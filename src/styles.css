@@ -26,7 +26,8 @@ body { font-family: var(--body); color: var(--paper); -webkit-font-smoothing: an
 #gl { position: absolute; inset: 0; display: block; image-rendering: auto; cursor: crosshair; }
 #ui { position: absolute; inset: 0; pointer-events: none; font-size: clamp(12px, 1.25vw, 17px); }
 #ui * { box-sizing: border-box; }
-#ui .interactive, #ui button, #ui .modal, #ui .dialogue { pointer-events: auto; }
+#ui .interactive, #ui button, #ui .modal, #ui .dialogue.on { pointer-events: auto; }
+#ui .dialogue:not(.on), #ui .dialogue:not(.on) * { pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { #ui * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
 
 .pix { font-family: var(--pix); letter-spacing: 0.02em; }

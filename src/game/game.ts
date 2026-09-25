@@ -23,7 +23,7 @@ class Game {
   save: SaveData = newSave();
   scene: Scene | null = null;
   time = 0;
-  private fadeDir = 0;
+  private fadeTarget = 0;
   private fadeSpeed = 2;
   private busy = false;
   paused = false;
@@ -52,12 +52,7 @@ class Game {
     if (this.busy) return;
     this.busy = true;
     this.r.post.fadeColor = color;
-    this.fadeSpeed = speed;
-    this.fadeDir = 1;
-    await new Promise<void>(res => {
-      const chk = () => (this.r.post.fade >= 1 ? res() : requestAnimationFrame(chk));
-      chk();
-    });
+    await this.fadeTo(1, speed);
     this.scene?.exit?.();
     this.ui.clearScene();
     this.scene = null;
@@ -65,8 +60,8 @@ class Game {
     const s = typeof next === 'function' ? await next() : next;
     await s.enter?.();
     this.scene = s;
-    this.fadeDir = -1;
     this.busy = false;
+    this.fadeTo(0, speed);
   }
 
   /** Immediately set a scene (first boot). */
@@ -77,16 +72,14 @@ class Game {
     this.scene = s;
   }
 
+  /** Animate the dissolve fade toward v; resolves when it gets there (or is superseded). */
   fadeTo(v: number, speed = 2) {
+    this.fadeTarget = v;
     this.fadeSpeed = speed;
-    this.fadeDir = v > this.r.post.fade ? 1 : -1;
     return new Promise<void>(res => {
       const chk = () => {
-        if ((this.fadeDir > 0 && this.r.post.fade >= v) || (this.fadeDir < 0 && this.r.post.fade <= v)) {
-          this.r.post.fade = v;
-          this.fadeDir = 0;
-          res();
-        } else requestAnimationFrame(chk);
+        if (this.fadeTarget !== v || Math.abs(this.r.post.fade - v) < 1e-3) res();
+        else requestAnimationFrame(chk);
       };
       chk();
     });
@@ -102,8 +95,10 @@ class Game {
       dt *= this.slowmo;
       this.time += dt;
       const post = this.r.post;
-      if (this.fadeDir) post.fade = clamp(post.fade + this.fadeDir * this.fadeSpeed * rdt, 0, 1);
-      if (this.fadeDir < 0 && post.fade <= 0) this.fadeDir = 0;
+      if (post.fade !== this.fadeTarget) {
+        const d = this.fadeTarget - post.fade;
+        post.fade = Math.abs(d) <= this.fadeSpeed * rdt ? this.fadeTarget : clamp(post.fade + Math.sign(d) * this.fadeSpeed * rdt, 0, 1);
+      }
       post.flash = Math.max(0, post.flash - rdt * 4);
       atlas?.upload();
       local?.upload();

@@ -486,6 +486,15 @@ export class Renderer {
 
   /** FX sprite drawn after lighting. additive=true for glows. intensity can exceed 1 (HDR). */
   fxDraw(fr: Frame, x: number, y: number, sx = 1, sy = 1, rot = 0, color = WHITE, intensity = 1, additive = true) {
+    if (this.L.p < 0.9) {
+      // background glows go through the depth-ordered scene pass so nearer layers occlude them
+      if (additive) {
+        const k = Math.min(intensity, 4) * ((color >>> 24) / 255);
+        const c = packColor(Math.min(1, (color & 255) / 255 * k), Math.min(1, ((color >>> 8) & 255) / 255 * k), Math.min(1, ((color >>> 16) & 255) / 255 * k), 1);
+        this.emit(this.scene, 0, fr, x, y, sx, sy, rot, c, this.L.aux, 0xff000000);
+      } else this.emit(this.scene, 0, fr, x, y, sx, sy, rot, color, this.L.aux, 0);
+      return;
+    }
     const aux = packColor(Math.min(intensity / 16, 1), this.L.fog, 0, 0);
     this.emit(this.fx, additive ? 0 : 1, fr, x, y, sx, sy, rot, color, aux, 0);
   }

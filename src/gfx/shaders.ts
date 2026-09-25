@@ -56,6 +56,13 @@ void main() {
   vec4 t = texture(u_tex, pixelAA(v_uv, u_texSize));
   vec4 c = vec4(t.rgb * v_color.rgb * v_color.a, t.a * v_color.a);
   if (c.a < 0.004) discard;
+  if (v_mat.a > 0.5) {
+    // additive glow inside the scene pass (occluded by anything drawn later)
+    o_albedo = vec4(c.rgb, 0.0);
+    o_aux = vec4(0.0);
+    o_mat = vec4(0.0);
+    return;
+  }
   if (u_shadow > 0.5) {
     o_albedo = vec4(0.0, 0.0, 0.0, c.a);
     o_aux = vec4(0.0);

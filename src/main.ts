@@ -37,6 +37,7 @@ async function boot() {
   window.addEventListener('pointerdown', unlock);
   window.addEventListener('keydown', unlock);
   game.r.post.fade = 1;
+  game.fadeTo(1);
   game.start();
   const scene = params.get('scene');
   if (scene === 'site') {
