@@ -3,6 +3,7 @@
 import { portrait } from '../game/assets';
 import { CREW } from '../art/characters';
 import { audio } from '../core/audio';
+import { guardInput } from '../core/input';
 
 export function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', html = ''): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -182,6 +183,7 @@ export class UI {
     }
     this.dlg.classList.remove('on');
     this.dialogueOpen = false;
+    guardInput(300);
     await new Promise(res => setTimeout(res, 120));
     return choice;
   }
@@ -228,6 +230,7 @@ export class UI {
       if (closed) return;
       closed = true;
       this.modalOpen--;
+      guardInput(250);
       window.removeEventListener('keydown', kh);
       wrap.classList.remove('on');
       setTimeout(() => wrap.remove(), 200);

@@ -22,6 +22,8 @@ import { campHud } from '../../ui/hud';
 import { openJournal } from '../../ui/journal';
 import { openShop } from '../../ui/shop';
 import { openMap } from '../../ui/mapui';
+import { openPause } from '../../ui/pause';
+import { CHAPTER_NAMES } from '../story';
 import type { TimeOfDay } from '../../world/timeofday';
 
 const GY = 222; // camp ground level
@@ -297,10 +299,16 @@ export class CampScene extends StageScene {
     };
     const n = this.npcs;
     I.push({ x: n.imogen.x, y: GY, w: 10, h: 22, label: 'Talk to Dr. Vance', standX: n.imogen.x + 22, action: () => talk('imogen', async () => {
+      const before = game.save.chapter;
       const t = vanceTalk();
       await game.ui.say(t.lines);
       t.after?.();
       game.persist();
+      campHud(this);
+      if (game.save.chapter !== before) {
+        if (game.save.chapter === 6) await this.ending();
+        else await game.ui.titleCard(`Chapter ${game.save.chapter}`, CHAPTER_NAMES[game.save.chapter], '', 3000);
+      }
     }) });
     I.push({ x: 730, y: GY, w: 26, h: 20, label: 'Field Guide (research desk)', standX: 730, action: () => openJournal() });
     I.push({ x: 804, y: GY, w: 12, h: 16, label: 'Photo board', standX: 790, action: () => openJournal('album') });
@@ -363,6 +371,38 @@ export class CampScene extends StageScene {
   update(dt: number) {
     super.update(dt);
     if (game.input.hit('journal') && !game.ui.blocking) openJournal();
+    if (game.input.hitRaw('pause') && !game.ui.blocking && !this.cutscene) openPause();
     void objective;
+  }
+
+  /** Campfire finale after the Leviathan. */
+  async ending() {
+    this.cutscene = true;
+    game.ui.letterbox(true);
+    game.ui.hud.classList.add('hidden');
+    audio.setMusic('wonder');
+    const cam = this.st.cam;
+    cam.locked = true;
+    const pan = async (to: number, ms: number) => {
+      const from = cam.x;
+      const n = Math.max(1, Math.round(ms / 16));
+      for (let i = 1; i <= n; i++) { const t = i / n; cam.x = from + (to - from) * t * t * (3 - 2 * t); await new Promise(r => setTimeout(r, 16)); }
+    };
+    await pan(560, 1500);
+    for (const id of ['lou', 'bolt', 'pip', 'sid']) this.npcs[id].mood = 'happy';
+    await game.ui.say([
+      { who: 'lou', text: 'To Otis! Who got in the water with a sea serpent and came back with *pictures*.', expr: 'happy' },
+      { who: 'bolt', text: 'Beatrice wants it on record that she drove you to every single site. Didn\u2019t break down once. Mostly.', expr: 'happy' },
+      { who: 'pip', text: 'I\u2019m naming my next gadget after you. The Finch-o-matic. It doesn\u2019t do anything yet.', expr: 'happy' },
+      { who: 'sid', text: 'I told you all. Snakes. Everywhere. Nobody listens to Sid.', expr: 'happy' },
+      { who: 'imogen', text: 'An island ruled by serpents, and everything else found a way to live beside them. Armour, quills, cliffs, gills.', expr: 'happy' },
+      { who: 'imogen', text: 'There\u2019s still so much we don\u2019t understand. Keep filling that Field Guide, Finch. Zealandia is just getting started.' },
+    ]);
+    await game.ui.titleCard('Expedition report filed', 'PROJECT ZEALANDIA', 'Thanks for playing \u2014 keep exploring to complete the Field Guide', 5200);
+    for (const id of ['lou', 'bolt', 'pip', 'sid']) this.npcs[id].mood = 'idle';
+    cam.locked = false;
+    game.ui.letterbox(false);
+    game.ui.hud.classList.remove('hidden');
+    this.cutscene = false;
   }
 }

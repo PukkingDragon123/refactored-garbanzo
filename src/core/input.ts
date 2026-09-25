@@ -30,6 +30,13 @@ const BINDINGS: Record<Action, string[]> = {
   g5: ['Digit5'],
 };
 
+let guardUntil = 0;
+/** Ignore gameplay key/click edges for a moment (after a dialogue or menu closes). */
+export function guardInput(ms = 250) {
+  guardUntil = Math.max(guardUntil, performance.now() + ms);
+}
+const guarded = () => performance.now() < guardUntil;
+
 const PREVENT = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab']);
 
 export class Input {
@@ -107,11 +114,12 @@ export class Input {
     return BINDINGS[a].some(k => this.keys.has(k));
   }
   hit(a: Action) {
-    if (this.blocked) return false;
+    if (this.blocked || guarded()) return false;
     return BINDINGS[a].some(k => this.pressedKeys.has(k));
   }
   /** Same as hit() but ignores UI blocking (for UI navigation). */
   hitRaw(a: Action) {
+    if (guarded()) return false;
     return BINDINGS[a].some(k => this.pressedKeys.has(k));
   }
   released(a: Action) {
@@ -121,7 +129,7 @@ export class Input {
     return (this.down('right') ? 1 : 0) - (this.down('left') ? 1 : 0);
   }
   click(b = 0) {
-    return !this.blocked && this.mousePressed[b];
+    return !this.blocked && !guarded() && this.mousePressed[b];
   }
   held(b = 0) {
     return !this.blocked && this.mouseDown[b];

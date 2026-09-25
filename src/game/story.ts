@@ -8,6 +8,8 @@ export const SITE_NAMES: Record<SiteId, string> = {
   fernwood: 'Fernwood Floor', canopy: 'Emerald Canopy', falls: 'Thunder Falls', mangrove: 'Blackwater Mangroves', coast: 'Serpent Coast',
 };
 
+export const CHAPTER_NAMES = ['Arrival', 'First Contact', 'Up in the Trees', 'Thunder Falls', 'The Titan', 'The Deep', 'The Field Guide'];
+
 export const seenCount = () => Object.keys(game.save.seen).length;
 export const factCount = () => Object.keys(game.save.facts).length;
 export const flag = (f: string) => !!game.save.flags[f];

@@ -23,6 +23,7 @@ import { audio } from '../../core/audio';
 import { clamp, rand } from '../../core/math';
 import { iconURL } from '../../ui/icons';
 import { returnToCamp } from './travel';
+import { openPause } from '../../ui/pause';
 import { buildFernwood } from '../sites/fernwood';
 import { buildCanopy } from '../sites/canopy';
 import { buildFalls } from '../sites/falls';
@@ -256,6 +257,7 @@ export class ExpeditionScene extends StageScene {
       if (inp.hit('place') && !this.cam.active) this.placeGadget();
       if (inp.hit('journal')) openJournal();
     }
+    if (inp.hitRaw('pause') && !game.ui.blocking && !this.cutscene && !this.cam.active) openPause({ onReturn: () => this.finish() });
     if (!this.cutscene) this.cam.update(dt, this.st, this.player, this.creatures);
     // cleanup dead creatures
     for (let i = this.creatures.length - 1; i >= 0; i--) if (this.creatures[i].dead) this.creatures.splice(i, 1);
