@@ -63,8 +63,10 @@ void main() {
     return;
   }
   o_albedo = c;
-  o_aux = v_aux * c.a;
-  o_mat = vec4(v_mat.rgb, 1.0) * c.a;
+  // alpha channels carry coverage so premultiplied blending works per attachment;
+  // depth (for DOF) lives in mat.b
+  o_aux = vec4(v_aux.rgb, 1.0) * c.a;
+  o_mat = vec4(v_mat.rg, v_aux.a, 1.0) * c.a;
 }`;
 
 export const LIGHT_FS = /* glsl */ `#version 300 es
@@ -167,7 +169,7 @@ void main() {
       }
       // glints along the surface
       float g = sin(row * 1.7 + floor(v_scr.x * u_viewArt.x / 3.0) * 2.3 + u_time * 3.1);
-      c += u_waterTint * smoothstep(0.985, 1.0, g) * m.b * 0.6 * exp(-artY * 0.05);
+      c += u_waterTint * smoothstep(0.985, 1.0, g) * m.r * 0.6 * exp(-artY * 0.05);
     }
   }
   o = vec4(max(c, 0.0), 1.0);
@@ -185,7 +187,7 @@ in vec2 v_uv;
 out vec4 o;
 float coc(float d) { return clamp(abs(d - u_focus) * u_strength, 0.0, 1.0); }
 void main() {
-  float cd = texture(u_aux, v_uv).a;
+  float cd = texture(u_aux, v_uv).b;
   float cc = coc(cd);
   vec3 acc = texture(u_src, v_uv).rgb;
   float wsum = 1.0;
@@ -196,7 +198,7 @@ void main() {
     float a = fi * 2.39996323;
     float dist = rr * u_maxR;
     vec2 suv = v_uv + vec2(cos(a), sin(a)) * dist * u_px;
-    float sd = texture(u_aux, suv).a;
+    float sd = texture(u_aux, suv).b;
     float sc = coc(sd) * u_maxR;
     if (sd > cd) sc = min(sc, cc * u_maxR);
     float w = clamp(sc - dist + 0.75, 0.0, 1.0);
@@ -315,7 +317,7 @@ void main() {
     c = texture(u_hdr, uv).rgb;
   }
   if (u_dofOn > 0.5) {
-    float cd = texture(u_aux, uv).a;
+    float cd = texture(u_aux, uv).b;
     float cc = clamp(abs(cd - u_focus) * u_dofStr, 0.0, 1.0);
     c = mix(c, texture(u_dof, uv).rgb, smoothstep(0.04, 0.3, cc));
   }

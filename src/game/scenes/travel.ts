@@ -7,7 +7,7 @@ import { game } from '../game';
 import { Stage } from '../../world/stage';
 import { Custom, Prop } from '../../world/props';
 import { addSky, addClouds, addFarImage, addGroundStrip, layerSpan } from '../../world/scenery';
-import { atlas, props, propAnims, chars, A } from '../assets';
+import { local, props, propAnims, chars, A } from '../assets';
 import * as L from '../../art/landscape';
 import * as F from '../../art/flora';
 import { hex } from '../../art/color';
@@ -48,7 +48,7 @@ export class TravelScene implements Scene {
     const span = layerSpan(st, 0.7);
     for (let x = span.x0; x < span.x0 + span.w; x += rng.range(30, 70)) {
       const o = rng.chance(0.6) ? F.paintTreeFern(rng.int(1, 999), { height: rng.range(60, 110), silver: rng.chance(0.3) }) : F.paintBush(rng.int(1, 999), 50, 28);
-      mid.add(new Prop(atlas.add('tv' + x, o.buf, o.ax, o.ay), x, 222, rng.next(), { sway: 1 }));
+      mid.add(new Prop(local.add('tv' + x, o.buf, o.ax, o.ay), x, 222, rng.next(), { sway: 1 }));
     }
     const main = st.addLayer('main', 1, 0, 1);
     const road = (x: number) => 230 + Math.sin(x * 0.01) * 2 + Math.sin(x * 0.037) * 1;
@@ -89,7 +89,7 @@ export class TravelScene implements Scene {
     const fspan = layerSpan(st, 1.5, 200);
     for (let x = fspan.x0; x < fspan.x0 + fspan.w; x += rng.range(40, 110)) {
       const o = rng.chance(0.5) ? F.paintBigLeaf(rng.int(1, 999), rng.range(50, 80)) : F.paintGrassTuft(rng.int(1, 99), 24, PAL.leafDeep, 12);
-      fg.add(new Prop(atlas.add('tf' + x, o.buf, o.ax, o.ay), x, 300, 0, { sway: 2 }));
+      fg.add(new Prop(local.add('tf' + x, o.buf, o.ax, o.ay), x, 300, 0, { sway: 2 }));
     }
     if (this.returning) this.jx = 2300;
     st.cam.x = st.cam.tx = this.jx;

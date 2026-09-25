@@ -1,6 +1,6 @@
 // Bakes every reusable sprite into the global atlas at startup.
 
-import { Atlas } from '../gfx/atlas';
+import { Atlas, disposeSceneTextures } from '../gfx/atlas';
 import type { Frame, Renderer } from '../gfx/renderer';
 import { PixelBuffer } from '../art/pixel';
 import * as FX from '../art/fx';
@@ -10,6 +10,14 @@ import * as K from '../art/camp';
 import { PAL } from '../art/palettes';
 
 export let atlas: Atlas;
+/** Scene-local atlas for props generated per scene; recreated on every scene change. */
+export let local: Atlas;
+export function newLocalAtlas(r: Renderer) {
+  local?.dispose();
+  disposeSceneTextures();
+  local = new Atlas(r, 2048);
+  return local;
+}
 
 export const A = {
   glow: null as unknown as Frame,
@@ -116,6 +124,7 @@ function mammalAnims(id: string) {
 
 export async function bakeAssets(r: Renderer, progress: (k: number, label: string) => void) {
   atlas = new Atlas(r, 2048);
+  newLocalAtlas(r);
   const step = async (k: number, label: string) => {
     progress(k, label);
     await new Promise(res => setTimeout(res, 0));

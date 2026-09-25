@@ -113,8 +113,15 @@ export class DynamicSprite {
   }
 }
 
-/** Upload a big standalone image (background layer) as a texture frame. */
+const sceneTextures: Texture[] = [];
+export function disposeSceneTextures() {
+  for (const t of sceneTextures) t.dispose();
+  sceneTextures.length = 0;
+}
+
+/** Upload a big standalone image (background layer) as a texture frame (freed on scene change). */
 export function bigFrame(r: Renderer, buf: PixelBuffer, ax = 0, ay = 0): Frame {
   const tex = r.texture(buf.w, buf.h, buf.bytes);
+  sceneTextures.push(tex);
   return { tex, u0: 0, v0: 0, u1: 1, v1: 1, w: buf.w, h: buf.h, ax, ay };
 }

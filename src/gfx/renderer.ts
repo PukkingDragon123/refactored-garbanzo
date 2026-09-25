@@ -334,7 +334,8 @@ export class Renderer {
   }
   /** Water material for following scene draws: strength of reflection, ripple amount, glints. */
   water(strength = 0, ripple = 1, glint = 1) {
-    this.mat = strength > 0 ? packColor(strength, Math.min(ripple / 4, 1), glint, 0) : 0;
+    this.mat = strength > 0 ? packColor(strength, Math.min(ripple / 4, 1), 0, 0) : 0;
+    void glint;
   }
 
   /** world -> screen art px on the current layer */
@@ -619,7 +620,7 @@ export class Renderer {
       this.rtDof.bind();
       const d = this.pDof.use();
       this.rtHdr.tex[0].bind(0);
-      this.rtScene.tex[1].bind(1);
+      this.rtScene.tex[2].bind(1);
       d.i('u_src', 0).i('u_aux', 1).f('u_focus', post.focus).f('u_strength', post.dofStrength);
       d.v2('u_px', 1 / this.rtDof.w, 1 / this.rtDof.h).f('u_maxR', Math.max(2, this.rtDof.h / 90));
       this.fullscreen();
@@ -659,7 +660,7 @@ export class Renderer {
     this.rtHdr.tex[0].bind(0);
     bl[0].tex[0].bind(1);
     this.rtDof.tex[0].bind(2);
-    this.rtScene.tex[1].bind(3);
+    this.rtScene.tex[2].bind(3);
     f.i('u_hdr', 0).i('u_bloom', 1).i('u_dof', 2).i('u_aux', 3);
     f.f('u_bloomStr', env.bloom).f('u_exposure', env.exposure).f('u_sat', env.saturation).f('u_contrast', env.contrast);
     f.f('u_vignette', env.vignette).f('u_grain', env.grain).f('u_time', this.time).f('u_ca', post.ca);

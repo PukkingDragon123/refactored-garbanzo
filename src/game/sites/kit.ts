@@ -10,7 +10,7 @@ import { PAL } from '../../art/palettes';
 import type { Stage, Layer } from '../../world/stage';
 import { Prop, Custom } from '../../world/props';
 import { layerSpan } from '../../world/scenery';
-import { atlas, A } from '../assets';
+import { local, A } from '../assets';
 import { Rng, bayer, clamp, fbm1, fbm2, noise1, rand } from '../../core/math';
 
 let uid = 0;
@@ -131,14 +131,14 @@ export function scatter(layer: Layer, x0: number, x1: number, step: [number, num
   for (let x = x0; x < x1; x += rng.range(step[0], step[1])) {
     const o = gen(rng, x);
     if (!o) continue;
-    layer.add(new Prop(atlas.add(aid('sc'), o.buf, o.ax, o.ay), x, yAt(x) + 1, zBase + rng.next(), { sway }));
+    layer.add(new Prop(local.add(aid('sc'), o.buf, o.ax, o.ay), x, yAt(x) + 1, zBase + rng.next(), { sway }));
   }
 }
 
 /** Bioluminescent fungi / glow flecks that light up at night. */
 export function addGlowFungi(layer: Layer, spots: [number, number][], night: boolean) {
-  const frame = atlas.has('mushGlow') ? atlas.get('mushGlow') : atlas.add('mushGlow', F.paintMushrooms(17, true).buf, 9, 12);
-  const frame2 = atlas.has('mush') ? atlas.get('mush') : atlas.add('mush', F.paintMushrooms(16, false).buf, 9, 12);
+  const frame = local.has('mushGlow') ? local.get('mushGlow') : local.add('mushGlow', F.paintMushrooms(17, true).buf, 9, 12);
+  const frame2 = local.has('mush') ? local.get('mush') : local.add('mush', F.paintMushrooms(16, false).buf, 9, 12);
   for (const [x, y] of spots) {
     layer.add(new Custom(8, (r, s) => {
       if (night) {

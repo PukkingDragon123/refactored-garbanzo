@@ -7,7 +7,7 @@ import type { ExpeditionScene } from '../scenes/expedition';
 import { Prop, Custom } from '../../world/props';
 import { addSky, addGroundStrip, layerSpan } from '../../world/scenery';
 import { addTrunkLayer, addCanopyCeiling, addShafts, scatter, addGlowFungi, aid, Shaft } from './kit';
-import { atlas, A } from '../assets';
+import { local, A } from '../assets';
 import * as F from '../../art/flora';
 import { PAL } from '../../art/palettes';
 import { packColor } from '../../gfx/renderer';
@@ -26,15 +26,15 @@ export function fernGround(x: number) {
 export function buildFernwood(st: Stage, sc: ExpeditionScene): SiteContent {
   const r = game.r;
   const tod = st.tod;
-  st.preset = timePreset(tod, { shade: 0.65, haze: [0.42, 0.62, 0.56], hazeK: 0.45 });
+  st.preset = timePreset(tod, { shade: 0.65, haze: [0.4, 0.62, 0.48], hazeK: 0.55 });
   st.minX = 0;
   st.maxX = FW_W;
   const night = tod === 'night';
   const rng = new Rng(101);
   addSky(st, r);
-  addTrunkLayer(st, r, 'far', 0.15, 0.62, -10, 250, 1, ['#557f7a', '#618b85', '#709890'], 1.4, [6, 12], { canopy: true, ferns: 0.3, vines: 0.3 });
-  addTrunkLayer(st, r, 'far2', 0.3, 0.45, -10, 252, 2, ['#35585a', '#3f6563', '#4c7470'], 1.1, [10, 18], { canopy: true, ferns: 0.6, vines: 0.4 });
-  addTrunkLayer(st, r, 'mid1', 0.5, 0.26, -10, 250, 3, ['#1e3834', '#26443e', '#305249'], 0.9, [14, 26], { canopy: true, ferns: 0.9, vines: 0.5 }, 0.3);
+  addTrunkLayer(st, r, 'far', 0.12, 0.66, -10, 250, 1, ['#4f7a6a', '#5a8674', '#6a947e'], 2.4, [8, 16], { canopy: true, ferns: 0.6, vines: 0.4 });
+  addTrunkLayer(st, r, 'far2', 0.28, 0.46, -10, 252, 2, ['#2f5446', '#386052', '#456d5a'], 1.6, [12, 22], { canopy: true, ferns: 0.8, vines: 0.5 });
+  addTrunkLayer(st, r, 'mid1', 0.48, 0.26, -10, 250, 3, ['#1a3129', '#223d32', '#2c4b3c'], 1.1, [16, 30], { canopy: true, ferns: 1, vines: 0.6 }, 0.3);
   // mid props p .72: sprite tree ferns & kauri trunks
   const mid = st.addLayer('mid', 0.72, 0.1, 0.6);
   const ms = layerSpan(st, 0.72);
@@ -62,14 +62,14 @@ export function buildFernwood(st: Stage, sc: ExpeditionScene): SiteContent {
   }));
   for (const [x, y] of [[1290, 234], [1330, 236], [1372, 234], [1410, 232]] as [number, number][]) {
     const o = F.paintRock(rng.int(1, 999), 16, 9, PAL.stone, 0.6);
-    main.add(new Prop(atlas.add(aid('stone'), o.buf, o.ax, o.ay), x, y + 3, 1));
+    main.add(new Prop(local.add(aid('stone'), o.buf, o.ax, o.ay), x, y + 3, 1));
     st.terrain.addPlatform([[x - 7, y - 4], [x + 7, y - 4]], 'rock');
   }
   // bridge the gaps between stones so walking across is smooth
   st.terrain.addPlatform([[1240, fernGround(1240)], [1283, 230], [1297, 230], [1323, 232], [1337, 232], [1365, 230], [1379, 230], [1403, 228], [1440, fernGround(1440)]], 'rock');
   // fallen mossy log (platform)
   const log = F.paintLog(7, 110, 8);
-  main.add(new Prop(atlas.add('fwlog', log.buf, log.ax, log.ay), 640, fernGround(640) + 3, 5));
+  main.add(new Prop(local.add('fwlog', log.buf, log.ax, log.ay), 640, fernGround(640) + 3, 5));
   st.terrain.addPlatform([[588, fernGround(588) - 12], [692, fernGround(692) - 14]], 'root');
   // background props on main (behind player)
   scatter(main, 20, FW_W, [60, 140], 12, fernGround, (g, x) => {
@@ -84,7 +84,7 @@ export function buildFernwood(st: Stage, sc: ExpeditionScene): SiteContent {
   const hides = [420, 780, 1100, 1560, 1900].map(x => ({ x, w: 44, y: fernGround(x), cover: 0.85 }));
   for (const h of hides) {
     const o = F.paintBush(rng.int(1, 999), 52, 30, rng.chance(0.5) ? PAL.leafDeep : PAL.leafTeal, rng.chance(0.3) ? PAL.flowerPink : undefined);
-    main.add(new Prop(atlas.add(aid('hide'), o.buf, o.ax, o.ay), h.x, h.y + 2, 70, { sway: 0.6 }));
+    main.add(new Prop(local.add(aid('hide'), o.buf, o.ax, o.ay), h.x, h.y + 2, 70, { sway: 0.6 }));
   }
   // burrows for delvers
   const holes = [930, 985, 1040];

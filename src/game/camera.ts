@@ -89,6 +89,7 @@ export class CameraSystem {
     }
     player.camera = this.active;
     this.vf.classList.toggle('on', this.active);
+    game.ui.hud.classList.toggle('hidden', this.active);
     const r = game.r;
     if (!this.active) {
       r.post.dof = false;

@@ -7,7 +7,7 @@ import { Player } from '../../world/player';
 import { NPC } from '../../world/npc';
 import { Prop, LightSource, Custom, AnimProp } from '../../world/props';
 import { addSky, addClouds, addFarImage, addGroundStrip, layerSpan } from '../../world/scenery';
-import { atlas, props, propAnims, A } from '../assets';
+import { local, props, propAnims, A } from '../assets';
 import { bigFrame } from '../../gfx/atlas';
 import { packColor } from '../../gfx/renderer';
 import * as L from '../../art/landscape';
@@ -110,11 +110,11 @@ export class CampScene extends StageScene {
       if (k < 0.55) o = F.paintTreeFern(rng.int(1, 999), { height: rng.range(70, 120), silver: rng.chance(0.3) });
       else if (k < 0.75) o = F.paintNikau(rng.int(1, 999), rng.range(80, 120));
       else o = F.paintKauri(rng.int(1, 999), rng.range(200, 240), rng.int(12, 16));
-      mid.add(new Prop(atlas.add('m' + x, o.buf, o.ax, o.ay), x, 214 + rng.range(-2, 4), rng.next(), { sway: 1.2 }));
+      mid.add(new Prop(local.add('m' + x, o.buf, o.ax, o.ay), x, 214 + rng.range(-2, 4), rng.next(), { sway: 1.2 }));
     }
     for (let x = midSpan.x0; x < edge(0.5) + 40; x += rng.range(50, 90)) {
       const o = F.paintNikau(rng.int(1, 999), rng.range(60, 100));
-      mid.add(new Prop(atlas.add('mn' + x, o.buf, o.ax, o.ay), x, 216, 0, { sway: 1.5 }));
+      mid.add(new Prop(local.add('mn' + x, o.buf, o.ax, o.ay), x, 216, 0, { sway: 1.5 }));
     }
     // near layer (p .75): bushes and ferns just behind the tents
     const nearSpan = layerSpan(st, 0.75);
@@ -128,7 +128,7 @@ export class CampScene extends StageScene {
       else if (k < 0.4) o = F.paintTreeFern(rng.int(1, 999), { height: rng.range(40, 70) });
       else if (k < 0.8) o = F.paintBush(rng.int(1, 999), rng.int(34, 56), rng.int(18, 28), rng.chance(0.5) ? PAL.leafDeep : PAL.leafTeal, rng.chance(0.25) ? PAL.flowerPink : undefined);
       else o = F.paintGroundFern(rng.int(1, 999), rng.range(12, 18));
-      near.add(new Prop(atlas.add('n' + x, o.buf, o.ax, o.ay), x, nearG(x) + 2, rng.next(), { sway: 0.8 }));
+      near.add(new Prop(local.add('n' + x, o.buf, o.ax, o.ay), x, nearG(x) + 2, rng.next(), { sway: 0.8 }));
     }
 
     // ---------------------------------------------------------- gameplay layer
@@ -264,7 +264,7 @@ export class CampScene extends StageScene {
       if (k < 0.5) o = F.paintGrassTuft(rng.int(1, 999), rng.range(14, 22), PAL.moss, 10);
       else if (k < 0.75) o = F.paintGroundFern(rng.int(1, 999), rng.range(16, 26), PAL.leafDeep);
       else o = F.paintBigLeaf(rng.int(1, 999), rng.range(40, 70), PAL.leafDeep);
-      fg.add(new Prop(atlas.add('fg' + x, o.buf, o.ax, o.ay), x, 290 + rng.range(-6, 6), 0, { sway: 2 }));
+      fg.add(new Prop(local.add('fg' + x, o.buf, o.ax, o.ay), x, 290 + rng.range(-6, 6), 0, { sway: 2 }));
     }
 
     // ambient particles: embers, smoke, fireflies, pollen

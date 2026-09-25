@@ -5,6 +5,7 @@ import { Input } from '../core/input';
 import { SaveData, newSave, writeSave } from './save';
 import { UI } from '../ui/ui';
 import { clamp } from '../core/math';
+import { atlas, local, newLocalAtlas } from './assets';
 
 export interface Scene {
   enter?(): void | Promise<void>;
@@ -60,6 +61,7 @@ class Game {
     this.scene?.exit?.();
     this.ui.clearScene();
     this.scene = null;
+    newLocalAtlas(this.r);
     const s = typeof next === 'function' ? await next() : next;
     await s.enter?.();
     this.scene = s;
@@ -103,6 +105,8 @@ class Game {
       if (this.fadeDir) post.fade = clamp(post.fade + this.fadeDir * this.fadeSpeed * rdt, 0, 1);
       if (this.fadeDir < 0 && post.fade <= 0) this.fadeDir = 0;
       post.flash = Math.max(0, post.flash - rdt * 4);
+      atlas?.upload();
+      local?.upload();
       this.r.begin(dt);
       if (this.scene) {
         try {

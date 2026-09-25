@@ -56,7 +56,8 @@ export function expeditionHud(siteName: string, timeLabel: string): ExpHudRefs {
     s.title = `${gd.name}: ${gd.desc}`;
     return s;
   });
-  h.appendChild(el('div', 'hint panel', `<span class="key">RMB</span>/<span class="key">Q</span> camera &nbsp;<span class="key">Click</span> shoot &nbsp;<span class="key">Wheel</span> zoom &nbsp;<span class="key">V</span> photo/video<br><span class="key">S</span> crouch / hide in bushes &nbsp;<span class="key">1-5</span>+<span class="key">F</span> place gadget &nbsp;<span class="key">E</span> collect &nbsp;<span class="key">J</span> guide`));
+  const hint = h.appendChild(el('div', 'hint panel', `<span class="key">RMB</span>/<span class="key">Q</span> camera &nbsp;<span class="key">Click</span> shoot &nbsp;<span class="key">Wheel</span> zoom &nbsp;<span class="key">V</span> photo/video<br><span class="key">S</span> crouch / hide in bushes &nbsp;<span class="key">1-5</span>+<span class="key">F</span> place gadget &nbsp;<span class="key">E</span> collect &nbsp;<span class="key">J</span> guide`));
+  setTimeout(() => { hint.style.transition = 'opacity 1s'; hint.style.opacity = '0'; }, 14000);
   h.classList.remove('hidden');
   return { film, gadgets, aware, awareBar: aware.querySelector('.bar > div') as HTMLElement, awareLabel: aware.querySelector('.lbl') as HTMLElement, obj, clock: site.querySelector('.clock') as HTMLElement };
 }
