@@ -30,6 +30,10 @@ export interface SiteContent {
   ambience: Ambience;
   music: Music;
   underwater?: boolean;
+  noJeep?: boolean;
+  exitLabel?: string;
+  minY?: number;
+  maxY?: number;
   lurePlaceY?: (x: number) => number;
   onEnter?: (sc: ExpeditionScene) => void | Promise<void>;
   onUpdate?: (sc: ExpeditionScene, dt: number) => void;

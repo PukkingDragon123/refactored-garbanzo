@@ -75,7 +75,7 @@ export class ExpeditionScene extends StageScene {
     };
     (st as unknown as { ctx: Ctx }).ctx = this.ctx;
     // jeep (exit) at the site's entrance
-    if (!c.underwater) {
+    if (!c.underwater && !c.noJeep) {
       main().add(new Custom(3, (r) => {
         const x = c.jeepX, y = st.terrain.groundY(x);
         r.beginShadows();
@@ -86,7 +86,7 @@ export class ExpeditionScene extends StageScene {
         r.draw(propAnims.wheel[0], x + 56 - 88, y - 11, -1, 1);
       }));
     }
-    this.interact.push({ x: c.jeepX, y: st.terrain.groundY(c.jeepX), w: 44, h: 18, label: 'Return to camp', action: () => this.finish() });
+    this.interact.push({ x: c.jeepX, y: c.underwater ? (c.waterY ?? 40) + 20 : st.terrain.surfaceBelow(c.jeepX, -1000)?.y ?? st.terrain.groundY(c.jeepX), w: 44, h: c.underwater ? 40 : 18, label: c.exitLabel ?? 'Return to camp', action: () => this.finish() });
     // clues
     for (const cl of c.clues) {
       if (game.save.clues[cl.id]) continue;
