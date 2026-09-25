@@ -1,0 +1,254 @@
+// The Zealandia Field Guide: species, observable behaviours, deducible facts and field clues.
+
+import type { TimeOfDay } from '../world/timeofday';
+
+export type SiteId = 'fernwood' | 'canopy' | 'falls' | 'mangrove' | 'coast';
+export type Group = 'Serpent' | 'Bird' | 'Mammal' | 'Reptile';
+
+export type Evidence =
+  | { kind: 'photo'; species: string; behavior: string }
+  | { kind: 'video'; species: string; behavior: string }
+  | { kind: 'clue'; clue: string };
+
+export interface Fact {
+  id: string;
+  cat: 'Diet' | 'Behaviour' | 'Adaptation' | 'Ecology' | 'Anatomy' | 'Activity';
+  q: string;
+  options: string[];
+  answer: number;
+  text: string;
+  evidence: Evidence[];
+  hint: string;
+}
+
+export interface Species {
+  id: string;
+  name: string;
+  sci: string;
+  group: Group;
+  sites: SiteId[];
+  times: TimeOfDay[];
+  rarity: number;
+  danger: number;
+  size: string;
+  blurb: string;
+  behaviors: Record<string, string>;
+  facts: Fact[];
+}
+
+export interface ClueDef {
+  id: string;
+  name: string;
+  desc: string;
+  site: SiteId;
+  icon: string;
+}
+
+const ph = (species: string, behavior: string): Evidence => ({ kind: 'photo', species, behavior });
+const vid = (species: string, behavior: string): Evidence => ({ kind: 'video', species, behavior });
+const cl = (clue: string): Evidence => ({ kind: 'clue', clue });
+
+export const SPECIES: Species[] = [
+  // ------------------------------------------------------------ SERPENTS
+  {
+    id: 'strider', name: 'Strider Serpent', sci: 'Pedophis ambulans', group: 'Serpent', sites: ['fernwood', 'falls'], times: ['dawn', 'day', 'dusk'],
+    rarity: 1, danger: 0, size: '1.2 m', blurb: 'A four-legged forest serpent that ambles over leaf litter like a lizard that forgot to stop growing. Zealandia’s most common snake, and surprisingly curious.',
+    behaviors: { foraging: 'Foraging', digging: 'Digging', basking: 'Basking', scenting: 'Tongue-scenting' },
+    facts: [
+      { id: 'strider-diet', cat: 'Diet', q: 'What does the Strider Serpent dig for?', options: ['Fallen fruit', 'Beetle grubs', 'Bird eggs'], answer: 1, text: 'Digs beetle grubs out of rotten wood and soft soil with its clawed forelegs.', evidence: [ph('strider', 'digging'), cl('grub-shells')], hint: 'Photograph one digging, and look for what it leaves behind.' },
+      { id: 'strider-legs', cat: 'Adaptation', q: 'Why would a serpent keep its legs?', options: ['To swim faster', 'To climb cliffs', 'To walk quietly over leaf litter'], answer: 2, text: 'Its legs lift the body off crunchy leaf litter, letting it stalk grubs almost silently.', evidence: [ph('strider', 'foraging')], hint: 'Photograph one walking across the forest floor.' },
+      { id: 'strider-bask', cat: 'Behaviour', q: 'Why does it lie in sunbeams?', options: ['To warm its body', 'To hide from hawks', 'To shed its skin'], answer: 0, text: 'Like all reptiles it is cold-blooded; it basks in light shafts each morning to warm up.', evidence: [ph('strider', 'basking')], hint: 'Catch one resting in a shaft of sunlight.' },
+    ],
+  },
+  {
+    id: 'sprinter', name: 'Sprint Viper', sci: 'Dromophis rapax', group: 'Serpent', sites: ['fernwood'], times: ['dusk', 'night'],
+    rarity: 3, danger: 1, size: '1.8 m', blurb: 'A bipedal viper that runs on two powerful hind legs, tail held out like a counterweight. It hunts by running prey down at dusk.',
+    behaviors: { running: 'Sprinting', hunting: 'Hunting', threat: 'Threat display', resting: 'Resting' },
+    facts: [
+      { id: 'sprinter-run', cat: 'Adaptation', q: 'How does the Sprint Viper chase prey?', options: ['It glides from trees', 'It runs upright on two legs', 'It burrows underneath'], answer: 1, text: 'It sprints upright on two legs at over 30 km/h, balancing with its stiff tail.', evidence: [vid('sprinter', 'running')], hint: 'Record a video of one running.' },
+      { id: 'sprinter-diet', cat: 'Diet', q: 'What does the Sprint Viper hunt?', options: ['Small mammals', 'Fish', 'Nectar'], answer: 0, text: 'It runs down small mammals such as Tunnel Delvers and young Shieldbacks.', evidence: [ph('sprinter', 'hunting'), cl('fur-tuft')], hint: 'Photograph it hunting, and look for signs of its prey.' },
+      { id: 'sprinter-time', cat: 'Activity', q: 'When is the Sprint Viper active?', options: ['Midday', 'Dusk and night', 'Only in rain'], answer: 1, text: 'Crepuscular and nocturnal: its heat-sensing pits find warm prey in the dark.', evidence: [ph('sprinter', 'threat')], hint: 'Its threat display is a sight you only see after sundown.' },
+    ],
+  },
+  {
+    id: 'skyribbon', name: 'Skyribbon Glider', sci: 'Volophis iridis', group: 'Serpent', sites: ['canopy'], times: ['dawn', 'day'],
+    rarity: 2, danger: 0, size: '1.5 m', blurb: 'An iridescent tree snake that flings itself between canopy giants, flattening its ribs into a living ribbon.',
+    behaviors: { gliding: 'Gliding', coiled: 'Coiled on a branch', hunting: 'Snatching insects' },
+    facts: [
+      { id: 'skyribbon-glide', cat: 'Adaptation', q: 'How does the Skyribbon glide?', options: ['It has feathered scales', 'It flattens its ribs and undulates', 'It inflates air sacs'], answer: 1, text: 'It spreads its ribs to flatten into a ribbon, undulating mid-air to steer between trees.', evidence: [vid('skyribbon', 'gliding')], hint: 'Record a full glide on video.' },
+      { id: 'skyribbon-diet', cat: 'Diet', q: 'What does the Skyribbon eat?', options: ['Canopy insects', 'Seeds', 'Eggs of ground birds'], answer: 0, text: 'It snaps cicadas and moths out of the air from its branch perch.', evidence: [ph('skyribbon', 'hunting')], hint: 'Photograph one snatching prey from a branch.' },
+      { id: 'skyribbon-pred', cat: 'Ecology', q: 'Which predator hunts Skyribbons in the air?', options: ['Ironjaw Crocodile', 'Gale Hawk', 'Quillhog'], answer: 1, text: 'Gale Hawks ambush gliding Skyribbons mid-flight; gliding is a gamble.', evidence: [ph('galehawk', 'carrying'), cl('shed-ribbon')], hint: 'Something in the sky carries Skyribbons away.' },
+    ],
+  },
+  {
+    id: 'lurevip', name: 'Lantern Lure-Viper', sci: 'Photophis lychnurus', group: 'Serpent', sites: ['canopy'], times: ['dusk', 'night'],
+    rarity: 3, danger: 1, size: '1.3 m', blurb: 'A violet pit viper whose tail tip glows like a lantern. At night it dangles the light to lure curious animals within striking range.',
+    behaviors: { luring: 'Tail-luring', striking: 'Striking', coiled: 'Coiled' },
+    facts: [
+      { id: 'lurevip-lure', cat: 'Adaptation', q: 'What is the glowing tail for?', options: ['Communicating with mates', 'Luring prey close', 'Scaring off hawks'], answer: 1, text: 'Bioluminescent bacteria in the tail tip glow; waving it lures moths and gliders close.', evidence: [ph('lurevip', 'luring')], hint: 'Photograph the glow being used at night.' },
+      { id: 'lurevip-diet', cat: 'Diet', q: 'Which animal falls for the lure most often?', options: ['Sail Possum', 'Crag Auk', 'Ironjaw'], answer: 0, text: 'Nectar-hunting Sail Possums mistake the glow for luminous flowers.', evidence: [ph('lurevip', 'striking'), ph('sailglider', 'feeding')], hint: 'Who visits glowing things for food?' },
+      { id: 'lurevip-time', cat: 'Activity', q: 'When does it hunt?', options: ['Night', 'Morning', 'Midday'], answer: 0, text: 'Strictly nocturnal: the lure is useless in daylight.', evidence: [ph('lurevip', 'coiled')], hint: 'Find where it rests.' },
+    ],
+  },
+  {
+    id: 'titan', name: 'Titan Constrictor', sci: 'Gigantophis rex', group: 'Serpent', sites: ['mangrove', 'fernwood'], times: ['dawn', 'day', 'dusk', 'night'],
+    rarity: 5, danger: 3, size: '16 m', blurb: 'The apex predator of Zealandia. A colossal constrictor whose mottled coils vanish among mangrove roots. Do not let it see you.',
+    behaviors: { ambush: 'Ambushing', digesting: 'Digesting', swimming: 'Swimming', hunting: 'Hunting' },
+    facts: [
+      { id: 'titan-size', cat: 'Anatomy', q: 'How long can a Titan Constrictor grow?', options: ['About 3 m', 'About 8 m', 'Over 15 m'], answer: 2, text: 'Shed skins exceed 15 metres — the largest snake ever recorded.', evidence: [cl('giant-skin'), ph('titan', 'swimming')], hint: 'The shed skin at the falls tells half the story.' },
+      { id: 'titan-diet', cat: 'Diet', q: 'What can a Titan swallow?', options: ['Only insects', 'Adult crocodiles', 'Fruit'], answer: 1, text: 'It overpowers and swallows adult Ironjaw crocodiles, then rests for weeks.', evidence: [ph('titan', 'digesting'), cl('croc-scute')], hint: 'Look for a huge bulge, and what is left of its meals.' },
+      { id: 'titan-hunt', cat: 'Behaviour', q: 'How does the Titan hunt?', options: ['Chases prey on land', 'Lies in ambush in water', 'Hunts in packs'], answer: 1, text: 'It lies submerged among roots for days, striking whatever wades close.', evidence: [ph('titan', 'ambush')], hint: 'Photograph it lying in wait.' },
+    ],
+  },
+  {
+    id: 'leviathan', name: 'Finned Leviathan', sci: 'Thalassophis pinnatus', group: 'Serpent', sites: ['coast'], times: ['dawn', 'day', 'dusk', 'night'],
+    rarity: 5, danger: 2, size: '25 m', blurb: 'An enormous marine serpent with a rippling dorsal fin and feathery crimson gill fronds. Sailors’ legends were true.',
+    behaviors: { surfacing: 'Surfacing', breathing: 'Gill-breathing', hunting: 'Hunting a shoal' },
+    facts: [
+      { id: 'leviathan-gills', cat: 'Anatomy', q: 'How does the Leviathan breathe underwater?', options: ['It holds its breath', 'External gill fronds', 'It never dives'], answer: 1, text: 'Feathery external gill fronds behind the head pull oxygen from the water, like a giant axolotl.', evidence: [ph('leviathan', 'breathing')], hint: 'Get close enough underwater to see behind its head.' },
+      { id: 'leviathan-diet', cat: 'Diet', q: 'What does it hunt?', options: ['Shoals of glassfin', 'Seabirds', 'Kelp'], answer: 0, text: 'It herds and gulps entire shoals of glassfin fish.', evidence: [ph('leviathan', 'hunting')], hint: 'Watch it near the fish shoals.' },
+      { id: 'leviathan-surface', cat: 'Behaviour', q: 'Why does it surface?', options: ['To bask and gulp air for buoyancy', 'To lay eggs', 'To hunt birds'], answer: 0, text: 'It surfaces to bask and gulp air, adjusting its buoyancy for deep dives.', evidence: [ph('leviathan', 'surfacing')], hint: 'Photograph it breaking the surface.' },
+    ],
+  },
+  {
+    id: 'mudribbon', name: 'Mudribbon', sci: 'Limnophis fasciatus', group: 'Serpent', sites: ['mangrove'], times: ['day', 'dusk', 'night'],
+    rarity: 2, danger: 0, size: '1.7 m', blurb: 'A banded water snake of the mangrove channels, with nostrils set high on its snout like a crocodile.',
+    behaviors: { swimming: 'Swimming', fishing: 'Fishing', basking: 'Basking on roots' },
+    facts: [
+      { id: 'mudribbon-diet', cat: 'Diet', q: 'What does the Mudribbon eat?', options: ['Fish and mudskippers', 'Leaves', 'Birds'], answer: 0, text: 'It ambushes mudskippers and small fish in the shallows.', evidence: [ph('mudribbon', 'fishing')], hint: 'Photograph it catching a meal.' },
+      { id: 'mudribbon-nose', cat: 'Adaptation', q: 'Why are its nostrils on top of its snout?', options: ['To smell flowers', 'To breathe while almost submerged', 'To hear better'], answer: 1, text: 'High nostrils let it breathe while its body stays hidden under murky water.', evidence: [ph('mudribbon', 'swimming')], hint: 'Watch how it swims.' },
+      { id: 'mudribbon-pred', cat: 'Ecology', q: 'Who is its main predator?', options: ['Serpent Stork', 'Sail Possum', 'Delver'], answer: 0, text: 'Serpent Storks stalk the channels and spear Mudribbons.', evidence: [ph('snakestork', 'catching')], hint: 'Something tall hunts the shallows.' },
+    ],
+  },
+  {
+    id: 'cragviper', name: 'Crag Viper', sci: 'Petrophis oophagus', group: 'Serpent', sites: ['falls', 'coast'], times: ['day', 'dusk'],
+    rarity: 3, danger: 1, size: '1.4 m', blurb: 'A granite-grey viper with keeled belly scales that let it climb sheer rock. It is why cliff birds nest where they do.',
+    behaviors: { climbing: 'Climbing rock', raiding: 'Raiding a nest', basking: 'Basking' },
+    facts: [
+      { id: 'cragviper-diet', cat: 'Diet', q: 'What does the Crag Viper raid?', options: ['Bee hives', 'Bird nests', 'Crab burrows'], answer: 1, text: 'It specialises in eggs and chicks of cliff-nesting birds.', evidence: [ph('cragviper', 'raiding'), cl('eggshell')], hint: 'Watch the nests, and check below them.' },
+      { id: 'cragviper-climb', cat: 'Adaptation', q: 'How does it climb sheer rock?', options: ['Sticky toe pads', 'Keeled belly scales', 'It jumps'], answer: 1, text: 'Ridged belly scales catch tiny cracks, letting it climb near-vertical cliffs.', evidence: [ph('cragviper', 'climbing')], hint: 'Photograph it on the cliff face.' },
+      { id: 'cragviper-eco', cat: 'Ecology', q: 'Why do Crag Auks nest on the highest, sheerest ledges?', options: ['For the view', 'To escape Crag Vipers', 'To be near fish'], answer: 1, text: 'Constant raids push auks onto the sheerest ledges — an evolutionary arms race.', evidence: [ph('cragauk', 'nesting'), ph('cragviper', 'climbing')], hint: 'Compare where the auks nest with where vipers climb.' },
+    ],
+  },
+  // ------------------------------------------------------------ BIRDS
+  {
+    id: 'galehawk', name: 'Gale Hawk', sci: 'Anemoaetus ophiophagus', group: 'Bird', sites: ['canopy', 'falls'], times: ['dawn', 'day', 'dusk'],
+    rarity: 3, danger: 0, size: '2.1 m wingspan', blurb: 'A powerful raptor built for speed, evolved in a world where the prey fly back. It snatches gliding serpents out of the air.',
+    behaviors: { soaring: 'Soaring', diving: 'Stooping dive', carrying: 'Carrying prey', perched: 'Perched' },
+    facts: [
+      { id: 'galehawk-diet', cat: 'Diet', q: 'What does the Gale Hawk carry off?', options: ['Fish', 'Serpents', 'Fruit'], answer: 1, text: 'Serpents make up most of its diet, especially gliding Skyribbons.', evidence: [ph('galehawk', 'carrying')], hint: 'Photograph it with prey in its talons.' },
+      { id: 'galehawk-dive', cat: 'Adaptation', q: 'How does it catch gliding prey?', options: ['A steep folded-wing dive', 'It waits on the ground', 'It chases on foot'], answer: 0, text: 'It folds its wings and stoops at over 200 km/h onto gliding snakes.', evidence: [vid('galehawk', 'diving')], hint: 'Record a dive on video.' },
+      { id: 'galehawk-perch', cat: 'Behaviour', q: 'Where does it watch for prey?', options: ['Emergent treetops', 'Burrows', 'Under waterfalls'], answer: 0, text: 'It perches on emergent treetops scanning the canopy for glides.', evidence: [ph('galehawk', 'perched')], hint: 'Find its lookout.' },
+    ],
+  },
+  {
+    id: 'cragauk', name: 'Crag Auk', sci: 'Rupialca aurigula', group: 'Bird', sites: ['falls', 'coast'], times: ['dawn', 'day', 'dusk'],
+    rarity: 2, danger: 0, size: '45 cm', blurb: 'A stocky black-and-white seabird with a golden throat, nesting on ledges so sheer only wings can reach them.',
+    behaviors: { nesting: 'Nesting', diving: 'Fishing dive', display: 'Courtship display', flying: 'Flying' },
+    facts: [
+      { id: 'cragauk-nest', cat: 'Behaviour', q: 'Where do Crag Auks nest?', options: ['In burrows', 'On sheer cliff ledges', 'In reeds'], answer: 1, text: 'Colonies crowd the sheerest cliff ledges above the falls and sea.', evidence: [ph('cragauk', 'nesting')], hint: 'Photograph one on its ledge.' },
+      { id: 'cragauk-diet', cat: 'Diet', q: 'What do Crag Auks eat?', options: ['Small fish', 'Snakes', 'Berries'], answer: 0, text: 'They dive from the air to catch small fish in the plunge pool and surf.', evidence: [ph('cragauk', 'diving')], hint: 'Watch them over the water.' },
+      { id: 'cragauk-display', cat: 'Behaviour', q: 'What is the golden throat for?', options: ['Camouflage', 'Courtship display', 'Keeping warm'], answer: 1, text: 'Pairs flare their golden throats in noisy courtship displays.', evidence: [ph('cragauk', 'display')], hint: 'Catch a display.' },
+    ],
+  },
+  {
+    id: 'torrentdipper', name: 'Torrent Dipper', sci: 'Cinclops cataractae', group: 'Bird', sites: ['falls'], times: ['dawn', 'day'],
+    rarity: 3, danger: 0, size: '20 cm', blurb: 'A slate-blue songbird that walks underwater along the stream bed and nests behind the waterfall curtain itself.',
+    behaviors: { diving: 'Walking underwater', bobbing: 'Bobbing', flying: 'Flying' },
+    facts: [
+      { id: 'dipper-nest', cat: 'Behaviour', q: 'Where does the Torrent Dipper nest?', options: ['Behind the waterfall', 'In the canopy', 'On the beach'], answer: 0, text: 'It builds mossy nests behind the waterfall curtain, where no snake can reach.', evidence: [cl('falls-nest'), ph('torrentdipper', 'flying')], hint: 'Something is hidden behind the falls.' },
+      { id: 'dipper-dive', cat: 'Adaptation', q: 'How does it feed?', options: ['Walks underwater', 'Catches insects in flight', 'Eats seeds'], answer: 0, text: 'Dense bones and oiled feathers let it walk along the stream bed hunting larvae.', evidence: [ph('torrentdipper', 'diving')], hint: 'Photograph it going under.' },
+      { id: 'dipper-bob', cat: 'Behaviour', q: 'Why does it bob constantly?', options: ['To signal over the roar of water', 'It is cold', 'To dry off'], answer: 0, text: 'Its bobbing and white eyelid flashes signal to mates over the thunder of the falls.', evidence: [ph('torrentdipper', 'bobbing')], hint: 'Watch it on a wet rock.' },
+    ],
+  },
+  {
+    id: 'snakestork', name: 'Serpent Stork', sci: 'Ophiociconia armata', group: 'Bird', sites: ['mangrove'], times: ['dawn', 'day', 'dusk'],
+    rarity: 2, danger: 0, size: '1.4 m', blurb: 'A tall stork with armoured leg scales and a dagger bill, specialising in spearing water snakes.',
+    behaviors: { stalking: 'Stalking', catching: 'Catching a serpent', display: 'Bill-clatter display', flying: 'Flying' },
+    facts: [
+      { id: 'stork-diet', cat: 'Diet', q: 'What does the Serpent Stork eat?', options: ['Water snakes', 'Leaves', 'Crabs only'], answer: 0, text: 'It spears Mudribbons and young serpents from the shallows.', evidence: [ph('snakestork', 'catching')], hint: 'Photograph a successful catch.' },
+      { id: 'stork-armor', cat: 'Adaptation', q: 'Why are its legs covered in thick scales?', options: ['Protection from bites', 'For swimming', 'Decoration'], answer: 0, text: 'Armoured leg scales shrug off bites from the snakes it hunts.', evidence: [ph('snakestork', 'stalking')], hint: 'Look closely at it wading.' },
+      { id: 'stork-display', cat: 'Behaviour', q: 'How do Serpent Storks court?', options: ['Loud bill-clattering', 'Singing', 'Dancing on water'], answer: 0, text: 'Pairs clatter their bills with wings raised in a loud duet.', evidence: [ph('snakestork', 'display')], hint: 'Catch a display.' },
+    ],
+  },
+  // ------------------------------------------------------------ MAMMALS
+  {
+    id: 'shieldback', name: 'Shieldback', sci: 'Loricatherium volvens', group: 'Mammal', sites: ['fernwood', 'falls'], times: ['dawn', 'day', 'dusk'],
+    rarity: 1, danger: 0, size: '60 cm', blurb: 'An armoured mammal plated like a pangolin. At the first flick of a forked tongue it rolls into a bite-proof ball.',
+    behaviors: { foraging: 'Foraging', rolled: 'Rolled up', digging: 'Digging' },
+    facts: [
+      { id: 'shield-roll', cat: 'Adaptation', q: 'How does the Shieldback defend itself?', options: ['Rolls into an armoured ball', 'Runs up trees', 'Sprays scent'], answer: 0, text: 'Overlapping plates lock into a sphere no snake jaw can grip.', evidence: [ph('shieldback', 'rolled')], hint: 'Startle one, or wait for a serpent to pass.' },
+      { id: 'shield-diet', cat: 'Diet', q: 'What does the Shieldback eat?', options: ['Roots and fungi', 'Birds', 'Fish'], answer: 0, text: 'It roots through the soil for tubers and truffle-like fungi.', evidence: [ph('shieldback', 'foraging')], hint: 'Photograph it snuffling for food.' },
+      { id: 'shield-eco', cat: 'Ecology', q: 'Why are Shieldbacks armoured?', options: ['Constant serpent predation', 'Cold winters', 'Falling trees'], answer: 0, text: 'Millions of years of snake predation favoured armour over speed.', evidence: [cl('scute'), ph('shieldback', 'digging')], hint: 'A lost plate is a clue.' },
+    ],
+  },
+  {
+    id: 'quillhog', name: 'Quillhog', sci: 'Echinomys nocturnus', group: 'Mammal', sites: ['fernwood'], times: ['dusk', 'night'],
+    rarity: 2, danger: 0, size: '45 cm', blurb: 'A nocturnal forager bristling with white-tipped quills that it rattles and raises at anything with scales.',
+    behaviors: { foraging: 'Foraging', quills: 'Quill display', eating: 'Eating fruit' },
+    facts: [
+      { id: 'quill-display', cat: 'Adaptation', q: 'What does it do when threatened?', options: ['Raises and rattles its quills', 'Plays dead', 'Climbs a tree'], answer: 0, text: 'It fans barbed quills and rattles them; snakes learn fast.', evidence: [ph('quillhog', 'quills')], hint: 'Photograph its defence.' },
+      { id: 'quill-diet', cat: 'Diet', q: 'What does the Quillhog love to eat?', options: ['Fallen fruit', 'Snails only', 'Eggs'], answer: 0, text: 'It gorges on fallen fruit; a fruit lure brings it running.', evidence: [ph('quillhog', 'eating')], hint: 'Try a fruit lure at night.' },
+      { id: 'quill-time', cat: 'Activity', q: 'When is it active?', options: ['At night', 'At midday', 'Only at dawn'], answer: 0, text: 'Nocturnal: it avoids day-hunting hawks and basking serpents.', evidence: [ph('quillhog', 'foraging')], hint: 'Look after dark.' },
+    ],
+  },
+  {
+    id: 'delver', name: 'Tunnel Delver', sci: 'Fossorimys vigil', group: 'Mammal', sites: ['fernwood', 'falls'], times: ['dawn', 'day', 'dusk'],
+    rarity: 1, danger: 0, size: '25 cm', blurb: 'A pink-nosed burrower that lives in huge tunnel towns and pops up to keep watch for serpents.',
+    behaviors: { peeking: 'Keeping watch', digging: 'Digging', eating: 'Eating roots' },
+    facts: [
+      { id: 'delver-home', cat: 'Behaviour', q: 'Where do Delvers live?', options: ['Tunnel networks', 'Tree hollows', 'Floating nests'], answer: 0, text: 'Colonies dig tunnel towns with dozens of entrances.', evidence: [cl('burrow'), ph('delver', 'digging')], hint: 'Find their burrows.' },
+      { id: 'delver-watch', cat: 'Behaviour', q: 'Why do Delvers pop up and freeze?', options: ['Sentinels watching for serpents', 'Sunbathing', 'Sleeping'], answer: 0, text: 'Sentinels stand guard and squeak an alarm when serpents approach.', evidence: [ph('delver', 'peeking')], hint: 'Photograph a sentinel.' },
+      { id: 'delver-diet', cat: 'Diet', q: 'What do they eat?', options: ['Roots and tubers', 'Insects', 'Fish'], answer: 0, text: 'They graze on roots underground and nibble tubers at the surface.', evidence: [ph('delver', 'eating')], hint: 'Catch one eating.' },
+    ],
+  },
+  {
+    id: 'sailglider', name: 'Sail Possum', sci: 'Velopetaurus nectarius', group: 'Mammal', sites: ['canopy'], times: ['dusk', 'night', 'dawn'],
+    rarity: 2, danger: 0, size: '30 cm', blurb: 'A big-eyed glider with a sail of skin between its limbs, drifting from blossom to blossom at dusk.',
+    behaviors: { gliding: 'Gliding', feeding: 'Sipping nectar', grooming: 'Grooming' },
+    facts: [
+      { id: 'sail-glide', cat: 'Adaptation', q: 'How does the Sail Possum travel?', options: ['Gliding on skin membranes', 'Swinging on vines', 'Flying with feathers'], answer: 0, text: 'A patagium of skin stretched between wrists and ankles lets it glide 50 m.', evidence: [vid('sailglider', 'gliding')], hint: 'Record a glide.' },
+      { id: 'sail-diet', cat: 'Diet', q: 'What does it feed on?', options: ['Rata nectar', 'Snake eggs', 'Beetles'], answer: 0, text: 'It laps nectar from red rata blossoms with a brush-tipped tongue.', evidence: [ph('sailglider', 'feeding')], hint: 'Watch the red flowers.' },
+      { id: 'sail-pred', cat: 'Ecology', q: 'Why does it avoid bright lights at night?', options: ['Lure-Vipers use glowing lures', 'It is shy of the moon', 'Bright lights burn it'], answer: 0, text: 'Young possums that chase glowing lures often end up as Lure-Viper meals.', evidence: [ph('lurevip', 'luring')], hint: 'What glows in the night canopy?' },
+    ],
+  },
+  {
+    id: 'flicker', name: 'Flicker Marten', sci: 'Ophiomachus velox', group: 'Mammal', sites: ['canopy', 'fernwood'], times: ['dawn', 'day', 'dusk'],
+    rarity: 4, danger: 0, size: '70 cm', blurb: 'A blindingly fast marten that picks fights with serpents twice its size and wins — Zealandia’s mongoose.',
+    behaviors: { leaping: 'Leaping', fighting: 'Fighting a serpent', alert: 'On alert' },
+    facts: [
+      { id: 'flicker-diet', cat: 'Diet', q: 'What does the Flicker Marten hunt?', options: ['Serpents', 'Fruit', 'Fish'], answer: 0, text: 'It hunts serpents, dodging strikes with lightning reflexes.', evidence: [ph('flicker', 'fighting')], hint: 'Photograph a fight with a serpent.' },
+      { id: 'flicker-agility', cat: 'Adaptation', q: 'How does it avoid being bitten?', options: ['Extreme speed and agility', 'Thick armour', 'It hides underground'], answer: 0, text: 'Reflexes twice as fast as a viper strike; it leaps clear, then bites the neck.', evidence: [vid('flicker', 'leaping')], hint: 'Record its acrobatics.' },
+      { id: 'flicker-venom', cat: 'Anatomy', q: 'What protects it from venom?', options: ['Venom-resistant blood', 'Feathers', 'Nothing'], answer: 0, text: 'Its blood proteins resist serpent venom, like a mongoose.', evidence: [cl('scat-scales'), ph('flicker', 'alert')], hint: 'Its droppings tell you what it eats — and survives.' },
+    ],
+  },
+  // ------------------------------------------------------------ REPTILE
+  {
+    id: 'ironjaw', name: 'Ironjaw Crocodile', sci: 'Crocodylus ferrognathus', group: 'Reptile', sites: ['mangrove'], times: ['dawn', 'day', 'dusk', 'night'],
+    rarity: 3, danger: 2, size: '5 m', blurb: 'An armoured crocodile that rules the mangrove channels. Only the Titan Constrictor dares challenge it.',
+    behaviors: { basking: 'Basking, jaws open', lurking: 'Lurking', swimming: 'Swimming', lunging: 'Lunging' },
+    facts: [
+      { id: 'croc-bask', cat: 'Behaviour', q: 'Why does the Ironjaw bask with its jaws open?', options: ['To cool down', 'To scare rivals', 'To catch flies'], answer: 0, text: 'Gaping lets heat escape from the mouth — it is air conditioning.', evidence: [ph('ironjaw', 'basking')], hint: 'Photograph it on the mudbank.' },
+      { id: 'croc-hunt', cat: 'Behaviour', q: 'How does it hunt?', options: ['Lurks with only its eyes above water', 'Climbs trees', 'Chases prey inland'], answer: 0, text: 'It drifts with only eyes and nostrils showing, then lunges.', evidence: [ph('ironjaw', 'lurking')], hint: 'Look for eyes on the water.' },
+      { id: 'croc-diet', cat: 'Diet', q: 'What does the Ironjaw prey on?', options: ['Storks and serpents at the water edge', 'Seaweed', 'Insects'], answer: 0, text: 'Anything at the water’s edge: storks, Mudribbons, even young Titans.', evidence: [ph('ironjaw', 'lunging'), cl('vertebrae')], hint: 'What is left on the bank?' },
+    ],
+  },
+];
+
+export const CLUES: ClueDef[] = [
+  { id: 'grub-shells', name: 'Chewed grub casings', desc: 'Empty beetle-larva husks beside freshly dug soil, with claw marks.', site: 'fernwood', icon: 'shells' },
+  { id: 'fur-tuft', name: 'Tuft of fur', desc: 'Brown fur caught on a thorn, next to two-toed running tracks.', site: 'fernwood', icon: 'fur' },
+  { id: 'scute', name: 'Armour plate', desc: 'A shed Shieldback scute, scored with fang marks that failed to pierce it.', site: 'fernwood', icon: 'scute' },
+  { id: 'burrow', name: 'Burrow mound', desc: 'A ring of loose earth around a hole; more holes nearby.', site: 'fernwood', icon: 'burrow' },
+  { id: 'scat-scales', name: 'Scaly droppings', desc: 'Mammal droppings packed with serpent scales and a fang.', site: 'canopy', icon: 'scat' },
+  { id: 'shed-ribbon', name: 'Iridescent shed skin', desc: 'A rainbow shed skin snagged on a treetop far above the ground.', site: 'canopy', icon: 'skin' },
+  { id: 'giant-skin', name: 'Colossal shed skin', desc: 'A shed skin so large it drapes the rocks like a tarp. Something enormous lives nearby.', site: 'falls', icon: 'bigskin' },
+  { id: 'eggshell', name: 'Eggshell fragments', desc: 'Cracked, gold-speckled eggshells beneath the nesting cliff.', site: 'falls', icon: 'egg' },
+  { id: 'falls-nest', name: 'Mossy nest', desc: 'A nest of moss behind the waterfall curtain, dripping but warm.', site: 'falls', icon: 'nest' },
+  { id: 'croc-scute', name: 'Crocodile scute', desc: 'A bony plate from an adult Ironjaw, etched by stomach acid.', site: 'mangrove', icon: 'scute' },
+  { id: 'vertebrae', name: 'Serpent vertebrae', desc: 'A string of snake vertebrae on the mudbank, crushed by massive jaws.', site: 'mangrove', icon: 'bones' },
+];
+
+export const SPECIES_BY_ID: Record<string, Species> = Object.fromEntries(SPECIES.map(s => [s.id, s]));
+export const CLUE_BY_ID: Record<string, ClueDef> = Object.fromEntries(CLUES.map(c => [c.id, c]));
+export const ALL_FACTS = SPECIES.flatMap(s => s.facts.map(f => ({ species: s.id, fact: f })));
