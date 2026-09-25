@@ -65,11 +65,17 @@ export class TravelScene implements Scene {
       rr.draw(A.shadow, x, road(x) + 1, 3.4, 1.2, 0, packColor(0, 0, 0, 0.5));
       rr.endShadows();
       const flip = this.returning ? -1 : 1;
-      // crew heads in the windows
-      const bolt = chars.bolt.idle[0], otis = chars.otis.idle[0];
-      rr.drawSub(bolt, 0, 0, bolt.w, 20, x + flip * 18 - (bolt.w / 2), y - 58, 1, 1);
-      rr.drawSub(otis, 0, 0, otis.w, 20, x - flip * 6 - (otis.w / 2), y - 56, 1, 1);
       rr.draw(props.jeep, x, y - 5, flip, 1, tilt);
+      // crew faces in the windows (front: Bolt driving, rear: Otis)
+      const bolt = chars.bolt.idle[0], otis = chars.otis.idle[Math.floor(s.time * 2) % 4];
+      const top = y - 5 - 54;
+      const bob = Math.abs(Math.sin(s.time * 11)) * 0.6;
+      const win = (fr: typeof bolt, wx: number, sy: number) => {
+        const cx = flip > 0 ? x - 56 + wx : x + 56 - wx - 17;
+        rr.drawSub(fr, Math.floor(fr.w / 2) - 7, sy, 17, 13, cx, top + 8 + bob, 1, 1);
+      };
+      win(bolt, 40, 7);
+      win(otis, 18, 6);
       const wf = propAnims.wheel;
       const fr = wf[Math.floor(s.time * 20) % wf.length];
       rr.draw(fr, x - 56 * flip + 24 * flip - 12 * 0, y - 11 + 0.5, flip, 1);
