@@ -61,7 +61,7 @@ export const SPECIES: Species[] = [
     ],
   },
   {
-    id: 'sprinter', name: 'Sprint Viper', sci: 'Dromophis rapax', group: 'Serpent', sites: ['fernwood'], times: ['dusk', 'night'],
+    id: 'sprinter', name: 'Sprint Viper', sci: 'Dromophis rapax', group: 'Serpent', sites: ['fernwood', 'falls'], times: ['dusk', 'night'],
     rarity: 3, danger: 1, size: '1.8 m', blurb: 'A bipedal viper that runs on two powerful hind legs, tail held out like a counterweight. It hunts by running prey down at dusk.',
     behaviors: { running: 'Sprinting', hunting: 'Hunting', threat: 'Threat display', resting: 'Resting' },
     facts: [
@@ -91,7 +91,7 @@ export const SPECIES: Species[] = [
     ],
   },
   {
-    id: 'titan', name: 'Titan Constrictor', sci: 'Gigantophis rex', group: 'Serpent', sites: ['mangrove', 'fernwood'], times: ['dawn', 'day', 'dusk', 'night'],
+    id: 'titan', name: 'Titan Constrictor', sci: 'Gigantophis rex', group: 'Serpent', sites: ['mangrove'], times: ['dawn', 'day', 'dusk', 'night'],
     rarity: 5, danger: 3, size: '16 m', blurb: 'The apex predator of Zealandia. A colossal constrictor whose mottled coils vanish among mangrove roots. Do not let it see you.',
     behaviors: { ambush: 'Ambushing', digesting: 'Digesting', swimming: 'Swimming', hunting: 'Hunting' },
     facts: [
@@ -113,7 +113,7 @@ export const SPECIES: Species[] = [
   {
     id: 'mudribbon', name: 'Mudribbon', sci: 'Limnophis fasciatus', group: 'Serpent', sites: ['mangrove'], times: ['day', 'dusk', 'night'],
     rarity: 2, danger: 0, size: '1.7 m', blurb: 'A banded water snake of the mangrove channels, with nostrils set high on its snout like a crocodile.',
-    behaviors: { swimming: 'Swimming', fishing: 'Fishing', basking: 'Basking on roots' },
+    behaviors: { swimming: 'Swimming', fishing: 'Fishing' },
     facts: [
       { id: 'mudribbon-diet', cat: 'Diet', q: 'What does the Mudribbon eat?', options: ['Fish and mudskippers', 'Leaves', 'Birds'], answer: 0, text: 'It ambushes mudskippers and small fish in the shallows.', evidence: [ph('mudribbon', 'fishing')], hint: 'Photograph it catching a meal.' },
       { id: 'mudribbon-nose', cat: 'Adaptation', q: 'Why are its nostrils on top of its snout?', options: ['To smell flowers', 'To breathe while almost submerged', 'To hear better'], answer: 1, text: 'High nostrils let it breathe while its body stays hidden under murky water.', evidence: [ph('mudribbon', 'swimming')], hint: 'Watch how it swims.' },
@@ -121,7 +121,7 @@ export const SPECIES: Species[] = [
     ],
   },
   {
-    id: 'cragviper', name: 'Crag Viper', sci: 'Petrophis oophagus', group: 'Serpent', sites: ['falls', 'coast'], times: ['day', 'dusk'],
+    id: 'cragviper', name: 'Crag Viper', sci: 'Petrophis oophagus', group: 'Serpent', sites: ['falls'], times: ['day', 'dusk'],
     rarity: 3, danger: 1, size: '1.4 m', blurb: 'A granite-grey viper with keeled belly scales that let it climb sheer rock. It is why cliff birds nest where they do.',
     behaviors: { climbing: 'Climbing rock', raiding: 'Raiding a nest', basking: 'Basking' },
     facts: [
@@ -142,7 +142,7 @@ export const SPECIES: Species[] = [
     ],
   },
   {
-    id: 'cragauk', name: 'Crag Auk', sci: 'Rupialca aurigula', group: 'Bird', sites: ['falls', 'coast'], times: ['dawn', 'day', 'dusk'],
+    id: 'cragauk', name: 'Crag Auk', sci: 'Rupialca aurigula', group: 'Bird', sites: ['falls'], times: ['dawn', 'day', 'dusk'],
     rarity: 2, danger: 0, size: '45 cm', blurb: 'A stocky black-and-white seabird with a golden throat, nesting on ledges so sheer only wings can reach them.',
     behaviors: { nesting: 'Nesting', diving: 'Fishing dive', display: 'Courtship display', flying: 'Flying' },
     facts: [
@@ -183,7 +183,7 @@ export const SPECIES: Species[] = [
     ],
   },
   {
-    id: 'quillhog', name: 'Quillhog', sci: 'Echinomys nocturnus', group: 'Mammal', sites: ['fernwood'], times: ['dusk', 'night'],
+    id: 'quillhog', name: 'Quillhog', sci: 'Echinomys nocturnus', group: 'Mammal', sites: ['fernwood', 'falls'], times: ['dusk', 'night'],
     rarity: 2, danger: 0, size: '45 cm', blurb: 'A nocturnal forager bristling with white-tipped quills that it rattles and raises at anything with scales.',
     behaviors: { foraging: 'Foraging', quills: 'Quill display', eating: 'Eating fruit' },
     facts: [

@@ -152,7 +152,8 @@ export class CameraSystem {
     r.post.ca = 0.0025;
 
     // shutter / record
-    if (inp.click(0) && this.cooldown <= 0) {
+    const fire = (inp.shutter && !game.ui.blocking) || (inp.click(0) && inp.lastDevice !== 'touch');
+    if (fire && this.cooldown <= 0) {
       if (this.mode === 'photo') this.shoot(st, creatures, player);
       else if (this.recording) this.stopRecording(st, creatures);
       else this.startRecording();

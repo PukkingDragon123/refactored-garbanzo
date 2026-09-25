@@ -717,10 +717,28 @@ export class Titan extends SerpentBase {
     this.depth = 0.5;
     this.waveAmp = 2;
     this.setState('ambush', 'ambush');
+    this.startDigest = rand.chance(0.4);
   }
+  startDigest = false;
   think(dt: number, ctx: Ctx) {
     if (this.scripted) return;
     const wy = ctx.waterY ?? this.hy;
+    if (this.startDigest) {
+      // sprawled across a mudbank, swollen with a crocodile-sized meal
+      this.startDigest = false;
+      const bank = ctx.terrain.surfaces.find(s => !s.oneWay && s.pts[0][0] > 900 && s.pts[0][0] < 1300);
+      if (bank) {
+        const x0 = bank.pts[0][0] + 20;
+        for (let i = 0; i < this.pts.length; i++) {
+          const x = x0 + 220 - i * this.spacing * 0.6;
+          const g = Terrain.yAt(bank, clamp(x, bank.pts[0][0], bank.pts[bank.pts.length - 1][0])) ?? wy;
+          this.pts[i][0] = x;
+          this.pts[i][1] = Math.min(g, wy + 4) - this.painter.radiusAt(i / this.pts.length) * 0.8 + Math.sin(i * 0.09) * 6;
+        }
+        this.facing = 1;
+        this.setState('digest', 'digesting');
+      }
+    }
     this.strikeCD -= dt;
     this.grounded = false;
     this.flick(dt, 0.3);
@@ -762,11 +780,13 @@ export class Titan extends SerpentBase {
       }
       case 'digest':
         this.swell = { at: 0.45, k: 0.9 };
-        this.submergeY = undefined;
+        this.submergeY = wy + 3;
         this.grounded = true;
-        if (this.stateT > 30) { this.swell = undefined; this.setState('swim', 'swimming'); }
+        this.flick(dt, 0.2);
+        if (this.stateT > 70 || (this.alerted && Math.abs(p.x - this.hx) < 120)) { this.swell = undefined; this.setState('swim', 'swimming'); this.tx = this.hx + 300; ctx.splash(this.hx, wy, 2); }
         break;
     }
+    if (this.state === 'digest') { this.x = this.hx; this.y = this.hy; return; }
     if (this.alerted && this.strikeCD <= 0 && (this.state === 'ambush' || this.state === 'swim') && Math.abs(p.x - this.hx) < 180) {
       this.setState('rear', 'hunting');
       audio.play('hiss', { vol: 0.9, pitch: 0.5 });

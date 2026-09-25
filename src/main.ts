@@ -4,6 +4,7 @@ import { bakeAssets } from './game/assets';
 import { loadSave, newSave } from './game/save';
 import { audio } from './core/audio';
 import { el } from './ui/ui';
+import { setupTouch } from './ui/touch';
 import type { SiteId } from './game/species';
 import type { TimeOfDay } from './world/timeofday';
 
@@ -36,6 +37,7 @@ async function boot() {
   const unlock = () => audio.unlock();
   window.addEventListener('pointerdown', unlock);
   window.addEventListener('keydown', unlock);
+  setupTouch();
   game.r.post.fade = 1;
   game.fadeTo(1);
   game.start();

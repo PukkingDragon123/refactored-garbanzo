@@ -250,9 +250,10 @@ export class TorrentDipper extends Bird {
       case 'dive':
         this.anim = 'swim';
         this.submerged = this.stateT > 0.4 && this.stateT < 3;
+        this.hiddenFromCamera = this.submerged;
         if (this.stateT < 0.4) this.y = lerp(this.y, wy + 1, 0.2);
         if (Math.abs(this.stateT - 0.4) < dt) ctx.splash(this.x, wy, 0.4);
-        if (this.stateT > 3) { this.submerged = false; const p = rand.pick(this.perches); this.target = [p.x, p.y]; this.setState('hop', 'flying'); ctx.splash(this.x, wy, 0.3); }
+        if (this.stateT > 3) { this.submerged = false; this.hiddenFromCamera = false; const p = rand.pick(this.perches); this.target = [p.x, p.y]; this.setState('hop', 'flying'); ctx.splash(this.x, wy, 0.3); }
         break;
       case 'hop':
         if (this.flyTo(this.target![0], this.target![1], dt, 110)) {

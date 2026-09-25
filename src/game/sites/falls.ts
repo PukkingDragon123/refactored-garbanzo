@@ -17,9 +17,9 @@ import { hex } from '../../art/color';
 import { packColor } from '../../gfx/renderer';
 import { timePreset } from '../../world/timeofday';
 import { Rng, rand } from '../../core/math';
-import { Strider, CragViper } from '../wildlife/serpents';
+import { Strider, CragViper, Sprinter } from '../wildlife/serpents';
 import { CragAuk, TorrentDipper, GaleHawk } from '../wildlife/birds';
-import { Shieldback, Delver } from '../wildlife/mammals';
+import { Shieldback, Delver, Quillhog } from '../wildlife/mammals';
 import { setFlag } from '../story';
 
 const W = 1800;
@@ -148,6 +148,8 @@ export function buildFalls(st: Stage, sc: ExpeditionScene): SiteContent {
       { species: 'strider', n: 2, times: ['dawn', 'day', 'dusk'], respawn: 40, make: (_c, i) => { const x = [250, 700][i % 2]; return new Strider(x, fallsGround(x) - 4, rand.sign()); } },
       { species: 'shieldback', n: 1, times: ['dawn', 'day', 'dusk'], make: () => new Shieldback(520, 0) },
       { species: 'delver', n: 1, times: ['dawn', 'day', 'dusk'], make: () => new Delver(holes[0], fallsGround(holes[0]), holes) },
+      { species: 'quillhog', n: 2, times: ['dusk', 'night'], respawn: 40, make: (_c, i) => new Quillhog([380, 720][i % 2], 0) },
+      { species: 'sprinter', n: 1, times: ['night'], respawn: 60, make: () => new Sprinter(600, fallsGround(600) - 16, -1) },
     ],
     jeepX: 90,
     spawnX: 170,

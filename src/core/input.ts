@@ -54,6 +54,8 @@ export class Input {
   lastDevice: 'mouse' | 'keyboard' | 'touch' = 'mouse';
   /** set by UI when a modal overlay owns input */
   blocked = false;
+  /** set by the on-screen shutter button */
+  shutter = false;
   onAnyKey: ((code: string) => void) | null = null;
 
   constructor(private canvas: HTMLCanvasElement, private viewSize: () => { w: number; h: number }) {
@@ -103,6 +105,15 @@ export class Input {
     }, { passive: false });
   }
 
+  /** Virtual key press (touch controls). */
+  press(code: string) {
+    if (!this.keys.has(code)) this.pressedKeys.add(code);
+    this.keys.add(code);
+  }
+  release(code: string) {
+    if (this.keys.has(code)) this.releasedKeys.add(code);
+    this.keys.delete(code);
+  }
   keyDown(code: string) {
     return this.keys.has(code);
   }
@@ -138,6 +149,7 @@ export class Input {
     this.mousePressed[b] = false;
   }
   endFrame() {
+    this.shutter = false;
     this.pressedKeys.clear();
     this.releasedKeys.clear();
     this.mousePressed = [false, false, false];
