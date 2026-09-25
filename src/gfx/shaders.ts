@@ -1,0 +1,346 @@
+// GLSL sources for the render pipeline.
+//
+// Pipeline per frame:
+//   scene pass  -> MRT {albedo, aux(fog, emissive, lightReceive, depth), mat(water)}
+//   light pass  -> half-res HDR light accumulation (point lights, light cookies)
+//   composite   -> HDR = albedo * (ambient + light) (+ emissive), fog, water reflections
+//   fx pass     -> additive / alpha FX straight into HDR (glows, shafts, sparks)
+//   dof         -> half-res gather blur driven by aux depth (camera mode only)
+//   bloom       -> dual filter down/up chain
+//   final       -> tonemap, grade, vignette, grain, chromatic aberration, dissolve fade
+
+const AA_FN = /* glsl */ `
+vec2 pixelAA(vec2 uv, vec2 texSize) {
+  vec2 p = uv * texSize;
+  vec2 fw = max(fwidth(p), vec2(1e-4));
+  vec2 i = floor(p + 0.5);
+  vec2 f = p - i;
+  p = i + clamp(f / fw, -0.5, 0.5);
+  return p / texSize;
+}`;
+
+export const SPRITE_VS = /* glsl */ `#version 300 es
+layout(location=0) in vec2 a_pos;
+layout(location=1) in vec2 a_uv;
+layout(location=2) in vec4 a_color;
+layout(location=3) in vec4 a_aux;
+layout(location=4) in vec4 a_mat;
+uniform vec2 u_view;
+out vec2 v_uv;
+out vec4 v_color;
+out vec4 v_aux;
+out vec4 v_mat;
+void main() {
+  vec2 c = a_pos / u_view;
+  gl_Position = vec4(c.x * 2.0 - 1.0, 1.0 - c.y * 2.0, 0.0, 1.0);
+  v_uv = a_uv;
+  v_color = a_color;
+  v_aux = a_aux;
+  v_mat = a_mat;
+}`;
+
+export const SCENE_FS = /* glsl */ `#version 300 es
+precision highp float;
+uniform sampler2D u_tex;
+uniform vec2 u_texSize;
+uniform float u_shadow;
+in vec2 v_uv;
+in vec4 v_color;
+in vec4 v_aux;
+in vec4 v_mat;
+layout(location=0) out vec4 o_albedo;
+layout(location=1) out vec4 o_aux;
+layout(location=2) out vec4 o_mat;
+${AA_FN}
+void main() {
+  vec4 t = texture(u_tex, pixelAA(v_uv, u_texSize));
+  vec4 c = vec4(t.rgb * v_color.rgb * v_color.a, t.a * v_color.a);
+  if (c.a < 0.004) discard;
+  if (u_shadow > 0.5) {
+    o_albedo = vec4(0.0, 0.0, 0.0, c.a);
+    o_aux = vec4(0.0);
+    o_mat = vec4(0.0);
+    return;
+  }
+  o_albedo = c;
+  o_aux = v_aux * c.a;
+  o_mat = vec4(v_mat.rgb, 1.0) * c.a;
+}`;
+
+export const LIGHT_FS = /* glsl */ `#version 300 es
+precision highp float;
+uniform sampler2D u_tex;
+uniform float u_useTex;
+in vec2 v_uv;
+in vec4 v_color;
+in vec4 v_aux;
+out vec4 o;
+void main() {
+  vec3 col = v_color.rgb * v_aux.x * 16.0 * v_color.a;
+  if (u_useTex > 0.5) {
+    vec4 t = texture(u_tex, v_uv);
+    o = vec4(col * t.rgb, 0.0);
+    return;
+  }
+  float d2 = dot(v_uv, v_uv);
+  float f = clamp(1.0 - d2, 0.0, 1.0);
+  f = f * f;
+  float core = exp(-d2 * 9.0) * v_aux.y * 3.0;
+  o = vec4(col * (f + core), 0.0);
+}`;
+
+export const FX_FS = /* glsl */ `#version 300 es
+precision highp float;
+uniform sampler2D u_tex;
+uniform vec2 u_texSize;
+in vec2 v_uv;
+in vec4 v_color;
+in vec4 v_aux;
+out vec4 o;
+${AA_FN}
+void main() {
+  vec4 t = texture(u_tex, pixelAA(v_uv, u_texSize));
+  float k = v_color.a * (1.0 - v_aux.y);
+  o = vec4(t.rgb * v_color.rgb * (v_aux.x * 16.0) * k, t.a * k);
+}`;
+
+export const FULL_VS = /* glsl */ `#version 300 es
+out vec2 v_uv;
+out vec2 v_scr;
+void main() {
+  vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+  v_uv = p;
+  v_scr = vec2(p.x, 1.0 - p.y);
+  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}`;
+
+export const COMPOSITE_FS = /* glsl */ `#version 300 es
+precision highp float;
+uniform sampler2D u_albedo;
+uniform sampler2D u_aux;
+uniform sampler2D u_mat;
+uniform sampler2D u_light;
+uniform vec3 u_ambTop;
+uniform vec3 u_ambBot;
+uniform vec3 u_fogTop;
+uniform vec3 u_fogBot;
+uniform vec3 u_waterTint;
+uniform float u_waterAxis;
+uniform float u_hasWater;
+uniform float u_time;
+uniform vec2 u_viewArt;
+in vec2 v_uv;
+in vec2 v_scr;
+out vec4 o;
+
+vec3 shadeAt(vec2 uv, float sy) {
+  vec4 al = texture(u_albedo, uv);
+  vec4 ax = texture(u_aux, uv);
+  vec3 lm = texture(u_light, uv).rgb;
+  vec3 amb = mix(u_ambTop, u_ambBot, sy);
+  float e = ax.g;
+  float unlit = clamp(e * 2.0, 0.0, 1.0);
+  float gain = 1.0 + max(e * 2.0 - 1.0, 0.0) * 3.0;
+  vec3 lit = al.rgb * (amb + lm * ax.b);
+  vec3 c = mix(lit, al.rgb * gain, unlit);
+  vec3 fog = mix(u_fogTop, u_fogBot, sy);
+  return mix(c, fog, clamp(ax.r, 0.0, 1.0));
+}
+
+void main() {
+  vec3 c = shadeAt(v_uv, v_scr.y);
+  if (u_hasWater > 0.5) {
+    vec4 m = texture(u_mat, v_uv);
+    float d = v_scr.y - u_waterAxis;
+    if (m.r > 0.004 && d > 0.0) {
+      float artY = d * u_viewArt.y;
+      float row = floor(v_scr.y * u_viewArt.y);
+      float wave = sin(row * 0.85 - u_time * 2.4) * 0.65 + sin(row * 0.31 + v_scr.x * u_viewArt.x * 0.045 + u_time * 1.2) * 0.45;
+      float dx = wave * m.g * (0.6 + artY * 0.06) / u_viewArt.x;
+      float ry = u_waterAxis - d;
+      ry = (floor(ry * u_viewArt.y) + 0.5) / u_viewArt.y;
+      if (ry > 0.0) {
+        vec2 ruv = vec2(v_uv.x + dx, 1.0 - ry);
+        vec3 refl = shadeAt(ruv, ry) * u_waterTint;
+        float fade = smoothstep(0.0, 0.08, ry) * (1.0 - smoothstep(0.0, 0.9, d) * 0.35);
+        c = mix(c, refl, m.r * fade);
+      }
+      // glints along the surface
+      float g = sin(row * 1.7 + floor(v_scr.x * u_viewArt.x / 3.0) * 2.3 + u_time * 3.1);
+      c += u_waterTint * smoothstep(0.985, 1.0, g) * m.b * 0.6 * exp(-artY * 0.05);
+    }
+  }
+  o = vec4(max(c, 0.0), 1.0);
+}`;
+
+export const DOF_FS = /* glsl */ `#version 300 es
+precision highp float;
+uniform sampler2D u_src;
+uniform sampler2D u_aux;
+uniform float u_focus;
+uniform float u_strength;
+uniform vec2 u_px;
+uniform float u_maxR;
+in vec2 v_uv;
+out vec4 o;
+float coc(float d) { return clamp(abs(d - u_focus) * u_strength, 0.0, 1.0); }
+void main() {
+  float cd = texture(u_aux, v_uv).a;
+  float cc = coc(cd);
+  vec3 acc = texture(u_src, v_uv).rgb;
+  float wsum = 1.0;
+  const int N = 40;
+  for (int i = 0; i < N; i++) {
+    float fi = float(i) + 0.5;
+    float rr = sqrt(fi / float(N));
+    float a = fi * 2.39996323;
+    float dist = rr * u_maxR;
+    vec2 suv = v_uv + vec2(cos(a), sin(a)) * dist * u_px;
+    float sd = texture(u_aux, suv).a;
+    float sc = coc(sd) * u_maxR;
+    if (sd > cd) sc = min(sc, cc * u_maxR);
+    float w = clamp(sc - dist + 0.75, 0.0, 1.0);
+    acc += texture(u_src, suv).rgb * w;
+    wsum += w;
+  }
+  o = vec4(acc / wsum, 1.0);
+}`;
+
+export const BLOOM_PRE_FS = /* glsl */ `#version 300 es
+precision highp float;
+uniform sampler2D u_src;
+uniform vec2 u_px;
+uniform float u_threshold;
+uniform float u_knee;
+in vec2 v_uv;
+out vec4 o;
+void main() {
+  vec3 c = texture(u_src, v_uv + vec2(-0.5, -0.5) * u_px).rgb
+         + texture(u_src, v_uv + vec2(0.5, -0.5) * u_px).rgb
+         + texture(u_src, v_uv + vec2(-0.5, 0.5) * u_px).rgb
+         + texture(u_src, v_uv + vec2(0.5, 0.5) * u_px).rgb;
+  c *= 0.25;
+  float br = max(c.r, max(c.g, c.b));
+  float soft = clamp(br - u_threshold + u_knee, 0.0, 2.0 * u_knee);
+  soft = soft * soft / (4.0 * u_knee + 1e-5);
+  float contrib = max(soft, br - u_threshold) / max(br, 1e-5);
+  o = vec4(c * contrib, 1.0);
+}`;
+
+export const BLOOM_DOWN_FS = /* glsl */ `#version 300 es
+precision highp float;
+uniform sampler2D u_src;
+uniform vec2 u_px;
+in vec2 v_uv;
+out vec4 o;
+void main() {
+  vec3 c = texture(u_src, v_uv).rgb * 4.0;
+  c += texture(u_src, v_uv + vec2(-1.0, -1.0) * u_px).rgb;
+  c += texture(u_src, v_uv + vec2(1.0, -1.0) * u_px).rgb;
+  c += texture(u_src, v_uv + vec2(-1.0, 1.0) * u_px).rgb;
+  c += texture(u_src, v_uv + vec2(1.0, 1.0) * u_px).rgb;
+  o = vec4(c / 8.0, 1.0);
+}`;
+
+export const BLOOM_UP_FS = /* glsl */ `#version 300 es
+precision highp float;
+uniform sampler2D u_src;
+uniform vec2 u_px;
+uniform float u_weight;
+in vec2 v_uv;
+out vec4 o;
+void main() {
+  vec3 c = texture(u_src, v_uv + vec2(-1.0, 0.0) * u_px * 2.0).rgb;
+  c += texture(u_src, v_uv + vec2(-1.0, 1.0) * u_px).rgb * 2.0;
+  c += texture(u_src, v_uv + vec2(0.0, 1.0) * u_px * 2.0).rgb;
+  c += texture(u_src, v_uv + vec2(1.0, 1.0) * u_px).rgb * 2.0;
+  c += texture(u_src, v_uv + vec2(1.0, 0.0) * u_px * 2.0).rgb;
+  c += texture(u_src, v_uv + vec2(1.0, -1.0) * u_px).rgb * 2.0;
+  c += texture(u_src, v_uv + vec2(0.0, -1.0) * u_px * 2.0).rgb;
+  c += texture(u_src, v_uv + vec2(-1.0, -1.0) * u_px).rgb * 2.0;
+  o = vec4(c / 12.0 * u_weight, 1.0);
+}`;
+
+export const FINAL_FS = /* glsl */ `#version 300 es
+precision highp float;
+uniform sampler2D u_hdr;
+uniform sampler2D u_bloom;
+uniform sampler2D u_dof;
+uniform sampler2D u_aux;
+uniform float u_bloomStr;
+uniform float u_exposure;
+uniform float u_sat;
+uniform float u_contrast;
+uniform float u_vignette;
+uniform float u_grain;
+uniform float u_time;
+uniform float u_ca;
+uniform float u_fade;
+uniform float u_flash;
+uniform float u_dofOn;
+uniform float u_focus;
+uniform float u_dofStr;
+uniform vec3 u_lift;
+uniform vec3 u_gamma;
+uniform vec3 u_gain;
+uniform vec3 u_fadeColor;
+uniform vec2 u_viewArt;
+uniform vec2 u_res;
+in vec2 v_uv;
+in vec2 v_scr;
+out vec4 o;
+
+float hash(vec2 p) {
+  p = fract(p * vec2(443.897, 441.423));
+  p += dot(p, p.yx + 19.19);
+  return fract((p.x + p.y) * p.x);
+}
+float bayer4(vec2 p) {
+  int x = int(mod(p.x, 4.0)), y = int(mod(p.y, 4.0));
+  int m[16] = int[16](0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5);
+  return (float(m[y * 4 + x]) + 0.5) / 16.0;
+}
+vec3 shoulder(vec3 x) {
+  const float k = 0.78;
+  vec3 over = max(x - k, 0.0);
+  return min(x, vec3(k)) + (1.0 - k) * (1.0 - exp(-over / (1.0 - k)));
+}
+void main() {
+  vec2 uv = v_uv;
+  vec3 c;
+  if (u_ca > 0.0) {
+    vec2 d = (uv - 0.5) * u_ca;
+    c = vec3(texture(u_hdr, uv + d).r, texture(u_hdr, uv).g, texture(u_hdr, uv - d).b);
+  } else {
+    c = texture(u_hdr, uv).rgb;
+  }
+  if (u_dofOn > 0.5) {
+    float cd = texture(u_aux, uv).a;
+    float cc = clamp(abs(cd - u_focus) * u_dofStr, 0.0, 1.0);
+    c = mix(c, texture(u_dof, uv).rgb, smoothstep(0.04, 0.3, cc));
+  }
+  c += texture(u_bloom, uv).rgb * u_bloomStr;
+  c *= u_exposure;
+  c = shoulder(c);
+  c = c * u_gain + u_lift * (1.0 - c);
+  c = pow(max(c, 0.0), 1.0 / u_gamma);
+  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  c = mix(vec3(l), c, u_sat);
+  c = (c - 0.5) * u_contrast + 0.5;
+  vec2 q = (uv - 0.5) * vec2(u_res.x / u_res.y, 1.0);
+  c *= clamp(1.0 - dot(q, q) * u_vignette, 0.0, 1.0);
+  c += (hash(gl_FragCoord.xy + fract(u_time * 7.13) * 91.7) - 0.5) * u_grain;
+  vec2 ap = floor(v_scr * u_viewArt);
+  float th = bayer4(ap);
+  float f = clamp((u_fade - th * 0.4) / 0.6, 0.0, 1.0);
+  c = mix(c, u_fadeColor, f);
+  c = mix(c, vec3(1.0), u_flash);
+  o = vec4(clamp(c, 0.0, 1.0), 1.0);
+}`;
+
+export const BLIT_FS = /* glsl */ `#version 300 es
+precision highp float;
+uniform sampler2D u_src;
+in vec2 v_uv;
+out vec4 o;
+void main() { o = texture(u_src, v_uv); }`;
