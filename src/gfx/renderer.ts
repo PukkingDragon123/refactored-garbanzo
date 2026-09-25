@@ -87,6 +87,8 @@ export const hexColor = (hex: number, a = 1) =>
 
 export const WHITE = 0xffffffff;
 
+/** Camera rest height: layers of any parallax line up when the camera y equals this. */
+export const REF_Y = 135;
 const BYTES_PER_VERT = 28;
 const FLOATS_PER_VERT = 7;
 const QUAD_CAP = 16000;
@@ -302,7 +304,7 @@ export class Renderer {
     L.py = py;
     L.z = Math.pow(v.zoom, p);
     L.ox = this.VW / 2 - v.x * p * L.z + v.shakeX;
-    L.oy = this.VH / 2 - v.y * py * L.z + v.shakeY;
+    L.oy = this.VH / 2 - REF_Y * L.z - (v.y - REF_Y) * py * L.z + v.shakeY;
     L.fog = fog;
     L.receive = receive;
     L.emissive = emissive;
@@ -359,7 +361,7 @@ export class Renderer {
   }
   projectY(y: number, p: number) {
     const z = Math.pow(this.view.zoom, p);
-    return y * z + this.VH / 2 - this.view.y * p * z + this.view.shakeY;
+    return y * z + this.VH / 2 - REF_Y * z - (this.view.y - REF_Y) * p * z + this.view.shakeY;
   }
   /** World-space visible range on current layer (for culling) */
   visibleX0(margin = 0) {

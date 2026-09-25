@@ -8,7 +8,13 @@ export class PixelBuffer {
   readonly data: Uint32Array;
   readonly bytes: Uint8Array;
 
-  constructor(readonly w: number, readonly h: number) {
+  readonly w: number;
+  readonly h: number;
+  constructor(w: number, h: number) {
+    this.w = Math.max(1, Math.ceil(w));
+    this.h = Math.max(1, Math.ceil(h));
+    w = this.w;
+    h = this.h;
     this.bytes = new Uint8Array(w * h * 4);
     this.data = new Uint32Array(this.bytes.buffer);
   }

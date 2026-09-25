@@ -59,9 +59,10 @@ class Game {
     });
     this.scene?.exit?.();
     this.ui.clearScene();
+    this.scene = null;
     const s = typeof next === 'function' ? await next() : next;
-    this.scene = s;
     await s.enter?.();
+    this.scene = s;
     this.fadeDir = -1;
     this.busy = false;
   }
@@ -69,8 +70,9 @@ class Game {
   /** Immediately set a scene (first boot). */
   async setNow(s: Scene) {
     this.scene?.exit?.();
-    this.scene = s;
+    this.scene = null;
     await s.enter?.();
+    this.scene = s;
   }
 
   fadeTo(v: number, speed = 2) {
