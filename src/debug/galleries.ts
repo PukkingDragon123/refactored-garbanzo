@@ -4,6 +4,10 @@ import * as L from '../art/landscape';
 import { PAL } from '../art/palettes';
 import { hex } from '../art/color';
 import * as K from '../art/camp';
+import * as CH from '../art/characters';
+import * as FA from '../art/fauna';
+import { SerpentPainter } from '../art/serpent';
+import { PixelBuffer } from '../art/pixel';
 
 export function runGallery(name: string) {
   const items: GalleryItem[] = [];
@@ -63,5 +67,41 @@ export function runGallery(name: string) {
     items.push({ name: 'gen', buf: K.paintGenerator().buf });
     items.push({ name: 'table', buf: K.paintTable().buf });
   }
-  showGallery(items, name === 'land' ? 2 : 3);
+  if (name === 'chars') {
+    for (const id of Object.keys(CH.CREW)) {
+      const sp = CH.CREW[id];
+      items.push({ name: id, buf: CH.drawCharacter(sp, CH.idlePose(0)) });
+      for (let i = 0; i < 4; i++) items.push({ name: id + ' w' + i, buf: CH.drawCharacter(sp, CH.walkPose(i / 4)) });
+      if (id === 'otis') {
+        const p = CH.basePose(); p.camera = 'raised';
+        items.push({ name: 'otis cam', buf: CH.drawCharacter(sp, p) });
+        const c = CH.basePose(); c.crouch = 1;
+        items.push({ name: 'otis crouch', buf: CH.drawCharacter(sp, c) });
+      }
+    }
+  }
+  if (name === 'fauna') {
+    for (const [id, look] of Object.entries(FA.SERPENT_LOOKS)) {
+      if (look.length > 200) continue;
+      const sp = new SerpentPainter(look);
+      const n = 24, spc = look.length / n;
+      const pts: [number, number][] = [];
+      for (let i = 0; i <= n; i++) pts.push([look.length + 20 - i * spc, 30 + Math.sin(i * 0.5) * look.radius * 1.4 - (i < 3 ? (3 - i) * 2 : 0)]);
+      const buf = new PixelBuffer(Math.ceil(look.length * 1.3 + 40), 60);
+      sp.paint(buf, { pts, facing: 1, jaw: id === 'sprinter' || id === 'ironjaw' ? 0.6 : 0, tongue: 0.8, legPhase: 1, legLift: 1, grounded: true, groundY: () => 50, flatten: 0 }, 0, 0, 0);
+      items.push({ name: id, buf });
+    }
+    for (const [id, bs] of Object.entries(FA.BIRDS)) {
+      items.push({ name: id + ' stand', buf: FA.drawBird(bs, FA.birdPoses.stand(0)) });
+      items.push({ name: id + ' fly', buf: FA.drawBird(bs, FA.birdPoses.fly(1)) });
+      items.push({ name: id + ' fly2', buf: FA.drawBird(bs, FA.birdPoses.fly(4)) });
+      items.push({ name: id + ' disp', buf: FA.drawBird(bs, FA.birdPoses.display(1)) });
+    }
+    for (const [id, ms] of Object.entries(FA.MAMMALS)) {
+      items.push({ name: id, buf: FA.drawMammal(ms, FA.mammalPoses.stand(0)) });
+      items.push({ name: id + ' w', buf: FA.drawMammal(ms, FA.mammalPoses.walk(1)) });
+      items.push({ name: id + ' sp', buf: FA.drawMammal(ms, id === 'shieldback' ? FA.mammalPoses.ball() : id === 'quillhog' ? FA.mammalPoses.quill(1) : id === 'sailglider' ? FA.mammalPoses.glide() : id === 'delver' ? FA.mammalPoses.dig(0) : FA.mammalPoses.leap()) });
+    }
+  }
+  showGallery(items, name === 'land' ? 2 : name === 'chars' ? 5 : name === 'fauna' ? 4 : 3);
 }

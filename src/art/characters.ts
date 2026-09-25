@@ -224,11 +224,11 @@ export function drawCharacter(s: CharSpec, p: Pose): PixelBuffer {
   if (s.parkaWaist) {
     // Antarctic parka tied around the waist, sleeves knotted in front
     const P = PAL.canvasOrange;
-    for (let y = beltY - 1; y <= hipY + 3; y++)
-      for (let x = Math.floor(bcx - bw / 2 - 1); x <= bcx + bw / 2 + 1; x++) {
-        const nx = (x - bcx) / (bw / 2 + 1);
-        if (Math.abs(nx) > 1) continue;
-        if (y > hipY && nx > -0.1) continue;
+    for (let y = beltY - 1; y <= hipY + 2; y++)
+      for (let x = Math.floor(bcx - bw / 2); x <= bcx + bw / 2; x++) {
+        const nx = (x - bcx) / (bw / 2);
+        if (Math.abs(nx) > 1 || !b.opaque(x, Math.min(y, hipY))) continue;
+        if (y > beltY + 2 && nx > -0.45) continue;
         b.set(x, y, r5(P, nx < -0.4 ? 6 : nx > 0.5 ? 3 : 5));
       }
     // fur trim row
@@ -345,7 +345,7 @@ export function drawCharacter(s: CharSpec, p: Pose): PixelBuffer {
   if (s.beard && s.beard !== 'none') {
     const Bd = s.beardCol ?? s.hair;
     if (s.beard === 'full') {
-      b.ellipseFn(hcx + 1, hcy + headR * 0.55, headR * 0.95, headR * 0.6, (x, y, nx, ny) => {
+      b.ellipseFn(hcx + 1, hcy + headR * 0.72, headR * 0.9, headR * 0.45, (x, y, nx, ny) => {
         if (ny < -0.25) return -1;
         if (nx > 0.2 && nx < 0.62 && ny < 0.15 && ny > -0.25) return -1; // mouth gap
         return r5(Bd, nx < -0.3 ? 4 : (x + y) % 3 === 0 ? 2 : 3);
@@ -360,14 +360,15 @@ export function drawCharacter(s: CharSpec, p: Pose): PixelBuffer {
   }
   // glasses
   if (s.glasses === 'round') {
+    const rim = hex('#2a2320');
     for (const gx of [ex1, ex2]) {
-      b.set(gx - 1, ey - 1, O); b.set(gx + 1, ey - 1, O); b.set(gx - 1, ey + 2, O); b.set(gx + 1, ey + 2, O);
-      b.set(gx - 2, ey, O); b.set(gx - 2, ey + 1, O); b.set(gx + 2, ey, O); b.set(gx + 2, ey + 1, O);
-      b.set(gx, ey - 1, O); b.set(gx, ey + 2, O);
-      b.set(gx + 1, ey, hex('#cfe8f0'));
+      b.set(gx - 1, ey - 1, rim); b.set(gx + 1, ey - 1, rim); b.set(gx - 1, ey + 2, rim); b.set(gx + 1, ey + 2, rim);
+      b.set(gx - 2, ey, rim); b.set(gx - 2, ey + 1, rim); b.set(gx + 2, ey, rim); b.set(gx + 2, ey + 1, rim);
+      b.set(gx + 1, ey, hex('#e8f6fa'));
+      b.set(gx - 1, ey, hex('#bcd6de'));
     }
-    b.set(ex1 + 2, ey, O);
-    b.set(ex1 + 3, ey, O);
+    b.set(ex1 + 2, ey, rim);
+    b.set(ex1 + 3, ey, rim);
   } else if (s.glasses === 'half') {
     for (const gx of [ex1, ex2]) {
       b.set(gx - 1, ey + 2, O); b.set(gx, ey + 2, O); b.set(gx + 1, ey + 2, O);
@@ -465,9 +466,9 @@ export function drawCharacter(s: CharSpec, p: Pose): PixelBuffer {
     }
   }
   if (s.headphones) {
-    for (let x = Math.floor(bcx - 3); x <= bcx + 4; x++) b.set(x, bodyTop - 1 + Math.abs(x - bcx) * 0.25, PAL.metal[2]);
-    b.shadedEllipse(bcx - 4, bodyTop, 2.2, 2.4, PAL.metal.slice(1, 6));
-    b.shadedEllipse(bcx + 5, bodyTop, 2.2, 2.4, PAL.metal.slice(1, 6));
+    for (let x = Math.floor(bcx - 3); x <= bcx + 4; x++) b.set(x, bodyTop + 3 - Math.abs(x - bcx) * 0.3, PAL.metal[2]);
+    b.shadedEllipse(bcx - 4, bodyTop + 2, 2, 2.2, PAL.metal.slice(1, 6));
+    b.shadedEllipse(bcx + 4, bodyTop + 3, 2, 2.2, PAL.metal.slice(1, 6));
   }
 
   // ---------------- front arm & held items
