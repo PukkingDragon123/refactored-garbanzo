@@ -236,8 +236,8 @@ const FERNWOOD: FieldSite = {
     clueSpot(f, 'grub-shells', 620, fwGround(620), 'Look at the dug-up soil', 'Chewed grub casings. Something with claws has been feasting here.');
     clueSpot(f, 'burrow', 660, fwGround(660), 'Examine the mound', 'A burrow… no, a whole network of them.');
     clueSpot(f, 'boneface-track', 1420, fwGround(1420), 'Examine the tracks', 'Three toes, and deep. Whatever made these is heavy.');
-    frontFoliage(f, 0, FW_W, [150, 260], ['leaves', 'fronds', 'monstera', 'flax', 'grass'], 1.35, FW_G + 80, 41);
-    frontFoliage(f, 0, FW_W, [300, 520], ['vines', 'branch'], 1.35, -40, 42, { hang: true });
+    frontFoliage(f, 280, FW_W, [150, 260], ['leaves', 'fronds', 'monstera', 'flax', 'grass'], 1.35, FW_G + 110, 41);
+    frontFoliage(f, 280, FW_W, [300, 520], ['vines', 'branch'], 1.35, -40, 42, { hang: true });
     void rng;
   },
   spawns: [
@@ -314,8 +314,8 @@ const CANOPY: FieldSite = {
     clueSpot(f, 'gecko-shed', 770, cnGround(770), 'Examine the bark', 'A shed skin, gecko-shaped. Toe pads and all.');
     clueSpot(f, 'shed-ribbon', 1640, cnGround(1640), 'Look at the snagged skin', 'Rainbow scales… a snake shed this up HERE?');
     clueSpot(f, 'cracked-seeds', 990, cnGround(990), 'Look at the seeds', 'Split clean in half. I couldn’t do that with a hammer.');
-    frontFoliage(f, 0, CN_W, [180, 300], ['leaves', 'monstera', 'fronds'], 1.35, CN_G + 110, 61);
-    frontFoliage(f, 0, CN_W, [260, 420], ['vines', 'branch', 'palm'], 1.35, -60, 62, { hang: true });
+    frontFoliage(f, 280, CN_W, [180, 300], ['leaves', 'monstera', 'fronds'], 1.35, CN_G + 150, 61);
+    frontFoliage(f, 280, CN_W, [260, 420], ['vines', 'branch', 'palm'], 1.35, -60, 62, { hang: true });
   },
   spawns: [
     { species: 'skyribbon', n: [2, 3], x: [250, 2150], poi: 'branch', medium: 'trunk', times: ['dawn', 'day'], chance: 1 },
@@ -421,8 +421,8 @@ const FALLS: FieldSite = {
     clueSpot(f, 'falls-nest', 1180, POOL_Y - 10, 'Look behind the curtain', 'A mossy nest, right behind the falling water. Clever.', { z: 29 });
     clueSpot(f, 'bat-roost', 560, faGround(560), 'Look at the litter under the branch', 'Wētā legs and frog bones. Something eats up there.');
     clueSpot(f, 'monarch-feather', 1880, faGround(1880), 'Pull out the feather', 'A feather longer than my arm. What on earth…');
-    frontFoliage(f, 0, 900, [140, 240], ['fronds', 'flax', 'leaves', 'grass'], 1.35, FA_G + 80, 97);
-    frontFoliage(f, 0, 900, [300, 500], ['vines', 'branch'], 1.35, -40, 98, { hang: true });
+    frontFoliage(f, 280, 900, [140, 240], ['fronds', 'flax', 'leaves', 'grass'], 1.35, FA_G + 110, 97);
+    frontFoliage(f, 280, 900, [300, 500], ['vines', 'branch'], 1.35, -40, 98, { hang: true });
   },
   spawns: [
     { species: 'cragauk', n: [4, 7], x: [1280, 2000], poi: 'nest', herd: true, juveniles: 0.3, times: ['dawn', 'day', 'dusk'], chance: 1 },
@@ -511,8 +511,8 @@ const MANGROVE: FieldSite = {
     for (const [k, kind, x] of N) node(f, k, kind, x);
     clueSpot(f, 'croc-scute', 1960, mgGround(1960), 'Pick up the bony plate', 'Etched by stomach acid. Something swallowed a crocodile plate… and spat it out.');
     clueSpot(f, 'frog-spawn', 830, mgGround(830), 'Look at the hanging leaf', 'Frog spawn, hung over the water where the fish can’t reach.');
-    frontFoliage(f, 0, MG_W, [180, 300], ['grass', 'flax', 'fronds'], 1.35, MG_WY + 90, 131, { tint: packColor(0.45, 0.5, 0.48, 1) });
-    frontFoliage(f, 0, MG_W, [300, 500], ['vines', 'branch'], 1.35, -40, 132, { hang: true });
+    frontFoliage(f, 280, MG_W, [180, 300], ['grass', 'flax', 'fronds'], 1.35, MG_WY + 115, 131, { tint: packColor(0.45, 0.5, 0.48, 1) });
+    frontFoliage(f, 280, MG_W, [300, 500], ['vines', 'branch'], 1.35, -40, 132, { hang: true });
   },
   spawns: [
     { species: 'titan', n: [1, 1], x: [1320, 1700], medium: 'water', times: ['dawn', 'day', 'dusk', 'night'], chance: 1 },
@@ -551,7 +551,17 @@ const COAST: FieldSite = {
     seaL.add(new Prop({ ...bigFrame(r, sea), ax: 0, ay: 0 }, span.x0, 230));
     const main = mainLayer(f);
     // sea cliffs on the left
-    const cliff = SA.paintCliff(19, 420, 300, PAL.stone, [80, 150], false);
+    const cliff = SA.paintCliff(19, 420, 300, PAL.stone, [], false);
+    // carve a weathered headland: sloping top, jagged seaward face, a sea arch notch
+    for (let y = 0; y < cliff.h; y++) {
+      const edge = 150 + (y / cliff.h) * 230 + (fbm2(y * 0.05, 3, 3, 7) - 0.5) * 60 + (y > 220 && y < 262 ? -40 : 0);
+      const top = 40 + Math.max(0, 120 - y) * 0;
+      for (let x = 0; x < cliff.w; x++) {
+        const t = 30 + (x / cliff.w) * 90 + (fbm2(x * 0.04, 1, 3, 9) - 0.5) * 30;
+        if (x > edge || y < t || y < top - 40) cliff.set(x, y, 0);
+        else if (x > edge - 3 || y < t + 2) cliff.set(x, y, shade(cliff.get(x, y), 0.18));
+      }
+    }
     main.add(new Prop({ ...bigFrame(r, cliff), ax: 0, ay: 0 }, -120, CO_G - 300, -9));
     f.pois.push({ kind: 'perch', x: 200, y: CO_G - 220 }, { kind: 'perch', x: 120, y: CO_G - 150 });
     groundStrip(f, SEA_X + 300, G, [PAL.sand[5], PAL.sand[4], PAL.stone[5], PAL.stone[4]], PAL.stone[1], 13, 120);
@@ -606,7 +616,7 @@ const COAST: FieldSite = {
       enabled: () => !game.save.flags['divegear'],
       action: () => f.bark('rowan', 'That fin from the storm is out there somewhere. I’d need dive gear to get close.', { expr: 'thinking' }),
     });
-    frontFoliage(f, 0, SEA_X, [220, 360], ['grass', 'flax'], 1.35, CO_G + 90, 141);
+    frontFoliage(f, 280, SEA_X, [220, 360], ['grass', 'flax'], 1.35, CO_G + 115, 141);
   },
   spawns: [
     { species: 'monarch', n: [1, 2], x: [300, 2200], medium: 'air', times: ['dawn', 'day'], chance: 1 },
