@@ -177,6 +177,7 @@ export abstract class WorldScene implements Scene {
       game.ui.toast(`Field Guide clue: <b>${c?.name ?? def.clue}</b>`, 'CLUE', 'teal', 4200);
     }
     n.deplete();
+    if (n.kind === 'snare') game.save.vars['snares'] = (game.save.vars['snares'] ?? 0) + 1;
     game.persist();
     this.hud?.refresh();
   }
