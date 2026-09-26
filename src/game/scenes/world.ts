@@ -39,6 +39,8 @@ export abstract class WorldScene implements Scene {
   pausable = true;
   private busyAction = false;
   hovered: Interactable | null = null;
+  /** nearest interactable in reach this frame (touch controls label the Use button with it) */
+  nearIt: Interactable | null = null;
   /** night: some nodes only appear after dark */
   night = false;
   /** allow opening the backpack */
@@ -245,6 +247,7 @@ export abstract class WorldScene implements Scene {
       if (Math.abs(wx - it.x) < it.w && wy > it.y - it.h * 2 && wy < it.y + 6) this.hovered = it;
     }
     const near = nearestInteractable(this.interact, this.player.x, this.player.y);
+    this.nearIt = near;
     const show = this.hovered ?? near;
     for (const n of this.nodes) n.hover = !!show && Math.abs(show.x - n.x) < 1 && Math.abs(show.y - n.y) < 1;
     if (show) {

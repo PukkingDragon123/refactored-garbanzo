@@ -53,7 +53,7 @@ export class FieldCamera {
   focus = 0.5;
   /** handheld */
   private swayT = Math.random() * 10;
-  private breath = 1;
+  breath = 1;
   holding = false;
   breathless = 0;
   private swayX = 0;
