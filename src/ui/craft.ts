@@ -27,82 +27,82 @@ const EAT: Record<string, string> = { energy: 'Energy for a long day', steady: '
 const KIND_LABEL: Record<string, string> = { tool: 'Tool', material: 'Material', plant: 'Plant', fungus: 'Fungus', insect: 'Insect', animal: 'Animal sample', lure: 'Lure', food: 'Food', key: 'Key item' };
 
 const CSS = `
-.cr-root { font-variant-ligatures: none; position: relative; width: min(94vw, 58em); height: min(88vh, 33em); padding: calc(var(--px) * 13) calc(var(--px) * 13) calc(var(--px) * 11); color: var(--paper); display: flex; flex-direction: column; overflow: hidden !important; }
-.cr-root > :not(.k-backdrop) { position: relative; z-index: 1; }
-.cr-head { display: flex; align-items: center; gap: 0.7em; margin: 0 0 0.55em; min-height: 2.6em; }
-.cr-head .badge { width: 2.6em; height: 2.6em; image-rendering: pixelated; filter: drop-shadow(0 3px 0 rgba(0,0,0,0.35)); }
-.cr-head .t { font-family: var(--pix); font-size: 1.55em; color: var(--amber2); line-height: 1; text-shadow: 0 3px 0 rgba(0,0,0,0.45); }
-.cr-head .s { font-family: var(--hand); font-size: 1em; opacity: 0.85; }
-.cr-head .x { margin-left: auto; }
-.cr-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(15em, 20em) 1fr; gap: calc(var(--px) * 7); }
-.cr-list { overflow-y: auto; padding: 0.35em; display: flex; flex-direction: column; gap: 0.3em; scrollbar-width: thin; scrollbar-color: rgba(241,232,208,0.3) transparent; }
-.cr-rec { display: grid; grid-template-columns: 2.5em 1fr auto; align-items: center; gap: 0.55em; padding: 0.3em 0.5em 0.3em 0.3em; background: rgba(0,0,0,0.18); border: 0; color: var(--paper); font: inherit; text-align: left; cursor: pointer; box-shadow: inset 0 0 0 2px rgba(0,0,0,0.25); transition: transform 0.1s, background 0.12s; }
-.cr-rec:hover { background: rgba(255,255,255,0.08); transform: translateX(2px); }
-.cr-rec.sel { background: rgba(244,180,60,0.2); box-shadow: inset 0 0 0 2px var(--amber); }
-.cr-rec .ic { width: 2.5em; height: 2.5em; display: grid; place-items: center; background: rgba(0,0,0,0.28); box-shadow: inset 0 -3px 0 rgba(0,0,0,0.25); }
-.cr-rec .ic img { width: 2.25em; height: 2.25em; image-rendering: pixelated; }
-.cr-rec .nm { font-family: var(--pix); font-size: 0.98em; line-height: 1.1; min-width: 0; }
-.cr-rec .nm i { font-style: normal; color: var(--amber2); font-size: 0.85em; }
-.cr-rec .nm small { display: block; font-family: var(--body); font-size: 0.72em; opacity: 0.75; margin-top: 0.15em; white-space: normal; }
-.cr-rec .st { font-family: var(--pix); font-size: 0.68em; padding: 0.15em 0.45em; letter-spacing: 0.06em; white-space: nowrap; }
-.cr-rec .st.ok { background: var(--teal); color: #06241e; }
-.cr-rec .st.missing { background: rgba(232,97,74,0.25); color: #ffb3a4; }
-.cr-rec .st.tool, .cr-rec .st.full { background: rgba(155,124,224,0.25); color: #d8c8ff; }
-.cr-rec.locked .nm { opacity: 0.6; }
-.cr-rec.locked .ic img { filter: brightness(0) opacity(0.45); }
-.cr-detail { position: relative; padding: 1em 1.1em; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-.cr-out { display: grid; grid-template-columns: auto 1fr; gap: 1em; align-items: center; }
-.cr-out .big { width: 6.4em; height: 6.4em; display: grid; place-items: center; background: radial-gradient(circle at 50% 42%, rgba(255,230,160,0.28), rgba(0,0,0,0.25) 70%); box-shadow: inset 0 0 0 2px rgba(0,0,0,0.3), inset 0 -5px 0 rgba(0,0,0,0.2); }
-.cr-out .big img { width: 5.4em; height: 5.4em; image-rendering: pixelated; filter: drop-shadow(0 4px 0 rgba(0,0,0,0.35)); }
-.cr-out .big.wobble img { animation: crWob 0.35s ease-in-out infinite; }
+.cft-root { font-variant-ligatures: none; position: relative; width: min(94vw, 58em); height: min(88vh, 33em); padding: calc(var(--px) * 13) calc(var(--px) * 13) calc(var(--px) * 11); color: var(--paper); display: flex; flex-direction: column; overflow: hidden !important; }
+.cft-root > :not(.k-backdrop) { position: relative; z-index: 1; }
+.cft-head { display: flex; align-items: center; gap: 0.7em; margin: 0 0 0.55em; min-height: 2.6em; }
+.cft-head .badge { width: 2.6em; height: 2.6em; image-rendering: pixelated; filter: drop-shadow(0 3px 0 rgba(0,0,0,0.35)); }
+.cft-head .t { font-family: var(--pix); font-size: 1.55em; color: var(--amber2); line-height: 1; text-shadow: 0 3px 0 rgba(0,0,0,0.45); }
+.cft-head .s { font-family: var(--hand); font-size: 1em; opacity: 0.85; }
+.cft-head .x { margin-left: auto; }
+.cft-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(15em, 20em) 1fr; gap: calc(var(--px) * 7); }
+.cft-list { overflow-y: auto; padding: 0.35em; display: flex; flex-direction: column; gap: 0.3em; scrollbar-width: thin; scrollbar-color: rgba(241,232,208,0.3) transparent; }
+.cft-rec { display: grid; grid-template-columns: 2.5em 1fr auto; align-items: center; gap: 0.55em; padding: 0.3em 0.5em 0.3em 0.3em; background: rgba(0,0,0,0.18); border: 0; color: var(--paper); font: inherit; text-align: left; cursor: pointer; box-shadow: inset 0 0 0 2px rgba(0,0,0,0.25); transition: transform 0.1s, background 0.12s; }
+.cft-rec:hover { background: rgba(255,255,255,0.08); transform: translateX(2px); }
+.cft-rec.sel { background: rgba(244,180,60,0.2); box-shadow: inset 0 0 0 2px var(--amber); }
+.cft-rec .ic { width: 2.5em; height: 2.5em; display: grid; place-items: center; background: rgba(0,0,0,0.28); box-shadow: inset 0 -3px 0 rgba(0,0,0,0.25); }
+.cft-rec .ic img { width: 2.25em; height: 2.25em; image-rendering: pixelated; }
+.cft-rec .nm { font-family: var(--pix); font-size: 0.98em; line-height: 1.1; min-width: 0; }
+.cft-rec .nm i { font-style: normal; color: var(--amber2); font-size: 0.85em; }
+.cft-rec .nm small { display: block; font-family: var(--body); font-size: 0.72em; opacity: 0.75; margin-top: 0.15em; white-space: normal; }
+.cft-rec .st { font-family: var(--pix); font-size: 0.68em; padding: 0.15em 0.45em; letter-spacing: 0.06em; white-space: nowrap; }
+.cft-rec .st.ok { background: var(--teal); color: #06241e; }
+.cft-rec .st.missing { background: rgba(232,97,74,0.25); color: #ffb3a4; }
+.cft-rec .st.tool, .cft-rec .st.full { background: rgba(155,124,224,0.25); color: #d8c8ff; }
+.cft-rec.locked .nm { opacity: 0.6; }
+.cft-rec.locked .ic img { filter: brightness(0) opacity(0.45); }
+.cft-detail { position: relative; padding: 1em 1.1em; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.cft-out { display: grid; grid-template-columns: auto 1fr; gap: 1em; align-items: center; }
+.cft-out .big { width: 6.4em; height: 6.4em; display: grid; place-items: center; background: radial-gradient(circle at 50% 42%, rgba(255,230,160,0.28), rgba(0,0,0,0.25) 70%); box-shadow: inset 0 0 0 2px rgba(0,0,0,0.3), inset 0 -5px 0 rgba(0,0,0,0.2); }
+.cft-out .big img { width: 5.4em; height: 5.4em; image-rendering: pixelated; filter: drop-shadow(0 4px 0 rgba(0,0,0,0.35)); }
+.cft-out .big.wobble img { animation: crWob 0.35s ease-in-out infinite; }
 @keyframes crWob { 25% { transform: rotate(-7deg) translateY(-2px); } 75% { transform: rotate(7deg) translateY(1px); } }
-.cr-out .nm { font-family: var(--pix); font-size: 1.45em; color: var(--amber2); line-height: 1.05; }
-.cr-out .kind { font-family: var(--pix); font-size: 0.75em; letter-spacing: 0.1em; text-transform: uppercase; color: var(--teal2); margin: 0.25em 0 0.35em; }
-.cr-out .desc { font-size: 0.92em; line-height: 1.4; opacity: 0.92; }
-.cr-sec { font-family: var(--pix); font-size: 0.78em; letter-spacing: 0.12em; text-transform: uppercase; color: var(--amber); margin: 0.9em 0 0.35em; }
-.cr-ings { display: flex; flex-wrap: wrap; gap: 0.45em; }
-.cr-ing { display: flex; align-items: center; gap: 0.45em; padding: 0.25em 0.6em 0.25em 0.25em; background: rgba(0,0,0,0.22); box-shadow: inset 0 0 0 2px rgba(143,240,220,0.35); font-size: 0.92em; }
-.cr-ing img { width: 2em; height: 2em; image-rendering: pixelated; }
-.cr-ing b { font-family: var(--pix); font-weight: 500; margin-left: 0.25em; color: var(--teal2); font-variant-numeric: tabular-nums; }
-.cr-ing.no { box-shadow: inset 0 0 0 2px rgba(232,97,74,0.55); }
-.cr-ing.no b { color: #ff9a86; }
-.cr-ing.no img { opacity: 0.6; }
-.cr-tool { align-self: flex-start; display: inline-flex; align-items: center; gap: 0.45em; font-size: 0.9em; padding: 0.2em 0.6em 0.2em 0.25em; background: rgba(0,0,0,0.22); }
-.cr-tool img { width: 1.8em; height: 1.8em; image-rendering: pixelated; }
-.cr-tool.no { color: #ff9a86; }
-.cr-foot { margin-top: auto; display: flex; align-items: center; gap: 0.8em; flex-wrap: wrap; padding-top: 0.8em; }
-.cr-batch { display: flex; align-items: center; gap: 0.25em; font-family: var(--pix); }
-.cr-batch .btn { padding: 0.3em 0.6em; font-size: 0.95em; }
-.cr-batch b { min-width: 2.2em; text-align: center; font-size: 1.1em; font-variant-numeric: tabular-nums; }
-.cr-time { font-family: var(--pix); font-size: 0.85em; opacity: 0.8; }
-.cr-go { margin-left: auto; font-size: 1.15em !important; padding: 0.55em 1.3em !important; }
-.cr-go:not(:disabled) { animation: crGlow 1.6s ease-in-out infinite; }
+.cft-out .nm { font-family: var(--pix); font-size: 1.45em; color: var(--amber2); line-height: 1.05; }
+.cft-out .kind { font-family: var(--pix); font-size: 0.75em; letter-spacing: 0.1em; text-transform: uppercase; color: var(--teal2); margin: 0.25em 0 0.35em; }
+.cft-out .desc { font-size: 0.92em; line-height: 1.4; opacity: 0.92; }
+.cft-sec { font-family: var(--pix); font-size: 0.78em; letter-spacing: 0.12em; text-transform: uppercase; color: var(--amber); margin: 0.9em 0 0.35em; }
+.cft-ings { display: flex; flex-wrap: wrap; gap: 0.45em; }
+.cft-ing { display: flex; align-items: center; gap: 0.45em; padding: 0.25em 0.6em 0.25em 0.25em; background: rgba(0,0,0,0.22); box-shadow: inset 0 0 0 2px rgba(143,240,220,0.35); font-size: 0.92em; }
+.cft-ing img { width: 2em; height: 2em; image-rendering: pixelated; }
+.cft-ing b { font-family: var(--pix); font-weight: 500; margin-left: 0.25em; color: var(--teal2); font-variant-numeric: tabular-nums; }
+.cft-ing.no { box-shadow: inset 0 0 0 2px rgba(232,97,74,0.55); }
+.cft-ing.no b { color: #ff9a86; }
+.cft-ing.no img { opacity: 0.6; }
+.cft-tool { align-self: flex-start; display: inline-flex; align-items: center; gap: 0.45em; font-size: 0.9em; padding: 0.2em 0.6em 0.2em 0.25em; background: rgba(0,0,0,0.22); }
+.cft-tool img { width: 1.8em; height: 1.8em; image-rendering: pixelated; }
+.cft-tool.no { color: #ff9a86; }
+.cft-foot { margin-top: auto; display: flex; align-items: center; gap: 0.8em; flex-wrap: wrap; padding-top: 0.8em; }
+.cft-batch { display: flex; align-items: center; gap: 0.25em; font-family: var(--pix); }
+.cft-batch .btn { padding: 0.3em 0.6em; font-size: 0.95em; }
+.cft-batch b { min-width: 2.2em; text-align: center; font-size: 1.1em; font-variant-numeric: tabular-nums; }
+.cft-time { font-family: var(--pix); font-size: 0.85em; opacity: 0.8; }
+.cft-go { margin-left: auto; font-size: 1.15em !important; padding: 0.55em 1.3em !important; }
+.cft-go:not(:disabled) { animation: crGlow 1.6s ease-in-out infinite; }
 @keyframes crGlow { 50% { filter: brightness(1.15); } }
-.cr-msg { font-size: 0.85em; color: #ffb3a4; min-height: 1.3em; margin-top: 0.35em; }
-.cr-msg.ok { color: var(--teal2); }
-.cr-prog { position: absolute; left: 1.1em; right: 1.1em; bottom: 1em; height: 1.3em; background: rgba(0,0,0,0.45); box-shadow: inset 0 0 0 2px rgba(0,0,0,0.5); display: none; }
-.cr-prog.on { display: block; }
-.cr-prog div { height: 100%; width: 0; background: repeating-linear-gradient(90deg, var(--amber) 0 10px, var(--amber2) 10px 20px); box-shadow: inset 0 -4px 0 rgba(0,0,0,0.2); }
-.cr-prog span { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--pix); font-size: 0.8em; color: var(--ink); text-shadow: 0 1px 0 rgba(255,255,255,0.4); }
-.cr-locked { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; height: 100%; gap: 0.6em; }
-.cr-locked .q { width: 6em; height: 6em; display: grid; place-items: center; border: 3px dashed rgba(241,232,208,0.35); }
-.cr-locked .q img { width: 4.5em; image-rendering: pixelated; filter: brightness(0) opacity(0.5); }
-.cr-locked .t { font-family: var(--pix); font-size: 1.4em; color: var(--paper3); }
-.cr-locked p { max-width: 24em; line-height: 1.45; font-size: 0.95em; opacity: 0.9; margin: 0; }
-.cr-locked b { color: var(--amber2); font-family: var(--pix); font-weight: 500; }
-.cr-result { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.35em; background: radial-gradient(circle at 50% 45%, rgba(255,220,140,0.35), rgba(10,16,14,0.88) 70%); z-index: 5; cursor: pointer; animation: kFade 0.2s; }
-.cr-result .stamp { font-family: var(--pix); font-size: 1em; letter-spacing: 0.2em; color: var(--ink); background: var(--amber); padding: 0.15em 0.8em; transform: rotate(-4deg); animation: crStamp 0.35s cubic-bezier(.2,1.8,.4,1) both 0.15s; }
-.cr-result img { width: 7em; height: 7em; image-rendering: pixelated; animation: crPop 0.55s cubic-bezier(.2,1.7,.4,1) both; filter: drop-shadow(0 6px 0 rgba(0,0,0,0.4)); }
-.cr-result .n { font-family: var(--pix); font-size: 1.5em; color: var(--paper); text-shadow: 0 3px 0 rgba(0,0,0,0.5); animation: crPop 0.4s ease-out both 0.25s; }
-.cr-result .h { font-size: 0.8em; opacity: 0.7; }
-.cr-result .spark { position: absolute; width: 0.5em; height: 0.5em; background: var(--amber2); box-shadow: 0 0 6px var(--amber); animation: crSpark 0.8s ease-out forwards; }
+.cft-msg { font-size: 0.85em; color: #ffb3a4; min-height: 1.3em; margin-top: 0.35em; }
+.cft-msg.ok { color: var(--teal2); }
+.cft-prog { position: absolute; left: 1.1em; right: 1.1em; bottom: 1em; height: 1.3em; background: rgba(0,0,0,0.45); box-shadow: inset 0 0 0 2px rgba(0,0,0,0.5); display: none; }
+.cft-prog.on { display: block; }
+.cft-prog div { height: 100%; width: 0; background: repeating-linear-gradient(90deg, var(--amber) 0 10px, var(--amber2) 10px 20px); box-shadow: inset 0 -4px 0 rgba(0,0,0,0.2); }
+.cft-prog span { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--pix); font-size: 0.8em; color: var(--ink); text-shadow: 0 1px 0 rgba(255,255,255,0.4); }
+.cft-locked { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; height: 100%; gap: 0.6em; }
+.cft-locked .q { width: 6em; height: 6em; display: grid; place-items: center; border: 3px dashed rgba(241,232,208,0.35); }
+.cft-locked .q img { width: 4.5em; image-rendering: pixelated; filter: brightness(0) opacity(0.5); }
+.cft-locked .t { font-family: var(--pix); font-size: 1.4em; color: var(--paper3); }
+.cft-locked p { max-width: 24em; line-height: 1.45; font-size: 0.95em; opacity: 0.9; margin: 0; }
+.cft-locked b { color: var(--amber2); font-family: var(--pix); font-weight: 500; }
+.cft-result { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.35em; background: radial-gradient(circle at 50% 45%, rgba(255,220,140,0.35), rgba(10,16,14,0.88) 70%); z-index: 5; cursor: pointer; animation: kFade 0.2s; }
+.cft-result .cft-badge { font-family: var(--pix); font-size: 1em; letter-spacing: 0.2em; color: var(--ink); background: var(--amber); padding: 0.15em 0.8em; transform: rotate(-4deg); animation: crStamp 0.35s cubic-bezier(.2,1.8,.4,1) both 0.15s; }
+.cft-result img { width: 7em; height: 7em; image-rendering: pixelated; animation: crPop 0.55s cubic-bezier(.2,1.7,.4,1) both; filter: drop-shadow(0 6px 0 rgba(0,0,0,0.4)); }
+.cft-result .n { font-family: var(--pix); font-size: 1.5em; color: var(--paper); text-shadow: 0 3px 0 rgba(0,0,0,0.5); animation: crPop 0.4s ease-out both 0.25s; }
+.cft-result .h { font-size: 0.8em; opacity: 0.7; }
+.cft-result .spark { position: absolute; width: 0.5em; height: 0.5em; background: var(--amber2); box-shadow: 0 0 6px var(--amber); animation: crSpark 0.8s ease-out forwards; }
 @keyframes crPop { 0% { transform: scale(0.2) rotate(-20deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
 @keyframes crStamp { 0% { transform: scale(2.2) rotate(-4deg); opacity: 0; } 100% { transform: scale(1) rotate(-4deg); opacity: 1; } }
 @keyframes crSpark { to { transform: translate(var(--dx), var(--dy)) scale(0.2); opacity: 0; } }
-.cr-note { margin-top: 0.9em; align-self: flex-start; max-width: 30em; background: var(--paper); color: var(--pencil); font-family: var(--hand); font-size: 0.98em; line-height: 1.3; padding: 0.45em 0.8em 0.4em; transform: rotate(-1.2deg); box-shadow: 0 3px 0 rgba(0,0,0,0.35); position: relative; }
-.cr-note::before { content: ''; position: absolute; top: -0.45em; left: 42%; width: 3.2em; height: 0.9em; background: rgba(240,220,150,0.75); transform: rotate(3deg); }
-.cr-note b { font-family: var(--pix); font-weight: 500; font-size: 0.85em; }
-.cr-empty { font-family: var(--hand); font-size: 1.1em; opacity: 0.8; padding: 1em; text-align: center; }
+.cft-note { margin-top: 0.9em; align-self: flex-start; max-width: 30em; background: var(--paper); color: var(--pencil); font-family: var(--hand); font-size: 0.98em; line-height: 1.3; padding: 0.45em 0.8em 0.4em; transform: rotate(-1.2deg); box-shadow: 0 3px 0 rgba(0,0,0,0.35); position: relative; }
+.cft-note::before { content: ''; position: absolute; top: -0.45em; left: 42%; width: 3.2em; height: 0.9em; background: rgba(240,220,150,0.75); transform: rotate(3deg); }
+.cft-note b { font-family: var(--pix); font-weight: 500; font-size: 0.85em; }
+.cft-empty { font-family: var(--hand); font-size: 1.1em; opacity: 0.8; padding: 1em; text-align: center; }
 `;
 
 function lockReason(r: Recipe): string {
@@ -135,11 +135,11 @@ export function openCrafting(station: Station, o: { onCraft?: (recipeId: string,
   const st = STATION[station];
   const recipes = RECIPES.filter(r => r.station === station);
   return new Promise<void>(resolve => {
-    const root = el('div', 'cr-root');
-    root.innerHTML = `<div class="cr-head"><img class="badge" src="${itemIconURL(st.tool, 3)}" alt=""><div><div class="t">${st.name}</div><div class="s">${st.sub}</div></div><button class="btn ghost x">Close <span class="key">Esc</span></button></div>
-      <div class="cr-body"><div class="cr-list" role="listbox" aria-label="Recipes"></div><div class="cr-detail"></div></div>`;
-    const list = root.querySelector('.cr-list') as HTMLElement;
-    const detail = root.querySelector('.cr-detail') as HTMLElement;
+    const root = el('div', 'cft-root');
+    root.innerHTML = `<div class="cft-head"><img class="badge" src="${itemIconURL(st.tool, 3)}" alt=""><div><div class="t">${st.name}</div><div class="s">${st.sub}</div></div><button class="btn ghost x">Close <span class="key">Esc</span></button></div>
+      <div class="cft-body"><div class="cft-list" role="listbox" aria-label="Recipes"></div><div class="cft-detail"></div></div>`;
+    const list = root.querySelector('.cft-list') as HTMLElement;
+    const detail = root.querySelector('.cft-detail') as HTMLElement;
     let sel = Math.max(0, recipes.findIndex(r => recipeState(r) === 'ok'));
     let batch = 1;
     let busy = false;
@@ -168,11 +168,11 @@ export function openCrafting(station: Station, o: { onCraft?: (recipeId: string,
 
     const renderList = () => {
       list.innerHTML = '';
-      if (!recipes.length) list.appendChild(el('div', 'cr-empty', 'Nothing to make here yet.'));
+      if (!recipes.length) list.appendChild(el('div', 'cft-empty', 'Nothing to make here yet.'));
       recipes.forEach((r, i) => {
         const s = recipeState(r);
         const d = ITEMS[r.out];
-        const b = el('button', `cr-rec${i === sel ? ' sel' : ''}${s === 'locked' ? ' locked' : ''}`);
+        const b = el('button', `cft-rec${i === sel ? ' sel' : ''}${s === 'locked' ? ' locked' : ''}`);
         b.setAttribute('role', 'option');
         if (s === 'locked') b.innerHTML = `<span class="ic"><img src="${itemIconURL(r.out, 3)}" alt=""></span><span class="nm">???<small>${esc(shortLock(r))}</small></span><span class="st"><img src="${uiIconURL('lock', 2)}" style="width:1.4em;image-rendering:pixelated" alt="locked"></span>`;
         else {
@@ -191,30 +191,30 @@ export function openCrafting(station: Station, o: { onCraft?: (recipeId: string,
       if (!r) return;
       const s = recipeState(r);
       if (s === 'locked') {
-        detail.innerHTML = `<div class="cr-locked"><div class="q"><img src="${itemIconURL(r.out, 3)}" alt=""></div><div class="t">Unknown recipe</div><p>${lockReason(r)}</p></div>`;
+        detail.innerHTML = `<div class="cft-locked"><div class="q"><img src="${itemIconURL(r.out, 3)}" alt=""></div><div class="t">Unknown recipe</div><p>${lockReason(r)}</p></div>`;
         return;
       }
       const d = ITEMS[r.out];
-      const out = detail.appendChild(el('div', 'cr-out', `<div class="big"><img src="${itemIconURL(r.out, 4)}" alt=""></div><div><div class="nm">${esc(d?.name ?? r.out)}</div><div class="kind">${KIND_LABEL[d?.kind ?? ''] ?? ''} · makes ${r.n}${d?.kind === 'tool' ? ' (tool belt)' : ''}</div><div class="desc">${esc(d?.desc ?? '')}</div></div>`));
-      detail.appendChild(el('div', 'cr-sec', 'Ingredients'));
-      const ings = detail.appendChild(el('div', 'cr-ings'));
+      const out = detail.appendChild(el('div', 'cft-out', `<div class="big"><img src="${itemIconURL(r.out, 4)}" alt=""></div><div><div class="nm">${esc(d?.name ?? r.out)}</div><div class="kind">${KIND_LABEL[d?.kind ?? ''] ?? ''} · makes ${r.n}${d?.kind === 'tool' ? ' (tool belt)' : ''}</div><div class="desc">${esc(d?.desc ?? '')}</div></div>`));
+      detail.appendChild(el('div', 'cft-sec', 'Ingredients'));
+      const ings = detail.appendChild(el('div', 'cft-ings'));
       const mult = Math.max(1, batch);
       for (const [id, n] of r.needs) {
         const have = count(id), need = n * mult;
-        ings.appendChild(el('div', `cr-ing${have >= need ? '' : ' no'}`, `<img src="${itemIconURL(id, 3)}" alt=""><span>${esc(ITEMS[id]?.name ?? id)}</span><b>${have}/${need}</b>`));
+        ings.appendChild(el('div', `cft-ing${have >= need ? '' : ' no'}`, `<img src="${itemIconURL(id, 3)}" alt=""><span>${esc(ITEMS[id]?.name ?? id)}</span><b>${have}/${need}</b>`));
       }
       if (r.tool) {
-        detail.appendChild(el('div', 'cr-sec', 'Tool'));
+        detail.appendChild(el('div', 'cft-sec', 'Tool'));
         const ok = hasTool(r.tool);
-        detail.appendChild(el('div', `cr-tool${ok ? '' : ' no'}`, `<img src="${itemIconURL(r.tool, 3)}" alt="">${esc(ITEMS[r.tool]?.name ?? r.tool)} ${ok ? '✓' : '— not on your tool belt'}`));
+        detail.appendChild(el('div', `cft-tool${ok ? '' : ' no'}`, `<img src="${itemIconURL(r.tool, 3)}" alt="">${esc(ITEMS[r.tool]?.name ?? r.tool)} ${ok ? '✓' : '— not on your tool belt'}`));
       }
       const have = count(r.out);
       const note = d?.eat ? `<b>${EAT[d.eat] ?? d.eat}.</b> ${NOTE.food}` : NOTE[d?.kind ?? ''] ?? '';
-      if (note) detail.appendChild(el('div', 'cr-note', `${note}${have && d?.kind !== 'tool' ? ` <br><b>In your pack: ${have}</b>` : ''}`));
-      const foot = detail.appendChild(el('div', 'cr-foot'));
+      if (note) detail.appendChild(el('div', 'cft-note', `${note}${have && d?.kind !== 'tool' ? ` <br><b>In your pack: ${have}</b>` : ''}`));
+      const foot = detail.appendChild(el('div', 'cft-foot'));
       const mx = maxBatch(r);
       if (d?.kind !== 'tool' && mx > 1) {
-        const bt = foot.appendChild(el('div', 'cr-batch'));
+        const bt = foot.appendChild(el('div', 'cft-batch'));
         const minus = bt.appendChild(el('button', 'btn ghost', '−'));
         const num = bt.appendChild(el('b', '', '×' + batch));
         const plus = bt.appendChild(el('button', 'btn ghost', '+'));
@@ -224,16 +224,16 @@ export function openCrafting(station: Station, o: { onCraft?: (recipeId: string,
         all.onclick = () => { batch = mx; sfx('ui', { vol: 0.5, pitch: 1.2 }); renderDetail(); };
         num.title = `You can make up to ${mx}`;
       } else batch = 1;
-      foot.appendChild(el('div', 'cr-time', `⏱ ${(r.time * batch).toFixed(1)}s`));
-      const go = foot.appendChild(el('button', 'btn cr-go', `${st.verb}${batch > 1 ? ' ×' + batch : ''} <span class="key">⏎</span>`)) as HTMLButtonElement;
+      foot.appendChild(el('div', 'cft-time', `⏱ ${(r.time * batch).toFixed(1)}s`));
+      const go = foot.appendChild(el('button', 'btn cft-go', `${st.verb}${batch > 1 ? ' ×' + batch : ''} <span class="key">⏎</span>`)) as HTMLButtonElement;
       go.disabled = s !== 'ok';
       go.onclick = () => doCraft();
-      const msg = detail.appendChild(el('div', 'cr-msg'));
+      const msg = detail.appendChild(el('div', 'cft-msg'));
       if (s === 'missing') msg.textContent = 'Missing: ' + missingText(r.needs);
       else if (s === 'tool') msg.textContent = `You need a ${ITEMS[r.tool!]?.name ?? r.tool} for this.`;
       else if (s === 'full') msg.textContent = d?.kind === 'tool' ? 'You already have one on your tool belt.' : `No room in the backpack (${freeSlots()} free slots).`;
-      else { msg.className = 'cr-msg ok'; msg.textContent = r.n * batch > 1 ? `Makes ${r.n * batch} ${d?.name ?? ''}.` : 'Everything you need is in the pack.'; }
-      detail.appendChild(el('div', 'cr-prog', '<div></div><span></span>'));
+      else { msg.className = 'cft-msg ok'; msg.textContent = r.n * batch > 1 ? `Makes ${r.n * batch} ${d?.name ?? ''}.` : 'Everything you need is in the pack.'; }
+      detail.appendChild(el('div', 'cft-prog', '<div></div><span></span>'));
       void out;
     };
 
@@ -246,9 +246,9 @@ export function openCrafting(station: Station, o: { onCraft?: (recipeId: string,
       const secs = r.time * n;
       const big = detail.querySelector('.big') as HTMLElement | null;
       big?.classList.add('wobble');
-      const go = detail.querySelector('.cr-go') as HTMLButtonElement | null;
+      const go = detail.querySelector('.cft-go') as HTMLButtonElement | null;
       if (go) go.disabled = true;
-      const prog = detail.querySelector('.cr-prog') as HTMLElement;
+      const prog = detail.querySelector('.cft-prog') as HTMLElement;
       const bar = prog.querySelector('div') as HTMLElement;
       const lab = prog.querySelector('span') as HTMLElement;
       prog.classList.add('on');
@@ -286,7 +286,7 @@ export function openCrafting(station: Station, o: { onCraft?: (recipeId: string,
 
     const showResult = (r: Recipe, qty: number) => {
       const d = ITEMS[r.out];
-      const res = detail.appendChild(el('div', 'cr-result', `<div class="stamp">${station === 'fire' ? 'COOKED!' : 'CRAFTED!'}</div><img src="${itemIconURL(r.out, 5)}" alt=""><div class="n">+${qty} ${esc(d?.name ?? r.out)}</div><div class="h">${d?.kind === 'tool' ? 'Added to your tool belt' : 'Added to your backpack'} · click to continue</div>`));
+      const res = detail.appendChild(el('div', 'cft-result', `<div class="cft-badge">${station === 'fire' ? 'COOKED!' : 'CRAFTED!'}</div><img src="${itemIconURL(r.out, 5)}" alt=""><div class="n">+${qty} ${esc(d?.name ?? r.out)}</div><div class="h">${d?.kind === 'tool' ? 'Added to your tool belt' : 'Added to your backpack'} · click to continue</div>`));
       if (!reduced()) for (let i = 0; i < 14; i++) {
         const sp = res.appendChild(el('i', 'spark'));
         const a = (i / 14) * Math.PI * 2;
