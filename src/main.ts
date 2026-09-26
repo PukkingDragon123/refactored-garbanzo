@@ -2,6 +2,7 @@ import './styles.css';
 import { game } from './game/game';
 import { bakeAssets } from './game/assets';
 import { bindAllArt } from './game/bindart';
+import { installSkin } from './ui/skin';
 import { loadSave, newSave } from './game/save';
 import { audio } from './core/audio';
 import { el } from './ui/ui';
@@ -18,6 +19,7 @@ async function boot() {
     m.runGallery(gq);
     return;
   }
+  installSkin();
   const canvas = document.getElementById('gl') as HTMLCanvasElement;
   const ui = document.getElementById('ui') as HTMLElement;
   try {

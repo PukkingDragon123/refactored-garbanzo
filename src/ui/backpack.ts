@@ -1,18 +1,17 @@
 // Rowan's backpack: stacked slot grid (capacity grows with skills), tool belt, item details and actions
-// (eat, strip fibre / twist rope, craft by hand, drop), sorting and a capacity meter.
+// (eat, drop; crafting happens at the workbench), sorting and a capacity meter.
 
 import { game } from '../game/game';
 import { ITEMS, ItemKind } from '../game/items';
 import { stacks, capacity, freeSlots, count, remove } from '../game/inventory';
-import { RECIPE_BY_ID, recipeState, craft } from '../game/crafting';
+import { RECIPE_BY_ID } from '../game/crafting';
 import { analysisRp } from '../game/lab';
 import { SKILL_BY_ID } from '../game/skills';
 import { PixelBuffer } from '../art/pixel';
 import { itemIconURL, uiIconURL } from '../art/itemicons';
 import { el } from './ui';
+import { paintParchment } from './skin';
 import { sfx, css, wait, pixelBackdrop, reduced, pushKeys, esc, confirmPop, H, fabric, stitch, uiPx, noise } from './laptop-kit';
-import { paintCanvasFrame } from './laptop-frames';
-import { openCrafting } from './craft';
 
 const KIND: Record<ItemKind, { label: string; color: string }> = {
   tool: { label: 'Tool', color: '#9aa3a5' }, material: { label: 'Material', color: '#c9a878' }, plant: { label: 'Plant', color: '#8db34a' },
@@ -277,26 +276,8 @@ export function openBackpack(o: { onEat?: (id: string) => void | Promise<void> }
         const b = acts.appendChild(el('button', 'btn teal', 'Eat')) as HTMLButtonElement;
         b.onclick = () => eat(id);
       }
-      const hand = (rid: string, label: string) => {
-        const r = RECIPE_BY_ID[rid];
-        if (!r) return;
-        const s = recipeState(r);
-        const b = acts.appendChild(el('button', 'btn', `${label}<span class="p"></span>`)) as HTMLButtonElement;
-        b.disabled = s !== 'ok';
-        b.title = s === 'ok' ? `${r.needs.map(([i, k]) => `${k}× ${ITEMS[i]?.name}`).join(', ')} → ${r.n}× ${ITEMS[r.out]?.name}` : s === 'tool' ? `Needs a ${ITEMS[r.tool!]?.name}` : s === 'missing' ? `Needs ${r.needs.map(([i, k]) => `${k}× ${ITEMS[i]?.name}`).join(', ')}` : 'No room in the pack';
-        b.onclick = () => quickCraft(rid, b);
-      };
-      if (id === 'flaxleaf') hand('flax', 'Strip fibre');
-      if (id === 'flax') hand('rope', 'Twist rope');
-      const cr = acts.appendChild(el('button', 'btn ghost', 'Craft…')) as HTMLButtonElement;
-      cr.title = 'Craft by hand';
-      cr.onclick = async () => {
-        if (busy) return;
-        busy = true;
-        await openCrafting('hand');
-        busy = false;
-        refresh();
-      };
+      const usedIn = Object.values(RECIPE_BY_ID).filter(r => r.needs.some(([i]) => i === id));
+      if (usedIn.length) acts.appendChild(el('div', 'bp-hint', `Used at the workbench for: ${usedIn.map(r => esc(ITEMS[r.out]?.name ?? r.out)).join(', ')}`));
       if (d?.kind !== 'key') {
         const dr = acts.appendChild(el('button', 'btn drop', 'Drop')) as HTMLButtonElement;
         dr.onclick = () => drop(id);
@@ -332,28 +313,6 @@ export function openBackpack(o: { onEat?: (id: string) => void | Promise<void> }
       setTimeout(() => sfx('munch', { pitch: 1.2 }), 160);
       toast(id, `Ate ${ITEMS[id]?.name ?? id}`);
       busy = false;
-      refresh();
-    };
-
-    const quickCraft = async (rid: string, btn: HTMLButtonElement) => {
-      const r = RECIPE_BY_ID[rid];
-      if (!r || busy || recipeState(r) !== 'ok') return;
-      busy = true;
-      btn.disabled = true;
-      const bar = btn.querySelector('.p') as HTMLElement;
-      sfx(rid === 'rope' ? 'rope' : 'pluck');
-      const ms = reduced() ? 80 : r.time * 1000;
-      bar.style.transition = `width ${ms}ms linear`;
-      requestAnimationFrame(() => { bar.style.width = '2.2em'; });
-      await wait(ms);
-      const ok = craft(r);
-      busy = false;
-      if (ok) {
-        sfx('craft'); setTimeout(() => sfx('collectPop'), 150);
-        toast(r.out, `+${r.n} ${ITEMS[r.out]?.name ?? r.out}`);
-        const i = stacks().findIndex(s => s.id === r.out);
-        if (i >= 0) sel = { area: 'pack', i };
-      } else sfx('wrong');
       refresh();
     };
 
@@ -424,7 +383,7 @@ export function openBackpack(o: { onEat?: (id: string) => void | Promise<void> }
 
     renderCap(); renderGrid(); renderBelt(); renderDetail();
     popIn = false;
-    disposeBg = pixelBackdrop(root, (b, w, h) => paintCanvasFrame(b, w, h, { inner: inner() }), px, [grid, detail]);
+    disposeBg = pixelBackdrop(root, (b, w, h) => paintParchment(b, w, h, { inner: inner() }), px, [grid, detail]);
 
   });
 }

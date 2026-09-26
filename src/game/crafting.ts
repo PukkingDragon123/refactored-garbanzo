@@ -24,8 +24,8 @@ export interface Recipe {
 }
 
 export const RECIPES: Recipe[] = [
-  { id: 'flax', out: 'flax', n: 3, needs: [['flaxleaf', 1]], station: 'hand', time: 1.2, tool: 'knife' },
-  { id: 'rope', out: 'rope', n: 1, needs: [['flax', 3]], station: 'hand', time: 1.6 },
+  { id: 'flax', out: 'flax', n: 3, needs: [['flaxleaf', 1]], station: 'bench', time: 1.2, tool: 'knife' },
+  { id: 'rope', out: 'rope', n: 1, needs: [['flax', 3]], station: 'bench', time: 1.6 },
   { id: 'fruitlure', out: 'fruitlure', n: 1, needs: [['moonfruit', 2], ['kawakawa', 1]], station: 'bench', time: 2 },
   { id: 'grublure', out: 'grublure', n: 1, needs: [['grub', 3], ['wood', 1]], station: 'bench', time: 2, skill: 'lurecraft' },
   { id: 'fishbait', out: 'fishbait', n: 2, needs: [['mussel', 3]], station: 'bench', time: 1.6, skill: 'lurecraft' },

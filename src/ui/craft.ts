@@ -9,8 +9,8 @@ import { SKILL_BY_ID, BRANCHES } from '../game/skills';
 import { QUEST_BY_ID } from '../game/quests';
 import { itemIconURL, uiIconURL } from '../art/itemicons';
 import { el } from './ui';
+import { paintParchment } from './skin';
 import { sfx, css, wait, pixelBackdrop, reduced, pushKeys, esc } from './laptop-kit';
-import { paintCanvasFrame, paintWoodFrame, paintStoneFrame } from './laptop-frames';
 
 const STATION: Record<Station, { name: string; sub: string; verb: string; tool: string }> = {
   bench: { name: 'Workbench', sub: 'Planks, nails and good intentions', verb: 'Craft', tool: 'hammer' },
@@ -27,7 +27,7 @@ const EAT: Record<string, string> = { energy: 'Energy for a long day', steady: '
 const KIND_LABEL: Record<string, string> = { tool: 'Tool', material: 'Material', plant: 'Plant', fungus: 'Fungus', insect: 'Insect', animal: 'Animal sample', lure: 'Lure', food: 'Food', key: 'Key item' };
 
 const CSS = `
-.cft-root { font-variant-ligatures: none; position: relative; width: min(94vw, 58em); height: min(88vh, 33em); padding: calc(var(--px) * 13) calc(var(--px) * 13) calc(var(--px) * 11); color: var(--paper); display: flex; flex-direction: column; overflow: hidden !important; }
+.cft-root { font-variant-ligatures: none; position: relative; width: min(94vw, 58em); height: min(92vh, 37em); padding: calc(var(--px) * 13) calc(var(--px) * 13) calc(var(--px) * 11); color: var(--paper); display: flex; flex-direction: column; overflow: hidden !important; }
 .cft-root > :not(.k-backdrop) { position: relative; z-index: 1; }
 .cft-head { display: flex; align-items: center; gap: 0.7em; margin: 0 0 0.55em; min-height: 2.6em; }
 .cft-head .badge { width: 2.6em; height: 2.6em; image-rendering: pixelated; filter: drop-shadow(0 3px 0 rgba(0,0,0,0.35)); }
@@ -50,7 +50,7 @@ const CSS = `
 .cft-rec .st.tool, .cft-rec .st.full { background: rgba(155,124,224,0.25); color: #d8c8ff; }
 .cft-rec.locked .nm { opacity: 0.6; }
 .cft-rec.locked .ic img { filter: brightness(0) opacity(0.45); }
-.cft-detail { position: relative; padding: 1em 1.1em; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.cft-detail { position: relative; padding: 0.8em 1em; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
 .cft-out { display: grid; grid-template-columns: auto 1fr; gap: 1em; align-items: center; }
 .cft-out .big { width: 6.4em; height: 6.4em; display: grid; place-items: center; background: radial-gradient(circle at 50% 42%, rgba(255,230,160,0.28), rgba(0,0,0,0.25) 70%); box-shadow: inset 0 0 0 2px rgba(0,0,0,0.3), inset 0 -5px 0 rgba(0,0,0,0.2); }
 .cft-out .big img { width: 5.4em; height: 5.4em; image-rendering: pixelated; filter: drop-shadow(0 4px 0 rgba(0,0,0,0.35)); }
@@ -70,7 +70,7 @@ const CSS = `
 .cft-tool { align-self: flex-start; display: inline-flex; align-items: center; gap: 0.45em; font-size: 0.9em; padding: 0.2em 0.6em 0.2em 0.25em; background: rgba(0,0,0,0.22); }
 .cft-tool img { width: 1.8em; height: 1.8em; image-rendering: pixelated; }
 .cft-tool.no { color: #ff9a86; }
-.cft-foot { margin-top: auto; display: flex; align-items: center; gap: 0.8em; flex-wrap: wrap; padding-top: 0.8em; }
+.cft-foot { margin-top: auto; position: sticky; bottom: 0; display: flex; align-items: center; gap: 0.8em; flex-wrap: wrap; padding-top: 0.8em; }
 .cft-batch { display: flex; align-items: center; gap: 0.25em; font-family: var(--pix); }
 .cft-batch .btn { padding: 0.3em 0.6em; font-size: 0.95em; }
 .cft-batch b { min-width: 2.2em; text-align: center; font-size: 1.1em; font-variant-numeric: tabular-nums; }
@@ -99,7 +99,7 @@ const CSS = `
 @keyframes crPop { 0% { transform: scale(0.2) rotate(-20deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
 @keyframes crStamp { 0% { transform: scale(2.2) rotate(-4deg); opacity: 0; } 100% { transform: scale(1) rotate(-4deg); opacity: 1; } }
 @keyframes crSpark { to { transform: translate(var(--dx), var(--dy)) scale(0.2); opacity: 0; } }
-.cft-note { margin-top: 0.9em; align-self: flex-start; max-width: 30em; background: var(--paper); color: var(--pencil); font-family: var(--hand); font-size: 0.98em; line-height: 1.3; padding: 0.45em 0.8em 0.4em; transform: rotate(-1.2deg); box-shadow: 0 3px 0 rgba(0,0,0,0.35); position: relative; }
+.cft-note { margin-top: 0.6em; align-self: flex-start; max-width: 30em; background: #fbe99a; color: #3b3226; font-family: var(--hand); font-size: 0.98em; line-height: 1.3; padding: 0.45em 0.8em 0.4em; transform: rotate(-1.2deg); box-shadow: 0 3px 0 rgba(0,0,0,0.35); position: relative; }
 .cft-note::before { content: ''; position: absolute; top: -0.45em; left: 42%; width: 3.2em; height: 0.9em; background: rgba(240,220,150,0.75); transform: rotate(3deg); }
 .cft-note b { font-family: var(--pix); font-weight: 500; font-size: 0.85em; }
 .cft-empty { font-family: var(--hand); font-size: 1.1em; opacity: 0.8; padding: 1em; text-align: center; }
@@ -161,9 +161,7 @@ export function openCrafting(station: Station, o: { onCraft?: (recipeId: string,
     };
     disposeBg = pixelBackdrop(root, (b, w, h) => {
       const o2 = { inner: inner() };
-      if (station === 'bench') paintWoodFrame(b, w, h, o2);
-      else if (station === 'fire') paintStoneFrame(b, w, h, o2);
-      else paintCanvasFrame(b, w, h, { ...o2, tint: 'tan' });
+      paintParchment(b, w, h, o2);
     }, undefined, [list, detail]);
 
     const renderList = () => {

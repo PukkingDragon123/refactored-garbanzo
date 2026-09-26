@@ -497,7 +497,7 @@ export class CampScene extends FieldScene {
     }
     if (n.kind === 'flax' && !game.save.flags['said:rope'] && game.save.quests['castaways'] === 'active') {
       game.save.flags['said:rope'] = true;
-      this.bark('rowan', 'Now strip the leaves for fibre, and twist it into rope. I can do that from my backpack.', { expr: 'thinking', emote: 'idea' });
+      this.bark('rowan', 'Now I can strip the leaves and twist them into rope at the workbench.', { expr: 'thinking', emote: 'idea' });
     }
     if (n.def?.gives.some(([id]) => ITEMS[id]?.lab) && !game.save.flags['said:sample']) {
       game.save.flags['said:sample'] = true;

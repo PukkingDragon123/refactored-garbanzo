@@ -67,7 +67,8 @@ export const QUESTS: QuestDef[] = [
     steps: [
       { text: 'Salvage the tent canvas and poles from the wreck', done: () => (count('canvas') >= 1 && count('poles') >= 4) || buildLevel('tent') >= 3 },
       { text: 'Find the hammer in the wreck', done: () => game.save.tools.includes('hammer') },
-      { text: 'Make rope from flax (3 flax fibre each)', done: () => count('rope') >= 2 || buildDone('tent'), progress: () => [Math.min(2, count('rope')), 2], hint: 'Cut flax leaves with your knife, then strip them for fibre in the backpack.' },
+      { text: 'Build the workbench from wreck planks and scrap', done: () => buildDone('bench') || buildDone('tent') },
+      { text: 'Make rope at the workbench (flax leaf → fibre → rope)', done: () => count('rope') >= 2 || buildDone('tent'), progress: () => [Math.min(2, count('rope')), 2], hint: 'Cut flax leaves with your knife, then strip and twist them at the workbench.' },
       { text: 'Build the tent', done: () => buildDone('tent') },
       { text: 'Gather firewood and stones, then build a campfire', done: () => buildDone('fire'), progress: () => [Math.min(5, count('wood')) + Math.min(6, count('stone')), 11] },
       { text: 'Collect a plant or mushroom sample at the jungle edge', done: f('sample:first') },

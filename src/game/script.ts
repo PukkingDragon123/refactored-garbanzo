@@ -142,7 +142,7 @@ export const CAMP_BARK = {
 
 export const CROWE_ROPE: BubbleLine[] = [
   L('crowe', 'You’ll want rope for the guy lines. Flax, Doc: those big sword-leaf bushes by the treeline.', { expr: 'neutral' }),
-  L('crowe', 'Cut the leaves, strip the fibre, twist it. My gran could do it with her eyes shut.', { expr: 'happy' }),
+  L('crowe', 'Cut the leaves, strip the fibre at the bench, twist it. My gran could do it with her eyes shut.', { expr: 'happy' }),
 ];
 
 export const TENT_BUILT: BubbleLine[] = [
