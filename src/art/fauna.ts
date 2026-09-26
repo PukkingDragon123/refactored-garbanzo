@@ -9,46 +9,123 @@ import type { SerpentLook } from './serpent';
 const r = (...h: string[]) => h.map(x => hex(x));
 
 // ------------------------------------------------------------------ serpents
+// V2 looks for the spine renderer (src/art/serpent.ts). `length` is the spine length the game
+// simulates; the head is drawn in front of pts[0], so total length ~= length + head length.
+// Sizes follow docs/V2-DESIGN.md (view is 360 px tall; humans ~65 px).
+const OLIVE_LEG = r('#1c1f14', '#2c3019', '#40431f', '#585827', '#726e32', '#8e8742', '#aea35a');
+const CROC_LEG = r('#0c0f09', '#151a0f', '#1f2615', '#2a331b', '#364222', '#44522a', '#566634', '#6c7c40');
+const GECKO = r('#171413', '#241f1c', '#332c27', '#443b34', '#574c42', '#6c5f52', '#857765', '#a0927c');
+const NEWT = r('#2a1208', '#40200e', '#5a3014', '#76421a', '#945622', '#b06c2c', '#cc883c', '#e4a656');
+
 export const SERPENT_LOOKS: Record<string, SerpentLook> = {
+  // Strider Serpent (~70 px): four jointed legs with clawed digits, ambles over leaf litter, digs grubs.
   strider: {
-    length: 46, radius: 3.6, thickAt: 0.35, dorsal: r('#2b3a1c', '#3f5626', '#58722f', '#77903c', '#9aad52'),
-    belly: hex('#d8c68a'), pattern: 'bands', patternCol: hex('#2a2414'), period: 7, head: 'blunt', eye: hex('#f2c14e'),
-    legs: [{ at: 0.22, len: 7, col: r('#2b3a1c', '#3f5626', '#58722f', '#77903c') }, { at: 0.55, len: 7, col: r('#2b3a1c', '#3f5626', '#58722f', '#77903c') }],
+    length: 60, radius: 4, profile: [0, 0.7, 0.06, 0.8, 0.22, 1, 0.5, 0.95, 0.72, 0.55, 1, 0.14],
+    dorsal: r('#1c1f14', '#2c3019', '#40431f', '#585827', '#726e32', '#8e8742', '#aea35a', '#cdc07e'),
+    belly: hex('#dccb96'), throat: hex('#ebdcae'), pattern: 'bands', patternCol: hex('#2b2415'), period: 8,
+    head: 'blunt', eye: hex('#f0b83a'), pupil: 'round', brow: 0.7, smile: 0.25,
+    scale: { kind: 'smooth', len: 2.4, rows: 6 }, bellyScute: 2.2,
+    legs: [
+      { at: 0.2, len: 10, col: OLIVE_LEG, kind: 'front', digits: 3, claw: hex('#e6dcc0'), thick: 0.42 },
+      { at: 0.5, len: 11, col: OLIVE_LEG, kind: 'hind', digits: 3, claw: hex('#e6dcc0'), thick: 0.46 },
+    ],
   },
+  // Sprint Viper (~90 px): bipedal runner with a stiff counterweight tail; raises a neck crest to threaten.
   sprinter: {
-    length: 64, radius: 4.6, thickAt: 0.25, tailTaper: 1.1, dorsal: r('#3a1d14', '#5c2c1a', '#86401f', '#b35a26', '#d98138'),
-    belly: hex('#efd9a8'), pattern: 'stripe', patternCol: hex('#241210'), patternCol2: hex('#f0b050'), head: 'raptor', eye: hex('#ffe066'),
-    legs: [{ at: 0.3, len: 14, col: r('#2a140e', '#4a2416', '#6d361e', '#93502a') }],
+    length: 76, radius: 5, profile: [0, 0.6, 0.08, 0.66, 0.2, 0.92, 0.3, 1, 0.42, 0.8, 0.7, 0.4, 1, 0.1],
+    dorsal: r('#0b090e', '#141118', '#1d1822', '#28212d', '#352b39', '#463946', '#5b4b58'),
+    belly: hex('#e8d6b4'), throat: hex('#f3e7cd'), pattern: 'flank', patternCol: hex('#130b0e'), patternCol2: hex('#b8322a'), period: 11,
+    head: 'raptor', eye: hex('#ffd23a'), pupil: 'slit', pits: true, brow: 1.1, teeth: 'fangs',
+    scale: { kind: 'smooth', len: 2.8, rows: 7 }, bellyScute: 2.6,
+    crest: { col: hex('#d8402c'), col2: hex('#140c10'), h: 12 },
+    legs: [{ at: 0.28, len: 21, col: r('#0b090e', '#141118', '#1d1822', '#28212d', '#352b39', '#463946', '#5b4b58'), kind: 'hind', digitigrade: true, thick: 0.72, digits: 3, claw: hex('#e8e0cc') }],
   },
+  // Skyribbon Glider (~90 px): iridescent canopy snake; flattens into a wide ribbon to glide (flatten 0..1).
   skyribbon: {
-    length: 60, radius: 2.4, thickAt: 0.3, dorsal: r('#0f3a2a', '#16603e', '#1f8a4f', '#39b35e', '#7fdc7a'),
-    belly: hex('#e8f59a'), pattern: 'rings', patternCol: hex('#0c2a28'), patternCol2: hex('#f6d34a'), period: 9, head: 'slim', eye: hex('#ff9a3c'), iridescent: true,
+    length: 84, radius: 2.6, thickAt: 0.3,
+    dorsal: r('#0c2a22', '#12402e', '#1a5a3a', '#257846', '#389650', '#58b25c', '#8ccc6a'),
+    sheen: [hex('#155f3b'), hex('#1a8a6a'), hex('#2a7cb0'), hex('#5a58c8'), hex('#9a5ad0')], iridescent: true,
+    belly: hex('#d8ec8c'), throat: hex('#eef6b0'), pattern: 'ribbon', patternCol: hex('#0a1c1c'), patternCol2: hex('#f0dc58'), period: 9,
+    head: 'slim', eye: hex('#ff9a3c'), pupil: 'round', scale: { kind: 'smooth', len: 2.2, rows: 5 }, bellyScute: 2.5,
+    glideRoll: 1.15, glideWiden: 0.9, flat: 1,
   },
+  // Lantern Lure-Viper (~100 px): dark mottled ambush viper; the glowing tail-tip lure is emissive.
   lurevip: {
-    length: 52, radius: 3.4, thickAt: 0.4, tailTaper: 1.6, dorsal: r('#1d1430', '#2d1f4a', '#44306a', '#5e4690', '#8068b8'),
-    belly: hex('#c9b8e6'), pattern: 'diamonds', patternCol: hex('#120c20'), patternCol2: hex('#8ef0e0'), period: 10, head: 'viper', eye: hex('#b8ff9a'), lure: hex('#dfffe0'),
+    length: 90, radius: 3.8, profile: [0, 0.5, 0.06, 0.68, 0.35, 1, 0.62, 0.85, 0.82, 0.4, 0.93, 0.2, 1, 0.14],
+    dorsal: r('#120e12', '#1c161a', '#282024', '#362c2c', '#463a36', '#584a42', '#6c5c50'),
+    belly: hex('#8e8478'), throat: hex('#b4a896'), pattern: 'mottle', patternCol: hex('#0a080c'), patternCol2: hex('#6e7a5c'), period: 12,
+    head: 'viper', eye: hex('#c8ff8a'), pupil: 'slit', horns: 2.5, headMark: 'postocular', brow: 1.2,
+    scale: { kind: 'keeled', len: 2.4, rows: 6 }, bellyScute: 2.4, lure: hex('#cfffe8'), lureLen: 0.075,
   },
+  // Titan Constrictor (~600 px, r 14): apex predator; saddles, heavy brows, cold eye, scars, digestion bulge.
   titan: {
-    length: 480, radius: 15, thickAt: 0.4, tailTaper: 1.4, dorsal: r('#1b1d10', '#2c3016', '#43461f', '#5c5e2a', '#787a38', '#9a9a4c'),
-    belly: hex('#c6b98a'), pattern: 'blotch', patternCol: hex('#1a1508'), patternCol2: hex('#b3a25c'), period: 26, head: 'blunt', eye: hex('#e8c040'),
+    length: 560, radius: 14, profile: [0, 0.6, 0.05, 0.72, 0.18, 0.92, 0.45, 1, 0.7, 0.85, 0.88, 0.45, 1, 0.1],
+    dorsal: r('#141a0e', '#1e2714', '#2a361a', '#384620', '#485828', '#5c6c32', '#76843e', '#949e52'),
+    belly: hex('#d4c890'), throat: hex('#e0d4a0'), pattern: 'saddles', patternCol: hex('#0e120a'), patternCol2: hex('#b0a868'), period: 34,
+    head: 'blunt', eye: hex('#c8a830'), pupil: 'slit', eyeSize: 0.62, brow: 2.4, headMark: 'postocular', smile: -0.35,
+    scale: { kind: 'smooth', len: 4.2, rows: 12 }, bellyScute: 5, scars: 5,
   },
+  // Finned Leviathan (~900 px, r 24): undulating dorsal fin, rayed pectorals, crimson gill fronds, photophores.
   leviathan: {
-    length: 720, radius: 17, thickAt: 0.25, tailTaper: 1.1, dorsal: r('#081a26', '#0d2c40', '#14415c', '#1d5a78', '#2f7896', '#5fa8b8'),
-    belly: hex('#bfe0d6'), pattern: 'speckle', patternCol: hex('#8ff0e0'), head: 'leviathan', eye: hex('#dfffb0'),
-    dorsalFin: { from: 0.06, to: 0.95, h: 11, col: hex('#3fa0a8') }, gills: hex('#e86a8a'), pectoral: hex('#3fa0a8'),
+    length: 850, radius: 24, profile: [0, 0.78, 0.07, 0.95, 0.25, 1, 0.6, 0.82, 0.86, 0.45, 1, 0.1],
+    dorsal: r('#0a1420', '#10202e', '#182e3e', '#223e50', '#2e5064', '#3e6478', '#56808e', '#7aa0a8'),
+    belly: hex('#d4e4e0'), throat: hex('#e0ece6'), pattern: 'countershade', patternCol: hex('#0a1620'), patternCol2: hex('#8aa8b0'),
+    head: 'leviathan', eye: hex('#e8f0a0'), pupil: 'round', mouthCol: hex('#9a3a56'),
+    scale: { kind: 'smooth', len: 5, rows: 14 },
+    dorsalFin: { from: 0.05, to: 1, h: 20, col: hex('#3a7890'), rays: 6 },
+    ventralFin: { from: 0.58, to: 1, h: 13, col: hex('#3a7890'), rays: 6 },
+    gills: hex('#d8384e'), gillLen: 1.8, pectoral: hex('#4a8aa0'), photophores: hex('#8ff8e8'),
   },
+  // Mudribbon (~120 px): eel-like mangrove water snake with a paddle tail and nostrils on top.
   mudribbon: {
-    length: 70, radius: 3.2, thickAt: 0.35, dorsal: r('#1c160e', '#2e2416', '#46371f', '#5f4c2b', '#7c663a'),
-    belly: hex('#e0c890'), pattern: 'bands', patternCol: hex('#f0e0b0'), period: 8, head: 'slim', eye: hex('#ffcf40'),
+    length: 112, radius: 3.4, thickAt: 0.35,
+    dorsal: r('#16100a', '#241a10', '#342616', '#46341e', '#5a4426', '#705630', '#8a6c3e'),
+    belly: hex('#d8c07a'), throat: hex('#e4d098'), pattern: 'rings', patternCol: hex('#e0b83a'), patternCol2: hex('#1a1208'), period: 11,
+    head: 'eel', eye: hex('#e8c040'), pupil: 'round', eyeSize: 0.8, nostrilTop: true,
+    scale: { kind: 'smooth', len: 2.3, rows: 6 }, paddle: 0.9, wet: 0.6,
   },
+  // Crag Viper (~80 px): cliff-climbing egg thief; rough keeled scales, heavy supraoculars, narrow snout.
   cragviper: {
-    length: 50, radius: 3.4, thickAt: 0.35, dorsal: r('#2a2a2e', '#40404a', '#5c5c66', '#7c7c86', '#a0a0a8'),
-    belly: hex('#d8d0c0'), pattern: 'diamonds', patternCol: hex('#1a1a20'), patternCol2: hex('#c05040'), period: 8, head: 'viper', eye: hex('#ff5040'),
+    length: 70, radius: 3.6, thickAt: 0.35,
+    dorsal: r('#18191c', '#25272b', '#34373c', '#464a4f', '#5a5e62', '#727578', '#8e908e'),
+    belly: hex('#c8c0b0'), throat: hex('#d8d0c0'), pattern: 'zigzag', patternCol: hex('#1a1414'), patternCol2: hex('#a4502c'), period: 9,
+    head: 'viper', headLen: 12, headW: 1.15, eye: hex('#ff6a3a'), pupil: 'slit', brow: 2, headMark: 'postocular',
+    scale: { kind: 'keeled', len: 2.5, rows: 6 }, bellyScute: 2.4, keeledBelly: true,
   },
+  // Ironjaw Crocodile (~220 px): osteoderm armour, mossy back, interlocking teeth, sprawling clawed legs.
   ironjaw: {
-    length: 120, radius: 8.5, thickAt: 0.3, tailTaper: 1.0, dorsal: r('#12160e', '#1f2616', '#2e391f', '#415029', '#566836', '#708545'),
-    belly: hex('#c8c09a'), pattern: 'bands', patternCol: hex('#161a0e'), period: 12, head: 'croc', headLen: 30, eye: hex('#e8d040'), scutes: true,
-    legs: [{ at: 0.12, len: 9, col: r('#12160e', '#1f2616', '#2e391f', '#415029') }, { at: 0.42, len: 10, col: r('#12160e', '#1f2616', '#2e391f', '#415029') }],
+    length: 180, radius: 10, profile: [0, 0.7, 0.07, 0.86, 0.18, 1, 0.42, 0.96, 0.55, 0.66, 0.78, 0.36, 1, 0.1],
+    dorsal: r('#0e110a', '#171c10', '#212816', '#2c351c', '#394423', '#48552c', '#5a6836', '#707e44'),
+    belly: hex('#c8c098'), throat: hex('#d8d0a8'), pattern: 'croc', patternCol: hex('#0c0e08'), patternCol2: hex('#7a7a48'), period: 14,
+    head: 'croc', headLen: 40, eye: hex('#d8c030'), pupil: 'slit', brow: 1.2, mouthCol: hex('#dcae9a'), teeth: 'croc',
+    scutes: true, osteoderms: { rows: 5, len: 5, crest: 3.2 },
+    moss: { col: r('#1a2a10', '#27401a', '#365a1f', '#4a7426', '#608e30', '#7aa63c', '#9cc04e', '#c0d870'), amount: 0.55 },
+    legs: [
+      { at: 0.1, len: 16, col: CROC_LEG, kind: 'front', digits: 4, claw: hex('#2e2a1e'), thick: 0.4 },
+      { at: 0.44, len: 18, col: CROC_LEG, kind: 'hind', digits: 4, claw: hex('#2e2a1e'), thick: 0.46 },
+    ],
+  },
+  // Bark Gecko (~30 px): clings to trunks (SerpentState.vertical), toe pads, violet dewlap (dewlap 0..1).
+  barkgecko: {
+    length: 25, radius: 2.4, profile: [0, 0.6, 0.08, 0.85, 0.25, 1, 0.42, 0.88, 0.55, 0.55, 0.8, 0.3, 1, 0.1],
+    dorsal: GECKO, belly: hex('#c8b8a0'), throat: hex('#d8c8b0'), pattern: 'bark', patternCol: hex('#161210'), patternCol2: hex('#9aa088'), period: 5,
+    head: 'gecko', eye: hex('#c8a878'), pupil: 'slit', scale: { kind: 'bead', len: 1.6, rows: 5 },
+    dewlap: { col: hex('#8a4ac8'), col2: hex('#f0d8f8'), size: 7 },
+    legs: [
+      { at: 0.16, len: 6, col: GECKO, kind: 'front', digits: 5, pads: true, thick: 0.5 },
+      { at: 0.42, len: 7, col: GECKO, kind: 'hind', digits: 5, pads: true, thick: 0.55 },
+    ],
+  },
+  // Pteramander (~40 px): gliding salamander; skin flaps between the limbs spread with `flatten`.
+  pteramander: {
+    length: 33, radius: 3.2, profile: [0, 0.75, 0.1, 0.9, 0.3, 1, 0.5, 0.9, 0.6, 0.6, 0.8, 0.35, 1, 0.1],
+    dorsal: NEWT, belly: hex('#f0dcb4'), throat: hex('#f4e4c4'), pattern: 'skin', patternCol: hex('#3a1a0c'), patternCol2: hex('#f0c890'),
+    head: 'salamander', eye: hex('#d8a040'), pupil: 'round', smile: 1, scale: { kind: 'skin' }, wet: 0.5,
+    patagia: { col: hex('#d88a44'), col2: hex('#a45a28') }, glideTop: true,
+    legs: [
+      { at: 0.14, len: 8, col: NEWT, kind: 'front', digits: 4, claw: hex('#e8b070'), thick: 0.4 },
+      { at: 0.42, len: 8.5, col: NEWT, kind: 'hind', digits: 5, claw: hex('#e8b070'), thick: 0.45 },
+    ],
   },
 };
 

@@ -116,6 +116,21 @@ export class Texture {
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
   }
 
+  /** Upload a sub-rectangle taken from a larger full-width RGBA8 buffer (rowLength = buffer width). */
+  subImageFrom(x: number, y: number, w: number, h: number, pixels: Uint8Array, rowLength: number) {
+    const gl = this.gl;
+    gl.bindTexture(gl.TEXTURE_2D, this.tex);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, this.o.premultiply);
+    gl.pixelStorei(gl.UNPACK_ROW_LENGTH, rowLength);
+    gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, x);
+    gl.pixelStorei(gl.UNPACK_SKIP_ROWS, y);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, x, y, w, h, this.o.format, this.o.type, pixels);
+    gl.pixelStorei(gl.UNPACK_ROW_LENGTH, 0);
+    gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, 0);
+    gl.pixelStorei(gl.UNPACK_SKIP_ROWS, 0);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+  }
+
   resize(w: number, h: number) {
     if (w === this.w && h === this.h) return;
     this.w = w;

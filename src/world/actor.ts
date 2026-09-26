@@ -208,6 +208,10 @@ export class Actor implements Drawable {
     if (!dur) this.baseExpr = e;
   }
 
+  clearEmote() {
+    this.emote = null;
+  }
+
   showEmote(kind: string, dur = 1.6) {
     this.emote = { kind, t: 0, dur };
     const s: Record<string, string> = {

@@ -11,6 +11,8 @@ interface Page {
   y: number;
   shelfH: number;
   dirty: boolean;
+  /** dirty rectangle (x0, y0, x1, y1) since the last upload */
+  d: [number, number, number, number];
 }
 
 const PAD = 2;
@@ -25,7 +27,7 @@ export class Atlas {
   private newPage(): Page {
     const buf = new PixelBuffer(this.size, this.size);
     const tex = this.r.texture(this.size, this.size, null);
-    const p = { tex, buf, x: PAD, y: PAD, shelfH: 0, dirty: true };
+    const p: Page = { tex, buf, x: PAD, y: PAD, shelfH: 0, dirty: true, d: [0, 0, this.size, this.size] };
     this.pages.push(p);
     return p;
   }
@@ -52,6 +54,9 @@ export class Atlas {
     page.buf.blit(src, x, y, false, false);
     page.x += src.w + PAD;
     page.shelfH = Math.max(page.shelfH, src.h);
+    const d = page.d;
+    if (!page.dirty) { d[0] = x; d[1] = y; d[2] = x + src.w; d[3] = y + src.h; }
+    else { d[0] = Math.min(d[0], x); d[1] = Math.min(d[1], y); d[2] = Math.max(d[2], x + src.w); d[3] = Math.max(d[3], y + src.h); }
     page.dirty = true;
     const S = this.size;
     const f: Frame = { tex: page.tex, u0: x / S, v0: y / S, u1: (x + src.w) / S, v1: (y + src.h) / S, w: src.w, h: src.h, ax, ay };
@@ -82,7 +87,9 @@ export class Atlas {
   upload() {
     for (const p of this.pages) {
       if (!p.dirty) continue;
-      p.tex.subImage(0, 0, this.size, this.size, p.buf.bytes);
+      const [x0, y0, x1, y1] = p.d;
+      if (x0 === 0 && y0 === 0 && x1 >= this.size && y1 >= this.size) p.tex.subImage(0, 0, this.size, this.size, p.buf.bytes);
+      else p.tex.subImageFrom(x0, y0, x1 - x0, y1 - y0, p.buf.bytes, this.size);
       p.dirty = false;
     }
   }

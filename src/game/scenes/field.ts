@@ -48,7 +48,11 @@ export interface SpawnV2 {
 }
 
 export interface FieldSite {
-  id: SiteId;
+  id: SiteId | 'camp';
+  /** no Aroha-follows-you guide (camp) */
+  noGuide?: boolean;
+  /** no "head back to camp" exit (camp itself) */
+  noExit?: boolean;
   name: string;
   width: number;
   camY: number;
@@ -185,7 +189,7 @@ export class FieldScene extends WorldScene implements WildHost {
     this.player.ground = s.ground ?? 'leaves';
     this.main.add(this.player);
     // guide
-    if (game.save.flags['aroha:met'] && !s.underwater) {
+    if (game.save.flags['aroha:met'] && !s.underwater && !s.noGuide) {
       const a = this.addActor('aroha', s.spawnX - 50, this.st.terrain.groundY(s.spawnX - 50), 1);
       a.idleAnim = 'staff';
       a.setAnim('staff');
@@ -206,12 +210,12 @@ export class FieldScene extends WorldScene implements WildHost {
     for (const sp of s.spawns) this.spawnRule(sp, false);
     for (const id of new Set(this.animals.map(a => a.species))) warmBeast(id);
     // camera
-    this.cam = new FieldCamera(this, s.id);
+    this.cam = new FieldCamera(this, s.id === 'camp' ? 'camp' : s.id);
     this.cam.occluders = this.occluders;
     this.cam.onShot = () => this.hud?.refresh();
     this.lampOn = this.night && game.save.tools.includes('headlamp');
     // exit back to camp
-    this.interact.push({ x: s.exitX, y: this.st.terrain.groundY(s.exitX), w: 20, h: 26, label: 'Head back to camp', standX: s.exitX, action: () => this.leave() });
+    if (!s.noExit) this.interact.push({ x: s.exitX, y: this.st.terrain.groundY(s.exitX), w: 20, h: 26, label: 'Head back to camp', standX: s.exitX, action: () => this.leave() });
     game.save.flags['visit:' + s.id] = true;
     game.persist();
     audio.setAmbience(s.ambience, this.night);

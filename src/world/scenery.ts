@@ -12,7 +12,7 @@ import { Custom, Prop } from './props';
 import { A } from '../game/assets';
 import { Rng, bayer, clamp, fbm1, fbm2, noise1 } from '../core/math';
 
-const HALF = 330;
+const HALF = 440;
 
 /** Required width & origin for a layer image so it covers the camera range at parallax p. */
 export function layerSpan(st: Stage, p: number, margin = 40) {
@@ -33,7 +33,7 @@ export function addSky(st: Stage, r: Renderer, opts: { glowK?: number } = {}) {
   const moonF = pr.moon ? bigFrame(r, L.paintMoon(9, hex('#eef2f6'), hex('#bcc6d4'), hex('#8e98aa'))) : null;
   const sunF = !pr.moon ? bigFrame(r, L.paintSun(st.tod === 'day' ? 8 : 11, hex('#fffaf0'), hex(st.tod === 'day' ? '#fff3c4' : '#ffd08a'))) : null;
   layer.add(new Custom(0, (rr, s) => {
-    const oy = -(s.cam.y - 135) * 0.04 - 10;
+    const oy = -(s.cam.y - 180) * 0.04 - 10;
     rr.drawSub(skyF, 0, 0, Math.min(W, rr.VW + 2), H, 0, oy);
     if (rr.VW > W) rr.drawSub(skyF, W - 2, 0, 2, H, W - 1, oy, (rr.VW - W + 2) / 2, 1);
     // stars
