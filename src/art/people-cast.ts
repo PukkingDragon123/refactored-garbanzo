@@ -938,6 +938,29 @@ export const PIP: CharDef = {
   },
 };
 
+/**
+ * V3 proportions: everyone is taller (longer legs, torso and arms; heads stay big and cute) and each
+ * castaway has a distinct silhouette: lanky Rowan, broad barrel-chested Crowe, tall athletic Aroha,
+ * short round Lou and small wiry Pip.
+ */
+function reshape(d: CharDef, o: { leg: number; torso: number; arm: number; width?: number }) {
+  const b = d.build, w = o.width ?? 1;
+  const slack = b.thigh + b.shin + b.ankleH - b.hipH;
+  b.thigh *= o.leg; b.shin *= o.leg;
+  b.hipH = b.thigh + b.shin + b.ankleH - slack * o.leg;
+  b.torso *= o.torso; b.shY *= o.torso;
+  b.upArm *= o.arm; b.foreArm *= o.arm;
+  b.shF *= w; b.shB *= w; b.legF *= w; b.legB *= w;
+  d.torso.prof = d.torso.prof.map(([y, bk, f]) => [y > 0 ? y * o.torso : y, bk * w, f * w] as [number, number, number]);
+  d.leg.rThigh *= Math.sqrt(w); d.leg.rKnee *= Math.sqrt(w);
+  d.arm.rSh *= Math.sqrt(w); d.arm.rEl *= Math.sqrt(w);
+}
+reshape(ROWAN, { leg: 1.26, torso: 1.12, arm: 1.16 });
+reshape(CROWE, { leg: 1.2, torso: 1.12, arm: 1.16, width: 1.14 });
+reshape(AROHA, { leg: 1.25, torso: 1.1, arm: 1.15, width: 0.95 });
+reshape(LOU, { leg: 1.1, torso: 1.06, arm: 1.08, width: 1.12 });
+reshape(PIP, { leg: 1.22, torso: 1.1, arm: 1.15, width: 0.9 });
+
 export const CHARS: Record<CharId, CharDef> = { rowan: ROWAN, crowe: CROWE, aroha: AROHA, lou: LOU, pip: PIP };
 
 export { B, boot, sandal, tl, profAt, clampi, shade, mix };

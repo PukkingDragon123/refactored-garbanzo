@@ -20,11 +20,11 @@ export const CHAR_ANIMS: Record<CharId, string[]> = {
 };
 
 export const CHAR_INFO: Record<CharId, { name: string; short: string; voice: number; height: number }> = {
-  rowan: { name: 'Rowan Ellis', short: 'Rowan', voice: 1, height: 64 },
-  crowe: { name: 'Captain Barnaby Crowe', short: 'Crowe', voice: 0.66, height: 66 },
-  aroha: { name: 'Aroha', short: 'Aroha', voice: 1.08, height: 72 },
-  lou: { name: 'Lou Tupou', short: 'Lou', voice: 0.9, height: 60 },
-  pip: { name: 'Pip Nakamura', short: 'Pip', voice: 1.45, height: 58 },
+  rowan: { name: 'Rowan Ellis', short: 'Rowan', voice: 1, height: 74 },
+  crowe: { name: 'Captain Barnaby Crowe', short: 'Crowe', voice: 0.66, height: 76 },
+  aroha: { name: 'Aroha', short: 'Aroha', voice: 1.08, height: 82 },
+  lou: { name: 'Lou Tupou', short: 'Lou', voice: 0.9, height: 64 },
+  pip: { name: 'Pip Nakamura', short: 'Pip', voice: 1.45, height: 66 },
 };
 
 export function renderBody(id: CharId, anim: string, frame: number): BodyFrame {

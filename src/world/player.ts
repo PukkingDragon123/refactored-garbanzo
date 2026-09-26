@@ -108,7 +108,7 @@ export class Player implements Drawable {
   }
 
   get height() {
-    return this.crouch || this.state === 'hide' || this.state === 'work' ? 42 : 62;
+    return this.crouch || this.state === 'hide' || this.state === 'work' ? 48 : 72;
   }
   get headY() {
     return this.y - this.height;
