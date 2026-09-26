@@ -64,6 +64,9 @@ export interface CamState {
   shakeT: number;
   /** when set, camera is driven directly (cutscenes) */
   locked: boolean;
+  /** additive view offset (handheld camera sway), world px */
+  ox?: number;
+  oy?: number;
 }
 
 export class Stage {
@@ -148,8 +151,8 @@ export class Stage {
       sy = (rand.next() - 0.5) * 2 * k;
       if (c.shakeT <= 0) c.shake = 0;
     }
-    r.view.x = c.x;
-    r.view.y = c.y;
+    r.view.x = c.x + (c.ox ?? 0);
+    r.view.y = c.y + (c.oy ?? 0);
     r.view.zoom = c.zoom;
     r.view.shakeX = sx;
     r.view.shakeY = sy;
