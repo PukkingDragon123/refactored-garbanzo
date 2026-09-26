@@ -287,8 +287,8 @@ export class CampScene extends FieldScene {
       if (buildLevel('fire') < 3) return;
       const x = SPOTS.fire, y = campGround(x);
       const k = 0.85 + 0.15 * Math.sin(s.time * 11) * Math.sin(s.time * 3.7);
-      rr.light(x, y - 12, this.tod === 'night' ? 230 : 120, 1, 0.62, 0.3, (this.tod === 'night' ? 3.2 : 1.4) * k);
-      rr.fxDraw(A.glow, x, y - 10, 0.8, 0.7, 0, packColor(1, 0.6, 0.25, 1), 2.4 * k);
+      rr.light(x, y - 12, this.tod === 'night' ? 200 : 120, 1, 0.62, 0.3, (this.tod === 'night' ? 1.35 : 1.1) * k);
+      rr.fxDraw(A.glow, x, y - 10, 0.7, 0.6, 0, packColor(1, 0.6, 0.25, 1), (this.tod === 'night' ? 0.9 : 1.4) * k);
     }, (dt, s) => {
       if (buildLevel('fire') < 3) return;
       this.fireT -= dt;

@@ -46,6 +46,7 @@ async function boot() {
   const scene = params.get('scene');
   const flow = await import('./game/scenes/flow');
   if (params.has('flags')) for (const f of params.get('flags')!.split(',')) game.save.flags[f] = true;
+  if (params.has('builds')) for (const kv of params.get('builds')!.split(',')) { const [k, v] = kv.split(':'); game.save.builds[k] = +v; }
   if (params.has('tod')) game.save.campTime = params.get('tod') as TimeOfDay;
   if (scene === 'site') await flow.goField((params.get('site') ?? 'fernwood') as SiteId, (params.get('tod') ?? 'day') as TimeOfDay);
   else if (scene === 'camp') await flow.goCamp();

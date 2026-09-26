@@ -98,7 +98,7 @@ const CSS = `
 .lt-note::before { content: ''; position: absolute; top: -0.5em; left: 38%; width: 4em; height: 1em; background: rgba(255,255,255,0.45); transform: rotate(-4deg); }
 .lt-note h4 { margin: 0 0 0.2em; font-family: var(--pix); font-weight: 500; font-size: 0.8em; letter-spacing: 0.1em; color: #a86a18; text-transform: uppercase; }
 .lt-note b { font-family: var(--pix); font-weight: 500; font-size: 0.95em; display: block; margin-bottom: 0.15em; }
-.lt-note .pr { font-family: var(--pix); font-size: 0.8em; color: #6a5a2a; }
+.lt-note .prog { font-family: var(--pix); font-size: 0.8em; color: #6a5a2a; }
 .lt-rpw { position: absolute; right: 1.2em; top: 8.6em; z-index: 2; display: flex; align-items: center; gap: 0.5em; padding: 0.45em 0.8em 0.45em 0.5em; background: rgba(16,32,28,0.82); box-shadow: 0 0 0 0.2em rgba(143,240,220,0.25); font-family: var(--pix); }
 .lt-rpw img { width: 2.4em; image-rendering: pixelated; }
 .lt-rpw b { font-size: 1.6em; color: var(--amber2); font-weight: 500; line-height: 1; }
@@ -299,7 +299,7 @@ export function openLaptop(o: { app?: LaptopApp } = {}): Promise<void> {
         const i = currentStepIndex(q);
         const st = q.steps[i];
         const pr = st?.progress?.();
-        note.innerHTML = `<h4>Tracking</h4><b>${esc(q.title)}</b>${st ? esc(st.text) : 'All done!'}${pr ? ` <span class="pr">(${pr[0]}/${pr[1]})</span>` : ''}`;
+        note.innerHTML = `<h4>Tracking</h4><b>${esc(q.title)}</b>${st ? esc(st.text) : 'All done!'}${pr ? ` <span class="prog">(${pr[0]}/${pr[1]})</span>` : ''}`;
       } else note.innerHTML = `<h4>Notes</h4>Nothing tracked. Crowe says: “Rest is also work.”`;
       note.onclick = () => openApp('quests');
       os.appendChild(note);
