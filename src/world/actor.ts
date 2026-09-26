@@ -16,7 +16,7 @@ import { approach, clamp, rand } from '../core/math';
 // ------------------------------------------------------------------ art binding (src/art/people.ts, src/art/emotes.ts)
 
 export type Look = 'fwd' | 'up' | 'down';
-export interface BodyFrameArt { back: PixelBuffer; front: PixelBuffer | null; ax: number; ay: number; hx: number; hy: number; look?: Look; hand?: [number, number]; headBehind?: boolean }
+export interface BodyFrameArt { back: PixelBuffer; front: PixelBuffer | null; ax: number; ay: number; hx: number; hy: number; look?: Look; hand?: [number, number]; headBehind?: boolean; hrot?: number }
 export interface PeopleArt {
   ANIMS: Record<string, { frames: number; fps: number; loop: boolean }>;
   CHAR_ANIMS: Record<string, string[]>;
@@ -38,7 +38,7 @@ export function bindActorArt(p: PeopleArt | null, e: EmoteArt | null) {
 }
 export const peopleArt = () => people;
 
-interface BodyCache { back: Frame; front: Frame | null; ax: number; ay: number; hx: number; hy: number; look: Look; hand: [number, number] | null; headBehind: boolean }
+interface BodyCache { back: Frame; front: Frame | null; ax: number; ay: number; hx: number; hy: number; look: Look; hand: [number, number] | null; headBehind: boolean; hrot: number }
 const bodyCache = new Map<string, BodyCache>();
 const headCache = new Map<string, Frame>();
 const emoteCache = new Map<string, Frame[]>();
@@ -52,7 +52,7 @@ function bodyFrame(id: string, anim: string, frame: number): BodyCache | null {
     b = {
       back: atlas.add('pb:' + key, art.back, art.ax, art.ay),
       front: art.front ? atlas.add('pf:' + key, art.front, art.ax, art.ay) : null,
-      ax: art.ax, ay: art.ay, hx: art.hx, hy: art.hy, look: art.look ?? 'fwd', hand: art.hand ?? null, headBehind: !!art.headBehind,
+      ax: art.ax, ay: art.ay, hx: art.hx, hy: art.hy, look: art.look ?? 'fwd', hand: art.hand ?? null, headBehind: !!art.headBehind, hrot: art.hrot ?? 0,
     };
     bodyCache.set(key, b);
   }
@@ -428,9 +428,10 @@ export class Actor implements Drawable {
     const nod = this.nodT > 0 ? Math.sin((this.nodT / 0.35) * Math.PI) * 1.5 : 0;
     const hx = x + f * (b.hx - b.ax) * this.sqx, hy = y + (b.hy - b.ay) * this.sqy + nod;
     const sx = f * this.sqx, sy = this.sqy;
-    if (b.headBehind && head) r.draw(head, hx, hy, sx, sy, 0, col);
+    const hr = b.hrot * f;
+    if (b.headBehind && head) r.draw(head, hx, hy, sx, sy, hr, col);
     r.draw(b.back, x, y, sx, sy, 0, col);
-    if (!b.headBehind && head) r.draw(head, hx, hy, sx, sy, 0, col);
+    if (!b.headBehind && head) r.draw(head, hx, hy, sx, sy, hr, col);
     if (b.front) r.draw(b.front, x, y, sx, sy, 0, col);
     // emote above head
     if (this.emote) {

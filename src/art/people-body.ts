@@ -15,6 +15,8 @@ export interface BodyFrame {
   look?: 'fwd' | 'up' | 'down';
   hand?: [number, number];
   headBehind?: boolean;
+  /** head rotation (radians, facing right) for lying/swimming poses */
+  hrot?: number;
 }
 
 const CW = 160, CH = 150, OX = 80, OY = 116;
@@ -79,6 +81,7 @@ export function paintBody(ch: CharDef, pose: Pose, anim: string, t: number): Bod
     look: pose.look,
     hand: [Math.round(hw[0]) - tr.ox, Math.round(hw[1]) - tr.oy],
     headBehind: pose.headBehind || undefined,
+    hrot: pose.flags?.hrot,
   };
 }
 
