@@ -14,6 +14,8 @@ import { SAILGLIDER } from './beasts-sailglider';
 import { FLICKER } from './beasts-flicker';
 import { BONEFACE } from './beasts-boneface';
 import { HUNTERBAT } from './beasts-hunterbat';
+import { GALEHAWK, CRAGAUK, TORRENTDIPPER, SNAKESTORK, MONARCH, NUTCRACKER } from './beasts-birds';
+import { MOSSFROG } from './beasts-frog';
 
 export type BeastId = 'shieldback' | 'quillhog' | 'delver' | 'sailglider' | 'flicker' | 'boneface' | 'hunterbat' | 'galehawk' | 'cragauk' | 'torrentdipper' | 'snakestork' | 'monarch' | 'nutcracker' | 'mossfrog';
 export type BeastEye = CoreEye;
@@ -27,6 +29,13 @@ const SPECIES: Partial<Record<BeastId, SpeciesDef>> = {
   flicker: FLICKER,
   boneface: BONEFACE,
   hunterbat: HUNTERBAT,
+  galehawk: GALEHAWK,
+  cragauk: CRAGAUK,
+  torrentdipper: TORRENTDIPPER,
+  snakestork: SNAKESTORK,
+  monarch: MONARCH,
+  nutcracker: NUTCRACKER,
+  mossfrog: MOSSFROG,
 };
 
 export const BEAST_IDS = Object.keys(SPECIES) as BeastId[];
