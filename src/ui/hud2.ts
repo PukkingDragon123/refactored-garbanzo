@@ -31,7 +31,18 @@ const CSS = `
 .h2 .rp { position: absolute; right: 16px; bottom: 14px; padding: 0.35em 0.8em; font-family: var(--pix); display: flex; gap: 0.45em; align-items: center; font-variant-numeric: tabular-nums; }
 .h2 .rp img { width: 1.4em; image-rendering: pixelated; }
 .h2 .rp b { color: var(--amber2); font-weight: 600; }
-.h2 .keys { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); font-size: 0.78em; opacity: 0.72; white-space: nowrap; text-shadow: 0 1px 2px #000; }
+.h2 .keys { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); font-size: 0.78em; opacity: 0.72; white-space: nowrap; text-shadow: 0 1px 2px #000; }
+.h2 .who { position: relative; pointer-events: none; display: flex; align-items: center; margin-right: 0.3em; }
+.h2 .who .med { width: 4.4em; height: 4.4em; border-radius: 50%; background: radial-gradient(circle at 50% 40%, #6aa0a8, #2a4a50); box-shadow: 0 0 0 3px #2a1a10, 0 0 0 6px #c08a48, 0 0 0 8px #2a1a10, 0 5px 0 5px rgba(0,0,0,0.35); overflow: hidden; display: grid; place-items: end center; z-index: 2; }
+.h2 .who .med img { width: 118%; image-rendering: pixelated; margin-bottom: -0.2em; }
+.h2 .who .bars { margin-left: -0.9em; padding-left: 1.2em; display: flex; flex-direction: column; gap: 3px; z-index: 1; }
+.h2 .who .bars i { display: block; width: 8.5em; height: 0.75em; background: #2a1a10; box-shadow: 0 0 0 2px #2a1a10; position: relative; }
+.h2 .who .bars i::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: var(--v, 100%); background: linear-gradient(#ff8a6a 0 35%, #d8543e 35% 75%, #a8382a 75%); transition: width 0.3s; }
+.h2 .who .bars i.b::after { background: linear-gradient(#8ad8ff 0 35%, #3a8ad8 35% 75%, #2a5aa8 75%); }
+.h2 .who .bars small { font-family: var(--head); font-size: 0.6em; color: #fff; text-shadow: 0 2px 0 #000; letter-spacing: 0.06em; }
+.h2 .belt { display: flex; gap: 2px; padding: 4px; background: #2a1a10; box-shadow: 0 0 0 3px #7a5028, 0 0 0 5px #2a1a10, 0 5px 0 5px rgba(0,0,0,0.3); }
+.h2 .belt span { width: 2.6em; height: 2.6em; background: var(--sk-slot) center / 100% 100%; image-rendering: pixelated; display: grid; place-items: center; }
+.h2 .belt span img { width: 2.1em; height: 2.1em; image-rendering: pixelated; }
 .flyitem { position: absolute; width: 36px; height: 36px; image-rendering: pixelated; pointer-events: none; z-index: 9; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.5)); }
 .pickup { position: absolute; transform: translate(-50%, -100%); font-family: var(--pix); font-size: 0.95em; color: #fff4c4; text-shadow: 0 2px 0 #1b1a1f, 0 0 6px rgba(0,0,0,0.6); pointer-events: none; animation: pickupRise 1.3s ease-out forwards; white-space: nowrap; }
 @keyframes pickupRise { 0% { opacity: 0; transform: translate(-50%, -80%) scale(0.7); } 15% { opacity: 1; transform: translate(-50%, -110%) scale(1.1); } 100% { opacity: 0; transform: translate(-50%, -260%) scale(1); } }
@@ -53,6 +64,9 @@ export class Hud2 {
   private pack: HTMLElement;
   private rpEl: HTMLElement;
   private keys: HTMLElement;
+  private who!: HTMLElement;
+  private belt!: HTMLElement;
+  private beltKey = '';
   private shownRp = -1;
   private lastQuestKey = '';
   private t = 0;
@@ -63,6 +77,8 @@ export class Hud2 {
     this.loc = this.root.appendChild(el('div', 'loc panel'));
     this.quest = this.root.appendChild(el('div', 'quest panel'));
     const bar = this.root.appendChild(el('div', 'bar'));
+    this.who = bar.appendChild(el('div', 'who', `<div class="med"><img alt=""></div><div class="bars"><small>PACK</small><i class="a"></i><small>FILM</small><i class="b"></i></div>`));
+    this.belt = bar.appendChild(el('div', 'belt'));
     this.pack = bar.appendChild(el('div', 'btn2 panel interactive', `<span class="k">I</span><img src="${uiIconURL('pack', 3)}" alt=""><span class="n"></span>`));
     this.pack.addEventListener('pointerdown', e => { e.stopPropagation(); o.onBackpack?.(); });
     this.rpEl = this.root.appendChild(el('div', 'rp panel', `<img src="${uiIconURL('rp', 3)}" alt=""><b>0</b><span style="opacity:0.7">RP</span>`));
@@ -114,6 +130,20 @@ export class Hud2 {
     this.lastQuestKey = key;
     // backpack
     (this.pack.querySelector('.n') as HTMLElement).textContent = `${s.inv.length}/${capacity()}`;
+    // portrait, pack meter, film (field camera) and tool belt
+    const img = this.who.querySelector('img') as HTMLImageElement;
+    if (!img.src) { const u = game.ui.portraitURL('rowan', 'happy'); if (u) img.src = u; }
+    (this.who.querySelector('i.a') as HTMLElement).style.setProperty('--v', `${Math.round((s.inv.length / Math.max(1, capacity())) * 100)}%`);
+    const cam = (game.scene as { cam?: { shots: number } } | null)?.cam;
+    const film = this.who.querySelector('i.b') as HTMLElement;
+    film.style.display = cam ? '' : 'none';
+    (film.previousElementSibling as HTMLElement).style.display = cam ? '' : 'none';
+    if (cam) film.style.setProperty('--v', `${Math.round(Math.min(1, cam.shots / 24) * 100)}%`);
+    const bk = s.tools.join(',');
+    if (bk !== this.beltKey) {
+      this.beltKey = bk;
+      this.belt.innerHTML = s.tools.slice(0, 8).map(t => `<span title="${t}"><img src="${itemIconURL(t, 3)}" alt=""></span>`).join('') + '<span></span>'.repeat(Math.max(0, 6 - s.tools.length));
+    }
     // rp count-up
     if (this.shownRp < 0 || force) this.shownRp = s.rp;
   }
