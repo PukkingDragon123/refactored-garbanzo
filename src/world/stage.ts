@@ -21,6 +21,8 @@ export class Layer {
   private dirty = true;
   screen = false;
   visible = true;
+  /** optional rigid transform for everything on this layer: [pivotX, pivotY, rot, tx, ty] */
+  xf: [number, number, number, number, number] | null = null;
   constructor(
     readonly name: string,
     public p: number,
@@ -76,8 +78,8 @@ export class Stage {
   minX = 0;
   maxX = 1000;
   minY = -200;
-  maxY = 270;
-  cam: CamState = { x: 240, y: 135, zoom: 1, tx: 240, ty: 135, tzoom: 1, follow: 4, zoomLerp: 3, shake: 0, shakeT: 0, locked: false };
+  maxY = 360;
+  cam: CamState = { x: 320, y: 180, zoom: 1, tx: 320, ty: 180, tzoom: 1, follow: 4, zoomLerp: 3, shake: 0, shakeT: 0, locked: false };
   /** hook for per-frame env modulation (lightning flashes, danger tint...) */
   envHook: ((env: Env, dt: number) => void) | null = null;
   waterY: number | null = null;
@@ -168,9 +170,11 @@ export class Stage {
       if (l.screen) r.screen(l.fog, l.receive, l.emissive);
       else r.layer(l.p, l.fog, l.receive, l.emissive, l.py);
       l.sort();
+      if (l.xf) r.pushTransform(l.xf[0], l.xf[1], l.xf[2], l.xf[3], l.xf[4]);
       for (const d of l.items) d.draw(r, this);
       l.particles.draw(r);
       l.glowParticles.draw(r);
+      if (l.xf) r.popTransform();
     }
   }
 

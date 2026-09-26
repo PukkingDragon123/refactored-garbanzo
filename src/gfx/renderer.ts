@@ -88,7 +88,7 @@ export const hexColor = (hex: number, a = 1) =>
 export const WHITE = 0xffffffff;
 
 /** Camera rest height: layers of any parallax line up when the camera y equals this. */
-export const REF_Y = 135;
+export const REF_Y = 180;
 const BYTES_PER_VERT = 28;
 const FLOATS_PER_VERT = 7;
 const QUAD_CAP = 16000;
@@ -151,8 +151,8 @@ export class Renderer {
   readonly gl: GL;
   readonly hdrFormat: { internal: number; format: number; type: number };
   /** Art-pixel view size (VW x VH) */
-  VW = 480;
-  VH = 270;
+  VW = 640;
+  VH = 360;
   W = 1;
   H = 1;
   scale = 1;
@@ -192,6 +192,10 @@ export class Renderer {
   readonly white: Frame;
   private shadowMode = 0;
   quality = 1;
+  /** world-space rigid transform applied before layer projection (boat decks, swinging props) */
+  private M: [number, number, number, number, number, number] | null = null;
+  private MR = 0;
+  private mStack: { M: [number, number, number, number, number, number] | null; R: number }[] = [];
 
   constructor(readonly canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, premultipliedAlpha: false, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
@@ -276,8 +280,8 @@ export class Renderer {
   /** Resize the drawing buffer. cssW/cssH are the displayed size, dpr the device pixel ratio. */
   resize(cssW: number, cssH: number, dpr: number) {
     const aspect = cssW / cssH;
-    this.VH = 270;
-    this.VW = Math.round(Math.min(Math.max(this.VH * aspect, 400), 640));
+    this.VH = 360;
+    this.VW = Math.round(Math.min(Math.max(this.VH * aspect, 540), 860));
     const maxPixels = 2560 * 1440 * this.quality * this.quality;
     let pw = Math.round(cssW * dpr), ph = Math.round(cssH * dpr);
     const k = Math.sqrt(Math.min(1, maxPixels / (pw * ph)));
@@ -372,6 +376,39 @@ export class Renderer {
     return this.wx(this.VW + margin);
   }
 
+  // ---------------------------------------------------------------- transforms
+  /**
+   * Rotate following draws by `rot` radians about world point (px, py), then translate by (tx, ty).
+   * Nestable; always pair with popTransform().
+   */
+  pushTransform(px: number, py: number, rot: number, tx = 0, ty = 0) {
+    this.mStack.push({ M: this.M, R: this.MR });
+    const c = Math.cos(rot), s = Math.sin(rot);
+    // local: p' = R (p - pivot) + pivot + t
+    const la = c, lb = s, lc = -s, ld = c;
+    const le = px + tx - (c * px - s * py), lf = py + ty - (s * px + c * py);
+    const P = this.M;
+    if (!P) this.M = [la, lb, lc, ld, le, lf];
+    else {
+      const [a, b, cc, d, e, f] = P;
+      this.M = [a * la + cc * lb, b * la + d * lb, a * lc + cc * ld, b * lc + d * ld, a * le + cc * lf + e, b * le + d * lf + f];
+    }
+    this.MR += rot;
+  }
+  popTransform() {
+    const t = this.mStack.pop();
+    this.M = t ? t.M : null;
+    this.MR = t ? t.R : 0;
+  }
+  /** Apply the current transform to a world point (for anchoring UI to transformed objects). */
+  transformPoint(x: number, y: number): [number, number] {
+    const M = this.M;
+    return M ? [M[0] * x + M[2] * y + M[4], M[1] * x + M[3] * y + M[5]] : [x, y];
+  }
+  get transformRot() {
+    return this.MR;
+  }
+
   // ---------------------------------------------------------------- drawing
   private writeQuad(
     b: QuadBatch, tex: Texture | null, mode: number,
@@ -396,6 +433,13 @@ export class Renderer {
   ) {
     const L = this.L;
     const z = L.z;
+    const M = this.M;
+    if (M) {
+      const x0 = x;
+      x = M[0] * x0 + M[2] * y + M[4];
+      y = M[1] * x0 + M[3] * y + M[5];
+      rot += this.MR;
+    }
     const cx = x * z + L.ox, cy = y * z + L.oy;
     const kx = sx * z, ky = sy * z;
     const l = -fr.ax * kx, r = (fr.w - fr.ax) * kx;
@@ -429,6 +473,10 @@ export class Renderer {
 
   /** Draw with the top edge sheared horizontally by `sway` world px (wind-bent vegetation). */
   drawSway(fr: Frame, x: number, y: number, sx: number, sy: number, sway: number, color = WHITE) {
+    if (this.M) {
+      this.emit(this.scene, this.shadowMode, fr, x, y, sx, sy, 0, color, this.L.aux, this.mat);
+      return;
+    }
     const L = this.L;
     const z = L.z;
     const cx = x * z + L.ox, cy = y * z + L.oy;
@@ -471,6 +519,7 @@ export class Renderer {
   /** Point light on the current layer. radius in world units. */
   light(x: number, y: number, radius: number, r: number, g: number, b: number, intensity = 1, core = 0) {
     const L = this.L;
+    if (this.M) [x, y] = this.transformPoint(x, y);
     const cx = x * L.z + L.ox, cy = y * L.z + L.oy, rr = radius * L.z;
     if (cx + rr < 0 || cx - rr > this.VW || cy + rr < 0 || cy - rr > this.VH) return;
     const color = packColor(Math.min(r, 1), Math.min(g, 1), Math.min(b, 1), 1);
@@ -508,6 +557,9 @@ export class Renderer {
     this.scene.reset();
     this.lights.reset();
     this.fx.reset();
+    this.M = null;
+    this.MR = 0;
+    this.mStack.length = 0;
     this.layer(1);
     this.mat = 0;
     this.shadowMode = 0;

@@ -15,7 +15,7 @@ export abstract class StageScene implements Scene {
   prompt!: PromptView;
   cutscene = false;
   lookAhead = 40;
-  camY = 135;
+  camY = 180;
   clickToWalk = true;
   private busyAction = false;
   hovered: Interactable | null = null;
