@@ -32,6 +32,7 @@ import type { Sprite } from '../../art/jungle-core';
 import { tree, canopyClump } from '../../art/jungle-trees';
 import { plant, fungus, deadwood } from '../../art/jungle-plants';
 import { foreground } from '../../art/jungle-fg';
+import { wreckPoint, deckY, BOAT_LAYOUT } from '../../art/boat';
 
 // ------------------------------------------------------------------ art adapter (src/art/castaway.ts, src/art/jungle.ts, src/art/boat.ts)
 type AnyFn = (...a: unknown[]) => unknown;
@@ -94,6 +95,7 @@ export class CampScene extends FieldScene {
   private bush: { x: number; shake: number } = { x: 1420, shake: 0 };
   private scared = false;
   phoneSpeaker: Speaker | null = null;
+  wreckLadder: { x: number; y0: number; y1: number } | null = null;
 
   constructor(o: CampOpts = {}) {
     const tod: TimeOfDay = o.noiseNight ? 'night' : game.save.campTime;
@@ -323,13 +325,36 @@ export class CampScene extends FieldScene {
       this.addNode(nd);
       return nd;
     };
-    // wreck salvage
-    node('crate1', 'crate', 250, [['canvas', 1], ['rope', 1]]);
-    node('crate2', 'crate', 300, [['poles', 4]]);
-    node('crate3', 'crate', 380, [['plank', 3], ['scrap', 1]]);
-    node('crate4', 'crate', 440, [['ration', 3], ['battery', 1]]);
-    node('crate5', 'crate', 520, [['plank', 2], ['scrap', 2], ['wire', 1]]);
-    node('toolbox', 'crate', 560, []);
+    // wreck salvage: climb the rope ladder at the stern and loot the Kittiwake herself
+    const base = campGround(SPOTS.wreck) + 8;
+    const wp = (lx: number, ly: number): [number, number] => { const [rx, ry] = wreckPoint(lx, ly); return [SPOTS.wreck + rx, base + ry]; };
+    const deck = BOAT_LAYOUT.floors.find(f => f.name === 'deck')!.pts.filter(([lx]) => lx < 462).map(([lx, ly]) => wp(lx, ly));
+    this.st.terrain.addPlatform(deck, 'bridge');
+    const [lx0, ly0] = wp(46, deckY(46));
+    this.st.terrain.addClimb(Math.round(lx0), ly0, campGround(lx0), 'rope');
+    this.wreckLadder = { x: Math.round(lx0), y0: ly0, y1: campGround(lx0) };
+    const onWreck = () => this.player.y < campGround(this.player.x) - 16;
+    const wnode = (key: string, lx: number, ly: number, contents: [string, number][]) => {
+      const [x, y] = wp(lx, ly);
+      const n: NodeArt = { normal: fr(res('crate', false, x)) ?? A.blob, depleted: fr(res('crate', true, x)), glow: null };
+      const nd = new ResourceNode('camp:' + key, 'crate', Math.round(x), y + 1, n);
+      nd.contents = contents;
+      this.addNode(nd);
+      const it = this.interact[this.interact.length - 1] as { enabled?: () => boolean };
+      const was = it.enabled;
+      it.enabled = () => onWreck() && (was ? was() : true);
+      return nd;
+    };
+    wnode('crate1', 128, deckY(128), [['canvas', 1], ['rope', 1]]);
+    wnode('crate2', 176, deckY(176), [['poles', 4]]);
+    wnode('toolbox', 262, BOAT_LAYOUT.spots.helm[1], []);
+    wnode('crate3', 384, deckY(384), [['plank', 3], ['scrap', 1]]);
+    wnode('crate4', 420, deckY(420), [['ration', 3], ['battery', 1]]);
+    wnode('crate5', 452, deckY(452), [['plank', 2], ['scrap', 2], ['wire', 1]]);
+    this.interact.push(
+      { x: this.wreckLadder.x, y: this.wreckLadder.y1, w: 12, h: 20, label: 'Climb aboard the wreck', standX: this.wreckLadder.x, enabled: () => !onWreck(), action: () => this.climbLadder(this.wreckLadder!, -1) } as never,
+      { x: this.wreckLadder.x, y: this.wreckLadder.y0, w: 12, h: 14, label: 'Climb down to the beach', standX: this.wreckLadder.x, enabled: () => onWreck() && Math.abs(this.player.x - this.wreckLadder!.x) < 30, action: () => this.climbLadder(this.wreckLadder!, 1) } as never,
+    );
     node('tidepool1', 'shells', 160);
     node('tidepool2', 'shells', 205);
     if (questStatus('pipe') === 'active' || questStatus('pipe') === 'done') node('pipe', 'shells', 185, [['pipe', 1], ['mussel', 1]]);
@@ -567,6 +592,7 @@ export class CampScene extends FieldScene {
     await game.ui.titleCard('Chapter 1', 'Castaways', 'Salvage the wreck. Build a camp. Survive the night.', 3000);
     this.cutscene = false;
     audio.setMusic('build' as never);
+    setTimeout(() => this.bark('rowan', 'Everything we own is still aboard the *Kittiwake*. That rope ladder at the stern: I can climb up and salvage.', { expr: 'determined', emote: 'idea' }), 1200);
     // Crowe's rope tip
     setTimeout(() => { if (!this.cutscene) this.say(script.CROWE_ROPE); }, 12000);
   }

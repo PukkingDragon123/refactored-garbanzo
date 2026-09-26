@@ -117,6 +117,21 @@ export abstract class WorldScene implements Scene {
     }
   }
 
+  /** Scripted ladder / rope climb (for mouse and touch; keyboard players can also use W / S). */
+  async climbLadder(ld: { x: number; y0: number; y1: number }, dir: 1 | -1) {
+    const p = this.player;
+    const c = this.st.terrain.climbs.find(k => Math.abs(k.x - ld.x) < 2);
+    if (!c) return;
+    p.x = c.x;
+    p.y = dir > 0 ? c.y0 : c.y1;
+    p.state = 'climb';
+    p.climb = c;
+    p.vx = p.vy = 0;
+    p.autoClimb = dir;
+    audio.play('stepWood' as never, { vol: 0.4 });
+    await new Promise<void>(res => { const chk = () => (p.state !== 'climb' ? res() : requestAnimationFrame(chk)); chk(); });
+  }
+
   /** Register a resource node as an interactable too. */
   addNode(n: ResourceNode, layer = this.main): ResourceNode {
     layer.add(n);

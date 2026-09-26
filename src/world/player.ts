@@ -40,6 +40,8 @@ export class Player implements Drawable {
   hideSpot: HideSpot | null = null;
   hides: HideSpot[] = [];
   dropT = 0;
+  /** scripted ladder climb direction (+1 down, -1 up), set by scenes for click/tap climbing */
+  autoClimb = 0;
   noise = 0;
   visibility = 1;
   swimming = false;
@@ -165,7 +167,19 @@ export class Player implements Drawable {
       const c = this.climb;
       let ay = 0;
       if (canControl) ay = (inp.down('down') ? 1 : 0) - (inp.down('up') ? 1 : 0);
-      this.y = clamp(this.y + ay * 44 * dt, c.y0, c.y1);
+      if (this.autoClimb) {
+        ay = this.autoClimb;
+        if ((ay > 0 && this.y >= c.y1 - 0.5) || (ay < 0 && this.y <= c.y0 + 0.5)) {
+          this.y = ay > 0 ? c.y1 : c.y0;
+          this.autoClimb = 0;
+          this.state = 'normal';
+          this.climb = null;
+          this.onGround = true;
+          this.syncBody(dt);
+          return;
+        }
+      }
+      this.y = clamp(this.y + ay * (this.autoClimb ? 70 : 44) * dt, c.y0, c.y1);
       this.x = approach(this.x, c.x, 80 * dt);
       this.anim = ay ? 'climb' : 'climbIdle';
       if (ay) {
@@ -218,6 +232,17 @@ export class Player implements Drawable {
     if (this.onGround && Math.abs(this.tilt) > 0.03) this.vx += Math.sin(this.tilt) * 520 * dt * (this.crouch ? 0.35 : 1);
     if (ax !== 0 && !this.camera) this.facing = ax;
 
+    // climbing grab (down from the top of a ladder / hatch)
+    if (canControl && inp.hit('down') && this.onGround && !this.camera) {
+      const c = this.terrain.climbAt(this.x, this.y + 6);
+      if (c && c.y0 >= this.y - 8) {
+        this.state = 'climb';
+        this.climb = c;
+        this.vx = this.vy = 0;
+        this.y += 2;
+        return;
+      }
+    }
     // climbing grab
     if (canControl && inp.down('up') && !this.camera) {
       const c = this.terrain.climbAt(this.x, this.y - 4);

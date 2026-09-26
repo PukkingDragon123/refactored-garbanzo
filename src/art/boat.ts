@@ -953,51 +953,70 @@ export function paintBoatParts(o: PaintOpts = {}): BoatParts {
 
 // ------------------------------------------------------------------ the wreck & debris
 
-/** The Kittiwake after the storm: heeled over on the shore rocks, bow torn off, mast snapped. */
+const WRECK_W = 620, WRECK_H = 300, WRECK_ROT = -0.2, WRECK_OX = 318, WRECK_OY = 232;
+/** Where a boat-local point ends up on the wreck sprite, relative to its anchor (bottom-centre). */
+export function wreckPoint(lx: number, ly: number): [number, number] {
+  const c = Math.cos(WRECK_ROT), s = Math.sin(WRECK_ROT);
+  const dxp = lx - PIVOT[0], dyp = ly - PIVOT[1];
+  const x = WRECK_OX + c * dxp - s * dyp, y = WRECK_OY + s * dxp + c * dyp;
+  return [x - WRECK_W / 2, y - (WRECK_H - 2)];
+}
+
+/** The Kittiwake after the storm: heeled over on the rocks, bow torn off (you can see into the flooded hold), mast snapped. */
 export function paintWreck(): Sprite {
-  const e = paintExterior(true);
-  const src = e.buf;
-  const W = 560, H = 300, rot = -0.2;
+  const cut = paintBoatCutaway({ storm: true });
+  const src = new PixelBuffer(BOAT_W, BOAT_H);
+  src.blit(cut.interior.buf, 0, 0);
+  src.blit(cut.shell.buf, 0, 0);
+  // the hull side is stove in over the bunks and hold: jagged hole shows the rooms inside
+  const hole = (x: number, y: number) => {
+    const dx = (x - 405) / 70, dy = (y - 168) / 34;
+    return dx * dx + dy * dy + (hash2(x >> 2, y >> 2, 3) - 0.5) * 0.5 < 1;
+  };
+  for (let y = 0; y < BOAT_H; y++) for (let x = 0; x < BOAT_W; x++) {
+    const c = cut.hullSide.buf.get(x, y);
+    if (c >>> 24 && !hole(x, y)) src.set(x, y, c);
+    // flood water inside the hold
+    if (hole(x, y) && y > 184 && (src.get(x, y) >>> 24)) src.set(x, y, mix(src.get(x, y), hex('#1e4a52'), 0.7));
+  }
+  src.blit(cut.front.buf, 0, 0);
+  const W = WRECK_W, H = WRECK_H;
   const out = new PixelBuffer(W, H);
-  const cx = 300, cy = 206, ox = 270, oy = 230;
-  const c = Math.cos(rot), s = Math.sin(rot);
+  const c = Math.cos(WRECK_ROT), s = Math.sin(WRECK_ROT);
   const rng = new Rng(77);
-  // inverse-map every destination pixel into the boat sprite (heeled and settled on the rocks)
   for (let y = 0; y < H; y++)
     for (let x = 0; x < W; x++) {
-      const dx = x - ox, dy = y - oy;
-      const sx = Math.round(c * dx + s * dy + cx), sy = Math.round(-s * dx + c * dy + cy);
-      if (sx < 0 || sy < 0 || sx >= src.w || sy >= src.h) continue;
-      let col = src.data[sy * src.w + sx];
+      const dx = x - WRECK_OX, dy = y - WRECK_OY;
+      const sx = Math.round(c * dx + s * dy + PIVOT[0]), sy = Math.round(-s * dx + c * dy + PIVOT[1]);
+      if (sx < 0 || sy < 0 || sx >= BOAT_W || sy >= BOAT_H) continue;
+      let col = src.data[sy * BOAT_W + sx];
       if (!(col >>> 24)) continue;
-      // torn-off bow: jagged break line
-      const brk = 452 + Math.sin(sy * 0.9) * 6 + (hash2(sy, 3, 9) - 0.5) * 10;
+      const brk = 470 + Math.sin(sy * 0.9) * 6 + (hash2(sy, 3, 9) - 0.5) * 10;
       if (sx > brk) continue;
-      // snapped foremast and wheelhouse roof caved in
-      if (sy < 30 && sx > 380) continue;
-      if (sy < 22 && sx > 210 && sx < 340 && hash2(sx >> 2, sy >> 2, 4) > 0.45) continue;
-      // holes stove in along the waterline
-      const hole = (sx > 150 && sx < 175 && sy > 150 && sy < 175) || (sx > 330 && sx < 350 && sy > 165 && sy < 190);
-      if (hole) { col = hex('#0e0a08'); }
-      // weathering: dark wet band, green weed on the bottom, scorched streaks
-      const wet = smoothstep(150, 225, sy);
-      col = mix(col, hex('#1c2420'), wet * 0.45);
-      if (sy > 190 && hash2(sx, sy, 5) > 0.6) col = mix(col, hex('#3a5a2a'), 0.6);
-      if (hash2(sx >> 3, sy, 2) > 0.93) col = shade(col, -0.25);
+      if (sy < 30 && sx > 400) continue; // snapped foremast
+      const wet = smoothstep(160, 225, sy);
+      col = mix(col, hex('#1c2420'), wet * 0.4);
+      if (sy > 196 && hash2(sx, sy, 5) > 0.6) col = mix(col, hex('#3a5a2a'), 0.6);
+      if (hash2(sx >> 3, sy, 2) > 0.94) col = shade(col, -0.25);
       out.data[y * W + x] = col;
     }
   // splintered planks at the break
-  for (let i = 0; i < 26; i++) {
-    const y = rng.int(60, 250), x = rng.int(380, 420);
-    for (let k = 0; k < rng.int(4, 12); k++) out.set(x + k, y - k * 0.3, P.wood[rng.int(2, 6)]);
+  for (let i = 0; i < 30; i++) {
+    const [px, py] = wreckPoint(466, rng.int(60, 225));
+    const x0 = px + W / 2, y0 = py + H - 2;
+    for (let k = 0; k < rng.int(4, 12); k++) out.set(x0 + k - 2, y0 - k * 0.3, P.wood[rng.int(2, 6)]);
   }
+  // rope ladder hanging from the stern rail down to the rocks
+  const [lx, ly] = wreckPoint(46, deckY(46) - 2);
+  const X = Math.round(lx + W / 2), Y0 = Math.round(ly + H - 2);
+  for (let y = Y0; y < H - 4; y++) { out.set(X - 4, y, P.rope[3]); out.set(X + 4, y, P.rope[3]); if ((y - Y0) % 7 === 3) hline(out, X - 4, X + 4, y, P.wood[4]); }
   // rocks it is stuck on
-  for (let i = 0; i < 12; i++) {
-    const rx = 40 + i * 45 + rng.range(-12, 12), ry = H - 8 - rng.range(0, 10), rr = rng.range(16, 34);
+  for (let i = 0; i < 13; i++) {
+    const rx = 30 + i * 45 + rng.range(-12, 12), ry = H - 8 - rng.range(0, 10), rr = rng.range(16, 34);
     for (let y = -rr; y < rr * 0.6; y++)
       for (let x = -rr * 1.3; x < rr * 1.3; x++) {
         const d = (x / (rr * 1.3)) ** 2 + (y / rr) ** 2;
-        if (d > 1) continue;
+        if (d > 1 || (out.get(rx + x, ry + y) >>> 24 && y < 0)) continue;
         const l = 0.55 - y / rr * 0.25 - x / rr * 0.15 + (fbm2((rx + x) * 0.08, (ry + y) * 0.08, 3, 3) - 0.5) * 0.5 + (bayer(rx + x, ry + y) - 0.5) * 0.25;
         const pal = P.metal;
         const cc = pal[clamp(Math.round(l * (pal.length - 1)), 1, pal.length - 1)];
@@ -1025,4 +1044,166 @@ export function paintDebris(kind: DebrisKind, seed: number): Sprite {
   }
   b.outline(OL);
   return { buf: b, ax: 20, ay: 23 };
+}
+
+// ------------------------------------------------------------------ cutaway interior (V3)
+
+export interface CutawaySet {
+  /** interior rooms: paneling, furniture, engine, bunks, hold, wheelhouse interior (behind actors) */
+  interior: Sprite;
+  /** exterior pieces, split so the hull side / wheelhouse walls can fade away when you go inside */
+  shell: Sprite;
+  hullSide: Sprite;
+  cabinWall: Sprite;
+  /** near bulwark and rail (over actors) */
+  front: Sprite;
+  glow?: PixelBuffer;
+}
+
+/** Everything needed to show the Kittiwake as a dollhouse: walk the deck, climb below, see inside. */
+export function paintBoatCutaway(o: PaintOpts = {}): CutawaySet {
+  const e = paintExterior(!!o.storm);
+  const parts = paintBoatParts({ storm: o.storm });
+  const fl = parts.flag[0], rd = parts.radar[0];
+  e.back.blit(fl.buf, BOAT_LAYOUT.mounts.flag[0] - fl.ax, BOAT_LAYOUT.mounts.flag[1] - fl.ay);
+  e.back.blit(rd.buf, BOAT_LAYOUT.mounts.radar[0] - rd.ax, BOAT_LAYOUT.mounts.radar[1] - rd.ay);
+  const W = BOAT_W, H = BOAT_H;
+  const M = hullMask();
+  const shell = new PixelBuffer(W, H), hull = new PixelBuffer(W, H), cabin = new PixelBuffer(W, H);
+  const inCabin = (x: number, y: number) => x >= WH_X0 + 2 && x <= WH_X1 - 2 && y >= WH_CEIL + 2 && y <= WH_FLOOR - 1;
+  const inHull = (x: number, y: number) => x > BH.engAft - 4 && x < BH.holdFwd + 6 && y > lowCeil(x) - 3 && M.at(x, y);
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      const c = e.back.get(x, y);
+      if (!(c >>> 24)) continue;
+      if (inCabin(x, y)) cabin.set(x, y, c);
+      else if (inHull(x, y)) hull.set(x, y, c);
+      else shell.set(x, y, c);
+    }
+  const front = new PixelBuffer(W, H);
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      const c = e.front.get(x, y);
+      if (!(c >>> 24)) continue;
+      if (inHull(x, y)) hull.set(x, y, c);
+      else front.set(x, y, c);
+    }
+  // ---- interior
+  const b = new PixelBuffer(W, H);
+  const g = new PixelBuffer(W, H);
+  const rng = new Rng(21);
+  const G = (x: number, y: number, c: [number, number, number], a = 200) => g.set(x, y, withAlpha(rgba(Math.round(c[0] * 255), Math.round(c[1] * 255), Math.round(c[2] * 255)), a));
+  // back wall paneling (tongue & groove) + frames/ribs, with a curved hull bottom
+  for (let x = BH.engAft; x <= BH.holdFwd; x++) {
+    const top = lowCeil(x);
+    for (let y = top; y < H; y++) {
+      if (!M.at(x, y)) continue;
+      const floor = x > BH.bunkHold + 4 ? HOLD_FLOOR : LOW_FLOOR;
+      if (y > floor + 1) { b.set(x, y, ramp(P.bottom, 1.2 + dith(x, y, 0.6))); continue; } // bilge below the floor
+      const board = Math.floor((x + (y > 160 ? 3 : 0)) / 6);
+      let f = 3 + (noise1(board * 3.1, 7) - 0.5) * 1.6 - (y - top) * 0.012;
+      if ((x + (y > 160 ? 3 : 0)) % 6 === 0) f -= 1.4;
+      if (y === top || y === top + 1) f -= 1.8; // ceiling beam shadow
+      const room = x < BH.engGal ? P.steelIn : x < BH.galBunk ? P.paintIn : x < BH.bunkHold ? P.teak : P.wood;
+      b.set(x, y, ramp(room, f + dith(x, y, 0.5)));
+    }
+  }
+  // ribs every 24px
+  for (let x = BH.engAft + 12; x < BH.holdFwd; x += 24) for (let y = lowCeil(x); y <= LOW_FLOOR; y++) if (M.at(x, y)) { b.set(x, y, P.wood[2]); b.set(x + 1, y, P.wood[4]); }
+  // floors (planks) and bulkheads with doorways
+  const floorAt = (x: number) => (x > BH.bunkHold + 4 ? HOLD_FLOOR : LOW_FLOOR);
+  for (let x = BH.engAft; x <= BH.holdFwd; x++) {
+    const fy = floorAt(x);
+    for (let k = 0; k < 3; k++) b.set(x, fy + k, ramp(P.teak, 5 - k * 1.4 + ((x % 11) === 0 ? -1.5 : 0)));
+  }
+  for (const bx of [BH.engGal, BH.galBunk, BH.bunkHold]) {
+    for (let y = lowCeil(bx); y <= LOW_FLOOR; y++) {
+      const door = y > LOW_FLOOR - 26;
+      for (let k = 0; k < 4; k++) if (!door || k === 0 || k === 3) b.set(bx + k, y, ramp(P.wood, (k === 0 ? 5 : k === 3 ? 1 : 3) + dith(bx + k, y, 0.4)));
+    }
+    hline(b, bx, bx + 3, LOW_FLOOR - 27, P.brass[3]);
+  }
+  // portholes on the back wall (you see the sea through them)
+  for (const px of [140, 262, 380, 452]) porthole(b, px, 146, 5, null, false);
+  // ---- engine room (76..196)
+  rectRamp(b, 130, 164, 58, 36, P.engine, 3, 0.8, 0.6);             // engine block
+  rectRamp(b, 136, 156, 46, 8, P.engine, 4, 0.4);
+  for (let i = 0; i < 4; i++) rectRamp(b, 140 + i * 10, 148, 6, 9, P.metal, 4, 0.6);   // cylinder heads
+  rope(b, 182, 150, 196, 128, 2, P.metal[3]); rope(b, 184, 154, 196, 132, 2, P.metal[5]);
+  for (let i = 0; i < 3; i++) { ring(b, 104 + i * 12, 140, 0, 3.5, () => P.brass[4]); b.set(104 + i * 12, 139, P.metal[1]); b.set(105 + i * 12, 140, P.red[3]); } // gauges
+  rectRamp(b, 84, 180, 24, 4, P.wood, 4, 0.2); vline(b, 86, 184, 201, P.wood[2]); vline(b, 105, 184, 201, P.wood[2]); // workbench
+  for (let i = 0; i < 5; i++) b.set(88 + i * 4, 178 - (i % 2), P.metal[5 - (i % 3)]);              // tools on the bench
+  rectRamp(b, 84, 150, 20, 20, P.wood, 2, 0.2);                                                       // tool board
+  for (let i = 0; i < 4; i++) { vline(b, 87 + i * 4, 152, 158 + (i % 2) * 4, P.metal[5]); b.set(87 + i * 4, 152, P.red[4]); }
+  for (let i = 0; i < 2; i++) rectRamp(b, 112 + i * 9, 186, 8, 15, P.red, 3, 0.8);                   // oil drums
+  G(158, 128, [0.95, 0.92, 0.75]); // lamp glow seed
+  // ---- galley & mess (196..336)
+  rectRamp(b, 232, 176, 30, 26, P.metal, 3, 0.7);                   // stove
+  for (let i = 0; i < 2; i++) ring(b, 240 + i * 14, 176, 0, 3, () => P.metal[1]);
+  rectRamp(b, 236, 168, 10, 8, P.metal, 5, 0.5);                    // pot
+  rectRamp(b, 250, 170, 7, 6, P.brass, 4, 0.5);                     // kettle
+  for (let i = 0; i < 6; i++) { const x = 238 + i; for (let k = 0; k < 4; k++) if (rng.chance(0.5)) g.set(x, 160 - k * 3 - i % 2, withAlpha(rgba(255, 255, 255), 90)); } // steam
+  rectRamp(b, 200, 150, 30, 14, P.wood, 4, 0.3);                     // cupboards
+  hline(b, 200, 229, 156, P.wood[2]); b.set(214, 152, P.brass[5]); b.set(214, 159, P.brass[5]);
+  for (let i = 0; i < 5; i++) rectRamp(b, 202 + i * 5, 140, 3, 7, [P.green, P.red, P.yellow, P.navy, P.brass][i], 3, 0.6); // jars on a shelf
+  hline(b, 200, 230, 148, P.wood[5]);
+  for (let i = 0; i < 3; i++) { vline(b, 268 + i * 6, 128, 134 + i, P.metal[3]); rectRamp(b, 266 + i * 6, 134 + i, 5, 4, P.metal, 4, 0.5); } // hanging pans
+  rectRamp(b, 290, 178, 40, 4, P.teak, 5, 0.3);                     // mess table
+  vline(b, 300, 182, 201, P.teak[2]); vline(b, 320, 182, 201, P.teak[2]);
+  rectRamp(b, 286, 188, 8, 3, P.cushion, 3, 0.4); rectRamp(b, 326, 188, 8, 3, P.cushion, 3, 0.4);
+  rectRamp(b, 294, 174, 6, 4, P.white, 3, 0.4); rectRamp(b, 312, 175, 5, 3, P.brass, 4, 0.3); // plates, mugs
+  // chart of the southern ocean on the wall
+  rectRamp(b, 296, 138, 26, 18, P.paintIn, 5, 0.2);
+  for (let i = 0; i < 20; i++) b.set(299 + i, 147 + Math.round(Math.sin(i * 0.6) * 3), P.navy[3]);
+  b.set(316, 144, P.red[4]); b.set(317, 144, P.red[4]);
+  // ---- bunks (336..424)
+  for (const [y, q] of [[182, P.quiltR], [158, P.quiltB]] as const) {
+    rectRamp(b, 346, y, 56, 3, P.teak, 4, 0.2);
+    rectRamp(b, 348, y - 6, 52, 6, q, 3, 0.8, 0.8);
+    rectRamp(b, 348, y - 7, 10, 5, P.white, 4, 0.5);               // pillow
+  }
+  vline(b, 344, 150, 201, P.teak[2]); vline(b, 403, 150, 201, P.teak[2]);
+  rectRamp(b, 408, 150, 12, 50, P.navy, 2, 0.4);                    // locker
+  for (let y = 156; y < 196; y += 8) hline(b, 410, 418, y, P.navy[0]);
+  rectRamp(b, 360, 128, 14, 18, P.white, 3, 0.3); for (let i = 0; i < 8; i++) b.set(362 + i, 136 + (i % 3), P.green[4]); // poster
+  b.set(386, 136, P.red[4]); vline(b, 386, 136, 146, P.rope[3]);   // hanging jacket hook
+  rectRamp(b, 382, 138, 9, 12, P.yellow, 3, 0.6);                    // rain jacket
+  // ---- hold (424..496): crates, nets, specimen jars
+  for (const [x, y, w, h] of [[430, 176, 20, 20], [452, 184, 16, 12], [436, 158, 14, 18], [470, 180, 18, 16]] as const) {
+    rectRamp(b, x, y, w, h, P.wood, 3, 0.5, 0.8);
+    hline(b, x, x + w - 1, y + Math.floor(h / 2), P.wood[1]);
+    b.set(x + 2, y + 2, P.cream[5]);
+  }
+  for (let i = 0; i < 12; i++) for (let k = 0; k < 10; k++) if ((i + k) % 3 === 0) b.set(472 + i, 150 + k + Math.round(Math.sin(i) * 1), P.net[3]);
+  for (let i = 0; i < 4; i++) rectRamp(b, 452 + i * 5, 172, 4, 8, P.glass, 3, 0.4);              // specimen jars
+  // ---- wheelhouse interior
+  for (let y = WH_CEIL + 2; y < WH_FLOOR; y++) for (let x = WH_X0 + 2; x < WH_X1 - 1; x++) {
+    const win = y > WH_CEIL + 8 && y < WH_CEIL + 34 && ((x - WH_X0) % 30) > 4;
+    b.set(x, y, win ? withAlpha(ramp(P.glass, 4 - (y - WH_CEIL) * 0.06), 110) : ramp(P.teak, 3 + ((x % 8) === 0 ? -1 : 0) + dith(x, y, 0.5)));
+  }
+  rectRamp(b, 276, 80, 30, 22, P.teak, 4, 0.4);                      // helm console
+  for (let i = 0; i < 4; i++) { b.set(280 + i * 6, 84, P.brass[5]); b.set(280 + i * 6, 85, P.brass[2]); }
+  rectRamp(b, 282, 70, 10, 8, P.metal, 1, 0.3); b.set(285, 73, hex('#6affb0')); b.set(287, 74, hex('#6affb0'));   // sonar screen
+  G(286, 73, [0.4, 1, 0.7], 255);
+  rectRamp(b, 226, 84, 32, 4, P.teak, 5, 0.2);                       // chart table
+  rectRamp(b, 228, 80, 26, 4, P.paintIn, 5, 0.2);
+  rectRamp(b, 244, 60, 16, 12, P.metal, 3, 0.4); b.set(248, 64, P.red[4]); b.set(252, 64, hex('#ffd060')); // radio
+  G(248, 64, [1, 0.3, 0.2], 255); G(252, 64, [1, 0.8, 0.3], 255);
+  // lamp glows for the interior rooms (drawn additively)
+  for (const L of BOAT_LAYOUT.lamps.slice(0, 6)) {
+    for (let y = -10; y <= 10; y++) for (let x = -10; x <= 10; x++) {
+      const d = Math.hypot(x, y) / 10;
+      if (d < 1) { const a = Math.round((1 - d) * (1 - d) * 120); if (a > (g.get(L.x + x, L.y + y) >>> 24)) G(L.x + x, L.y + y, L.color, a); }
+    }
+  }
+  for (const L of BOAT_LAYOUT.lamps.slice(0, 5)) { rectRamp(b, L.x - 2, L.y - 2, 5, 4, P.brass, 4, 0.5); b.set(L.x, L.y + 1, hex('#fff2c0')); vline(b, L.x, L.y - 8, L.y - 3, P.metal[3]); }
+  // ladders
+  for (const ld of BOAT_LAYOUT.ladders) {
+    const x0 = ld.x - 5, x1 = ld.x + 5;
+    vline(b, x0, ld.y0, ld.y1, P.wood[5]); vline(b, x1, ld.y0, ld.y1, P.wood[5]);
+    vline(b, x0 + 1, ld.y0, ld.y1, P.wood[2]); vline(b, x1 + 1, ld.y0, ld.y1, P.wood[2]);
+    for (let y = ld.y0 + 3; y < ld.y1; y += 6) hline(b, x0, x1, y, P.wood[4]);
+  }
+  const A = (buf: PixelBuffer): Sprite => ({ buf, ax: PIVOT[0], ay: PIVOT[1] });
+  return { interior: { ...A(b), glow: g }, shell: A(shell), hullSide: A(hull), cabinWall: A(cabin), front: A(front), glow: e.glow };
 }

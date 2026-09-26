@@ -44,9 +44,9 @@ export const QUESTS: QuestDef[] = [
     id: 'voyage', title: 'The Voyage', giver: 'story', main: true, chapter: 0,
     desc: 'Three weeks out of Bluff aboard the Kittiwake, chasing reports of an uncharted current. Settle in and get to know the crew.',
     steps: [
-      { text: 'Talk to Captain Crowe at the helm', done: f('talk:crowe') },
-      { text: 'Check on Pip up at the bow', done: f('talk:pip') },
-      { text: 'Have lunch on the aft deck with Lou', done: f('ate') },
+      { text: 'Talk to Captain Crowe in the wheelhouse', done: f('talk:crowe') },
+      { text: 'Check on Pip in the engine room below deck', done: f('talk:pip') },
+      { text: 'Have lunch in the galley with Lou', done: f('ate') },
       { text: 'Photograph the giant bird circling the boat', done: f('photo:monarch'), hint: 'Press Q (or hold right mouse) to raise the camera, left click to shoot.' },
       { text: 'Review the shot on your camera', done: f('reviewed:first') },
     ],

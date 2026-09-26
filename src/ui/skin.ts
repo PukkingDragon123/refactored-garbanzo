@@ -59,8 +59,8 @@ export function well(b: PixelBuffer, x: number, y: number, w: number, h: number)
 
 // ---------------------------------------------------------------- 9-slice images for CSS
 function frameImg(): string {
-  const b = new PixelBuffer(24, 24);
-  paintParchment(b, 24, 24, { frame: 5 });
+  const b = new PixelBuffer(32, 32);
+  paintParchment(b, 32, 32, { frame: 5 });
   return toURL(b);
 }
 function button(c1: C, c2: C, c3: C, c4: C, pressed = false): string {
@@ -139,7 +139,7 @@ const SKIN_CSS = `
 /* parchment window in a wooden frame */
 .panel, .pz-panel {
   background: none !important; clip-path: none !important; box-shadow: 0 6px 0 rgba(0,0,0,0.35) !important;
-  border-style: solid; border-width: calc(var(--sk-u) * 5); border-image: var(--sk-frame) 5 fill / calc(var(--sk-u) * 5) / 0 round;
+  border-style: solid; border-width: calc(var(--sk-u) * 6); border-image: var(--sk-frame) 6 fill / calc(var(--sk-u) * 6) / 0 round;
   image-rendering: pixelated; color: var(--sk-ink);
   --paper: #3a2614; --paper2: #5a4024; --paper3: #7a5a34; --amber2: #2f6b2a; --teal2: #2a6a5a; --amber: #c8841c;
 }
