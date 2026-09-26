@@ -269,7 +269,7 @@ export class CampScene extends FieldScene {
       } as never);
     };
     spot('tent', SPOTS.tent, s => call<Sprite>(castaway, 'tentStage', s, { open: s >= 4, night: false }));
-    spot('fire', SPOTS.fire, s => call<Sprite>(castaway, 'campfire', Math.min(2, Math.max(0, s - 1)), { pot: !!game.save.flags['kitchen'] }));
+    spot('fire', SPOTS.fire, s => (s === 0 ? null : call<Sprite>(castaway, 'campfire', Math.min(2, s - 1), { pot: !!game.save.flags['kitchen'] })));
     spot('bench', SPOTS.bench, s => call<Sprite>(castaway, 'workbench', Math.min(2, s)));
     spot('radio', SPOTS.radio, s => call<Sprite>(castaway, 'radioStation', Math.min(2, s)));
     // fixed props
