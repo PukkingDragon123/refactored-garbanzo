@@ -237,7 +237,7 @@ export const mountSkills: AppMount = (host, ctx) => {
         n.style.left = p.x + '%';
         n.style.top = p.y + 'em';
         n.title = s.name;
-        n.dataset.id = s.id;
+        n.dataset.sk = s.id;
         n.onclick = () => { sel = s.id; sfx('ui', { vol: 0.4 }); draw(); };
         col.appendChild(n);
       }
@@ -254,7 +254,7 @@ export const mountSkills: AppMount = (host, ctx) => {
       sfx('skillUnlock', { vol: 0.8 });
       ctx.refresh();
       draw();
-      root.querySelector(`.sk-n[data-id="${sel}"]`)?.classList.add('sk-pop');
+      root.querySelector(`.sk-n[data-sk="${sel}"]`)?.classList.add('sk-pop');
     };
   };
   draw();

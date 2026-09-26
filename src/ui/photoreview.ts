@@ -51,13 +51,13 @@ css('photo-roll', `
 .phr-rp { font-family: var(--pix); font-size: 1.5em; color: var(--amber2); display: flex; align-items: center; gap: 0.3em; }
 .phr-empty { flex: 1; display: grid; place-items: center; text-align: center; opacity: 0.7; padding: 2em; font-style: italic; }
 .phr-cam { width: min(72em, 94vw); height: min(40em, 86vh); position: relative; background: linear-gradient(180deg, #2a2d30, #1a1c1e); box-shadow: 0 0 0 0.3em #0b0c0d, inset 0 0.2em 0 rgba(255,255,255,0.12), 0 1em 3em rgba(0,0,0,0.7); padding: 2.2em 1.2em 1em; border-radius: 1.2em; }
-.phr-cam::before { content: 'ZX-7 · REVIEW'; position: absolute; left: 1.4em; top: 0.6em; font-family: var(--pix); font-size: 0.85em; letter-spacing: 0.2em; color: #c8c0a8; opacity: 0.8; }
+.phr-cam::before { content: 'ZX-7 · PLAYBACK'; position: absolute; left: 1.4em; top: 0.6em; font-family: var(--pix); font-size: 0.85em; letter-spacing: 0.2em; color: #c8c0a8; opacity: 0.8; }
 .phr-cam .x { position: absolute; right: 1em; top: 0.5em; font-family: var(--pix); border: 0; background: #e8614a; color: #fff; padding: 0.2em 0.7em; cursor: pointer; }
 .phr-cam .inner { position: relative; width: 100%; height: 100%; background: #0f1714; box-shadow: inset 0 0 0 0.25em #050606; }
 `);
 
 /** Mount the reviewer in a container. onDone fires after every reviewed photo (for badges). */
-export function mountPhotoReview(container: HTMLElement, onDone?: () => void, ctx?: AppCtx): () => void {
+export function mountPhotoRoll(container: HTMLElement, onDone?: () => void, ctx?: AppCtx): () => void {
   const root = el('div', 'phr');
   container.appendChild(root);
   let cur: RawPhoto | null = null;
@@ -195,13 +195,13 @@ export function mountPhotoReview(container: HTMLElement, onDone?: () => void, ct
 }
 
 /** Review photos on the camera itself (a modal), e.g. during the prologue. Resolves on close. */
-export function openPhotoReview(o: { standalone?: boolean } = {}): Promise<void> {
+export function openPhotoRoll(o: { standalone?: boolean } = {}): Promise<void> {
   void o;
   return new Promise(res => {
     const cam = el('div', 'phr-cam');
     const x = cam.appendChild(el('button', 'x', 'Close ✕'));
     const inner = cam.appendChild(el('div', 'inner'));
-    const dispose = mountPhotoReview(inner);
+    const dispose = mountPhotoRoll(inner);
     sfx('uiOpen', { vol: 0.5 });
     let closed = false;
     const close = game.ui.modal(cam, () => {

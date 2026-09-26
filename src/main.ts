@@ -63,7 +63,7 @@ async function boot() {
   // debug helpers for testing UIs from the console
   (window as unknown as { zl: unknown }).zl = {
     laptop: async (app?: string) => (await import('./ui/laptop')).openLaptop({ app: app as never }),
-    review: async () => (await import('./ui/photoreview')).openPhotoReview(),
+    review: async () => (await import('./ui/photoreview')).openPhotoRoll(),
     pack: async () => (await import('./ui/backpack')).openBackpack({}),
     craft: async (st = 'bench') => (await import('./ui/craft')).openCrafting(st as never),
     map: async () => (await import('./game/travel2')).openTravelMap(),

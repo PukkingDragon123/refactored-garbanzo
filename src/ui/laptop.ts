@@ -15,7 +15,7 @@ import { mountSamples } from './laptop-samples';
 import { mountSkills } from './laptop-skills';
 import { mountGuide } from './laptop-guide';
 import { mountQuests } from './laptop-quests';
-import { mountPhotoReview } from './photoreview';
+import { mountPhotoRoll } from './photoreview';
 
 export type LaptopApp = LaptopAppId;
 
@@ -23,7 +23,7 @@ interface AppDef { id: Exclude<LaptopApp, 'home'>; name: string; title: string; 
 
 const APPS: AppDef[] = [
   { id: 'samples', name: 'Microscope', title: 'Microscope — sample analysis', icon: () => skillIconURL('micro', 1), accent: '#9b7ce0', badge: () => labSamples().filter(x => x.times === 0).length, mount: mountSamples },
-  { id: 'photos', name: 'Photos', title: 'Photos — camera roll', icon: () => uiIconURL('photos', 1), accent: '#f4b43c', badge: () => rawPhotos().length, mount: (h, ctx) => { const c = mountPhotoReview(h, () => ctx.refresh(), ctx); return c; } },
+  { id: 'photos', name: 'Photos', title: 'Photos — camera roll', icon: () => uiIconURL('photos', 1), accent: '#f4b43c', badge: () => rawPhotos().length, mount: (h, ctx) => { const c = mountPhotoRoll(h, () => ctx.refresh(), ctx); return c; } },
   { id: 'skills', name: 'Skills', title: 'Research tree', icon: () => uiIconURL('tree', 1), accent: '#3fbca6', badge: () => SKILLS.filter(s => canUnlock(s.id).ok).length, mount: mountSkills },
   { id: 'guide', name: 'Field Guide', title: 'Zealandia Field Guide', icon: () => uiIconURL('book', 1), accent: '#8db34a', badge: () => readyFactCount(), mount: mountGuide },
   { id: 'quests', name: 'Notes', title: 'Notes — to do', icon: () => uiIconURL('notes', 1), accent: '#e8c050', badge: () => 0, mount: mountQuests },

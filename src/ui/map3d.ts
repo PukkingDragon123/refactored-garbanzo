@@ -1715,7 +1715,7 @@ class MapView {
   private reduced: boolean;
   private closed = false;
   private travel: Travel | null = null;
-  private routePreviewKey = '';
+  private routeShowKey = '';
   private occTick = 0;
   private flat: { img: HTMLCanvasElement; ov: HTMLCanvasElement; x: number; y: number; s: number } | null = null;
   private ro: ResizeObserver | null = null;
@@ -1976,8 +1976,8 @@ class MapView {
     for (const l of this.labels) l.el.style.display = 'none';
     this.renderSide();
     this.layoutFlat();
-    this.routePreviewKey = '';
-    this.previewRoute();
+    this.routeShowKey = '';
+    this.showRoute();
   }
 
   private layoutFlat() {
@@ -2211,17 +2211,17 @@ class MapView {
       }
       this.gfx.setRing(new Float32Array(pts));
     }
-    this.previewRoute();
+    this.showRoute();
   }
 
   private routeFor(from: string, to: string) {
     return this.t.route(this.posOf(from), this.posOf(to));
   }
 
-  private previewRoute() {
+  private showRoute() {
     const key = this.opts.from + '>' + this.sel;
-    if (key === this.routePreviewKey) return;
-    this.routePreviewKey = key;
+    if (key === this.routeShowKey) return;
+    this.routeShowKey = key;
     if (this.sel === this.opts.from) {
       this.gfx?.setRoute(new Float32Array(0));
       this.drawFlatRoute(null, 0, 0);
@@ -2350,7 +2350,7 @@ class MapView {
     };
     this.travel = { t: 0, T, to, tod: this.tod, pts, world, cum, lines, line: -1, camFrom: { ...this.cam }, camTo, stepAt: 0, done: false };
     this.gfx?.setRoute(this.routeDots(pts));
-    this.routePreviewKey = '';
+    this.routeShowKey = '';
     this.side.classList.add('busy');
     this.view.classList.add('travel');
     this.skipEl.classList.add('on');

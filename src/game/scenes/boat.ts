@@ -228,8 +228,8 @@ export class BoatScene extends FieldScene {
     this.cam.raise(false);
     await this.say(script.MONARCH_SHOT);
     try {
-      const { openPhotoReview } = await import('../../ui/photoreview');
-      await openPhotoReview({ standalone: true });
+      const { openPhotoRoll } = await import('../../ui/photoreview');
+      await openPhotoRoll({ standalone: true });
     } catch (e) { console.warn(e); }
     game.save.flags['reviewed:first'] = true;
     game.persist();
