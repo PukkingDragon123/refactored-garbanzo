@@ -58,7 +58,7 @@ class Game {
     this.scene = null;
     newLocalAtlas(this.r);
     const s = typeof next === 'function' ? await next() : next;
-    await s.enter?.();
+    await this.enterScene(s);
     this.scene = s;
     this.busy = false;
     this.fadeTo(0, speed);
@@ -68,8 +68,17 @@ class Game {
   async setNow(s: Scene) {
     this.scene?.exit?.();
     this.scene = null;
-    await s.enter?.();
+    await this.enterScene(s);
     this.scene = s;
+  }
+
+  /** Run a scene's enter(); scenes that expose `readyP` go live as soon as they're built, while
+   *  the rest of enter() (opening dialogue, cutscenes) keeps running on the live scene. */
+  private async enterScene(s: Scene) {
+    const done = Promise.resolve(s.enter?.());
+    const ready = (s as { readyP?: Promise<void> }).readyP;
+    done.catch(e => console.error('scene enter failed', e));
+    await (ready ? Promise.race([ready, done]) : done);
   }
 
   /** Animate the dissolve fade toward v; resolves when it gets there (or is superseded). */

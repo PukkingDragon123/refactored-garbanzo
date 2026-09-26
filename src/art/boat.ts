@@ -950,3 +950,79 @@ export function paintBoatParts(o: PaintOpts = {}): BoatParts {
   void storm;
   return { wheel, radar, flag, lamp, crate: crateBuf(false), crateLashed: crateBuf(true), pot };
 }
+
+// ------------------------------------------------------------------ the wreck & debris
+
+/** The Kittiwake after the storm: heeled over on the shore rocks, bow torn off, mast snapped. */
+export function paintWreck(): Sprite {
+  const e = paintExterior(true);
+  const src = e.buf;
+  const W = 560, H = 300, rot = -0.2;
+  const out = new PixelBuffer(W, H);
+  const cx = 300, cy = 206, ox = 270, oy = 230;
+  const c = Math.cos(rot), s = Math.sin(rot);
+  const rng = new Rng(77);
+  // inverse-map every destination pixel into the boat sprite (heeled and settled on the rocks)
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      const dx = x - ox, dy = y - oy;
+      const sx = Math.round(c * dx + s * dy + cx), sy = Math.round(-s * dx + c * dy + cy);
+      if (sx < 0 || sy < 0 || sx >= src.w || sy >= src.h) continue;
+      let col = src.data[sy * src.w + sx];
+      if (!(col >>> 24)) continue;
+      // torn-off bow: jagged break line
+      const brk = 452 + Math.sin(sy * 0.9) * 6 + (hash2(sy, 3, 9) - 0.5) * 10;
+      if (sx > brk) continue;
+      // snapped foremast and wheelhouse roof caved in
+      if (sy < 30 && sx > 380) continue;
+      if (sy < 22 && sx > 210 && sx < 340 && hash2(sx >> 2, sy >> 2, 4) > 0.45) continue;
+      // holes stove in along the waterline
+      const hole = (sx > 150 && sx < 175 && sy > 150 && sy < 175) || (sx > 330 && sx < 350 && sy > 165 && sy < 190);
+      if (hole) { col = hex('#0e0a08'); }
+      // weathering: dark wet band, green weed on the bottom, scorched streaks
+      const wet = smoothstep(150, 225, sy);
+      col = mix(col, hex('#1c2420'), wet * 0.45);
+      if (sy > 190 && hash2(sx, sy, 5) > 0.6) col = mix(col, hex('#3a5a2a'), 0.6);
+      if (hash2(sx >> 3, sy, 2) > 0.93) col = shade(col, -0.25);
+      out.data[y * W + x] = col;
+    }
+  // splintered planks at the break
+  for (let i = 0; i < 26; i++) {
+    const y = rng.int(60, 250), x = rng.int(380, 420);
+    for (let k = 0; k < rng.int(4, 12); k++) out.set(x + k, y - k * 0.3, P.wood[rng.int(2, 6)]);
+  }
+  // rocks it is stuck on
+  for (let i = 0; i < 12; i++) {
+    const rx = 40 + i * 45 + rng.range(-12, 12), ry = H - 8 - rng.range(0, 10), rr = rng.range(16, 34);
+    for (let y = -rr; y < rr * 0.6; y++)
+      for (let x = -rr * 1.3; x < rr * 1.3; x++) {
+        const d = (x / (rr * 1.3)) ** 2 + (y / rr) ** 2;
+        if (d > 1) continue;
+        const l = 0.55 - y / rr * 0.25 - x / rr * 0.15 + (fbm2((rx + x) * 0.08, (ry + y) * 0.08, 3, 3) - 0.5) * 0.5 + (bayer(rx + x, ry + y) - 0.5) * 0.25;
+        const pal = P.metal;
+        const cc = pal[clamp(Math.round(l * (pal.length - 1)), 1, pal.length - 1)];
+        out.set(rx + x, ry + y, (ry + y) > H - 14 && hash2(rx + x, ry + y, 1) > 0.5 ? hex('#3a5a2a') : cc);
+      }
+  }
+  out.outline(OL);
+  return { buf: out, ax: W / 2, ay: H - 2 };
+}
+
+export type DebrisKind = 'crate' | 'barrel' | 'plank' | 'lifebuoy' | 'net' | 'rope';
+export const DEBRIS_KINDS: DebrisKind[] = ['crate', 'barrel', 'plank', 'lifebuoy', 'net', 'rope'];
+/** Washed-up bits of the Kittiwake. Anchor bottom-centre. */
+export function paintDebris(kind: DebrisKind, seed: number): Sprite {
+  const rng = new Rng(seed * 17 + kind.length);
+  const b = new PixelBuffer(40, 24);
+  const r = (pal: C[], l: number) => pal[clamp(Math.round(l * (pal.length - 1)), 0, pal.length - 1)];
+  switch (kind) {
+    case 'crate': b.rectFn(8, 6, 22, 16, (x, y) => r(P.wood, 0.6 - (y - 6) * 0.02 + (y % 4 === 0 ? -0.25 : 0) + (bayer(x, y) - 0.5) * 0.15)); break;
+    case 'barrel': b.rectFn(12, 4, 14, 18, (x, y) => (y === 8 || y === 17 ? P.metal[3] : r(P.navy, 0.8 - Math.abs(x - 19) * 0.07))); break;
+    case 'plank': for (let x = 2; x < 38; x++) { b.set(x, 18 + Math.round(Math.sin(x * 0.2 + seed)), P.wood[5]); b.set(x, 19 + Math.round(Math.sin(x * 0.2 + seed)), P.wood[3]); } break;
+    case 'lifebuoy': for (let a = 0; a < 64; a++) { const t = (a / 64) * Math.PI * 2; for (let k = 5; k < 9; k++) b.set(20 + Math.cos(t) * k, 13 + Math.sin(t) * k * 0.8, Math.floor(a / 8) % 2 ? P.red[4] : P.white[4]); } break;
+    case 'net': for (let y = 10; y < 22; y++) for (let x = 4; x < 36; x++) if ((x + y) % 4 === 0 || (x - y + 40) % 4 === 0) if (hash2(x, y, seed) > 0.25) b.set(x, y, P.net[rng.int(2, 4)]); break;
+    case 'rope': for (let a = 0; a < 80; a++) { const t = a * 0.25; b.set(20 + Math.cos(t) * (4 + t * 0.4), 16 + Math.sin(t) * (2 + t * 0.2), P.rope[3 + (a % 2)]); } break;
+  }
+  b.outline(OL);
+  return { buf: b, ax: 20, ay: 23 };
+}

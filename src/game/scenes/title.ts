@@ -3,12 +3,11 @@
 import type { Renderer } from '../../gfx/renderer';
 import type { Scene } from '../game';
 import { game } from '../game';
-import { buildSea, SeaStage, SeaMode } from './sea';
+import { buildSea, SeaStage } from './sea';
 import { el } from '../../ui/ui';
 import { audio } from '../../core/audio';
 import { hasSave, newSave, clearSave } from '../save';
-import { newLocalAtlas } from '../assets';
-import { CampScene } from './camp';
+import { goCamp, goPrologue } from './flow';
 
 const CSS = `
 .title { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 7vh; pointer-events: none; }
@@ -43,7 +42,7 @@ export class TitleScene implements Scene {
     const cont = hasSave();
     if (cont) {
       const c = el('button', 'btn', 'Continue expedition');
-      c.onclick = () => { audio.unlock(); audio.play('ui'); game.go(() => new CampScene()); };
+      c.onclick = () => { audio.unlock(); audio.play('ui'); if (game.save.flags['prologue']) goCamp(); else goPrologue(); };
       menu.appendChild(c);
     }
     const n = el('button', cont ? 'btn ghost' : 'btn', 'New expedition');
@@ -77,7 +76,7 @@ export class TitleScene implements Scene {
   }
   startNew() {
     game.save = newSave();
-    game.go(() => new IntroScene());
+    goPrologue();
   }
   update(dt: number) {
     this.t += dt;
@@ -128,135 +127,4 @@ function openCredits() {
   box.appendChild(done);
   const close = game.ui.modal(box);
   done.onclick = () => close();
-}
-
-// ------------------------------------------------------------------ opening cutscene
-
-export class IntroScene implements Scene {
-  sea!: SeaStage;
-  mode: SeaMode = 'antarctic';
-  skip = false;
-  skipEl!: HTMLElement;
-  enter() {
-    this.sea = buildSea('antarctic');
-    this.sea.ship.x = 700;
-    this.skipEl = el('div', 'skip', '<span class="key">Esc</span> skip intro');
-    game.ui.sceneLayer.appendChild(this.skipEl);
-    game.ui.letterbox(true);
-    audio.setAmbience('ocean', true);
-    audio.setMusic('night');
-    this.run();
-  }
-  async swap(mode: SeaMode) {
-    await game.fadeTo(1, 1.6);
-    this.sea.st.clear();
-    newLocalAtlas(game.r);
-    this.mode = mode;
-    this.sea = buildSea(mode);
-    await new Promise(r => setTimeout(r, 300));
-    await game.fadeTo(0, 1.2);
-  }
-  wait(ms: number) {
-    return new Promise<void>(r => setTimeout(r, this.skip ? 0 : ms));
-  }
-  async run() {
-    const ui = game.ui;
-    await this.wait(600);
-    if (this.skip) return;
-    await ui.showCaption('Ross Sea, Antarctica<br><span style="font-size:0.8em;opacity:0.8">Research vessel <i>Southern Wren</i> — day 41</span>', 3600);
-    if (this.skip) return;
-    await ui.say([
-      { who: 'captain', text: 'Another iceberg, Finch. Another penguin. You’ve photographed eleven thousand penguins.' },
-      { who: 'otis', text: 'Eleven thousand and *four*, Captain. Each one a unique individual.', expr: 'happy' },
-      { who: 'captain', text: 'Aye. Well, get below. Barometer’s dropping like a stone. Something nasty’s coming out of the north.' },
-    ]);
-    if (this.skip) return;
-    await this.swap('storm');
-    audio.setAmbience('storm', true);
-    audio.setMusic('tension');
-    for (let i = 0; i < 3 && !this.skip; i++) {
-      await this.wait(900);
-      this.sea.lightning = 1;
-      this.sea.st.shake(4, 0.6);
-      audio.play('thunder');
-    }
-    if (this.skip) return;
-    await ui.say([
-      { who: 'captain', text: 'Hold on to something! She’s taking them over the bow!' },
-      { who: 'otis', text: 'Captain, the compass is spinning! Which way is south?!', expr: 'wow' },
-      { who: 'captain', text: 'Doesn’t matter, son. We go where the storm puts us.' },
-    ]);
-    this.sea.lightning = 1;
-    audio.play('thunder');
-    this.sea.st.shake(6, 1);
-    await this.wait(1200);
-    if (this.skip) return;
-    await game.fadeTo(1, 0.8);
-    await ui.showCaption('The next morning...', 2400);
-    if (this.skip) return;
-    this.sea.st.clear();
-    newLocalAtlas(game.r);
-    this.sea = buildSea('dawn');
-    this.sea.ship.x = 520;
-    audio.setAmbience('ocean');
-    audio.setMusic('wonder');
-    await game.fadeTo(0, 0.5);
-    this.sea.st.cam.locked = false;
-    this.sea.st.cam.tx = 760;
-    this.sea.st.cam.follow = 0.25;
-    await this.wait(2500);
-    if (this.skip) return;
-    await ui.say([
-      { who: 'otis', text: 'Captain... that coastline isn’t on any chart.', expr: 'wow' },
-      { who: 'captain', text: 'Four hundred kilometres north of where we should be. And it’s *warm*. Look at those trees.' },
-    ]);
-    this.sea.glider.active = true;
-    this.sea.glider.t = 0;
-    await this.wait(1800);
-    if (this.skip) return;
-    await ui.say([{ who: 'otis', text: 'Was that... a snake? Flying?', expr: 'wow' }]);
-    this.sea.fin.active = true;
-    this.sea.fin.t = 0;
-    this.sea.fin.x = this.sea.st.cam.x - 500;
-    await this.wait(3500);
-    if (this.skip) return;
-    await ui.say([
-      { who: 'captain', text: 'And *that* was no whale.' },
-      { who: 'imogen', text: 'Gentlemen. Get the launches ready. We’re going ashore.', expr: 'happy' },
-    ]);
-    if (this.skip) return;
-    await ui.titleCard('A continent where serpents rule', 'PROJECT ZEALANDIA', 'Three days later — Base Camp', 4200);
-    this.finish();
-  }
-  finish() {
-    if (this.done) return;
-    this.done = true;
-    game.save.chapter = 0;
-    game.save.campTime = 'dusk';
-    game.persist();
-    game.go(() => new CampScene('dusk', 640));
-  }
-  done = false;
-  update(dt: number) {
-    const st = this.sea.st;
-    st.update(dt);
-    if (!st.cam.locked) {
-      if (this.mode !== 'dawn' && !st.cam.tx) st.cam.tx = 700;
-      st.cam.ty = 135;
-    }
-    if (game.input.hitRaw('skip') && !this.skip) {
-      this.skip = true;
-      this.finish();
-    }
-    audio.update(dt);
-  }
-  render(r: Renderer, dt: number) {
-    this.sea.st.updateCamera(dt, r);
-    this.sea.st.render(r, dt);
-  }
-  exit() {
-    game.ui.letterbox(false);
-    this.skipEl.remove();
-    this.sea.st.clear();
-  }
 }

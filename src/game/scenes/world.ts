@@ -45,6 +45,9 @@ export abstract class WorldScene implements Scene {
   allowPack = true;
 
   abstract build(): void | Promise<void>;
+  private readyRes: (() => void) | null = null;
+  /** resolves once the scene is built and can be shown (see Game.enterScene) */
+  readonly readyP = new Promise<void>(r => (this.readyRes = r));
 
   hudOpts(): HudOpts | null {
     return null;
@@ -60,6 +63,7 @@ export abstract class WorldScene implements Scene {
     const ho = this.hudOpts();
     if (ho) this.hud = new Hud2(game.ui.sceneLayer, { ...ho, onBackpack: () => this.openPack() });
     this.snapCamera();
+    this.readyRes?.();
   }
 
   snapCamera() {

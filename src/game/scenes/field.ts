@@ -48,7 +48,7 @@ export interface SpawnV2 {
 }
 
 export interface FieldSite {
-  id: SiteId | 'camp';
+  id: SiteId | 'camp' | 'boat';
   /** no Aroha-follows-you guide (camp) */
   noGuide?: boolean;
   /** no "head back to camp" exit (camp itself) */
@@ -210,7 +210,7 @@ export class FieldScene extends WorldScene implements WildHost {
     for (const sp of s.spawns) this.spawnRule(sp, false);
     for (const id of new Set(this.animals.map(a => a.species))) warmBeast(id);
     // camera
-    this.cam = new FieldCamera(this, s.id === 'camp' ? 'camp' : s.id);
+    this.cam = new FieldCamera(this, s.id === 'boat' ? 'sea' : s.id);
     this.cam.occluders = this.occluders;
     this.cam.onShot = () => this.hud?.refresh();
     this.lampOn = this.night && game.save.tools.includes('headlamp');
@@ -220,7 +220,11 @@ export class FieldScene extends WorldScene implements WildHost {
     game.persist();
     audio.setAmbience(s.ambience, this.night);
     audio.setMusic(s.music);
-    await s.onEnter?.(this);
+  }
+
+  async enter() {
+    await super.enter();
+    await this.site.onEnter?.(this);
   }
 
   // ---------------------------------------------------------------- spawning

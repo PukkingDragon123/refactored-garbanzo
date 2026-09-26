@@ -51,10 +51,13 @@ export const ICONS: Record<string, () => string> = {
 export const iconURL = (id: string) => memo('i:' + id, () => (ICONS[id] ? ICONS[id]() : ICONS.camera()));
 
 /** A sprite portrait of a species for the Field Guide cards. */
+import { BEAST_ANIMS, renderBeast, BeastId } from '../art/beasts';
+
 export function speciesSprite(id: string): string {
   return memo('s:' + id, () => {
     let buf: PixelBuffer;
-    if (SERPENT_LOOKS[id]) {
+    if (BEAST_ANIMS[id as BeastId]) buf = renderBeast(id as BeastId, 'idle', 0).buf.trim(1).buf;
+    else if (SERPENT_LOOKS[id]) {
       const look = SERPENT_LOOKS[id];
       const L = Math.min(look.length, 110);
       const scale = L / look.length;

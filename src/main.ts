@@ -1,6 +1,7 @@
 import './styles.css';
 import { game } from './game/game';
 import { bakeAssets } from './game/assets';
+import { bindAllArt } from './game/bindart';
 import { loadSave, newSave } from './game/save';
 import { audio } from './core/audio';
 import { el } from './ui/ui';
@@ -30,6 +31,7 @@ async function boot() {
   ui.appendChild(load);
   const bar = load.querySelector('.bar div') as HTMLElement, lbl = load.querySelector('.lbl') as HTMLElement;
   await bakeAssets(game.r, (k, label) => { bar.style.width = k * 100 + '%'; lbl.textContent = label; });
+  bindAllArt();
   game.save = loadSave() ?? newSave();
   audio.masterVolume = 0.8;
   audio.musicVolume = game.save.settings.music;
@@ -42,15 +44,14 @@ async function boot() {
   game.fadeTo(1);
   game.start();
   const scene = params.get('scene');
-  if (scene === 'site') {
-    const { createExpedition } = await import('./game/scenes/expedition');
-    if (params.has('ch')) game.save.chapter = +params.get('ch')!;
-    await game.setNow(createExpedition((params.get('site') ?? 'fernwood') as SiteId, (params.get('tod') ?? 'day') as TimeOfDay));
-  } else if (scene === 'camp') {
-    const { CampScene } = await import('./game/scenes/camp');
-    if (params.has('ch')) game.save.chapter = +params.get('ch')!;
-    await game.setNow(new CampScene((params.get('tod') ?? 'dusk') as TimeOfDay));
-  } else {
+  const flow = await import('./game/scenes/flow');
+  if (params.has('flags')) for (const f of params.get('flags')!.split(',')) game.save.flags[f] = true;
+  if (params.has('tod')) game.save.campTime = params.get('tod') as TimeOfDay;
+  if (scene === 'site') await flow.goField((params.get('site') ?? 'fernwood') as SiteId, (params.get('tod') ?? 'day') as TimeOfDay);
+  else if (scene === 'camp') await flow.goCamp();
+  else if (scene === 'tent') await flow.goTent();
+  else if (scene === 'boat') await flow.goPrologue();
+  else {
     const { TitleScene } = await import('./game/scenes/title');
     await game.setNow(new TitleScene());
   }
