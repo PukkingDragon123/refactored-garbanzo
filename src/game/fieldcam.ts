@@ -67,6 +67,14 @@ export class FieldCamera {
   private mx = 0.5;
   private my = 0.5;
   cooldown = 0;
+  /** instant print developing after a shot: 0 (just ejected) .. 1 (dry) */
+  develop = 1;
+  private shakeK = 0;
+  private lastMx = 0;
+  private lastMy = 0;
+  private jolt = 0;
+  private joltT = 3;
+  private recoil = 0;
   /** video */
   recording = false;
   private recT = 0;
@@ -88,6 +96,7 @@ export class FieldCamera {
       <div class="breathbar"><i></i></div><div class="lcd"></div>`;
     for (const k of ['focus', 'subject', 'mode', 'shots', 'zoom', 'af', 'rt', 'stab', 'light', 'breathbar', 'lcd']) this.els[k] = this.vf.querySelector('.' + k) as HTMLElement;
     injectCss();
+    this.els.lcd.addEventListener('pointerdown', e => { e.stopPropagation(); this.shakePrint(); });
   }
 
   get zoomMax() {
@@ -146,10 +155,16 @@ export class FieldCamera {
     // handheld motion: slow sway + fast tremor
     this.swayT += dt;
     const steady = perks.shake() * (brace ? 0.55 : 1) * (this.holding ? 0.3 : 1) * (1 + this.breathless * 2.5) * (this.host.tod === 'night' ? 1.25 : 1);
-    const a = this.zoom * steady;
+    const a = this.zoom * steady * 1.35;
     const s = this.swayT;
-    const sx = (Math.sin(s * 1.3) + Math.sin(s * 2.9) * 0.5) * 1.4 * a + (Math.sin(s * 23) * 0.5 + Math.sin(s * 37) * 0.3) * 0.45 * a;
-    const sy = (Math.cos(s * 1.1) + Math.sin(s * 3.7) * 0.4) * 1.0 * a + (Math.cos(s * 29) * 0.5 + Math.sin(s * 41) * 0.3) * 0.4 * a;
+    // random hand jolts (less when holding your breath or bracing), and recoil after each shot
+    this.joltT -= dt;
+    if (this.joltT <= 0) { this.joltT = 1.2 + Math.random() * 3; this.jolt = (this.holding ? 0.4 : 1) * (brace ? 0.6 : 1); }
+    this.jolt = Math.max(0, this.jolt - dt * 4);
+    this.recoil = Math.max(0, this.recoil - dt * 5);
+    const jx = Math.sin(s * 61) * this.jolt * 3.2 * a, jy = (Math.cos(s * 53) * this.jolt * 2.4 + this.recoil * 7) * a;
+    const sx = (Math.sin(s * 1.3) + Math.sin(s * 2.9) * 0.5) * 1.4 * a + (Math.sin(s * 23) * 0.5 + Math.sin(s * 37) * 0.3) * 0.5 * a + jx;
+    const sy = (Math.cos(s * 1.1) + Math.sin(s * 3.7) * 0.4) * 1.0 * a + (Math.cos(s * 29) * 0.5 + Math.sin(s * 41) * 0.3) * 0.45 * a + jy;
     this.swayVX = (sx - this.swayX) / Math.max(dt, 1e-4);
     this.swayVY = (sy - this.swayY) / Math.max(dt, 1e-4);
     this.swayX = sx;
@@ -172,9 +187,16 @@ export class FieldCamera {
     r.post.focus = this.focus;
     r.post.dofStrength = 2 + this.zoom * 1.5;
     r.post.ca = 0.0022;
+    this.updateDevelop(dt);
     const fire = inp.shutter || (inp.click(0) && inp.lastDevice !== 'touch');
     if (fire && this.cooldown <= 0 && !game.ui.blocking) {
-      if (this.mode === 'photo') this.shoot(animals);
+      if (this.mode === 'photo' && this.develop < 1) {
+        this.cooldown = 0.35;
+        this.shakeK = Math.min(1, this.shakeK + 0.35);
+        audio.play('wrong', { vol: 0.35 });
+        this.els.lcd.classList.add('nag');
+        setTimeout(() => this.els.lcd.classList.remove('nag'), 400);
+      } else if (this.mode === 'photo') this.shoot(animals);
       else if (this.recording) this.stopRecording();
       else this.startRecording();
     }
@@ -302,6 +324,7 @@ export class FieldCamera {
     this.shots--;
     this.shotsTaken++;
     this.cooldown = 0.4;
+    this.recoil = 1;
     const subjects: PhotoSubject[] = [];
     for (const a of animals) {
       if (a.dead || a.gone) continue;
@@ -392,14 +415,44 @@ export class FieldCamera {
     return c.toDataURL('image/jpeg', q);
   }
 
+  /** The instant print slides out of the camera and slowly develops; shake it (R, mouse wiggle, click) to speed it up. */
   private lcd(img: string) {
     const l = this.els.lcd;
-    l.innerHTML = `<img src="${img}" alt=""><span>${rawPhotos().length} unreviewed</span>`;
-    l.classList.remove('on');
+    l.innerHTML = `<div class="pic"><img src="${img}" alt=""></div><span class="cap">DEVELOPING… shake it! <b>R</b></span><span class="n">${rawPhotos().length} to review</span>`;
+    l.classList.remove('on', 'dry');
     void l.offsetWidth;
     l.classList.add('on');
+    l.style.setProperty('--d', '0');
+    this.develop = 0;
+    this.shakeK = 0;
+    audio.play('focus' as never, { vol: 0.35, pitch: 0.6 });
     clearTimeout((l as unknown as { _t: number })._t);
-    (l as unknown as { _t: number })._t = window.setTimeout(() => l.classList.remove('on'), 1400);
+  }
+
+  private updateDevelop(dt: number) {
+    if (this.develop >= 1) return;
+    const inp = game.input;
+    const l = this.els.lcd;
+    // shaking: R held, fast mouse wiggles, or a tap on the print
+    const mv = Math.hypot(inp.mx - this.lastMx, inp.my - this.lastMy) / Math.max(dt, 1e-3);
+    this.lastMx = inp.mx; this.lastMy = inp.my;
+    if (inp.keyDown?.('KeyR') || mv > 2400) this.shakeK = Math.min(1, this.shakeK + dt * 4);
+    this.shakeK = Math.max(0, this.shakeK - dt * 1.6);
+    const rate = (1 / 4.2) * (1 + this.shakeK * 3.5) * (this.host.tod === 'night' ? 0.8 : 1);
+    this.develop = Math.min(1, this.develop + rate * dt);
+    l.style.setProperty('--d', this.develop.toFixed(3));
+    l.style.setProperty('--sh', this.shakeK.toFixed(2));
+    if (this.shakeK > 0.2 && Math.random() < dt * 8) audio.play('rustle' as never, { vol: 0.12, pitch: 1.6 });
+    if (this.develop >= 1) {
+      l.classList.add('dry');
+      audio.play('collectPop' as never, { vol: 0.35 });
+      (l as unknown as { _t: number })._t = window.setTimeout(() => l.classList.remove('on'), 1600);
+    }
+  }
+
+  /** tap/click on the print to shake it */
+  shakePrint() {
+    if (this.develop < 1) this.shakeK = Math.min(1, this.shakeK + 0.45);
   }
 
   // ---------------------------------------------------------------- video
@@ -501,10 +554,19 @@ function injectCss() {
 .vf .breathbar { position: absolute; left: 50%; bottom: calc(7% + 1.2em); width: 9em; height: 0.4em; transform: translateX(-50%); background: rgba(0,0,0,0.4); opacity: 0; transition: opacity 0.2s; }
 .vf .breathbar.on { opacity: 1; }
 .vf .breathbar i { position: absolute; left: 0; top: 0; bottom: 0; background: #bfe8ff; }
-.vf .lcd { position: absolute; left: 7%; bottom: calc(7% + 2.8em); width: 13em; padding: 5px 5px 3px; background: #0e1413; border: 2px solid #2b3533; border-radius: 4px; box-shadow: 0 6px 16px rgba(0,0,0,0.5);
-  opacity: 0; transform: translateY(12px) rotate(-2deg); transition: opacity 0.2s, transform 0.25s; font-family: var(--pix); font-size: 0.75em; color: #8ff0dc; }
-.vf .lcd.on { opacity: 1; transform: translateY(0) rotate(-2deg); }
-.vf .lcd img { width: 100%; display: block; }
+.vf .lcd { position: absolute; left: 6%; bottom: calc(7% + 2.4em); width: 12.5em; padding: 0.55em 0.55em 2.2em; background: #f4f1e6; box-shadow: 0 0 0 3px #1b1a1f, 0 8px 0 rgba(0,0,0,0.4);
+  opacity: 0; transform: translateY(140%) rotate(-3deg); transition: opacity 0.2s, transform 0.55s steps(7); font-family: 'Silkscreen', var(--pix); font-size: 0.72em; color: #3b3226; pointer-events: auto; cursor: pointer; }
+.vf .lcd.on { opacity: 1; transform: translateY(0) rotate(calc(-3deg + var(--sh, 0) * 8deg * var(--w, 1))); animation: prWiggle 0.12s steps(2) infinite; animation-play-state: paused; }
+.vf .lcd.on:not(.dry) { animation-play-state: running; animation-duration: calc(0.5s - var(--sh, 0) * 0.4s); }
+@keyframes prWiggle { 50% { --w: -1; margin-left: calc(var(--sh, 0) * 6px); } }
+.vf .lcd .pic { background: #111; overflow: hidden; }
+.vf .lcd img { width: 100%; display: block; image-rendering: pixelated;
+  filter: brightness(calc(0.08 + var(--d, 1) * 0.92)) saturate(calc(var(--d, 1) * 1.1)) sepia(calc((1 - var(--d, 1)) * 0.8)) contrast(calc(0.6 + var(--d, 1) * 0.4)) blur(calc((1 - var(--d, 1)) * 1.5px)); }
+.vf .lcd .cap { position: absolute; left: 0.6em; bottom: 0.55em; font-weight: 700; }
+.vf .lcd.dry .cap { visibility: hidden; }
+.vf .lcd .n { position: absolute; right: 0.6em; bottom: 0.55em; opacity: 0.7; }
+.vf .lcd.nag { box-shadow: 0 0 0 3px #d0301e, 0 8px 0 rgba(0,0,0,0.4); }
+.vf::after { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0.06; background: repeating-linear-gradient(0deg, #000 0 1px, transparent 1px 3px); }
 `;
   document.head.appendChild(s);
 }
