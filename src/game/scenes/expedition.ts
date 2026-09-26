@@ -29,6 +29,7 @@ import { buildCanopy } from '../sites/canopy';
 import { buildFalls } from '../sites/falls';
 import { buildMangrove } from '../sites/mangrove';
 import { buildCoast } from '../sites/coast';
+import { count, remove } from '../inventory';
 
 const BUILDERS: Record<SiteId, SiteBuilder> = { fernwood: buildFernwood, canopy: buildCanopy, falls: buildFalls, mangrove: buildMangrove, coast: buildCoast };
 
@@ -129,7 +130,7 @@ export class ExpeditionScene extends StageScene {
     this.cam = new CameraSystem(this.site, this.tod);
     this.hud = expeditionHud(SITE_NAMES[this.site], TIME_LABEL[this.tod]);
     this.refreshHud();
-    this.lampOn = this.tod === 'night' && !!game.save.upgrades.headlamp;
+    this.lampOn = this.tod === 'night' && game.save.tools.includes('headlamp');
     audio.setAmbience(c.ambience, this.tod === 'night');
     audio.setMusic(this.tod === 'night' ? 'night' : c.music);
     if (c.followY) this.camY = this.player.y - 40;
@@ -160,7 +161,7 @@ export class ExpeditionScene extends StageScene {
     const s = game.save;
     this.hud.film.innerHTML = `<img src="${iconURL('film')}" style="width:1.2em;image-rendering:pixelated" alt=""> <i>${this.cam.film}</i> shots`;
     GADGETS.forEach((g, i) => {
-      const n = s.items[g.id] ?? 0;
+      const n = count(g.id);
       const slot = this.hud.gadgets[i];
       slot.classList.toggle('sel', i === this.gadget);
       slot.classList.toggle('empty', n <= 0);
@@ -204,9 +205,9 @@ export class ExpeditionScene extends StageScene {
   placeGadget() {
     const g = GADGETS[this.gadget];
     const s = game.save;
-    if ((s.items[g.id] ?? 0) <= 0) { audio.play('wrong'); game.ui.toast(`No ${g.name}s left. Pip sells more.`, 'GEAR', 'coral'); return; }
+    if (count(g.id) <= 0) { audio.play('wrong'); game.ui.toast(`No ${g.name}s left. Pip sells more.`, 'GEAR', 'coral'); return; }
     if (this.player.underwater) { audio.play('wrong'); return; }
-    s.items[g.id]--;
+    remove(g.id, 1);
     const x = this.player.x + this.player.facing * 12;
     const y = this.content.lurePlaceY ? this.content.lurePlaceY(x) : this.st.terrain.surfaceBelow(x, this.player.y - 6)?.y ?? this.player.y;
     if (g.id === 'trap') this.traps.push({ x, y, dir: this.player.facing, cd: 2, shots: 3 });

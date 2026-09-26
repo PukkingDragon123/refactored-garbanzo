@@ -11,6 +11,7 @@ import { clamp, damp } from '../core/math';
 import { el } from '../ui/ui';
 import { PixelBuffer } from '../art/pixel';
 import { speciesSprite } from '../ui/icons';
+import { perks } from './skills';
 
 export interface Shot {
   species: string | null;
@@ -59,7 +60,7 @@ export class CameraSystem {
 
   constructor(readonly site: SiteId, readonly tod: TimeOfDay) {
     const s = game.save;
-    this.film = 16 + (s.upgrades.film - 1) * 8 + (s.flags['meal:stew'] ? 4 : 0);
+    this.film = perks.shots() + (s.buff === 'energy' ? 4 : 0);
     this.vf = game.ui.vf;
     this.vf.innerHTML = `<div class="frame"><div class="grid"></div><div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div></div>
       <div class="focus"></div><div class="subject"></div>
@@ -69,10 +70,10 @@ export class CameraSystem {
   }
 
   get zoomMax() {
-    return [2.2, 3.2, 4.4][game.save.upgrades.lens - 1] ?? 2.2;
+    return perks.zoomMax();
   }
   get afTime() {
-    return [0.55, 0.32, 0.16][game.save.upgrades.af - 1] ?? 0.55;
+    return perks.afTime();
   }
 
   update(dt: number, st: Stage, player: Player, creatures: Creature[]) {
@@ -99,7 +100,7 @@ export class CameraSystem {
       st.cam.follow = 4;
       return;
     }
-    if (inp.hit('mode') && game.save.upgrades.video) {
+    if (inp.hit('mode') && perks.video()) {
       if (this.recording) this.stopRecording(st, creatures);
       this.mode = this.mode === 'photo' ? 'video' : 'photo';
       audio.play('ui');

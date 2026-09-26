@@ -9,6 +9,7 @@ import { chars, A } from '../game/assets';
 import { game } from '../game/game';
 import { audio } from '../core/audio';
 import { approach, clamp } from '../core/math';
+import { perks } from '../game/skills';
 
 export type PState = 'normal' | 'climb' | 'hide' | 'swim' | 'script' | 'stunned';
 
@@ -131,7 +132,7 @@ export class Player implements Drawable {
     if (this.state === 'hide') {
       this.anim = 'crouch';
       this.noise = 0;
-      this.visibility = (1 - (this.hideSpot?.cover ?? 0.8)) * (game.save.upgrades.ghillie ? 0.5 : 1);
+      this.visibility = (1 - (this.hideSpot?.cover ?? 0.8)) * perks.visibility();
       if (canControl && (ax !== 0 || inp.hit('up') || inp.hit('jump'))) {
         this.state = 'normal';
         this.hideSpot = null;
@@ -226,7 +227,7 @@ export class Player implements Drawable {
     else this.anim = 'idle';
     if (this.poseOverride) this.anim = this.poseOverride;
     this.noise = !moving ? 0 : this.crouch ? 0.12 : this.running ? 1 : this.camera ? 0.15 : 0.4;
-    this.visibility = (this.crouch ? 0.6 : 1) * (game.save.upgrades.ghillie ? 0.7 : 1);
+    this.visibility = (this.crouch ? 0.6 : 1) * perks.visibility();
     if (moving && this.onGround) {
       this.stepT += dt * Math.abs(this.vx) / 58;
       if (this.stepT > 0.34) {

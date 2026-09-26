@@ -98,7 +98,7 @@ export function vanceTalk(): { lines: Line[]; after?: () => string | void } {
           L('imogen', 'I need to know what made this. But if it notices you, you *hide*. Promise me.'),
           L('pip', 'I, uh, made you something! It’s a headlamp. For the dark. Where giant snakes are.', 'happy'),
         ],
-        after: () => { s.chapter = 4; unlockSite('mangrove'); s.upgrades.headlamp = 1; game.ui.toast('Received: <b>Headlamp</b> — night expeditions unlocked', 'GEAR', 'teal', 4200); },
+        after: () => { s.chapter = 4; unlockSite('mangrove'); if (!s.tools.includes('headlamp')) s.tools.push('headlamp'); game.ui.toast('Received: <b>Headlamp</b> — night expeditions unlocked', 'GEAR', 'teal', 4200); },
       };
       return { lines: [L('imogen', 'Thunder Falls. Keep your eyes on the rocks as well as the birds.')] };
     case 4:
@@ -110,7 +110,7 @@ export function vanceTalk(): { lines: Line[]; after?: () => string | void } {
           L('pip', 'Dive gear! I modified the old survey suit. It probably won’t leak.', 'happy'),
           L('imogen', 'The *Serpent Coast*, then. Finch... be brilliant.'),
         ],
-        after: () => { s.chapter = 5; unlockSite('coast'); s.upgrades.dive = 1; game.ui.toast('Received: <b>Dive gear</b>', 'GEAR', 'teal', 4200); },
+        after: () => { s.chapter = 5; unlockSite('coast'); s.flags.divegear = true; game.ui.toast('Received: <b>Dive gear</b>', 'GEAR', 'teal', 4200); },
       };
       return { lines: [L('imogen', 'Mangroves. Stay low, stay hidden, and if the water moves by itself, run.', 'worried')] };
     case 5:

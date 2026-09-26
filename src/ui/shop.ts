@@ -48,19 +48,19 @@ export function openShop() {
       box.appendChild(el('div', 'sect', kind === 'item' ? 'Lures & gadgets' : 'Camera & field upgrades'));
       const list = box.appendChild(el('div', 'list'));
       for (const it of ITEMS.filter(i => i.kind === kind)) {
-        const lvl = kind === 'upgrade' ? s.upgrades[it.id] ?? 0 : 0;
+        const lvl = kind === 'upgrade' ? s.vars['up:' + it.id] ?? 0 : 0;
         const maxed = kind === 'upgrade' && lvl >= (it.max ?? 1);
         const price = it.price(lvl);
         const row = list.appendChild(el('div', 'it'));
-        const own = kind === 'item' ? `Carrying: ${s.items[it.id] ?? 0}` : it.max && it.max > 1 ? `Level ${lvl}/${it.max}` : lvl ? 'Owned' : '';
+        const own = kind === 'item' ? `Carrying: ${s.vars['it:' + it.id] ?? 0}` : it.max && it.max > 1 ? `Level ${lvl}/${it.max}` : lvl ? 'Owned' : '';
         row.innerHTML = `<img src="${iconURL(it.icon)}" alt=""><div><div class="nm">${it.name}</div><div class="ds">${it.desc}</div><div class="own">${own}</div></div>`;
         const b = el('button', 'btn' + (maxed ? ' ghost' : ''), maxed ? 'Max' : `${price} RP`);
         b.disabled = maxed || s.rp < price;
         b.onclick = () => {
           if (s.rp < price) return;
           s.rp -= price;
-          if (kind === 'item') s.items[it.id] = (s.items[it.id] ?? 0) + 1;
-          else s.upgrades[it.id] = lvl + 1;
+          if (kind === 'item') s.vars['it:' + it.id] = (s.vars['it:' + it.id] ?? 0) + 1;
+          else s.vars['up:' + it.id] = lvl + 1;
           audio.play('coin');
           render();
         };

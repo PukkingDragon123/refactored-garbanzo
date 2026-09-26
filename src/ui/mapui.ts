@@ -147,7 +147,7 @@ export function openMap() {
     side.innerHTML = `<div class="lbl2">Destination</div><h2>${SITE_NAMES[sel]}</h2><p>${SITE_DESC[sel]}</p><div class="lbl2">Time of day</div>`;
     const times = side.appendChild(el('div', 'times'));
     for (const t of TIMES) {
-      const locked = t === 'night' && !s.upgrades.headlamp;
+      const locked = t === 'night' && !s.tools.includes('headlamp');
       const b = el('button', 'btn ghost' + (t === tod ? ' on' : ''), locked ? 'Night (needs headlamp)' : TIME_LABEL[t]);
       b.disabled = locked;
       b.onclick = () => { tod = t; audio.play('ui'); render(); };
@@ -162,10 +162,10 @@ export function openMap() {
       i.title = s.seen[sp.id] ? `${sp.name} (${sp.times.map(x => TIME_LABEL[x]).join(', ')})` : 'Unknown species';
       fa.appendChild(i);
     }
-    if (sel === 'coast' && !s.upgrades.dive) side.appendChild(el('p', '', '<i>Needs dive gear from Pip.</i>'));
+    if (sel === 'coast' && !s.flags.divegear) side.appendChild(el('p', '', '<i>Needs dive gear from Pip.</i>'));
     const go = el('button', 'btn', 'Drive! ▶');
     go.style.width = '100%';
-    go.disabled = sel === 'coast' && !s.upgrades.dive;
+    go.disabled = sel === 'coast' && !s.flags.divegear;
     go.onclick = () => { audio.play('engine'); close(); startTrip(sel, tod); };
     side.appendChild(go);
     const cancel = el('button', 'btn ghost', 'Stay in camp');
