@@ -4,6 +4,8 @@ import { portrait } from '../game/assets';
 import { CREW } from '../art/characters';
 import { audio } from '../core/audio';
 import { guardInput } from '../core/input';
+import { Bubbles } from './bubbles';
+import { portraitURL as v2Portrait, peopleArt } from '../world/actor';
 
 export function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', html = ''): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -35,6 +37,8 @@ export class UI {
   readonly dlg: HTMLElement;
   readonly modalLayer: HTMLElement;
   readonly sceneLayer: HTMLElement;
+  /** world-anchored speech bubbles (V2 dialogue) */
+  readonly bubbles: Bubbles;
   private portraitCache = new Map<string, string>();
   private typing: { full: string; shown: number; speed: number; done: () => void; who: string } | null = null;
   private advance: (() => void) | null = null;
@@ -53,6 +57,7 @@ export class UI {
     this.card = root.appendChild(el('div', 'titlecard'));
     this.dlg = root.appendChild(el('div', 'dialogue panel'));
     this.dlg.innerHTML = `<div class="portrait"><img alt=""></div><div class="body"><div class="name pix"></div><div class="text"></div><div class="choices"></div><div class="next">&#9660;</div></div>`;
+    this.bubbles = new Bubbles(root);
     this.toasts = root.appendChild(el('div', 'toasts'));
     this.modalLayer = root.appendChild(el('div'));
     this.dlg.addEventListener('pointerdown', e => {
@@ -73,6 +78,8 @@ export class UI {
   }
 
   clearScene() {
+    this.bubbles.clear();
+    this.bubbles.clearSpeakers();
     this.sceneLayer.innerHTML = '';
     this.prompts.innerHTML = '';
     this.hud.innerHTML = '';
@@ -83,6 +90,7 @@ export class UI {
   }
 
   frame(dt: number) {
+    this.bubbles.update(dt);
     const t = this.typing;
     if (t) {
       const before = Math.floor(t.shown);
@@ -104,11 +112,12 @@ export class UI {
     return s.replace(/\*([^*]+)\*?/g, '<em>$1</em>');
   }
 
-  portraitURL(who: string, expr: Line['expr'] = 'neutral') {
+  portraitURL(who: string, expr: string = 'neutral') {
+    if (peopleArt()?.CHAR_INFO[who]) return v2Portrait(who, expr);
     const key = who + ':' + expr;
     let u = this.portraitCache.get(key);
     if (!u && CREW[who]) {
-      u = portrait(who, expr ?? 'neutral');
+      u = portrait(who, (expr ?? 'neutral') as 'neutral');
       this.portraitCache.set(key, u);
     }
     return u ?? '';

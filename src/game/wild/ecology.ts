@@ -105,7 +105,7 @@ export const ECO: Record<string, Eco> = {
     sight: 240, hear: 1, flightDist: 0, food: [], prey: ['ironjaw', 'boneface', 'snakestork'], defense: ['strike'], attacksPlayer: 1,
     group: [1, 1], calls: { threat: 'callHiss' }, size: 6,
     idle: [{ act: 'ambush', w: 3, dur: [12, 25] }, { act: 'swim', w: 2 }, { act: 'rest', w: 1, dur: [10, 20] }],
-    photo: { ambush: 'ambush', swim: 'swimming', hunt: 'hunting', attack: 'hunting', digest: 'digesting', rest: 'digesting' },
+    photo: { ambush: 'ambush', swim: 'swimming', hunt: 'hunting', attack: 'hunting', constrict: 'hunting', digest: 'digesting', rest: 'digesting' },
   },
   leviathan: {
     loco: 'swimmer', medium: 'water', walk: 30, run: 80, bold: 0.9, aggro: 0.1, curious: 0.8, social: 0, alert: 0.5,

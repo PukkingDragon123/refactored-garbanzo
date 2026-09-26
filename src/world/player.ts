@@ -1,17 +1,18 @@
-// Otis Finch: side-scrolling controller with walk/run/crouch/jump/climb/hide/swim and scripted moves.
+// Rowan Ellis: side-scrolling controller with walk/run/crouch/jump/climb/hide/swim, scripted moves,
+// timed work actions (collecting, building) and deck sliding. Rendered through an Actor so any
+// expression, emote or cartoon reaction works on the player too.
 
 import type { Renderer } from '../gfx/renderer';
-import { packColor } from '../gfx/renderer';
 import type { Drawable, Stage } from './stage';
 import type { Surface, Climb } from './terrain';
 import { Terrain } from './terrain';
-import { chars, A } from '../game/assets';
+import { Actor } from './actor';
 import { game } from '../game/game';
 import { audio } from '../core/audio';
 import { approach, clamp } from '../core/math';
 import { perks } from '../game/skills';
 
-export type PState = 'normal' | 'climb' | 'hide' | 'swim' | 'script' | 'stunned';
+export type PState = 'normal' | 'climb' | 'hide' | 'swim' | 'script' | 'stunned' | 'work';
 
 export interface HideSpot {
   x: number;
@@ -52,13 +53,23 @@ export class Player implements Drawable {
   hurtT = 0;
   alpha = 1;
   poseOverride: string | null = null;
-  /** optional hook to block movement (dialogue, menus) */
   frozen = false;
   underwater = false;
+  /** deck tilt in radians (boat scenes): makes the player slide */
+  tilt = 0;
+  /** footstep surface for sfx */
+  ground: 'sand' | 'wood' | 'leaves' | 'grass' = 'leaves';
+  /** timed work (collecting, building) */
+  private work: { anim: string; t: number; dur: number; res: (ok: boolean) => void; onTick?: (k: number) => void } | null = null;
+  /** seconds since the player last ran hard (drives camera breathlessness) */
+  sinceRun = 99;
+  readonly body: Actor;
 
   constructor(x: number, y: number, readonly terrain: Terrain) {
     this.x = x;
     this.y = y;
+    this.body = new Actor('rowan', x, y, 1);
+    this.body.fidget = true;
   }
 
   walkTo(x: number, speed = 60): Promise<void> {
@@ -76,19 +87,43 @@ export class Player implements Drawable {
     d?.();
   }
 
+  /**
+   * Do timed work with an animation (collecting, hammering). Resolves true when finished,
+   * false if interrupted by moving away.
+   */
+  doWork(anim: string, dur: number, onTick?: (k: number) => void): Promise<boolean> {
+    this.work?.res(false);
+    this.state = 'work';
+    this.vx = 0;
+    return new Promise(res => {
+      this.work = { anim, t: 0, dur, res, onTick };
+    });
+  }
+  cancelWork() {
+    if (!this.work) return;
+    const w = this.work;
+    this.work = null;
+    this.state = 'normal';
+    w.res(false);
+  }
+
+  get height() {
+    return this.crouch || this.state === 'hide' || this.state === 'work' ? 42 : 62;
+  }
   get headY() {
-    return this.y - (this.crouch || this.state === 'hide' ? 26 : 40);
+    return this.y - this.height;
   }
   get eyeY() {
-    return this.y - (this.crouch || this.state === 'hide' ? 20 : 31);
+    return this.y - this.height + 12;
   }
 
   update(dt: number, st: Stage) {
     this.t += dt;
     this.hurtT = Math.max(0, this.hurtT - dt);
     this.dropT = Math.max(0, this.dropT - dt);
+    this.sinceRun += dt;
     const inp = game.input;
-    const canControl = this.control && !this.frozen && !game.ui.blocking && this.state !== 'script';
+    const canControl = this.control && !this.frozen && !game.ui.blocking && this.state !== 'script' && this.state !== 'work';
     let ax = canControl ? inp.axisX() : 0;
     if (this.state === 'script' && this.scriptTarget !== null) {
       const d = this.scriptTarget - this.x;
@@ -100,9 +135,29 @@ export class Player implements Drawable {
     }
     if (this.state === 'stunned') ax = 0;
 
-    // swimming (underwater dive section)
+    // timed work
+    if (this.state === 'work' && this.work) {
+      const w = this.work;
+      this.anim = w.anim;
+      this.vx = 0;
+      this.noise = 0.15;
+      this.visibility = 0.8 * perks.visibility();
+      w.t += dt;
+      w.onTick?.(Math.min(1, w.t / w.dur));
+      // walking away cancels
+      if (!game.ui.blocking && inp.axisX() !== 0 && w.t > 0.15) { this.cancelWork(); return; }
+      if (w.t >= w.dur) {
+        this.work = null;
+        this.state = 'normal';
+        w.res(true);
+      }
+      this.syncBody(dt);
+      return;
+    }
+
     if (this.underwater) {
       this.updateSwim(dt, canControl);
+      this.syncBody(dt);
       return;
     }
 
@@ -110,22 +165,22 @@ export class Player implements Drawable {
       const c = this.climb;
       let ay = 0;
       if (canControl) ay = (inp.down('down') ? 1 : 0) - (inp.down('up') ? 1 : 0);
-      this.y = clamp(this.y + ay * 38 * dt, c.y0, c.y1);
+      this.y = clamp(this.y + ay * 44 * dt, c.y0, c.y1);
       this.x = approach(this.x, c.x, 80 * dt);
       this.anim = ay ? 'climb' : 'climbIdle';
       if (ay) {
         this.stepT += dt;
-        if (this.stepT > 0.28) { this.stepT = 0; audio.play('rustle', { vol: 0.25 }); }
+        if (this.stepT > 0.28) { this.stepT = 0; audio.play((c.kind === 'ladder' ? 'stepWood' : 'rustle') as 'rustle', { vol: 0.25 }); }
       }
-      // leave at top onto a platform, at bottom onto ground, or by jumping sideways
       if (canControl && (inp.hit('jump') || (ax !== 0 && this.y <= c.y0 + 1) || (ay > 0 && this.y >= c.y1))) {
         this.state = 'normal';
         this.climb = null;
-        if (inp.hit('jump')) { this.vy = -90; this.vx = ax * 60; }
+        if (inp.hit('jump')) { this.vy = -100; this.vx = ax * 60; }
         this.onGround = false;
       }
       this.noise = ay ? 0.3 : 0.05;
       this.visibility = 0.9;
+      this.syncBody(dt);
       return;
     }
 
@@ -138,6 +193,7 @@ export class Player implements Drawable {
         this.hideSpot = null;
         audio.play('rustle', { vol: 0.5 });
       }
+      this.syncBody(dt);
       return;
     }
 
@@ -154,9 +210,12 @@ export class Player implements Drawable {
       }
     }
     this.running = canControl && inp.down('run') && !this.crouch && !this.camera;
-    const speed = this.state === 'script' ? this.scriptSpeed : this.camera ? 30 : this.crouch ? 26 : this.running ? 110 : 58;
+    if (this.running && Math.abs(this.vx) > 80) this.sinceRun = 0;
+    const speed = this.state === 'script' ? this.scriptSpeed : this.camera ? 28 : this.crouch ? 26 : this.running ? 118 : 60;
     const target = ax * speed;
-    this.vx = approach(this.vx, target, (this.onGround ? 600 : 260) * dt);
+    this.vx = approach(this.vx, target, (this.onGround ? 640 : 280) * dt);
+    // sliding on a tilted deck
+    if (this.onGround && Math.abs(this.tilt) > 0.03) this.vx += Math.sin(this.tilt) * 520 * dt * (this.crouch ? 0.35 : 1);
     if (ax !== 0 && !this.camera) this.facing = ax;
 
     // climbing grab
@@ -176,23 +235,24 @@ export class Player implements Drawable {
         this.onGround = false;
         this.y += 2;
       } else {
-        this.vy = -128;
+        this.vy = -138;
         this.onGround = false;
+        this.body.react('stretch');
         audio.play('jump', { vol: 0.5 });
       }
     }
 
     // integrate
     const nx = clamp(this.x + this.vx * dt, this.minX, this.maxX);
+    if (nx === this.minX || nx === this.maxX) this.vx = 0;
     if (this.onGround && this.surface) {
       const sy = Terrain.yAt(this.surface, nx);
-      if (sy !== null && Math.abs(sy - this.y) < 7) {
+      if (sy !== null && Math.abs(sy - this.y) < 8) {
         this.x = nx;
         this.y = sy;
       } else {
-        // walked off the edge (or onto another surface)
-        const s = this.terrain.surfaceBelow(nx, this.y - 6, 0, this.dropT > 0);
-        if (s && s.y - this.y < 7) {
+        const s = this.terrain.surfaceBelow(nx, this.y - 7, 0, this.dropT > 0);
+        if (s && s.y - this.y < 8) {
           this.x = nx;
           this.y = s.y;
           this.surface = s.s;
@@ -203,13 +263,13 @@ export class Player implements Drawable {
       }
     } else {
       this.x = nx;
-      this.vy = Math.min(this.vy + 380 * dt, 260);
+      this.vy = Math.min(this.vy + 400 * dt, 280);
       const ny = this.y + this.vy * dt;
       if (this.vy >= 0) {
         const s = this.terrain.surfaceBelow(this.x, this.y - 2, 0, this.dropT > 0);
         if (s && ny >= s.y) {
           this.y = s.y;
-          if (this.vy > 150) { audio.play('land', { vol: 0.6 }); st.shake(1, 0.15); }
+          if (this.vy > 150) { audio.play('land', { vol: 0.6 }); st.shake(1, 0.15); this.body.react('land'); }
           this.vy = 0;
           this.onGround = true;
           this.surface = s.s;
@@ -220,28 +280,33 @@ export class Player implements Drawable {
 
     // animation & noise
     const moving = Math.abs(this.vx) > 4;
+    const steep = Math.abs(this.tilt) > 0.12;
     if (!this.onGround) this.anim = this.vy < 0 ? 'jump' : 'fall';
-    else if (this.camera) this.anim = this.crouch ? 'camCrouch' : 'cam';
+    else if (this.camera) this.anim = this.crouch ? 'cameraCrouch' : 'camera';
+    else if (steep && Math.abs(this.vx) > 30 && Math.sign(this.vx) === Math.sign(this.tilt) && ax === 0) this.anim = 'slip';
+    else if (steep && !moving) this.anim = 'brace';
     else if (this.crouch) this.anim = moving ? 'crouchWalk' : 'crouch';
-    else if (moving) this.anim = Math.abs(this.vx) > 80 ? 'run' : 'walk';
+    else if (moving) this.anim = Math.abs(this.vx) > 85 ? 'run' : 'walk';
     else this.anim = 'idle';
     if (this.poseOverride) this.anim = this.poseOverride;
-    this.noise = !moving ? 0 : this.crouch ? 0.12 : this.running ? 1 : this.camera ? 0.15 : 0.4;
-    this.visibility = (this.crouch ? 0.6 : 1) * perks.visibility();
+    this.noise = (!moving ? 0 : this.crouch ? 0.12 : this.running ? 1 : this.camera ? 0.15 : 0.4) * perks.noise();
+    this.visibility = (this.crouch ? 0.6 : 1) * perks.visibility() * (perks.stillness() && !moving && this.crouch ? 0.6 : 1);
     if (moving && this.onGround) {
-      this.stepT += dt * Math.abs(this.vx) / 58;
-      if (this.stepT > 0.34) {
+      this.stepT += dt * Math.abs(this.vx) / 60;
+      if (this.stepT > 0.36) {
         this.stepT = 0;
-        audio.play(this.crouch ? 'stepSoft' : 'step', { vol: this.running ? 0.55 : 0.3, pitch: 0.9 + Math.random() * 0.2 });
+        const s = this.ground === 'sand' ? 'stepSand' : this.ground === 'wood' ? 'stepWood' : this.ground === 'leaves' ? 'stepLeaves' : 'step';
+        audio.play((this.crouch ? 'stepSoft' : s) as 'step', { vol: this.running ? 0.55 : 0.3, pitch: 0.9 + Math.random() * 0.2 });
       }
     }
+    this.syncBody(dt);
   }
 
   private updateSwim(dt: number, canControl: boolean) {
     const inp = game.input;
     const ax = canControl ? inp.axisX() : 0;
     const ay = canControl ? (inp.down('down') ? 1 : 0) - (inp.down('up') || inp.down('jump') ? 1 : 0) : 0;
-    const sp = inp.down('run') ? 70 : 42;
+    const sp = inp.down('run') ? 72 : 44;
     this.vx = approach(this.vx, ax * sp, 90 * dt);
     this.vy = approach(this.vy, ay * sp + 4, 90 * dt);
     this.x = clamp(this.x + this.vx * dt, this.minX, this.maxX);
@@ -253,24 +318,21 @@ export class Player implements Drawable {
     this.visibility = 0.9;
   }
 
+  private syncBody(dt: number) {
+    const b = this.body;
+    b.x = this.x;
+    b.y = this.y;
+    b.facing = this.facing;
+    let a = this.anim;
+    if (a === 'climbIdle') { a = 'climb'; b.holdFrame = 0; } else if (b.holdFrame !== null && a !== 'climb') b.holdFrame = null;
+    if (b.anim !== a && !b.walking) b.setAnim(a);
+    b.alpha = (this.state === 'hide' ? 0.6 : 1) * this.alpha * (this.hurtT > 0 && Math.floor(this.hurtT * 12) % 2 === 0 ? 0.35 : 1);
+    b.shadow = !this.underwater && this.onGround;
+    b.update(dt);
+  }
+
   draw(r: Renderer, st: Stage) {
-    const set = chars.otis;
-    let frames = set[this.anim] ?? set.idle;
-    let fps = this.anim === 'run' ? 14 : this.anim === 'walk' ? 10 : this.anim === 'crouchWalk' ? 8 : this.anim === 'climb' ? 6 : 3;
-    if (this.anim === 'climbIdle') { frames = set.climb; fps = 0; }
-    const f = frames[Math.floor(this.t * fps) % frames.length];
-    const hidden = this.state === 'hide';
-    // blob shadow
-    if (!this.underwater && this.onGround) {
-      r.beginShadows();
-      r.draw(A.shadow, this.x, this.y, 0.7, 0.8, 0, packColor(0, 0, 0, 0.45));
-      r.endShadows();
-    }
-    const blinkA = this.hurtT > 0 && Math.floor(this.hurtT * 12) % 2 === 0 ? 0.3 : 1;
-    const a = (hidden ? 0.55 : 1) * blinkA * this.alpha;
-    const rot = this.underwater ? (Math.abs(this.vx) > 10 ? -this.facing * 1.2 : -this.facing * 0.2) : 0;
-    const oy = this.underwater ? 18 : 0;
-    r.draw(f, this.x, this.y + oy, this.facing, 1, rot, packColor(1, 1, 1, a));
-    void st;
+    this.body.oy = this.underwater ? 18 : 0;
+    this.body.draw(r, st);
   }
 }

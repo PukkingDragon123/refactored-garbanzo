@@ -3,7 +3,7 @@
 import type { TimeOfDay } from '../world/timeofday';
 
 export type SiteId = 'fernwood' | 'canopy' | 'falls' | 'mangrove' | 'coast';
-export type Group = 'Serpent' | 'Bird' | 'Mammal' | 'Reptile';
+export type Group = 'Serpent' | 'Bird' | 'Mammal' | 'Reptile' | 'Amphibian';
 
 export type Evidence =
   | { kind: 'photo'; species: string; behavior: string }
@@ -162,7 +162,7 @@ export const SPECIES: Species[] = [
     ],
   },
   {
-    id: 'snakestork', name: 'Serpent Stork', sci: 'Ophiociconia armata', group: 'Bird', sites: ['mangrove'], times: ['dawn', 'day', 'dusk'],
+    id: 'snakestork', name: 'Thunder Stork', sci: 'Ophiociconia armata', group: 'Bird', sites: ['mangrove'], times: ['dawn', 'day', 'dusk'],
     rarity: 2, danger: 0, size: '1.4 m', blurb: 'A tall stork with armoured leg scales and a dagger bill, specialising in spearing water snakes.',
     behaviors: { stalking: 'Stalking', catching: 'Catching a serpent', display: 'Bill-clatter display', flying: 'Flying' },
     facts: [
@@ -233,6 +233,77 @@ export const SPECIES: Species[] = [
       { id: 'croc-diet', cat: 'Diet', q: 'What does the Ironjaw prey on?', options: ['Storks and serpents at the water edge', 'Seaweed', 'Insects'], answer: 0, text: 'Anything at the water’s edge: storks, Mudribbons, even young Titans.', evidence: [ph('ironjaw', 'lunging'), cl('vertebrae')], hint: 'What is left on the bank?' },
     ],
   },
+  // ------------------------------------------------------------ V2 ADDITIONS
+  {
+    id: 'boneface', name: 'Forest Boneface', sci: 'Osteoprosopus silvanus', group: 'Mammal', sites: ['fernwood'], times: ['dawn', 'day', 'dusk'],
+    rarity: 2, danger: 1, size: '2.4 m', blurb: 'A great, placid browser with a face of solid bone. Herds wander the Fernwood stripping leaves, calves bouncing at their heels. Threaten the young, though, and the placid part is over.',
+    behaviors: { browsing: 'Browsing', charging: 'Charging', playing: 'Calves playing', wallowing: 'Wallowing' },
+    facts: [
+      { id: 'bf-shield', cat: 'Adaptation', q: 'What is the Boneface’s bony face for?', options: ['Shoving through thorny thickets and turning aside fangs', 'Digging burrows', 'Attracting mates with colour'], answer: 0, text: 'The fused bony shield turns aside serpent fangs and lets it bulldoze through thorny undergrowth to reach fresh leaves.', evidence: [ph('boneface', 'browsing'), cl('boneface-track')], hint: 'Watch one feeding, and look at where it has pushed through.' },
+      { id: 'bf-herd', cat: 'Behaviour', q: 'Why are Boneface calves so relaxed?', options: ['The adults form a living wall and charge at threats', 'Nothing hunts them', 'They can outrun anything'], answer: 0, text: 'Adults close ranks around the calves and charge anything that comes too close, even a photographer.', evidence: [ph('boneface', 'charging'), ph('boneface', 'playing')], hint: 'Photograph the calves at play, and see what happens if you get too close.' },
+      { id: 'bf-mud', cat: 'Behaviour', q: 'Why do Bonefaces wallow in mud?', options: ['Mud protects their skin from sun and biting insects', 'To hide from the Titan', 'To find roots'], answer: 0, text: 'A coat of drying mud is sunscreen and insect repellent in one.', evidence: [ph('boneface', 'wallowing')], hint: 'Find a muddy spot they like.' },
+    ],
+  },
+  {
+    id: 'hunterbat', name: 'Hunter Bat', sci: 'Ambulochiroptera venator', group: 'Mammal', sites: ['fernwood', 'falls'], times: ['dusk', 'night'],
+    rarity: 3, danger: 0, size: '1.1 m span', blurb: 'A big-eared bat that folds its wings into forelegs and stalks the forest floor on all fours, snatching frogs and wētā in the dark.',
+    behaviors: { hunting: 'Hunting on foot', hanging: 'Roosting', flying: 'Flying' },
+    facts: [
+      { id: 'hb-walk', cat: 'Adaptation', q: 'How does the Hunter Bat catch frogs?', options: ['It walks on its folded wings and pounces', 'It spits venom', 'It dives into water'], answer: 0, text: 'With no small birds to compete with, these bats took to the ground. Folded wings become strong forelegs.', evidence: [ph('hunterbat', 'hunting'), cl('bat-roost')], hint: 'Find where it roosts, and watch it hunt at night.' },
+      { id: 'hb-echo', cat: 'Anatomy', q: 'What are the huge ears for?', options: ['Echolocation, and hearing prey footsteps', 'Cooling off', 'Display'], answer: 0, text: 'The ears pick up its own clicks bouncing back, and the tiny footsteps of a wētā on bark.', evidence: [vid('hunterbat', 'flying')], hint: 'Record it flying: listen for the clicks.' },
+      { id: 'hb-roost', cat: 'Behaviour', q: 'Where does it spend the day?', options: ['Hanging upside-down from high branches', 'In burrows', 'In old birds’ nests'], answer: 0, text: 'It roosts high under branches, wrapped in its wings, out of reach of climbing serpents.', evidence: [ph('hunterbat', 'hanging')], hint: 'Look up.' },
+    ],
+  },
+  {
+    id: 'mossfrog', name: 'Moss Frog', sci: 'Bryobatrachus cantor', group: 'Amphibian', sites: ['fernwood', 'falls', 'mangrove'], times: ['dusk', 'night', 'dawn'],
+    rarity: 1, danger: 0, size: '6 cm', blurb: 'A frog so covered in mossy skin flaps that it vanishes on any log. At night the whole forest throbs with their chorus.',
+    behaviors: { calling: 'Calling', hunting: 'Catching insects', hiding: 'Camouflaged' },
+    facts: [
+      { id: 'mf-camo', cat: 'Adaptation', q: 'Why is it covered in moss-like flaps?', options: ['Camouflage against serpents and bats', 'To keep warm', 'To store water'], answer: 0, text: 'Its skin flaps break up its outline completely. You can be looking right at one.', evidence: [ph('mossfrog', 'hiding')], hint: 'Find one sitting still on a mossy log. Good luck.' },
+      { id: 'mf-call', cat: 'Behaviour', q: 'Why do Moss Frogs call back and forth?', options: ['Males answer each other to attract mates', 'To scare predators', 'They’re lost'], answer: 0, text: 'Males take turns calling so each one can be heard: a chorus with rules.', evidence: [vid('mossfrog', 'calling')], hint: 'Record a calling frog at night.' },
+      { id: 'mf-diet', cat: 'Diet', q: 'What do they eat?', options: ['Insects caught with a sticky tongue', 'Algae', 'Fish fry'], answer: 0, text: 'The tongue shoots out in a fifteenth of a second. Moths never see it coming.', evidence: [ph('mossfrog', 'hunting'), cl('frog-spawn')], hint: 'Watch one hunting, and look for its eggs.' },
+    ],
+  },
+  {
+    id: 'barkgecko', name: 'Bark Gecko', sci: 'Corticolus violaceus', group: 'Reptile', sites: ['fernwood', 'canopy'], times: ['dawn', 'day', 'dusk'],
+    rarity: 1, danger: 0, size: '18 cm', blurb: 'A gecko patterned exactly like kauri bark. Rival males flare violet dewlaps at each other in silent duels up and down the trunks.',
+    behaviors: { display: 'Dewlap display', hunting: 'Hunting moths', clinging: 'Clinging to bark' },
+    facts: [
+      { id: 'bg-dewlap', cat: 'Behaviour', q: 'What is the violet dewlap for?', options: ['Displaying to rivals and mates', 'Storing food', 'Breathing'], answer: 0, text: 'A flash of violet says “this trunk is mine” without a fight.', evidence: [ph('barkgecko', 'display')], hint: 'Two on one trunk means trouble. Watch.' },
+      { id: 'bg-toes', cat: 'Anatomy', q: 'How does it cling to smooth bark?', options: ['Millions of microscopic hairs on its toe pads', 'Suction cups', 'Sticky slime'], answer: 0, text: 'Its toe pads grip with molecular forces. It could hang from glass.', evidence: [ph('barkgecko', 'clinging'), cl('gecko-shed')], hint: 'Photograph one on a trunk, and find a shed skin.' },
+      { id: 'bg-diet', cat: 'Diet', q: 'What does it hunt?', options: ['Moths and small insects', 'Birds’ eggs', 'Fruit'], answer: 0, text: 'It waits motionless for moths to land on the bark, then snaps.', evidence: [ph('barkgecko', 'hunting')], hint: 'Watch one hunting.' },
+    ],
+  },
+  {
+    id: 'pteramander', name: 'Pteramander', sci: 'Pterotriton volans', group: 'Amphibian', sites: ['mangrove', 'falls'], times: ['dusk', 'night'],
+    rarity: 2, danger: 0, size: '25 cm', blurb: 'A salamander with skin flaps between its legs that glides from trunk to trunk above the mangrove water, out of reach of the Mudribbons below.',
+    behaviors: { gliding: 'Gliding', climbing: 'Climbing', hunting: 'Hunting' },
+    facts: [
+      { id: 'pt-glide', cat: 'Adaptation', q: 'How does the Pteramander get between trees?', options: ['Gliding on skin flaps between its legs', 'Swimming', 'Hopping'], answer: 0, text: 'It spreads its limbs and the flaps become wings. It can glide ten metres.', evidence: [vid('pteramander', 'gliding')], hint: 'Record a glide.' },
+      { id: 'pt-why', cat: 'Ecology', q: 'Why does it avoid the water?', options: ['Mudribbons and Thunder Storks hunt the water’s edge', 'It can’t swim', 'The water is too salty'], answer: 0, text: 'An amphibian that fears water: in the Blackwater, the water is where the danger is.', evidence: [ph('pteramander', 'climbing'), ph('mudribbon', 'fishing')], hint: 'Watch what hunts in the water below it.' },
+      { id: 'pt-diet', cat: 'Diet', q: 'What does it eat?', options: ['Insects on the trunks', 'Fish', 'Leaves'], answer: 0, text: 'It licks ants and midges off the mangrove bark.', evidence: [ph('pteramander', 'hunting')], hint: 'Watch it hunt.' },
+    ],
+  },
+  {
+    id: 'monarch', name: 'Monarch', sci: 'Regivultur immensus', group: 'Bird', sites: ['falls', 'coast'], times: ['dawn', 'day'],
+    rarity: 4, danger: 0, size: '5 m span', blurb: 'The largest flying animal anyone has ever seen: a soaring scavenger with a bare pale neck, riding thermals over the cliffs for hours without a single wingbeat.',
+    behaviors: { soaring: 'Soaring', feeding: 'Scavenging' },
+    facts: [
+      { id: 'mo-soar', cat: 'Adaptation', q: 'How does the Monarch stay aloft for hours?', options: ['Soaring on rising warm air', 'Flapping constantly', 'Floating on gas sacs'], answer: 0, text: 'It circles in thermals and slope winds, almost never flapping. Flapping a body that big would be exhausting.', evidence: [vid('monarch', 'soaring')], hint: 'Record it soaring.' },
+      { id: 'mo-diet', cat: 'Diet', q: 'What does the Monarch eat?', options: ['Carrion: dead animals', 'Live serpents', 'Fish'], answer: 0, text: 'It cleans up what the Titan and the Ironjaw leave behind.', evidence: [ph('monarch', 'feeding'), cl('monarch-feather')], hint: 'Find where it lands.' },
+      { id: 'mo-neck', cat: 'Anatomy', q: 'Why is its neck bare?', options: ['Feathers would get fouled while feeding inside carcasses', 'To attract mates', 'To cool its brain'], answer: 0, text: 'Like a vulture: a bald neck stays clean.', evidence: [ph('monarch', 'feeding')], hint: 'Get a clear shot of it feeding.' },
+    ],
+  },
+  {
+    id: 'nutcracker', name: 'Nutcracker', sci: 'Nucifraga crassirostris', group: 'Bird', sites: ['canopy', 'fernwood'], times: ['dawn', 'day'],
+    rarity: 1, danger: 0, size: '22 cm', blurb: 'A plump bird with a beak like a pair of pliers. Flocks crack moonfruit seeds nobody else can open, while one of them always keeps watch.',
+    behaviors: { cracking: 'Cracking seeds', sentinel: 'Keeping watch', flocking: 'Flocking' },
+    facts: [
+      { id: 'nc-beak', cat: 'Adaptation', q: 'What is that massive beak for?', options: ['Cracking hard seeds', 'Fighting serpents', 'Digging'], answer: 0, text: 'Its beak can crack a moonfruit seed that a hammer struggles with.', evidence: [ph('nutcracker', 'cracking'), cl('cracked-seeds')], hint: 'Watch one feeding, and look at what it leaves.' },
+      { id: 'nc-sentinel', cat: 'Behaviour', q: 'Why does one bird sit apart from the flock?', options: ['It’s a sentinel watching for predators', 'It’s the leader', 'It’s sick'], answer: 0, text: 'A sentinel keeps watch from a perch and barks an alarm when a hawk or glider appears.', evidence: [ph('nutcracker', 'sentinel')], hint: 'Look up from the flock.' },
+      { id: 'nc-flock', cat: 'Behaviour', q: 'Why do they feed in flocks?', options: ['More eyes to spot gliding serpents and hawks', 'To share warmth', 'To confuse the fruit'], answer: 0, text: 'In a land of gliding snakes, feeding alone is a bad idea.', evidence: [ph('nutcracker', 'flocking')], hint: 'Photograph the flock.' },
+    ],
+  },
 ];
 
 export const CLUES: ClueDef[] = [
@@ -246,6 +317,12 @@ export const CLUES: ClueDef[] = [
   { id: 'eggshell', name: 'Eggshell fragments', desc: 'Cracked, gold-speckled eggshells beneath the nesting cliff.', site: 'falls', icon: 'egg' },
   { id: 'falls-nest', name: 'Mossy nest', desc: 'A nest of moss behind the waterfall curtain, dripping but warm.', site: 'falls', icon: 'nest' },
   { id: 'croc-scute', name: 'Crocodile scute', desc: 'A bony plate from an adult Ironjaw, etched by stomach acid.', site: 'mangrove', icon: 'scute' },
+  { id: 'boneface-track', name: 'Three-toed tracks', desc: 'Deep three-toed prints and a tunnel of stripped, shoved-aside branches through the thorn scrub.', site: 'fernwood', icon: 'tracks' },
+  { id: 'bat-roost', name: 'Roost litter', desc: 'A pile of wētā legs and frog bones under a high branch. Something eats up there.', site: 'falls', icon: 'bones' },
+  { id: 'frog-spawn', name: 'Frog spawn', desc: 'A jelly egg mass on a leaf hanging over the water, speckled with tiny green dots.', site: 'mangrove', icon: 'egg' },
+  { id: 'gecko-shed', name: 'Tiny shed skin', desc: 'A gecko-shaped shed skin clinging to bark, toe pads and all.', site: 'canopy', icon: 'skin' },
+  { id: 'monarch-feather', name: 'Colossal feather', desc: 'A dark flight feather longer than your arm, stuck in the rocks.', site: 'falls', icon: 'feather' },
+  { id: 'cracked-seeds', name: 'Cracked seeds', desc: 'Moonfruit seeds split cleanly in half under a tree. Nothing you own could crack them.', site: 'canopy', icon: 'shells' },
   { id: 'vertebrae', name: 'Serpent vertebrae', desc: 'A string of snake vertebrae on the mudbank, crushed by massive jaws.', site: 'mangrove', icon: 'bones' },
 ];
 
