@@ -59,6 +59,14 @@ async function boot() {
   setTimeout(() => load.remove(), 700);
   game.fadeTo(0, 1.2);
   (window as unknown as { game: typeof game }).game = game;
+  // debug helpers for testing UIs from the console
+  (window as unknown as { zl: unknown }).zl = {
+    laptop: async (app?: string) => (await import('./ui/laptop')).openLaptop({ app: app as never }),
+    review: async () => (await import('./ui/photoreview')).openPhotoReview(),
+    pack: async () => (await import('./ui/backpack')).openBackpack({}),
+    craft: async (st = 'bench') => (await import('./ui/craft')).openCrafting(st as never),
+    map: async () => (await import('./game/travel2')).openTravelMap(),
+  };
 }
 
 boot();

@@ -1,2 +1,1 @@
-import type { AppMount } from './laptop-kit';
-export const mountGuide: AppMount = host => { host.innerHTML = '<div style="padding:2em;font-family:var(--pix)">Guide app</div>'; };
+export { mountGuide } from './laptop-apps';
