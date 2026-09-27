@@ -572,8 +572,11 @@ export class Renderer {
   }
 
   private sceneCleared = false;
+  /** called before any batch reaches the GPU, so sprites created mid-frame are uploaded first */
+  beforeFlush: (() => void) | null = null;
 
   private flushScene() {
+    this.beforeFlush?.();
     const gl = this.gl;
     const b = this.scene;
     this.rtScene.bind();

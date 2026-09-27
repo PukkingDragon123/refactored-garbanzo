@@ -949,17 +949,20 @@ function reshape(d: CharDef, o: { leg: number; torso: number; arm: number; width
   b.thigh *= o.leg; b.shin *= o.leg;
   b.hipH = b.thigh + b.shin + b.ankleH - slack * o.leg;
   b.torso *= o.torso; b.shY *= o.torso;
+  // the smaller realistic head covers less of the neck
+  b.neck *= 0.55;
   b.upArm *= o.arm; b.foreArm *= o.arm;
   b.shF *= w; b.shB *= w; b.legF *= w; b.legB *= w;
   d.torso.prof = d.torso.prof.map(([y, bk, f]) => [y > 0 ? y * o.torso : y, bk * w, f * w] as [number, number, number]);
   d.leg.rThigh *= Math.sqrt(w); d.leg.rKnee *= Math.sqrt(w);
   d.arm.rSh *= Math.sqrt(w); d.arm.rEl *= Math.sqrt(w);
 }
-reshape(ROWAN, { leg: 1.26, torso: 1.12, arm: 1.16 });
-reshape(CROWE, { leg: 1.2, torso: 1.12, arm: 1.16, width: 1.14 });
-reshape(AROHA, { leg: 1.25, torso: 1.1, arm: 1.15, width: 0.95 });
-reshape(LOU, { leg: 1.1, torso: 1.06, arm: 1.08, width: 1.12 });
-reshape(PIP, { leg: 1.22, torso: 1.1, arm: 1.15, width: 0.9 });
+// realistic adult proportions (~7 heads): long legs (crotch near half height), long torso, arms to mid-thigh
+reshape(ROWAN, { leg: 2.08, torso: 1.32, arm: 1.5, width: 0.9 });
+reshape(CROWE, { leg: 1.9, torso: 1.3, arm: 1.46, width: 1.1 });
+reshape(AROHA, { leg: 2.02, torso: 1.3, arm: 1.46, width: 0.86 });
+reshape(LOU, { leg: 1.95, torso: 1.25, arm: 1.44, width: 1.02 });
+reshape(PIP, { leg: 2.02, torso: 1.3, arm: 1.5, width: 0.84 });
 
 export const CHARS: Record<CharId, CharDef> = { rowan: ROWAN, crowe: CROWE, aroha: AROHA, lou: LOU, pip: PIP };
 

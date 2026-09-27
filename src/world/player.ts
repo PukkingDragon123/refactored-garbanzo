@@ -29,6 +29,9 @@ export class Player implements Drawable {
   vy = 0;
   facing = 1;
   onGround = true;
+  private airT = 0;
+  private pendAnim = '';
+  private pendT = 0;
   crouch = false;
   running = false;
   state: PState = 'normal';
@@ -110,13 +113,13 @@ export class Player implements Drawable {
   }
 
   get height() {
-    return this.crouch || this.state === 'hide' || this.state === 'work' ? 48 : 72;
+    return this.crouch || this.state === 'hide' || this.state === 'work' ? 54 : 82;
   }
   get headY() {
     return this.y - this.height;
   }
   get eyeY() {
-    return this.y - this.height + 12;
+    return this.y - this.height + 7;
   }
 
   update(dt: number, st: Stage) {
@@ -304,15 +307,26 @@ export class Player implements Drawable {
     if (this.y > 2000) { this.y = this.terrain.groundY(this.x); this.vy = 0; }
 
     // animation & noise
-    const moving = Math.abs(this.vx) > 4;
-    const steep = Math.abs(this.tilt) > 0.12;
-    if (!this.onGround) this.anim = this.vy < 0 ? 'jump' : 'fall';
+    const moving = Math.abs(this.vx) > (this.anim === 'idle' ? 6 : 3);
+    const steep = Math.abs(this.tilt) > (this.anim === 'brace' || this.anim === 'slip' ? 0.1 : 0.14);
+    this.airT = this.onGround ? 0 : this.airT + dt;
+    const prevAnim = this.anim;
+    // brief drops over small ledges don't flash the fall pose
+    if (!this.onGround && (this.airT > 0.1 || this.vy < -30)) this.anim = this.vy < 0 ? 'jump' : 'fall';
+    else if (!this.onGround) { /* keep the grounded pose for a moment */ }
     else if (this.camera) this.anim = this.crouch ? 'cameraCrouch' : 'camera';
     else if (steep && Math.abs(this.vx) > 30 && Math.sign(this.vx) === Math.sign(this.tilt) && ax === 0) this.anim = 'slip';
     else if (steep && !moving) this.anim = 'brace';
     else if (this.crouch) this.anim = moving ? 'crouchWalk' : 'crouch';
     else if (moving) this.anim = Math.abs(this.vx) > 85 ? 'run' : 'walk';
     else this.anim = 'idle';
+    // debounce ground-pose changes (idle/walk/brace/slip jitter on bumpy terrain)
+    const soft = (a: string) => a === 'idle' || a === 'walk' || a === 'run' || a === 'brace' || a === 'slip';
+    if (this.anim !== prevAnim && soft(this.anim) && soft(prevAnim)) {
+      if (this.pendAnim !== this.anim) { this.pendAnim = this.anim; this.pendT = 0; }
+      this.pendT += dt;
+      if (this.pendT < 0.07) this.anim = prevAnim;
+    } else this.pendAnim = '';
     if (this.poseOverride) this.anim = this.poseOverride;
     this.noise = (!moving ? 0 : this.crouch ? 0.12 : this.running ? 1 : this.camera ? 0.15 : 0.4) * perks.noise();
     this.visibility = (this.crouch ? 0.6 : 1) * perks.visibility() * (perks.stillness() && !moving && this.crouch ? 0.6 : 1);

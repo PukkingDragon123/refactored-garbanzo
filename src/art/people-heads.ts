@@ -870,10 +870,117 @@ export function drawHeadInto(id: CharId, o: HeadOpts, S: number, w = HW * S, hgt
   return { buf: c.back, ax, ay };
 }
 
+/**
+ * In-world head size relative to the S=1 painter. Heads are painted at portrait detail (S=2) and
+ * shrunk with a feature-preserving filter, which gives realistic ~7-heads-tall proportions while
+ * keeping readable eyes, brows and hair shapes.
+ */
+export const HEAD_K = 0.66;
+
+const lum = (c: number) => (c & 255) * 0.3 + ((c >>> 8) & 255) * 0.55 + ((c >>> 16) & 255) * 0.15;
+
+/** Area-average downscale that snaps to source colours and keeps small dark features (eyes, lashes, outlines). */
+export function shrinkPixels(src: PixelBuffer, sax: number, say: number, k: number): { buf: PixelBuffer; ax: number; ay: number } {
+  const inv = 1 / k;
+  // align the grid so the anchor lands exactly on a target pixel corner
+  const tax = Math.ceil(sax * k) + 1, tay = Math.ceil(say * k) + 1;
+  const gx = sax - tax * inv, gy = say - tay * inv;
+  const W = Math.ceil((src.w - gx) * k) + 1, H = Math.ceil((src.h - gy) * k) + 1;
+  const out = new PixelBuffer(W, H);
+  const cols: number[] = [], ws: number[] = [];
+  for (let j = 0; j < H; j++) {
+    const y0 = gy + j * inv, y1 = y0 + inv;
+    for (let i = 0; i < W; i++) {
+      const x0 = gx + i * inv, x1 = x0 + inv;
+      let A = 0, T = 0, r = 0, g = 0, b = 0;
+      cols.length = 0; ws.length = 0;
+      for (let y = Math.floor(y0); y < y1; y++) {
+        const wy = Math.min(y + 1, y1) - Math.max(y, y0);
+        if (wy <= 0) continue;
+        for (let x = Math.floor(x0); x < x1; x++) {
+          const wx = Math.min(x + 1, x1) - Math.max(x, x0);
+          if (wx <= 0) continue;
+          const w = wx * wy;
+          T += w;
+          const c = src.get(x, y);
+          const a = (c >>> 24) / 255;
+          if (a <= 0) continue;
+          const wa = w * a;
+          A += wa;
+          r += (c & 255) * wa; g += ((c >>> 8) & 255) * wa; b += ((c >>> 16) & 255) * wa;
+          const idx = cols.indexOf(c);
+          if (idx < 0) { cols.push(c); ws.push(wa); } else ws[idx] += wa;
+        }
+      }
+      if (T <= 0 || A / T < 0.42) continue;
+      r /= A; g /= A; b /= A;
+      const al = r * 0.3 + g * 0.55 + b * 0.15;
+      // darkest feature colour in the box
+      let dk = -1, dl = 1e9;
+      for (let n = 0; n < cols.length; n++) { const l = lum(cols[n]); if (l < dl) { dl = l; dk = n; } }
+      let pick = -1;
+      if (dk >= 0 && ws[dk] / A > 0.2 && dl < al - 55) pick = dk;
+      else {
+        let best = 1e9;
+        for (let n = 0; n < cols.length; n++) {
+          const c = cols[n];
+          const d = ((c & 255) - r) ** 2 + (((c >>> 8) & 255) - g) ** 2 + (((c >>> 16) & 255) - b) ** 2;
+          if (d < best) { best = d; pick = n; }
+        }
+      }
+      out.set(i, j, (cols[pick] | 0xff000000) >>> 0);
+    }
+  }
+  return { buf: out, ax: tax, ay: tay };
+}
+
+const GEOS: Record<CharId, () => FaceGeo> = { rowan: ROWAN_GEO, crowe: CROWE_GEO, aroha: AROHA_GEO, lou: LOU_GEO, pip: PIP_GEO };
+
+/** Re-draw crisp mini eyes and brows over a shrunk head so faces stay clear and expressive. */
+function miniFace(buf: PixelBuffer, ax: number, ay: number, id: CharId, o: HeadOpts) {
+  const g = (GEOS[id] ?? ROWAN_GEO)();
+  const st = FACES[o.expr] ?? FACES.neutral;
+  const lk = o.look === 'up' ? 1 : o.look === 'down' ? -1 : 0;
+  const K = HEAD_K;
+  const pal: Record<string, number> = { L: g.lash, I: g.iris, W: g.sclera, B: g.brow[1], b: g.brow[0] };
+  const eye = (e: P2, near: boolean, shape: EyeShape, bo: [number, number]) => {
+    const px = Math.round(ax + e[0] * K), py = Math.round(ay - (e[1] + lk * 0.6) * K);
+    const skin = buf.get(px, py + 2) >>> 24 ? buf.get(px, py + 2) : g.skin[3];
+    let sh: EyeShape = o.blink && shape !== 'arc' && shape !== 'sleep' ? 'closed' : shape;
+    if (st.pupil === 't' && sh === 'open') sh = 'wide';
+    const rows: Record<string, string[]> = near
+      ? { open: ['LL', 'WI'], half: ['LL', 'LI'], squint: ['LL', 'LI'], sad: ['.L', 'WI'], wide: ['LL', 'WI', 'WW'], happy: ['LL', '..'], arc: ['LL', '..'], closed: ['..', 'LL'], sleep: ['..', 'LL'] }
+      : { open: ['L', 'I'], half: ['L', 'I'], squint: ['L', 'I'], sad: ['L', 'I'], wide: ['L', 'I', 'W'], happy: ['L', '.'], arc: ['L', '.'], closed: ['.', 'L'], sleep: ['.', 'L'] };
+    const t = rows[sh] ?? rows.open;
+    const x0 = near ? px - 1 : px;
+    t.forEach((row, j) => {
+      for (let i = 0; i < row.length; i++) {
+        const x = x0 + i, y = py - 1 + j;
+        if (!(buf.get(x, y) >>> 24)) continue;
+        buf.set(x, y, row[i] === '.' ? skin : pal[row[i]]);
+      }
+    });
+    // brow: inner end toward the nose (right)
+    const by = py - 3;
+    const w = near ? 2 : 2;
+    for (let i = 0; i < w; i++) {
+      const inner = near ? i === w - 1 : i === 0;
+      const d = inner ? bo[0] : bo[1];
+      const y = by - Math.round(Math.max(-1.4, Math.min(2.2, d)) * 0.55);
+      const x = x0 + i - (near ? 0 : 0);
+      if (buf.get(x, y) >>> 24) buf.set(x, y, inner ? pal.B : pal.b);
+    }
+  };
+  eye(g.eyeN, true, st.eye, st.bn);
+  eye(g.eyeF, false, st.eyeF ?? st.eye, st.bf);
+}
+
 export function renderHeadRaw(id: CharId, o: HeadOpts) {
-  const r = drawHeadInto(id, o, 1);
-  const t = r.buf.trim(0);
-  return { buf: t.buf, ax: r.ax - t.ox, ay: r.ay - t.oy };
+  const r = drawHeadInto(id, o, 2);
+  const sm = shrinkPixels(r.buf, r.ax, r.ay, HEAD_K / 2);
+  miniFace(sm.buf, sm.ax, sm.ay, id, o);
+  const t = sm.buf.trim(0);
+  return { buf: t.buf, ax: sm.ax - t.ox, ay: sm.ay - t.oy };
 }
 
 export { FACES };

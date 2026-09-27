@@ -356,10 +356,10 @@ export class Actor implements Drawable {
   /** world position of the top of the head (for emotes and bubbles) */
   headTop(): [number, number] {
     const b = bodyFrame(this.id, this.anim, this.frameIndex());
-    if (!b) return [this.x, this.y - 70 + this.hop];
+    if (!b) return [this.x, this.y - 84 + this.hop];
     const hx = this.x + this.ox + this.facing * (b.hx - b.ax) * this.sqx;
     const hy = this.y + this.oy + this.hop + (b.hy - b.ay) * this.sqy;
-    return [hx, hy - 26 * this.sqy];
+    return [hx, hy - 17 * this.sqy];
   }
 
   /** CSS anchor above the head (accounts for layer parallax and layer transform) */

@@ -109,8 +109,8 @@ class Game {
         post.fade = Math.abs(d) <= this.fadeSpeed * rdt ? this.fadeTarget : clamp(post.fade + Math.sign(d) * this.fadeSpeed * rdt, 0, 1);
       }
       post.flash = Math.max(0, post.flash - rdt * 4);
-      atlas?.upload();
-      local?.upload();
+      // textures are (re)uploaded right before each GPU flush, so lazily generated frames never draw blank
+      this.r.beforeFlush = () => { atlas?.upload(); local?.upload(); };
       this.r.begin(dt);
       if (this.scene) {
         try {
