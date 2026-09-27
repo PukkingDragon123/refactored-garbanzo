@@ -1005,12 +1005,13 @@ function miniFaceDtd(buf: PixelBuffer, ax: number, ay: number, id: BustId, o: He
     }
     for (const [cx, cy, c] of cells) set(cx, cy, c);
   };
-  eye(102, 80 + ey, true);
-  eye(126, 79.5 + ey, false);
-  if (id === 'rowan') {
+  const an = !!d.face.anime;
+  eye(an ? 104 : 102, (an ? 84 : 80) + ey, true);
+  eye(an ? 127 : 126, (an ? 83 : 79.5) + ey, false);
+  if (id === 'pip') {
     // glasses: the frame rim doubles as the lash line so the eyes stay visible
-    const g = hex('#1c1418');
-    const [nx, ny] = P(102, 80), [qx, qy] = P(126.5, 79.5);
+    const g = hex('#d0407e');
+    const [nx, ny] = P(104, 84), [qx, qy] = P(127.5, 83);
     for (let i = -2; i <= 1; i++) set(nx + i, ny - 1, g);
     set(nx - 1, ny, white); set(nx, ny, iris); set(nx - 2, ny, g); set(nx + 1, ny, g);
     for (let x = nx + 2; x < qx; x++) set(x, ny - 1, g);

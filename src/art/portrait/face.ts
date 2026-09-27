@@ -25,6 +25,8 @@ export interface FaceSpec {
   lips?: boolean;
   /** skip the neck (in-game heads sit on the body's own neck) */
   noNeck?: boolean;
+  /** anime face: small rounded face, pointed chin, slim neck, big glossy eyes, button nose */
+  anime?: boolean;
 }
 
 export interface FaceParams {
@@ -73,48 +75,61 @@ export function paintFace(p: Pic, f: FaceSpec, ex: FaceParams, talk: 0 | 1 | 2, 
   const [cx, cy] = f.chin ?? [0, 0];
   const jw = f.jawW ?? 1, ch = f.cheek ?? 0;
   // neck (front edge under the chin, back edge down from the skull)
-  if (!f.noNeck) p.fill([[74, 96], [110, 116], [112, 150], [72, 150]], S[2], skin, { sharp: true });
+  if (!f.noNeck) p.fill(f.anime ? [[82, 98], [104, 108], [105, 150], [82, 150]] : [[74, 96], [110, 116], [112, 150], [72, 150]], S[2], skin, { sharp: true });
   // ear
   const ear: Pt = [66, 84];
   p.ell(ear[0], ear[1], 7, 10.5, S[2], skin);
   p.ell(ear[0] + 0.5, ear[1] + 0.5, 3.6, 6.4, S[1], skin, { clip: [skin] });
   p.stroke([[ear[0] - 2, ear[1] - 6], [ear[0] + 2, ear[1] - 4], [ear[0] + 3, ear[1] + 2]], 1.2, 1, S[0], skin, { clip: [skin] });
-  // skull + 3/4 face: far contour = forehead → brow ridge → cheekbone → cheek hollow → jaw → chin
-  const face: Pt[] = [
-    [54, 66], [58, 40], [80, 22], [106, 19], [124, 28], [131, 46], [134, 64], [133 + ch * 0.2, 74], [134 + ch, 86], [135 + ch, 98],
-    [132 + cx * 0.6, 106 + cy * 0.5], [130 + cx, 115 + cy], [123 + cx, 123 + cy], [108, 124 + cy], [88 - (jw - 1) * 18, 114 + cy * 0.4], [74 - (jw - 1) * 10, 102], [62, 90],
-  ];
-  p.fill(face, S[2], skin);
-  const chinP: Pt = [120 + cx, 123 + cy];
-  // nose: breaks the far contour (DtD-style 3/4), bridge starts between the eyes
-  const nl = f.nose?.len ?? 1, ns = f.nose?.size ?? 1, bump = f.nose?.bump ?? 0;
-  const tip: Pt = [138 + 6 * nl, 93 + 1.5 * nl];
-  const nose: Pt[] = [[128, 70], [134 + bump, 80], [tip[0] - 1, tip[1] - 3], tip, [tip[0] - 1.2, tip[1] + 3 * ns], [tip[0] - 6 * ns, tip[1] + 4 * ns], [128, tip[1] + 2], [124, 86]];
-  p.fill(nose, S[2], skin);
-  // cel shadows (key light from the upper left): under the nose tip, nostril, far wing
-  p.fill([[tip[0] - 1, tip[1] + 1], [tip[0] - 1.2, tip[1] + 3 * ns], [tip[0] - 6 * ns, tip[1] + 4 * ns], [128, tip[1] + 2.5], [130, tip[1] - 1]], S[1], skin, { clip: [skin] });
-  p.ell(tip[0] - 4.5 * ns, tip[1] + 2.2 * ns, 1.8 * ns, 1.1, S[0], feat, { clip: [skin], retag: true });
-  p.stroke([[124, 88], [126, 94], [129, tip[1] + 2]], 1.4, 1.2, S[1], skin, { clip: [skin] });
-  // far cheek plane
-  p.fill([[134, 100], [136 + ch, 100], [133 + cx * 0.6, 108 + cy * 0.5], [131 + cx, 115 + cy], [128 + cx, 110]], S[1], skin, { clip: [skin] });
-  // eye sockets (soft)
-  p.ell(101, 79, 11.5, 6.2, S[1], skin, { clip: [skin] });
-  p.ell(126, 79, 6, 5.5, S[1], skin, { clip: [skin] });
-  // jaw underside + neck under the chin
-  // jaw line plane + neck in the jaw's shadow
-  p.fill([[66, 96], [80, 108], [96, 117], [110, 123 + cy], [96, 124 + cy], [76, 114], [64, 102]], S[1], skin, { clip: [skin] });
-  p.where([skin], (u, v) => u < 114 && v > 100 && v > 114 + (u - 90) * 0.4 + cy * 0.6 && v < 132 + cy - (u - 80) * 0.1, S[1]);
-  p.where([skin], (u, v) => u < 114 && v > 100 && v > 114 + (u - 90) * 0.4 + cy * 0.6 && v < 118 + (u - 90) * 0.4 + cy * 0.6, S[0]);
-  // under lower lip / chin dimple
-  p.stroke([[118, 114 + cy * 0.5], [124, 114.5 + cy * 0.5], [129, 113.5 + cy * 0.5]], 2, 1.5, S[1], skin, { clip: [skin] });
-  // highlights: cheekbone, nose bridge, forehead
-  p.ell(108, 90, 6, 3.2, S[3], skin, { clip: [skin] });
-  p.stroke([[130, 74], [134, 82], [138, 89]], 1.8, 1.4, S[3], skin, { clip: [skin] });
-  p.ell(106, 42, 7, 4, S[3], skin, { clip: [skin] });
-  if (f.lines) {
-    p.stroke([[120, 99], [115, 106], [113, 112]], 1.5, 1.1, S[1], skin, { clip: [skin] });
-    p.stroke([[90, 88], [98, 90.5], [106, 89]], 1.4, 1, S[1], skin, { clip: [skin] });
-    p.stroke([[86, 60], [100, 58], [112, 60]], 1.2, 1, S[1], skin, { clip: [skin] });
+  let tip: Pt = [138, 90], chinP: Pt = [110, 114];
+  if (f.anime) {
+    // small rounded anime face with a soft pointed chin and a button nose
+    p.fill([[54, 66], [58, 40], [80, 22], [106, 19], [124, 28], [131, 46], [134, 62], [135, 74], [137, 86], [134, 97], [127, 106], [118, 113], [108, 115], [96, 111], [82, 102], [70, 94], [62, 84]], S[2], skin);
+    p.fill([[134, 84], [139, 89], [135, 92]], S[2], skin, { sharp: true });
+    p.dot(134.5, 91.5, S[1]);
+    // neck shadow under the chin, soft cheek plane
+    p.where([skin], (u, v) => u < 108 && v > 104 && v > 108 + (u - 86) * 0.3 && v < 124, S[1]);
+    p.fill([[128, 98], [134, 97], [127, 106], [120, 111], [124, 104]], S[1], skin, { clip: [skin] });
+    p.ell(106, 44, 8, 4.5, S[3], skin, { clip: [skin] });
+    p.ell(112, 94, 6, 2.6, S[3], skin, { clip: [skin] });
+  } else {
+    // skull + 3/4 face: far contour = forehead → brow ridge → cheekbone → cheek hollow → jaw → chin
+    const face: Pt[] = [
+      [54, 66], [58, 40], [80, 22], [106, 19], [124, 28], [131, 46], [134, 64], [133 + ch * 0.2, 74], [134 + ch, 86], [135 + ch, 98],
+      [132 + cx * 0.6, 106 + cy * 0.5], [130 + cx, 115 + cy], [123 + cx, 123 + cy], [108, 124 + cy], [88 - (jw - 1) * 18, 114 + cy * 0.4], [74 - (jw - 1) * 10, 102], [62, 90],
+    ];
+    p.fill(face, S[2], skin);
+    chinP = [120 + cx, 123 + cy];
+    // nose: breaks the far contour (DtD-style 3/4), bridge starts between the eyes
+    const nl = f.nose?.len ?? 1, ns = f.nose?.size ?? 1, bump = f.nose?.bump ?? 0;
+    tip = [138 + 6 * nl, 93 + 1.5 * nl];
+    const nose: Pt[] = [[128, 70], [134 + bump, 80], [tip[0] - 1, tip[1] - 3], tip, [tip[0] - 1.2, tip[1] + 3 * ns], [tip[0] - 6 * ns, tip[1] + 4 * ns], [128, tip[1] + 2], [124, 86]];
+    p.fill(nose, S[2], skin);
+    // cel shadows (key light from the upper left): under the nose tip, nostril, far wing
+    p.fill([[tip[0] - 1, tip[1] + 1], [tip[0] - 1.2, tip[1] + 3 * ns], [tip[0] - 6 * ns, tip[1] + 4 * ns], [128, tip[1] + 2.5], [130, tip[1] - 1]], S[1], skin, { clip: [skin] });
+    p.ell(tip[0] - 4.5 * ns, tip[1] + 2.2 * ns, 1.8 * ns, 1.1, S[0], feat, { clip: [skin], retag: true });
+    p.stroke([[124, 88], [126, 94], [129, tip[1] + 2]], 1.4, 1.2, S[1], skin, { clip: [skin] });
+    // far cheek plane
+    p.fill([[134, 100], [136 + ch, 100], [133 + cx * 0.6, 108 + cy * 0.5], [131 + cx, 115 + cy], [128 + cx, 110]], S[1], skin, { clip: [skin] });
+    // eye sockets (soft)
+    p.ell(101, 79, 11.5, 6.2, S[1], skin, { clip: [skin] });
+    p.ell(126, 79, 6, 5.5, S[1], skin, { clip: [skin] });
+    // jaw underside + neck under the chin
+    // jaw line plane + neck in the jaw's shadow
+    p.fill([[66, 96], [80, 108], [96, 117], [110, 123 + cy], [96, 124 + cy], [76, 114], [64, 102]], S[1], skin, { clip: [skin] });
+    p.where([skin], (u, v) => u < 114 && v > 100 && v > 114 + (u - 90) * 0.4 + cy * 0.6 && v < 132 + cy - (u - 80) * 0.1, S[1]);
+    p.where([skin], (u, v) => u < 114 && v > 100 && v > 114 + (u - 90) * 0.4 + cy * 0.6 && v < 118 + (u - 90) * 0.4 + cy * 0.6, S[0]);
+    // under lower lip / chin dimple
+    p.stroke([[118, 114 + cy * 0.5], [124, 114.5 + cy * 0.5], [129, 113.5 + cy * 0.5]], 2, 1.5, S[1], skin, { clip: [skin] });
+    // highlights: cheekbone, nose bridge, forehead
+    p.ell(108, 90, 6, 3.2, S[3], skin, { clip: [skin] });
+    p.stroke([[130, 74], [134, 82], [138, 89]], 1.8, 1.4, S[3], skin, { clip: [skin] });
+    p.ell(106, 42, 7, 4, S[3], skin, { clip: [skin] });
+    if (f.lines) {
+      p.stroke([[120, 99], [115, 106], [113, 112]], 1.5, 1.1, S[1], skin, { clip: [skin] });
+      p.stroke([[90, 88], [98, 90.5], [106, 89]], 1.4, 1, S[1], skin, { clip: [skin] });
+      p.stroke([[86, 60], [100, 58], [112, 60]], 1.2, 1, S[1], skin, { clip: [skin] });
+    }
   }
   // blush
   if (ex.blush) {
@@ -124,20 +139,21 @@ export function paintFace(p: Pic, f: FaceSpec, ex: FaceParams, talk: 0 | 1 | 2, 
   }
   // eyes
   const ey = f.eyes.y ?? 0;
-  const eyeN: Pt = [102, 80 + ey], eyeF: Pt = [126, 79.5 + ey];
+  const eyeN: Pt = f.anime ? [104, 84 + ey] : [102, 80 + ey], eyeF: Pt = f.anime ? [127, 83 + ey] : [126, 79.5 + ey];
   const es = f.eyes.size ?? 1;
   const shape = blink && ex.eye !== 'closed' && ex.eye !== 'happy' ? 'closed' : ex.eye;
-  eye(p, eyeN, 16 * es, 8.6 * es, shape, f, ex, S, skin, feat, ink, true);
-  eye(p, eyeF, 8 * es, 7.8 * es, shape, f, ex, S, skin, feat, ink, false);
+  const eh = f.anime ? 1.45 : 1;
+  eye(p, eyeN, 16 * es, 8.6 * es * eh, shape, f, ex, S, skin, feat, ink, true);
+  eye(p, eyeF, 8 * es, 7.8 * es * eh, shape, f, ex, S, skin, feat, ink, false);
   // brows (thick, expressive)
-  const by = (f.brow.y ?? 0) + ey;
+  const by = (f.brow.y ?? 0) + ey + (f.anime ? -1 : 0);
   const bc = hex(f.brow.col), bw = f.brow.w, bl = f.brow.len ?? 1, ar = f.brow.arch ?? 1;
   const bN: Pt[] = [[88 - 3 * bl, 72 + by - ex.bOut], [100, 67 + by - (ex.bOut + ex.bIn) / 2 - ar], [113, 69 + by - ex.bIn]];
   const bF: Pt[] = [[121, 69 + by - ex.bIn], [127, 67.5 + by - (ex.bIn + ex.bOut) / 2 - ar * 0.6], [132, 69.5 + by - ex.bOut]];
   p.stroke(bN, bw * 0.8, bw, bc, feat);
   p.stroke(bF, bw * 0.85, bw * 0.55, bc, feat);
   // mouth
-  const mc: Pt = [123 + cx * 0.5, 106 + cy * 0.4];
+  const mc: Pt = f.anime ? [121, 104] : [123 + cx * 0.5, 106 + cy * 0.4];
   const closedish = talk === 0 && (ex.mouth === 'line' || ex.mouth === 'smile' || ex.mouth === 'smirk' || ex.mouth === 'frown' || ex.mouth === 'wavy');
   if (f.lips && closedish) {
     const L = hex(f.lip ?? '#b5584e');
@@ -166,7 +182,7 @@ function eye(p: Pic, c: Pt, w: number, h: number, shape: FaceParams['eye'], f: F
   const white = hex('#f6f2ee');
   const hw = w / 2;
   // socket shade
-  p.ell(x, y - 1, hw + 1.5, h * 0.62 + 1.2, S[1], skin, { clip: [skin] });
+  if (!f.anime) p.ell(x, y - 1, hw + 1.5, h * 0.62 + 1.2, S[1], skin, { clip: [skin] });
   if (shape === 'closed' || shape === 'happy') {
     const up = shape === 'happy' ? -1 : 1;
     p.stroke([[x - hw, y + 0.5 * up], [x, y - 2.2 * up], [x + hw, y + 0.5 * up]], lidW, lidW * 0.8, ink, feat);
@@ -188,6 +204,12 @@ function eye(p: Pic, c: Pt, w: number, h: number, shape: FaceParams['eye'], f: F
   if (!small) {
     p.ell(ix - ir * 0.35, iy - ir * 0.4, Math.max(0.9, ir * 0.28), Math.max(0.9, ir * 0.28), hex('#ffffff'), feat, { clip: [feat] });
     if (near) p.dot(ix + ir * 0.35, iy + ir * 0.45, shade(iris, 0.35));
+    if (f.anime) {
+      p.ell(ix, iy - ir * 0.55, ir * 0.85, ir * 0.45, mix(iris, ink, 0.45), feat, { clip: [feat] });
+      p.ell(ix, iy + ir * 0.55, ir * 0.55, ir * 0.3, shade(iris, 0.3), feat, { clip: [feat] });
+      p.ell(ix - ir * 0.35, iy - ir * 0.35, Math.max(1, ir * 0.3), Math.max(1.2, ir * 0.36), hex('#ffffff'), feat, { clip: [feat] });
+      p.ell(ix + ir * 0.3, iy + ir * 0.3, Math.max(0.8, ir * 0.14), Math.max(0.8, ir * 0.14), hex('#ffffff'), feat, { clip: [feat] });
+    }
   }
   // lids: heavy upper lash line, faint lower lid
   const lidTop: Pt[] = [[x - hw - 0.6, y + 0.3], [x - hw * 0.4, y - hh * top - 0.3], [x + hw * 0.5, y - hh * top * (shape === 'sad' ? 0.7 : 1) - 0.3], [x + hw + 0.4, y - hh * 0.05]];

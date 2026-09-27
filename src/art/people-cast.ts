@@ -822,46 +822,27 @@ export const LOU: CharDef = {
 
 function pipGear(x: Ctx) {
   const { c } = x;
-  const T = x.b.torso;
   const sw = x.P.sway ?? 0;
-  // the unhooked near strap dangles from the bib corner
-  torsoFrame(x, [-10, 4, -12, 9], (lx0, ly) => {
-    const lx = lx0 + sw * Math.max(0, 7 - ly) * 0.12;
-    const sx = -0.6 - (7.2 - ly) * 0.34;
-    if (ly < 7.6 && ly > -3.4 && Math.abs(lx - sx) < 1.05) {
-      if (ly < -2.2) return at(P.brass, 4);
-      return tone(P.orange, 0.15 - (lx - sx) * 0.3, 0.05);
-    }
+  // the near suspender strap
+  torsoFrame(x, [-10, 4, -12, 12], (lx, ly) => {
+    const sx = -1.2 - (ly - 2) * 0.12;
+    if (ly < 12 && ly > 2 && Math.abs(lx - sx) < 0.9) return tone(P.orange, 0.2 - (lx - sx) * 0.3, 0.05);
     return -1;
   });
   c.merge({ line: 0.35, ao: 0.25 });
-  // tool belt: pouches, screwdriver, tape measure
-  torsoFrame(x, [-10, 11, -9, 4], (lx, ly) => {
-    const belt = Math.abs(ly - 0.8) < 1 && lx > -7.8 && lx < 8;
-    const pouch1 = rr(lx, ly, -5.8, -5.2, -1.4, 0.2, 1);
-    const pouch2 = rr(lx, ly, 4, -4.4, 7.8, 0.2, 0.9);
-    const driver = Math.abs(lx - 5) < 0.55 && ly > 0.2 && ly < 3.6;
-    const tape = rr(lx, ly, 1, -3.6, 3.6, -0.6, 1.2);
-    if (driver) return ly > 2.4 ? at(P.orange, 4) : at(P.metal, 3);
-    if (pouch1 || pouch2) {
-      const l = pouch1 ? boxL(lx, ly, -5.8, -5.2, -1.4, 0.2) : boxL(lx, ly, 4, -4.4, 7.8, 0.2);
-      if (ly > -1.2) return tone(P.leather, l + 0.3, 0.1);
-      return tone(P.leather, l, 0);
-    }
-    if (tape) return Math.hypot(lx - 2.3, ly + 2.1) < 0.6 ? at(P.metal, 1) : tone(P.yellow2, boxL(lx, ly, 1, -3.6, 3.6, -0.6), 0.1);
-    if (belt) return Math.abs(lx - 1.2) < 0.9 ? at(P.metal, 3) : tone(P.leather, ly > 1.3 ? 0.4 : 0, 0.05);
-    return -1;
+  // flared pleated mini skirt
+  torsoFrame(x, [-14, 14, -10, 4], (lx0, ly) => {
+    if (ly > 2.6 || ly < -8.4) return -1;
+    const lx = lx0 + sw * (2.6 - ly) * 0.12;
+    const k = (2.6 - ly) * 0.42;
+    if (lx < -5.6 - k || lx > 5.8 + k) return -1;
+    const pleat = ((lx + 40) % 2.6) < 1.3;
+    let l = pleat ? 0.2 : -0.25;
+    if (ly < -7.4) l -= 0.3;
+    if (ly > 1.8) return at(P.orange, 5);
+    return tone(P.orange, l, 0.05, 1.1);
   });
-  c.merge({ line: 0.36, ao: 0.26 });
-  // wrench in the back pocket
-  torsoFrame(x, [-12, -3, -4, 10], (lx, ly) => {
-    const handle = Math.abs(lx - (-7.6 - (ly - 2) * 0.12)) < 0.65 && ly > -1.2 && ly < 5.6;
-    const head = Math.hypot(lx + 8.4, ly - 6.6) < 1.7 && !(Math.abs(lx + 8.8) < 0.5 && ly > 6.6);
-    if (!handle && !head) return -1;
-    return tone(P.metal, lx < -7.8 ? 0.5 : 0.05, 0.1);
-  });
-  c.merge({ line: 0.34, ao: 0.2 });
-  void T;
+  c.merge({ line: 0.35, ao: 0.3 });
 }
 
 export const PIP: CharDef = {
@@ -871,66 +852,50 @@ export const PIP: CharDef = {
   neckR: 2.5,
   face: { eye: [3.2, 9.6], mouth: [7.2, 3.6], chin: [6, 1], top: 23.6 },
   leg: {
-    rThigh: 3.8, rKnee: 3.3, rAnkle: 3.3, cuff: 1.2,
+    rThigh: 3, rKnee: 2.4, rAnkle: 2.2, cuff: 1,
     mat(s, nr) {
       const bias = nr ? 0.05 : -0.35;
-      let col = tone(P.orange, s.l, bias, 1.15);
-      // grey knee pads
-      if (s.u > 0.44 && s.u < 0.6 && s.v > -0.6) col = tone(P.greyO, s.l + 0.1, bias + 0.1, 1.1);
-      // rolled cuffs
-      if (s.u > 0.88) col = tone(P.greyO, s.l + 0.2, bias, 1);
-      // grease
-      if (nr && Math.abs(s.u - 0.3) < 0.035 && Math.abs(s.v + 0.1) < 0.25) col = at(P.orange, 1);
-      if (Math.abs(s.v - 0.86) < 0.1 && s.u < 0.88) col = tone(P.orange, s.l - 0.35, bias, 1);
-      return col;
+      // bare thigh under the skirt, then white thigh-high socks with a pink band
+      if (s.u < 0.5) return tone(P.skinPip, s.l, bias, 1.05);
+      if (s.u < 0.56) return tone(P.flowerPink, s.l + 0.2, bias, 1);
+      return tone(P.apron, s.l + 0.1, bias, 1.05);
     },
     foot(x, an, pitch, nr) {
       boot(x, an, pitch, nr, {
-        ramp: P.charcoal, sole: P.soleDark, lace: at(P.orange, 5), ah: 3, soleH: 1.4, cuff: P.charcoal.slice(2), cuffH: 1, toeCap: P.greyO.slice(2),
-        shape: [-3.8, 0, 6.6, 0, 7.4, 1, 7.4, 2.4, 6.4, 3.4, 4.2, 4, 2.4, 4.6, 1.8, 6, 1.8, 6.8, -3, 7, -3.8, 5.2, -4.1, 1.2],
-        lacePts: [[2.4, 5], [3.6, 4.4]],
+        ramp: P.flowerPink, sole: P.apron, lace: at(P.apron, 6), ah: 2.6, soleH: 1.4, cuff: P.apron.slice(3), cuffH: 0.8, toeCap: P.apron.slice(3),
+        shape: [-3.4, 0, 6, 0, 6.8, 1, 6.8, 2.2, 5.8, 3.2, 3.8, 3.6, 2.2, 4.2, 1.6, 5.4, 1.6, 6.2, -2.8, 6.4, -3.4, 4.8, -3.7, 1.2],
+        lacePts: [[2.2, 4.4], [3.2, 3.8]],
       });
     },
   },
   arm: {
-    rSh: 2.9, rEl: 2.4, rWr: 1.8,
+    rSh: 2.4, rEl: 1.9, rWr: 1.5,
     upper(s, nr) {
       const bias = nr ? 0.05 : -0.35;
-      if (s.u < 0.46) return tone(P.charcoal, s.l + (s.u > 0.38 ? 0.35 : 0), bias + 0.1, 1.1);
+      // puffy short tee sleeve
+      if (s.u < 0.46) return tone(P.charcoal, s.l + (s.u > 0.38 ? 0.3 : 0.1), bias + 0.1, 1.1);
       return tone(P.skinPip, s.l, bias, 1.05);
     },
     fore(s, nr) {
       const bias = nr ? 0.05 : -0.35;
-      if (nr && Math.abs(s.u - 0.45) < 0.06 && s.v > 0) return mix(tone(P.skinPip, s.l, bias, 1), P.grease, 0.45);
+      // pink scrunchie on the wrist
+      if (nr && s.u > 0.82 && s.u < 0.92) return tone(P.flowerPink, s.l + 0.2, 0.1);
       return tone(P.skinPip, s.l + (s.v < -0.6 ? 0.15 : 0), bias, 1.05);
     },
     hand: P.skinPip,
   },
   torso: {
-    prof: [[-4, -7, 7.2], [0, -7.4, 7.6], [5, -7, 7.2], [9, -7.2, 7.4], [11.8, -6.4, 6.6], [13.8, -4.2, 4]],
+    prof: [[-4, -6.6, 6.8], [0, -6.4, 6.6], [5, -5.4, 5.8], [9, -6, 6.6], [11.8, -5.6, 6], [13.8, -3.8, 3.6]],
     mat(s, x) {
-      const T = x.b.torso;
       const lx = s.lx, ly = s.ly;
-      const bibTop = 9.6;
-      const inBib = ly < bibTop && lx > -0.8 && lx < 7.6;
-      const farStrap = ly >= bibTop - 0.4 && Math.abs(lx - (6.6 + (ly - bibTop) * 0.1)) < 1.1;
-      if (ly < 2.2 || inBib || farStrap) {
-        let col = tone(P.orange, s.l - (lx > 4 ? 0.15 : 0), 0.05, 1.2);
-        // grey chest pocket with a pen
-        if (inBib && lx > 1.4 && lx < 5.4 && ly > 4.6 && ly < 8) {
-          col = tone(P.greyO, s.l + (ly > 7.4 ? 0.3 : 0), 0.1, 1.1);
-          if (Math.abs(lx - 2.4) < 0.45 && ly > 7) col = at(P.patchRed, 3);
-        }
-        if (farStrap && Math.abs(ly - bibTop) < 0.8 && ly >= bibTop - 0.4) col = at(P.brass, 4);
-        if (inBib && Math.abs(lx + 0.5) < 0.45) col = tone(P.orange, s.l - 0.4, 0, 1);
-        // grease smudges
-        if ((lx - 5.6) ** 2 + (ly - 3.4) ** 2 < 0.7 || (lx - 0.6) ** 2 + (ly - 2) ** 2 < 0.5) col = mix(col, P.grease, 0.5);
-        return col;
-      }
-      // charcoal tee
-      let col = tone(P.charcoal, s.l, 0.1, 1.2);
-      if (ly > T - 1.4 && lx > -1 && lx < 4) col = tone(P.charcoal, s.l - 0.3, 0.05);
-      return col;
+      void x;
+      // suspender strap over the far shoulder
+      const farStrap = ly >= 2 && Math.abs(lx - (5.2 + (ly - 9.6) * 0.1)) < 0.9;
+      if (ly < 2.2) return tone(P.orange, s.l, 0.05, 1.2);
+      if (farStrap) return tone(P.orange, s.l + 0.1, 0.05, 1.1);
+      // white kawaii tee with a little pink heart
+      if ((lx - 2.4) ** 2 + (ly - 7.2) ** 2 < 2.2) return at(P.flowerPink, 4);
+      return tone(P.charcoal, s.l, 0.15, 1.2);
     },
   },
   afterTorso(x) {
@@ -962,7 +927,7 @@ reshape(ROWAN, { leg: 2.08, torso: 1.32, arm: 1.5, width: 0.9 });
 reshape(CROWE, { leg: 1.9, torso: 1.3, arm: 1.46, width: 1.1 });
 reshape(AROHA, { leg: 2.02, torso: 1.3, arm: 1.46, width: 0.86 });
 reshape(LOU, { leg: 1.95, torso: 1.25, arm: 1.44, width: 1.02 });
-reshape(PIP, { leg: 2.02, torso: 1.3, arm: 1.5, width: 0.84 });
+reshape(PIP, { leg: 2.12, torso: 1.22, arm: 1.48, width: 0.72 });
 
 export const CHARS: Record<CharId, CharDef> = { rowan: ROWAN, crowe: CROWE, aroha: AROHA, lou: LOU, pip: PIP };
 
