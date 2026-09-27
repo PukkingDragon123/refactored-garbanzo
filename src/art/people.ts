@@ -7,6 +7,8 @@ import { ANIMS, COMMON, CHAR_SPECIALS, poseFor, AnimInfo } from './people-anims'
 import { CHARS } from './people-cast';
 import { drawHeadInto, renderHeadRaw, Expr, Look, HeadOpts } from './people-heads';
 import type { CharId } from './people-parts';
+import { renderBust, DESIGNS, BustId } from './portrait/cast';
+import type { PExpr } from './portrait/face';
 
 export type { CharId, Expr, Look, HeadOpts, BodyFrame, AnimInfo };
 export { ANIMS };
@@ -39,8 +41,11 @@ export function renderHead(id: CharId, o: HeadOpts): { buf: PixelBuffer; ax: num
   return renderHeadRaw(id, o);
 }
 
-/** Bust portrait (head at 2x detail) for dialogue and UI. */
+/** Portrait head for the HUD and UI, drawn with the Dave-the-Diver-style portrait kit. */
 export function renderPortrait(id: CharId, expr: Expr, o: { mouth?: 0 | 1 | 2; blink?: boolean } = {}): PixelBuffer {
-  const r = drawHeadInto(id, { expr, mouth: o.mouth ?? 0, blink: !!o.blink, look: 'fwd' }, 2);
-  return r.buf.trim(1).buf;
+  if (!(id in DESIGNS)) {
+    const r = drawHeadInto(id, { expr, mouth: o.mouth ?? 0, blink: !!o.blink, look: 'fwd' }, 2);
+    return r.buf.trim(1).buf;
+  }
+  return renderBust(id as BustId, expr as PExpr, { scale: 0.36, headOnly: true, talk: o.mouth ?? 0, blink: !!o.blink }).trim(1).buf;
 }

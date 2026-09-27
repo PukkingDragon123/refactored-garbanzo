@@ -7,6 +7,9 @@ import { C, hex, shade, mix } from './color';
 import { Canvas, P2, tone, rampOf, at, finish, light3 } from './people-rig';
 import { PALS } from './people-cast';
 import type { CharId } from './people-parts';
+import { renderBust, DESIGNS, BustId } from './portrait/cast';
+import { EXPR_PARAMS } from './portrait/face';
+import type { PExpr } from './portrait/face';
 
 export type Expr = 'neutral' | 'happy' | 'laugh' | 'surprised' | 'shocked' | 'angry' | 'grumpy' | 'sad' | 'worried' | 'scared' | 'thinking' | 'tired' | 'teasing' | 'serious' | 'smug' | 'determined' | 'sleep' | 'eat';
 export type Look = 'fwd' | 'up' | 'down';
@@ -975,7 +978,75 @@ function miniFace(buf: PixelBuffer, ax: number, ay: number, id: CharId, o: HeadO
   eye(g.eyeF, false, st.eyeF ?? st.eye, st.bf);
 }
 
+/** crisp sprite-size eyes, brows and mouth over a shrunk portrait-design head */
+function miniFaceDtd(buf: PixelBuffer, ax: number, ay: number, id: BustId, o: HeadOpts) {
+  const d = DESIGNS[id];
+  const ex = EXPR_PARAMS[o.expr as PExpr] ?? EXPR_PARAMS.neutral;
+  const K = DTD_K;
+  const ey = d.face.eyes.y ?? 0, by = (d.face.brow.y ?? 0) + ey;
+  const P = (u: number, v: number): [number, number] => [Math.round(ax + (u - 90) * K), Math.round(ay + (v - 112) * K)];
+  const ink = hex('#1a1016'), white = hex('#f6f2ee'), iris = hex(d.face.eyes.iris), brow = hex(d.face.brow.col);
+  const set = (x: number, y: number, c: number) => { if (buf.get(x, y) >>> 24) buf.set(x, y, c); };
+  const skinAt = (x: number, y: number) => { const c = buf.get(x, y + 2); return c >>> 24 ? c : buf.get(x, y + 1); };
+  const shape = o.blink && ex.eye !== 'closed' && ex.eye !== 'happy' ? 'closed' : ex.eye;
+  const eye = (u: number, v: number, near: boolean) => {
+    const [x, y] = P(u, v);
+    const sk = skinAt(x, y);
+    const cells: [number, number, number][] = [];
+    const w = near ? 2 : 1;
+    if (shape === 'closed' || shape === 'happy') {
+      for (let i = 0; i < w; i++) cells.push([x - (near ? 1 : 0) + i, y, ink], [x - (near ? 1 : 0) + i, y - 1, sk]);
+      if (shape === 'happy' && near) cells.push([x - 1, y, sk], [x - 1, y - 1, ink], [x, y - 1, ink]);
+    } else {
+      const x0 = near ? x - 1 : x;
+      if (near) cells.push([x0, y - 1, ink], [x0 + 1, y - 1, ink], [x0, y, shape === 'half' || shape === 'squint' ? ink : white], [x0 + 1, y, iris]);
+      else cells.push([x0, y - 1, ink], [x0, y, iris]);
+      if (shape === 'wide') { if (near) cells.push([x0, y + 1, white], [x0 + 1, y + 1, white]); else cells.push([x0, y + 1, white]); }
+    }
+    for (const [cx, cy, c] of cells) set(cx, cy, c);
+  };
+  eye(102, 80 + ey, true);
+  eye(126, 79.5 + ey, false);
+  if (id === 'rowan') {
+    // glasses: the frame rim doubles as the lash line so the eyes stay visible
+    const g = hex('#1c1418');
+    const [nx, ny] = P(102, 80), [qx, qy] = P(126.5, 79.5);
+    for (let i = -2; i <= 1; i++) set(nx + i, ny - 1, g);
+    set(nx - 1, ny, white); set(nx, ny, iris); set(nx - 2, ny, g); set(nx + 1, ny, g);
+    for (let x = nx + 2; x < qx; x++) set(x, ny - 1, g);
+    set(qx, qy - 1, g); set(qx + 1, qy - 1, g); set(qx, qy, iris); set(qx + 1, qy, g);
+    set(nx - 3, ny - 1, g);
+  }
+  // brows: near 3 px, far 2 px; inner end rises/falls with the expression
+  const bOff = (k: number) => Math.round(Math.max(-1.5, Math.min(2, k)) * 0.45);
+  const [bx, byy] = P(100, 68 + by);
+  set(bx - 2, byy - bOff(ex.bOut), brow); set(bx - 1, byy - bOff((ex.bOut + ex.bIn) / 2), brow); set(bx, byy - bOff(ex.bIn), brow);
+  const [fx, fy] = P(127, 68 + by);
+  set(fx, fy - bOff(ex.bIn), brow); set(fx + 1, fy - bOff(ex.bOut), brow);
+  // mouth
+  const [mx, my] = P(123, 106.5);
+  const inside = hex('#5a1620');
+  const open = o.mouth === 2 || ex.mouth === 'shout' ? 2 : o.mouth === 1 || ex.mouth === 'o' || ex.mouth === 'open' || ex.mouth === 'grin' ? 1 : 0;
+  if (id === 'crowe' && !open) return; // the mustache hides a closed mouth
+  if (open === 2) { set(mx - 1, my, inside); set(mx, my, inside); set(mx - 1, my + 1, inside); set(mx, my + 1, hex('#c04a5a')); set(mx - 1, my - 1, white); set(mx, my - 1, white); }
+  else if (open === 1) { set(mx - 1, my, inside); set(mx, my, inside); }
+  else if (ex.mouth === 'smile' || ex.mouth === 'smirk') { set(mx - 1, my, shade(skinAt(mx, my), -0.35)); set(mx, my, shade(skinAt(mx, my), -0.35)); set(mx + 1, my - 1, shade(skinAt(mx, my), -0.35)); }
+  else if (ex.mouth === 'frown' || ex.mouth === 'grit') { set(mx - 1, my, shade(skinAt(mx, my), -0.35)); set(mx, my - (ex.mouth === 'frown' ? 1 : 0), ex.mouth === 'grit' ? white : shade(skinAt(mx, my), -0.35)); }
+}
+
+/** in-game head size: design units → sprite pixels (crown-to-chin ≈ 103 units ≈ 16 px) */
+export const DTD_K = 0.178;
+const DTD_S = 0.6;
+
 export function renderHeadRaw(id: CharId, o: HeadOpts) {
+  if (id in DESIGNS) {
+    // Dave-the-Diver-style head from the portrait designs, shrunk to sprite size
+    const big = renderBust(id as BustId, o.expr as PExpr, { scale: DTD_S, headOnly: true, noNeck: true, talk: o.mouth, blink: o.blink });
+    const sm = shrinkPixels(big, 90 * DTD_S, 112 * DTD_S, DTD_K / DTD_S);
+    miniFaceDtd(sm.buf, sm.ax, sm.ay, id as BustId, o);
+    const t = sm.buf.trim(0);
+    return { buf: t.buf, ax: sm.ax - t.ox, ay: sm.ay - t.oy };
+  }
   const r = drawHeadInto(id, o, 2);
   const sm = shrinkPixels(r.buf, r.ax, r.ay, HEAD_K / 2);
   miniFace(sm.buf, sm.ax, sm.ay, id, o);

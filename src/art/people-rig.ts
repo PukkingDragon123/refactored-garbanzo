@@ -21,11 +21,18 @@ export const light3 = (nx: number, ny: number, nz: number) => nx * LX + ny * LY 
 export function tone(r: C[], l: number, bias = 0, k = 1): C {
   const t = (l * k + bias) * 0.5 + 0.5;
   const n = r.length;
+  if (n >= 4 && FLAT.on) {
+    // Dave-the-Diver-style cel shading: one shadow, a broad base and a thin highlight
+    const lo = Math.round((n - 1) * 0.22), mid = Math.round((n - 1) * 0.6), hi = Math.round((n - 1) * 0.86);
+    return r[t < 0.34 ? lo : t < 0.8 ? mid : hi];
+  }
   let i = Math.floor(t * n);
   if (i < 0) i = 0;
   else if (i >= n) i = n - 1;
   return r[i];
 }
+/** global switch for the flat (cel) people style */
+export const FLAT = { on: true };
 export const rampOf = (...h: string[]): C[] => h.map(x => hex(x));
 export const clampi = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 export const at = (r: C[], i: number) => r[clampi(Math.round(i), 0, r.length - 1)];
@@ -542,10 +549,10 @@ export class Canvas {
 
 /** Tinted dark outline derived from the neighbouring colour (sel-out). */
 export function outlineColor(inner: C, lit: boolean): C {
-  const d = shade(inner, lit ? -0.62 : -0.8);
+  const d = shade(inner, FLAT.on ? -0.78 : lit ? -0.62 : -0.8);
   // pull toward a deep, slightly cool/warm tinted base so outlines stay coherent
-  const base = rgba(20, 14, 18);
-  return mix(d, base, lit ? 0.35 : 0.55);
+  const base = rgba(24, 16, 22);
+  return mix(d, base, FLAT.on ? 0.62 : lit ? 0.35 : 0.55);
 }
 
 /**
@@ -553,6 +560,7 @@ export function outlineColor(inner: C, lit: boolean): C {
  * whose colour follows the local colour (lighter on the lit top-left side).
  */
 export function finish(buf: PixelBuffer, rimK = 0.16) {
+  if (FLAT.on) rimK = Math.min(rimK, 0.04);
   const w = buf.w, h = buf.h, d = buf.data;
   const src = d.slice();
   const op = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && src[y * w + x] >>> 24 > 0;

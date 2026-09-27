@@ -158,7 +158,7 @@ export function drawProp(x: Ctx, p: PropP) {
     case 'taiaha':
     case 'taiahaBack': {
       let q0: P2, q1: P2;
-      if (p.kind === 'taiahaBack') { const h = J.hip, u = J.up, f = J.fwd; q0 = [h[0] - f[0] * 9 - u[0] * 12, h[1] - f[1] * 9 - u[1] * 12]; q1 = [h[0] + f[0] * 9 + u[0] * 31, h[1] + f[1] * 9 + u[1] * 31]; }
+      if (p.kind === 'taiahaBack') { const h = J.hip, n = J.neckTop, u = J.up, f = J.fwd; q0 = [h[0] + f[0] * 7 - u[0] * 12, h[1] + f[1] * 7 - u[1] * 12]; q1 = [n[0] - f[0] * 13 + u[0] * 8, n[1] - f[1] * 13 + u[1] * 8]; }
       else if (p.t === 3) { const len = 34; q0 = off(o, len * 0.45, a + Math.PI); q1 = off(o, len * 1.0, a); }
       else { q0 = o; q1 = dir(76); }
       // shaft

@@ -26,7 +26,7 @@ export function croweTalk(): BubbleLine[] {
     L('crowe', 'Go on, eat something. Lou gets upset if you don’t.', { expr: 'neutral' }),
   ])];
   return [
-    L('crowe', 'Doc. You’re up.', { expr: 'grumpy' }),
+    L('crowe', 'Doc. You’re up.', { expr: 'grumpy', close: true }),
     L('crowe', 'Three weeks chasing a current that isn’t on any chart. Your university’s paying for the diesel, so I’m not complaining.', { expr: 'neutral' }),
     L('crowe', 'Much.', { expr: 'grumpy', react: 'nod' }),
     L('rowan', 'Anything on the sonar?', {
@@ -112,7 +112,7 @@ export const WAKE_UP: BubbleLine[] = [
 ];
 
 export const SEE_WRECK: BubbleLine[] = [
-  L('rowan', 'The Kittiwake...', { expr: 'sad', emote: 'shock' }),
+  L('rowan', 'The Kittiwake...', { expr: 'sad', emote: 'shock', close: true }),
 ];
 
 export const CREW_ASHORE: BubbleLine[] = [
@@ -122,9 +122,9 @@ export const CREW_ASHORE: BubbleLine[] = [
   L('pip', 'Here! I think I swallowed a fish!', { expr: 'shocked', emote: 'sweat', react: 'bounce' }),
   L('crowe', 'Lou?', { expr: 'worried' }),
   L('crowe', '...Lou?!', { style: 'shout', expr: 'scared', emote: 'sweat' }),
-  L('lou', 'I saved the pot!', { expr: 'happy', emote: 'sparkle', react: 'jump', others: { crowe: { expr: 'laugh', emote: 'laugh' }, pip: { expr: 'laugh', emote: 'laugh' }, rowan: { expr: 'laugh' } } }),
+  L('lou', 'I saved the pot!', { expr: 'happy', emote: 'sparkle', react: 'jump', close: true, others: { crowe: { expr: 'laugh', emote: 'laugh' }, pip: { expr: 'laugh', emote: 'laugh' }, rowan: { expr: 'laugh' } } }),
   L('crowe', 'Course you did.', { expr: 'happy' }),
-  L('crowe', 'Right. The Kittiwake’s done for. Hull split like a kipper, and the radio’s drowned.', { expr: 'serious' }),
+  L('crowe', 'Right. The Kittiwake’s done for. Hull split like a kipper, and the radio’s drowned.', { expr: 'serious', close: true }),
   L('pip', 'I can fix the radio! Probably! With parts. That we don’t have.', { expr: 'worried' }),
   L('crowe', 'Then we make camp. Dark in a few hours, and I don’t fancy finding out what lives in that jungle.', { expr: 'serious', others: { rowan: { expr: 'worried' } } }),
   L('lou', 'I’ll find us something to eat. Something that doesn’t eat us first.', { expr: 'determined' }),
@@ -197,11 +197,11 @@ export const JUMPSCARE: BubbleLine[] = [
   L('aroha', 'Hahaha! Kia ora. You can put the phone away. It was butchering my language.', { expr: 'laugh', emote: 'laugh', react: 'bounce' }),
   L('rowan', 'You speak English?!', { expr: 'shocked', emote: 'interrobang', react: 'jump' }),
   L('aroha', 'Better than your phone speaks Māori.', { expr: 'smug' }),
-  L('aroha', 'I’m Aroha. I watched your boat hit the rocks. I figured whoever survived would be very lucky or very stupid.', { expr: 'teasing' }),
+  L('aroha', 'I’m Aroha. I watched your boat hit the rocks. I figured whoever survived would be very lucky or very stupid.', { expr: 'teasing', close: true }),
   L('rowan', 'Which one are we?', { expr: 'worried' }),
   L('aroha', 'You pitched your tent right next to a delver colony. Stupid. You survived that storm. Lucky.', { expr: 'teasing', emote: 'sparkle' }),
   L('crowe', 'What in blazes is all the screaming— oh. Who’s this, then?', { expr: 'grumpy', emote: 'question' }),
-  L('aroha', 'The one who’s going to keep you alive. You have no idea what lives out there.', { expr: 'serious' }),
+  L('aroha', 'The one who’s going to keep you alive. You have no idea what lives out there.', { expr: 'serious', close: true }),
   L('crowe', '...Right. I’ll put the kettle on.', { expr: 'neutral' }),
 ];
 
@@ -215,7 +215,7 @@ export const MORNING_AROHA: BubbleLine[] = [
   L('pip', 'AAAH! LEGS! IT HAS LEGS!', { style: 'shout', expr: 'shocked', emote: 'shock', react: 'jump', others: { aroha: { expr: 'laugh', emote: 'laugh' }, crowe: { expr: 'laugh' } } }),
   L('aroha', 'That’s just a strider. It likes you.', { expr: 'happy' }),
   L('aroha', 'My whānau have fished this coast for generations. We keep to ourselves.', { expr: 'neutral' }),
-  L('aroha', 'The land here is not like anywhere else. It has been waiting a long time for someone who wants to understand it.', { expr: 'serious' }),
+  L('aroha', 'The land here is not like anywhere else. It has been waiting a long time for someone who wants to understand it.', { expr: 'serious', close: true }),
   L('rowan', 'Then let me try. Will you show me?', { expr: 'determined', choices: ['Will you show me?', 'I promise I’ll listen.'] }),
   L('aroha', 'I’ll show you. But when I say run, you run.', { expr: 'smug' }),
   L('aroha', 'Here, I drew you a map. My map. The best one on the island.', { expr: 'happy', emote: 'sparkle' }),

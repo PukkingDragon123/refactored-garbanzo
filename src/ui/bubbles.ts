@@ -7,6 +7,7 @@ import { audio } from '../core/audio';
 import { guardInput } from '../core/input';
 import { SPECIES, CLUES } from '../game/species';
 import { ITEMS } from '../game/items';
+import { CloseUps, isCastId } from './closeup';
 
 // ---------------------------------------------------------------- pixel bubble skins
 function px(w: number, h: number, rows: (x: number, y: number) => string | null): string {
@@ -133,6 +134,8 @@ export interface BubbleLine {
   onShow?: () => void;
   /** typing speed multiplier */
   speed?: number;
+  /** cinematic close-up of the speaker: true forces one, false prevents it (default: dramatic lines) */
+  close?: boolean;
 }
 
 const CSS = `
@@ -214,6 +217,7 @@ const CSS = `
 `;
 
 interface Live {
+  close?: boolean;
   el: HTMLElement;
   box: HTMLElement;
   tx: HTMLElement;
@@ -244,6 +248,7 @@ export class Bubbles {
   active = false;
   private keyHandler: (e: KeyboardEvent) => void;
   private clickHandler: (e: PointerEvent) => void;
+  readonly cu: CloseUps;
 
   constructor(parent: HTMLElement) {
     if (!styled) {
@@ -251,6 +256,7 @@ export class Bubbles {
       document.head.appendChild(el('style', '', CSS));
       styled = true;
     }
+    this.cu = new CloseUps(parent);
     this.root = parent.appendChild(el('div', 'bubbles'));
     this.keyHandler = e => {
       if (!this.active) return;
@@ -289,7 +295,9 @@ export class Bubbles {
       .replace(/_([^_]+)_?/g, '<i>$1</i>');
   }
 
-  private make(line: BubbleLine, bark: boolean): Live {
+  private closeWho = '';
+  private closeExpr = 'neutral';
+  private make(line: BubbleLine, bark: boolean, close = false): Live {
     const sp = this.speakers.get(line.who);
     const style = line.style ?? 'say';
     const b = el('div', `bub ${style}${bark ? ' bark' : ' pre'}`);
@@ -308,7 +316,7 @@ export class Bubbles {
       el: b, box: b.querySelector('.box') as HTMLElement, tx, who: line.who,
       full: line.text, shown: 0, speed: 46 * (line.speed ?? 1) * (style === 'shout' ? 1.3 : style === 'whisper' ? 0.8 : 1), pause: 0,
       done: false, bark, ttl: bark ? 2.4 + line.text.length * 0.045 : Infinity, w: 0, h: 0,
-      chars, plain: chars.map(c => c.textContent ?? '').join(''), pre: bark ? 0 : 0.32, caret,
+      chars, plain: chars.map(c => c.textContent ?? '').join(''), pre: bark ? 0 : 0.32, caret, close,
     };
     lv.w = b.offsetWidth;
     lv.h = b.offsetHeight;
@@ -336,7 +344,7 @@ export class Bubbles {
     const sp = this.speakers.get(lv.who);
     const rootR = this.root.getBoundingClientRect();
     const W = rootR.width, H = rootR.height;
-    const a = sp?.anchor() ?? null;
+    const a = lv.close && this.cu.active ? this.cu.anchor() : sp?.anchor() ?? null;
     const w = lv.el.offsetWidth || lv.w, h = lv.el.offsetHeight || lv.h;
     let x: number, y: number, edge = false;
     if (a) {
@@ -439,7 +447,16 @@ export class Bubbles {
         if (line.others) for (const [id, r] of Object.entries(line.others)) this.speakers.get(id)?.react?.(r);
         line.onShow?.();
         if (!line.text) continue;
-        const lv = this.make(line, false);
+        // cinematic close-up for dramatic lines (kept while the same speaker keeps talking)
+        const dramatic = line.style === 'shout' || ['shocked', 'surprised', 'angry', 'scared'].includes(line.expr ?? '');
+        const close = isCastId(line.who) && (line.close ?? (dramatic || (this.cu.active && this.closeWho === line.who)));
+        const ref = { lv: null as Live | null };
+        if (close) this.cu.show(line.who as never, line.expr ?? (this.closeWho === line.who ? this.closeExpr : 'neutral'), { name: sp?.name ?? line.who, style: line.style, talking: () => !!ref.lv && !ref.lv.done });
+        else this.cu.hide();
+        this.closeWho = close ? line.who : '';
+        if (close && line.expr) this.closeExpr = line.expr;
+        const lv = this.make(line, false, close);
+        ref.lv = lv;
         sp?.talk?.(true);
         await new Promise<void>(res => {
           const chk = () => (lv.done ? res() : requestAnimationFrame(chk));
@@ -459,6 +476,8 @@ export class Bubbles {
       }
     } finally {
       for (const lv of this.live.filter(l => !l.bark)) this.kill(lv);
+      this.cu.hide();
+      this.closeWho = '';
       this.active = false;
       this.advance = null;
       game.ui.dialogueOpen = false;
