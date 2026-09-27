@@ -2,6 +2,7 @@
 // Owns the stage, the player, actors (who can speak in bubbles), interactables, resource nodes,
 // the V2 HUD and the collecting flow; keeps quests ticking.
 
+import { openPause } from '../../ui/pause';
 import type { Renderer } from '../../gfx/renderer';
 import type { Scene } from '../game';
 import { game } from '../game';
@@ -235,6 +236,8 @@ export abstract class WorldScene implements Scene {
 
   updateInteraction() {
     const inp = game.input;
+    const camUp = !!(this as unknown as { cam?: { active?: boolean } }).cam?.active;
+    if (inp.hitRaw('pause') && !game.ui.blocking && !this.cutscene && !camUp) { openPause(); return; }
     if (this.cutscene || game.ui.blocking || this.busyAction || this.player.state === 'work') {
       this.prompt.hide();
       for (const n of this.nodes) n.hover = false;
