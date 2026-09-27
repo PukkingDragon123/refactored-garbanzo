@@ -74,7 +74,7 @@ function knobImg() {
 }
 
 const CSS = `
-.touch { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 30; --tu: clamp(3px, 0.62vmin, 6px);
+.touch { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 30; touch-action: none; --tu: clamp(3px, 0.62vmin, 6px);
   font-family: 'Silkscreen', 'Pixelify Sans', monospace; image-rendering: pixelated; -webkit-user-select: none; user-select: none; }
 .touch.on { display: block; }
 .touch.hide .tc-l, .touch.hide .tc-r, .touch.hide .tc-top { opacity: 0; pointer-events: none !important; }
@@ -130,6 +130,7 @@ const CSS = `
   .touch { --tu: clamp(3px, 0.9vmin, 6px); }
   .tc-top { top: auto; bottom: calc(var(--tu) * 52); }
 }
+body.touchmode, body.touchmode #app { touch-action: none; overscroll-behavior: none; -webkit-touch-callout: none; }
 /* the HUD makes room for the thumbs */
 body.touchmode .h2 .keys, body.touchmode .h2 .belt, body.touchmode .h2 .btn2, body.touchmode .h2 .rp { display: none; }
 body.touchmode .h2 .bar { bottom: auto; top: 7em; transform: scale(0.78); transform-origin: 0 0; }
@@ -216,6 +217,14 @@ export function setupTouch() {
   };
   L.addEventListener('pointerup', endStick);
   L.addEventListener('pointercancel', endStick);
+  L.addEventListener('lostpointercapture', endStick);
+  const resets: (() => void)[] = [];
+  /** release every virtual key and reset the stick (menus opening mid-press, app switch, lost touches) */
+  const releaseAll = () => {
+    if (sid !== -1) { sid = -1; jx = jy = 0; L.classList.remove('act', 'run'); home(); }
+    for (const k of [...held]) setKey(k, false);
+    for (const r of resets) r();
+  };
 
   // ---------- buttons ----------
   const btn = (parent: HTMLElement, o: BtnOpts) => {
@@ -246,6 +255,8 @@ export function setupTouch() {
     };
     b.addEventListener('pointerup', up);
     b.addEventListener('pointercancel', up);
+    b.addEventListener('lostpointercapture', up);
+    resets.push(() => { if (pid !== -1) { pid = -1; b.classList.remove('down'); if (o.code) inp.release(o.code); } });
     parent.appendChild(b);
     return { b, t, cap };
   };
@@ -283,7 +294,9 @@ export function setupTouch() {
     const sc = game.scene as unknown as { cam?: { active?: boolean; zoom?: number; develop?: number; breathLeft?: number }; nearIt?: { label: string } | null; player?: unknown } | null;
     const c = !!sc?.cam?.active;
     const inWorld = !!sc?.player;
-    root.classList.toggle('hide', game.ui.blocking || !inWorld);
+    const hide = game.ui.blocking || !inWorld;
+    if (hide && !root.classList.contains('hide')) releaseAll();
+    root.classList.toggle('hide', hide);
     if (c !== lastCam) {
       lastCam = c;
       root.classList.toggle('cam', c);
@@ -319,6 +332,11 @@ export function setupTouch() {
   const setOn = (on: boolean) => { root.classList.toggle('on', on); document.body.classList.toggle('touchmode', on); };
   if (coarse) setOn(true);
   window.addEventListener('pointerdown', e => { if (e.pointerType === 'touch') setOn(true); });
-  window.addEventListener('keydown', () => setOn(false));
+  window.addEventListener('keydown', e => { if (!e.repeat && e.key.length > 0 && !(e.target instanceof HTMLInputElement)) { releaseAll(); setOn(false); } });
+  window.addEventListener('blur', releaseAll);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAll(); });
+  // no pinch-zoom / double-tap zoom / pull-to-refresh while playing on a phone
+  document.addEventListener('gesturestart', e => e.preventDefault());
+  document.addEventListener('dblclick', e => { if (root.classList.contains('on')) e.preventDefault(); });
   (window as unknown as { zlTouch?: (on: boolean) => void }).zlTouch = setOn;
 }

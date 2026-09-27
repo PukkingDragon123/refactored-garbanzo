@@ -203,10 +203,11 @@ const CSS = `
 .bub.bark .box { font-size: 0.9em; }
 .bub.bark .nm { display: none; }
 .bub.edge .tail { display: none; }
-.bub.pop { animation: bubPop 0.3s cubic-bezier(.2,1.7,.4,1) both; }
-.bub.out { animation: bubOut 0.14s steps(3) both; }
-@keyframes bubPop { 0% { transform: var(--pos) scale(0.2, 0.2); opacity: 0; } 40% { transform: var(--pos) scale(1.18, 0.86); opacity: 1; } 70% { transform: var(--pos) scale(0.94, 1.06); } 100% { transform: var(--pos) scale(1); } }
-@keyframes bubOut { to { transform: var(--pos) scale(1.25, 0.2); opacity: 0; } }
+.bub .pp { transform-origin: var(--tx, 50%) 100%; }
+.bub.pop .pp { animation: bubPop 0.3s cubic-bezier(.2,1.7,.4,1) both; }
+.bub.out .pp { animation: bubOut 0.14s steps(3) both; }
+@keyframes bubPop { 0% { transform: scale(0.2, 0.2); opacity: 0; } 40% { transform: scale(1.18, 0.86); opacity: 1; } 70% { transform: scale(0.94, 1.06); } 100% { transform: none; } }
+@keyframes bubOut { to { transform: scale(1.25, 0.2); opacity: 0; } }
 @keyframes bubNext { 50% { transform: translateY(3px); } }
 @keyframes bubShake { 0% { transform: translate(0, 0); } 50% { transform: translate(2px, -1px); } 100% { transform: translate(-1px, 1px); } }
 @media (prefers-reduced-motion: reduce) { .bub.shout .inner, .bub .tx .c.on, .bub.shout .fx.burst { animation: none !important; } }
@@ -291,9 +292,10 @@ export class Bubbles {
   private make(line: BubbleLine, bark: boolean): Live {
     const sp = this.speakers.get(line.who);
     const style = line.style ?? 'say';
-    const b = el('div', `bub pop ${style}${bark ? ' bark' : ' pre'}`);
+    const b = el('div', `bub ${style}${bark ? ' bark' : ' pre'}`);
+    b.style.visibility = 'hidden';
     const marks = style === 'shout' ? (/[?]/.test(line.text) ? '!?' : '!!') : '';
-    b.innerHTML = `<div class="inner"><div class="fx burst"></div><div class="box"><div class="nm"></div><div class="typing"><b></b><b></b><b></b></div><div class="tx"></div><div class="chs"></div><div class="more"></div></div><div class="tail"></div><div class="fx marks">${marks}</div></div>`;
+    b.innerHTML = `<div class="pp"><div class="inner"><div class="fx burst"></div><div class="box"><div class="nm"></div><div class="typing"><b></b><b></b><b></b></div><div class="tx"></div><div class="chs"></div><div class="more"></div></div><div class="tail"></div><div class="fx marks">${marks}</div></div></div>`;
     const nm = b.querySelector('.nm') as HTMLElement;
     nm.textContent = sp?.name ?? line.who;
     b.style.setProperty('--c', sp?.color ?? '#3fbca6');
@@ -311,7 +313,12 @@ export class Bubbles {
     lv.w = b.offsetWidth;
     lv.h = b.offsetHeight;
     this.live.push(lv);
+    // position first, then reveal and pop in place (never animates in from the corner)
     this.place(lv);
+    b.style.visibility = '';
+    void b.offsetWidth;
+    b.classList.add('pop');
+    setTimeout(() => b.classList.remove('pop'), 360);
     audio.play(('bubblePop' as unknown) as 'ui', { vol: 0.35, pitch: 0.9 + (sp?.voice ?? 1) * 0.15 });
     if (style === 'shout') (game.scene as { st?: { shake(a: number, t: number): void } } | null)?.st?.shake(2, 0.25);
     return lv;
@@ -347,22 +354,20 @@ export class Bubbles {
     lv.el.classList.toggle('edge', edge);
     if (a) lv.el.style.setProperty('--tx', `${Math.max(16, Math.min(w - 16, a[0] - cx))}px`);
     const pos = `translate(${Math.round(cx)}px, ${Math.round(cy)}px)`;
-    lv.el.style.setProperty('--pos', pos);
-    if (!lv.el.classList.contains('pop') && !lv.el.classList.contains('out')) lv.el.style.transform = pos;
+    if (!lv.el.classList.contains('out')) lv.el.style.transform = pos;
   }
 
   /** per-frame: typewriter + follow speakers */
   update(dt: number) {
     for (const lv of [...this.live]) {
-      if (lv.el.classList.contains('pop') && lv.el.getAnimations().length === 0) lv.el.classList.remove('pop');
       this.place(lv);
       if (!lv.done) {
         if (lv.pre > 0 && !this.skipTyping) {
           lv.pre -= dt;
-          if (lv.pre <= 0) lv.el.classList.remove('pre');
+          if (lv.pre <= 0) { lv.el.classList.remove('pre'); this.place(lv); }
           continue;
         }
-        lv.el.classList.remove('pre');
+        if (lv.el.classList.contains('pre')) { lv.el.classList.remove('pre'); this.place(lv); }
         const before = Math.floor(lv.shown);
         if (this.skipTyping && !lv.bark) {
           lv.shown = lv.chars.length;

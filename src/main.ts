@@ -69,6 +69,8 @@ async function boot() {
     pack: async () => (await import('./ui/backpack')).openBackpack({}),
     craft: async (st = 'bench') => (await import('./ui/craft')).openCrafting(st as never),
     map: async () => (await import('./game/travel2')).openTravelMap(),
+    quest: async (id: string) => (await import('./game/quests')).startQuest(id),
+    flag: (k: string, v = true) => { game.save.flags[k] = v; },
   };
 }
 

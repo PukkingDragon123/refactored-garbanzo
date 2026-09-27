@@ -3,6 +3,7 @@
 
 import { el } from './ui';
 import { game } from '../game/game';
+import { audio } from '../core/audio';
 import { trackedQuest, currentStepIndex } from '../game/quests';
 import { capacity } from '../game/inventory';
 import { itemIconURL, uiIconURL } from '../art/itemicons';
@@ -13,13 +14,33 @@ const CSS = `
 .h2 .loc { position: absolute; left: 16px; top: 14px; padding: 0.45em 0.9em; display: flex; flex-direction: column; gap: 1px; }
 .h2 .loc b { font-family: var(--pix); color: var(--amber2); font-weight: 600; font-size: 1.05em; letter-spacing: 0.02em; }
 .h2 .loc span { font-size: 0.8em; opacity: 0.8; }
-.h2 .quest { position: absolute; right: 16px; top: 14px; max-width: min(24em, 36vw); padding: 0.5em 0.9em 0.55em; }
-.h2 .quest .t { font-family: var(--pix); color: var(--teal2); font-size: 0.78em; letter-spacing: 0.08em; text-transform: uppercase; display: flex; gap: 0.5em; align-items: center; }
-.h2 .quest .t i { font-style: normal; color: var(--amber2); }
-.h2 .quest .s { font-size: 0.9em; line-height: 1.35; margin-top: 2px; }
-.h2 .quest .pb { height: 5px; background: rgba(255,255,255,0.12); margin-top: 5px; }
-.h2 .quest .pb > div { height: 100%; background: var(--teal); transition: width 0.3s; }
+.h2 .quest { position: absolute; right: 16px; top: 14px; width: min(20em, 34vw); padding: 0.55em 0.8em 0.6em; color: #3a2a1a; pointer-events: auto; cursor: pointer; }
+.h2 .quest .rb { display: flex; align-items: center; gap: 0.45em; margin: -0.1em 0 0.25em; }
+.h2 .quest .rb span { font-family: 'Silkscreen', var(--pix); font-size: 0.66em; letter-spacing: 0.12em; color: #fff; background: #3f7a32; padding: 0.15em 0.55em 0.1em; box-shadow: 0 2px 0 #1f3a18; }
+.h2 .quest.side .rb span { background: #b8761c; box-shadow: 0 2px 0 #5a3408; }
+.h2 .quest .rb small { font-family: 'Silkscreen', var(--pix); font-size: 0.62em; color: #8a6a44; letter-spacing: 0.08em; margin-left: auto; }
+.h2 .quest .rb img { width: 1.9em; height: 1.9em; image-rendering: pixelated; margin: -0.35em 0 -0.35em 0.2em; border-radius: 50%; background: #d8c49a; box-shadow: 0 0 0 2px #6a4a2a; }
+.h2 .quest .ti { font-family: 'Pixelify Sans', var(--pix); font-weight: 700; font-size: 1.05em; color: #2a1c10; letter-spacing: 0.02em; line-height: 1.1; }
+.h2 .quest .dv { height: 2px; margin: 0.4em 0 0.35em; background: repeating-linear-gradient(90deg, #b89a6a 0 4px, transparent 4px 8px); }
+.h2 .quest .st { display: grid; grid-template-columns: 1.1em 1fr auto; gap: 0.1em 0.45em; align-items: start; font-family: 'Pixelify Sans', var(--pix); font-size: 0.88em; line-height: 1.25; margin: 0.12em 0; }
+.h2 .quest .st i { font-style: normal; font-family: 'Silkscreen', var(--pix); font-size: 0.85em; text-align: center; line-height: 1.45; }
+.h2 .quest .st.done { color: #9a8462; text-decoration: line-through; text-decoration-thickness: 2px; }
+.h2 .quest .st.done i { color: #3f7a32; text-decoration: none; }
+.h2 .quest .st.next { color: #a8926c; }
+.h2 .quest .st.cur { color: #1c120a; font-weight: 600; background: rgba(255, 236, 170, 0.55); margin: 0.2em -0.35em; padding: 0.2em 0.35em; box-shadow: inset 3px 0 0 #3f7a32; }
+.h2 .quest .st.cur i { color: #3f7a32; animation: qArrow 0.8s steps(2) infinite; }
+.h2 .quest .st b { font-family: 'Silkscreen', var(--pix); font-size: 0.8em; color: #fff; background: #2a1c10; padding: 0.1em 0.4em; }
+@keyframes qArrow { 50% { transform: translateX(3px); } }
+.h2 .quest .pb { grid-column: 2 / 4; height: 6px; background: #c9b489; box-shadow: inset 0 0 0 1px #8a6a44; margin-top: 0.25em; }
+.h2 .quest .pb > div { height: 100%; background: linear-gradient(#8ad05a 0 50%, #5a9a3a 50%); transition: width 0.4s steps(6); }
+.h2 .quest .hn { grid-column: 2 / 4; font-size: 0.82em; color: #7a5a38; font-weight: 400; font-style: italic; }
+.h2 .quest.min .st.done, .h2 .quest.min .st.next, .h2 .quest.min .hn, .h2 .quest.min .dv { display: none; }
 .h2 .quest.flash { animation: qflash 0.9s ease-out; }
+.h2 .qbanner { position: absolute; left: 50%; top: 16%; transform: translateX(-50%); font-family: 'Pixelify Sans', var(--pix); font-weight: 700; font-size: 1.5em; letter-spacing: 0.08em;
+  color: #fff6d8; padding: 0.35em 1.2em 0.3em; background: #3f7a32; box-shadow: 0 0 0 3px #1f3a18, 0 0 0 6px #fff6d8, 0 0 0 9px #1f3a18, 0 10px 0 6px rgba(0,0,0,0.35);
+  text-shadow: 0 3px 0 #1f3a18; white-space: nowrap; pointer-events: none; animation: qBan 2.2s cubic-bezier(.2,1.6,.4,1) both; z-index: 4; }
+.h2 .qbanner small { display: block; font-family: 'Silkscreen', var(--pix); font-weight: 400; font-size: 0.45em; letter-spacing: 0.2em; color: #cfe8b8; text-shadow: none; text-align: center; }
+@keyframes qBan { 0% { transform: translateX(-50%) scale(2.4) rotate(-6deg); opacity: 0; } 12% { transform: translateX(-50%) scale(0.92) rotate(-2deg); opacity: 1; } 18% { transform: translateX(-50%) scale(1) rotate(-2deg); } 85% { opacity: 1; transform: translateX(-50%) scale(1) rotate(-2deg); } 100% { opacity: 0; transform: translateX(-50%) translateY(-12px) scale(0.96) rotate(-2deg); } }
 @keyframes qflash { 0% { box-shadow: 0 0 0 3px var(--amber2), 0 10px 30px var(--shadow); } 100% { box-shadow: 0 0 0 2px rgba(4,10,9,0.7), 0 10px 30px var(--shadow); } }
 .h2 .bar { position: absolute; left: 16px; bottom: 14px; display: flex; gap: 8px; align-items: flex-end; }
 .h2 .btn2 { pointer-events: auto; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 0.35em 0.55em 0.3em; font-family: var(--pix); font-size: 0.78em; color: var(--paper); }
@@ -61,6 +82,18 @@ export class Hud2 {
   readonly root: HTMLElement;
   private loc: HTMLElement;
   private quest: HTMLElement;
+  private questMin = false;
+  private bannerT = 0;
+  /** big stamped banner in the middle of the screen (objective complete / new quest) */
+  banner(title: string, sub = '') {
+    const now = performance.now();
+    if (now - this.bannerT < 600) return;
+    this.bannerT = now;
+    const b = el('div', 'qbanner', `${title}${sub ? `<small>${sub.replace(/</g, '&lt;')}</small>` : ''}`);
+    this.root.appendChild(b);
+    audio.play('uiOpen', { vol: 0.5, pitch: 1.2 });
+    setTimeout(() => b.remove(), 2300);
+  }
   private pack: HTMLElement;
   private rpEl: HTMLElement;
   private keys: HTMLElement;
@@ -76,6 +109,7 @@ export class Hud2 {
     this.root = parent.appendChild(el('div', 'h2'));
     this.loc = this.root.appendChild(el('div', 'loc panel'));
     this.quest = this.root.appendChild(el('div', 'quest panel'));
+    this.quest.addEventListener('click', () => { this.questMin = !this.questMin; this.quest.classList.toggle('min', this.questMin); });
     const bar = this.root.appendChild(el('div', 'bar'));
     this.who = bar.appendChild(el('div', 'who', `<div class="med"><img alt=""></div><div class="bars"><small>PACK</small><i class="a"></i><small>FILM</small><i class="b"></i></div>`));
     this.belt = bar.appendChild(el('div', 'belt'));
@@ -122,7 +156,22 @@ export class Hud2 {
       key = `${q.id}:${i}:${pr ? pr.join('/') : ''}`;
       if (key !== this.lastQuestKey || force) {
         const flash = this.lastQuestKey !== '' && !this.lastQuestKey.startsWith(`${q.id}:${i}:`);
-        this.quest.innerHTML = `<div class="t">${q.main ? 'STORY' : 'QUEST'} · <i>${q.title}</i></div><div class="s">${st ? st.text : 'Complete!'}${pr ? ` <b style="color:var(--amber2)">${pr[0]}/${pr[1]}</b>` : ''}</div>${pr ? `<div class="pb"><div style="width:${Math.round((pr[0] / Math.max(1, pr[1])) * 100)}%"></div></div>` : ''}`;
+        const esc = (t: string) => t.replace(/</g, '&lt;');
+        const row = (k: number, cls: string, mark: string) => {
+          const x = q.steps[k];
+          if (!x) return '';
+          const p2 = cls === 'cur' ? pr : undefined;
+          return `<div class="st ${cls}"><i>${mark}</i><span>${esc(x.text)}</span>${p2 ? `<b>${p2[0]}/${p2[1]}</b>` : '<span></span>'}${p2 ? `<div class="pb"><div style="width:${Math.round((p2[0] / Math.max(1, p2[1])) * 100)}%"></div></div>` : ''}${cls === 'cur' && x.hint ? `<div class="hn">${esc(x.hint)}</div>` : ''}</div>`;
+        };
+        const giverImg = q.giver !== 'story' ? game.ui.portraitURL(q.giver, 'neutral') : '';
+        this.quest.className = `quest panel${q.main ? '' : ' side'}${this.questMin ? ' min' : ''}`;
+        this.quest.innerHTML = `<div class="rb"><span>${q.main ? '★ STORY' : '◆ SIDE'}</span><small>${q.chapter ? `CHAPTER ${q.chapter}` : `STEP ${Math.min(i + 1, q.steps.length)}/${q.steps.length}`}</small>${giverImg ? `<img src="${giverImg}" alt="">` : ''}</div>`
+          + `<div class="ti">${esc(q.title)}</div><div class="dv"></div>`
+          + (i > 0 ? row(i - 1, 'done', '✔') : '')
+          + (st ? row(i, 'cur', '▶') : `<div class="st cur"><i>✔</i><span>Complete!</span><span></span></div>`)
+          + row(i + 1, 'next', '○');
+        if (flash && this.lastQuestKey.startsWith(`${q.id}:`)) this.banner('OBJECTIVE COMPLETE', 'New objective added');
+        else if (flash) this.banner(q.main ? 'NEW STORY QUEST' : 'NEW QUEST', q.title);
         if (flash) { this.quest.classList.remove('flash'); void this.quest.offsetWidth; this.quest.classList.add('flash'); }
       }
     }
