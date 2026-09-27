@@ -23,8 +23,8 @@ export function tone(r: C[], l: number, bias = 0, k = 1): C {
   const n = r.length;
   if (n >= 4 && FLAT.on) {
     // Dave-the-Diver-style cel shading: one shadow, a broad base and a thin highlight
-    const lo = Math.round((n - 1) * 0.22), mid = Math.round((n - 1) * 0.6), hi = Math.round((n - 1) * 0.86);
-    return r[t < 0.34 ? lo : t < 0.8 ? mid : hi];
+    const mid = Math.round((n - 1) * 0.66), lo = n >= 6 ? mid - 1 : Math.round((n - 1) * 0.4), hi = Math.round((n - 1) * 0.88);
+    return r[t < 0.12 ? Math.max(0, lo - 1) : t < 0.36 ? lo : t < 0.84 ? mid : hi];
   }
   let i = Math.floor(t * n);
   if (i < 0) i = 0;
@@ -535,7 +535,7 @@ export class Canvas {
         if (!inP(x, y + 1) && inT(x, y + 1)) k = Math.max(k, line);
         if (!inP(x - 1, y) && inT(x - 1, y)) k = Math.max(k, lineLit);
         if (!inP(x, y - 1) && inT(x, y - 1)) k = Math.max(k, lineLit);
-        if (k > 0) c = shade(c, -k);
+        if (k > 0) c = FLAT.on ? (k >= 0.25 && k === line ? mix(shade(c, -0.3), rgba(40, 26, 34), 0.38) : c) : shade(c, -k);
         T[i] = c;
         P[i] = 0;
       }

@@ -1,5 +1,6 @@
 // The V2 script: every conversation, reaction and bark, as bubble lines.
-// Cast: rowan (player, they/them), crowe (captain), lou (cook), pip (engineer), aroha (guide), phone.
+// Cast: rowan (player, he/him: a young Darwin-style naturalist), crowe (captain), lou (the cook: older, formidable),
+// pip (tech whiz: pink hair, computers), aroha (guide), phone.
 
 import type { BubbleLine } from '../ui/bubbles';
 import { game } from './game';
@@ -44,6 +45,8 @@ export function pipTalk(): BubbleLine[] {
     L('pip', 'The engine’s purring! Mostly! That clunk is normal!', { expr: 'happy' }),
     L('pip', 'Did you know duct tape has a tensile strength of— never mind. It’s holding.', { expr: 'smug' }),
     L('pip', 'If you see anything weird out there, photograph it. Weird is data!', { expr: 'happy', emote: 'sparkle' }),
+    L('pip', 'I wrote a script that sorts your photos by species. And one that sorts them by cuteness. Don’t ask which is faster.', { expr: 'smug', emote: 'sparkle' }),
+    L('pip', 'Ping to the satellite: 9000 ms. Ping to my heart when you say thank you: 0 ms~', { expr: 'happy', emote: 'heart' }),
   ])];
   return [
     L('pip', 'Nope. Nope nope nope— OH! Hi Rowan!', { expr: 'surprised', emote: 'exclaim', react: 'jump' }),
@@ -59,6 +62,8 @@ export function louTalk(): BubbleLine[] {
     L('lou', 'Seconds? There’s always seconds.', { expr: 'happy' }),
     L('lou', 'Crowe’s been rubbing his knee all morning. His knee is never wrong about weather.', { expr: 'worried' }),
     L('lou', 'Go look at the birds, sweetheart. I’ll save you pudding.', { expr: 'happy' }),
+    L('lou', 'If this island has a manager, I would like a word with them.', { expr: 'grumpy', emote: 'anger' }),
+    L('lou', 'Twelve years I’ve cooked on this boat and not ONE complaint that I didn’t personally resolve.', { expr: 'smug' }),
   ])];
   return [
     L('lou', 'There’s my favourite scientist! Sit, sit. You look like you’ve been living on granola bars.', { expr: 'happy', emote: 'heart' }),

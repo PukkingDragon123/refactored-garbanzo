@@ -34,54 +34,69 @@ function torso(p: Pic, base: string, o: { broad?: number; shadowX?: number; m?: 
 // ------------------------------------------------------------------ designs
 
 const ROWAN: Design = {
-  hair: '#3a2218',
+  // a young Darwin-style naturalist: swept chestnut hair, sideburns and stubble, field coat, cravat, a finch friend
+  hair: '#6a3a1e',
   face: {
-    skin: '#e9b58f', chin: [0, 0], jawW: 0.98, cheek: -1,
-    nose: { len: 0.75, size: 0.9 },
-    eyes: { style: 'soft', iris: '#4a2a1a', size: 1.02 },
-    brow: { col: '#2a1810', w: 3.2, arch: 1.2 },
-    lip: '#b85a50',
+    skin: '#eab48e', chin: [1, 1], jawW: 1.04, cheek: 0,
+    nose: { len: 0.95, size: 1, bump: 0.6 },
+    eyes: { style: 'bold', iris: '#3a5a3a', size: 1, y: 0.5 },
+    brow: { col: '#4a2612', w: 4, arch: 0.9, len: 1.1 },
+    lip: '#b0584c',
   },
   back(p, H, m) {
-    // big curly mass behind the head and down the nape (chunky curls with crescent lights)
-    const curls: [number, number, number][] = [[60, 48, 19], [52, 68, 15], [54, 88, 13], [60, 104, 11], [66, 116, 8], [74, 28, 18], [96, 20, 16], [116, 26, 13], [46, 50, 12]];
-    for (const [x, y, r] of curls) curl(p, x, y, r, H, m, 1);
-    // top-knot bun + blue tie
-    p.ell(66, 12, 15, 11.5, H[2], m);
-    p.ell(62, 8, 9, 5, H[3], m, { clip: [m] });
-    p.ell(66, 16, 12, 6, H[2], m, { clip: [m] });
-    p.ell(74, 21, 8, 3.2, hex('#3a78c8'), p.m(6, true, 0.5), {}, -0.45);
+    // volume at the back, falling over the collar
+    p.fill([[50, 70], [48, 44], [62, 22], [86, 12], [110, 12], [126, 22], [118, 32], [90, 30], [72, 40], [66, 64], [70, 100], [58, 108], [50, 92]], H[1], m);
   },
   body(p) {
-    // blue field parka with a stand-up collar, zip, camera strap across the chest
-    const { m, T } = torso(p, '#3d6fb0', { broad: 0.85 });
-    p.fill([[62, 126], [80, 140], [106, 142], [118, 128], [128, 146], [108, 158], [78, 156], [54, 142]], T[3], m);
-    p.where([m], (u, v) => v > 151 && v < 158 && u > 70 && u < 114, T[1]);
-    p.stroke([[112, 156], [116, 178], [118, 200]], 2.2, 2.2, T[0], m);
-    const strap = p.m(4, true, 0.5);
-    p.stroke([[54, 142], [98, 168], [146, 200]], 9, 9, hex('#7a4a2a'), strap);
-    p.stroke([[54, 140], [98, 166], [146, 198]], 2, 2, hex('#a8703e'), strap, { clip: [strap] });
-    const pb = p.m(5, true, 0.5);
-    p.fill([[136, 166], [152, 168], [151, 182], [137, 180]], hex('#d8543e'), pb, { sharp: true });
-    p.ell(144, 174, 3, 3, hex('#ffe08a'), pb, { clip: [pb] });
+    // dark olive field coat with wide lapels, cream shirt, rust cravat, satchel strap, beetle pin
+    const { m, T } = torso(p, '#4a5a34', { broad: 1 });
+    const sh = p.m(4, true, 0.45);
+    p.fill([[78, 134], [112, 136], [118, 160], [98, 176], [80, 160]], hex('#efe6d2'), sh);
+    p.where([sh], (u) => u < 90, hex('#d4c8ae'));
+    const lap = p.m(3, true, 0.5);
+    p.fill([[64, 138], [80, 136], [96, 178], [72, 200], [54, 200], [50, 160]], T[3], lap);
+    p.fill([[116, 136], [132, 142], [146, 168], [120, 200], [104, 200], [110, 170]], T[3], lap);
+    p.stroke([[80, 138], [96, 176]], 1.4, 1.2, T[0], lap);
+    p.stroke([[114, 138], [110, 172]], 1.4, 1.2, T[0], lap);
+    const cv = p.m(5, true, 0.5);
+    const K = tones('#b8502a');
+    p.fill([[84, 134], [110, 136], [106, 148], [96, 152], [86, 146]], K[2], cv);
+    p.fill([[92, 148], [102, 148], [106, 172], [98, 176], [90, 170]], K[2], cv);
+    p.fill([[92, 148], [96, 150], [95, 172], [90, 170]], K[1], cv, { clip: [cv] });
+    p.ell(97, 146, 4, 3, K[3], cv, { clip: [cv] });
+    const strap = p.m(6, true, 0.5);
+    p.stroke([[132, 142], [100, 178], [62, 200]], 8, 8, hex('#6a3e22'), strap);
+    p.stroke([[132, 140], [100, 176], [62, 198]], 1.6, 1.6, hex('#9a6436'), strap, { clip: [strap] });
+    // beetle pin on the lapel (iridescent)
+    const bt = p.m(7, true, 0.5);
+    p.ell(128, 160, 3.4, 4.4, hex('#1e7a6a'), bt);
+    p.ell(127, 158.5, 1.4, 1.6, hex('#8ae8c8'), bt, { clip: [bt] });
+    p.stroke([[128, 156], [128, 164]], 0.7, 0.7, hex('#0e3a34'), bt, { clip: [bt] });
+    void m;
   },
   front(p, H, m, c) {
-    // curly fringe: chunky clumps over the forehead, falling toward the face
-    const fr: [number, number, number][] = [[70, 34, 12], [84, 26, 12], [100, 26, 12], [114, 32, 11], [125, 42, 9], [60, 52, 10], [92, 38, 9], [108, 42, 8], [120, 52, 6], [132, 50, 5]];
-    for (const [x, y, r] of fr) curl(p, x, y, r, H, m, 0);
-    // side hair framing the face down to the ear
-    p.fill([[56, 44], [70, 40], [80, 52], [82, 66], [78, 76], [70, 74], [58, 70]], H[1], m);
-    p.stroke([[68, 48], [75, 56], [77, 66]], 2.4, 1.2, H[2], m, { clip: [m] });
-    curl(p, 76, 72, 5, H, m, 0);
-    // round glasses: thin dark frames, faint lens glare (sprite heads draw their own 1px frames)
-    if (c.small) return;
-    const gl = p.m(7, false);
-    const ink = hex('#1c1418');
-    ring(p, [102, 79], 11.5, 10.5, 2.2, ink, gl);
-    ring(p, [126.5, 79], 5.6, 9.8, 2, ink, gl);
-    p.stroke([[113.5, 77], [117, 75.5], [121, 77]], 2, 2, ink, gl);
-    p.stroke([[90.5, 77], [72, 75]], 2, 1.6, ink, gl);
-    p.stroke([[95, 72], [98, 70.5]], 1.6, 1.6, hex('#ffffff'), gl);
+    // swept-back wavy hair with a loose lock over the brow
+    p.fill([[54, 60], [56, 36], [74, 18], [100, 12], [122, 18], [134, 34], [132, 46], [118, 38], [102, 34], [86, 38], [76, 48], [74, 66], [66, 78], [58, 74]], H[2], m);
+    for (const [a, b, t] of [[[80, 22], [102, 18], [124, 28]], [[70, 32], [90, 26], [112, 30]], [[62, 46], [72, 36], [92, 34]]] as Pt[][]) p.stroke([a, b, t], 2.6, 1, H[3], m, { clip: [m] });
+    lock(p, [112, 34], [124, 40], [128, 54], 8, H, m);
+    lock(p, [100, 34], [108, 44], [110, 56], 6, H, m);
+    // sideburns down the jaw
+    p.fill([[70, 66], [80, 66], [84, 90], [82, 104], [74, 100], [70, 84]], H[2], m);
+    p.stroke([[76, 70], [80, 88]], 1.6, 1, H[3], m, { clip: [m] });
+    // light stubble shadow along the jaw and chin
+    if (!c.small) p.fill([[84, 102], [100, 112], [118, 116], [130, 112], [128, 122], [116, 126], [98, 122], [84, 112]], mix(c.S[1], hex('#6a4a38'), 0.3), c.skin, { clip: [c.skin] });
+    // a little finch perched on the shoulder (hidden in sprite heads)
+    if (!c.small) {
+      const f = p.m(9, true, 0.45);
+      p.ell(150, 132, 9, 6.5, hex('#8a6a44'), f, {}, -0.2);
+      p.ell(158, 126, 5.5, 5, hex('#8a6a44'), f);
+      p.fill([[162, 124], [168, 126], [162, 128]], hex('#3a2a1a'), f, { sharp: true });
+      p.ell(158, 125, 1.1, 1.1, hex('#141010'), f);
+      p.fill([[140, 130], [128, 128], [142, 136]], hex('#5a4228'), f, { sharp: true });
+      p.ell(150, 134, 5, 3, hex('#c89a64'), f, { clip: [f] });
+      p.stroke([[144, 128], [152, 130], [156, 134]], 1.4, 1, hex('#4a3420'), f, { clip: [f] });
+      p.stroke([[146, 138], [146, 142]], 1, 1, hex('#3a2a1a'), f);
+    }
   },
 };
 
@@ -205,94 +220,122 @@ const AROHA: Design = {
 };
 
 const LOU: Design = {
-  hair: '#2a1c16',
+  // the cook: older, sharp and very much in charge. Asymmetric blonde bob, sunglasses up top, pearls, lipstick
+  hair: '#d8b070',
   face: {
-    skin: '#9c6a46', chin: [0, 1], jawW: 1.2, cheek: 2.5,
-    nose: { len: 0.7, size: 1.4 },
-    eyes: { style: 'soft', iris: '#24140e', size: 0.98, y: 0.5 },
-    brow: { col: '#1e1410', w: 4.4, arch: 0.8 },
-    lip: '#7a3a32', blushCol: '#d0605a',
+    skin: '#f0c4a4', chin: [0, 0], jawW: 1.02, cheek: 0.5,
+    nose: { len: 0.85, size: 1.05 },
+    eyes: { style: 'lash', iris: '#4a6a8a', size: 0.92, y: 0.5 },
+    brow: { col: '#8a6a44', w: 2.4, arch: 2.4, len: 1 },
+    lip: '#b8384a', lines: true, lips: true, blushCol: '#e07a6a',
+  },
+  back(p, H, m) {
+    // short stacked back of the bob
+    p.fill([[48, 70], [46, 44], [60, 24], [84, 12], [104, 12], [118, 22], [96, 34], [74, 48], [70, 72], [62, 92], [52, 86]], H[1], m);
+    for (const y of [48, 60, 72, 82]) p.stroke([[50, y], [62, y - 6], [70, y - 4]], 2, 1, H[0], m, { clip: [m] });
   },
   body(p) {
-    // red aloha shirt with white hibiscus + a white apron bib
-    const { m, T } = torso(p, '#c83a36', { broad: 1.25 });
-    const fl: Pt[] = [[36, 170], [60, 188], [150, 176], [170, 196], [40, 196], [158, 160]];
-    for (const [x, y] of fl) { for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; p.ell(x + Math.cos(a) * 4, y + Math.sin(a) * 4, 3.4, 3.4, hex('#f6ece0'), m, { clip: [m] }); } p.ell(x, y, 2, 2, hex('#f0b848'), m, { clip: [m] }); }
-    p.fill([[80, 138], [96, 152], [112, 140], [118, 150], [96, 164], [74, 150]], T[3], m);
-    const ap = p.m(4, true, 0.4);
-    const A = tones('#f2ece0');
-    p.fill([[64, 168], [134, 168], [138, 200], [60, 200]], A[2], ap, { sharp: true });
-    p.stroke([[66, 170], [80, 142]], 3.4, 3.4, A[2], ap);
-    p.stroke([[132, 170], [118, 142]], 3.4, 3.4, A[2], ap);
-    p.where([ap], (u) => u < 76, A[1]);
-    p.fill([[84, 180], [114, 180], [114, 196], [84, 196]], A[1], ap, { clip: [ap], sharp: true });
+    // lavender cardigan over a cream blouse, white apron, a name badge
+    const { m, T } = torso(p, '#9a86b8', { broad: 1.05 });
+    void T;
+    const bl = p.m(4, true, 0.45);
+    p.fill([[80, 134], [112, 136], [114, 156], [96, 166], [80, 156]], hex('#f2e8d8'), bl);
+    const ap = p.m(5, true, 0.4);
+    const A = tones('#f4f0e6');
+    p.fill([[70, 166], [130, 166], [134, 200], [66, 200]], A[2], ap, { sharp: true });
+    p.stroke([[72, 168], [84, 142]], 3, 3, A[2], ap);
+    p.stroke([[128, 168], [114, 142]], 3, 3, A[2], ap);
+    p.where([ap], (u) => u < 80, A[1]);
+    const bd = p.m(6, true, 0.5);
+    p.fill([[140, 162], [158, 164], [157, 174], [139, 172]], hex('#f6f2e6'), bd, { sharp: true });
+    p.fill([[140, 162], [158, 164], [158, 167], [140, 165]], hex('#c8384a'), bd, { sharp: true });
+    p.stroke([[143, 170], [154, 171]], 1, 1, hex('#3a3040'), bd);
+    void m;
   },
-  front(p, H, m) {
-    // short hair at the temple, then the teal patterned head wrap with a knot at the back
-    p.fill([[58, 64], [62, 50], [76, 50], [80, 70], [72, 80], [62, 78]], H[2], m);
-    const wr = p.m(6, true, 0.45);
-    const W = tones('#2aa8a0');
-    p.fill([[50, 68], [52, 40], [72, 18], [100, 12], [124, 20], [136, 38], [136, 54], [118, 52], [92, 52], [70, 58], [58, 66]], W[2], wr);
-    p.where([wr], (u, v) => u < 70 || v > 50, W[1]);
-    for (let y = 18; y < 58; y += 7) for (let x = 54 + (y % 2) * 3; x < 136; x += 8) p.ell(x, y, 1.5, 1.5, hex('#f8d850'), wr, { clip: [wr] });
-    const band = p.m(6, true, 0.45);
-    p.fill([[52, 64], [72, 54], [96, 48], [122, 46], [138, 48], [138, 56], [120, 55], [96, 56], [72, 62], [54, 72]], hex('#e8483a'), band);
-    // knot + tails at the back of the head
-    p.ell(44, 50, 9, 7, W[2], wr);
-    p.fill([[40, 54], [30, 76], [36, 80], [46, 58]], W[1], wr);
-    p.fill([[46, 56], [44, 82], [51, 82], [52, 58]], W[2], wr);
-    // small gold stud
-    p.ell(68, 94, 1.6, 1.6, hex('#f0c040'), p.m(5, true, 0.5));
+  front(p, H, m, c) {
+    // the bob: long angled front sweeping past the jaw, spiky volume at the crown, lowlights
+    p.fill([[56, 58], [58, 34], [76, 16], [102, 10], [124, 16], [136, 32], [134, 48], [122, 53], [108, 49], [95, 52], [87, 58], [89, 80], [91, 102], [85, 112], [74, 106], [68, 88], [58, 78]], H[2], m);
+    for (const [a, b, t] of [[[96, 16], [114, 26], [122, 46]], [[80, 20], [90, 34], [88, 76]], [[118, 22], [128, 34], [130, 46]]] as Pt[][]) p.stroke([a, b, t], 3, 1.2, H[3], m, { clip: [m] });
+    for (const [a, b, t] of [[[88, 24], [96, 40], [86, 100]], [[70, 30], [78, 44], [78, 64]]] as Pt[][]) p.stroke([a, b, t], 2, 1, H[1], m, { clip: [m] });
+    // spiky crown
+    for (const [x, y] of [[62, 24], [72, 14], [84, 8]] as Pt[]) p.fill([[x - 6, y + 10], [x, y - 6], [x + 6, y + 10]], H[2], m, { sharp: true });
+    // sunglasses pushed up on the head
+    if (!c.small) {
+      const sg = p.m(7, true, 0.4);
+      p.stroke([[66, 30], [90, 22], [118, 20]], 2.4, 2, hex('#1a1418'), sg);
+      p.ell(98, 20, 9, 5, hex('#2a2230'), sg, {}, -0.15);
+      p.ell(118, 18, 6, 4.5, hex('#2a2230'), sg);
+      p.stroke([[94, 18], [100, 17]], 1.2, 1.2, hex('#8a8aa8'), sg, { clip: [sg] });
+    }
+    // pearl stud
+    p.ell(66, 94, 2.2, 2.2, hex('#f6f2ea'), p.m(8, true, 0.3));
+    p.dot(65.5, 93.5, hex('#ffffff'));
   },
 };
 
 const PIP: Design = {
-  hair: '#1c1c26',
+  // tech wizard: pink twin-tails, big round glasses, headphones, kawaii tee
+  hair: '#f08cbc',
   face: {
-    skin: '#f2caa8', chin: [-2, -2], jawW: 0.9, cheek: -1,
-    nose: { len: 0.55, size: 0.85 },
-    eyes: { style: 'bold', iris: '#2a2a3a', size: 1.1, y: 0.5 },
-    brow: { col: '#16161e', w: 3.4, arch: 1 },
-    lip: '#c06a60', blushCol: '#f08070',
+    skin: '#fbdcc6', chin: [-3, -3], jawW: 0.86, cheek: -1.5,
+    nose: { len: 0.35, size: 0.7 },
+    eyes: { style: 'lash', iris: '#c04a8a', size: 1.38, y: 1 },
+    brow: { col: '#d06a9a', w: 2.2, arch: 1.4, len: 0.9 },
+    lip: '#e0707a', blushCol: '#ff8aa0',
   },
   back(p, H, m) {
-    p.ell(78, 52, 30, 32, H[1], m);
+    // twin-tails with scrunchies
+    p.fill([[50, 58], [56, 30], [80, 14], [106, 12], [126, 24], [110, 30], [80, 40], [66, 60], [58, 76]], H[1], m);
+    p.fill([[52, 60], [38, 74], [28, 108], [30, 146], [44, 168], [50, 140], [48, 108], [58, 80]], H[2], m);
+    p.stroke([[46, 72], [36, 110], [40, 150]], 2.4, 1, H[3], m, { clip: [m] });
+    p.ell(52, 64, 6, 5, hex('#8ae0e8'), p.m(6, true, 0.5));
   },
   body(p) {
-    // dark tee under orange overalls, a wrench in the bib pocket
-    const { m, T } = torso(p, '#3a3a44', { broad: 0.8 });
-    void T;
-    const ov = p.m(4, true, 0.5);
-    const O = tones('#e8762a');
-    p.fill([[70, 166], [132, 166], [136, 200], [66, 200]], O[2], ov, { sharp: true });
-    p.stroke([[58, 148], [72, 168]], 8, 8, O[2], ov);
-    p.stroke([[142, 150], [130, 168]], 8, 8, O[2], ov);
-    p.where([ov], (u) => u < 80, O[1]);
-    p.fill([[88, 172], [114, 172], [114, 190], [88, 190]], O[1], ov, { clip: [ov], sharp: true });
-    const wr = p.m(5, true, 0.5);
-    p.stroke([[106, 176], [110, 160]], 3, 3, hex('#9aa8b4'), wr);
-    p.ell(110.5, 158, 3.6, 3, hex('#9aa8b4'), wr);
-    p.ell(111, 157, 1.4, 1.6, O[1], wr, { clip: [wr] });
-    for (const [x, y] of [[74, 170], [128, 170]] as Pt[]) p.ell(x, y, 2.6, 2.6, hex('#d8d0c0'), ov, { clip: [ov] });
+    // pastel kawaii tee (smiling cat + stars), lilac overall straps, headphones round the neck
+    const tee = p.m(3, true, 0.45);
+    const Tt = tones('#fff4fa');
+    p.fill([[76, 138], [114, 138], [136, 146], [160, 164], [170, 200], [24, 200], [32, 164], [54, 146]], Tt[2], tee);
+    p.where([tee], (u, v) => u < 56 + (v - 150) * 0.25, Tt[1]);
+    const art = p.m(4, false);
+    p.ell(98, 176, 13, 11, hex('#ffb0d0'), art, { clip: [tee], retag: true });
+    p.fill([[86, 170], [88, 158], [94, 167]], hex('#ffb0d0'), art, { sharp: true });
+    p.fill([[102, 167], [108, 158], [110, 170]], hex('#ffb0d0'), art, { sharp: true });
+    p.ell(93, 175, 1.4, 1.8, hex('#3a2030'), art);
+    p.ell(103, 175, 1.4, 1.8, hex('#3a2030'), art);
+    p.stroke([[95, 180], [98, 182], [101, 180]], 1, 1, hex('#3a2030'), art);
+    for (const [x, y] of [[70, 170], [128, 180], [120, 160]] as Pt[]) { p.fill([[x, y - 4], [x + 1.4, y - 1], [x + 4, y], [x + 1.4, y + 1], [x, y + 4], [x - 1.4, y + 1], [x - 4, y], [x - 1.4, y - 1]], hex('#ffd84a'), art, { sharp: true, clip: [tee] }); }
+    const ov = p.m(5, true, 0.5);
+    p.stroke([[60, 150], [66, 200]], 6, 6, hex('#b89ae8'), ov);
+    p.stroke([[138, 152], [132, 200]], 6, 6, hex('#b89ae8'), ov);
+    for (const [x, y] of [[62, 176], [136, 176]] as Pt[]) p.ell(x, y, 2.6, 2.6, hex('#fff0a0'), ov, { clip: [ov] });
+    // headphones
+    const hp = p.m(7, true, 0.5);
+    p.stroke([[70, 132], [96, 150], [124, 136]], 3.4, 3.4, hex('#4a3a5a'), hp);
+    p.ell(70, 134, 8, 9, hex('#5a4a6a'), hp);
+    p.ell(70, 134, 4.5, 5.5, hex('#ff8ac0'), hp, { clip: [hp] });
+    p.ell(124, 136, 6, 8, hex('#5a4a6a'), hp);
   },
   front(p, H, m, c) {
-    // spiky short hair: locks radiating from the crown, fringe falling over the brow
-    const locks: [Pt, Pt, Pt, number][] = [
-      [[80, 30], [66, 20], [50, 22], 14], [[84, 26], [80, 10], [72, 2], 12], [[92, 26], [100, 10], [110, 4], 12], [[100, 30], [116, 20], [130, 20], 12],
-      [[104, 36], [122, 38], [134, 50], 10], [[98, 40], [112, 52], [118, 66], 9], [[90, 40], [96, 56], [98, 68], 9], [[76, 40], [74, 58], [70, 74], 11], [[66, 42], [56, 58], [52, 76], 12],
-    ];
-    p.fill([[52, 64], [54, 38], [70, 22], [94, 18], [116, 24], [128, 38], [120, 44], [100, 42], [82, 46], [70, 56], [62, 72]], H[2], m);
-    for (const [a, b, t, w] of locks) lock(p, a, b, t, w, H, m);
-    // goggles pushed up on the head
-    const gg = p.m(7, true, 0.5);
-    p.stroke([[50, 50], [80, 38], [118, 34], [134, 40]], 5, 5, hex('#3a2a20'), gg);
-    for (const [x, y, r] of [[92, 30, 9], [116, 28, 7.5]] as [number, number, number][]) {
-      p.ell(x, y, r, r * 0.9, hex('#b8862a'), gg);
-      p.ell(x, y, r * 0.7, r * 0.62, hex('#2ab0b8'), gg, { clip: [gg] });
-      p.ell(x - r * 0.25, y - r * 0.2, r * 0.25, r * 0.2, hex('#c8fff8'), gg, { clip: [gg] });
+    // blunt anime bangs + side locks
+    p.fill([[56, 58], [58, 34], [78, 16], [104, 12], [124, 20], [134, 36], [136, 52], [128, 62], [122, 50], [116, 62], [108, 50], [100, 62], [92, 50], [84, 62], [78, 52], [74, 70], [66, 86], [58, 78]], H[2], m);
+    for (const [a, b] of [[[90, 20], [118, 26]], [[76, 28], [98, 22]]] as Pt[][]) p.stroke([a, b], 3, 1.5, H[3], m, { clip: [m] });
+    lock(p, [76, 56], [72, 80], [74, 104], 9, H, m);
+    lock(p, [130, 50], [134, 66], [132, 82], 6, H, m);
+    // ahoge
+    p.stroke([[96, 14], [100, 4], [110, 2]], 2.2, 1, H[2], m);
+    // star hair clip
+    const cl = p.m(6, true, 0.5);
+    p.fill([[118, 24], [120, 18], [122, 24], [128, 25], [123, 28], [125, 34], [120, 30], [115, 34], [117, 28], [112, 25]], hex('#ffd84a'), cl, { sharp: true });
+    // big round nerd glasses (sprite heads draw their own)
+    if (!c.small) {
+      const gl = p.m(8, false);
+      const fr = hex('#c83a7a');
+      ring(p, [102, 80], 12.5, 11, 2.2, fr, gl);
+      ring(p, [127, 79.5], 6.5, 10.5, 2, fr, gl);
+      p.stroke([[114.5, 78], [118, 76], [120.5, 78]], 2, 2, fr, gl);
+      p.stroke([[89.5, 78], [74, 76]], 2, 1.6, fr, gl);
+      p.stroke([[94, 72], [97, 70]], 1.6, 1.6, hex('#ffffff'), gl);
     }
-    // grease smudge on the cheek
-    p.ell(110, 96, 4, 1.6, mix(c.S[1], hex('#3a3a44'), 0.4), c.skin, { clip: [c.skin] }, -0.3);
   },
 };
 
