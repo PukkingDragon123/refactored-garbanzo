@@ -16,7 +16,7 @@ import { approach, clamp, rand } from '../core/math';
 // ------------------------------------------------------------------ art binding (src/art/people.ts, src/art/emotes.ts)
 
 export type Look = 'fwd' | 'up' | 'down';
-export interface BodyFrameArt { back: PixelBuffer; front: PixelBuffer | null; ax: number; ay: number; hx: number; hy: number; look?: Look; hand?: [number, number]; headBehind?: boolean; hrot?: number }
+export interface BodyFrameArt { back: PixelBuffer; front: PixelBuffer | null; ax: number; ay: number; hx: number; hy: number; look?: Look; hand?: [number, number]; headBehind?: boolean; hrot?: number; hflip?: boolean }
 export interface PeopleArt {
   ANIMS: Record<string, { frames: number; fps: number; loop: boolean }>;
   CHAR_ANIMS: Record<string, string[]>;
@@ -24,6 +24,10 @@ export interface PeopleArt {
   renderBody(id: string, anim: string, frame: number): BodyFrameArt;
   renderHead(id: string, o: { expr: string; mouth: 0 | 1 | 2; blink: boolean; look: Look }): { buf: PixelBuffer; ax: number; ay: number };
   renderPortrait(id: string, expr: string, o?: { mouth?: 0 | 1 | 2; blink?: boolean }): PixelBuffer;
+  /** per-character anim table (e.g. the pug has his own frame counts) */
+  animFor?(id: string, anim: string): { frames: number; fps: number; loop: boolean } | null;
+  /** posture transition clip between two anims (sit down, stand up...) */
+  transitionFor?(id: string, from: string, to: string): string | null;
 }
 export interface EmoteArt {
   EMOTE_INFO: Record<string, { frames: number; fps: number; loop: boolean }>;
@@ -38,7 +42,7 @@ export function bindActorArt(p: PeopleArt | null, e: EmoteArt | null) {
 }
 export const peopleArt = () => people;
 
-interface BodyCache { back: Frame; front: Frame | null; ax: number; ay: number; hx: number; hy: number; look: Look; hand: [number, number] | null; headBehind: boolean; hrot: number }
+interface BodyCache { back: Frame; front: Frame | null; ax: number; ay: number; hx: number; hy: number; look: Look; hand: [number, number] | null; headBehind: boolean; hrot: number; hflip: boolean }
 const bodyCache = new Map<string, BodyCache>();
 const headCache = new Map<string, Frame>();
 const emoteCache = new Map<string, Frame[]>();
@@ -52,7 +56,7 @@ function bodyFrame(id: string, anim: string, frame: number): BodyCache | null {
     b = {
       back: atlas.add('pb:' + key, art.back, art.ax, art.ay),
       front: art.front ? atlas.add('pf:' + key, art.front, art.ax, art.ay) : null,
-      ax: art.ax, ay: art.ay, hx: art.hx, hy: art.hy, look: art.look ?? 'fwd', hand: art.hand ?? null, headBehind: !!art.headBehind, hrot: art.hrot ?? 0,
+      ax: art.ax, ay: art.ay, hx: art.hx, hy: art.hy, look: art.look ?? 'fwd', hand: art.hand ?? null, headBehind: !!art.headBehind, hrot: art.hrot ?? 0, hflip: !!art.hflip,
     };
     bodyCache.set(key, b);
   }
@@ -82,8 +86,8 @@ export function emoteAnim(kind: string): Frame[] {
   return fr;
 }
 
-export function animInfo(anim: string) {
-  return people?.ANIMS[anim] ?? { frames: 1, fps: 1, loop: true };
+export function animInfo(anim: string, id?: string) {
+  return (id && people?.animFor?.(id, anim)) || people?.ANIMS[anim] || { frames: 1, fps: 1, loop: true };
 }
 
 /** Pre-render a character's body frames for the given anims (call during loading to avoid hitches). */
@@ -91,7 +95,7 @@ export function warmActor(id: string, anims?: string[]) {
   if (!people) return;
   const list = anims ?? people.CHAR_ANIMS[id] ?? [];
   for (const a of list) {
-    const n = people.ANIMS[a]?.frames ?? 1;
+    const n = animInfo(a, id).frames;
     for (let i = 0; i < n; i++) bodyFrame(id, a, i);
   }
   for (const e of ['neutral', 'happy']) for (const m of [0, 1, 2] as const) headFrame(id, e, m, false, 'fwd');
@@ -101,12 +105,14 @@ export function warmActor(id: string, anims?: string[]) {
 // ------------------------------------------------------------------ actor
 
 export const CHAR_COLORS: Record<string, string> = {
-  rowan: '#3d6fb0', crowe: '#b73a2c', aroha: '#8a4b2a', lou: '#d2842e', pip: '#e0762a', phone: '#13262b',
+  mori: '#4a6a2a', jenna: '#d04890', joshu: '#2c3a5a', aroha: '#8a4b2a', chunk: '#c8402e',
+  rowan: '#4a6a2a', crowe: '#2c3a5a', lou: '#2c3a5a', pip: '#d04890', phone: '#13262b',
 };
 export const CHAR_NAMES: Record<string, string> = {
-  rowan: 'Rowan', crowe: 'Crowe', aroha: 'Aroha', lou: 'Lou', pip: 'Pip', phone: 'Phone',
+  mori: 'Mori', jenna: 'Jenna', joshu: 'Joshu', aroha: 'Aroha', chunk: 'Chunk',
+  rowan: 'Mori', crowe: 'Joshu', lou: 'Joshu', pip: 'Jenna', phone: 'Phone',
 };
-export const CHAR_VOICE: Record<string, number> = { rowan: 1, crowe: 0.66, aroha: 1.08, lou: 0.9, pip: 1.45, phone: 1.6 };
+export const CHAR_VOICE: Record<string, number> = { mori: 1, jenna: 1.5, joshu: 0.62, aroha: 1.12, chunk: 1.9, rowan: 1, crowe: 0.62, lou: 0.62, pip: 1.5, phone: 1.6 };
 
 export type ReactKind = 'jump' | 'shake' | 'shrink' | 'nod' | 'bounce' | 'recoil' | 'tremble' | 'stretch' | 'land';
 
@@ -175,11 +181,21 @@ export class Actor implements Drawable {
     return people?.CHAR_INFO[this.id]?.height ?? 64;
   }
 
+  /** posture transition in progress: plays a clip, then switches to `to` */
+  private trans: { to: string } | null = null;
+  /** insert posture transitions (sit down / stand up / lie down / get up) automatically */
+  transitions = true;
+
   /** Loop an animation (no-op if already playing). */
   setAnim(anim: string) {
-    if (this.anim === anim && !this.once) return;
+    if (this.anim === anim && !this.once && !this.trans) return;
+    if (this.trans?.to === anim) return;
     if (this.once) { const o = this.once; this.once = null; o.res(); }
-    this.anim = anim;
+    const from = this.trans ? this.trans.to : this.anim;
+    this.trans = null;
+    const clip = this.transitions ? people?.transitionFor?.(this.id, from, anim) : null;
+    this.anim = clip ?? anim;
+    if (clip) this.trans = { to: anim };
     this.animT = 0;
     this.holdFrame = null;
   }
@@ -187,10 +203,11 @@ export class Actor implements Drawable {
   /** Play an animation once, then switch to `then` (default: previous idle). */
   play(anim: string, then = this.idleAnim): Promise<void> {
     if (this.once) { const o = this.once; this.once = null; o.res(); }
+    this.trans = null;
     this.anim = anim;
     this.animT = 0;
     this.holdFrame = null;
-    const info = animInfo(anim);
+    const info = animInfo(anim, this.id);
     if (info.loop) {
       // looping anims played "once" run one cycle
       return new Promise(res => {
@@ -259,13 +276,22 @@ export class Actor implements Drawable {
 
   update(dt: number) {
     this.animT += dt;
+    // posture transition finished: continue into the target anim
+    if (this.trans) {
+      const info = animInfo(this.anim, this.id);
+      if (this.animT >= info.frames / info.fps) {
+        this.anim = this.trans.to;
+        this.trans = null;
+        this.animT = 0;
+      }
+    }
     // one-shot completion
     if (this.once) {
-      const info = animInfo(this.anim);
+      const info = animInfo(this.anim, this.id);
       if (this.animT >= info.frames / info.fps) {
         const o = this.once;
         this.once = null;
-        if (!animInfo(o.anim).loop) {
+        if (!animInfo(o.anim, this.id).loop) {
           this.holdFrame = null;
         }
         this.anim = o.then;
@@ -285,7 +311,7 @@ export class Actor implements Drawable {
         this.vx = Math.sign(d) * this.walkSpeed;
         this.x += this.vx * dt;
         if (Math.sign(this.walkX - this.x) !== Math.sign(d)) this.x = this.walkX;
-        if (!this.once && this.anim !== this.walkAnim) { this.anim = this.walkAnim; }
+        if (!this.once && this.anim !== this.walkAnim && this.trans?.to !== this.walkAnim) this.setAnim(this.walkAnim);
       }
     }
     if (this.terrain) {
@@ -347,7 +373,7 @@ export class Actor implements Drawable {
   }
 
   private frameIndex() {
-    const info = animInfo(this.anim);
+    const info = animInfo(this.anim, this.id);
     if (this.holdFrame !== null) return Math.min(info.frames - 1, this.holdFrame);
     const i = Math.floor(this.animT * info.fps);
     return info.loop ? i % info.frames : Math.min(info.frames - 1, i);
@@ -359,7 +385,9 @@ export class Actor implements Drawable {
     if (!b) return [this.x, this.y - 84 + this.hop];
     const hx = this.x + this.ox + this.facing * (b.hx - b.ax) * this.sqx;
     const hy = this.y + this.oy + this.hop + (b.hy - b.ay) * this.sqy;
-    return [hx, hy - 17 * this.sqy];
+    const h = headFrame(this.id, this.expr, 0, false, 'fwd');
+    const top = h ? (b.hflip ? h.h - h.ay : h.ay) : 17;
+    return [hx, hy - top * this.sqy];
   }
 
   /** CSS anchor above the head (accounts for layer parallax and layer transform) */
@@ -429,9 +457,10 @@ export class Actor implements Drawable {
     const hx = x + f * (b.hx - b.ax) * this.sqx, hy = y + (b.hy - b.ay) * this.sqy + nod;
     const sx = f * this.sqx, sy = this.sqy;
     const hr = b.hrot * f;
-    if (b.headBehind && head) r.draw(head, hx, hy, sx, sy, hr, col);
+    const hsy = b.hflip ? -sy : sy;
+    if (b.headBehind && head) r.draw(head, hx, hy, sx, hsy, hr, col);
     r.draw(b.back, x, y, sx, sy, 0, col);
-    if (!b.headBehind && head) r.draw(head, hx, hy, sx, sy, hr, col);
+    if (!b.headBehind && head) r.draw(head, hx, hy, sx, hsy, hr, col);
     if (b.front) r.draw(b.front, x, y, sx, sy, 0, col);
     // emote above head
     if (this.emote) {

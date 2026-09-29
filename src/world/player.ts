@@ -6,7 +6,7 @@ import type { Renderer } from '../gfx/renderer';
 import type { Drawable, Stage } from './stage';
 import type { Surface, Climb } from './terrain';
 import { Terrain } from './terrain';
-import { Actor } from './actor';
+import { Actor, peopleArt } from './actor';
 import { game } from '../game/game';
 import { audio } from '../core/audio';
 import { approach, clamp } from '../core/math';
@@ -70,10 +70,13 @@ export class Player implements Drawable {
   sinceRun = 99;
   readonly body: Actor;
 
-  constructor(x: number, y: number, readonly terrain: Terrain) {
+  /** movement speed multiplier (V4 scenes are scaled for the smaller anime cast) */
+  speedK = 1;
+
+  constructor(x: number, y: number, readonly terrain: Terrain, readonly id = 'mori') {
     this.x = x;
     this.y = y;
-    this.body = new Actor('rowan', x, y, 1);
+    this.body = new Actor(id, x, y, 1);
     this.body.fidget = true;
   }
 
@@ -113,7 +116,8 @@ export class Player implements Drawable {
   }
 
   get height() {
-    return this.crouch || this.state === 'hide' || this.state === 'work' ? 54 : 82;
+    const h = peopleArt()?.CHAR_INFO[this.id]?.height ?? 82;
+    return this.crouch || this.state === 'hide' || this.state === 'work' ? Math.round(h * 0.66) : h;
   }
   get headY() {
     return this.y - this.height;
@@ -227,8 +231,8 @@ export class Player implements Drawable {
       }
     }
     this.running = canControl && inp.down('run') && !this.crouch && !this.camera;
-    if (this.running && Math.abs(this.vx) > 80) this.sinceRun = 0;
-    const speed = this.state === 'script' ? this.scriptSpeed : this.camera ? 28 : this.crouch ? 26 : this.running ? 118 : 60;
+    if (this.running && Math.abs(this.vx) > 80 * this.speedK) this.sinceRun = 0;
+    const speed = (this.state === 'script' ? this.scriptSpeed : this.camera ? 28 : this.crouch ? 26 : this.running ? 118 : 60) * this.speedK;
     const target = ax * speed;
     this.vx = approach(this.vx, target, (this.onGround ? 640 : 280) * dt);
     // sliding on a tilted deck
@@ -318,7 +322,7 @@ export class Player implements Drawable {
     else if (steep && Math.abs(this.vx) > 30 && Math.sign(this.vx) === Math.sign(this.tilt) && ax === 0) this.anim = 'slip';
     else if (steep && !moving) this.anim = 'brace';
     else if (this.crouch) this.anim = moving ? 'crouchWalk' : 'crouch';
-    else if (moving) this.anim = Math.abs(this.vx) > 85 ? 'run' : 'walk';
+    else if (moving) this.anim = Math.abs(this.vx) > 85 * this.speedK ? 'run' : 'walk';
     else this.anim = 'idle';
     // debounce ground-pose changes (idle/walk/brace/slip jitter on bumpy terrain)
     const soft = (a: string) => a === 'idle' || a === 'walk' || a === 'run' || a === 'brace' || a === 'slip';

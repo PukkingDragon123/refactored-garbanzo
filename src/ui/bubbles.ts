@@ -8,6 +8,7 @@ import { guardInput } from '../core/input';
 import { SPECIES, CLUES } from '../game/species';
 import { ITEMS } from '../game/items';
 import { CloseUps, isCastId } from './closeup';
+import { PortraitBox, hasPortrait } from './dialogbox';
 
 // ---------------------------------------------------------------- pixel bubble skins
 function px(w: number, h: number, rows: (x: number, y: number) => string | null): string {
@@ -218,6 +219,8 @@ const CSS = `
 
 interface Live {
   close?: boolean;
+  /** typed inside the Stardew-style portrait box instead of a bubble */
+  inBox?: boolean;
   el: HTMLElement;
   box: HTMLElement;
   tx: HTMLElement;
@@ -249,6 +252,10 @@ export class Bubbles {
   private keyHandler: (e: KeyboardEvent) => void;
   private clickHandler: (e: PointerEvent) => void;
   readonly cu: CloseUps;
+  /** Stardew-style portrait dialogue box */
+  readonly pb: PortraitBox;
+  /** 'box': blocking dialogue from the cast goes to the portrait box (close: false forces a bubble) */
+  mode: 'box' | 'bubble' = 'box';
 
   constructor(parent: HTMLElement) {
     if (!styled) {
@@ -258,6 +265,7 @@ export class Bubbles {
     }
     this.cu = new CloseUps(parent);
     this.root = parent.appendChild(el('div', 'bubbles'));
+    this.pb = new PortraitBox(parent);
     this.keyHandler = e => {
       if (!this.active) return;
       if (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyE') {
@@ -297,6 +305,28 @@ export class Bubbles {
 
   private closeWho = '';
   private closeExpr = 'neutral';
+  private makeBoxed(line: BubbleLine): Live {
+    const sp = this.speakers.get(line.who);
+    const style = line.style ?? 'say';
+    const w = el('div', 'dbl');
+    w.innerHTML = `<div class="tx"></div><div class="chs"></div><div class="more"></div>`;
+    this.pb.area.appendChild(w);
+    this.pb.setDone(false);
+    const tx = w.querySelector('.tx') as HTMLElement;
+    tx.innerHTML = charSpans(this.fmt(line.text));
+    const chars = [...tx.querySelectorAll('.c')] as HTMLElement[];
+    const lv: Live = {
+      el: w, box: w, tx, who: line.who, full: line.text, shown: 0,
+      speed: 52 * (line.speed ?? 1) * (style === 'shout' ? 1.3 : style === 'whisper' ? 0.8 : 1), pause: 0,
+      done: false, bark: false, ttl: Infinity, w: 0, h: 0, chars, plain: chars.map(c => c.textContent ?? '').join(''), pre: 0.06,
+      caret: el('span', 'caret'), inBox: true,
+    };
+    this.live.push(lv);
+    audio.play(('bubblePop' as unknown) as 'ui', { vol: 0.2, pitch: 0.9 + (sp?.voice ?? 1) * 0.15 });
+    if (style === 'shout') (game.scene as { st?: { shake(a: number, t: number): void } } | null)?.st?.shake(2, 0.25);
+    return lv;
+  }
+
   private make(line: BubbleLine, bark: boolean, close = false): Live {
     const sp = this.speakers.get(line.who);
     const style = line.style ?? 'say';
@@ -333,6 +363,12 @@ export class Bubbles {
   }
 
   private kill(lv: Live) {
+    if (lv.inBox) {
+      lv.el.remove();
+      this.live = this.live.filter(x => x !== lv);
+      this.speakers.get(lv.who)?.talk?.(false);
+      return;
+    }
     lv.el.classList.remove('pop');
     lv.el.classList.add('out');
     setTimeout(() => lv.el.remove(), 170);
@@ -341,6 +377,7 @@ export class Bubbles {
   }
 
   private place(lv: Live) {
+    if (lv.inBox) return;
     const sp = this.speakers.get(lv.who);
     const rootR = this.root.getBoundingClientRect();
     const W = rootR.width, H = rootR.height;
@@ -367,6 +404,7 @@ export class Bubbles {
 
   /** per-frame: typewriter + follow speakers */
   update(dt: number) {
+    this.pb.update(dt);
     for (const lv of [...this.live]) {
       this.place(lv);
       if (!lv.done) {
@@ -401,6 +439,7 @@ export class Bubbles {
           lv.caret.remove();
           lv.done = true;
           lv.el.classList.add('done');
+          if (lv.inBox) this.pb.setDone(true);
           if (!lv.bark) this.speakers.get(lv.who)?.talk?.(false);
           this.skipTyping = false;
         }
@@ -447,6 +486,31 @@ export class Bubbles {
         if (line.others) for (const [id, r] of Object.entries(line.others)) this.speakers.get(id)?.react?.(r);
         line.onShow?.();
         if (!line.text) continue;
+        const boxed = this.mode === 'box' && line.close !== false && line.style !== 'phone' && (hasPortrait(line.who) || !sp || line.who === 'narrator');
+        if (boxed) {
+          this.cu.hide();
+          this.closeWho = '';
+          this.pb.show(line.who, sp?.name ?? (line.who === 'narrator' ? '' : line.who), line.expr, line.style);
+          const lv = this.makeBoxed(line);
+          this.pb.talking = () => !lv.done;
+          sp?.talk?.(true);
+          await new Promise<void>(res => {
+            const chk = () => (lv.done ? res() : requestAnimationFrame(chk));
+            chk();
+          });
+          if (line.choices) choice = await this.ask(lv, line.choices);
+          else if (line.auto !== undefined) {
+            await new Promise<void>(res => {
+              const t = setTimeout(() => { this.advance = null; res(); }, line.auto);
+              this.advance = () => { clearTimeout(t); res(); };
+            });
+          } else {
+            await new Promise<void>(res => (this.advance = res));
+            audio.play('ui', { vol: 0.25 });
+          }
+          continue;
+        }
+        this.pb.hide();
         // cinematic close-up for dramatic lines (kept while the same speaker keeps talking)
         const dramatic = line.style === 'shout' || ['shocked', 'surprised', 'angry', 'scared'].includes(line.expr ?? '');
         const close = isCastId(line.who) && (line.close ?? (dramatic || (this.cu.active && this.closeWho === line.who)));
@@ -477,6 +541,7 @@ export class Bubbles {
     } finally {
       for (const lv of this.live.filter(l => !l.bark)) this.kill(lv);
       this.cu.hide();
+      this.pb.hide();
       this.closeWho = '';
       this.active = false;
       this.advance = null;
