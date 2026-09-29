@@ -271,17 +271,17 @@ function drawFeatures(b: PixelBuffer, d: Design, e: ExprDef, talk: 0 | 1 | 2, bl
 // ------------------------------------------------------------------ cast
 
 const MORI: Design = {
-  skin: T('#f4c8a6', { sh: 0.12, deep: 0.28, hi: 0.06 }),
-  eyes: 'young', iris: ['#2a1a14', '#6a4a2a', '#9a7040'], lash: '#2a1c22', brow: '#36221c', browH: 1,
+  skin: T('#f3b07e', { sh: 0.12, deep: 0.28, hi: 0.06 }),
+  eyes: 'young', iris: ['#1a0e0c', '#6a3a22', '#b07040'], lash: '#2a1c22', brow: '#36221c', browH: 1,
   eyeX: 18, eyeY: 25,
   back(p, m) {
-    const [hd, hs, hb] = T('#4e3428', { sh: 0.2, deep: 0.36 });
+    const [hd, hs, hb] = T('#2e2426', { sh: 0.2, deep: 0.36 });
     p.ell(CX, 20, 16, 14, hb, m.hairB);
     p.where([m.hairB], (u, v) => v > 22, hs);
     void hd;
   },
   body(p, m) {
-    const shirt = T('#dccca2'), vest = T('#5e6e3c', { sh: 0.18 }), strap = T('#e06a2e');
+    const shirt = T('#453a3a'), vest = T('#5b4b4b', { sh: 0.18 }), strap = T('#744830');
     // shoulders: olive vest over a khaki shirt
     p.fill([[4, 60], [7, 51], [15, 46.5], [CX, 45], [PW - 15, 46.5], [PW - 7, 51], [PW - 4, 60]], vest[2], m.cloth);
     p.where([m.cloth], (u, v) => u > PW - 16 || v > 57, vest[1]);
@@ -293,16 +293,9 @@ const MORI: Design = {
     // backpack straps (orange) over the shoulders
     p.fill([[9, 49.5], [13.6, 47.6], [15.6, 60], [10.6, 60]], strap[2], m.acc, { sharp: true });
     p.fill([[PW - 9, 49.5], [PW - 13.6, 47.6], [PW - 15.6, 60], [PW - 10.6, 60]], strap[1], m.acc, { sharp: true });
-    // blue lanyard + ID card
-    p.stroke([[CX - 5.4, 46], [CX - 6.2, 53], [CX - 7.6, 55.4]], 0.9, 0.9, col('#3a78c0'), m.acc);
-    p.fill([[CX - 11, 54.2], [CX - 5.4, 54.2], [CX - 5.4, 60], [CX - 11, 60]], col('#f4f4ee'), m.acc, { sharp: true });
-    p.where([m.acc], (u, v) => u > CX - 10.6 && u < CX - 5.8 && v > 55 && v < 56.2, col('#3a78c0'));
-    // badge pins on the vest
-    p.ell(CX + 10, 53.5, 1.3, 1.3, col('#e8483a'), m.acc);
-    p.ell(CX + 13.2, 54, 1.3, 1.3, col('#48a8e8'), m.acc);
   },
   front(p, m) {
-    const [hd, hs, hb, hl] = T('#4e3428', { sh: 0.2, deep: 0.36, hi: 0.2 });
+    const [hd, hs, hb, hl] = T('#2e2426', { sh: 0.2, deep: 0.36, hi: 0.2 });
     // messy bangs: pointed locks over the forehead, parted toward his right
     p.fill([
       [CX - 15, 26], [CX - 14.6, 16], [CX - 10, 9], [CX - 2, 6.4], [CX + 6, 7], [CX + 12.6, 10.4], [CX + 15.4, 17], [CX + 15, 27],
@@ -318,58 +311,37 @@ const MORI: Design = {
     p.where([m.hair], (u, v) => Math.abs(v - (10.6 + ((u - CX + 4) / 7) ** 2 * 2)) < 0.7 && u > CX - 11 && u < CX + 3, hl);
     void hd;
   },
-  post(b, e) {
-    // round glasses: rounded frames, bridge, glints
-    const g = col('#4a3a52');
-    const ey = 25, ex = 18;
-    for (const side of [0, 1]) {
-      const x0 = side ? PW - ex - 7 : ex - 1;
-      const pts: [number, number][] = [];
-      for (let i = 2; i < 6; i++) { pts.push([x0 + i, ey - 1]); pts.push([x0 + i, ey + 5]); }
-      for (let j = 1; j < 4; j++) { pts.push([x0, ey + j]); pts.push([x0 + 7, ey + j]); }
-      pts.push([x0 + 1, ey], [x0 + 6, ey], [x0 + 1, ey + 4], [x0 + 6, ey + 4]);
-      for (const [x, y] of pts) if (b.get(x, y) >>> 24) b.set(x, y, g);
-      if (e.eye !== 'happy' && e.eye !== 'closed') { b.set(x0 + (side ? 5 : 2), ey + 3, col('#dff4ff')); }
-    }
-    for (let x = ex + 7; x < PW - ex - 7; x++) if (b.get(x, ey + 1) >>> 24) b.set(x, ey + 1, g);
-  },
+  post() {},
 };
 
 const JENNA: Design = {
   skin: T('#fcd8c2', { sh: 0.1, deep: 0.24, hi: 0.05 }),
-  eyes: 'girl', iris: ['#3a1030', '#c0407e', '#f080b8'], lash: '#3a1a2e', brow: '#d04890', rosy: true, blush: '#ff8aa8',
+  eyes: 'girl', iris: ['#2a1a10', '#c89a30', '#f0d060'], lash: '#3a1a2e', brow: '#4a3038', blush: '#f09a90',
   faceW: 0.96, chin: -0.6, eyeX: 17, eyeY: 25,
   back(p, m) {
-    const [hd, hs, hb] = T('#f472b0', { sh: 0.16, deep: 0.3 });
+    const [hd, hs, hb] = T('#8a6868', { sh: 0.16, deep: 0.3 });
     // long hair behind, down past the shoulders
     p.fill([[CX - 16, 18], [CX - 14, 8], [CX, 4.6], [CX + 14, 8], [CX + 16.4, 18], [CX + 17, 40], [CX + 15, 52], [CX - 15, 52], [CX - 17, 40]], hb, m.hairB);
     p.where([m.hairB], (u, v) => v > 34 || u > CX + 12, hs);
-    // side ponytail (viewer right) with a lavender scrunchie
-    p.fill([[CX + 13, 11], [CX + 20, 9.6], [CX + 25.6, 16], [CX + 26.4, 30], [CX + 23, 42], [CX + 21.6, 30], [CX + 18.6, 19]], hb, m.hairB);
     p.where([m.hairB], (u, v) => u > CX + 21 && v > 18, hs);
     p.where([m.hairB], (u, v) => u > CX + 16 && u < CX + 22 && v > 22 && ((u + v * 0.5) % 4) < 1, hd);
-    p.ell(CX + 17.6, 11.4, 3, 2.4, col('#c8b4f0'), m.acc);
   },
   body(p, m) {
-    const hood = T('#b8a0e8', { sh: 0.16 }), heart = T('#f472b0');
+    const hood = T('#6d4855', { sh: 0.16 }), heart = T('#e1c7bc');
     // hoodie with the hood bunched behind the neck (cat ears poke up behind the shoulders)
     p.fill([[CX - 16, 47], [CX - 12.6, 42.4], [CX - 6, 45], [CX + 6, 45], [CX + 12.6, 42.4], [CX + 16, 47]], hood[1], m.cloth2);
     p.fill([[3, 60], [6, 51], [14, 46.4], [CX, 45.6], [PW - 14, 46.4], [PW - 6, 51], [PW - 3, 60]], hood[2], m.cloth);
     p.where([m.cloth], (u, v) => u > PW - 14 || v > 58, hood[1]);
     // neckline, drawstrings, heart print
     p.fill([[CX - 6, 45], [CX, 48.6], [CX + 6, 45], [CX + 6, 46.6], [CX, 50], [CX - 6, 46.6]], hood[1], m.cloth2);
-    p.stroke([[CX - 3.4, 48.6], [CX - 3.8, 55.6]], 0.9, 0.9, col('#ffffff'), m.acc);
-    p.stroke([[CX + 3.4, 48.6], [CX + 3.8, 55.6]], 0.9, 0.9, col('#ffffff'), m.acc);
+    p.stroke([[CX - 3.4, 48.6], [CX - 3.8, 55.6]], 0.9, 0.9, col('#8a6060'), m.acc);
+    p.stroke([[CX + 3.4, 48.6], [CX + 3.8, 55.6]], 0.9, 0.9, col('#8a6060'), m.acc);
     p.fill([[CX + 8, 55], [CX + 10, 53.4], [CX + 12, 55], [CX + 10, 58.4]], heart[2], m.acc);
     p.fill([[CX + 10, 55], [CX + 12, 53.4], [CX + 14, 55], [CX + 12, 58.4]], heart[2], m.acc);
     // headphones around the neck
-    p.stroke([[CX - 9, 45.4], [CX - 5, 48.8], [CX + 5, 48.8], [CX + 9, 45.4]], 1.4, 1.4, col('#3a3a4a'), m.acc);
-    p.ell(CX - 9.6, 46.2, 2.6, 3.1, col('#f472b0'), m.acc);
-    p.ell(CX + 9.6, 46.2, 2.6, 3.1, col('#d04890'), m.acc);
-    p.where([m.acc], (u, v) => Math.abs(Math.abs(u - CX) - 9.6) < 1.1 && Math.abs(v - 46.2) < 1.3, col('#ffb8dc'));
   },
   front(p, m) {
-    const [hd, hs, hb, hl] = T('#f472b0', { sh: 0.16, deep: 0.3, hi: 0.18 });
+    const [hd, hs, hb, hl] = T('#8a6868', { sh: 0.16, deep: 0.3, hi: 0.18 });
     // blunt anime bangs with pointed tips, side locks framing the face
     p.fill([
       [CX - 16.2, 36], [CX - 15.6, 16], [CX - 11, 7.6], [CX, 5.2], [CX + 11, 7.6], [CX + 15.6, 16], [CX + 16.2, 36],
@@ -381,7 +353,6 @@ const JENNA: Design = {
     // shiny highlight band
     p.where([m.hair], (u, v) => Math.abs(v - (10.8 + ((u - CX + 3) / 7) ** 2 * 2.2)) < 0.7 && Math.abs(u - CX + 3) < 8.4, hl);
     // star hair clip
-    p.fill([[CX - 9, 12.6], [CX - 8.2, 14.6], [CX - 6, 14.8], [CX - 7.8, 16.2], [CX - 7.2, 18.4], [CX - 9, 17], [CX - 10.8, 18.4], [CX - 10.2, 16.2], [CX - 12, 14.8], [CX - 9.8, 14.6]], col('#ffd84a'), m.acc, { sharp: true });
     void hd;
   },
 };
@@ -395,7 +366,7 @@ const JOSHU: Design = {
     p.ell(CX, 22, 17, 12, hair[2], m.hairB);
   },
   body(p, m) {
-    const knit = T('#e2d6b8', { sh: 0.14 }), susp = T('#b8342a');
+    const knit = T('#303a5a', { sh: 0.14 }), susp = T('#744830');
     // big broad shoulders in a cable-knit sweater, red suspenders
     p.fill([[0, 60], [1.6, 50], [10, 45], [CX, 43.6], [PW - 10, 45], [PW - 1.6, 50], [PW, 60]], knit[2], m.cloth);
     p.where([m.cloth], (u, v) => u > PW - 12 || v > 58, knit[1]);
@@ -404,7 +375,7 @@ const JOSHU: Design = {
     p.fill([[PW - 9, 47], [PW - 13, 45.6], [PW - 15, 60], [PW - 10.6, 60]], susp[1], m.cloth2, { sharp: true });
   },
   front(p, m) {
-    const hair = T('#c8c4bc', { sh: 0.18 }), beard = T('#dedad2', { sh: 0.16, deep: 0.3 }), cap = T('#2c3a5a', { sh: 0.2 });
+    const hair = T('#c8c4bc', { sh: 0.18 }), beard = T('#dedad2', { sh: 0.16, deep: 0.3 }), cap = T('#8a3228', { sh: 0.2 });
     // grey hair at the temples
     p.fill([[CX - 16, 30], [CX - 16.6, 20], [CX - 12, 16], [CX - 12.6, 26]], hair[2], m.hair);
     p.fill([[CX + 16, 30], [CX + 16.6, 20], [CX + 12, 16], [CX + 12.6, 26]], hair[1], m.hair);
@@ -422,7 +393,7 @@ const JOSHU: Design = {
     p.fill([[CX - 15.6, 17.6], [CX - 16.8, 10], [CX - 8, 4.4], [CX + 8, 4.4], [CX + 16.8, 10], [CX + 15.6, 17.6]], cap[2], m.acc);
     p.where([m.acc], (u, v) => v > 13.6, cap[0]);
     p.where([m.acc], (u, v) => u > CX + 9 && v < 13.6, cap[1]);
-    p.fill([[CX - 15.6, 17], [CX + 15.6, 17], [CX + 13, 21], [CX - 13, 21]], col('#141824'), m.cloth2, { sharp: true });
+    p.fill([[CX - 15.6, 17], [CX + 15.6, 17], [CX + 13, 21], [CX - 13, 21]], col('#5a1c18'), m.cloth2, { sharp: true });
     p.ell(CX, 10.6, 2.6, 2.2, col('#e8b848'), m.acc);
     void m;
   },
@@ -444,7 +415,7 @@ const AROHA: Design = {
   eyes: 'girl', iris: ['#1a0c08', '#5a3420', '#8a5a34'], lash: '#1e1210', brow: '#241410', browH: 1, blush: '#d87060',
   faceW: 0.98, chin: 0.2, eyeX: 17, eyeY: 25,
   back(p, m) {
-    const [hd, hs, hb] = T('#4e3022', { sh: 0.18, deep: 0.34 });
+    const [hd, hs, hb] = T('#2e1a14', { sh: 0.18, deep: 0.34 });
     // long wavy hair falling behind the shoulders
     p.fill([[CX - 16.6, 20], [CX - 15, 8], [CX, 4.4], [CX + 15, 8], [CX + 16.6, 20], [CX + 19.6, 40], [CX + 20.4, 60], [CX - 20.4, 60], [CX - 19.6, 40]], hb, m.hairB);
     p.where([m.hairB], (u, v) => v > 30 && ((u + Math.sin(v * 0.3) * 2 + 40) % 6.4) < 1, hs);
@@ -452,7 +423,7 @@ const AROHA: Design = {
     void hd;
   },
   body(p, m) {
-    const top = T('#ece0c4', { sh: 0.12 });
+    const top = T('#b08c5c', { sh: 0.12 });
     // woven top with short sleeves; a taniko band (red / black / white) across the chest
     p.fill([[2, 60], [4, 51], [12, 46.4], [CX, 45.4], [PW - 12, 46.4], [PW - 4, 51], [PW - 2, 60]], top[2], m.cloth);
     p.fill([[CX - 6.4, 45], [CX, 49.6], [CX + 6.4, 45]], this.skin[2], m.neck);
@@ -467,7 +438,7 @@ const AROHA: Design = {
     p.where([m.acc], (u, v) => u < CX && v > 50.6 && v < 53, col('#7ad0a0'));
   },
   front(p, m) {
-    const [hd, hs, hb, hl] = T('#4e3022', { sh: 0.18, deep: 0.34, hi: 0.2 });
+    const [hd, hs, hb, hl] = T('#2e1a14', { sh: 0.18, deep: 0.34, hi: 0.2 });
     // centre-parted hair framing the face, falling in waves
     p.fill([
       [CX - 17, 44], [CX - 16.4, 16], [CX - 11, 7.4], [CX - 1, 5], [CX, 8.6], [CX + 1, 5], [CX + 11, 7.4], [CX + 16.4, 16], [CX + 17, 44],
@@ -477,7 +448,7 @@ const AROHA: Design = {
     p.where([m.hair], (u, v) => v > 22 && Math.abs(u - CX) > 13.4 && ((u + Math.sin(v * 0.3) * 1.6 + 40) % 3.6) < 0.9, hs);
     p.where([m.hair], (u, v) => Math.abs(v - (12.4 + Math.abs(u - CX) * 0.3)) < 0.8 && u < CX - 2 && u > CX - 12, hl);
     // woven headband with a small red/black pattern
-    p.stroke([[CX - 15.4, 15.4], [CX - 8, 10.6], [CX, 9.6], [CX + 8, 10.6], [CX + 15.4, 15.4]], 2.2, 2.2, col('#d8b060'), m.acc);
+    p.stroke([[CX - 15.4, 15.4], [CX - 8, 10.6], [CX, 9.6], [CX + 8, 10.6], [CX + 15.4, 15.4]], 2.2, 2.2, col('#a8342c'), m.acc);
     p.where([m.acc], (u, v) => ((u + 40) % 3) < 1 && v < 17, col('#8a3a24'));
     void hd;
   },

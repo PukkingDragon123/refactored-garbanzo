@@ -171,6 +171,52 @@ export function dressIsland(s: IslandScene4, L: IsleLayers) {
     const c = sprite(`fcan:${x % 3}`, () => canopyClump(770 + (x % 3), 300, 140));
     if (c) L.front.add(new Prop(c.f, x * pf, layerY(pf, -30) + rng.range(-10, 20), 3, { sway: 0.2, tint: packColor(0.42, 0.5, 0.46, 1) }));
   }
+
+  // ---------------------------------------------------------------- V5 dressing: the old site kit's density
+  // walk-line flora along the beach (behind the cast): grasses, sedge, flax, astelia, shore flowers
+  const spots = Object.values(SPOT);
+  const clear = (x: number, w: number) => spots.some(v => Math.abs(v - x) < w);
+  const shore = (x: number) => { const z = zoneAt(x); return z === 'landing' || z === 'grove' || z === 'stream' || z === 'seal' || z === 'cove' || z === 'rocks'; };
+  const flora = ['grass', 'sedge', 'flax', 'astelia', 'flowers', 'grass', 'flowers', 'kawakawa'] as const;
+  for (let x = 60; x < 5900; x += rng.range(22, 58)) {
+    if (!shore(x) || clear(x, 46) || Math.abs(x - SPOT.stream) < 90) continue;
+    const kind = flora[rng.int(0, flora.length - 1)];
+    const v = rng.int(0, 3);
+    const size = kind === 'flax' ? rng.range(26, 38) : kind === 'flowers' ? rng.range(14, 22) : kind === 'astelia' ? 26 : kind === 'kawakawa' ? 30 : rng.range(16, 24);
+    const c = sprite(`wl:${kind}:${v}:${Math.round(size / 4)}`, () => plant(kind, 800 + v * 7, size));
+    if (c) main.add(new Prop(c.f, x, groundY(x) + 2, -2.6 + rng.next() * 0.3, { sway: 1.1, flip: rng.chance(0.5) }));
+  }
+  // mossy rocks with grass tufts at the headlands
+  for (const x of [80, 210, 330, 4050, 4210, 4640, 5520, 5820]) {
+    const c = sprite(`mrock:${x % 4}`, () => deadwood('rock', 820 + (x % 4), 34 + (x % 3) * 8));
+    if (c) main.add(new Prop(c.f, x, groundY(x) + 3, -3.2, { flip: x % 2 === 1 }));
+    const g = sprite(`mrg:${x % 3}`, () => plant('grass', 830 + (x % 3), 18));
+    if (g) main.add(new Prop(g.f, x + 8, groundY(x + 8) - 6, -3.1, { sway: 1 }));
+  }
+  // more palms along the landing beach and the seal rocks
+  for (const [x, h, lean] of [[1560, 230, 1], [1900, 175, -1], [2260, 205, 1], [4140, 215, -1], [4380, 185, 1], [5640, 225, -1]] as const) {
+    if (clear(x, 40)) continue;
+    const c = sprite(`palm:${h}`, () => tree('palm', 300 + h, h));
+    if (c) main.add(new Prop(c.f, x, groundY(x) - 1, -4.2, { sway: 1.2, flip: lean < 0 }));
+  }
+  // denser foreground: flax, grasses, ferns and flowers right in front of the camera
+  const fgKinds = ['grass', 'flax', 'fronds', 'grass', 'flax', 'leaves'] as const;
+  for (let x = 380; x < 5950; x += rng.range(46, 110)) {
+    if (!beach(x) && zoneAt(x) !== 'cove') continue;
+    const kind = fgKinds[rng.int(0, fgKinds.length - 1)];
+    const v = rng.int(0, 2);
+    const c = sprite(`fg2:${kind}:${v}`, () => foreground(kind, 900 + v * 11, kind === 'fronds' || kind === 'leaves' ? 170 : 150));
+    if (c) L.front.add(new Prop(c.f, x * pf, fy + 18 + rng.range(-6, 14), rng.next(), { sway: 0.8, flip: rng.chance(0.5), tint: packColor(0.5, 0.56, 0.52, 1) }));
+    if (rng.chance(0.35)) {
+      const fl = sprite(`fgfl:${v}`, () => plant('flowers', 910 + v, 34));
+      if (fl) L.front.add(new Prop(fl.f, (x + 30) * pf, fy + 4 + rng.range(-4, 8), rng.next(), { sway: 1, tint }));
+    }
+  }
+  // palm fronds hanging into the top of the frame over the grove and the landing beach
+  for (let x = 1500; x < 4100; x += rng.range(260, 420)) {
+    const c = sprite(`fpalm:${x % 2}`, () => foreground('palm', 930 + (x % 2), 220));
+    if (c) L.front.add(new Prop(c.f, x * pf, layerY(pf, -40) + rng.range(-10, 10), 2, { sway: 0.5, flip: rng.chance(0.5), tint: packColor(0.4, 0.46, 0.42, 1) }));
+  }
   // the rock arch of the sea cave
   const archW = Math.round((5470 - 5030) * pf) + 60, archH = 300;
   const arch = paintCaveArch(archW, archH, 5, [[Math.round(archW * 0.38), 9], [Math.round(archW * 0.66), 7]]);

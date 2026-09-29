@@ -137,22 +137,61 @@ function wall(R: Region, x0: number, x1: number, ceil: number, floor: number, st
         c = y === wain ? low[3] : y === wain + 1 ? low[1] : bx === 0 ? low[1] : low[2];
         if (y === floor - 3) c = low[0];
       } else if (style === 'wood') {
-        const seam = (x - x0) % 8 === 0;
-        const grain = ((x * 7 + Math.floor(y / 5) * 13) % 23) === 0;
-        c = seam ? tone[1] : grain ? tone[1] : ((x - x0) % 8 === 1 ? tone[3] : tone[2]);
+        // planks: each board its own tone, staggered butt joints with nail heads, grain streaks, knots
+        const px = (x - x0) % 8, pi = Math.floor((x - x0) / 8);
+        const h = ((pi * 2654435761) >>> 0) % 1000 / 1000;
+        const joint = ((y - wy0) + (pi * 37) % 53) % 58;
+        const base = h < 0.3 ? mix(tone[2], tone[1], 0.35) : h > 0.75 ? mix(tone[2], tone[3], 0.35) : tone[2];
+        const grain = ((x * 7 + Math.floor(y / 4) * 13 + pi * 5) % 19) === 0 || (((y * 3 + pi * 11) % 29) === 0 && px > 2 && px < 6);
+        const knot = ((pi * 131 + Math.floor((y - wy0) / 17) * 71) % 97) === 0 && (y - wy0) % 17 === 8 && px > 2 && px < 6;
+        c = px === 0 ? tone[1] : px === 1 ? mix(base, tone[3], 0.5) : grain ? mix(base, tone[1], 0.6) : base;
+        if (joint === 0) c = tone[1];
+        else if (joint === 1 && px > 0) c = mix(base, tone[3], 0.4);
+        if ((joint === 3 || joint === 55) && (px === 2 || px === 6)) c = shade(tone[1], -0.2);
+        if (knot) c = tone[0];
       } else if (style === 'steel') {
         const pw = 34, ph = 22;
         const px = (x - x0) % pw, py = (y - wy0) % ph;
         c = px === 0 || py === 0 ? tone[1] : px === 1 || py === 1 ? tone[3] : tone[2];
         if ((px === 3 || px === pw - 3) && (py === 3 || py === ph - 3)) c = tone[0];
       } else {
+        // painted tongue-and-groove panels: bevelled edges, each panel a touch different, a dado rail,
+        // faint stains and chips in the paint
         const pw = 26;
-        const px = (x - x0) % pw;
-        c = px === 0 ? tone[1] : px === 1 ? tone[3] : tone[2];
+        const px = (x - x0) % pw, pi = Math.floor((x - x0) / pw);
+        const h = ((pi * 2246822519) >>> 0) % 1000 / 1000;
+        const base = h < 0.33 ? mix(tone[2], tone[1], 0.18) : h > 0.7 ? mix(tone[2], tone[3], 0.2) : tone[2];
+        const rail = wain - 20;
+        c = px === 0 ? tone[1] : px === 1 ? tone[3] : px === pw - 1 ? mix(base, tone[1], 0.45) : base;
+        if (px > 1 && px < pw - 1 && (px - 1) % 6 === 0) c = mix(base, tone[1], 0.25);
+        if (y === rail) c = tone[3]; else if (y === rail + 1) c = tone[1];
+        const n = Math.sin(x * 0.37 + y * 0.11) * Math.sin(x * 0.07 - y * 0.23);
+        if (n > 0.82) c = mix(c, tone[1], 0.3);
+        if (((x * 31 + y * 17) % 211) === 0) c = tone[3];
         if (style === 'lav' && ((x + y * 3) % 17 === 0)) c = tone[3];
       }
       R.px(x, y, c);
     }
+  // soft shadow under the ceiling, grime and scuffs above the wainscot
+  for (let x = x0; x < x1; x++) {
+    for (let d = 0; d < 10; d++) {
+      const y = ceil + 5 + d;
+      if (y >= wain) break;
+      const k = (10 - d) / 10 * 0.28;
+      const lx = Math.floor(x - R.x), ly = Math.floor(y - R.y);
+      if (lx < 0 || lx >= R.w || ly < 0 || ly >= R.h) continue;
+      const i = ly * R.w + lx;
+      if (i >= 0 && i < R.buf.data.length && R.buf.data[i] >>> 24) R.buf.data[i] = shade(R.buf.data[i], -k);
+    }
+    for (let d = 1; d < 7; d++) {
+      const y = wain - d;
+      const lx = Math.floor(x - R.x), ly = Math.floor(y - R.y);
+      if (lx < 0 || lx >= R.w || ly < 0 || ly >= R.h) continue;
+      const i = ly * R.w + lx;
+      const n = ((x * 13 + d * 7) % 11) / 11;
+      if (i >= 0 && i < R.buf.data.length && R.buf.data[i] >>> 24 && n < 0.75 - d * 0.1) R.buf.data[i] = shade(R.buf.data[i], -0.08 * (7 - d) / 6);
+    }
+  }
   // ceiling beams
   for (let x = x0; x < x1; x++) for (let y = ceil; y < ceil + 5; y++) R.px(x, y, y === ceil + 4 ? P.beam[0] : y === ceil ? P.beam[3] : P.beam[2]);
   for (let x = x0 + 18 + Math.floor(rr() * 10); x < x1 - 8; x += 44) R.rect(x, ceil + 5, 5, 4, (i, j) => (j === ceil + 8 ? P.beam[0] : i === x + 4 ? P.beam[1] : P.beam[2]));
