@@ -6,7 +6,7 @@
 import { openMini, portraitCanvas, loop, wait } from './mini';
 import { el } from '../ui';
 import { audio } from '../../core/audio';
-import { renderPortrait } from '../../art/anime';
+import { renderPortrait } from '../../art/v5';
 
 export interface NegAnswer { t: string; trust: number; nerves: number; reply: string; rexpr: string }
 export interface NegRound { say: string; expr: string; time: number; answers: NegAnswer[] }

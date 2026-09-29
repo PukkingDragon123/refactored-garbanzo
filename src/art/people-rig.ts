@@ -14,8 +14,8 @@ export type P2 = [number, number];
 // ------------------------------------------------------------------ light
 
 /** Key light direction (screen space, y down, z toward viewer): from the top-left. */
-const LX = -0.56, LY = -0.64, LZ = 0.53;
-export const light3 = (nx: number, ny: number, nz: number) => nx * LX + ny * LY + nz * LZ;
+export const LIGHT = { x: -0.56, y: -0.64, z: 0.53 };
+export const light3 = (nx: number, ny: number, nz: number) => nx * LIGHT.x + ny * LIGHT.y + nz * LIGHT.z;
 
 /** Pick a tone from a dark→light ramp. `l` is roughly -1..1; bias shifts, k scales contrast. */
 export function tone(r: C[], l: number, bias = 0, k = 1): C {
@@ -305,6 +305,10 @@ export interface MergeOpts {
   lineLit?: number;
   /** cast shadow strength on pixels beneath (down/right of the part) */
   ao?: number;
+  /** custom interior line colour (V5 sprites): pixel colour + strength -> line colour */
+  lineFn?: (c: C, k: number) => C;
+  /** custom cast shadow colour on the pixel beneath */
+  aoFn?: (c: C, k: number) => C;
 }
 
 export class Canvas {
@@ -522,7 +526,7 @@ export class Canvas {
           const i = y * w + x;
           if (P[i] >>> 24 || !(T[i] >>> 24)) continue;
           const near = inP(x - 1, y) || inP(x, y - 1) || inP(x - 1, y - 1);
-          if (near) T[i] = shade(T[i], -ao);
+          if (near) T[i] = o.aoFn ? o.aoFn(T[i], ao) : shade(T[i], -ao);
         }
     for (let y = this.y0; y <= this.y1; y++)
       for (let x = this.x0; x <= this.x1; x++) {
@@ -535,7 +539,7 @@ export class Canvas {
         if (!inP(x, y + 1) && inT(x, y + 1)) k = Math.max(k, line);
         if (!inP(x - 1, y) && inT(x - 1, y)) k = Math.max(k, lineLit);
         if (!inP(x, y - 1) && inT(x, y - 1)) k = Math.max(k, lineLit);
-        if (k > 0) c = FLAT.on ? (k >= 0.25 && k === line ? mix(shade(c, -0.3), rgba(40, 26, 34), 0.38) : c) : shade(c, -k);
+        if (k > 0) c = o.lineFn ? o.lineFn(c, k) : FLAT.on ? (k >= 0.25 && k === line ? mix(shade(c, -0.3), rgba(40, 26, 34), 0.38) : c) : shade(c, -k);
         T[i] = c;
         P[i] = 0;
       }
