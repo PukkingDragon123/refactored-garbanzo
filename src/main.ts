@@ -55,6 +55,8 @@ async function boot() {
   else if (scene === 'tent') await flow.goTent();
   else if (scene === 'boat') await flow.goPrologue();
   else if (scene === 'ship4') await flow.goShip4();
+  else if (scene === 'wake4') await flow.goBeachWake();
+  else if (scene === 'island4') await (await import('./game/v4/islandflow')).goIsland();
   else {
     const { TitleScene } = await import('./game/scenes/title');
     await game.setNow(new TitleScene());

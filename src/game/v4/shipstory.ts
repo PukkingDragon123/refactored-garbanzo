@@ -168,8 +168,13 @@ export class ShipStory {
   // ---------------------------------------------------------------- interactables
   private addInteractables() {
     const s = this.s;
-    const it = (o: Partial<Interactable> & { x: number; y: number; label: string; action: () => void | Promise<void> }) =>
-      s.interact.push({ w: 12, h: 18, ...o } as Interactable);
+    const it = (o: Partial<Interactable> & { x: number; y: number; label: string; action: () => void | Promise<void> }) => {
+      // no object spread: getters (a moving actor's x, dynamic labels) must stay live
+      const i = o as Interactable & { w?: number; h?: number };
+      if (i.w === undefined) i.w = 12;
+      if (i.h === undefined) i.h = 18;
+      s.interact.push(i as Interactable);
+    };
     const calm = () => s.phase !== 'storm' && s.phase !== 'wave';
     const fl = (k: string) => () => this.flag(k);
     const L = S4.lower.floor, H = S4.house.floor, B = S4.bridge.floor, D = S4.main.y;

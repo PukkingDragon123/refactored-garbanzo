@@ -98,7 +98,8 @@ class Game {
     let last = performance.now();
     const frame = (now: number) => {
       // (tests can raise the step cap to fast-forward slow headless renders: window.__dtCap)
-      const rdt = Math.min((window as unknown as { __dtCap?: number }).__dtCap ?? 0.05, (now - last) / 1000);
+      // (never negative: the first rAF timestamp can predate start())
+      const rdt = Math.max(0, Math.min((window as unknown as { __dtCap?: number }).__dtCap ?? 0.05, (now - last) / 1000));
       let dt = rdt;
       last = now;
       if (this.paused) dt = 0;
