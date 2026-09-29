@@ -1,0 +1,573 @@
+// V4 story aboard the Kittiwake: wake up with Chunk, instant noodles, the morning rounds, the report
+// on the laptop, Jenna's engine emergency, an afternoon of photography and fishing, then the storm.
+
+import { game } from '../game';
+import type { ShipScene4 } from './ship';
+import { SPOTS, S4 } from './ship';
+import { startQuest, questStatus } from '../quests';
+import { audio } from '../../core/audio';
+import { animInfo } from '../../world/actor';
+import type { Interactable } from '../../world/npc';
+import type { BubbleLine } from '../../ui/bubbles';
+import { ChunkBuddy } from './buddy';
+import { rand } from '../../core/math';
+
+const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+const F = () => game.save.flags;
+const V = () => game.save.vars;
+
+export function attachShipStory(sc: ShipScene4): ShipScene4 {
+  const story = new ShipStory(sc);
+  sc.story = story;
+  const baseEnter = sc.enter.bind(sc);
+  sc.enter = async () => {
+    await baseEnter();
+    await story.enter();
+  };
+  return sc;
+}
+
+export class ShipStory {
+  constructor(readonly s: ShipScene4) {}
+
+  private flag(k: string) { return !!F()[k]; }
+  private set(k: string, v = true) { F()[k] = v; game.persist(); this.s.hud?.refresh(true); }
+  private inc(k: string, n = 1) { V()[k] = (V()[k] ?? 0) + n; game.persist(); this.s.hud?.refresh(true); }
+  private say(lines: BubbleLine[]) { return this.s.say(lines); }
+  private get p() { return this.s.player; }
+
+  /** hold a pose on the player (cutscenes) */
+  private pose(anim: string | null) { this.p.poseOverride = anim; }
+  private async once(anim: string) {
+    const i = animInfo(anim, 'mori');
+    this.pose(anim);
+    await wait((i.frames / i.fps) * 1000);
+  }
+
+  // ---------------------------------------------------------------- setup
+  async enter() {
+    const s = this.s;
+    s.player.ground = 'wood';
+    s.player.speedK = 0.8;
+    s.st.cam.tzoom = s.st.cam.zoom = 1.12;
+    // Mori's bunk is a little platform so he can lie on it
+    s.st.terrain.addPlatform([[1218, 346], [1278, 346]], 'bridge');
+    s.buddy = new ChunkBuddy(s.chunk, { player: s.player, terrain: s.st.terrain, levelSpan: y => s.levelSpan(y) });
+    this.addInteractables();
+    if (!this.flag('v4:woke')) {
+      await this.wakeUp();
+    } else {
+      s.player.x = SPOTS.moriDesk[0];
+      s.player.y = S4.lower.floor;
+      s.chunk.x = s.player.x - 20;
+      s.chunk.y = S4.lower.floor;
+      s.snapCamera();
+      this.restorePhase();
+    }
+  }
+
+  private restorePhase() {
+    const s = this.s;
+    if (questStatus('v4morning') === 'hidden') startQuest('v4morning', true);
+    if (this.flag('v4:report') && !this.flag('v4:engineCall')) this.engineCall();
+    else if (this.flag('v4:engineCall') && !this.flag('v4:engineFixed')) {
+      s.phase = 'engine';
+      this.placeJenna('engine');
+      audio.setEngine(0);
+    } else if (this.flag('v4:engineFixed')) {
+      s.phase = 'deck';
+      this.placeJenna('desk');
+    }
+    if (this.flag('v4:fishUsed') && !this.flag('v4:bridge')) setTimeout(() => this.storm(), 1500);
+  }
+
+  // ---------------------------------------------------------------- wake up
+  private async wakeUp() {
+    const s = this.s, p = this.p;
+    s.cutscene = true;
+    s.hud?.show(false);
+    // Mori asleep in his bunk, Chunk curled up on his chest
+    p.x = 1242;
+    p.y = 346;
+    p.facing = -1;
+    this.pose('sleepBunk');
+    const c = s.chunk;
+    c.terrain = null;
+    c.x = 1238; c.y = 339; c.facing = -1;
+    c.idleAnim = 'sleep'; c.setAnim('sleep');
+    c.setExpr('sleep');
+    p.body.setExpr('sleep');
+    s.snapCamera();
+    s.st.cam.x = s.st.cam.tx = 1236;
+    s.st.cam.y = s.st.cam.ty = 300;
+    s.st.cam.locked = true;
+    game.r.post.fade = 1;
+    game.fadeTo(1);
+    await wait(900);
+    audio.setAmbience('boatCalm', false);
+    audio.play('woodCreak', { vol: 0.4 });
+    game.fadeTo(0, 0.45);
+    await wait(2200);
+    await game.ui.titleCard('Day 1', 'The Kittiwake', 'Somewhere in the Southern Ocean', 2600);
+    await this.say([
+      { who: 'chunk', text: 'Hnnnnk... shnrrrrk... hnnnnk...', expr: 'sleep', close: false },
+    ]);
+    c.setExpr('surprised', 1.2);
+    c.react('bounce');
+    c.showEmote('exclaim', 1);
+    audio.play('callGrunt', { vol: 0.35, pitch: 1.8 });
+    await wait(500);
+    c.setAnim('bark');
+    await this.say([
+      { who: 'chunk', text: '*slurp slurp slurp slurp*', expr: 'happy', close: false },
+      { who: 'mori', text: 'Mmmh... five more minutes, Chunk.', expr: 'sleep' },
+      { who: 'chunk', text: 'Boof.', expr: 'excited' },
+      { who: 'chunk', text: '*SLURP*', expr: 'happy', close: false },
+    ]);
+    p.body.setExpr('tired');
+    await this.once('wake');
+    this.pose('sitGround');
+    await this.say([
+      { who: 'mori', text: '...Chunk. Buddy. Your breath smells like a tide pool.', expr: 'tired' },
+      { who: 'chunk', text: 'Hff!', expr: 'happy' },
+      { who: 'mori', text: 'Good morning to you too.', expr: 'happy' },
+    ]);
+    // Chunk hops down; Mori gets up, stretches, finds his glasses
+    c.terrain = s.st.terrain;
+    c.setAnim('jump');
+    c.walkTo(1206, 60, 'run');
+    c.idleAnim = 'idle';
+    await wait(400);
+    c.y = S4.lower.floor;
+    c.react('land');
+    await wait(300);
+    p.y = S4.lower.floor;
+    p.x = 1232;
+    p.facing = -1;
+    await this.once('standUp');
+    await this.once('stretch');
+    p.body.setExpr('neutral');
+    await this.once('glasses');
+    this.pose(null);
+    c.play('wiggle', 'idle').catch(() => {});
+    await this.say([
+      { who: 'mori', text: 'Day twenty-three aboard the Kittiwake. Weather: gorgeous. Crew: alive. Coffee: tragically nonexistent.', expr: 'neutral' },
+      { who: 'mori', text: 'Breakfast first. Noodles. It’s always noodles.', expr: 'happy' },
+      { who: 'chunk', text: 'Boof! Boof!', expr: 'excited', react: 'jump' },
+      { who: 'mori', text: 'No, YOU already had breakfast. I heard you eat it at four in the morning.', expr: 'teasing' },
+      { who: 'chunk', text: '...snrk.', expr: 'derp' },
+    ]);
+    s.st.cam.locked = false;
+    s.cutscene = false;
+    s.hud?.show(true);
+    this.set('v4:woke');
+    startQuest('v4morning');
+    game.ui.toast('Walk with <b>A</b>/<b>D</b> (hold <b>Shift</b> to run). Climb ladders with <b>W</b>/<b>S</b>. <b>E</b> interacts.', 'TIP', 'teal', 6500);
+  }
+
+  // ---------------------------------------------------------------- interactables
+  private addInteractables() {
+    const s = this.s;
+    const it = (o: Partial<Interactable> & { x: number; y: number; label: string; action: () => void | Promise<void> }) =>
+      s.interact.push({ w: 12, h: 18, ...o } as Interactable);
+    const calm = () => s.phase !== 'storm' && s.phase !== 'wave';
+    const fl = (k: string) => () => this.flag(k);
+    const L = S4.lower.floor, H = S4.house.floor, B = S4.bridge.floor, D = S4.main.y;
+
+    // breakfast
+    it({ x: SPOTS.kettle[0], y: H, label: 'Make instant noodles', standX: SPOTS.kettle[0] - 4, enabled: () => this.flag('v4:woke') && !this.flag('v4:noodles'), action: () => this.noodles() });
+    it({ x: SPOTS.messSeat[0], y: H, w: 16, label: 'Sit down and eat', standX: SPOTS.messSeat[0], enabled: () => this.flag('v4:noodles') && !this.flag('v4:ate'), action: () => this.eat() });
+    // rounds
+    const self = this;
+    it({ x: SPOTS.tank[0], y: L, w: 20, get label() { return self.flag('v4:fishToTank') && !self.flag('v4:fishUsed') ? 'Release your catch into the tank' : self.flag('v4:round:tank') ? 'Watch the fish' : 'Feed the fish'; }, standX: SPOTS.tank[0] + 22, enabled: calm, action: () => (this.flag('v4:fishToTank') && !this.flag('v4:fishUsed') ? this.releaseFish() : this.tank()) } as never);
+    it({ x: 160, y: L, w: 20, label: 'Check the engine gauges', standX: 160, enabled: () => calm() && s.phase !== 'engine', action: () => this.gauges() });
+    it({ x: s.joshu.x, y: B, w: 14, get label() { return self.flag('v4:fishToJoshu') && !self.flag('v4:fishUsed') ? 'Give Joshu the fish' : 'Talk to Joshu'; }, standX: s.joshu.x - 22, enabled: () => calm() && s.joshu.y === B, action: () => (this.flag('v4:fishToJoshu') && !this.flag('v4:fishUsed') ? this.giveFish() : this.talkJoshu()) } as never);
+    // fishing at the stern
+    it({ x: SPOTS.fishing[0], y: D, w: 18, label: 'Fish off the stern', standX: SPOTS.fishing[0] + 8, enabled: () => s.phase === 'deck', action: () => this.fish() });
+    it({ get x() { return s.jenna.x; }, get y() { return s.jenna.y; }, w: 14, label: 'Talk to Jenna', get standX() { return s.jenna.x + 22; }, enabled: () => calm() && s.phase !== 'engine', action: () => this.talkJenna() } as never);
+    // laptop
+    it({ x: SPOTS.moriDesk[0] - 4, y: L, label: 'Use your laptop', standX: SPOTS.moriDesk[0] + 8, enabled: calm, action: () => this.laptop() });
+    // flavour: things to poke at around the boat
+    const look = (x: number, y: number, label: string, lines: () => BubbleLine[], o: Partial<Interactable> = {}) => it({ x, y, label, standX: x, enabled: calm, action: () => this.say(lines()).then(() => {}), ...o });
+    look(SPOTS.chunkBed[0], L, 'Chunk’s bed', () => [{ who: 'mori', text: 'Chunk’s bed. Premium orthopaedic memory foam. He sleeps on my face anyway.', expr: 'teasing' }]);
+    look(1255, L, 'Look at the photo board', () => [
+      { who: 'mori', text: 'Every species we’ve logged this trip. Forty-one birds, nine fish, two dolphins, one Chunk.', expr: 'happy' },
+      { who: 'mori', text: 'The Chunk entry says “Canis lupus snorfus. Habitat: my pillow.”', expr: 'teasing' },
+    ]);
+    look(1170, L, 'Field guides', () => [{ who: 'mori', text: 'Birds of the Southern Ocean, Fishes of New Zealand, and “How to Train Your Pug”. Two of these have been useful.', expr: 'thinking' }]);
+    look(990, L, 'Jenna’s monitors', () => [
+      { who: 'mori', text: 'Three monitors, twelve terminals, and a cat video paused at the exact moment the cat falls off the table.', expr: 'neutral' },
+      { who: 'mori', text: 'Somewhere in here is the code that counts my seabirds. Also somewhere in here: 400 browser tabs.', expr: 'teasing' },
+    ], { enabled: () => calm() && s.jenna.x > 940 });
+    look(SPOTS.chess[0], H, 'Look at the chess game', () => [
+      { who: 'mori', text: 'Joshu versus Jenna, day nineteen of the same game. Joshu’s winning. Jenna says the knight is “emotionally compromised.”', expr: 'teasing' },
+    ]);
+    look(SPOTS.modelShip[0], H, 'The model ship', () => [
+      { who: 'mori', text: 'Joshu built this the winter after Jenna was born. It’s a tiny Kittiwake. It even has a tiny version of that dent in the bow.', expr: 'happy' },
+    ]);
+    look(SPOTS.photosJ[0], H, 'The framed photos', () => [
+      { who: 'mori', text: 'Little Jenna holding a fish bigger than she is. She looks thrilled. The fish looks less thrilled.', expr: 'happy' },
+      { who: 'mori', text: 'And the woman in the sun hat... Jenna’s mum. Joshu keeps her right where he can see her from his bunk.', expr: 'sad' },
+    ]);
+    look(SPOTS.bowls[0], H, 'Chunk’s bowls', () => [{ who: 'mori', text: '“CHUNK” in glitter paint. Jenna made these. Chunk licked the glitter off within a week.', expr: 'teasing' }]);
+    look(SPOTS.fridge[0], H, 'The fridge', () => [{ who: 'mori', text: 'Milk, eggs, a jar labelled “DO NOT EAT (SCIENCE)”, and a jar labelled “DO NOT EAT (JOSHU’S)”. I respect both.', expr: 'neutral' }]);
+    look(SPOTS.games[0], H, 'Board games shelf', () => [{ who: 'mori', text: 'Scrabble, a 1000-piece puzzle of a lighthouse, and a Monopoly set we are legally not allowed to open again.', expr: 'teasing' }]);
+    look(SPOTS.captainBunk[0], H, 'Joshu’s bunk', () => [{ who: 'mori', text: 'Perfectly made. Hospital corners. Forty years at sea will do that to a man.', expr: 'neutral' }]);
+    look(SPOTS.charts[0], B, 'The charts', () => [{ who: 'mori', text: 'Joshu’s route, pencilled in. There’s a little circle where he wrote “good fishing” and a bigger circle where he wrote “DON’T”.', expr: 'thinking' }]);
+    look(SPOTS.herbs[0], S4.upper.y, 'Joshu’s herb garden', () => [{ who: 'mori', text: 'Basil, thyme, and a very determined chilli plant. Joshu talks to them every morning. They seem happier than me.', expr: 'happy' }]);
+    look(SPOTS.crane[0], D, 'The research crane', () => [{ who: 'mori', text: 'The A-frame for the plankton nets. Jenna wants to “upgrade” it. I’ve hidden the toolbox.', expr: 'teasing' }]);
+    look(SPOTS.dogFood[0], L, 'Chunk’s food crate', () => [{ who: 'mori', text: 'A whole crate of canned dog food. Chunk knows exactly where it is. Chunk always knows exactly where it is.', expr: 'neutral' }]);
+    look(SPOTS.forepeak[0], L, 'The forepeak', () => [{ who: 'mori', text: 'Chain, paint cans and the spooky corner. Every boat has a spooky corner.', expr: 'worried' }]);
+    look(SPOTS.microscope[0], L, 'The microscope', () => [{ who: 'mori', text: 'Yesterday’s plankton sample. Copepods, diatoms, and one very confused baby crab.', expr: 'happy' }]);
+  }
+
+  // ---------------------------------------------------------------- breakfast
+  private async noodles() {
+    const s = this.s;
+    s.cutscene = true;
+    this.p.facing = 1;
+    await this.say([{ who: 'mori', text: 'Kettle on. Now: the most delicate procedure in all of marine science.', expr: 'determined' }]);
+    this.pose('pour');
+    const { runNoodleGame } = await import('../../ui/v4/noodles');
+    const res = await runNoodleGame();
+    this.pose(null);
+    const line: Record<string, BubbleLine> = {
+      perfect: { who: 'mori', text: 'Right on the line. Textbook noodle hydration.', expr: 'smug' },
+      over: { who: 'mori', text: 'Aaand that’s soup now. Noodle soup. Still counts.', expr: 'worried' },
+      under: { who: 'mori', text: 'Little crunchy. Crunchy is a texture.', expr: 'thinking' },
+    };
+    await this.say([line[res] ?? line.perfect]);
+    s.buddy.mode = 'stay';
+    s.chunk.faceTo(this.p.x);
+    s.chunk.idleAnim = 'beg';
+    s.chunk.setAnim('beg');
+    await this.say([
+      { who: 'chunk', text: '...', expr: 'excited', close: false },
+      { who: 'mori', text: 'Don’t look at me like that. Dogs can’t have noodles. We’ve been over this. With a vet.', expr: 'teasing' },
+      { who: 'chunk', text: '*very quiet whine*', expr: 'sad', close: false },
+    ]);
+    s.chunk.idleAnim = 'idle';
+    s.buddy.mode = 'follow';
+    s.buddy.reset();
+    this.set('v4:noodles');
+    s.cutscene = false;
+    s.bark('mori', 'Three minutes. I’ll eat at the mess table.', { expr: 'happy' });
+  }
+
+  private async eat() {
+    const s = this.s;
+    s.cutscene = true;
+    this.p.facing = 1;
+    this.pose('sit');
+    await wait(500);
+    this.pose('eat');
+    audio.play('munch', { vol: 0.5 });
+    await this.say([
+      { who: 'mori', text: 'Mmm. Chicken flavour. Which chicken? Nobody knows. Science can’t answer everything.', expr: 'eat' },
+    ]);
+    s.buddy.mode = 'stay';
+    s.chunk.walkTo(this.p.x + 20, 50);
+    await wait(800);
+    s.chunk.faceTo(this.p.x);
+    s.chunk.idleAnim = 'beg';
+    s.chunk.setAnim('beg');
+    s.chunk.showEmote('heart', 1.4);
+    await this.say([
+      { who: 'chunk', text: '*stares with the full weight of his soul*', expr: 'excited', close: false },
+      { who: 'mori', text: '...', expr: 'grumpy' },
+      { who: 'mori', text: 'Fine. ONE biscuit. One.', expr: 'tired' },
+    ]);
+    s.chunk.idleAnim = 'eat';
+    s.chunk.setAnim('eat');
+    s.chunk.setExpr('eat');
+    audio.play('munch', { vol: 0.4, pitch: 1.4 });
+    await this.say([{ who: 'chunk', text: 'Snrf snrf snrf snrf.', expr: 'eat', close: false }]);
+    await wait(600);
+    s.chunk.setExpr('happy', 2);
+    s.chunk.idleAnim = 'idle';
+    s.buddy.mode = 'follow';
+    s.buddy.reset();
+    this.pose('standUp');
+    await wait(260);
+    this.pose(null);
+    this.set('v4:ate');
+    s.cutscene = false;
+    await this.say([{ who: 'mori', text: 'Right. Morning rounds: fish, engine, captain, Jenna. In order of how likely they are to bite me.', expr: 'determined' }]);
+  }
+
+  // ---------------------------------------------------------------- rounds
+  private round(k: string) {
+    if (this.flag('v4:round:' + k)) return;
+    this.set('v4:round:' + k);
+    this.inc('v4:rounds');
+    const n = V()['v4:rounds'];
+    if (n < 4) game.ui.toast(`Morning rounds: <b>${n}/4</b>`, 'ROUNDS', 'teal', 2200);
+    else game.ui.toast('Rounds done. Time for the report.', 'ROUNDS', 'teal', 3000);
+  }
+
+  private async tank() {
+    const first = !this.flag('v4:round:tank');
+    this.p.facing = -1;
+    if (first) {
+      await this.p.doWork('pour', 1.4);
+      await this.say([
+        { who: 'mori', text: 'Morning, team! Gerald. Captain Bubbles. Tiny Tim. And... the one who never comes out.', expr: 'happy' },
+        { who: 'mori', text: 'Breakfast is served. Eat up, you beautiful little data points.', expr: 'happy' },
+      ]);
+      this.round('tank');
+    } else {
+      await this.say([{ who: 'mori', text: rand.pick(['Gerald is doing laps again. Gerald has a lot of energy.', 'Captain Bubbles is judging me. I can tell.', 'Still haven’t seen the shy one. One day.']), expr: 'happy' }]);
+    }
+  }
+
+  private async gauges() {
+    const first = !this.flag('v4:round:engine');
+    await this.say(first ? [
+      { who: 'mori', text: 'Oil pressure’s a bit low. And is it supposed to rattle like that?', expr: 'thinking' },
+      { who: 'mori', text: 'Jenna says the engine runs on “vibes and duct tape.” I’m choosing to believe that’s a joke.', expr: 'worried' },
+    ] : [{ who: 'mori', text: 'Still rattling. Still running. That’s the whole engineering philosophy on this boat.', expr: 'neutral' }]);
+    this.round('engine');
+  }
+
+  private async talkJoshu() {
+    const s = this.s;
+    s.joshu.faceTo(this.p.x);
+    if (!this.flag('v4:round:joshu')) {
+      await this.say([
+        { who: 'joshu', text: 'Mornin’, Doc! Sleep alright?', expr: 'happy' },
+        { who: 'mori', text: 'Chunk slept on my face again.', expr: 'tired' },
+        { who: 'joshu', text: 'Hah! That dog’s got more sense than both of us. Warmest spot on the boat.', expr: 'laugh' },
+        { who: 'joshu', text: 'Glass has been jumpy all mornin’, though. And my knee’s achin’. Old sailor’s barometer, that knee.', expr: 'thinking' },
+        { who: 'mori', text: 'Is that... a scientific instrument?', expr: 'teasing' },
+        { who: 'joshu', text: 'Forty years at sea, lad. Never been wrong.', expr: 'smug' },
+        { who: 'joshu', text: '...Well. Twice.', expr: 'grumpy' },
+        { who: 'joshu', text: 'Go on, do your rounds. Look after my girl, she’s been up all night with them computers again.', expr: 'happy' },
+      ]);
+      this.round('joshu');
+    } else if (s.phase === 'deck') {
+      await this.say([{ who: 'joshu', text: rand.pick(['Catch anything yet? Remember: patience, and a bit of bread on the hook when nobody’s looking.', 'That albatross has been following us since dawn. Good luck, that is.']), expr: 'happy' }]);
+    } else {
+      await this.say([{ who: 'joshu', text: rand.pick(['Sea’s like glass. Makes me nervous.', 'You want to steer? Ha! Maybe when you can tie a bowline without looking it up.', 'Jenna’s mum used to say the sea keeps secrets. She was usually right.']), expr: 'neutral' }]);
+    }
+    s.joshu.faceTo(s.joshu.x + 10);
+  }
+
+  private async talkJenna() {
+    const s = this.s, j = s.jenna;
+    j.faceTo(this.p.x);
+    const was = j.idleAnim;
+    j.setAnim('idle');
+    if (!this.flag('v4:round:jenna')) {
+      await this.say([
+        { who: 'jenna', text: 'GOOOOD MORNING, MORI!!', expr: 'excited', style: 'shout', react: 'jump' },
+        { who: 'mori', text: 'You’re wearing headphones. You don’t have to yell.', expr: 'tired' },
+        { who: 'jenna', text: 'I’m not yelling, I’m ENTHUSIASTIC!', expr: 'laugh' },
+        { who: 'jenna', text: 'Guess what! I trained the fish counter overnight! It can tell a gull from a cloud now! Mostly!', expr: 'excited' },
+        { who: 'mori', text: '...Mostly?', expr: 'worried' },
+        { who: 'jenna', text: 'It thinks Chunk is a potato. But honestly? Fair.', expr: 'teasing' },
+        { who: 'chunk', text: 'Hff.', expr: 'grumpy' },
+        { who: 'jenna', text: 'Go write your boring report, nerd! I’ll be here! Coding the FUTURE!', expr: 'happy' },
+      ]);
+      this.round('jenna');
+    } else {
+      await this.say([{ who: 'jenna', text: rand.pick(['Shh! I’m in the zone! The zone is very fragile!', 'Do you think the fish counter should have a voice? I’m thinking... pirate.', 'If Dad asks, I definitely slept.']), expr: 'happy' }]);
+    }
+    j.setAnim(was);
+  }
+
+  // ---------------------------------------------------------------- laptop
+  private async laptop() {
+    const s = this.s;
+    s.cutscene = true;
+    this.p.facing = -1;
+    this.pose('type');
+    const { openMoriOS } = await import('../../ui/v4/moriOS');
+    const canReport = V()['v4:rounds'] >= 4 && this.flag('v4:ate');
+    await openMoriOS({ report: canReport && !this.flag('v4:report') });
+    this.pose(null);
+    s.cutscene = false;
+    if (!canReport && !this.flag('v4:report')) {
+      await this.say([{ who: 'mori', text: this.flag('v4:ate') ? 'I can’t write the morning report before the morning rounds. That’s just fiction.' : 'Breakfast first. I don’t write reports on an empty stomach.', expr: 'thinking' }]);
+      return;
+    }
+    if (this.flag('v4:report') && !this.flag('v4:engineCall')) this.engineCall();
+  }
+
+  // ---------------------------------------------------------------- engine
+  private placeJenna(where: 'engine' | 'desk') {
+    const j = this.s.jenna;
+    if (where === 'engine') { j.x = 250; j.y = S4.lower.floor; j.facing = -1; j.idleAnim = 'scared'; j.setAnim('scared'); }
+    else { j.x = SPOTS.jennaDesk[0]; j.y = S4.lower.floor; j.facing = 1; j.idleAnim = 'typeFast'; j.setAnim('typeFast'); }
+  }
+
+  async engineCall() {
+    const s = this.s;
+    this.set('v4:engineCall');
+    s.phase = 'engine';
+    await wait(1200);
+    s.cutscene = true;
+    // the engine coughs and dies; the lights stutter
+    for (let i = 0; i < 4; i++) { s.power = 0.2; await wait(90); s.power = 1; await wait(140 + i * 60); }
+    audio.play('woodCreak', { vol: 0.6 });
+    s.st.shake(2, 0.5);
+    audio.setEngine(0);
+    s.engineOn = false;
+    this.placeJenna('engine');
+    await wait(500);
+    await this.say([
+      { who: 'jenna', text: 'MORIIIIIIIIIIIIII!!!', style: 'shout', expr: 'shocked' },
+      { who: 'jenna', text: 'ENGINE ROOM! NOW! IT’S DOING THE THING!', style: 'shout', expr: 'scared' },
+      { who: 'mori', text: 'The... THING?!', expr: 'shocked' },
+      { who: 'chunk', text: 'BOOF!', expr: 'surprised', react: 'jump' },
+    ]);
+    s.cutscene = false;
+    startQuest('v4engine');
+  }
+
+  private async engineArrive() {
+    const s = this.s;
+    this.set('v4:engineArrive');
+    s.cutscene = true;
+    this.p.walkTo(282, 70).catch(() => {});
+    s.jenna.faceTo(this.p.x);
+    await this.say([
+      { who: 'jenna', text: 'Okay so! Don’t panic! I was doing a TEENY firmware update on the fuel controller...', expr: 'worried' },
+      { who: 'jenna', text: '...and it went *ka-CHUNK* and then *pssshhhhh* and now it’s just... sad.', expr: 'sad' },
+      { who: 'mori', text: 'You updated the ENGINE?!', expr: 'shocked' },
+      { who: 'jenna', text: 'It’s a smart engine now! ...Was. It WAS a smart engine.', expr: 'smug' },
+      { who: 'joshu', text: 'Whatever you two did down there, UNDO IT! We’re driftin’!', style: 'shout', expr: 'angry' },
+      { who: 'mori', text: 'Okay. Okay! We can fix this. What does the diagnostic say?', expr: 'determined' },
+      { who: 'jenna', text: 'Air in the fuel line, a blown fuse, and the fuel valve’s stuck! Teamwork time!', expr: 'determined' },
+    ]);
+    s.jenna.idleAnim = 'type';
+    s.jenna.setAnim('type');
+    await this.engineFix();
+  }
+
+  private async engineFix() {
+    const s = this.s;
+    const { runEngineRepair } = await import('../../ui/v4/engine');
+    const ok = await runEngineRepair({
+      onStep: async (k: string) => {
+        // mirror the minigame with the sprites
+        const map: Record<string, [string, string]> = { valve: ['wrench', 'type'], bleed: ['pull', 'point'], fuse: ['grab', 'hype'], start: ['push', 'cheer'] };
+        const m = map[k];
+        if (m) { this.pose(m[0]); s.jenna.setAnim(m[1]); }
+      },
+    });
+    this.pose(null);
+    if (!ok) { s.cutscene = false; return; }
+    audio.setEngine(0.5);
+    s.engineOn = true;
+    s.st.shake(1.5, 0.6);
+    s.jenna.setAnim('hype');
+    this.p.body.showEmote('sparkle', 1.4);
+    await this.say([
+      { who: 'jenna', text: 'WE DID IT!! Up top!', expr: 'excited', style: 'shout', react: 'jump' },
+      { who: 'mori', text: 'Teamwork!', expr: 'laugh' },
+      { who: 'chunk', text: 'Boof boof!', expr: 'excited', react: 'jump' },
+      { who: 'joshu', text: 'THAT’s the sound I like! Good work, you two.', expr: 'laugh' },
+      { who: 'joshu', text: 'Tell you what: take the afternoon. Weather’s holding, for now. Go take your pictures, Doc. And catch us some dinner!', expr: 'happy' },
+      { who: 'jenna', text: 'I’m gonna go un-update everything. Quietly. Forever.', expr: 'teasing' },
+    ]);
+    this.placeJenna('desk');
+    this.set('v4:engineFixed');
+    s.phase = 'deck';
+    s.cutscene = false;
+    const { startDeckLife } = await import('./seafauna');
+    startDeckLife(s);
+  }
+
+  /** the storm (see storm.ts) */
+  async storm() {
+    const { runStorm } = await import('./storm');
+    await runStorm(this.s);
+  }
+
+  // ---------------------------------------------------------------- deck: fishing
+  private async fish() {
+    const s = this.s;
+    this.p.facing = -1;
+    s.cutscene = true;
+    const { goFishing } = await import('../../ui/v4/fishing');
+    const c = await goFishing(s as never);
+    s.cutscene = false;
+    if (!c) return;
+    if (this.flag('v4:fishToTank') || this.flag('v4:fishToJoshu') || this.flag('v4:fishUsed')) {
+      await this.say([{ who: 'mori', text: `Another ${c.fish.name.toLowerCase()}! You’re free to go, buddy. Tell your friends I’m nice.`, expr: 'happy' }]);
+      return;
+    }
+    V()['v4:fishLen'] = c.len;
+    F()['v4:fishName:' + c.fish.name] = true;
+    this.caught = c.fish.name;
+    const ch = await this.say([
+      { who: 'mori', text: `A ${c.fish.name}! ${c.len} centimetres of pure science. Or dinner.`, expr: 'excited', choices: ['Study it in the lab tank', 'Give it to Joshu to cook'] },
+    ]);
+    if (ch === 0) {
+      this.set('v4:fishToTank');
+      game.ui.toast(`Take the ${c.fish.name.toLowerCase()} to the <b>tank in the lab</b> (lower deck).`, 'FISH', 'teal', 4200);
+    } else {
+      this.set('v4:fishToJoshu');
+      game.ui.toast(`Take the ${c.fish.name.toLowerCase()} to <b>Joshu on the bridge</b>.`, 'FISH', 'teal', 4200);
+    }
+  }
+  private caught = 'fish';
+
+  private async releaseFish() {
+    const s = this.s;
+    s.cutscene = true;
+    this.p.facing = -1;
+    await this.p.doWork('pour', 1.2);
+    s.addTankFish();
+    audio.play('splash', { vol: 0.4 });
+    await this.say([
+      { who: 'mori', text: `In you go. Gerald, Captain Bubbles, everyone: this is our new colleague, the ${this.caught.toLowerCase()}.`, expr: 'happy' },
+      { who: 'mori', text: 'Field notes: healthy adult, bright eyes, good colour. Behaviour: deeply offended. Noted.', expr: 'thinking' },
+      { who: 'chunk', text: '*nose pressed to the glass*', expr: 'excited', close: false },
+    ]);
+    s.cutscene = false;
+    this.set('v4:fishUsed');
+    game.ui.toast(`Research log: <b>${this.caught}</b> added.`, 'LAB', 'teal', 3000);
+  }
+
+  private async giveFish() {
+    const s = this.s;
+    s.cutscene = true;
+    s.joshu.faceTo(this.p.x);
+    await this.say([
+      { who: 'joshu', text: `Now THAT’s a beauty! Look at the size of it!`, expr: 'laugh' },
+      { who: 'joshu', text: 'I’ll have it in the pan before you can say “lemon butter.” Jenna! Dinner in twenty!', expr: 'happy' },
+      { who: 'jenna', text: 'LEMON BUTTER!!', style: 'shout', expr: 'excited' },
+      { who: 'joshu', text: 'Take the wheel a sec, Doc. Just... hold it straight. Nothin’ fancy.', expr: 'teasing' },
+      { who: 'mori', text: 'Hold it straight. Nothing fancy. Got it.', expr: 'determined' },
+    ]);
+    // Joshu heads down to the galley to cook; Jenna comes to set the table
+    const j = s.joshu;
+    j.x = SPOTS.stove[0] + 6; j.y = S4.house.floor; j.facing = -1;
+    j.idleAnim = 'cook'; j.setAnim('cook');
+    const je = s.jenna;
+    je.x = SPOTS.chess[0] + 8; je.y = S4.house.floor; je.facing = -1;
+    je.idleAnim = 'talk'; je.setAnim('idle');
+    this.set('v4:fishUsed');
+    this.set('v4:joshuCooking');
+    s.cutscene = false;
+    game.ui.toast('Smells like lemon butter already.', 'GALLEY', 'teal', 2600);
+  }
+
+  /** the storm (see storm.ts) */
+  private stormArmed = false;
+
+  // ---------------------------------------------------------------- per frame
+  update(dt: number) {
+    const s = this.s, p = s.player;
+    void dt;
+    if (s.phase === 'engine' && !this.flag('v4:engineArrive') && !s.cutscene && p.y > S4.lower.ceil && p.x < 400) this.engineArrive();
+    // the afternoon ends: once the deck quest wraps up, the storm arrives
+    if (s.phase === 'deck' && !this.stormArmed && questStatus('v4deck') === 'done' && !s.cutscene) {
+      this.stormArmed = true;
+      setTimeout(() => this.storm(), 6000);
+    }
+    // Chunk shivers out on the open deck
+    if (s.buddy) s.buddy.cold = s.level() !== 'lower' && s.inside < 0.5;
+  }
+}

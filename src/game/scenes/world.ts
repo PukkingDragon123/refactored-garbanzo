@@ -8,7 +8,7 @@ import type { Scene } from '../game';
 import { game } from '../game';
 import { Stage, Layer } from '../../world/stage';
 import { Player } from '../../world/player';
-import { Actor } from '../../world/actor';
+import { Actor, CHAR_NAMES } from '../../world/actor';
 import { Interactable, PromptView, nearestInteractable } from '../../world/npc';
 import { ResourceNode } from '../../world/resources';
 import { Hud2, HudOpts } from '../../ui/hud2';
@@ -60,7 +60,9 @@ export abstract class WorldScene implements Scene {
     this.prompt = new PromptView(game.ui.prompts);
     await this.build();
     const b = game.ui.bubbles;
-    b.register('rowan', this.player.body.speaker('Rowan'));
+    const pn = CHAR_NAMES[this.player.id] ?? 'Mori';
+    b.register(this.player.id, this.player.body.speaker(pn));
+    b.register('rowan', this.player.body.speaker(pn));
     this.player.body.layer = this.main;
     for (const [id, a] of this.actors) b.register(id, a.speaker());
     const ho = this.hudOpts();
@@ -86,7 +88,7 @@ export abstract class WorldScene implements Scene {
     return a;
   }
   actor(id: string): Actor {
-    return id === 'rowan' ? this.player.body : this.actors.get(id)!;
+    return id === 'rowan' || id === this.player.id ? this.player.body : this.actors.get(id)!;
   }
 
   say(lines: BubbleLine[]) {

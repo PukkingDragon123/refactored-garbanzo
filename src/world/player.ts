@@ -72,6 +72,8 @@ export class Player implements Drawable {
 
   /** movement speed multiplier (V4 scenes are scaled for the smaller anime cast) */
   speedK = 1;
+  /** remap automatic anims (e.g. carrying Chunk: idle -> carryPupIdle, walk -> carryPup) */
+  animMap: Record<string, string> | null = null;
 
   constructor(x: number, y: number, readonly terrain: Terrain, readonly id = 'mori') {
     this.x = x;
@@ -367,7 +369,11 @@ export class Player implements Drawable {
     b.y = this.y;
     b.facing = this.facing;
     let a = this.anim;
-    if (a === 'climbIdle') { a = 'climb'; b.holdFrame = 0; } else if (b.holdFrame !== null && a !== 'climb') b.holdFrame = null;
+    if (!this.poseOverride && this.animMap) {
+      const m = this.animMap[a] ?? (a === 'climbIdle' ? this.animMap.climb : undefined);
+      if (m) { b.holdFrame = a === 'climbIdle' ? 0 : null; a = m; }
+    }
+    if (a === 'climbIdle') { a = 'climb'; b.holdFrame = 0; } else if (b.holdFrame !== null && a !== 'climb' && !this.animMap) b.holdFrame = null;
     if (b.anim !== a && !b.walking) b.setAnim(a);
     b.alpha = (this.state === 'hide' ? 0.6 : 1) * this.alpha * (this.hurtT > 0 && Math.floor(this.hurtT * 12) % 2 === 0 ? 0.35 : 1);
     b.shadow = !this.underwater && this.onGround;

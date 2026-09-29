@@ -6,8 +6,9 @@ import { add, count } from './inventory';
 import { buildDone, buildLevel } from './crafting';
 import { ITEMS } from './items';
 import { SPECIES, SPECIES_BY_ID } from './species';
+import { V4_QUESTS } from './v4/quests4';
 
-export type Giver = 'story' | 'rowan' | 'crowe' | 'aroha' | 'lou' | 'pip';
+export type Giver = 'story' | 'rowan' | 'crowe' | 'aroha' | 'lou' | 'pip' | 'mori' | 'jenna' | 'joshu' | 'chunk';
 
 export interface QuestStep {
   text: string;
@@ -39,7 +40,8 @@ const v = (k: string) => game.save.vars[k] ?? 0;
 const cluesN = () => Object.keys(game.save.clues).length;
 
 export const QUESTS: QuestDef[] = [
-  // ============================================================ MAIN
+  ...V4_QUESTS,
+  // ============================================================ MAIN (V2/V3 story)
   {
     id: 'voyage', title: 'The Voyage', giver: 'story', main: true, chapter: 0,
     desc: 'Three weeks out of Bluff aboard the Kittiwake, chasing reports of an uncharted current. Settle in and get to know the crew.',

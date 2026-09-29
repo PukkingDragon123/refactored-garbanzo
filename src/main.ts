@@ -54,6 +54,7 @@ async function boot() {
   else if (scene === 'camp') await flow.goCamp();
   else if (scene === 'tent') await flow.goTent();
   else if (scene === 'boat') await flow.goPrologue();
+  else if (scene === 'ship4') await flow.goShip4();
   else {
     const { TitleScene } = await import('./game/scenes/title');
     await game.setNow(new TitleScene());
@@ -71,6 +72,9 @@ async function boot() {
     map: async () => (await import('./game/travel2')).openTravelMap(),
     quest: async (id: string) => (await import('./game/quests')).startQuest(id),
     flag: (k: string, v = true) => { game.save.flags[k] = v; },
+    moriOS: async (report = true) => (await import('./ui/v4/moriOS')).openMoriOS({ report }),
+    noodles: async () => (await import('./ui/v4/noodles')).runNoodleGame(),
+    engine: async () => (await import('./ui/v4/engine')).runEngineRepair({}),
   };
 }
 

@@ -37,3 +37,26 @@ export async function goTitle() {
   const { TitleScene } = await import('./title');
   game.go(() => new TitleScene());
 }
+
+/** V4: the Kittiwake (Day 1 at sea) */
+export async function goShip4() {
+  const { ShipScene4 } = await import('../v4/ship');
+  const { attachShipStory } = await import('../v4/shipstory');
+  game.go(() => attachShipStory(new ShipScene4()), [0.02, 0.02, 0.03], 1.2);
+}
+
+/** V4: washed ashore. First-person wake-up on the beach, then the island. */
+export async function goBeachWake() {
+  const { BeachWakeScene } = await import('../v4/wake');
+  game.go(() => new BeachWakeScene(), [0, 0, 0], 0.8);
+}
+
+/** V4: pick up the story wherever the save left it */
+export async function continueV4() {
+  const f = game.save.flags;
+  if (!f['v4']) { const { newSave } = await import('../save'); game.save = newSave(); game.save.flags['v4'] = true; game.persist(); return goShip4(); }
+  if (!f['v4:bridge']) return goShip4();
+  if (!f['v4:beachWoke']) return goBeachWake();
+  const { goIsland } = await import('../v4/islandflow');
+  return goIsland();
+}

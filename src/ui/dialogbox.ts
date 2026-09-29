@@ -54,7 +54,8 @@ const CSS = `
 .dbx.shout .dtx { font-weight: 700; }
 .dbx.whisper .dtx .tx { color: #7a6a58; }
 .dbx.think .dtx .tx { color: #5a4a6a; font-style: italic; }
-@media (max-width: 720px), (max-height: 520px) { .dbx-wrap { --ps: 2; } }
+@media (max-width: 720px), (max-height: 620px) { .dbx-wrap { --ps: 2; } }
+@media (max-height: 520px) { .dbx-wrap { --ps: 1.5; --sk-u: 2px; bottom: 4px; } .dbx .dtx { font-size: 14px; min-height: calc(60px * var(--ps) + 1.2em); } .dbx .dpt .plate { font-size: 10px; } }
 @media (max-width: 460px) { .dbx .dtx { font-size: 14px; } }
 `;
 

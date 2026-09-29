@@ -236,13 +236,14 @@ export function drawAnimeProp(x: Ctx, p: PropP) {
       merge();
       break;
     }
-    case 'sleepingBag': {
-      // quilted sleeping bag from the feet to the shoulders, head left out
+    case 'sleepingBag': case 'blanket': {
+      // quilted sleeping bag (or the bunk blanket) from the feet to the shoulders, head left out
+      const pal = p.kind === 'blanket' ? P.green : P.orange;
       const a0 = Bp([o[0] - 22 * s, o[1] - 0.4 * s]), a1 = Bp([o[0] + 11 * s, o[1] + 0.6 * s]);
       c.limb(a0, a1, 4 * s, 4.6 * s, sm => {
         const q = sm.u * 7;
-        if (q - Math.floor(q) < 0.12) return P.orange[0];
-        return flat(P.orange, sm.v < -0.2 ? 0.7 : sm.v > 0.5 ? -0.6 : 0.1);
+        if (p.kind === 'sleepingBag' && q - Math.floor(q) < 0.12) return pal[0];
+        return flat(pal, sm.v < -0.2 ? 0.7 : sm.v > 0.5 ? -0.6 : 0.1);
       });
       merge(0.3);
       // soft pillow-y lining at the opening

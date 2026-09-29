@@ -13,10 +13,10 @@ export const ANIME_ANIMS: Record<string, AnimInfo> = {
   idle: A(4, 3), walk: A(8, 10), run: A(8, 14), crouch: A(2, 2), crouchWalk: A(6, 8), jump: A(1, 1), fall: A(1, 1), land: A(1, 1),
   climb: A(4, 6), climbIdle: A(1, 1), swim: A(4, 5), push: A(4, 5), pull: A(4, 5), limp: A(8, 7), sneak: A(6, 7),
   // posture
-  sit: A(2, 1.5), sitGround: A(2, 1.5), lie: A(2, 1), sleep: A(2, 0.8), sleepBag: A(2, 0.8), wake: A(4, 4, false), getUp: A(4, 7, false),
+  sit: A(2, 1.5), sitGround: A(2, 1.5), lie: A(2, 1), sleep: A(2, 0.8), sleepBag: A(2, 0.8), sleepBunk: A(2, 0.8), wake: A(4, 4, false), getUp: A(4, 7, false),
   sitDown: A(3, 12, false), standUp: A(3, 12, false), crouchDown: A(2, 14, false), lieDown: A(4, 9, false), unconscious: A(1, 1),
   // actions
-  eat: A(4, 4), eatStand: A(4, 4), cook: A(4, 5), carry: A(8, 10), carryIdle: A(2, 2), carryHeavy: A(8, 6), grab: A(4, 12, false),
+  eat: A(4, 4), eatStand: A(4, 4), cook: A(4, 5), carry: A(8, 10), carryIdle: A(2, 2), carryHeavy: A(8, 6), carryPup: A(8, 10), carryPupIdle: A(2, 2), carryPupRun: A(8, 14), carryPupClimb: A(4, 6), grab: A(4, 12, false),
   pick: A(4, 9, false), kneel: A(4, 5), hammer: A(4, 8), wrench: A(4, 8), camera: A(2, 2), cameraCrouch: A(2, 2), photograph: A(2, 2),
   fishCast: A(6, 12, false), fishWait: A(4, 2), fishReel: A(4, 10), research: A(4, 3), notebook: A(4, 4), laptop: A(4, 8), type: A(4, 8),
   steer: A(4, 3), dig: A(4, 6), pour: A(4, 5), drink: A(4, 4), build: A(4, 8), sweep: A(4, 6),
@@ -249,6 +249,7 @@ const POSES: Record<string, PoseFn> = {
   lie: (b, t) => lieP(b, Math.sin(TAU * t)),
   sleep: (b, t) => { const p = lieP(b, Math.sin(TAU * t)); p.fa = { a: -1.1, e: 1.4, hand: 'flat' }; return p; },
   sleepBag: (b, t) => { const k = K(b); const p = lieP(b, Math.sin(TAU * t)); p.props = [prop('sleepingBag', p.hip[0], p.hip[1] + 0.4 * k, 0, { s: k, t: 0, z: 'top' })]; p.fa = { a: -1.45, e: 0, hand: 'none' }; p.ba = { a: -1.45, e: 0, hand: 'none' }; p.sq = 1 + Math.sin(TAU * t) * 0.03; return p; },
+  sleepBunk: (b, t) => { const k = K(b); const p = lieP(b, Math.sin(TAU * t)); p.props = [prop('blanket', p.hip[0], p.hip[1] + 0.4 * k, 0, { s: k, t: 0, z: 'top' })]; p.fa = { a: -1.45, e: 0, hand: 'none' }; p.ba = { a: -1.45, e: 0, hand: 'none' }; p.sq = 1 + Math.sin(TAU * t) * 0.03; return p; },
   unconscious: b => { const p = lieP(b, 0); p.fa = { a: -0.6, e: 0.5, hand: 'open' }; return p; },
   wake: (b, t) => keys(t, [lieP(b), { ...lieP(b), lean: 1.1, hip: [-2.2 * K(b), 2.6 * K(b)] }, sitGroundP(b, 0.25), sitGroundP(b)], false),
   getUp: (b, t) => keys(t, [lieP(b), sitGroundP(b, 0.3), crouchP(b, 0.55, 0.4), stand(b)], false),
@@ -332,6 +333,48 @@ const POSES: Record<string, PoseFn> = {
     const s = shoulderAt(b, p.hip, p.lean);
     p.props = [prop('crate', 0, 1.6 * k, 0, { t: 3, s: 0.8 * ps(id), z: 'mid' })];
     return hands(p, add(s, 6 * k, -6.6 * k), add(s, 4.4 * k, -6.6 * k));
+  },
+  carryPup: (b, t) => {
+    // hugging Chunk against the chest while walking
+    const k = K(b);
+    const p = walkC(b, t);
+    p.lean = 0.02;
+    const s = shoulderAt(b, p.hip, p.lean);
+    p.fa = { ik: add(s, 4.2 * k, -4.6 * k), hand: 'flat' };
+    p.ba = { ik: add(s, 3 * k, -3.2 * k), hand: 'flat' };
+    p.front = ['armF'];
+    return p;
+  },
+  carryPupRun: (b, t) => {
+    const k = K(b);
+    const p = cycle(b, t, { stride: b.thigh * 1.6, lift: 2.8 * k, bob: 1 * k, lean: 0.16, swing: 0.2, elbow: 1.2, elbowSwing: 0.1, stance: 0.46, flight: 0.8 * k, hipDrop: 1.2 });
+    const s = shoulderAt(b, p.hip, p.lean);
+    p.fa = { ik: add(s, 4.4 * k, -4.4 * k), hand: 'flat' };
+    p.ba = { ik: add(s, 3.2 * k, -3 * k), hand: 'flat' };
+    p.front = ['armF'];
+    return p;
+  },
+  carryPupIdle: (b, t) => {
+    const k = K(b);
+    const p = stand(b, { lean: -0.02 });
+    p.hip[1] -= Math.sin(TAU * t) > 0 ? 0.4 : 0;
+    const s = shoulderAt(b, p.hip, p.lean);
+    p.fa = { ik: add(s, 4.2 * k, -4.6 * k), hand: 'flat' };
+    p.ba = { ik: add(s, 3 * k, -3.2 * k), hand: 'flat' };
+    p.front = ['armF'];
+    return p;
+  },
+  carryPupClimb: (b, t) => {
+    // one-armed ladder climb with the pug tucked under the other arm
+    const k = K(b);
+    const i = Math.floor(t * 4) % 4;
+    const p = stand(b, { lean: 0, hip: [0, b.hipH + (i % 2) * 0.8 * k] });
+    const s = shoulderAt(b, p.hip, 0);
+    p.fa = { ik: add(s, 1 * k, (7 + (i < 2 ? 1.6 : -1.6)) * k), hand: 'grip' };
+    p.ba = { ik: add(s, 3 * k, -3.4 * k), hand: 'flat' };
+    p.fl = { f: [0.6 * k, b.ankleH + (i < 2 ? 4 : 0.5) * k], fa: 0 };
+    p.bl = { f: [-0.6 * k, b.ankleH + (i < 2 ? 0.5 : 4) * k], fa: 0 };
+    return p;
   },
   carryHeavy: (b, t) => {
     // staggering under something heavy held against the chest (Chunk!) - wobbly, bent knees

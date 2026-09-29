@@ -20,7 +20,7 @@ const SEA_Y = BOAT_LAYOUT.pivot[1];
 import { el } from '../../ui/ui';
 import { audio } from '../../core/audio';
 import { hasSave, newSave, clearSave } from '../save';
-import { goCamp, goPrologue } from './flow';
+import { continueV4, goShip4 } from './flow';
 
 const CSS = `
 .t3 { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
@@ -253,7 +253,7 @@ export class TitleScene implements Scene {
       return b;
     };
     const cont = hasSave();
-    if (cont) btn('Continue', 'play', '', () => { audio.play('ui'); if (game.save.flags['prologue']) goCamp(); else goPrologue(); });
+    if (cont) btn('Continue', 'play', '', () => { audio.play('ui'); continueV4(); });
     btn('New expedition', 'compass', cont ? 'ghost' : '', () => { audio.play('ui'); if (cont) this.confirmNew(); else this.startNew(); });
     btn('Settings', 'gear', 'ghost', () => { audio.play('uiOpen'); openSettings(); });
     btn('Credits', 'scroll', 'ghost', () => { audio.play('uiOpen'); openCredits(); });
@@ -295,7 +295,9 @@ export class TitleScene implements Scene {
   }
   startNew() {
     game.save = newSave();
-    goPrologue();
+    game.save.flags['v4'] = true;
+    game.persist();
+    goShip4();
   }
 
   update(dt: number) {
