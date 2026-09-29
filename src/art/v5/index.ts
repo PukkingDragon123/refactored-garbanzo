@@ -12,6 +12,7 @@ import { V5_CHARS, V5_INFO } from './cast';
 import { ANIME_ANIMS, ANIME_COMMON, TRANSITIONS, animePose, AnimInfo } from '../anime/anims';
 import { CHUNK_ANIMS, renderChunkBody, renderChunkHead } from '../anime/chunk';
 import { renderAnimePortrait, PORTRAIT_EXPRS } from '../anime/portraits';
+import { renderClone, cloneClip, cloneFrames } from './clone';
 
 export type { V5Id, HeadOpts5 as HeadOpts, Look, AnimInfo };
 export { PORTRAIT_EXPRS };
@@ -22,7 +23,11 @@ export const norm = (id: string) => ALIAS[id] ?? id;
 export const ANIMS: Record<string, AnimInfo> = ANIME_ANIMS;
 
 export function animFor(id: string, anim: string): AnimInfo | null {
-  return (norm(id) === 'chunk' ? CHUNK_ANIMS[anim] : ANIME_ANIMS[anim]) ?? null;
+  id = norm(id);
+  if (id === 'chunk') return CHUNK_ANIMS[anim] ?? null;
+  const c = cloneClip(id, anim);
+  if (c) return { frames: cloneFrames(id, anim), fps: c.fps, loop: c.loop };
+  return ANIME_ANIMS[anim] ?? null;
 }
 
 const human = () => [...ANIME_COMMON];
@@ -89,6 +94,8 @@ export function renderBody(id: string, anim: string, frame: number): BodyFrame5 
     const a = CHUNK_ANIMS[anim] ? anim : 'idle';
     return renderChunkBody(a, frame % CHUNK_ANIMS[a].frames);
   }
+  const cl = renderClone(id, anim, frame);
+  if (cl) return cl;
   const ch = V5_CHARS[id] ?? V5_CHARS.mori;
   const a = ANIME_ANIMS[anim] ? anim : 'idle';
   const info = ANIME_ANIMS[a];
