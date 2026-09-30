@@ -1,163 +1,36 @@
-// MoriOS: Mori's field laptop. A cosy retro desktop with an animated nature wallpaper and a fat-pug
-// cursor. Apps: Spreadsheets (seabird survey + temperature chart), Reports (the morning report: read
-// the data and fill it in), Photos, Discoveries (species log), Files (with Jenna's locked folder),
-// Plankton Sort (a quick research minigame) and a tiny terminal Jenna installed "for emergencies".
+// MoriOS: Mori's field laptop, a glossy "aero" desktop. The pixel Bliss wallpaper sits under
+// drifting pixel clouds, sun rays and lens flares, with bubbles floating up off the grass (click
+// them). Windows open, close, minimise and maximise on springs; icons hop and squash; gel buttons
+// squish with soft pops; a pug cursor leaves a sparkle trail. On touch screens the whole laptop is
+// a trackpad for the pug cursor (see ../v7/aeroCursor). Keyboard: Esc closes (menus first, then
+// the lid), Tab / arrows move a focus glow, Enter or Space clicks.
+// Apps: Spreadsheets (seabird survey + temperature chart), Reports (the morning report: read the
+// data and fill it in), Photos, Discoveries (species log), Files (with Jenna's locked folder),
+// Plankton Sort and Bubble Pop (quick minigames) and a tiny terminal Jenna installed "for emergencies".
 
 import { game } from '../../game/game';
 import { el } from '../ui';
-import { audio } from '../../core/audio';
 import { guardInput } from '../../core/input';
 import { rawPhotos } from '../../game/photos';
-
-const CSS = `
-.mos-wrap { position: absolute; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; background: rgba(6,4,8,0.7); animation: mosIn 0.25s ease-out both; }
-@keyframes mosIn { from { opacity: 0; } }
-.mos-lap { position: relative; width: min(96vw, 1100px); height: min(88vh, 660px); background: #2a2630; border-radius: 10px; padding: 16px 16px 26px; box-sizing: border-box;
-  box-shadow: 0 0 0 3px #141018, 0 10px 0 #141018, inset 0 0 0 2px #4a4452; animation: mosPop 0.35s cubic-bezier(.2,1.4,.4,1) both; }
-@keyframes mosPop { from { transform: scale(0.9) translateY(20px); } }
-.mos-lap::after { content: 'MoriBook'; position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); font: 700 11px 'Silkscreen', monospace; color: #8a8494; letter-spacing: 0.2em; }
-.mos-lap::before { content: ''; position: absolute; top: 6px; left: 50%; width: 5px; height: 5px; margin-left: -2px; background: #141018; border-radius: 50%; box-shadow: 0 0 0 1px #4a4452; }
-.mos-scr { position: relative; width: 100%; height: 100%; overflow: hidden; background: #0e1622; font-family: 'Pixelify Sans', 'Silkscreen', monospace; color: #1e1a24; -webkit-font-smoothing: none;
-  cursor: var(--pug) 3 3, auto; user-select: none; }
-.mos-scr * { cursor: inherit; }
-.mos-scr input, .mos-scr select { cursor: var(--pug) 3 3, text; }
-.mos-wall { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
-.mos-icons { position: absolute; left: 10px; top: 10px; display: grid; grid-auto-flow: column; grid-template-rows: repeat(auto-fill, 84px); gap: 4px 10px; height: calc(100% - 50px); }
-.mos-ic { width: 74px; text-align: center; color: #fff; font-size: 13px; text-shadow: 0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000; padding: 4px 0; border-radius: 3px; }
-.mos-ic canvas { width: 48px; height: 48px; image-rendering: pixelated; display: block; margin: 0 auto 2px; filter: drop-shadow(0 2px 0 rgba(0,0,0,0.5)); }
-.mos-ic:hover { background: rgba(255,255,255,0.14); }
-.mos-ic.new::after { content: '!'; position: relative; top: -64px; left: 22px; background: #e8483a; color: #fff; font: 700 11px 'Silkscreen', monospace; padding: 0 4px; border-radius: 6px; }
-.mos-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 34px; background: #e8e2d4; box-shadow: inset 0 2px 0 #fff, 0 -2px 0 #7a7484; display: flex; align-items: center; gap: 6px; padding: 0 6px; font-size: 13px; }
-.mos-start { display: flex; align-items: center; gap: 5px; font: 700 13px 'Silkscreen', monospace; padding: 3px 9px; background: #d8d0c0; box-shadow: inset 2px 2px 0 #fff, inset -2px -2px 0 #7a7484; }
-.mos-start canvas { width: 20px; height: 20px; image-rendering: pixelated; }
-.mos-tabs { display: flex; gap: 4px; flex: 1; overflow: hidden; }
-.mos-tab { padding: 3px 10px; background: #d8d0c0; box-shadow: inset 2px 2px 0 #fff, inset -2px -2px 0 #7a7484; white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
-.mos-tab.on { box-shadow: inset 2px 2px 0 #7a7484, inset -2px -2px 0 #fff; background: #cac2b0; }
-.mos-tray { display: flex; gap: 10px; align-items: center; padding: 3px 10px; box-shadow: inset 2px 2px 0 #7a7484, inset -2px -2px 0 #fff; }
-.mos-tray .wf { color: #a8382a; }
-.mos-win { position: absolute; min-width: 260px; background: #f4efe4; box-shadow: 0 0 0 2px #1e1a24, 4px 6px 0 rgba(0,0,0,0.35); display: flex; flex-direction: column; animation: mosWin 0.18s cubic-bezier(.2,1.5,.4,1) both; }
-@keyframes mosWin { from { transform: scale(0.92); opacity: 0; } }
-.mos-win .tb { display: flex; align-items: center; gap: 6px; padding: 4px 6px 4px 8px; background: var(--wc, #3a78c0); color: #fff; font: 700 13px 'Silkscreen', monospace; letter-spacing: 0.04em; }
-.mos-win .tb canvas { width: 16px; height: 16px; image-rendering: pixelated; }
-.mos-win .tb .tt { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mos-win .tb .x { width: 18px; height: 16px; background: #e8483a; box-shadow: inset 1px 1px 0 #ff8a7a, inset -1px -1px 0 #8a1a10; text-align: center; line-height: 15px; font-size: 11px; }
-.mos-win .bd { flex: 1; overflow: auto; padding: 8px 10px; font-size: 14px; line-height: 1.35; }
-.mos-win.dark .bd { background: #141018; color: #9dffd8; font-family: 'Silkscreen', monospace; font-size: 12px; }
-.xl { border-collapse: collapse; font-size: 13px; }
-.xl td, .xl th { border: 1px solid #b8b0a0; padding: 2px 8px; text-align: right; min-width: 52px; }
-.xl th { background: #e0d8c4; text-align: center; font-weight: 700; }
-.xl td.sel { background: #bfe0ff; box-shadow: inset 0 0 0 2px #3a78c0; }
-.xl tr.sum td { font-weight: 700; background: #f8f0d8; }
-.fx { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; font-size: 13px; }
-.fx b { background: #e0d8c4; padding: 1px 6px; }
-.fx span { flex: 1; background: #fff; padding: 1px 6px; box-shadow: inset 1px 1px 0 #7a7484; }
-.rp label { display: block; margin: 7px 0 2px; font-weight: 700; color: #3a2614; }
-.rp select, .rp input { font: inherit; font-size: 14px; color: #1e1a24; min-width: 120px; padding: 2px 6px; border: 0; box-shadow: inset 1px 1px 0 #7a7484, inset -1px -1px 0 #fff; background: #fff; }
-.rp .bad { box-shadow: 0 0 0 2px #e8483a; }
-.rp .ok { box-shadow: 0 0 0 2px #4ab04a; }
-.rp .tip { color: #a8382a; font-size: 12px; min-height: 1em; }
-.rp .thumbs { display: flex; gap: 8px; }
-.rp .thumbs canvas { width: 96px; height: 64px; image-rendering: pixelated; box-shadow: 0 0 0 2px #7a7484; }
-.rp .thumbs canvas.on { box-shadow: 0 0 0 3px #3a78c0; }
-.mbtn { font: 700 13px 'Silkscreen', monospace; padding: 4px 12px; background: #d8d0c0; box-shadow: inset 2px 2px 0 #fff, inset -2px -2px 0 #7a7484; border: 0; margin-top: 10px; }
-.mbtn:active { box-shadow: inset 2px 2px 0 #7a7484, inset -2px -2px 0 #fff; }
-.mbtn.go { background: #5aa447; color: #fff; box-shadow: inset 2px 2px 0 #8ad870, inset -2px -2px 0 #2a6a1a; }
-.done-stamp { margin-top: 10px; padding: 8px; background: #e0f4d8; box-shadow: 0 0 0 2px #4ab04a; color: #2a6a1a; font-weight: 700; }
-.gal { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
-.gal figure { margin: 0; background: #fff; padding: 4px 4px 2px; box-shadow: 0 0 0 1px #b8b0a0, 2px 2px 0 rgba(0,0,0,0.15); }
-.gal canvas, .gal img { width: 100%; image-rendering: pixelated; display: block; }
-.gal figcaption { font-size: 11px; color: #5a4a3a; padding-top: 2px; }
-.big canvas, .big img { width: 100%; image-rendering: pixelated; }
-.disc { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; border-bottom: 1px dashed #c8c0b0; }
-.disc canvas { width: 48px; height: 48px; image-rendering: pixelated; background: #e8f0f4; flex: none; box-shadow: 0 0 0 1px #b8b0a0; }
-.disc b { color: #2f6b2a; } .disc i { color: #7a6a58; font-size: 12px; }
-.disc.lock { opacity: 0.55; } .disc.lock canvas { filter: brightness(0); opacity: 0.4; }
-.fl { display: flex; flex-direction: column; gap: 2px; }
-.fl div { padding: 2px 6px; display: flex; gap: 6px; align-items: center; }
-.fl div:hover { background: #bfe0ff; }
-.fl canvas { width: 16px; height: 16px; image-rendering: pixelated; }
-.np { white-space: pre-wrap; font-family: 'Pixelify Sans', monospace; font-size: 14px; background: #fff; padding: 8px; box-shadow: inset 1px 1px 0 #7a7484; min-height: 100%; box-sizing: border-box; }
-.term { white-space: pre-wrap; }
-.term input { background: transparent; border: 0; color: #9dffd8; font: inherit; outline: none; width: 70%; }
-.pk { position: relative; }
-.pk canvas { width: 100%; image-rendering: pixelated; display: block; }
-.pk .bins { display: flex; gap: 6px; margin-top: 6px; }
-.pk .bins button { flex: 1; font: 700 12px 'Silkscreen', monospace; padding: 6px; border: 0; background: #d8d0c0; box-shadow: inset 2px 2px 0 #fff, inset -2px -2px 0 #7a7484; }
-`;
+import bliss from '../../assets/bliss.jpg';
+import { AERO_CSS } from '../v7/aeroCss';
+import { Spring, Fx, sfx, canvas, R, E, icon, cloudSprite, clamp, bubSprite } from '../v7/aeroFx';
+import { VCursor } from '../v7/aeroCursor';
 
 let styled = false;
 
-// ------------------------------------------------------------------ pixel helpers
-
-function canvas(w: number, h: number, draw: (g: CanvasRenderingContext2D) => void): HTMLCanvasElement {
-  const c = document.createElement('canvas');
-  c.width = w; c.height = h;
-  const g = c.getContext('2d')!;
-  g.imageSmoothingEnabled = false;
-  draw(g);
-  return c;
-}
-function grid(g: CanvasRenderingContext2D, rows: string[], pal: Record<string, string>, x0 = 0, y0 = 0) {
-  rows.forEach((r, y) => { for (let x = 0; x < r.length; x++) { const c = pal[r[x]]; if (c) { g.fillStyle = c; g.fillRect(x0 + x, y0 + y, 1, 1); } } });
-}
-function R(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, c: string) { g.fillStyle = c; g.fillRect(x, y, w, h); }
-function E(g: CanvasRenderingContext2D, cx: number, cy: number, rx: number, ry: number, c: string | ((nx: number, ny: number) => string | null)) {
-  for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
-    const nx = (x + 0.5 - cx) / rx, ny = (y + 0.5 - cy) / ry;
-    if (nx * nx + ny * ny > 1) continue;
-    const v = typeof c === 'string' ? c : c(nx, ny);
-    if (v) { g.fillStyle = v; g.fillRect(x, y, 1, 1); }
-  }
-}
-function outline(g: CanvasRenderingContext2D, w: number, h: number, col = '#1a1014') {
-  const d = g.getImageData(0, 0, w, h);
-  const src = d.data.slice();
-  const op = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && src[(y * w + x) * 4 + 3] > 0;
-  const [r, gg, b] = [parseInt(col.slice(1, 3), 16), parseInt(col.slice(3, 5), 16), parseInt(col.slice(5, 7), 16)];
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    if (op(x, y)) continue;
-    if (op(x + 1, y) || op(x - 1, y) || op(x, y + 1) || op(x, y - 1)) { const i = (y * w + x) * 4; d.data[i] = r; d.data[i + 1] = gg; d.data[i + 2] = b; d.data[i + 3] = 255; }
-  }
-  g.putImageData(d, 0, 0);
-}
-
-/** the fat pug cursor: a chunky pug head with the pointer tip at its nose (top-left) */
-function pugCursor(): string {
-  const c = canvas(30, 30, g => {
-    // pointer tip
-    g.fillStyle = '#e4b87c';
-    g.beginPath(); g.moveTo(2, 2); g.lineTo(13, 7); g.lineTo(7, 13); g.closePath(); g.fill();
-    // head
-    E(g, 16, 16, 11, 10, (nx, ny) => (nx + ny < -0.7 ? '#f4d49c' : ny > 0.55 ? '#c49058' : '#e4b87c'));
-    // ears
-    E(g, 7.5, 9, 3.2, 3.6, '#3e2c2a'); E(g, 25, 9, 3.2, 3.6, '#3e2c2a');
-    // muzzle, nose, tongue
-    E(g, 16, 20.5, 6, 4.2, '#3e2c2a'); R(g, 14, 18, 4, 2, '#140c0c'); R(g, 15, 23, 3, 3, '#f07a90');
-    // big ringed eyes
-    for (const ex of [11, 21]) { E(g, ex, 14, 3.2, 3.2, '#ffffff'); E(g, ex, 14, 2, 2, '#1a1012'); R(g, ex - 1, 13, 1, 1, '#ffffff'); }
-    // forehead wrinkle
-    R(g, 14, 9, 5, 1, '#c49058');
-    outline(g, 30, 30, '#2e1c16');
-  });
-  return `url(${c.toDataURL()})`;
-}
-
-// desktop icons (16x16 grids)
-const ICONS: Record<string, { rows: string[]; pal: Record<string, string> }> = {
-  report: { rows: ['..wwwwwwwwww....', '..wbbbbbbbbw....', '..wwwwwwwwww....', '..wkkkkkkkkw....', '..wwwwwwwwww....', '..wkkkkkkkw.....', '..wwwwwwwwww....', '..wkkkkkkkkw....', '..wwwwwwwwww....', '..wkkkkkw.......', '..wwwwwwwwww....', '..wgggwwwwww....', '..wgggwwwwww....', '..wwwwwwwwww....', '................', '................'], pal: { w: '#f4efe4', b: '#3a78c0', k: '#7a7484', g: '#5aa447' } },
-  sheet: { rows: ['gggggggggggggg..', 'gwwwwgwwwwgwww..', 'gwwwwgwwwwgwww..', 'gggggggggggggg..', 'gwwwwgwwwwgwww..', 'gwwwwgwwbbgwww..', 'gggggggggggggg..', 'gwwwwgwbbbgwww..', 'gwwwwgwbbbgwbb..', 'gggggggggggggg..', 'gwwbbgwbbbgwbb..', 'gwwbbgwbbbgwbb..', 'gggggggggggggg..', '................', '................', '................'], pal: { g: '#2a7a3a', w: '#f4efe4', b: '#5aa447' } },
-  photo: { rows: ['................', '..kkkk..........', '.kkkkkkkkkkkkkk.', '.kwwwwwwwwwwwwk.', '.kwsssssssssswk.', '.kwsssssssyysk..', '.kwssssssssyswk.', '.kwsssmmsssssswk', '.kwssmmmmssmmswk', '.kwsmmmmmmmmmmwk', '.kwggggggggggwk.', '.kwwwwwwwwwwwwk.', '.kkkkkkkkkkkkkk.', '................', '................', '................'], pal: { k: '#2a2630', w: '#f4efe4', s: '#8ac8e8', y: '#ffd84a', m: '#5a8a4a', g: '#3a6a3a' } },
-  disc: { rows: ['................', '....bbbbbb......', '...bwwwwwwb.....', '..bwwgggwwwb....', '..bwgggggwwb....', '..bwggkgggwb....', '..bwgggggwwb....', '..bwwgggwwwb....', '...bwwwwwwbb....', '....bbbbbb.bb...', '............bb..', '.............bb.', '..............b.', '................', '................', '................'], pal: { b: '#6a4a2a', w: '#d8f0f8', g: '#5aa447', k: '#1a1014' } },
-  folder: { rows: ['................', '.yyyyy..........', 'yYYYYYyyyyyyyyy.', 'yYYYYYYYYYYYYYy.', 'yyyyyyyyyyyyyyyy', 'yYYYYYYYYYYYYYYy', 'yYYYYYYYYYYYYYYy', 'yYYYYYYYYYYYYYYy', 'yYYYYYYYYYYYYYYy', 'yYYYYYYYYYYYYYYy', 'yYYYYYYYYYYYYYYy', 'yyyyyyyyyyyyyyyy', '................', '................', '................', '................'], pal: { y: '#c8901a', Y: '#f0c040' } },
-  game: { rows: ['................', '....cccccc......', '...cwwwwwwc.....', '..cwwgwwwwwc....', '..cwgggwwrwc....', '..cwwgwwrwrc....', '..cwwwwwwrwc....', '..cwwwwwwwwc....', '...cwwwwwwc.....', '....cccccc......', '......cc........', '.....cccc.......', '................', '................', '................', '................'], pal: { c: '#3a9a9a', w: '#d8f4f4', g: '#5aa447', r: '#e8483a' } },
-  term: { rows: ['kkkkkkkkkkkkkkkk', 'kddddddddddddddk', 'kdgddddddddddddk', 'kddgdddddddddddk', 'kdgddggggddddddk', 'kddddddddddddddk', 'kddddddddddddddk', 'kddddddddddddddk', 'kddddddddddddddk', 'kkkkkkkkkkkkkkkk', '......kkkk......', '....kkkkkkkk....', '................', '................', '................', '................'], pal: { k: '#2a2630', d: '#141018', g: '#9dffd8' } },
-  bin: { rows: ['................', '....kkkkkk......', '..kkkkkkkkkk....', '...kwwwwwwk.....', '...kwkwkwkk.....', '...kwkwkwkk.....', '...kwkwkwkk.....', '...kwkwkwkk.....', '...kwkwkwkk.....', '...kwwwwwwk.....', '....kkkkkk......', '................', '................', '................', '................', '................'], pal: { k: '#5a5a64', w: '#c8c8d0' } },
-  doc: { rows: ['..wwwwwww.......', '..wkkkkkww......', '..wwwwwwwww.....', '..wkkkkkkkw.....', '..wwwwwwwww.....', '..wkkkkkkkw.....', '..wwwwwwwww.....', '..wkkkkw..w.....', '..wwwwwwwww.....', '................', '................', '................', '................', '................', '................', '................'], pal: { w: '#f4efe4', k: '#7a7484' } },
-  lock: { rows: ['.....kkkk.......', '....k....k......', '....k....k......', '...yyyyyyyy.....', '...yYYYYYYy.....', '...yYYkkYYy.....', '...yYYkkYYy.....', '...yYYYYYYy.....', '...yyyyyyyy.....', '................', '................', '................', '................', '................', '................', '................'], pal: { k: '#7a7484', y: '#c8901a', Y: '#f0c040' } },
+/** tiny 9x9 pixel glyphs (window controls, dropdown arrow) with a 1px drop shadow */
+const GLYPHS: Record<string, string[]> = {
+  min: ['.........', '.........', '.........', '.........', '.........', '.........', '..#####..', '..#####..', '.........'],
+  max: ['.........', '.#######.', '.#######.', '.#.....#.', '.#.....#.', '.#.....#.', '.#######.', '.........', '.........'],
+  res: ['...#####.', '...#####.', '.#####.#.', '.#####.#.', '.#...###.', '.#...#...', '.#####...', '.........', '.........'],
+  x: ['.........', '.##...##.', '..##.##..', '...###...', '...###...', '..##.##..', '.##...##.', '.........', '.........'],
+  arr: ['.........', '.........', '.#######.', '..#####..', '...###...', '....#....', '.........', '.........', '.........'],
 };
-function icon(name: string, scale = 1): HTMLCanvasElement {
-  const d = ICONS[name] ?? ICONS.doc;
-  return canvas(16 * scale, 16 * scale, g => { g.scale(scale, scale); grid(g, d.rows, d.pal); });
+function glyph(k: string, col = '#ffffff', sh = 'rgba(10,40,70,0.75)'): string {
+  return canvas(10, 10, g => {
+    for (const [o, c] of [[1, sh], [0, col]] as const) GLYPHS[k].forEach((r, y) => { for (let x = 0; x < 9; x++) if (r[x] === '#') R(g, x + o, y + o, 1, 1, c); });
+  }).toDataURL();
 }
 
 // ------------------------------------------------------------------ fake photos (pixel art)
@@ -234,135 +107,396 @@ const FILES: { path: string; name: string; text: string; lock?: boolean }[] = [
 
 // ------------------------------------------------------------------ OS
 
-interface Win { el: HTMLElement; id: string; tab: HTMLElement }
+interface Win {
+  el: HTMLElement; id: string; tab: HTMLElement; bd: HTMLElement;
+  x: number; y: number; w: number; h: number;
+  max: boolean; min: boolean; minning: boolean; closing: boolean; drag: boolean; anim: boolean;
+  prev: { x: number; y: number; w: number; h: number } | null;
+  sx: Spring; sy: Spring; tx: Spring; ty: Spring; rot: Spring; a: number; aT: number; lastTb: number;
+  onKey?: (e: KeyboardEvent) => boolean;
+}
+interface Pop { el: HTMLElement; anchor?: Element; onClose?: () => void }
+type MenuItem = [string, string | null, () => void] | '-';
 
 export async function openMoriOS(o: { report: boolean }): Promise<void> {
-  if (!styled) { document.head.appendChild(el('style', '', CSS)); styled = true; }
+  if (!styled) { document.head.appendChild(el('style', '', AERO_CSS)); styled = true; }
   const wrap = el('div', 'mos-wrap');
-  wrap.innerHTML = `<div class="mos-lap"><div class="mos-scr"><canvas class="mos-wall" width="320" height="180"></canvas><div class="mos-icons"></div><div class="mos-wins"></div>
-    <div class="mos-bar"><div class="mos-start"></div><div class="mos-tabs"></div><div class="mos-tray"><span class="wf" title="No internet: middle of the ocean">✕ Wi-Fi</span><span>▮▮▮ 87%</span><span class="clk"></span></div></div></div></div>`;
+  wrap.innerHTML = `<div class="mos-lap"><div class="mos-scr">
+      <div class="mos-bg"><img alt="" draggable="false"></div>
+      <div class="mos-sun"></div><div class="mos-rays"></div>
+      <div class="mos-flare f2"></div><div class="mos-flare f0"></div><div class="mos-flare f1"></div><div class="mos-flare f3"></div>
+      <div class="mos-icons"></div><div class="mos-gad"></div><div class="mos-wins"></div>
+      <div class="mos-bar"><div class="mos-orb ctl" title="Start"></div><div class="mos-tabs"></div>
+        <div class="mos-tray"><span class="wf" title="No internet: middle of the ocean">✕ Wi-Fi</span><span class="bt">▮▮▮ 87%</span><span class="clk"></span></div><div class="mos-peek ctl" title="Show desktop"></div></div>
+      <div class="mos-menus"></div><div class="mos-focus"></div>
+    </div><div class="mos-brand"><i></i>MoriBook</div></div>`;
+  const $ = <T extends HTMLElement = HTMLElement>(s: string) => wrap.querySelector(s) as T;
+  const lap = $('.mos-lap'), scr = $('.mos-scr'), bgEl = $('.mos-bg'), wins = $('.mos-wins'), tabs = $('.mos-tabs'), bar = $('.mos-bar');
+  const orb = $('.mos-orb'), peek = $('.mos-peek'), clk = $('.clk'), menus = $('.mos-menus'), ring = $('.mos-focus'), iconsEl = $('.mos-icons'), gad = $('.mos-gad');
+  ($('.mos-bg img') as HTMLImageElement).src = bliss;
+  orb.appendChild(icon('pug', 1.34));
+  const lid = el('div', 'gel red sm mos-lid ctl', '✕ Close lid');
+  lid.dataset.direct = '1';
+  lid.title = 'Close the laptop (Esc)';
+  lap.appendChild(lid);
   game.ui.modalLayer.appendChild(wrap);
   game.ui.modalOpen++;
-  audio.play('uiOpen', { vol: 0.6 });
-  const scr = wrap.querySelector('.mos-scr') as HTMLElement;
-  scr.style.setProperty('--pug', pugCursor());
-  const wins = wrap.querySelector('.mos-wins') as HTMLElement;
-  const tabs = wrap.querySelector('.mos-tabs') as HTMLElement;
-  const start = wrap.querySelector('.mos-start') as HTMLElement;
-  start.appendChild(canvas(16, 16, g => {
-    E(g, 8, 8.5, 6.5, 6, '#e4b87c'); E(g, 3.5, 4, 2, 2, '#3e2c2a'); E(g, 12.5, 4, 2, 2, '#3e2c2a'); E(g, 8, 10.5, 3.4, 2.4, '#3e2c2a');
-    R(g, 5, 7, 2, 2, '#1a1012'); R(g, 9, 7, 2, 2, '#1a1012'); R(g, 7, 12, 2, 2, '#f07a90');
-  }));
-  start.appendChild(document.createTextNode('MoriOS'));
-  const clk = wrap.querySelector('.clk') as HTMLElement;
+  sfx.open();
+
   let open: Win[] = [];
+  let active: Win | null = null;
   let zTop = 10;
   let closed = false;
+  let finish = () => {};
+  const fx = new Fx();
+  fx.back.className = 'mos-fxb'; fx.front.className = 'mos-fxf';
+  scr.insertBefore(fx.back, iconsEl);
+  scr.appendChild(fx.front);
 
-  // ---- animated nature wallpaper: dusk sea, drifting clouds, a whale tail rising and diving, birds
-  const wall = wrap.querySelector('.mos-wall') as HTMLCanvasElement;
-  const wg = wall.getContext('2d')!;
-  wg.imageSmoothingEnabled = false;
-  const clouds = Array.from({ length: 6 }, (_, i) => ({ x: i * 60 + Math.random() * 40, y: 12 + Math.random() * 40, w: 26 + Math.random() * 30, v: 1.5 + Math.random() * 2 }));
-  const birds = Array.from({ length: 5 }, () => ({ x: Math.random() * 320, y: 20 + Math.random() * 50, v: 8 + Math.random() * 10, ph: Math.random() * 6 }));
-  let wt = 0, last = performance.now();
-  const drawWall = () => {
-    if (closed) return;
-    const now = performance.now();
-    const dt = Math.min(0.1, (now - last) / 1000);
-    last = now;
-    wt += dt;
-    for (let y = 0; y < 180; y++) {
-      const t = y / 110;
-      const r = y < 110 ? Math.round(250 - t * 120) : 40, g = y < 110 ? Math.round(170 - t * 90) : 60, b = y < 110 ? Math.round(120 + t * 60) : 96;
-      wg.fillStyle = `rgb(${r},${g},${b})`;
-      wg.fillRect(0, y, 320, 1);
-    }
-    E(wg, 230, 100, 18, 18, '#ffe0a0');
-    for (const c of clouds) {
-      c.x += c.v * dt;
-      if (c.x > 340) c.x = -c.w - 10;
-      E(wg, c.x, c.y, c.w / 2, 5, 'rgba(255,230,220,0.85)');
-      E(wg, c.x + c.w * 0.2, c.y - 3, c.w / 4, 4, 'rgba(255,240,230,0.9)');
-    }
-    // distant island
-    E(wg, 70, 110, 44, 9, '#3a3050');
-    E(wg, 80, 104, 16, 8, '#3a3050');
-    // sea with shimmering sun path
-    for (let y = 110; y < 180; y++) {
-      wg.fillStyle = y % 4 === 0 ? '#34506e' : '#2a4260';
-      wg.fillRect(0, y, 320, 1);
-      const k = (y - 110) / 70;
-      for (let i = 0; i < 3; i++) {
-        const x = 230 + Math.sin(wt * 1.5 + y * 0.9 + i * 2) * (8 + k * 30);
-        wg.fillStyle = 'rgba(255,220,160,0.7)';
-        wg.fillRect(Math.round(x), y, 4 + Math.round(k * 6), 1);
-      }
-    }
-    // whale tail: rises, holds, dives (12 s cycle)
-    const ph = (wt % 12) / 12;
-    const up = ph < 0.15 ? ph / 0.15 : ph < 0.45 ? 1 : ph < 0.6 ? 1 - (ph - 0.45) / 0.15 : 0;
-    if (up > 0) {
-      const bx = 150, by = 128 - up * 14;
-      wg.fillStyle = '#1e2a3a';
-      wg.fillRect(bx - 2, by + 6, 5, 16 * up);
-      wg.beginPath(); wg.moveTo(bx, by + 8); wg.lineTo(bx - 14, by - 2); wg.lineTo(bx - 9, by + 3); wg.lineTo(bx, by + 4); wg.lineTo(bx + 9, by + 3); wg.lineTo(bx + 14, by - 2); wg.closePath(); wg.fill();
-      if (ph > 0.4 && ph < 0.5) for (let i = 0; i < 8; i++) { wg.fillStyle = '#e8f4ff'; wg.fillRect(bx - 12 + Math.random() * 24, by - 2 + Math.random() * 10, 1, 1); }
-    }
-    for (const b of birds) {
-      b.x += b.v * dt;
-      if (b.x > 330) { b.x = -10; b.y = 20 + Math.random() * 50; }
-      const f = Math.sin(wt * 8 + b.ph) > 0 ? 1 : 0;
-      wg.fillStyle = '#2a2230';
-      wg.fillRect(Math.round(b.x), Math.round(b.y), 1, 1);
-      wg.fillRect(Math.round(b.x) - 2, Math.round(b.y) - f, 2, 1);
-      wg.fillRect(Math.round(b.x) + 1, Math.round(b.y) - f, 2, 1);
-    }
-    clk.textContent = `${String(8 + Math.floor(game.time / 60) % 4).padStart(2, '0')}:${String(Math.floor(game.time) % 60).padStart(2, '0')}`;
-    requestAnimationFrame(drawWall);
+  // ---- geometry
+  const S = { w: 0, h: 0, dh: 0 };
+  const scrPt = (cx: number, cy: number) => { const r = scr.getBoundingClientRect(); const k = r.width / (scr.offsetWidth || 1); return { x: (cx - r.left) / k, y: (cy - r.top) / k }; };
+  const center = (e: Element) => { const r = e.getBoundingClientRect(); return scrPt(r.left + r.width / 2, r.top + r.height / 2); };
+  let bgW = 0, bgH = 0;
+  const measure = () => {
+    S.w = scr.clientWidth; S.h = scr.clientHeight; S.dh = S.h - bar.offsetHeight;
+    bgW = Math.max(S.w, S.h * 16 / 9) * 1.06; bgH = bgW * 9 / 16;
+    bgEl.style.width = bgW + 'px'; bgEl.style.height = bgH + 'px';
+    fx.resize(S.w, S.h);
   };
-  requestAnimationFrame(drawWall);
+  measure();
+
+  // ---- the cursor (mouse rides it, touch drives it like a trackpad)
+  const cur = new VCursor(wrap, () => scr.getBoundingClientRect(), t => !!t.closest('[data-direct]'));
+  let trailAcc = 0;
+  let ringOn = false;
+  const par = { x: 0, y: 0, tx: 0, ty: 0 };
+  cur.onMove = (x, y, dx, dy) => {
+    const p = scrPt(x, y);
+    par.tx = clamp(p.x / (S.w || 1) - 0.5, -0.6, 0.6); par.ty = clamp(p.y / (S.h || 1) - 0.5, -0.6, 0.6);
+    trailAcc += Math.hypot(dx, dy);
+    if (trailAcc > 13 && p.x > 0 && p.y > 0 && p.x < S.w && p.y < S.h) { trailAcc = 0; fx.trail(p.x + 4, p.y + 6); }
+    ringOn = false; ring.classList.remove('on');
+  };
+  cur.onFirstTouch = () => {
+    const h = el('div', 'mos-hint', `<b>Chunk is your trackpad</b>Drag anywhere to move the cursor · Tap to click<br>Hold (or two-finger tap) for more · Two fingers scroll<br>Tap, then drag, to move windows`);
+    wrap.appendChild(h);
+    setTimeout(() => { h.classList.add('bye'); setTimeout(() => h.remove(), 450); }, 5600);
+  };
+
+  // ---- wallpaper: drifting pixel clouds in the wallpaper's own pixel grid, sun rays, lens flares
+  const clouds = Array.from({ length: 7 }, (_, i) => {
+    const c = cloudSprite(i * 7 + 3);
+    c.className = 'mos-cloud';
+    bgEl.appendChild(c);
+    return { c, x: Math.random() * 170 - 10, y: 3 + ((i * 37) % 34) + Math.random() * 3, v: 0.35 + Math.random() * 0.9 + (i % 3) * 0.25, d: 0.4 + (i % 3) * 0.3 };
+  });
+  const flares = [...wrap.querySelectorAll<HTMLElement>('.mos-flare')].map((e, i) => ({ e, k: [0.55, 0.85, 1.15, 0.38][i], s: [110, 70, 26, 14][i] }));
+
+  // ---- gadgets (clock + sea & sky), with a few water droplets on the glass
+  gad.innerHTML = `<div><canvas class="clockc" width="48" height="48"></canvas></div><div><h4>Sea & Sky</h4><p>Water 12.4°C <span class="dn">▼</span></p><p>Barometer <span class="dn">falling</span></p><p>Wi-Fi: 1,400 km away</p></div>`;
+  const DROPS = [[8, 10], [84, 58], [44, 84], [20, 70], [90, 14], [62, 30]];
+  gad.querySelectorAll(':scope > div').forEach((d, i) => { for (let k = 0; k < 3; k++) { const [x, y] = DROPS[(i * 3 + k) % DROPS.length]; const dr = el('i', 'mos-drop'); dr.style.cssText = `left:${x}%;top:${y}%`; d.appendChild(dr); } });
+  const clockG = (gad.querySelector('.clockc') as HTMLCanvasElement).getContext('2d')!;
+  const line = (g: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number, c: string, w = 1) => {
+    const n = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)));
+    for (let i = 0; i <= n; i++) R(g, Math.round(x0 + ((x1 - x0) * i) / n) - (w > 1 ? 1 : 0), Math.round(y0 + ((y1 - y0) * i) / n) - (w > 1 ? 1 : 0), w, w, c);
+  };
+  const gameClock = () => ({ h: 8 + Math.floor(game.time / 60) % 4, m: Math.floor(game.time) % 60 });
+  const drawClock = () => {
+    const g = clockG, { h, m } = gameClock();
+    g.clearRect(0, 0, 48, 48);
+    E(g, 24, 24, 23, 23, (nx, ny) => (Math.hypot(nx, ny) > 0.9 ? '#1a4a70' : ny < -0.1 ? '#ffffff' : ny < 0.45 ? '#eef8ff' : '#d4ecfa'));
+    E(g, 24, 13, 15, 8, (_, ny) => (ny < 0 ? 'rgba(255,255,255,0.6)' : null));
+    for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; R(g, Math.round(24 + Math.sin(a) * 17) - (i % 3 ? 0 : 1), Math.round(24 - Math.cos(a) * 17) - (i % 3 ? 0 : 1), i % 3 ? 1 : 2, i % 3 ? 1 : 2, '#3a6a90'); }
+    const ha = ((h % 12) + m / 60) / 12 * Math.PI * 2, ma = (m / 60) * Math.PI * 2;
+    line(g, 24, 24, 24 + Math.sin(ha) * 10, 24 - Math.cos(ha) * 10, '#12304a', 2);
+    line(g, 24, 24, 24 + Math.sin(ma) * 15, 24 - Math.cos(ma) * 15, '#1a98d8');
+    E(g, 24, 24, 2, 2, '#e8483a');
+  };
+
+  // ---- per-frame animation hooks
+  const anims = new Set<(dt: number) => boolean>();
+  const animate = (f: (dt: number) => boolean) => { anims.add(f); };
+  const floatText = (x: number, y: number, t: string, color?: string) => {
+    const f = el('div', 'mos-float', t);
+    f.style.left = x + 'px'; f.style.top = y + 'px';
+    if (color) f.style.color = color;
+    scr.appendChild(f);
+    setTimeout(() => f.remove(), 950);
+  };
+  const retrigger = (e: Element, cls: string) => { e.classList.remove(cls); void (e as HTMLElement).offsetWidth; e.classList.add(cls); };
+
+  // ---- balloons from the tray
+  let bal: HTMLElement | null = null;
+  const balloon = (title: string, text: string, ms = 6500) => {
+    bal?.remove();
+    const b = el('div', 'mos-balloon', `<b></b><span>${text}</span>`);
+    const bb = b.querySelector('b') as HTMLElement;
+    bb.appendChild(icon('pug', 1));
+    bb.appendChild(document.createTextNode(title));
+    scr.appendChild(b);
+    bal = b;
+    const kill = () => { if (!b.isConnected) return; b.classList.add('bye'); setTimeout(() => b.remove(), 320); if (bal === b) bal = null; };
+    b.addEventListener('click', kill);
+    setTimeout(kill, ms);
+    sfx.pick();
+  };
+
+  // ---- popovers & menus
+  let pops: Pop[] = [];
+  const closePops = () => {
+    for (const p of pops) { p.el.classList.add('bye'); setTimeout(() => p.el.remove(), 150); p.onClose?.(); }
+    if (navCur && pops.some(p => p.el.contains(navCur))) navCur = navBack && navBack.isConnected ? navBack : null;
+    pops = [];
+    orb.classList.remove('on');
+  };
+  const openPop = (content: HTMLElement, x: number, y: number, opt: { anchor?: Element; bottom?: boolean; onClose?: () => void } = {}) => {
+    closePops();
+    measure();
+    const p = el('div', 'mos-pop');
+    p.appendChild(content);
+    menus.appendChild(p);
+    const pw = p.offsetWidth, ph = p.offsetHeight;
+    const px = clamp(x, 4, Math.max(4, S.w - pw - 4));
+    let py = opt.bottom ? S.dh - ph - 4 : y;
+    if (py + ph > S.dh - 4) py = Math.max(4, y - ph - (opt.anchor ? (opt.anchor as HTMLElement).offsetHeight + 6 : 0));
+    p.style.left = px + 'px'; p.style.top = py + 'px';
+    p.style.transformOrigin = `${clamp(x - px, 0, pw)}px ${opt.bottom || py < y ? ph : 0}px`;
+    pops.push({ el: p, anchor: opt.anchor, onClose: opt.onClose });
+    sfx.menu();
+    if (ringOn) { navBack = navCur; const first = p.querySelector<HTMLElement>('.ctl'); if (first) setNav(first); }
+    return p;
+  };
+  const menu = (x: number, y: number, items: MenuItem[]) => {
+    const m = el('div', 'mos-menu');
+    for (const it of items) {
+      if (it === '-') { m.appendChild(el('hr')); continue; }
+      const [label, ic, act] = it;
+      const mi = el('div', 'mi ctl');
+      if (ic) mi.appendChild(icon(ic, 1));
+      mi.appendChild(el('span', '', label));
+      mi.addEventListener('click', () => { closePops(); act(); });
+      m.appendChild(mi);
+    }
+    openPop(m, x, y);
+  };
+
+  // ---- form controls built for the pug cursor (no native pickers needed)
+  const arrow = glyph('arr', '#0a4a78', 'rgba(255,255,255,0.85)');
+  const dropdown = (opts: string[], ph = '(choose)') => {
+    const d = el('div', 'dd ctl ph', ph);
+    d.style.setProperty('--arr', `url(${arrow})`);
+    const api = { el: d, value: '', onChange: () => {} };
+    d.addEventListener('click', () => {
+      if (pops.some(p => p.anchor === d)) { closePops(); return; }
+      const r = d.getBoundingClientRect();
+      const p = scrPt(r.left, r.bottom + 3);
+      const m = el('div', 'mos-menu');
+      m.style.minWidth = d.offsetWidth + 'px';
+      for (const op of opts) {
+        const mi = el('div', 'mi ctl' + (op === api.value ? ' hov' : ''), op);
+        mi.addEventListener('click', () => {
+          api.value = op; d.textContent = op; d.classList.remove('ph', 'ok', 'bad');
+          closePops(); sfx.pick(); retrigger(d, 'mos-wiggle');
+          const c = center(d); fx.sparkle(c.x + d.offsetWidth * 0.3, c.y, 7, 60);
+          api.onChange();
+        });
+        m.appendChild(mi);
+      }
+      openPop(m, p.x, p.y, { anchor: d });
+    });
+    return api;
+  };
+  let numActive: { type: (k: string) => void } | null = null;
+  const numField = () => {
+    const w = el('div', 'numf');
+    const v = el('div', 'v ctl ph', '0');
+    w.appendChild(v);
+    const api = { el: w, v, value: '', onChange: () => {}, type: (_k: string) => {} };
+    const set = (s: string) => { api.value = s; v.textContent = s || '0'; v.classList.toggle('ph', !s); v.classList.remove('ok', 'bad'); api.onChange(); };
+    api.type = (k: string) => {
+      if (k === 'back') { set(api.value.slice(0, -1)); sfx.tick(0); }
+      else if (k === 'ok') closePops();
+      else if (api.value.length < 3) { set((api.value + k).replace(/^0+(?=\d)/, '')); sfx.tick(+k); }
+      retrigger(v, 'mos-wiggle');
+    };
+    v.addEventListener('click', () => {
+      if (pops.some(p => p.anchor === v)) { closePops(); return; }
+      const kp = el('div', 'mos-menu kp');
+      for (const k of ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'back', '0', 'ok']) {
+        const b = el('div', 'gel ctl' + (k === 'ok' ? ' green' : k === 'back' ? ' glass' : ''), k === 'back' ? '⌫' : k === 'ok' ? 'OK' : k);
+        b.addEventListener('click', () => { api.type(k); if (k !== 'ok') { const c = center(b); fx.sparkle(c.x, c.y, 4, 40); } });
+        kp.appendChild(b);
+      }
+      const r = v.getBoundingClientRect();
+      const p = scrPt(r.left, r.bottom + 3);
+      v.classList.add('on');
+      numActive = api;
+      openPop(kp, p.x, p.y, { anchor: v, onClose: () => { v.classList.remove('on'); if (numActive === api) numActive = null; } });
+    });
+    return api;
+  };
+  const progress = (cls = '') => {
+    const e = el('div', 'prog ' + cls, '<i></i><span></span>');
+    const i = e.querySelector('i') as HTMLElement, s = e.querySelector('span') as HTMLElement;
+    const sp = new Spring(0, 170, 13);
+    let running = false;
+    const api = {
+      el: e,
+      set: (f: number, label?: string, instant = false) => {
+        sp.target = clamp(f, 0, 1);
+        if (instant) sp.snap(sp.target);
+        if (label !== undefined) s.textContent = label;
+        if (!running) { running = true; animate(dt => { sp.step(dt); i.style.width = clamp(sp.x, 0, 1.04) * 100 + '%'; if (sp.rest(0.001)) { running = false; return false; } return e.isConnected; }); }
+      },
+      edge: () => { const r = i.getBoundingClientRect(); return scrPt(r.right, r.top + r.height / 2); },
+    };
+    return api;
+  };
 
   // ---- windows
-  const focus = (w: Win) => { w.el.style.zIndex = String(++zTop); tabs.querySelectorAll('.mos-tab').forEach(t => t.classList.remove('on')); w.tab.classList.add('on'); };
-  const closeWin = (w: Win) => { w.el.remove(); w.tab.remove(); open = open.filter(x => x !== w); audio.play('uiBack', { vol: 0.4 }); };
-  const win = (id: string, title: string, ic: string, color: string, w: number, h: number, body: HTMLElement | string, dark = false): Win | null => {
-    const ex = open.find(x => x.id === id);
-    if (ex) { focus(ex); return null; }
-    const e = el('div', 'mos-win' + (dark ? ' dark' : ''));
-    const n = open.length;
-    e.style.cssText = `left:${120 + n * 26}px;top:${22 + n * 20}px;width:${w}px;height:${h}px;--wc:${color}`;
-    e.innerHTML = `<div class="tb"><span class="ic"></span><span class="tt">${title}</span><span class="x">✕</span></div><div class="bd"></div>`;
-    (e.querySelector('.ic') as HTMLElement).appendChild(icon(ic));
+  const place = (W: Win) => { const s = W.el.style; s.left = W.x + 'px'; s.top = W.y + 'px'; s.width = W.w + 'px'; s.height = W.h + 'px'; };
+  const visibleWins = () => open.filter(w => !w.closing && !w.min && !w.minning);
+  const topWin = () => visibleWins().sort((a, b) => +b.el.style.zIndex - +a.el.style.zIndex)[0] ?? null;
+  const focus = (W: Win | null) => {
+    if (W) W.el.style.zIndex = String(++zTop);
+    active = W;
+    for (const x of open) { x.el.classList.toggle('act', x === W); x.tab.classList.toggle('on', x === W); }
+  };
+  const tabCenter = (W: Win) => center(W.tab);
+  const kSet = (W: Win, k: [number, number, number, number], d = 20) => { [W.sx, W.sy, W.tx, W.ty].forEach((s, i) => { s.k = k[i]; s.d = d; }); };
+  const minimize = (W: Win) => {
+    if (W.min || W.minning || W.closing) return;
+    const t = tabCenter(W);
+    W.el.style.transformOrigin = '50% 50%';
+    kSet(W, [190, 300, 210, 300], 22);
+    W.tx.target = t.x - (W.x + W.w / 2); W.ty.target = t.y - (W.y + W.h / 2);
+    W.sx.target = 0.1; W.sy.target = 0.06; W.aT = 0; W.minning = true;
+    W.tab.classList.add('min');
+    sfx.min();
+    if (active === W) focus(topWin());
+  };
+  const restore = (W: Win) => {
+    if (!W.min && !W.minning) return;
+    const t = tabCenter(W);
+    W.min = W.minning = false;
+    W.el.style.display = '';
+    W.el.style.transformOrigin = '50% 50%';
+    kSet(W, [260, 210, 240, 200], 17);
+    W.tx.x = t.x - (W.x + W.w / 2); W.ty.x = t.y - (W.y + W.h / 2); W.sx.x = 0.1; W.sy.x = 0.06;
+    W.tx.target = W.ty.target = 0; W.sx.target = W.sy.target = 1; W.a = 0; W.aT = 1;
+    W.tab.classList.remove('min');
+    focus(W);
+    sfx.restore();
+    fx.sparkle(t.x, t.y - 10, 8, 70);
+  };
+  const toggleMax = (W: Win) => {
+    measure();
+    const old = { x: W.x, y: W.y, w: W.w, h: W.h };
+    if (!W.max) { W.prev = old; Object.assign(W, { x: 0, y: 0, w: S.w, h: S.dh, max: true }); }
+    else { Object.assign(W, W.prev ?? { x: 20, y: 20, w: Math.min(480, S.w - 20), h: Math.min(400, S.dh - 20) }, { max: false }); }
+    W.el.classList.toggle('max', W.max);
+    place(W);
+    W.el.style.transformOrigin = '0 0';
+    kSet(W, [300, 280, 300, 280], 21);
+    W.tx.x = old.x - W.x; W.ty.x = old.y - W.y; W.sx.x = old.w / W.w; W.sy.x = old.h / W.h;
+    W.tx.target = W.ty.target = 0; W.sx.target = W.sy.target = 1;
+    (W.el.querySelector('.ctrls .mx') as HTMLElement).style.setProperty('--gl', `url(${glyph(W.max ? 'res' : 'max', '#1a3a5a', 'rgba(255,255,255,0.9)')})`);
+    sfx.click();
+    focus(W);
+  };
+  const closeWin = (W: Win) => {
+    if (W.closing) return;
+    W.closing = true;
+    W.el.style.transformOrigin = '50% 50%';
+    kSet(W, [420, 380, 300, 300], 26);
+    W.sx.target = 0.72; W.sy.target = 0.55; W.aT = 0;
+    W.el.style.pointerEvents = 'none';
+    W.tab.remove();
+    const cx = W.x + W.w / 2, cy = W.y + W.h / 2;
+    fx.bubbles(cx, cy, 10, Math.min(W.w, 260)); fx.sparkle(cx, cy, 8, 110);
+    sfx.close();
+    if (active === W) focus(topWin());
+  };
+  let lastPress = { x: 0, y: 0 };
+  const win = (id: string, title: string, ic: string, w: number, h: number, body: HTMLElement | string, opt: { dark?: boolean; from?: { x: number; y: number } } = {}): Win | null => {
+    const ex = open.find(x => x.id === id && !x.closing);
+    if (ex) { if (ex.min || ex.minning) restore(ex); focus(ex); retrigger(ex.el, 'mos-wiggle'); sfx.click(); return null; }
+    measure();
+    const n = visibleWins().length;
+    const ww = Math.min(w, S.w - 12), hh = Math.min(h, S.dh - 12);
+    const x0 = Math.min(iconsEl.offsetWidth + 20, S.w - ww - 6);
+    const x = clamp(x0 + n * 28, 6, Math.max(6, S.w - ww - 6)), y = clamp(10 + n * 24, 4, Math.max(4, S.dh - hh - 4));
+    const e = el('div', 'mos-win' + (opt.dark ? ' dark' : ''));
+    e.innerHTML = `<div class="tb"><span class="ic"></span><span class="tt"></span><div class="ctrls"><b class="mn ctl" title="Minimise"></b><b class="mx ctl" title="Maximise"></b><b class="x ctl" title="Close"></b></div></div><div class="bd"></div>`;
+    (e.querySelector('.ic') as HTMLElement).appendChild(icon(ic, 1));
+    (e.querySelector('.tt') as HTMLElement).textContent = title;
+    const [mn, mx, xx] = [...e.querySelectorAll<HTMLElement>('.ctrls b')];
+    mn.style.setProperty('--gl', `url(${glyph('min', '#1a3a5a', 'rgba(255,255,255,0.9)')})`);
+    mx.style.setProperty('--gl', `url(${glyph('max', '#1a3a5a', 'rgba(255,255,255,0.9)')})`);
+    xx.style.setProperty('--gl', `url(${glyph('x')})`);
     const bd = e.querySelector('.bd') as HTMLElement;
     if (typeof body === 'string') bd.innerHTML = body; else bd.appendChild(body);
     wins.appendChild(e);
-    const tab = el('div', 'mos-tab', title);
+    const tab = el('div', 'mos-tab ctl');
+    tab.appendChild(icon(ic, 1));
+    tab.appendChild(el('span', 'tt', title));
     tabs.appendChild(tab);
-    const W: Win = { el: e, id, tab };
+    const W: Win = { el: e, id, tab, bd, x, y, w: ww, h: hh, max: false, min: false, minning: false, closing: false, drag: false, anim: true, prev: null,
+      sx: new Spring(0.3, 330, 16), sy: new Spring(0.2, 250, 14), tx: new Spring(0, 260, 20), ty: new Spring(0, 260, 20), rot: new Spring(0, 220, 14), a: 0, aT: 1, lastTb: 0 };
+    W.sx.target = W.sy.target = 1;
+    place(W);
+    const from = opt.from ?? lastPress;
+    e.style.transformOrigin = `${clamp(from.x - x, -200, ww + 200)}px ${clamp(from.y - y, -200, hh + 200)}px`;
+    e.style.opacity = '0';
     open.push(W);
     focus(W);
-    audio.play('ui', { vol: 0.4 });
-    tab.addEventListener('pointerdown', () => focus(W));
-    e.addEventListener('pointerdown', () => focus(W));
-    (e.querySelector('.x') as HTMLElement).addEventListener('pointerdown', ev => { ev.stopPropagation(); closeWin(W); });
-    // drag by the title bar
+    sfx.open();
+    e.addEventListener('pointerdown', () => { if (active !== W) focus(W); });
+    tab.addEventListener('click', () => { if (W.min || W.minning) restore(W); else if (active === W) minimize(W); else { focus(W); retrigger(e, 'mos-wiggle'); } });
+    for (const b of [mn, mx, xx]) b.addEventListener('pointerdown', ev => ev.stopPropagation());
+    mn.addEventListener('click', () => minimize(W));
+    mx.addEventListener('click', () => toggleMax(W));
+    xx.addEventListener('click', () => closeWin(W));
     const tb = e.querySelector('.tb') as HTMLElement;
+    tb.addEventListener('click', ev => {
+      if ((ev.target as Element).closest('.ctrls')) return;
+      const now = performance.now();
+      if (now - W.lastTb < 380) { W.lastTb = 0; toggleMax(W); } else W.lastTb = now;
+    });
     tb.addEventListener('pointerdown', ev => {
-      if ((ev.target as HTMLElement).classList.contains('x')) return;
-      const sr = scr.getBoundingClientRect();
-      const ox = ev.clientX - e.offsetLeft, oy = ev.clientY - e.offsetTop;
-      const mv = (m: PointerEvent) => { e.style.left = Math.max(-w + 60, Math.min(sr.width - 60, m.clientX - ox)) + 'px'; e.style.top = Math.max(0, Math.min(sr.height - 60, m.clientY - oy)) + 'px'; };
-      const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); };
+      if (ev.button !== 0 || (ev.target as Element).closest('.ctrls')) return;
+      const p0 = scrPt(ev.clientX, ev.clientY);
+      let ox = p0.x - W.x, oy = p0.y - W.y, lx = p0.x, lt = performance.now(), moved = false;
+      const mv = (m: PointerEvent) => {
+        const p = scrPt(m.clientX, m.clientY);
+        if (!moved) {
+          if (Math.hypot(p.x - p0.x, p.y - p0.y) < 4) return;
+          moved = true; W.drag = true;
+          if (W.max && W.prev) { const f = ox / W.w; W.max = false; e.classList.remove('max'); W.w = W.prev.w; W.h = W.prev.h; ox = f * W.w; oy = Math.min(oy, 16); mx.style.setProperty('--gl', `url(${glyph('max', '#1a3a5a', 'rgba(255,255,255,0.9)')})`); }
+          e.style.transformOrigin = `${ox}px ${oy}px`;
+          W.sx.k = W.sy.k = 300; W.sx.d = W.sy.d = 16;
+          W.sx.target = W.sy.target = 1.03;
+        }
+        W.x = clamp(p.x - ox, -W.w + 90, S.w - 90); W.y = clamp(p.y - oy, 0, S.dh - 28);
+        const now = performance.now();
+        const vx = ((p.x - lx) / Math.max(1, now - lt)) * 1000;
+        lx = p.x; lt = now;
+        W.rot.target = clamp(vx / 240, -5, 5);
+        place(W);
+      };
+      const up = (u: PointerEvent) => {
+        window.removeEventListener('pointermove', mv);
+        window.removeEventListener('pointerup', up);
+        if (!moved) return;
+        W.drag = false; W.rot.target = 0; W.sx.target = W.sy.target = 1;
+        W.sy.v -= 1.6; W.sx.v += 1.1;
+        sfx.press();
+        if (scrPt(u.clientX, u.clientY).y <= 3 && !W.max) toggleMax(W);
+      };
       window.addEventListener('pointermove', mv);
       window.addEventListener('pointerup', up);
-    });
-    // keep windows inside smaller screens
-    requestAnimationFrame(() => {
-      const sr = scr.getBoundingClientRect();
-      if (e.offsetLeft + e.offsetWidth > sr.width) e.style.left = Math.max(4, sr.width - e.offsetWidth - 8) + 'px';
-      if (e.offsetTop + e.offsetHeight > sr.height - 36) { e.style.top = '4px'; e.style.height = Math.min(h, sr.height - 44) + 'px'; }
-      if (e.offsetWidth > sr.width) e.style.width = sr.width - 8 + 'px';
     });
     return W;
   };
@@ -371,27 +505,32 @@ export async function openMoriOS(o: { report: boolean }): Promise<void> {
   const apps: Record<string, () => void> = {
     sheet: () => {
       const b = el('div');
-      b.innerHTML = `<div class="fx"><b class="ref">B2</b><span class="val"></span></div>`;
+      b.innerHTML = `<div class="ribbon"><span class="on">Home</span><span>Insert</span><span>Data</span><span>Chunk</span></div><div class="fx"><b class="ref">B2</b><i>fx</i><span class="val">3</span></div>`;
       const t = el('table', 'xl');
       t.innerHTML = `<tr><th></th>${BIRDS.map(x => `<th>${x}</th>`).join('')}<th>Water °C</th></tr>` +
-        COUNTS.map((r, i) => `<tr><th>${DAYS[i]}</th>${r.map((v, j) => `<td data-v="${v}" data-f="${v}" data-r="${String.fromCharCode(66 + j)}${i + 2}">${v}</td>`).join('')}<td data-v="${TEMP[i]}" data-f="${TEMP[i]}" data-r="F${i + 2}">${TEMP[i].toFixed(1)}</td></tr>`).join('') +
-        `<tr class="sum"><th>SUM</th>${BIRDS.map((_, j) => `<td data-v="?" data-f="=SUM(${String.fromCharCode(66 + j)}2:${String.fromCharCode(66 + j)}8)" data-r="${String.fromCharCode(66 + j)}9">?</td>`).join('')}<td data-f="(average)" data-v="?" data-r="F9">?</td></tr>`;
+        COUNTS.map((r, i) => `<tr><th>${DAYS[i]}</th>${r.map((v, j) => `<td class="hv" data-v="${v}" data-f="${v}" data-r="${String.fromCharCode(66 + j)}${i + 2}">${v}</td>`).join('')}<td class="hv" data-v="${TEMP[i]}" data-f="${TEMP[i]}" data-r="F${i + 2}">${TEMP[i].toFixed(1)}</td></tr>`).join('') +
+        `<tr class="sum"><th>SUM</th>${BIRDS.map((_, j) => `<td class="ctl" data-v="?" data-f="=SUM(${String.fromCharCode(66 + j)}2:${String.fromCharCode(66 + j)}8)" data-r="${String.fromCharCode(66 + j)}9">?</td>`).join('')}<td class="ctl" data-f="(average)" data-v="?" data-r="F9">?</td></tr>`;
       b.appendChild(t);
-      const chart = canvas(220, 90, g => {
-        R(g, 0, 0, 220, 90, '#ffffff');
-        for (let i = 0; i < 5; i++) R(g, 20, 10 + i * 17, 195, 1, '#e8e0d0');
-        g.strokeStyle = '#e8483a'; g.lineWidth = 2; g.beginPath();
-        TEMP.forEach((v, i) => { const x = 26 + i * 30, y = 10 + (14.4 - v) * 32; if (i) g.lineTo(x, y); else g.moveTo(x, y); });
-        g.stroke();
-        TEMP.forEach((v, i) => R(g, 24 + i * 30, 8 + (14.4 - v) * 32, 4, 4, '#a8382a'));
-        g.fillStyle = '#5a4a3a'; g.font = '9px monospace'; DAYS.forEach((d, i) => g.fillText(d, 18 + i * 30, 88));
-        g.fillText('°C', 2, 12);
-      });
-      chart.style.cssText = 'width:440px;max-width:100%;image-rendering:pixelated;margin-top:8px;box-shadow:0 0 0 1px #b8b0a0';
-      const cap = el('div', '', '<b>Chart:</b> water temperature this week');
-      cap.style.cssText = 'font-size:12px;margin-top:8px';
+      const cap = el('div', 'cap', '<b>Chart:</b> water temperature this week');
       b.appendChild(cap);
-      b.appendChild(chart);
+      const chart = canvas(220, 96, g => {
+        const sky = ['#f6fcff', '#eef8ff', '#e4f4fe', '#daf0fc', '#d0ebfa'];
+        for (let y = 0; y < 96; y++) R(g, 0, y, 220, 1, sky[Math.floor(y / 20)]);
+        for (let i = 0; i < 5; i++) R(g, 18, 10 + i * 17, 198, 1, '#c6def0');
+        const Y = (v: number) => 10 + (14.4 - v) * 32;
+        const at = (x: number) => { const f = clamp((x - 26) / 30, 0, 6); const i = Math.min(5, Math.floor(f)); return Y(TEMP[i] + (TEMP[i + 1] - TEMP[i]) * (f - i)); };
+        for (let x = 26; x <= 206; x++) { const y = Math.round(at(x)); R(g, x, y + 2, 1, 86 - y, x % 2 ? '#bfe8fb' : '#b4e2f8'); R(g, x, y + 2, 1, 2, '#8fd6f6'); }
+        for (let x = 26; x <= 206; x++) R(g, x, Math.round(at(x)), 1, 2, '#1a8ad0');
+        TEMP.forEach((v, i) => { const x = 26 + i * 30, y = Math.round(Y(v)); E(g, x + 0.5, y + 1, 3, 3, (nx, ny) => (Math.hypot(nx, ny) > 0.72 ? '#0a5f8e' : ny < -0.1 ? '#ffffff' : '#5fd0f4')); });
+        R(g, 18, 86, 198, 1, '#7a9ab4');
+      });
+      chart.className = 'chart';
+      const cw = el('div');
+      cw.style.cssText = 'position:relative;width:440px;max-width:100%;padding-bottom:18px';
+      cw.appendChild(chart);
+      DAYS.forEach((d, i) => { const s = el('span', '', d); s.style.cssText = `position:absolute;bottom:0;left:${((26 + i * 30) / 220) * 100}%;transform:translateX(-50%);font:16px/1 'Jersey 15','Pixelify Sans',monospace;color:#3a5a78`; cw.appendChild(s); });
+      const cu = el('span', '', '°C'); cu.style.cssText = `position:absolute;left:4px;top:8px;font:16px/1 'Jersey 15','Pixelify Sans',monospace;color:#3a5a78`; cw.appendChild(cu);
+      b.appendChild(cw);
       const ref = b.querySelector('.ref') as HTMLElement, val = b.querySelector('.val') as HTMLElement;
       t.addEventListener('pointerdown', ev => {
         const td = (ev.target as HTMLElement).closest('td') as HTMLElement | null;
@@ -400,74 +539,139 @@ export async function openMoriOS(o: { report: boolean }): Promise<void> {
         td.classList.add('sel');
         ref.textContent = td.dataset.r ?? '';
         val.textContent = td.dataset.f ?? '';
-        // SUM cells compute when clicked (Mori has to actually look)
+        // SUM cells compute when clicked (Mori has to actually look); the total counts up
         if (td.dataset.v === '?') {
           const j = (td.dataset.r ?? 'B').charCodeAt(0) - 66;
-          td.textContent = j < 4 ? String(sumCol(j)) : (TEMP.reduce((a, v) => a + v, 0) / TEMP.length).toFixed(1);
-          td.dataset.v = td.textContent;
-          audio.play('scanBeep', { vol: 0.3 });
+          const fin = j < 4 ? sumCol(j) : TEMP.reduce((a, v) => a + v, 0) / TEMP.length;
+          const txt = j < 4 ? String(fin) : fin.toFixed(1);
+          td.dataset.v = txt;
+          let tt = 0, lastN = -1;
+          animate(dt => {
+            tt += dt;
+            const f = Math.min(1, tt / 0.6), e2 = 1 - Math.pow(1 - f, 3);
+            const n = fin * e2;
+            td.textContent = j < 4 ? String(Math.round(n)) : n.toFixed(1);
+            const step = Math.floor(e2 * 8);
+            if (step !== lastN) { lastN = step; sfx.tick(step); }
+            if (f >= 1) {
+              td.textContent = txt;
+              retrigger(td, 'bump');
+              const c = center(td); fx.sparkle(c.x, c.y, 12, 80);
+              sfx.beep();
+              return false;
+            }
+            return td.isConnected;
+          });
         }
       });
-      win('sheet', 'seabird_survey_wk3.xls', 'sheet', '#2a7a3a', 560, 440, b);
+      win('sheet', 'seabird_survey_wk3.xls', 'sheet', 600, 480, b);
     },
     report: () => {
       const b = el('div', 'rp');
+      const head = (s: string) => `<div class="head"><b>${s}</b></div>`;
       if (game.save.flags['v4:report']) {
-        b.innerHTML = `<b>Morning Report · Day 23</b><div class="done-stamp">✓ Submitted. It will upload to the university the moment we have signal. (In about three weeks.)</div>`;
-        win('report', 'morning_report_day23.doc', 'report', '#3a78c0', 460, 220, b);
+        b.innerHTML = head('Morning Report · Day 23') + `<div class="done-stamp"><b>✓ Submitted</b>It will upload to the university the moment we have signal. (In about three weeks.)</div>`;
+        win('report', 'morning_report_day23.doc', 'report', 470, 250, b);
         return;
       }
       if (!o.report) {
-        b.innerHTML = `<b>Morning Report · Day 23</b><p>Template ready. Needs today’s rounds first: fish fed, engine checked, captain and Jenna checked on.</p><p><i>(Mori’s rule: no fiction in the data.)</i></p>`;
-        win('report', 'morning_report_day23.doc', 'report', '#3a78c0', 460, 240, b);
+        b.innerHTML = head('Morning Report · Day 23') + `<p>Template ready. Needs today’s rounds first: fish fed, engine checked, captain and Jenna checked on.</p><p><i>(Mori’s rule: no fiction in the data.)</i></p>`;
+        win('report', 'morning_report_day23.doc', 'report', 470, 260, b);
         return;
       }
-      b.innerHTML = `<b>Morning Report · Day 23 · RV Kittiwake</b>
-        <label>1. Most sighted seabird this week</label><select class="q1"><option value="">(choose)</option>${BIRDS.map(x => `<option>${x}</option>`).join('')}</select><div class="tip t1"></div>
-        <label>2. Total albatross sightings this week</label><input class="q2" type="number" min="0" max="999" style="width:80px"><div class="tip t2"></div>
-        <label>3. Water temperature trend</label><select class="q3"><option value="">(choose)</option><option>Rising</option><option>Falling</option><option>Steady</option></select><div class="tip t3"></div>
-        <label>4. Photo of the day</label><div class="thumbs"></div><div class="tip t4"></div>
-        <button class="mbtn go">Submit report</button><div class="out"></div>`;
+      b.innerHTML = `<div class="head"><b>Morning Report · Day 23 · RV Kittiwake</b></div>
+        <div class="q"><label>1. Most sighted seabird this week</label><div class="s1"></div><div class="tip t1"></div></div>
+        <div class="q"><label>2. Total albatross sightings this week</label><div class="s2"></div><div class="tip t2"></div></div>
+        <div class="q"><label>3. Water temperature trend</label><div class="s3"></div><div class="tip t3"></div></div>
+        <div class="q"><label>4. Photo of the day</label><div class="thumbs"></div><div class="tip t4"></div></div>
+        <div class="act"><div class="gel green big go ctl">Send report ➤</div><div class="pw"></div></div><div class="out"></div>`;
+      const q1 = dropdown(BIRDS), q2 = numField(), q3 = dropdown(['Rising', 'Falling', 'Steady']);
+      (b.querySelector('.s1') as HTMLElement).appendChild(q1.el);
+      (b.querySelector('.s2') as HTMLElement).appendChild(q2.el);
+      (b.querySelector('.s3') as HTMLElement).appendChild(q3.el);
+      const answered = progress();
+      (b.querySelector('.pw') as HTMLElement).replaceWith(answered.el);
       const th = b.querySelector('.thumbs') as HTMLElement;
       let pick = -1;
+      const upd = () => { const n = [q1.value, q2.value, q3.value, pick >= 0 ? 'y' : ''].filter(Boolean).length; answered.set(n / 4, `${n}/4 answered`); };
+      q1.onChange = q2.onChange = q3.onChange = upd;
+      upd();
       const kinds: PhotoKind[] = ['butt', 'albatross', 'blurry'];
       kinds.forEach((k, i) => {
+        const f = el('div', 'th ctl');
         const c = photo(k);
-        c.title = ['Chunk’s behind', 'Albatross in flight', 'Something blurry'][i];
-        c.addEventListener('pointerdown', () => { pick = i; th.querySelectorAll('canvas').forEach((x, j) => x.classList.toggle('on', j === i)); });
-        th.appendChild(c);
+        f.title = ['Chunk’s behind', 'Albatross in flight', 'Something blurry'][i];
+        f.appendChild(c);
+        f.addEventListener('pointerdown', () => {
+          pick = i;
+          th.querySelectorAll('.th').forEach((x, j) => x.classList.toggle('on', j === i));
+          th.classList.remove('ok', 'bad');
+          sfx.pick();
+          const cc = center(f); fx.sparkle(cc.x, cc.y, 8, 70);
+          upd();
+        });
+        th.appendChild(f);
       });
-      (b.querySelector('.go') as HTMLElement).addEventListener('pointerdown', () => {
-        const q1 = (b.querySelector('.q1') as HTMLSelectElement), q2 = (b.querySelector('.q2') as HTMLInputElement), q3 = (b.querySelector('.q3') as HTMLSelectElement);
+      const go = b.querySelector('.go') as HTMLElement;
+      go.addEventListener('click', () => {
         const ok1 = q1.value === 'Shearwater', ok2 = +q2.value === sumCol(0), ok3 = q3.value === 'Falling', ok4 = pick === 1;
-        q1.className = 'q1 ' + (ok1 ? 'ok' : 'bad'); q2.className = 'q2 ' + (ok2 ? 'ok' : 'bad'); q3.className = 'q3 ' + (ok3 ? 'ok' : 'bad');
+        const mark = (e: HTMLElement, ok: boolean) => { e.classList.remove('ok', 'bad'); e.classList.add(ok ? 'ok' : 'bad'); if (!ok) retrigger(e, 'mos-shake'); };
+        mark(q1.el, ok1); mark(q2.v, ok2); mark(q3.el, ok3); mark(th, ok4);
         (b.querySelector('.t1') as HTMLElement).textContent = ok1 ? '' : 'Check the spreadsheet: click the SUM row to total each column.';
         (b.querySelector('.t2') as HTMLElement).textContent = ok2 ? '' : 'Add up the Albatross column (or click its SUM cell).';
         (b.querySelector('.t3') as HTMLElement).textContent = ok3 ? '' : 'Look at the temperature chart in the spreadsheet.';
         (b.querySelector('.t4') as HTMLElement).textContent = ok4 ? '' : pick === 0 ? 'The university will not accept Chunk’s behind. Again.' : 'Pick the one with an actual bird in it.';
-        if (ok1 && ok2 && ok3 && ok4) {
-          audio.play('discover', { vol: 0.6 });
-          game.save.flags['v4:report'] = true;
-          game.persist();
-          (b.querySelector('.out') as HTMLElement).innerHTML = `<div class="done-stamp">✓ Report complete! Shearwaters lead the week, ${sumCol(0)} albatross, and the water is cooling fast. Cooling fast... huh. Might mention that to Joshu.</div>`;
-          (b.querySelector('.go') as HTMLElement).remove();
-        } else audio.play('wrong', { vol: 0.4 });
+        if (!(ok1 && ok2 && ok3 && ok4)) { sfx.bad(); retrigger(go, 'mos-shake'); return; }
+        // all correct: the report is done the moment it validates; the rest is the victory lap
+        game.save.flags['v4:report'] = true;
+        game.persist();
+        iconsEl.querySelector('.mos-ic.new')?.classList.remove('new');
+        answered.set(1, '4/4 answered');
+        const act = go.parentElement as HTMLElement;
+        go.remove();
+        const send = progress('aq');
+        act.innerHTML = '';
+        act.appendChild(el('span', '', 'Packing into the outbox…'));
+        act.appendChild(send.el);
+        send.set(0, '0%', true);
+        let tt = 0, lastQ = -1;
+        animate(dt => {
+          tt += dt;
+          const f = Math.min(1, tt / 1.7), e2 = f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2;
+          send.set(e2, Math.round(e2 * 100) + '%');
+          const q = Math.floor(e2 * 10);
+          if (q !== lastQ) { lastQ = q; sfx.tick(q); if (b.isConnected) { const p = send.edge(); fx.sparkle(p.x, p.y, 3, 40); fx.bubbles(p.x, p.y, 1, 8); } }
+          if (f < 1) return true;
+          sfx.win();
+          if (b.isConnected) {
+            act.innerHTML = '';
+            (b.querySelector('.out') as HTMLElement).innerHTML = `<div class="done-stamp"><b>✓ Report complete!</b>Shearwaters lead the week, ${sumCol(0)} albatross, and the water is cooling fast. Cooling fast... huh. Might mention that to Joshu.</div>`;
+            const c = center(b);
+            fx.confetti(c.x - b.offsetWidth * 0.3, c.y - b.offsetHeight / 2, 70, b.offsetWidth * 0.5); fx.confetti(c.x + b.offsetWidth * 0.3, c.y - b.offsetHeight / 2, 70, b.offsetWidth * 0.5);
+            fx.bubbles(c.x, c.y, 16, b.offsetWidth * 0.6);
+            fx.sparkle(c.x, c.y, 18, 160);
+            const W = open.find(w => w.id === 'report');
+            if (W) { W.sy.v -= 2.2; W.sx.v += 1.4; W.anim = true; W.el.style.transformOrigin = '50% 100%'; }
+          }
+          balloon('Report queued', 'It will upload the moment we find signal. Close the lid when you’re ready.', 8000);
+          return false;
+        });
       });
-      win('report', 'morning_report_day23.doc', 'report', '#3a78c0', 480, 470, b);
+      win('report', 'morning_report_day23.doc', 'report', 500, 480, b);
     },
     photos: () => {
       const b = el('div');
       const gal = el('div', 'gal');
       const list: [PhotoKind, string][] = [['albatross', 'Wandering albatross, day 20. 3.1 m wingspan!'], ['dolphins', 'Hector’s dolphins riding the bow wave'], ['sunset', 'The Kittiwake at sunset (Jenna took this one)'], ['jennaSleep', 'Jenna, asleep on her keyboard at 3 a.m. "zzzzzzzzzzzzzzzz" x 4000'], ['joshuFish', 'Joshu and The Fish That Was Bigger Last Time He Told It'], ['chunkBucket', 'Chunk in a bucket. He chose this.'], ['chunkFace', 'Chunk, 5 a.m., 2 cm from my face']];
       for (const [k, c] of list) {
-        const f = el('figure');
+        const f = el('figure', 'ctl');
         f.appendChild(photo(k));
         f.appendChild(el('figcaption', '', c));
-        f.addEventListener('pointerdown', () => {
+        f.addEventListener('click', () => {
           const big = el('div', 'big');
-          big.appendChild(photo(k, 192, 128));
+          big.appendChild(photo(k));
           big.appendChild(el('p', '', c));
-          win('ph:' + k, k + '.png', 'photo', '#6a4a8a', 440, 360, big);
+          win('ph:' + k, k + '.png', 'photo', 460, 400, big);
         });
         gal.appendChild(f);
       }
@@ -475,12 +679,13 @@ export async function openMoriOS(o: { report: boolean }): Promise<void> {
         const f = el('figure');
         const img = el('img') as HTMLImageElement;
         img.src = p.img;
+        img.draggable = false;
         f.appendChild(img);
         f.appendChild(el('figcaption', '', 'New today'));
         gal.appendChild(f);
       }
       b.appendChild(gal);
-      win('photos', 'Photos', 'photo', '#6a4a8a', 560, 430, b);
+      win('photos', 'Photos', 'photo', 580, 450, b);
     },
     disc: () => {
       const b = el('div');
@@ -504,86 +709,197 @@ export async function openMoriOS(o: { report: boolean }): Promise<void> {
         d.appendChild(el('div', '', `<b>${n}</b><br><i>${sci}</i><br>${t}`));
         b.appendChild(d);
       }
-      win('disc', 'Discoveries', 'disc', '#2f6b2a', 480, 440, b);
+      win('disc', 'Discoveries', 'disc', 490, 450, b);
     },
     files: () => {
-      const b = el('div', 'fl');
+      const b = el('div');
+      b.innerHTML = `<div class="addr"><div class="gel glass sm">◀</div><span>Computer ▸ MoriBook ▸ Files</span></div>`;
+      const list = el('div', 'fl');
+      b.appendChild(list);
       let unlocked = false;
       const folders = [...new Set(FILES.map(f => f.path))];
       const render = () => {
-        b.innerHTML = '';
+        list.innerHTML = '';
         for (const fo of folders) {
-          const row = el('div');
-          row.appendChild(icon(fo === 'Jenna\'s Stuff' && !unlocked ? 'lock' : 'folder'));
-          row.appendChild(el('b', '', fo));
-          b.appendChild(row);
-          if (fo === 'Jenna\'s Stuff' && !unlocked) {
-            const r2 = el('div');
-            r2.style.paddingLeft = '28px';
-            r2.innerHTML = `<i>Password:</i> <input class="pw" style="width:110px;font:inherit"> <button class="mbtn" style="margin:0">Unlock</button>`;
-            (r2.querySelector('button') as HTMLElement).addEventListener('pointerdown', () => {
-              const v = (r2.querySelector('.pw') as HTMLInputElement).value.trim().toLowerCase();
-              if (v === 'chunk123' || v === 'chunk') { unlocked = true; audio.play('discover', { vol: 0.5 }); render(); }
-              else { audio.play('wrong', { vol: 0.4 }); (r2.querySelector('.pw') as HTMLInputElement).value = ''; (r2.querySelector('.pw') as HTMLInputElement).placeholder = 'hint: her favourite dog + 123'; }
-            });
-            b.appendChild(r2);
+          const locked = fo === 'Jenna\'s Stuff' && !unlocked;
+          const row = el('div', 'row dir');
+          row.appendChild(icon(locked ? 'lock' : 'folder', 1));
+          row.appendChild(el('span', '', fo));
+          list.appendChild(row);
+          if (locked) {
+            const r2 = el('div', 'pwrow');
+            r2.innerHTML = `<span>Password:</span><input class="mos-in pw" style="width:130px" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="gel sm ctl">Unlock</div>`;
+            const pw = r2.querySelector('.pw') as HTMLInputElement;
+            pw.classList.add('ctl');
+            const tryIt = () => {
+              const v = pw.value.trim().toLowerCase();
+              if (v === 'chunk123' || v === 'chunk') {
+                unlocked = true; sfx.unlock();
+                const c = center(r2); fx.sparkle(c.x, c.y, 16, 120); fx.confetti(c.x, c.y, 26, 80);
+                render();
+              } else { sfx.bad(); pw.value = ''; pw.placeholder = 'hint: her favourite dog + 123'; retrigger(pw, 'mos-shake'); }
+            };
+            (r2.querySelector('.gel') as HTMLElement).addEventListener('click', tryIt);
+            pw.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') tryIt(); });
+            list.appendChild(r2);
             continue;
           }
           for (const f of FILES.filter(x => x.path === fo)) {
-            const r = el('div');
-            r.style.paddingLeft = '28px';
-            r.appendChild(icon('doc'));
+            const r = el('div', 'row f ctl');
+            r.appendChild(icon('doc', 1));
             r.appendChild(el('span', '', f.name));
-            r.addEventListener('pointerdown', () => { const np = el('div', 'np'); np.textContent = f.text; win('f:' + f.name, f.name, 'doc', '#8a6a4a', 420, 300, np); });
-            b.appendChild(r);
+            r.addEventListener('click', () => { const np = el('div', 'np'); np.textContent = f.text; win('f:' + f.name, f.name, 'doc', 430, 320, np); });
+            list.appendChild(r);
           }
         }
       };
       render();
-      win('files', 'Files', 'folder', '#c8901a', 440, 400, b);
+      win('files', 'Files', 'folder', 470, 430, b);
     },
     plankton: () => {
       const b = el('div', 'pk');
-      b.innerHTML = `<div><b>Plankton Sort</b> · sort yesterday’s sample before the slide dries! <span class="sc"></span></div><div class="cvw"></div><div class="bins"><button data-k="0">Copepod</button><button data-k="1">Diatom</button><button data-k="2">Larva</button></div>`;
+      b.innerHTML = `<div class="top"><b>Plankton Sort</b><div class="tm"></div><span class="sc"></span></div><div style="margin:-2px 0 8px;color:#3a5a78">Sort yesterday’s sample before the slide dries!</div><div class="cvw"></div>
+        <div class="bins"><div class="gel ctl" data-k="0">Copepod <span class="k">1</span></div><div class="gel green ctl" data-k="1">Diatom <span class="k">2</span></div><div class="gel pink ctl" data-k="2">Larva <span class="k">3</span></div></div><div class="res"></div>`;
+      const tm = progress('');
+      (b.querySelector('.tm') as HTMLElement).replaceWith(tm.el);
       const cvw = b.querySelector('.cvw') as HTMLElement;
       const cv = canvas(160, 80, () => {});
+      cv.className = 'spec';
       cvw.appendChild(cv);
       const g = cv.getContext('2d')!;
-      const sc = b.querySelector('.sc') as HTMLElement;
-      let cur = Math.floor(Math.random() * 3), score = 0, miss = 0, left = 25, t0 = performance.now(), over = false;
+      const sc = b.querySelector('.sc') as HTMLElement, res = b.querySelector('.res') as HTMLElement;
+      let cur2 = 0, score = 0, miss = 0, left = 25, t0 = 0, over = false, wob = 0;
       const drawSpec = () => {
-        R(g, 0, 0, 160, 80, '#d8f0f4');
-        E(g, 80, 40, 70, 36, (nx, ny) => (Math.hypot(nx, ny) > 0.96 ? '#1a1014' : '#eaf8f8'));
-        if (over) { g.fillStyle = '#1a1014'; g.font = '10px monospace'; g.fillText(`Done! ${score} sorted, ${miss} oops`, 26, 42); return; }
-        if (cur === 0) { E(g, 80, 40, 12, 7, '#e8a060'); R(g, 90, 36, 16, 1, '#c87a3a'); R(g, 90, 44, 16, 1, '#c87a3a'); R(g, 60, 39, 8, 1, '#c87a3a'); E(g, 74, 38, 2, 2, '#1a1014'); }
-        else if (cur === 1) { for (let i = 0; i < 5; i++) { E(g, 64 + i * 8, 40 + (i % 2) * 3, 4, 6, '#6ac04a'); E(g, 64 + i * 8, 40 + (i % 2) * 3, 2, 3, '#b8f0a0'); } }
-        else { E(g, 80, 40, 8, 10, '#f4c8e0'); E(g, 80, 34, 5, 4, '#e090b8'); R(g, 74, 48, 12, 2, '#e090b8'); E(g, 78, 33, 1.5, 1.5, '#1a1014'); E(g, 83, 33, 1.5, 1.5, '#1a1014'); }
-      };
-      drawSpec();
-      const tick = () => {
-        if (closed || over || !b.isConnected) return;
-        left = 25 - (performance.now() - t0) / 1000;
-        sc.textContent = `${Math.max(0, Math.ceil(left))}s · ${score} sorted`;
-        if (left <= 0) { over = true; drawSpec(); if (score >= 8 && !game.save.flags['v4:plankton']) { game.save.flags['v4:plankton'] = true; game.save.rp = (game.save.rp ?? 0) + 5; game.persist(); } audio.play('star', { vol: 0.5 }); return; }
-        requestAnimationFrame(tick);
-      };
-      requestAnimationFrame(tick);
-      b.querySelectorAll('.bins button').forEach(btn => btn.addEventListener('pointerdown', () => {
+        R(g, 0, 0, 160, 80, '#cfeef8');
+        E(g, 80, 40, 70, 36, (nx, ny) => { const d = Math.hypot(nx, ny); return d > 0.96 ? '#0a5f8e' : d > 0.9 ? '#9adcf4' : ny < -0.55 && nx < -0.1 ? '#ffffff' : '#eefbff'; });
         if (over) return;
-        if (+(btn as HTMLElement).dataset.k! === cur) { score++; audio.play('collectPop', { vol: 0.35, pitch: 1 + score * 0.03 }); }
-        else { miss++; audio.play('wrong', { vol: 0.3 }); }
-        cur = Math.floor(Math.random() * 3);
+        const oy = Math.round(Math.sin(wob) * 1.5);
+        if (cur2 === 0) { E(g, 80, 40 + oy, 12, 7, '#e8a060'); R(g, 90, 36 + oy, 16, 1, '#c87a3a'); R(g, 90, 44 + oy, 16, 1, '#c87a3a'); R(g, 60, 39 + oy, 8, 1, '#c87a3a'); E(g, 74, 38 + oy, 2, 2, '#1a1014'); R(g, 76, 36 + oy, 3, 1, '#ffd0a0'); }
+        else if (cur2 === 1) { for (let i = 0; i < 5; i++) { E(g, 64 + i * 8, 40 + (i % 2) * 3 + oy, 4, 6, '#6ac04a'); E(g, 64 + i * 8, 40 + (i % 2) * 3 + oy, 2, 3, '#b8f0a0'); } }
+        else { E(g, 80, 40 + oy, 8, 10, '#f4c8e0'); E(g, 80, 34 + oy, 5, 4, '#e090b8'); R(g, 74, 48 + oy, 12, 2, '#e090b8'); E(g, 78, 33 + oy, 1.5, 1.5, '#1a1014'); E(g, 83, 33 + oy, 1.5, 1.5, '#1a1014'); }
+      };
+      const start = () => {
+        cur2 = Math.floor(Math.random() * 3); score = 0; miss = 0; left = 25; t0 = performance.now(); over = false;
+        res.innerHTML = '';
+        tm.set(1, '25s', true);
+        tm.el.className = 'prog';
         drawSpec();
-      }));
-      win('plankton', 'Plankton Sort', 'game', '#3a9a9a', 380, 330, b);
+        animate(dt => {
+          if (closed || !b.isConnected) return false;
+          wob += dt * 5;
+          drawSpec();
+          left = 25 - (performance.now() - t0) / 1000;
+          sc.textContent = `${score} sorted`;
+          tm.set(Math.max(0, left) / 25, `${Math.max(0, Math.ceil(left))}s`);
+          tm.el.className = 'prog' + (left < 6 ? ' hot' : left < 12 ? ' warn' : '');
+          if (left > 0) return true;
+          over = true;
+          drawSpec();
+          if (score >= 8 && !game.save.flags['v4:plankton']) { game.save.flags['v4:plankton'] = true; game.save.rp = (game.save.rp ?? 0) + 5; game.persist(); }
+          sfx.star();
+          res.innerHTML = `<h3>Done! ${score} sorted, ${miss} oops</h3>${score >= 8 ? '<div style="color:#2a8a18">Great sorting! The slide is saved.</div>' : '<div>Sort 8 or more to save the slide.</div>'}`;
+          const again = el('div', 'gel ctl', 'Again!');
+          again.style.marginTop = '6px';
+          again.addEventListener('click', start);
+          res.appendChild(again);
+          const c = center(cv);
+          if (score >= 8) fx.confetti(c.x, c.y - 30, 50, 160); else fx.bubbles(c.x, c.y, 8, 120);
+          return false;
+        });
+      };
+      const sort = (k: number, btn?: Element) => {
+        if (over) return;
+        const c = center(cv);
+        if (k === cur2) { score++; sfx.pop(score); fx.sparkle(c.x, c.y, 10, 90); fx.bubbles(c.x, c.y + 10, 3, 60); floatText(c.x, c.y - 20, '+1'); }
+        else { miss++; sfx.bad(); retrigger(cv, 'mos-shake'); floatText(c.x, c.y - 20, 'oops', '#ffd0c8'); }
+        if (btn) retrigger(btn, 'mos-wiggle');
+        cur2 = Math.floor(Math.random() * 3);
+        drawSpec();
+      };
+      b.querySelectorAll<HTMLElement>('.bins .gel').forEach(btn => btn.addEventListener('pointerdown', () => sort(+btn.dataset.k!, btn)));
+      start();
+      const W = win('plankton', 'Plankton Sort', 'game', 430, 370, b);
+      if (W) W.onKey = e => { const k = ['Digit1', 'Digit2', 'Digit3', 'Numpad1', 'Numpad2', 'Numpad3'].indexOf(e.code) % 3; if (k < 0 || e.repeat) return false; const btn = b.querySelectorAll('.bins .gel')[k]; btn.classList.add('press'); setTimeout(() => btn.classList.remove('press'), 90); sort(k, btn); return true; };
+    },
+    bubbles: () => {
+      const b = el('div', 'bp pk');
+      b.innerHTML = `<div class="top"><b>Bubble Pop</b><div class="tm"></div><span class="sc"></span></div><div style="margin:-2px 0 8px;color:#3a5a78">Pop them all! Golden Chunk bubbles are worth 5.</div><div class="cvw"></div><div class="res"></div>`;
+      const tm = progress('aq');
+      (b.querySelector('.tm') as HTMLElement).replaceWith(tm.el);
+      const W0 = 200, H0 = 120;
+      const cv = canvas(W0, H0, () => {});
+      (b.querySelector('.cvw') as HTMLElement).appendChild(cv);
+      const g = cv.getContext('2d')!;
+      const sc = b.querySelector('.sc') as HTMLElement, res = b.querySelector('.res') as HTMLElement;
+      const pug = icon('pug', 1);
+      type B = { x: number; y: number; r: number; v: number; ph: number; gold: boolean };
+      let bs: B[] = [], score = 0, combo = 0, left = 0, spawn = 0, over = true;
+      const draw = () => {
+        const cols = ['#bfeaff', '#b0e4fd', '#a2ddfa', '#94d6f6', '#86cff2', '#79c7ee'];
+        for (let y = 0; y < H0; y++) R(g, 0, y, W0, 1, cols[Math.floor((y / H0) * cols.length)]);
+        for (let i = 0; i < 6; i++) R(g, 20 + i * 34 + Math.round(Math.sin(left + i) * 3), 0, 6, H0, 'rgba(255,255,255,0.12)');
+        R(g, 0, H0 - 10, W0, 10, '#6cc83c'); R(g, 0, H0 - 10, W0, 2, '#a6e86a');
+        for (const q of bs) {
+          const s = bubSprite(q.r);
+          g.drawImage(s, Math.round(q.x - q.r), Math.round(q.y - q.r));
+          if (q.gold) { g.globalAlpha = 0.9; g.drawImage(pug, Math.round(q.x - q.r * 0.7), Math.round(q.y - q.r * 0.7), Math.round(q.r * 1.4), Math.round(q.r * 1.4)); g.globalAlpha = 1; R(g, Math.round(q.x - q.r * 0.5), Math.round(q.y - q.r * 0.7), 2, 1, '#fff'); }
+        }
+      };
+      const start = () => {
+        bs = []; score = 0; combo = 0; left = 20; spawn = 0; over = false; res.innerHTML = '';
+        tm.set(1, '20s', true);
+        animate(dt => {
+          if (closed || !b.isConnected) return false;
+          left -= dt; spawn -= dt;
+          if (spawn <= 0) { spawn = 0.28 + Math.random() * 0.35; const gold = Math.random() < 0.09; bs.push({ x: 12 + Math.random() * (W0 - 24), y: H0 + 8, r: gold ? 9 : 4 + Math.floor(Math.random() * 6), v: 16 + Math.random() * 18 + (20 - left) * 0.8, ph: Math.random() * 6, gold }); }
+          for (const q of bs) { q.y -= q.v * dt; q.ph += dt * 3; q.x += Math.sin(q.ph) * 8 * dt; }
+          const esc = bs.filter(q => q.y < -q.r).length;
+          if (esc) combo = 0;
+          bs = bs.filter(q => q.y >= -q.r);
+          sc.textContent = `${score} pts${combo > 2 ? ` · x${combo}` : ''}`;
+          tm.set(Math.max(0, left) / 20, `${Math.max(0, Math.ceil(left))}s`);
+          draw();
+          if (left > 0) return true;
+          over = true;
+          sfx.star();
+          res.innerHTML = `<h3>${score} points!</h3>`;
+          const again = el('div', 'gel ctl', 'Again!');
+          again.addEventListener('click', start);
+          res.appendChild(again);
+          const c = center(cv); fx.confetti(c.x, c.y - 40, 40, 200);
+          return false;
+        });
+      };
+      cv.addEventListener('pointerdown', ev => {
+        if (over) return;
+        const r = cv.getBoundingClientRect();
+        const x = ((ev.clientX - r.left) / r.width) * W0, y = ((ev.clientY - r.top) / r.height) * H0;
+        let hit = -1, best = 1e9;
+        bs.forEach((q, i) => { const d = Math.hypot(q.x - x, q.y - y); if (d < q.r + 4 && d < best) { best = d; hit = i; } });
+        const p = scrPt(ev.clientX, ev.clientY);
+        if (hit < 0) { combo = 0; return; }
+        const q = bs.splice(hit, 1)[0];
+        combo++;
+        const pts = (q.gold ? 5 : 1) * (combo > 4 ? 2 : 1);
+        score += pts;
+        sfx.pop(combo);
+        if (q.gold) sfx.bark();
+        fx.sparkle(p.x, p.y, q.gold ? 16 : 7, q.gold ? 120 : 70);
+        fx.ring(p.x, p.y, 'rgba(230,252,255,0.95)', q.r * 5);
+        floatText(p.x, p.y - 14, '+' + pts, q.gold ? '#ffe27a' : undefined);
+      });
+      draw();
+      start();
+      win('bubbles', 'Bubble Pop', 'bubbles', 440, 400, b);
     },
     term: () => {
       const b = el('div', 'term');
+      const chips = el('div', 'chips');
       const out = el('div', '', 'JennaShell v0.3 (installed "for emergencies")\ntype "help"\n\n');
-      const line = el('div', '', '&gt; <input>');
-      b.appendChild(out);
-      b.appendChild(line);
-      const inp = line.querySelector('input') as HTMLInputElement;
+      const ln = el('div', 'ln', '<span>&gt;</span><input spellcheck="false" autocomplete="off" autocapitalize="off">');
+      b.append(chips, out, ln);
+      const inp = ln.querySelector('input') as HTMLInputElement;
+      inp.classList.add('ctl');
       const cmds: Record<string, string> = {
         help: 'commands: help, whoami, ls, fortune, weather, sudo feed chunk, jenna, joshu, clear',
         whoami: 'mori. marine biologist. noodle enthusiast. owned by a pug.',
@@ -594,58 +910,346 @@ export async function openMoriOS(o: { report: boolean }): Promise<void> {
         joshu: 'Joshu does not use computers. Joshu uses the sun, the stars and his knee.',
       };
       const fortunes = ['A pug\'s wrinkles need cleaning every day. Chunk disagrees.', 'Albatrosses can fly for years without landing.', 'The ocean is 94% of the living space on Earth. Chunk is 94% snacks.', 'Sea otters hold hands when they sleep.'];
-      setTimeout(() => inp.focus(), 50);
-      inp.addEventListener('keydown', e => {
-        e.stopPropagation();
-        if (e.key !== 'Enter') return;
-        const v = inp.value.trim().toLowerCase();
-        inp.value = '';
+      const run = (raw: string) => {
+        const v = raw.trim().toLowerCase();
         if (v === 'clear') { out.textContent = ''; return; }
         const r = v === 'fortune' ? fortunes[Math.floor(Math.random() * fortunes.length)] : cmds[v] ?? (v ? `${v}: command not found (try "help")` : '');
         out.textContent += `> ${v}\n${r}\n\n`;
-        b.scrollTop = b.scrollHeight;
-        audio.play('typing', { vol: 0.25 });
+        const bd = b.parentElement;
+        if (bd) bd.scrollTop = bd.scrollHeight;
+        sfx.type();
+      };
+      for (const c of ['help', 'whoami', 'ls', 'fortune', 'weather', 'jenna', 'joshu', 'sudo feed chunk', 'clear']) {
+        const ch = el('div', 'gel sm glass ctl', c);
+        ch.addEventListener('click', () => run(c));
+        chips.appendChild(ch);
+      }
+      if (!cur.isTouch) setTimeout(() => inp.focus(), 60);
+      inp.addEventListener('keydown', e => {
+        e.stopPropagation();
+        if (e.key !== 'Enter') return;
+        run(inp.value);
+        inp.value = '';
       });
-      win('term', 'JennaShell', 'term', '#141018', 460, 300, b, true);
+      win('term', 'JennaShell', 'term', 500, 360, b, { dark: true });
     },
     bin: () => {
       const b = el('div', '', `<p>Recycle Bin (2,038 items)</p><div class="gal"></div><p><i>All of them are photos of Chunk. Mori cannot bring himself to empty it.</i></p>`);
       const gal = b.querySelector('.gal') as HTMLElement;
-      for (const k of ['chunkFace', 'chunkBucket', 'butt'] as PhotoKind[]) { const f = el('figure'); f.appendChild(photo(k)); gal.appendChild(f); }
-      win('bin', 'Recycle Bin', 'bin', '#5a5a64', 420, 330, b);
+      for (const k of ['chunkFace', 'chunkBucket', 'butt'] as PhotoKind[]) { const f = el('figure', 'ctl'); f.appendChild(photo(k)); f.addEventListener('click', () => { sfx.bark(); const c = center(f); fx.sparkle(c.x, c.y, 10, 80); floatText(c.x, c.y - 20, 'boof!', '#ffe27a'); }); gal.appendChild(f); }
+      win('bin', 'Recycle Bin', 'bin', 440, 370, b);
     },
   };
 
   // ---- desktop icons
-  const iconsEl = wrap.querySelector('.mos-icons') as HTMLElement;
   const desk: [string, string, string, boolean?][] = [
     ['report', 'Reports', 'report', o.report && !game.save.flags['v4:report']], ['sheet', 'Spread-sheets', 'sheet'], ['photos', 'Photos', 'photo'],
-    ['disc', 'Discoveries', 'disc'], ['files', 'Files', 'folder'], ['plankton', 'Plankton Sort', 'game'], ['term', 'JennaShell', 'term'], ['bin', 'Recycle Bin', 'bin'],
+    ['disc', 'Discoveries', 'disc'], ['files', 'Files', 'folder'], ['plankton', 'Plankton Sort', 'game'], ['bubbles', 'Bubble Pop', 'bubbles'], ['term', 'JennaShell', 'term'], ['bin', 'Recycle Bin', 'bin'],
   ];
+  const launch = (id: string, from?: Element) => {
+    if (from) {
+      retrigger(from, 'pop');
+      iconsEl.querySelectorAll('.sel').forEach(x => x.classList.remove('sel'));
+      from.classList.add('sel');
+      const c = center(from); lastPress = c; fx.bubbles(c.x, c.y - 10, 6, 40);
+    }
+    closePops();
+    apps[id]();
+  };
+  const iconEls: Record<string, HTMLElement> = {};
   for (const [id, name, ic, isNew] of desk) {
-    const d = el('div', 'mos-ic' + (isNew ? ' new' : ''));
-    d.appendChild(icon(ic, 3));
-    d.appendChild(document.createTextNode(name));
-    d.addEventListener('click', () => apps[id]());
+    const d = el('div', 'mos-ic ctl' + (isNew ? ' new' : ''));
+    d.appendChild(icon(ic, 2));
+    d.appendChild(el('span', '', name));
+    d.addEventListener('click', () => launch(id, d));
     iconsEl.appendChild(d);
+    iconEls[id] = d;
   }
-  // open the report straight away when it is due
-  if (o.report && !game.save.flags['v4:report']) setTimeout(() => { apps.sheet(); apps.report(); }, 350);
-  // ---- close: the lid (Esc, or the power button in the corner)
-  const pw = el('div', 'mos-start', '⏻ Close lid');
-  pw.style.cssText = 'margin-left:auto';
-  (wrap.querySelector('.mos-bar') as HTMLElement).appendChild(pw);
-  await new Promise<void>(res => {
-    const kd = (e: KeyboardEvent) => { if (e.code === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(); } };
-    const finish = () => { window.removeEventListener('keydown', kd, true); res(); };
-    window.addEventListener('keydown', kd, true);
-    pw.addEventListener('pointerdown', finish);
+  const refresh = () => {
+    iconsEl.querySelectorAll('.mos-ic').forEach((d, i) => setTimeout(() => { retrigger(d, 'pop'); sfx.pop(i); const c = center(d); fx.sparkle(c.x, c.y - 10, 4, 40); }, i * 70));
+  };
+  const blow = () => { sfx.bubbles(); for (let i = 0; i < 6; i++) setTimeout(() => fx.bubbles(S.w * (0.1 + Math.random() * 0.8), S.dh - 10, 6, 80), i * 120); };
+  const pet = (x: number, y: number) => { sfx.bark(); fx.sparkle(x, y, 14, 90); floatText(x, y - 16, '♥ boof!', '#ffc4e4'); };
+
+  // ---- start menu
+  const startMenu = () => {
+    if (pops.some(p => p.anchor === orb)) { closePops(); return; }
+    const m = el('div', 'mos-start');
+    const l = el('div', 'l'), r = el('div', 'r');
+    m.append(l, r);
+    for (const [id, name, ic] of desk) {
+      const mi = el('div', 'mi ctl');
+      mi.appendChild(icon(ic, 1));
+      mi.appendChild(el('span', '', name.replace('Spread-sheets', 'Spreadsheets')));
+      mi.addEventListener('click', () => { closePops(); lastPress = center(orb); apps[id](); });
+      l.appendChild(mi);
+    }
+    const av = el('div', 'av');
+    av.appendChild(icon('pug', 2));
+    r.append(av, el('div', 'nm', 'Mori'));
+    for (const [label, id] of [['Documents', 'files'], ['Pictures', 'photos'], ['Discoveries', 'disc'], ['Games', 'plankton'], ['Blow bubbles', '*b'], ['Pet Chunk', '*p']] as const) {
+      const mi = el('div', 'mi ctl', label);
+      mi.addEventListener('click', () => { closePops(); if (id === '*b') blow(); else if (id === '*p') { const c = center(orb); pet(c.x + 20, c.y - 30); } else { lastPress = center(orb); apps[id](); } });
+      r.appendChild(mi);
+    }
+    r.appendChild(el('div', 'sp'));
+    const pw = el('div', 'gel red sm ctl', '⏻ Close lid');
+    pw.addEventListener('click', () => finish());
+    r.appendChild(pw);
+    openPop(m, 4, 0, { anchor: orb, bottom: true });
+    orb.classList.add('on');
+  };
+  orb.addEventListener('click', startMenu);
+  peek.addEventListener('click', () => {
+    const vis = visibleWins();
+    if (vis.length) vis.forEach(minimize); else open.filter(w => w.min && !w.closing).forEach(restore);
   });
+
+  // ---- global pointer feedback: squish, pop, ripple; clicking bubbles on the desktop
+  let pressed: Element[] = [];
+  let bubCombo = 0, bubT = 0;
+  const isDesk = (t: Element) => t === scr || t === iconsEl || !!t.closest('.mos-bg');
+  wrap.addEventListener('pointerdown', e => {
+    const t = e.target as Element;
+    const p = scrPt(e.clientX, e.clientY);
+    lastPress = p;
+    if (pops.length && !t.closest('.mos-pop') && !pops.some(pp => pp.anchor && pp.anchor.contains(t))) closePops();
+    const c = t.closest('.ctl');
+    if (c) { c.classList.add('press'); pressed.push(c); sfx.press(); }
+    if (p.x >= 0 && p.y >= 0 && p.x <= S.w && p.y <= S.h && e.button === 0) fx.ring(p.x, p.y);
+    if (isDesk(t) && e.button === 0) {
+      iconsEl.querySelectorAll('.sel').forEach(x => x.classList.remove('sel'));
+      if (fx.popAt(p.x, p.y)) { const now = performance.now(); bubCombo = now - bubT < 1500 ? bubCombo + 1 : 0; bubT = now; sfx.pop(bubCombo); fx.sparkle(p.x, p.y, 6, 60); if (bubCombo >= 2) floatText(p.x, p.y - 12, 'x' + (bubCombo + 1)); }
+    }
+  }, true);
+  const release = () => { pressed.forEach(c => c.classList.remove('press')); pressed = []; };
+  wrap.addEventListener('pointerup', release, true);
+  wrap.addEventListener('pointercancel', release, true);
+  wrap.addEventListener('dragstart', e => e.preventDefault());
+  wrap.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    const t = e.target as Element;
+    const p = scrPt(e.clientX, e.clientY);
+    const w = t.closest('.mos-win'), ic = t.closest('.mos-ic'), tab = t.closest('.mos-tab');
+    if (t.closest('.mos-pop')) return;
+    if (ic) {
+      const id = Object.keys(iconEls).find(k => iconEls[k] === ic)!;
+      menu(p.x, p.y, [['Open', desk.find(d => d[0] === id)?.[2] ?? null, () => launch(id, ic)], ['Refresh', null, refresh]]);
+    } else if (w || tab) {
+      const W = open.find(x => x.el === w || x.tab === tab);
+      if (!W) return;
+      menu(p.x, p.y, [
+        [W.min ? 'Restore' : 'Minimise', null, () => (W.min ? restore(W) : minimize(W))],
+        [W.max ? 'Restore size' : 'Maximise', null, () => toggleMax(W)],
+        '-', ['Close', null, () => closeWin(W)],
+      ]);
+    } else if (t.closest('.mos-scr') && !t.closest('.mos-bar')) {
+      menu(p.x, p.y, [['Blow bubbles', 'bubbles', blow], ['Refresh', null, refresh], ['Pet Chunk', 'pug', () => pet(p.x, p.y)], '-', ['Close lid', null, () => finish()]]);
+    }
+  });
+
+  // ---- keyboard: Esc closes, Tab / arrows move a focus glow, Enter or Space clicks
+  let navCur: HTMLElement | null = null, navBack: HTMLElement | null = null;
+  const fr = { x: new Spring(0, 420, 30), y: new Spring(0, 420, 30), w: new Spring(0, 420, 30), h: new Spring(0, 420, 30) };
+  const hit = (e: HTMLElement) => {
+    const r = e.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return false;
+    const h = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return !!h && (h === e || e.contains(h) || h.closest('.ctl') === e);
+  };
+  const navList = (): HTMLElement[] => {
+    if (pops.length) return [...pops[pops.length - 1].el.querySelectorAll<HTMLElement>('.ctl')];
+    const aw = active && !active.min && !active.minning ? active : null;
+    const inWin = aw ? [...aw.bd.querySelectorAll<HTMLElement>('.ctl'), ...aw.el.querySelectorAll<HTMLElement>('.tb .ctl')].filter(e => e.offsetParent !== null) : [];
+    const rest = [...iconsEl.querySelectorAll<HTMLElement>('.ctl'), ...bar.querySelectorAll<HTMLElement>('.ctl'), lid].filter(hit);
+    return [...inWin, ...rest];
+  };
+  const setNav = (e: HTMLElement | null) => {
+    navCur = e;
+    if (!e) return;
+    if (!ringOn) { const r = e.getBoundingClientRect(), s = scrPt(r.left, r.top); fr.x.snap(s.x); fr.y.snap(s.y); fr.w.snap(r.width); fr.h.snap(r.height); }
+    ringOn = true;
+    ring.classList.add('on');
+    e.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    if (hovEl !== e) { hovEl?.classList.remove('hov'); hovEl = e; e.classList.add('hov'); if (e.classList.contains('mos-ic')) sfx.hover(); }
+    sfx.tick(3);
+  };
+  const activate = (e: HTMLElement) => {
+    const r = e.getBoundingClientRect();
+    const init: PointerEventInit = { bubbles: true, cancelable: true, composed: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, pointerId: 78, pointerType: 'mouse', isPrimary: true, button: 0, buttons: 1, view: window };
+    e.dispatchEvent(new PointerEvent('pointerdown', init));
+    e.dispatchEvent(new PointerEvent('pointerup', { ...init, buttons: 0 }));
+    e.dispatchEvent(new MouseEvent('click', init));
+    if (e instanceof HTMLInputElement) e.focus();
+    if (!ringOn) return;
+    const n = navCur;
+    const stale = !n || !n.isConnected || !!n.closest('.mos-pop.bye') || open.some(w => w.closing && w.el.contains(n));
+    setNav(stale ? navList()[0] ?? null : n);
+  };
+  const navDir = (dx: number, dy: number) => {
+    const list = navList();
+    if (!navCur || !list.includes(navCur)) { setNav(list[0] ?? null); return; }
+    const a = navCur.getBoundingClientRect(), ax = a.left + a.width / 2, ay = a.top + a.height / 2;
+    let best: HTMLElement | null = null, bs = 1e9;
+    for (const e of list) {
+      if (e === navCur) continue;
+      const r = e.getBoundingClientRect(), vx = r.left + r.width / 2 - ax, vy = r.top + r.height / 2 - ay;
+      const along = vx * dx + vy * dy;
+      if (along <= 2) continue;
+      const s = along + Math.abs(vx * dy - vy * dx) * 2.5;
+      if (s < bs) { bs = s; best = e; }
+    }
+    if (best) setNav(best); else if (navCur) retrigger(navCur, 'mos-wiggle');
+  };
+  const kd = (e: KeyboardEvent) => {
+    const inText = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+    if (e.code === 'Escape') {
+      e.preventDefault(); e.stopPropagation();
+      if (pops.length) { closePops(); if (navCur && ringOn) setNav(navCur); }
+      else if (inText) (e.target as HTMLElement).blur();
+      else finish();
+      return;
+    }
+    if (inText && e.code !== 'Tab') return;
+    if (numActive && /^(Digit|Numpad)\d$/.test(e.code)) { numActive.type(e.code.slice(-1)); e.preventDefault(); e.stopPropagation(); return; }
+    if (numActive && e.code === 'Backspace') { numActive.type('back'); e.preventDefault(); e.stopPropagation(); return; }
+    if (!pops.length && active?.onKey?.(e)) { e.preventDefault(); e.stopPropagation(); return; }
+    const dir: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+    if (e.code === 'Tab') {
+      e.preventDefault(); e.stopPropagation();
+      if (inText) (e.target as HTMLElement).blur();
+      const list = navList();
+      if (!list.length) return;
+      const i = navCur ? list.indexOf(navCur) : -1;
+      setNav(list[(i < 0 ? (e.shiftKey ? list.length - 1 : 0) : i + (e.shiftKey ? -1 : 1) + list.length) % list.length]);
+    } else if (dir[e.code]) {
+      e.preventDefault(); e.stopPropagation();
+      navDir(...dir[e.code]);
+    } else if ((e.code === 'Enter' || e.code === 'Space' || e.code === 'NumpadEnter') && navCur && ringOn) {
+      e.preventDefault(); e.stopPropagation();
+      if (!e.repeat) activate(navCur);
+    }
+  };
+  window.addEventListener('keydown', kd, true);
+
+  // ---- resize
+  const ro = new ResizeObserver(() => {
+    measure();
+    for (const W of open) {
+      if (W.max) { W.w = S.w; W.h = S.dh; }
+      else { W.w = Math.min(W.w, S.w - 8); W.h = Math.min(W.h, S.dh - 8); W.x = clamp(W.x, -W.w + 90, Math.max(0, S.w - 90)); W.y = clamp(W.y, 0, Math.max(0, S.dh - 28)); }
+      place(W);
+    }
+  });
+  ro.observe(scr);
+
+  // ---- the frame loop
+  let hovEl: Element | null = null;
+  let last = performance.now(), T = 0, clockT = 0;
+  const frame = (now: number) => {
+    if (closed) return;
+    const dt = Math.min(0.25, (now - last) / 1000);
+    last = now; T += dt;
+    cur.update(dt);
+    if (cur.hoverDirty) {
+      cur.hoverDirty = false;
+      const t = cur.target();
+      const h = (t?.closest('.ctl, .hv') as HTMLElement | null) ?? null;
+      if (h !== hovEl) {
+        hovEl?.classList.remove('hov');
+        h?.classList.add('hov');
+        if (h && (h.classList.contains('mos-ic') || h.classList.contains('mos-orb') || (h.classList.contains('gel') && !h.closest('.kp')))) sfx.hover();
+        hovEl = h;
+      }
+      cur.setLink(!!h && !h.classList.contains('hv'));
+    }
+    // parallax + clouds + flares
+    const k = Math.min(1, dt * 3.5);
+    par.x += (par.tx - par.x) * k; par.y += (par.ty - par.y) * k;
+    const mx = (bgW - S.w) / 2, my = (bgH - S.h) / 2;
+    bgEl.style.transform = `translate(${(-mx - par.x * mx * 1.2).toFixed(1)}px,${(-my - par.y * my * 1.2).toFixed(1)}px)`;
+    const px = bgW / 160;
+    for (const c of clouds) {
+      c.x += c.v * dt * 0.6;
+      if (c.x > 168) c.x = -c.c.width - Math.random() * 20;
+      c.c.style.transform = `translate(${(c.x * px - par.x * 26 * c.d).toFixed(1)}px,${(c.y * px - par.y * 10 * c.d).toFixed(1)}px) scale(${px.toFixed(3)})`;
+    }
+    const sx0 = S.w * 0.03, sy0 = -S.h * 0.02, cx0 = S.w * (0.5 + par.x * 0.5), cy0 = S.h * (0.5 + par.y * 0.5);
+    for (const f of flares) {
+      const x = sx0 + (cx0 - sx0) * f.k, y = sy0 + (cy0 - sy0) * f.k;
+      f.e.style.transform = `translate(${(x - f.s / 2).toFixed(1)}px,${(y - f.s / 2).toFixed(1)}px)`;
+      f.e.style.opacity = String(0.55 + Math.sin(T * 0.7 + f.k * 5) * 0.25);
+    }
+    // windows
+    for (const W of open.slice()) {
+      for (const s of [W.sx, W.sy, W.tx, W.ty, W.rot]) s.step(dt);
+      if (W.drag) W.rot.target *= Math.exp(-dt * 7);
+      W.a += (W.aT - W.a) * Math.min(1, dt * (W.closing ? 14 : W.minning ? 7 : 12));
+      if (W.closing && W.a < 0.04) { W.el.remove(); open = open.filter(x => x !== W); continue; }
+      if (W.minning && (W.a < 0.04 || W.sx.x < 0.13)) {
+        W.minning = false; W.min = true; W.el.style.display = 'none';
+        for (const s of [W.sx, W.sy]) s.snap(1);
+        for (const s of [W.tx, W.ty, W.rot]) s.snap(0);
+        W.a = 0; W.anim = false; W.el.style.transform = ''; W.el.style.opacity = '';
+        const t = tabCenter(W); fx.sparkle(t.x, t.y - 6, 6, 50); retrigger(W.tab, 'mos-wiggle');
+        continue;
+      }
+      if (W.min) continue;
+      const still = !W.drag && W.sx.rest() && W.sy.rest() && W.tx.rest(0.3) && W.ty.rest(0.3) && W.rot.rest(0.02) && Math.abs(W.a - W.aT) < 0.01;
+      if (!still) {
+        W.anim = true;
+        W.el.style.transform = `translate(${W.tx.x.toFixed(2)}px,${W.ty.x.toFixed(2)}px) rotate(${W.rot.x.toFixed(3)}deg) scale(${W.sx.x.toFixed(4)},${W.sy.x.toFixed(4)})`;
+        W.el.style.opacity = String(clamp(W.a, 0, 1));
+      } else if (W.anim) {
+        W.anim = false;
+        for (const s of [W.sx, W.sy, W.tx, W.ty, W.rot]) s.snap();
+        W.el.style.transform = ''; W.el.style.opacity = '';
+      }
+    }
+    // focus glow
+    if (ringOn && navCur) {
+      if (!navCur.isConnected) { ringOn = false; ring.classList.remove('on'); }
+      else {
+        const r = navCur.getBoundingClientRect(), s = scrPt(r.left, r.top), kk = r.width / (navCur.offsetWidth || r.width || 1);
+        fr.x.target = s.x - 3; fr.y.target = s.y - 3; fr.w.target = r.width / (kk || 1) + 6; fr.h.target = r.height / (kk || 1) + 6;
+        for (const s2 of Object.values(fr)) s2.step(dt);
+        ring.style.transform = `translate(${fr.x.x.toFixed(1)}px,${fr.y.x.toFixed(1)}px)`;
+        ring.style.width = fr.w.x.toFixed(1) + 'px'; ring.style.height = fr.h.x.toFixed(1) + 'px';
+      }
+    }
+    for (const f of [...anims]) if (!f(dt)) anims.delete(f);
+    fx.step(dt, true, S.dh);
+    fx.draw();
+    clockT -= dt;
+    if (clockT <= 0) {
+      clockT = 0.25;
+      const { h, m } = gameClock();
+      clk.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      if (gad.offsetParent) drawClock();
+    }
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+
+  // open the report straight away when it is due
+  if (o.report && !game.save.flags['v4:report']) {
+    setTimeout(() => { if (closed) return; lastPress = center(iconEls.sheet); apps.sheet(); }, 450);
+    setTimeout(() => { if (closed) return; lastPress = center(iconEls.report); apps.report(); balloon('Morning report due', 'Fill it in from the survey spreadsheet, then send it.'); }, 650);
+  }
+  lid.addEventListener('click', () => finish());
+
+  await new Promise<void>(res => { finish = () => { finish = () => {}; res(); }; });
   closed = true;
-  wrap.style.transition = 'opacity 0.2s';
-  wrap.style.opacity = '0';
+  window.removeEventListener('keydown', kd, true);
+  ro.disconnect();
+  cur.destroy();
+  lap.style.animation = 'none';
+  lap.style.transition = 'transform 0.28s cubic-bezier(.5,0,.8,.4), opacity 0.28s';
+  lap.style.transform = 'perspective(900px) rotateX(-58deg) scale(0.9, 0.5)';
+  lap.style.opacity = '0';
+  wrap.classList.add('bye');
   game.ui.modalOpen = Math.max(0, game.ui.modalOpen - 1);
-  audio.play('uiBack', { vol: 0.5 });
-  setTimeout(() => wrap.remove(), 220);
+  sfx.close();
+  setTimeout(() => wrap.remove(), 300);
   guardInput(300);
 }
