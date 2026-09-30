@@ -9,8 +9,7 @@
 
 import { PixelBuffer } from '../pixel';
 import { paintBoatCutaway, BOAT_LAYOUT, deckY } from '../boat';
-import * as F from '../ship4/furniture';
-import { P, T } from '../ship4/kit';
+import * as D5 from './props';
 
 export interface ShipSprite { buf: PixelBuffer; glow: PixelBuffer | null; sky?: PixelBuffer | null; x: number; y: number }
 export interface Ship4Art {
@@ -116,37 +115,37 @@ function put(dst: PixelBuffer, src: PixelBuffer, x: number, bottom: number, glow
   }
 }
 
-/** the Day 1 props the small boat didn't have: Jenna's laptop, the tank, chess, the fridge, Chunk's things */
+/** the Day 1 props the small boat didn't have: Jenna's screens, the tank, chess, the fridge, Chunk's things */
 function furnish(b: PixelBuffer, g: PixelBuffer) {
-  // engine room: Jenna's laptop and a second screen on the workbench, her chair
-  const lap = F.laptop(true); put(b, lap.buf, 86, 180, g, lap.glow);
-  const mon = F.monitor(12, 9, '#4ac8e8'); put(b, mon.buf, 98, 180, g, mon.glow);
-  put(b, F.stool(), 104, LOW_FLOOR);
-  put(b, F.gauge(), 180, 150);
-  // galley & mess: noodle stash, fridge, Chunk's bowls, chess on the table, the games shelf
-  put(b, F.noodleStash(), 200, 160);
-  put(b, F.fridge(), 268, LOW_FLOOR);
-  put(b, F.dogBowl(true), 284, LOW_FLOOR);
-  put(b, F.chessBoard(), 302, 181);
-  put(b, F.shelf(16, 7, 'mixed'), 320, 150);
-  // bunk room: Chunk's bed, Mori's laptop on the bunk, a poster
-  put(b, F.dogBed(), 396, LOW_FLOOR);
-  const ml = F.laptop(false); put(b, ml.buf, 346, 182, g, ml.glow);
-  put(b, F.poster('whale', 12, 14), 402, 150);
-  // hold: the research tank on its cabinet, microscope and the Chunky Chow sack on crates
-  const tank = F.fishTankFrame(24, 16); put(b, tank.buf, 432, HOLD_FLOOR, g, tank.glow);
-  put(b, F.microscope(), 478, 176);
-  put(b, F.sack(), 470, HOLD_FLOOR);
-  // wheelhouse: photos on the wall, the model ship on the console
-  put(b, F.photos(14, 3), 310, 62);
-  put(b, F.modelShip(), 236, 82);
+  // engine room: Jenna's three screens (one on a wall arm) and her stool at the workbench
+  const wm = D5.monitor(12, 8, true); put(b, wm.buf, 88, 165, g, wm.glow);
+  const mon = D5.monitor(11, 9); put(b, mon.buf, 81, 180, g, mon.glow);
+  const lap = D5.laptop('term'); put(b, lap.buf, 93, 180, g, lap.glow);
+  put(b, D5.stool(), 96, LOW_FLOOR);
+  // galley & mess: fridge, Chunk's bowls, chess on the table, the games shelf
+  put(b, D5.fridge(), 268, LOW_FLOOR);
+  put(b, D5.dogBowls(), 283, LOW_FLOOR);
+  put(b, D5.chessBoard(), 302, 181);
+  put(b, D5.gamesShelf(), 318, 150);
+  // bunk room: Chunk's bed, Mori's laptop on the bunk, the species photo board
+  put(b, D5.dogBed(), 396, LOW_FLOOR);
+  const ml = D5.laptop('birds'); put(b, ml.buf, 346, 182, g, ml.glow);
+  put(b, D5.photoBoard(17, 20), 404, 147);
+  // hold: the research tank on its cabinet, the lab laptop, microscope and Chunky Chow crate
+  const tank = D5.fishTank(24, 16); put(b, tank.buf, 432, HOLD_FLOOR, g, tank.glow);
+  const lab = D5.laptop('graph'); put(b, lab.buf, 464, 176, g, lab.glow);
+  put(b, D5.microscope(), 480, 176);
+  put(b, D5.chowCrate(), 470, HOLD_FLOOR);
+  // wheelhouse: photos on the forward panel, the model ship on its shelf over Joshu's berth
+  put(b, D5.framedPhotos(), 310, 62);
+  put(b, D5.modelShip(), 234, 85);
 }
 
 function furnishDeck(b: PixelBuffer) {
-  put(b, F.herbBox(), 178, Math.round(deckY(186)));
-  put(b, F.deckChair(), 364, Math.round(deckY(372)));
-  put(b, F.rodHolder(), 34, Math.round(deckY(34)));
-  put(b, F.cooler(), 150, Math.round(deckY(150)));
+  put(b, D5.herbBox(), 178, Math.round(deckY(186)));
+  put(b, D5.deckChair(), 364, Math.round(deckY(372)));
+  put(b, D5.rodHolder(), 33, Math.round(deckY(34)));
+  put(b, D5.cooler(), 150, Math.round(deckY(150)));
 }
 
 const empty = (): ShipSprite => ({ buf: new PixelBuffer(1, 1), glow: null, sky: null, x: 0, y: 0 });
@@ -188,4 +187,3 @@ export function roomAt(x: number, y: number): RoomDef | null {
   return null;
 }
 
-void P; void T;

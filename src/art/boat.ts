@@ -1,8 +1,11 @@
 // art/boat.ts: the research boat Kittiwake: exterior, dollhouse cutaway, storm variant, wreck, debris.
 //
-// A sturdy old wooden expedition trawler turned research boat: cream topsides, red boot stripe,
-// dark blue-green bottom, weathered varnished rail, raised wheelhouse, foremast with radar and
-// lights, stern davit, lifebuoys, nets, crates and a small Union Jack at the stern.
+// A sturdy old wooden expedition trawler turned research boat: cream carvel-planked topsides with
+// caulked seams and fastening lines, a steel-shod rubbing strake and a lower belting, red boot
+// stripe over dark blue-green antifouling (weed, slime and barnacles along the waterline),
+// weathered varnished cap rail, raised wheelhouse with teak-framed windows, foremast with
+// crosstrees, radar reflector and nav lights, stern davit, lifebuoys, tyre fenders, rope coils,
+// a stockless anchor in its hawse and a small Union Jack at the stern.
 //
 // Coordinates: every sprite and BOAT_LAYOUT use BOAT-LOCAL pixels with the origin at the TOP-LEFT
 // of the boat sprite (BOAT_W x BOAT_H = 600 x 236). The bow points to +x. The static waterline is
@@ -28,7 +31,15 @@
 
 import { PixelBuffer } from './pixel';
 import { C, hex, mix, rgba, shade, withAlpha, A as alphaOf } from './color';
-import { Rng, bayer, clamp, fbm2, hash2, lerp, noise1, smoothstep } from '../core/math';
+import { Rng, bayer, clamp, fbm2, hash2, noise1, noise2, smoothstep } from '../core/math';
+import {
+  BOAT_W, BOAT_H, WATERLINE, PIVOT, KEEL, P, OL, OLc, deckY, sheerY, STERN_X, BOW_X, hullMask,
+  WH_X0, WH_X1, WH_FLOOR, WH_CEIL, WH_ROOF, LOW_FLOOR, HOLD_FLOOR, BH, lowCeil,
+  ramp, dith, vline, hline, rope, rope2, ring, lifebuoy, tyre, porthole, pixelText, textWidth, tint,
+} from './boatKit';
+import { paintInterior } from './boatInterior';
+
+export { BOAT_W, BOAT_H, WATERLINE, deckY };
 
 export interface Sprite {
   buf: PixelBuffer;
@@ -39,105 +50,6 @@ export interface Sprite {
 export interface ExteriorSprite extends Sprite {
   back: PixelBuffer;
   front: PixelBuffer;
-}
-
-export const BOAT_W = 600;
-export const BOAT_H = 236;
-export const WATERLINE = 206;
-const PIVOT: [number, number] = [300, 206];
-const KEEL = 230;
-
-// ------------------------------------------------------------------ palettes (dark -> light)
-
-const hx = (...s: string[]): C[] => s.map(v => hex(v));
-const P = {
-  cream: hx('#4f483c', '#7d7462', '#a79d85', '#cbc1a6', '#e3dbc3', '#f3edda', '#fffaea'),
-  red: hx('#3d1011', '#681a19', '#8f2621', '#b3352a', '#cf4b35', '#e66c47'),
-  bottom: hx('#0b1719', '#112326', '#183134', '#213f40', '#2d514e', '#3d655d'),
-  varnish: hx('#2a170c', '#472914', '#673d1e', '#885328', '#a86b33', '#c68846', '#dfab66'),
-  wood: hx('#24160d', '#382315', '#50331d', '#6a4526', '#855a31', '#a1703d', '#bd8a50', '#d6a86b'),
-  teak: hx('#342519', '#4d3826', '#684e36', '#836749', '#9c805e', '#b69b76', '#cdb58f'),
-  paintIn: hx('#5a4b34', '#77664a', '#968461', '#b2a07a', '#cab995', '#ddd0ae'),
-  steelIn: hx('#20282b', '#2c363a', '#3a464a', '#4c595d', '#617074', '#7c8b8e'),
-  metal: hx('#101316', '#1c2126', '#2b3238', '#3d464d', '#525c63', '#6d777c', '#8f989a', '#bcc2c0'),
-  brass: hx('#36250b', '#5f4213', '#8a611d', '#b3852b', '#d6aa45', '#efd07a', '#fff0b8'),
-  rust: hx('#351a0e', '#582b16', '#7c3d1f', '#9f542a', '#bf6f39'),
-  engine: hx('#141f18', '#1e3325', '#2a4832', '#385f41', '#4a7852', '#619367', '#80ad80'),
-  glass: hx('#16232b', '#223642', '#34505e', '#56788a', '#8fb2c2', '#cfe6ee'),
-  navy: hx('#0f1626', '#18233c', '#243453', '#33496e', '#4a6590'),
-  green: hx('#15261a', '#1f3a27', '#2c5236', '#3c6b45', '#548a57', '#76a870'),
-  yellow: hx('#3d2a07', '#62440b', '#8c6210', '#b58218', '#d9a42a', '#efc653', '#fbe48e'),
-  rope: hx('#3b2f1d', '#5a4a2e', '#7a6641', '#9a8456', '#b8a270', '#d3c08e'),
-  net: hx('#1b2a24', '#27403a', '#35564c', '#487060', '#618a73'),
-  quiltR: hx('#4a1618', '#72231f', '#9b3427', '#c14d33', '#dc6d45'),
-  quiltB: hx('#15213a', '#213457', '#304b78', '#456898', '#6488b5'),
-  cushion: hx('#1d3326', '#2b4a36', '#3b6448', '#50805c', '#6e9e74'),
-  tyre: hx('#0d0e10', '#18191c', '#232428', '#303236', '#43464b'),
-  white: hx('#6d737e', '#9299a3', '#b8bec4', '#dadfe0', '#f4f5ef'),
-};
-const OL = hex('#15100c');
-const OLc = hex('#0d1215');
-const SECTION = hx('#1a100a', '#2a1a10', '#3d2819', '#533823');
-
-// ------------------------------------------------------------------ geometry (boat-local px)
-
-/** Walkable main-deck surface y (top of the planking). */
-export function deckY(x: number): number {
-  if (x < 300) return 116 - 4 * Math.pow((300 - x) / 276, 2);
-  return 116 - 18 * Math.pow(clamp((x - 300) / 250), 2.2);
-}
-/** Top of the bulwark cap rail. */
-const sheerY = (x: number) => deckY(x) - 13;
-
-const STERN_X = 24;
-const BOW_X = 551;
-
-/** Hull silhouette polygon (without rudder / propeller / bowsprit). */
-function hullPoly(): number[] {
-  const pts: number[] = [];
-  pts.push(STERN_X, sheerY(STERN_X));
-  for (let x = STERN_X + 4; x < BOW_X; x += 4) pts.push(x, sheerY(x));
-  pts.push(BOW_X, sheerY(BOW_X));
-  const stem: [number, number][] = [[552, 100], [550, 118], [545, 142], [537, 165], [525, 186], [509, 204], [490, 218], [468, 227], [448, 230]];
-  for (const [x, y] of stem) pts.push(x, y);
-  pts.push(112, KEEL);
-  const counter: [number, number][] = [[100, 228], [88, 223], [76, 216], [64, 208], [52, 200], [41, 193], [33, 188]];
-  for (const [x, y] of counter) pts.push(x, y);
-  pts.push(29, 184);
-  return pts;
-}
-
-/** Rasterised hull mask with helpers. */
-class Mask {
-  readonly m: Uint8Array;
-  constructor(readonly w: number, readonly h: number) {
-    this.m = new Uint8Array(w * h);
-  }
-  static poly(w: number, h: number, pts: number[]) {
-    const k = new Mask(w, h);
-    const b = new PixelBuffer(w, h);
-    b.poly(pts, 0xffffffff);
-    for (let i = 0; i < w * h; i++) k.m[i] = b.data[i] ? 1 : 0;
-    return k;
-  }
-  at(x: number, y: number) {
-    x |= 0; y |= 0;
-    return x >= 0 && y >= 0 && x < this.w && y < this.h ? this.m[y * this.w + x] : 0;
-  }
-  /** first opaque row in column x (or -1) */
-  top(x: number) {
-    for (let y = 0; y < this.h; y++) if (this.m[y * this.w + x]) return y;
-    return -1;
-  }
-  bottom(x: number) {
-    for (let y = this.h - 1; y >= 0; y--) if (this.m[y * this.w + x]) return y;
-    return -1;
-  }
-}
-
-let HULL: Mask | null = null;
-function hullMask() {
-  return (HULL ??= Mask.poly(BOAT_W, BOAT_H, hullPoly()));
 }
 
 // ------------------------------------------------------------------ layout
@@ -167,14 +79,6 @@ const deckPts = (x0: number, x1: number, step = 12): [number, number][] => {
   out.push([x1, Math.round(deckY(x1))]);
   return out;
 };
-
-// Key interior dimensions
-const WH_X0 = 214, WH_X1 = 334, WH_FLOOR = 102, WH_CEIL = 24, WH_ROOF = 17;
-const LOW_FLOOR = 202, LOW_CEIL = 122, HOLD_FLOOR = 196;
-const BH = { engAft: 76, engGal: 196, galBunk: 336, bunkHold: 424, holdFwd: 496 };
-
-/** Ceiling of the lower deck (underside of the main deck planking). */
-const lowCeil = (x: number) => Math.round(deckY(x)) + 6;
 
 export const BOAT_LAYOUT: BoatLayout = {
   origin: 'top-left of the 600x236 boat sprite; bow toward +x; y down; sprites anchored at pivot (300, 206)',
@@ -232,9 +136,9 @@ export const BOAT_LAYOUT: BoatLayout = {
   ],
   rooms: {
     wheelhouse: { x0: WH_X0, y0: WH_CEIL, x1: WH_X1, y1: WH_FLOOR },
-    galley: { x0: BH.engGal + 6, y0: LOW_CEIL, x1: BH.galBunk, y1: LOW_FLOOR },
-    bunks: { x0: BH.galBunk + 6, y0: LOW_CEIL, x1: BH.bunkHold, y1: LOW_FLOOR },
-    engine: { x0: BH.engAft, y0: LOW_CEIL, x1: BH.engGal, y1: LOW_FLOOR },
+    galley: { x0: BH.engGal + 6, y0: 122, x1: BH.galBunk, y1: LOW_FLOOR },
+    bunks: { x0: BH.galBunk + 6, y0: 122, x1: BH.bunkHold, y1: LOW_FLOOR },
+    engine: { x0: BH.engAft, y0: 122, x1: BH.engGal, y1: LOW_FLOOR },
     hold: { x0: BH.bunkHold + 6, y0: lowCeil(460), x1: BH.holdFwd, y1: HOLD_FLOOR },
     deckAft: { x0: 26, y0: 40, x1: WH_X0, y1: 116 },
     deckFore: { x0: WH_X1, y0: 20, x1: 552, y1: 116 },
@@ -256,120 +160,35 @@ export const BOAT_LAYOUT: BoatLayout = {
   },
 };
 
-// ------------------------------------------------------------------ small painting helpers
-
-const ramp = (r: C[], f: number) => r[clamp(Math.round(f), 0, r.length - 1)];
-const dith = (x: number, y: number, k = 0.8) => (bayer(x, y) - 0.5) * k;
-
-function rectRamp(b: PixelBuffer, x: number, y: number, w: number, h: number, r: C[], base: number, vert = 0.3, noiseK = 0) {
-  b.rectFn(x, y, w, h, (px, py) => {
-    const t = (py - y) / Math.max(1, h - 1);
-    let f = base + (0.5 - t) * vert * (r.length - 1);
-    if (noiseK) f += (noise1(px * 0.7 + py * 13.1, 3) - 0.5) * noiseK;
-    return ramp(r, f + dith(px, py, 0.6));
-  });
-}
-
-/** Vertical strip of a line with an optional highlight side. */
-function vline(b: PixelBuffer, x: number, y0: number, y1: number, c: C) {
-  for (let y = Math.round(Math.min(y0, y1)); y <= Math.round(Math.max(y0, y1)); y++) b.set(x, y, c);
-}
-function hline(b: PixelBuffer, x0: number, x1: number, y: number, c: C) {
-  for (let x = Math.round(Math.min(x0, x1)); x <= Math.round(Math.max(x0, x1)); x++) b.set(x, y, c);
-}
-
-/** Rope / wire with catenary sag. */
-function rope(b: PixelBuffer, x0: number, y0: number, x1: number, y1: number, sag: number, c: C, c2?: C) {
-  const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) * 1.4);
-  for (let i = 0; i <= n; i++) {
-    const t = i / n;
-    const x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t + Math.sin(t * Math.PI) * sag;
-    b.set(x, y, c2 && i % 3 === 0 ? c2 : c);
-  }
-}
-
-/** Filled ring (lifebuoy, tyre, porthole rim). */
-function ring(b: PixelBuffer, cx: number, cy: number, r0: number, r1: number, fn: (a: number, t: number, x: number, y: number) => C | -1) {
-  for (let y = Math.floor(cy - r1 - 1); y <= cy + r1 + 1; y++)
-    for (let x = Math.floor(cx - r1 - 1); x <= cx + r1 + 1; x++) {
-      const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
-      if (d < r0 || d > r1) continue;
-      const c = fn(Math.atan2(y + 0.5 - cy, x + 0.5 - cx), (d - r0) / Math.max(0.01, r1 - r0), x, y);
-      if (c !== -1) b.set(x, y, c);
-    }
-}
-
-function lifebuoy(b: PixelBuffer, cx: number, cy: number, r = 7) {
-  ring(b, cx, cy, r * 0.5, r, (a, t, x, y) => {
-    const seg = Math.floor(((a + Math.PI) / (Math.PI * 2)) * 8 + 0.5) % 2;
-    const base = seg ? P.red : P.white;
-    const lit = -Math.cos(a + 2.4) * 0.5 + (0.5 - Math.abs(t - 0.5)) * 1.2;
-    return ramp(base, 2.2 + lit * 2 + dith(x, y, 0.5));
-  });
-  // grab line
-  for (let k = 0; k < 4; k++) {
-    const a = k * (Math.PI / 2) + Math.PI / 4;
-    b.set(cx + Math.cos(a) * r * 0.75, cy + Math.sin(a) * r * 0.75, P.rope[4]);
-  }
-}
-
-function tyre(b: PixelBuffer, cx: number, cy: number, r = 6) {
-  ring(b, cx, cy, r * 0.45, r, (a, t, x, y) => ramp(P.tyre, 1.8 - Math.cos(a + 2.2) * 1.5 + (t > 0.8 ? -0.6 : 0) + dith(x, y, 0.4)));
-}
-
-function porthole(b: PixelBuffer, cx: number, cy: number, r = 5, glass: C | null = null, lit = false) {
-  ring(b, cx, cy, r - 1.6, r, (a, _t, x, y) => ramp(P.brass, 3 - Math.cos(a + 2.3) * 2 + dith(x, y, 0.4)));
-  b.discFn(cx, cy, r - 1.6, (x, y, nx, ny) => {
-    if (glass !== null) return glass;
-    if (lit) return ramp(P.yellow, 4.5 - ny * 1.5);
-    const g = nx + ny < -0.6 ? 4 : nx + ny < -0.2 ? 2 : 1;
-    return ramp(P.glass, g + dith(x, y, 0.3));
-  });
-  // bolts
-  for (let k = 0; k < 6; k++) {
-    const a = k * (Math.PI / 3);
-    b.set(cx + Math.cos(a) * (r + 0.6), cy + Math.sin(a) * (r + 0.6), P.brass[1]);
-  }
-}
-
-// pixel font for the name (4x5 / 3x5 / 5x5 glyphs)
-const GLYPH: Record<string, string[]> = {
-  K: ['1001', '1010', '1100', '1010', '1001'],
-  I: ['111', '010', '010', '010', '111'],
-  T: ['111', '010', '010', '010', '010'],
-  W: ['10001', '10001', '10101', '10101', '01010'],
-  A: ['0110', '1001', '1111', '1001', '1001'],
-  E: ['1111', '1000', '1110', '1000', '1111'],
-  P: ['1110', '1001', '1110', '1000', '1000'],
-  Z: ['1111', '0010', '0100', '1000', '1111'],
-  '6': ['0110', '1000', '1110', '1001', '0110'],
-  '7': ['1111', '0001', '0010', '0100', '0100'],
-};
-function pixelText(b: PixelBuffer, text: string, x: number, y: number, c: C, shadow?: C) {
-  let cx = x;
-  for (const ch of text) {
-    const g = GLYPH[ch];
-    if (!g) { cx += 3; continue; }
-    for (let r = 0; r < g.length; r++)
-      for (let k = 0; k < g[r].length; k++)
-        if (g[r][k] === '1') {
-          if (shadow !== undefined) b.set(cx + k + 1, y + r + 1, shadow);
-          b.set(cx + k, y + r, c);
-        }
-    cx += g[0].length + 1;
-  }
-  return cx - x;
-}
-
 // ------------------------------------------------------------------ exterior
 
 interface PaintOpts { storm?: boolean }
 
-/** Hull topsides, rub rail, boot stripe, bottom paint, planking and weathering. */
+/** Exterior portholes along the lower deck. */
+const PORTHOLES: [number, number][] = [[92, 146], [272, 146], [318, 146], [388, 140], [446, 142]];
+/** Tyre fenders hanging on the topsides. */
+const FENDERS = [146, 258, 358];
+/** Shroud chainplates on the sheer. */
+const CHAINPLATES = [386, 398, 452];
+
+const bootTop = (x: number) => 195 - smoothstep(470, 540, x) * 3 - smoothstep(80, 34, x) * 2;
+const bootBot = (x: number) => bootTop(x) + 8;
+const PLANKS = 11;
+/** Strake index at (x, y) on the topsides: planks are lofted between the rub rail and the boot top, so they sweep with the sheer. */
+function plankIndex(x: number, y: number) {
+  const top = deckY(x) + 5, bot = bootTop(x) - 3;
+  return Math.floor(((y - top) / (bot - top)) * PLANKS);
+}
+/** y of the seam above strake i at column x. */
+function seamY(x: number, i: number) {
+  const top = deckY(x) + 5, bot = bootTop(x) - 3;
+  return top + (i / PLANKS) * (bot - top);
+}
+const BELT = 5; // the lower belting runs along the seam above strake 5, just under the portholes
+
+/** Hull topsides, rubbing strakes, boot stripe, bottom paint, planking and weathering. */
 function paintHullSkin(b: PixelBuffer, rng: Rng) {
   const M = hullMask();
-  const bootTop = (x: number) => 195 - smoothstep(470, 540, x) * 3 - smoothstep(80, 34, x) * 2;
-  const bootBot = (x: number) => bootTop(x) + 8;
   for (let y = 0; y < BOAT_H; y++)
     for (let x = 0; x < BOAT_W; x++) {
       if (!M.at(x, y)) continue;
@@ -378,57 +197,130 @@ function paintHullSkin(b: PixelBuffer, rng: Rng) {
       const b0 = bootTop(x), b1 = bootBot(x);
       let c: C;
       if (y < dk + 1) {
-        // bulwark: bright, with the stays showing as faint vertical ribs
+        // bulwark: bright cream, one seam, the stanchions showing as faint vertical ribs
         let f = 5.3 - (y - sh) * 0.05;
-        if ((Math.round(x) - 30) % 22 === 0 && y > sh + 3) f -= 0.9;
+        if ((Math.round(x) - 30) % 22 === 0 && y > sh + 3) f -= 0.7;
+        if ((Math.round(x) - 30) % 22 === 1 && y > sh + 3) f += 0.3;
+        if (Math.round(y) === Math.round(sh + 8)) f -= 1.1;
+        if (Math.round(y) === Math.round(sh + 9)) f += 0.3;
         c = ramp(P.cream, f + dith(x, y, 0.3));
-      } else if (y < b0) {
-        // cream topsides: light under the rail, rolling into shadow toward the turn of the bilge,
+      } else if (y < b0 - 2) {
+        // carvel strakes: lit under the rail, rolling into shadow toward the turn of the bilge,
         // a little bounce light off the water just above the boot top
         const t = (y - dk) / (b0 - dk);
         const bowFlare = smoothstep(440, 540, x) * (0.7 - t * 1.3);
         const sternTurn = smoothstep(90, 30, x) * -0.4;
         let f = 5.1 - t * 1.1 - smoothstep(0.5, 1, t) * 1.5 + bowFlare + sternTurn + smoothstep(0.9, 1, t) * 0.7;
-        const py = y - dk - 6;
-        const seam = py > 2 && (((Math.round(py) % 8) + 8) % 8) === 0;
-        const plank = Math.floor(py / 8);
-        const butt = py > 2 && ((Math.round(x) + plank * 57) % 83) === 0;
+        const pi = plankIndex(x, y);
+        const seam = pi !== plankIndex(x, y - 1) && y > dk + 5;
+        const underSeam = !seam && pi !== plankIndex(x, y - 2) && y > dk + 6;
+        const overSeam = pi !== plankIndex(x, y + 1);
+        // each strake takes the paint a little differently, with a slow mottle along its length
+        f += (hash2(pi, 3, 7) - 0.5) * 0.22 + (noise1(x * 0.045 + pi * 7.3, 5) - 0.5) * 0.3;
+        const butt = (x + pi * 53) % 97;
         c = ramp(P.cream, f + dith(x, y, 0.32));
-        if (seam || butt) c = shade(c, -0.14);
+        if (seam) {
+          // caulked seam: a dark line with the odd lighter blob of seam compound
+          c = hash2(x >> 1, pi, 11) > 0.92 ? ramp(P.cream, f - 0.6) : mix(ramp(P.cream, f - 2.1), P.wood[2], 0.25);
+        } else if (underSeam) c = ramp(P.cream, f + 0.5 + dith(x, y, 0.3));
+        else if (overSeam) c = ramp(P.cream, f - 0.45 + dith(x, y, 0.3));
+        if (!seam && pi >= 0 && butt === 0) c = mix(c, ramp(P.cream, f - 1.6), 0.6);
+        // fastening dots (bronze screws under paint) on every frame, two per strake
+        if (!seam && pi >= 0 && (x - 30) % 22 === 0) {
+          const s0 = seamY(x, pi), s1 = seamY(x, pi + 1);
+          const r = Math.round(y);
+          if (r === Math.round(s0 + (s1 - s0) * 0.5)) c = mix(c, ramp(P.cream, f - 1.4), 0.55);
+        }
+      } else if (y < b0) {
+        // cove line: a navy pinstripe with a cream line under it, then the boot stripe
+        c = y < b0 - 1 ? P.navy[3] : P.cream[4];
       } else if (y < b1) {
         const t = (y - b0) / (b1 - b0);
-        c = ramp(P.red, 3.9 - t * 1.9 + dith(x, y, 0.3));
+        c = ramp(P.red, 3.9 - t * 1.9 + dith(x, y, 0.3) + (noise1(x * 0.08, 9) - 0.5) * 0.4);
         if (y - b0 < 1) c = P.red[5];
       } else {
         const t = (y - b1) / (KEEL - b1);
-        c = ramp(P.bottom, 3.6 - t * 2.6 + dith(x, y, 0.35));
+        c = ramp(P.bottom, 3.6 - t * 2.6 + dith(x, y, 0.35) + (noise2(x * 0.1, y * 0.2, 4) - 0.5) * 0.7);
         if (y - b1 < 1) c = P.bottom[5];
       }
       b.set(x, y, c);
     }
-  // rub rail at deck level and cap rail at the sheer
+  // rubbing strake at deck level: varnished oak shod with a steel half-round; cap rail on the sheer
   for (let x = STERN_X; x <= BOW_X; x++) {
     const dk = Math.round(deckY(x)), sh = Math.round(sheerY(x));
-    if (!M.at(x, dk + 3)) continue;
-    b.set(x, dk + 1, P.varnish[5]);
-    b.set(x, dk + 2, P.varnish[4]);
-    b.set(x, dk + 3, P.varnish[2]);
-    b.set(x, dk + 4, P.cream[2]);
-    b.set(x, sh - 1, P.varnish[6]);
+    if (!M.at(x, dk + 4)) continue;
+    const scarf = (x - 20) % 64 === 0;
+    b.set(x, dk + 1, scarf ? P.varnish[3] : P.varnish[5]);
+    b.set(x, dk + 2, (x + 3) % 40 === 0 ? P.metal[5] : P.metal[7]);
+    b.set(x, dk + 3, P.metal[4]);
+    b.set(x, dk + 4, scarf ? P.varnish[1] : P.varnish[3]);
+    b.set(x, dk + 5, P.cream[2]);
+    if (M.at(x, dk + 6)) tint(b, x, dk + 6, P.cream[2], 0.4);
+    // screw heads through the steel band
+    if ((x - 30) % 22 === 11) b.set(x, dk + 2, P.metal[3]);
+    b.set(x, sh - 1, (x - 8) % 48 === 0 ? P.varnish[4] : P.varnish[6]);
     b.set(x, sh, P.varnish[5]);
     b.set(x, sh + 1, P.varnish[3]);
-    b.set(x, sh + 2, P.cream[3]);
+    b.set(x, sh + 2, P.cream[2]);
+    // lower belting along the seam above strake BELT
+    const by = Math.round(seamY(x, BELT));
+    if (M.at(x, by + 2) && x > 34 && x < 540) {
+      b.set(x, by - 1, mix(b.get(x, by - 1), P.cream[6], 0.35));
+      b.set(x, by, P.varnish[5]);
+      b.set(x, by + 1, P.varnish[3]);
+      b.set(x, by + 2, mix(b.get(x, by + 2), P.cream[1], 0.5));
+    }
   }
-  // freeing ports with rust streaks
+  // freeing ports in the bulwark, with a hinged flap and a rust streak under each
   for (const fx of [62, 182, 372, 476]) {
     const dk = Math.round(deckY(fx));
     b.rect(fx, dk - 4, 7, 3, P.bottom[0]);
-    hline(b, fx, fx + 6, dk - 5, P.cream[3]);
-    rustStreak(b, fx + 3, dk + 5, rng.int(10, 22), rng);
+    hline(b, fx + 1, fx + 6, dk - 2, P.bottom[1]);
+    hline(b, fx - 1, fx + 7, dk - 5, P.metal[4]);
+    b.set(fx - 1, dk - 5, P.metal[6]);
+    b.set(fx + 1, dk - 5, P.metal[2]); b.set(fx + 5, dk - 5, P.metal[2]);
+    rustStreak(b, fx + 2, dk + 6, rng.int(10, 22), rng);
+    rustStreak(b, fx + 5, dk + 6, rng.int(5, 12), rng);
   }
+  // scupper and bilge outlets: small lipped holes with a dirty-water stain running down
+  for (const [sx, dy] of [[104, 9], [236, 8], [330, 9], [416, 8], [508, 10]] as const) {
+    const y = Math.round(deckY(sx)) + dy;
+    b.rect(sx, y, 3, 2, P.metal[0]);
+    hline(b, sx - 1, sx + 3, y - 1, P.cream[6]);
+    hline(b, sx, sx + 2, y + 2, P.cream[2]);
+    for (let k = 3; k < 16 + (sx % 7); k++) tint(b, sx + 1 + (k > 9 ? 1 : 0), y + k, P.grime[3], 0.3 * (1 - k / 22));
+  }
+  // chainplates for the shrouds: bolted bronze straps with a green-brown weep under them
+  for (const cx of CHAINPLATES) {
+    const sh = Math.round(sheerY(cx));
+    for (let y = sh - 1; y < sh + 15; y++) {
+      b.set(cx - 1, y, P.brass[y < sh + 1 ? 5 : 3]);
+      b.set(cx, y, P.brass[y < sh + 1 ? 4 : 2]);
+    }
+    for (const by of [sh + 3, sh + 8, sh + 13]) { b.set(cx - 1, by, P.brass[6]); b.set(cx, by, P.brass[0]); }
+    for (let k = 0; k < 12; k++) tint(b, cx - 1 + (k > 6 ? 1 : 0), sh + 15 + k, P.moss[3], 0.5 * (1 - k / 12));
+  }
+  // stem band: a steel strip shoeing the cutwater
+  for (let y = 98; y < 206; y++) {
+    let xe = -1;
+    for (let x = BOAT_W - 1; x > 420; x--) if (M.at(x, y)) { xe = x; break; }
+    if (xe < 0) continue;
+    b.set(xe, y, P.metal[y % 9 === 0 ? 7 : 5]);
+    b.set(xe - 1, y, P.metal[3]);
+  }
+  // draught marks: white figures up the stem and the stern quarter
+  for (const [dx, marks] of [[508, [['6', 186], ['4', 196], ['2', 206]]], [44, [['6', 184], ['4', 194]]]] as const) {
+    for (const [d, y] of marks) {
+      const x = dx - (y - 186) * (dx > 300 ? 0.55 : -0.3);
+      const onPaint = y + 5 < bootTop(x);
+      if (M.at(Math.round(x), y) && M.at(Math.round(x) + 4, y + 4)) pixelText(b, d, Math.round(x), y, onPaint ? P.navy[1] : P.white[4], onPaint ? undefined : P.bottom[0]);
+    }
+  }
+  // transom edge
+  for (let y = Math.round(sheerY(STERN_X)); y < 186; y++) if (M.at(STERN_X + 1, y)) { b.set(STERN_X + 1, y, P.cream[2]); b.set(STERN_X + 2, y, P.cream[3]); }
   // barnacle clusters and weed along the waterline, thickest at the bow and stern
-  for (let i = 0; i < 46; i++) {
-    const x = i < 14 ? rng.range(36, 120) : i < 30 ? rng.range(440, 530) : rng.range(120, 440);
+  for (let i = 0; i < 60; i++) {
+    const x = i < 16 ? rng.range(36, 120) : i < 36 ? rng.range(440, 530) : rng.range(120, 440);
     const cy = WATERLINE - 6 + rng.range(-1, 5);
     const n = rng.int(3, 9);
     for (let k = 0; k < n; k++) {
@@ -438,30 +330,55 @@ function paintHullSkin(b: PixelBuffer, rng: Rng) {
       b.set(px, py, v < 0.35 ? P.white[3] : v < 0.75 ? P.white[1] : P.white[0]);
       if (v < 0.2) b.set(px + 1, py, P.white[2]);
     }
-    if (rng.chance(0.55)) {
+    if (rng.chance(0.6)) {
       const wx = Math.round(x + rng.range(-4, 4));
-      const L = rng.int(2, 6);
+      const L = rng.int(2, 7);
       for (let k = 0; k < L; k++) if (M.at(wx, cy + 3 + k)) b.set(wx + (k > 2 ? 1 : 0), cy + 3 + k, P.green[k < 2 ? 3 : 2]);
     }
   }
-  // chipped paint near the bow and waterline
-  for (let i = 0; i < 26; i++) {
-    const x = rng.chance(0.6) ? rng.range(470, 540) : rng.range(40, 470);
-    const y = rng.range(150, 192);
-    if (!M.at(x, y) || !M.at(x + 2, y)) continue;
-    b.set(x, y, P.cream[2]);
-    b.set(x + 1, y, P.wood[3]);
+  // waterline slime: a mottled green-brown band where the boat sits, creeping up into the boot stripe
+  for (let x = 30; x < 530; x++) {
+    const ends = Math.max(smoothstep(140, 40, x), smoothstep(400, 520, x));
+    for (let y = WATERLINE - 8; y < WATERLINE + 6; y++) {
+      if (!M.at(x, y)) continue;
+      const n = noise2(x * 0.14, y * 0.3, 21);
+      const band = smoothstep(WATERLINE - 7 - ends * 3, WATERLINE - 1, y) * (1 - smoothstep(WATERLINE + 1, WATERLINE + 6, y));
+      const k = band * (0.15 + n * 0.45 + ends * 0.15);
+      if (k > 0.22) tint(b, x, y, n > 0.6 ? P.moss[3] : P.grime[2], Math.min(0.55, k));
+    }
+    // algae streaks hanging up the stripe in drips
+    if (hash2(x, 1, 31) > 0.9) {
+      const L = 2 + Math.floor(hash2(x, 2, 31) * (3 + ends * 4));
+      for (let k = 0; k < L; k++) tint(b, x, WATERLINE - 3 - k, P.moss[4], 0.45 * (1 - k / L));
+    }
   }
-  // salt/dirt streaks under the rub rail
-  for (let i = 0; i < 38; i++) {
+  // chipped paint near the bow and waterline: primer showing through with a dark bruise edge
+  for (let i = 0; i < 34; i++) {
+    const x = Math.round(rng.chance(0.6) ? rng.range(470, 540) : rng.range(40, 470));
+    const y = Math.round(rng.range(126, 192));
+    if (!M.at(x, y) || !M.at(x + 3, y)) continue;
+    const w = rng.int(1, 3);
+    for (let k = 0; k < w; k++) b.set(x + k, y, k === 0 ? P.cream[1] : P.wood[4]);
+    b.set(x + w, y, P.cream[2]);
+    if (w > 1) b.set(x + 1, y + 1, P.cream[2]);
+  }
+  // salt and grime streaks weeping from under the rubbing strake
+  for (let i = 0; i < 56; i++) {
     const x = Math.round(rng.range(34, 540));
-    const y0 = deckY(x) + 5;
-    const L = rng.int(6, 26);
+    const y0 = deckY(x) + 6;
+    const L = rng.int(6, 30);
+    const dark = rng.chance(0.55);
     for (let k = 0; k < L; k++) {
       if (!M.at(x, y0 + k) || y0 + k > 190) break;
-      const cur = b.get(x, y0 + k);
-      b.set(x, y0 + k, mix(cur, P.cream[1], 0.22 * (1 - k / L)));
+      tint(b, x, y0 + k, dark ? P.cream[1] : P.cream[6], (dark ? 0.2 : 0.3) * (1 - k / L));
     }
+  }
+  // general grime toward the turn of the bilge and at the stern quarter
+  for (let y = 120; y < 195; y++) for (let x = 26; x < 552; x++) {
+    if (!M.at(x, y) || y > bootTop(x) - 3) continue;
+    const n = fbm2(x * 0.03, y * 0.08, 3, 17);
+    const k = smoothstep(150, 194, y) * 0.1 + smoothstep(90, 30, x) * 0.1 + (n - 0.58) * 0.22;
+    if (k > 0.05) tint(b, x, y, P.grime[3], Math.min(0.2, k));
   }
 }
 
@@ -479,26 +396,79 @@ function rustStreak(b: PixelBuffer, x: number, y: number, L: number, rng: Rng) {
 
 /** Rudder, propeller and skeg under the counter. */
 function paintRunningGear(b: PixelBuffer) {
-  // skeg: the keel carried aft to support the rudder heel
+  // skeg: the keel carried aft to support the rudder heel, with a steel shoe
   for (let x = 38; x < 114; x++) {
-    b.set(x, KEEL, P.bottom[0]);
+    b.set(x, KEEL, P.metal[2]);
     b.set(x, KEEL - 1, x < 60 ? P.bottom[1] : P.bottom[2]);
   }
   // sternpost
   b.rectFn(64, 206, 4, 24, (x, y) => ramp(P.bottom, 2.6 - (x - 64) * 0.4 + dith(x, y, 0.3)));
-  // rudder blade hung under the counter, rounded trailing edge
+  // rudder blade hung under the counter, rounded trailing edge, pintles and a zinc anode
   b.polyFn([40, 196, 55, 198, 57, 228, 42, 228, 38, 222, 37, 204], (x, y) => ramp(P.bottom, 3.4 - (y - 196) * 0.05 - (x - 37) * 0.07 + dith(x, y, 0.4)));
   vline(b, 55, 199, 227, P.bottom[0]);
+  vline(b, 39, 205, 220, P.bottom[5]);
+  for (const py of [202, 214, 225]) { hline(b, 54, 58, py, P.metal[4]); b.set(54, py, P.metal[6]); }
+  b.rect(45, 212, 4, 3, P.metal[5]);
+  b.set(45, 212, P.metal[7]);
   b.rect(46, 194, 5, 3, P.metal[3]);
   // propeller in the aperture (two blades side on) with boss and shaft
   b.polyFn([59, 204, 63, 204, 63, 213, 59, 213], (x, y) => ramp(P.brass, 4 - (y - 204) * 0.2 + dith(x, y, 0.4)));
   b.polyFn([59, 217, 63, 217, 64, 227, 58, 227], (x, y) => ramp(P.brass, 2.8 - (y - 217) * 0.12 + dith(x, y, 0.4)));
   b.rect(58, 213, 7, 4, P.brass[2]);
   hline(b, 58, 64, 213, P.brass[4]);
+  vline(b, 60, 205, 211, P.brass[6]);
+}
+
+/** A window of the wheelhouse seen from outside: teak frame, gasket, sky and sea reflections, glints, parked wiper. */
+function wheelhouseWindow(b: PixelBuffer, wx: number, wy: number, ww: number, wh: number, wiper: number) {
+  // eyebrow drip rail
+  hline(b, wx - 3, wx + ww + 2, wy - 4, P.varnish[5]);
+  hline(b, wx - 3, wx + ww + 2, wy - 3, P.varnish[2]);
+  // frame, 2px, lit from the top-left, rounded corners
+  b.rectFn(wx - 2, wy - 2, ww + 4, wh + 4, (x, y) => {
+    const cx = x < wx ? 0 : x >= wx + ww ? 2 : 1, cy = y < wy ? 0 : y >= wy + wh ? 2 : 1;
+    if (cx === 1 && cy === 1) return -1;
+    if ((x === wx - 2 || x === wx + ww + 1) && (y === wy - 2 || y === wy + wh + 1)) return -1;
+    const top = cy === 0, left = cx === 0, outer = x === wx - 2 || y === wy - 2 || x === wx + ww + 1 || y === wy + wh + 1;
+    let f = top || left ? 5 : 2.4;
+    if (outer) f += top || left ? 0.8 : -0.8;
+    return ramp(P.varnish, f + dith(x, y, 0.3));
+  });
+  // corner fixings
+  for (const [cx, cy] of [[wx - 1, wy - 1], [wx + ww, wy - 1], [wx - 1, wy + wh], [wx + ww, wy + wh]]) b.set(cx, cy, P.brass[5]);
+  // glass
+  b.rectFn(wx, wy, ww, wh, (x, y) => {
+    const u = (x - wx) / ww, v = (y - wy) / wh;
+    if (x === wx || y === wy) return P.metal[1]; // rubber gasket (inner shadow)
+    const hz = 0.56;
+    let f: number;
+    if (v < hz) f = 4.3 - v * 2.4; // sky reflection, bright at the top
+    else f = 1.9 - (v - hz) * 1.4; // the darker sea
+    if (Math.abs(v - hz) < 0.02) f = 3.6; // horizon glint
+    // cloud smear in the sky part
+    if (v < hz && noise2(u * 3 + wx, v * 6, 13) > 0.62) f += 0.6;
+    // two diagonal glints
+    const d = u + v * 0.7;
+    if (d > 0.2 && d < 0.3) f += 1.3;
+    else if (d > 0.36 && d < 0.39) f += 0.9;
+    // dark reflection of the far wall at the bottom
+    if (v > 0.88) f -= 0.6;
+    return ramp(P.glass, f + dith(x, y, 0.45));
+  });
+  b.set(wx + 1, wy + 1, P.white[4]);
+  b.set(wx + 2, wy + 1, P.glass[5]);
+  b.set(wx + 1, wy + 2, P.glass[5]);
+  // parked wiper: arm pivot at the bottom, blade lying diagonally
+  if (wiper) {
+    const px = wx + Math.round(ww / 2), py = wy + wh - 1;
+    b.set(px, py + 2, P.metal[5]); b.set(px + 1, py + 2, P.metal[3]);
+    rope(b, px, py, px - 11 * wiper, py - 14, 0, P.metal[1]);
+    rope(b, px + 1, py, px - 10 * wiper, py - 14, 0, P.metal[3]);
+  }
 }
 
 /** Wheelhouse exterior shell: walls, windows, trim, roof and roof gear. */
-function paintWheelhouseShell(b: PixelBuffer, cut: boolean, rng: Rng) {
+function paintWheelhouseShell(b: PixelBuffer, fine: PixelBuffer, cut: boolean, rng: Rng) {
   const x0 = WH_X0, x1 = WH_X1;
   const top = WH_ROOF;
   const frontTop = x1 + 6; // front wall rakes forward
@@ -507,131 +477,203 @@ function paintWheelhouseShell(b: PixelBuffer, cut: boolean, rng: Rng) {
   if (!cut) {
     b.polyFn([x0, baseY, x0, top + 6, frontTop, top + 6, x1, baseY], (x, y) => {
       const t = (y - top) / (baseY - top);
-      let f = 4.8 - t * 1.4 + (x < x0 + 3 ? 0.8 : 0);
+      let f = 4.8 - t * 1.2 + (x < x0 + 3 ? 0.8 : 0);
       if (x > x1 - 3 + (baseY - y) * ((frontTop - x1) / (baseY - top))) f -= 1;
-      // vertical tongue-and-groove boards on the lower wall
-      if (y > 72 && (x - x0) % 5 === 0) f -= 0.6;
-      return ramp(P.cream, f + dith(x, y, 0.5));
+      // vertical tongue-and-groove boards on the lower wall (groove shadow, lit bead)
+      if (y > 72) {
+        const k = (x - x0) % 5;
+        if (k === 0) f -= 0.8;
+        else if (k === 1) f += 0.35;
+        f += (hash2(Math.floor((x - x0) / 5), 1, 5) - 0.5) * 0.3;
+      }
+      // soft shadow under the roof overhang
+      if (y < top + 11) f -= (top + 11 - y) * 0.12;
+      return ramp(P.cream, f + dith(x, y, y < top + 11 ? 0.2 : 0.45));
     });
+    // corner posts
+    for (let y = top + 7; y < baseY; y++) { b.set(x0, y, P.cream[6]); b.set(x0 + 1, y, P.cream[5]); }
     // trim bands
     for (let x = x0; x <= frontTop; x++) {
       const yb = top + 6;
       b.set(x, yb, P.varnish[3]);
       b.set(x, yb + 1, P.varnish[5]);
+      b.set(x, yb + 2, P.varnish[2]);
     }
     for (let x = x0; x <= x1 + 1; x++) {
+      b.set(x, 69, P.varnish[6]);
       b.set(x, 70, P.varnish[4]);
       b.set(x, 71, P.varnish[2]);
+      b.set(x, 72, P.cream[2]);
     }
+    // base: a varnished skirting where the house meets the deck
+    for (let x = x0; x <= x1; x++) { b.set(x, baseY - 3, P.varnish[5]); b.set(x, baseY - 2, P.varnish[3]); b.set(x, baseY - 1, P.varnish[2]); }
     // three big side windows
-    for (const wx of [228, 260, 292]) {
-      const ww = 26, wy = 34, wh = 30;
-      b.rectFn(wx - 1, wy - 1, ww + 2, wh + 2, (x, y) => (x === wx - 1 || y === wy - 1 ? P.varnish[5] : P.varnish[2]));
-      b.rectFn(wx, wy, ww, wh, (x, y) => {
-        const u = (x - wx) / ww, v = (y - wy) / wh;
-        const refl = u + v * 0.6;
-        let f = 1.2 + v * 0.8;
-        if (refl > 0.25 && refl < 0.38) f = 4;
-        else if (refl > 0.44 && refl < 0.48) f = 3.2;
-        if (v > 0.8) f -= 0.6;
-        return ramp(P.glass, f + dith(x, y, 0.4));
-      });
-      // window frame corners rounded
-      for (const [cx, cy] of [[wx, wy], [wx + ww - 1, wy], [wx, wy + wh - 1], [wx + ww - 1, wy + wh - 1]]) b.set(cx, cy, P.varnish[3]);
-      // wiper blade on the middle window
-      if (wx === 260) rope(b, wx + 13, wy + wh - 2, wx + 4, wy + 10, 0, P.metal[2]);
-    }
-    // lifebuoy on the forward panel and a name board
-    lifebuoy(b, 326, 84, 7);
-    b.rect(236, 78, 46, 9, P.varnish[2]);
-    b.rect(237, 79, 44, 7, P.varnish[4]);
-    hline(b, 237, 280, 79, P.varnish[6]);
-    pixelText(b, 'KITTIWAKE', 239, 80, P.cream[6]);
+    const WX = [228, 260, 292];
+    WX.forEach((wx, i) => wheelhouseWindow(b, wx, 34, 26, 30, i === 1 ? 1 : i === 2 ? -1 : 0));
+    // rust / tannin weeps from the lower window corners
+    for (const wx of WX) for (const cx of [wx, wx + 24]) for (let k = 0; k < 7; k++) tint(b, cx + (k > 3 ? 1 : 0), 67 + k, P.varnish[3], 0.3 * (1 - k / 7));
+    void rng;
+    // brass grab rail under the windows on stand-off posts
+    for (let x = 226; x <= 320; x++) { b.set(x, 75, P.brass[5]); b.set(x, 76, P.brass[2]); }
+    for (let x = 228; x <= 320; x += 23) { b.set(x, 77, P.brass[3]); b.set(x, 78, P.brass[1]); }
+    // name board: varnished plank with brass letters and bevelled ends
+    const nb0 = 234, nb1 = 284, ny = 80;
+    b.rectFn(nb0, ny, nb1 - nb0 + 1, 10, (x, y) => {
+      if ((x === nb0 || x === nb1) && (y === ny || y === ny + 9)) return -1;
+      let f = y === ny ? 6 : y === ny + 9 ? 1.4 : y === ny + 1 ? 5 : 3.6 - (y - ny) * 0.12;
+      if (x === nb0 || x === nb1) f -= 1;
+      f += (noise1(x * 0.3 + y * 7, 2) - 0.5) * 0.7;
+      return ramp(P.varnish, f + dith(x, y, 0.3));
+    });
+    const tw = textWidth('KITTIWAKE');
+    pixelText(b, 'KITTIWAKE', Math.round((nb0 + nb1) / 2 - tw / 2), ny + 3, P.brass[5], P.varnish[1]);
+    b.set(nb0 + 2, ny + 5, P.brass[3]); b.set(nb1 - 2, ny + 5, P.brass[3]);
+    // lifebuoy on the forward panel hung on two brass hooks, with its grab line
+    b.set(321, 75, P.brass[6]); b.set(331, 75, P.brass[6]);
+    lifebuoy(b, 326, 85, 7);
+    // a vent louvre and the wheelhouse number plate
+    for (let k = 0; k < 4; k++) hline(b, 218, 224, 90 + k * 2, P.cream[1]);
+    b.rect(217, 89, 9, 1, P.cream[5]);
   }
-  // roof slab with sun visor
+  // roof slab with sun visor: a lit top edge, a painted fascia and a drip moulding
   b.polyFn([x0 - 5, top, frontTop + 8, top, frontTop + 10, top + 6, x0 - 5, top + 6], (x, y) => {
-    const f = y === top ? 5.5 : y === top + 1 ? 4.6 : 3.2 - (y - top) * 0.4;
+    const f = y === top ? 5.6 : y === top + 1 ? 4.8 : y === top + 5 ? 1.6 : 3.3 - (y - top) * 0.3;
     return ramp(P.cream, f + dith(x, y, 0.4));
   });
   hline(b, x0 - 5, frontTop + 10, top + 6, P.cream[1]);
-  // roof gear: funnel, life raft canister, antennas, radar post, horn, searchlight
-  // funnel (exhaust stack)
+  hline(b, x0 - 5, frontTop + 10, top + 7, withAlpha(P.cream[0], 160));
+  // roof guard rail: posts and a top rail
+  for (let x = x0 - 2; x <= frontTop + 4; x += 14) vline(fine, x, top - 5, top - 1, P.metal[3]);
+  for (let x = x0 - 2; x <= frontTop + 4; x++) { fine.set(x, top - 6, P.metal[5]); fine.set(x, top - 5, P.metal[2]); }
+  // funnel (exhaust stack) with a rain cap, red band and soot
   b.rectFn(221, 3, 12, top - 3, (x, y) => {
-    let f = 4.4 - (x - 221) * 0.25;
-    if (y < 6) return ramp(P.metal, 1.4 - (x - 221) * 0.08);
+    const f = 4.4 - (x - 221) * 0.25;
+    if (y < 6) return ramp(P.metal, 1.6 - (x - 221) * 0.08);
     if (y >= 8 && y < 11) return ramp(P.red, 4 - (x - 221) * 0.25 + dith(x, y));
+    if (y === 7 || y === 11) return ramp(P.cream, f - 1.2);
     return ramp(P.cream, f + dith(x, y, 0.5));
   });
-  hline(b, 220, 233, 3, P.metal[1]);
-  // soot streak
-  for (let y = 6; y < 13; y++) b.set(231, y, mix(b.get(231, y), P.metal[1], 0.5));
-  // life raft canister
+  hline(b, 219, 234, 3, P.metal[1]);
+  hline(b, 220, 233, 2, P.metal[4]);
+  vline(b, 222, 12, top - 1, P.cream[6]);
+  for (let y = 6; y < 16; y++) b.set(231, y, mix(b.get(231, y), P.metal[1], 0.55));
+  for (let y = 6; y < 12; y++) b.set(230, y, mix(b.get(230, y), P.metal[1], 0.3));
+  // life raft canister in its cradle, with straps and a hydrostatic release
   b.rectFn(256, 9, 22, 8, (x, y) => {
     const t = (y - 9) / 7;
     const cap = x < 259 || x > 274;
-    return ramp(P.white, (cap ? 3.4 : 3.8) - t * 2 + dith(x, y, 0.4));
+    const seam = x === 259 || x === 274;
+    return ramp(P.white, (seam ? 2 : cap ? 3.4 : 3.8) - t * 2 + dith(x, y, 0.4));
   });
-  hline(b, 266, 267, 9, P.red[4]);
-  b.set(266, 12, P.red[3]); b.set(267, 12, P.red[3]);
+  hline(b, 257, 276, 9, P.white[4]);
+  for (const sx of [262, 271]) vline(b, sx, 9, 16, P.orange[3]);
+  b.rect(265, 11, 4, 3, P.red[4]);
+  b.set(265, 11, P.red[5]);
   for (const x of [258, 275]) vline(b, x, 16, top, P.metal[3]);
-  // VHF whips
-  for (const [ax, lean] of [[243, -0.08], [250, 0.05]]) {
-    for (let y = 0; y < top; y++) b.set(Math.round(ax + (top - y) * (lean as number)), y, y < 3 ? P.metal[5] : P.metal[3]);
-    b.set(ax as number, top - 1, P.metal[1]);
+  hline(b, 255, 279, top - 1, P.metal[2]);
+  // VHF whips with spring bases and tip balls; a GPS mushroom
+  for (const [ax, lean] of [[243, -0.08], [250, 0.05]] as const) {
+    for (let y = 0; y < top - 3; y++) fine.set(Math.round(ax + (top - y) * lean), y, y < 3 ? P.metal[5] : P.metal[2]);
+    b.rect(ax - 1, top - 4, 3, 3, P.metal[2]);
+    b.set(ax - 1, top - 4, P.metal[5]);
+    fine.set(Math.round(ax + top * lean), 0, P.white[4]);
   }
+  b.ellipseFn(283, 13, 3, 2, (x, y, nx, ny) => ramp(P.white, 3.6 - ny * 1.2 - nx * 0.6));
+  vline(b, 283, 15, top - 1, P.metal[3]);
   // radar post (scanner is an animated part; frame 0 baked by paintBoatExterior)
   b.rect(290, 9, 5, top - 9, P.metal[4]);
   vline(b, 290, 9, top - 1, P.metal[6]);
+  vline(b, 294, 9, top - 1, P.metal[2]);
   b.rect(287, 14, 11, 3, P.metal[3]);
-  // brass horn
+  hline(b, 287, 297, 14, P.metal[5]);
+  // brass horn on a bracket
   b.polyFn([312, 12, 320, 10, 320, 15, 312, 14], (x, y) => ramp(P.brass, 4 - (y - 10) * 0.4 + dith(x, y)));
+  vline(b, 320, 10, 15, P.brass[6]);
   vline(b, 314, 15, top - 1, P.metal[3]);
-  // searchlight on a bracket at the front of the roof
+  // searchlight on a yoke at the front of the roof, handle behind
   b.rect(330, 9, 9, 7, P.metal[3]);
   b.rect(331, 10, 7, 5, P.metal[5]);
+  hline(b, 331, 337, 10, P.metal[6]);
   b.rect(338, 10, 2, 5, P.brass[5]);
   b.set(339, 11, P.white[4]);
   vline(b, 334, 16, top - 1, P.metal[2]);
-  void rng;
+  hline(b, 326, 330, 12, P.metal[4]);
+  // starboard (green) sidelight in its screened box on the forward roof corner
+  b.rect(342, 10, 7, 7, P.metal[1]);
+  b.rect(343, 11, 5, 4, P.green[2]);
+  b.rect(344, 11, 3, 3, hex('#5fe08a'));
+  b.set(344, 11, hex('#c8ffd8'));
+  hline(b, 342, 348, 10, P.metal[4]);
+  vline(b, 345, 17, top - 1, P.metal[2]);
 }
 
-/** Foremast with crosstrees, lights, derrick boom and rigging. */
-function paintMastAndRig(b: PixelBuffer, storm: boolean, rng: Rng) {
+/** Foremast with crosstrees, lights, radar reflector, shrouds and halyards. Heavier lines are the standing rigging. */
+function paintMastAndRig(b: PixelBuffer, fine: PixelBuffer, storm: boolean, rng: Rng) {
   const mx = 424, base = Math.round(deckY(mx)), top = 8;
-  // rigging first (behind the mast)
+  // rigging first (behind the mast): stays are the heaviest lines, shrouds medium, halyards fine
   const tip: [number, number] = [584, 84];
-  rope(b, mx, top + 2, tip[0], tip[1], 3, P.metal[3]); // forestay
-  rope(b, mx - 1, top + 2, WH_X1 + 12, WH_ROOF + 1, 2, P.metal[3]); // triatic stay to wheelhouse
-  rope(b, mx - 1, 40, 398, Math.round(sheerY(398)) - 1, 1, P.metal[4]); // shrouds
-  rope(b, mx + 1, 40, 452, Math.round(sheerY(452)) - 1, 1, P.metal[4]);
-  rope(b, mx - 1, 40, 386, Math.round(sheerY(386)) - 1, 1, P.metal[3]);
-  // signal halyard with small flags
-  rope(b, mx + 2, 42, 540, Math.round(sheerY(540)) - 2, 7, P.rope[3]);
+  rope2(fine, mx, top + 2, tip[0], tip[1], 3, P.metal[1], P.metal[4]); // forestay
+  rope(fine, mx - 1, top + 2, WH_X1 + 12, WH_ROOF + 1, 2, P.metal[2]); // triatic stay to wheelhouse
+  for (const [sx, dx] of [[398, -1], [452, 1], [386, -1]] as const) {
+    const sy = Math.round(sheerY(sx)) - 1;
+    rope(fine, mx + dx, 40, sx, sy - 5, 1, P.metal[sx === 386 ? 2 : 3]);
+    // bottle-screw at the foot of each shroud
+    vline(fine, sx, sy - 5, sy, P.brass[3]);
+    fine.set(sx, sy - 4, P.brass[6]);
+    fine.set(sx, sy - 1, P.brass[1]);
+  }
+  // signal halyard with small flags (fine rope)
+  rope(fine, mx + 2, 42, 540, Math.round(sheerY(540)) - 2, 7, P.rope[2]);
   const flagC = [P.red[4], P.yellow[5], P.navy[4], P.white[4], P.green[4]];
   for (let i = 0; i < 9; i++) {
     const t = (i + 1) / 10;
     const x = mx + 2 + (540 - mx - 2) * t, y = 42 + (sheerY(540) - 2 - 42) * t + Math.sin(t * Math.PI) * 7;
     const c = flagC[i % flagC.length];
-    b.poly([x, y, x + 4, y, x + 2, y + 4], c);
+    fine.poly([x, y + 1, x + 4, y + 1, x + 2, y + 5], c);
+    fine.set(x + 1, y + 1, shade(c, 0.3));
+    fine.set(x + 3, y + 1, shade(c, -0.3));
+    fine.set(x + 2, y + 4, shade(c, -0.3));
   }
-  // mast pole: white-painted steel, lit from the left
+  // flag halyard down the mast (fine, lighter, slightly slack)
+  rope(fine, mx + 2, top, mx + 3, base - 12, 0.5, P.rope[4]);
+  // mast pole: white-painted steel, lit from the left, with a shadowed right edge
   for (let y = top; y <= base; y++) {
     b.set(mx - 1, y, P.cream[6]);
     b.set(mx, y, P.cream[4]);
     b.set(mx + 1, y, P.cream[2]);
+    // mast steps
+    if (y > 44 && y < base - 8 && (y - 44) % 7 === 0) { b.set(mx - 2, y, P.metal[5]); b.set(mx - 3, y, P.metal[3]); }
   }
-  // crosstrees and platform
+  // bands, gooseneck and pin rail with coiled halyards hanging off it
+  for (const by of [36, 48, 84]) { hline(b, mx - 1, mx + 1, by, P.metal[4]); b.set(mx - 1, by, P.metal[6]); }
+  b.rect(mx - 8, 86, 17, 2, P.varnish[4]);
+  hline(b, mx - 8, mx + 8, 86, P.varnish[6]);
+  for (const px of [mx - 6, mx - 2, mx + 3, mx + 7]) b.set(px, 85, P.brass[5]);
+  ropeCoilHang(b, mx - 5, 88, 4, 7);
+  ropeCoilHang(b, mx + 5, 88, 3, 6);
+  // crosstrees with spreader lights underneath
   b.rect(mx - 12, 39, 25, 2, P.metal[4]);
   hline(b, mx - 12, mx + 12, 39, P.metal[6]);
-  // lights: masthead lamp, radar reflector, floodlight
+  for (const sx of [mx - 10, mx + 9]) { b.rect(sx, 41, 3, 2, P.metal[2]); b.set(sx + 1, 42, P.white[4]); }
+  // masthead light and a small VHF whip on the truck
   b.rect(mx - 2, top - 3, 5, 4, P.metal[2]);
   b.rect(mx - 1, top - 2, 3, 2, P.white[4]);
-  b.poly([mx - 5, 26, mx, 20, mx + 5, 26, mx, 32], P.metal[5]); // radar reflector diamond
+  vline(fine, mx + 1, 0, top - 4, P.metal[4]);
+  // radar reflector diamond
+  b.poly([mx - 5, 26, mx, 20, mx + 5, 26, mx, 32], P.metal[5]);
   b.poly([mx - 3, 26, mx, 23, mx + 3, 26, mx, 29], P.metal[3]);
+  hline(b, mx - 4, mx + 4, 26, P.metal[7]);
+  vline(b, mx, 21, 31, P.metal[6]);
+  // steaming light in its box
+  b.rect(mx + 2, 50, 4, 4, P.metal[2]);
+  b.rect(mx + 3, 51, 2, 2, P.white[4]);
+  // deck floodlight
   b.rect(mx + 2, 56, 6, 4, P.metal[3]);
+  hline(b, mx + 2, mx + 7, 56, P.metal[5]);
   b.rect(mx + 7, 56, 2, 4, P.yellow[6]);
   // mast collar and base plate
   b.rect(mx - 3, base - 4, 7, 4, P.metal[3]);
+  hline(b, mx - 3, mx + 3, base - 4, P.metal[5]);
   if (storm) {
     // a loose halyard whipping in the wind
     const pts: [number, number][] = [];
@@ -646,16 +688,41 @@ function paintMastAndRig(b: PixelBuffer, storm: boolean, rng: Rng) {
   void rng;
 }
 
+/** A coil of rope hanging from a pin: stacked loops, with the tail hanging below. */
+function ropeCoilHang(b: PixelBuffer, cx: number, y0: number, rx: number, h: number) {
+  for (let k = 0; k < 3; k++) {
+    ring(b, cx + (k - 1) * 0.6, y0 + h / 2 + k * 0.4, rx - 1.6, rx, (a, t, x, y) => {
+      if (Math.sin(a) < -0.85 && k < 2) return -1;
+      return ramp(P.rope, 3.2 - Math.cos(a + 2.2) * 1.2 + (t > 0.6 ? -0.8 : 0.2) - k * 0.3 + dith(x, y, 0.4));
+    });
+  }
+  // lashing turns at the top and the tail
+  hline(b, cx - 1, cx + 1, y0 + 1, P.rope[1]);
+  vline(b, cx + 1, y0 + h, y0 + h + 3, P.rope[3]);
+}
+
 /** Stern crane (davit), flagstaff, stern light. */
 function paintSternGear(b: PixelBuffer, rng: Rng) {
   const cx = 66, dk = Math.round(deckY(cx));
-  // pedestal
-  b.rectFn(cx - 3, dk - 30, 7, 30, (x, y) => ramp(P.yellow, (x === cx - 3 ? 6 : x > cx + 1 ? 2.6 : 4.4) - (y - (dk - 30)) * 0.02 + dith(x, y, 0.3)));
+  // pedestal: yellow-painted steel with hazard stripes near the base and rust at the welds
+  b.rectFn(cx - 3, dk - 30, 7, 30, (x, y) => {
+    let f = (x === cx - 3 ? 6 : x > cx + 1 ? 2.6 : 4.4) - (y - (dk - 30)) * 0.02;
+    if (y > dk - 12 && y < dk - 5 && ((x + y) >> 1) % 2 === 0) return ramp(P.metal, x > cx + 1 ? 1 : 2);
+    return ramp(P.yellow, f + dith(x, y, 0.3));
+  });
+  for (const wy of [dk - 20, dk - 13]) hline(b, cx - 3, cx + 3, wy, P.yellow[2]);
   b.rect(cx - 5, dk - 4, 11, 4, P.metal[3]);
   hline(b, cx - 5, cx + 5, dk - 4, P.metal[5]);
+  for (const bx of [cx - 4, cx + 4]) b.set(bx, dk - 2, P.metal[6]);
+  // hydraulic control box with two levers
+  b.rect(cx + 4, dk - 22, 5, 6, P.metal[3]);
+  hline(b, cx + 4, cx + 8, dk - 22, P.metal[5]);
+  vline(b, cx + 5, dk - 26, dk - 23, P.metal[5]); b.set(cx + 5, dk - 27, P.red[4]);
+  vline(b, cx + 7, dk - 25, dk - 23, P.metal[5]); b.set(cx + 7, dk - 26, P.red[4]);
   // slewing head
   b.rect(cx - 4, dk - 34, 9, 5, P.yellow[3]);
   hline(b, cx - 4, cx + 4, dk - 34, P.yellow[5]);
+  b.disc(cx, dk - 32, 1.4, P.metal[4]);
   // boom reaching up and aft over the transom
   const bx0 = cx, by0 = dk - 32, bx1 = 34, by1 = 50;
   const n = 60;
@@ -665,114 +732,188 @@ function paintSternGear(b: PixelBuffer, rng: Rng) {
     b.set(x, y - 1, P.yellow[6]);
     b.set(x, y, P.yellow[4]);
     b.set(x, y + 1, P.yellow[2]);
+    if (i % 12 === 6) b.set(x, y, P.yellow[3]);
   }
-  // hydraulic ram
+  // hydraulic ram (chromed rod out of a painted cylinder)
   rope(b, cx + 1, dk - 18, (bx0 + bx1) / 2 + 4, (by0 + by1) / 2 + 1, 0, P.metal[5]);
   rope(b, cx + 2, dk - 18, (bx0 + bx1) / 2 + 5, (by0 + by1) / 2 + 2, 0, P.metal[3]);
-  // sheave, wire and hook
+  rope(b, cx + 1, dk - 18, cx - 6, dk - 30, 0, P.yellow[3]);
+  // sheave, wire, block and hook
   b.disc(bx1, by1, 2.4, P.metal[3]);
   b.set(bx1 - 1, by1 - 1, P.metal[6]);
+  b.set(bx1, by1, P.metal[1]);
   vline(b, bx1, by1 + 2, by1 + 30, P.metal[2]);
   b.rect(bx1 - 1, by1 + 30, 3, 3, P.yellow[4]);
+  b.set(bx1 - 1, by1 + 30, P.yellow[6]);
   b.set(bx1 - 2, by1 + 34, P.metal[4]); b.set(bx1 - 2, by1 + 35, P.metal[4]); b.set(bx1 - 1, by1 + 36, P.metal[4]); b.set(bx1, by1 + 35, P.metal[4]);
+  // rope coil hung on the pedestal
+  ropeCoilHang(b, cx - 6, dk - 26, 4, 8);
   // flagstaff at the taffrail (the flag itself is an animated part)
   const fx = 24;
-  for (let y = 58; y < sheerY(fx); y++) b.set(fx, y, y < 60 ? P.brass[5] : P.varnish[4]);
+  for (let y = 58; y < sheerY(fx); y++) b.set(fx, y, y < 60 ? P.brass[5] : y % 12 === 0 ? P.varnish[2] : P.varnish[4]);
   b.disc(fx, 57, 1.2, P.brass[5]);
-  // stern light
+  // stern light on a bracket
+  b.rect(fx + 1, 85, 5, 5, P.metal[2]);
   b.rect(fx + 2, 86, 3, 3, P.white[4]);
+  b.set(fx + 2, 86, hex('#ffffff'));
   void rng;
 }
 
 /** Bowsprit pulpit, anchor, hawse, fairleads. */
-function paintBowGear(b: PixelBuffer, rng: Rng) {
+function paintBowGear(b: PixelBuffer, fine: PixelBuffer, rng: Rng) {
   const sh = Math.round(sheerY(BOW_X));
-  // bowsprit platform
-  b.polyFn([546, sh + 1, 586, 83, 586, 86, 546, sh + 6], (x, y) => ramp(P.varnish, 5 - (y - 83) * 0.5 + dith(x, y)));
+  // bowsprit platform with teak slats
+  b.polyFn([546, sh + 1, 586, 83, 586, 86, 546, sh + 6], (x, y) => ramp(P.varnish, 5 - (y - 83) * 0.5 + ((x - 546) % 6 === 0 ? -1.4 : 0) + dith(x, y)));
   hline(b, 548, 586, 82, P.varnish[6]);
-  // pulpit rail
-  for (let x = 552; x <= 584; x += 8) vline(b, x, 72, 83, P.metal[5]);
-  rope(b, 540, sh - 10, 584, 72, 1, P.metal[6]);
-  rope(b, 540, sh - 5, 584, 78, 1, P.metal[4]);
-  // bobstay to the stem
-  rope(b, 584, 86, 548, 128, 0, P.metal[3]);
-  // hawsepipe and stockless anchor
+  // pulpit rail: stanchions and two lines of rail
+  for (let x = 552; x <= 584; x += 8) { vline(fine, x, 72, 83, P.metal[4]); fine.set(x, 72, P.metal[6]); }
+  rope2(fine, 540, sh - 10, 584, 72, 1, P.metal[2], P.metal[5]);
+  rope(fine, 540, sh - 5, 584, 78, 1, P.metal[3]);
+  // bobstay to the stem, with its eye plate
+  rope2(fine, 584, 86, 548, 128, 0, P.metal[1], P.metal[3]);
+  b.rect(547, 127, 3, 3, P.metal[4]);
+  b.set(547, 127, P.metal[6]);
+  // navigation: a fairlead on the bow rail and a cleat
+  b.rect(532, Math.round(sheerY(532)) - 2, 6, 2, P.metal[4]);
+  hline(b, 532, 537, Math.round(sheerY(532)) - 2, P.metal[6]);
+  // hawse pipe with a bronze lip and a rust stain, the stockless anchor stowed in it
   const ax = 522, ay = 112;
-  // hawse pipe with a rust stain, the stockless anchor stowed in it
-  b.ellipseFn(ax, ay, 5, 3.5, (x, y, nx, ny) => (Math.hypot(nx, ny) > 0.62 ? ramp(P.metal, 3 - ny * 1.5) : P.metal[0]));
-  rustStreak(b, ax - 3, ay + 4, 30, rng);
-  rustStreak(b, ax + 3, ay + 4, 18, rng);
-  b.rectFn(ax - 1, ay + 1, 4, 20, (x, y) => ramp(P.metal, x === ax - 1 ? 6 : x === ax + 2 ? 2 : 4));
+  rustStreak(b, ax - 3, ay + 4, 32, rng);
+  rustStreak(b, ax + 3, ay + 4, 20, rng);
+  rustStreak(b, ax + 6, ay + 22, 26, rng);
+  ring(b, ax, ay, 3, 5.4, (a, _t, x, y) => ramp(P.brass, 3 - Math.cos(a + 2.3) * 1.8 + dith(x, y, 0.3)));
+  b.discFn(ax, ay, 3, (_x, _y, nx, ny) => (nx + ny < -0.4 ? P.metal[2] : P.metal[0]));
+  // shank
+  b.rectFn(ax - 1, ay + 1, 4, 20, (x, y) => ramp(P.metal, (x === ax - 1 ? 6 : x === ax + 2 ? 2 : 4) - (y - ay) * 0.03));
+  b.set(ax - 1, ay + 6, P.rust[3]); b.set(ax + 1, ay + 12, P.rust[2]);
   // crown and flukes
   b.polyFn([ax - 9, ay + 19, ax + 10, ay + 19, ax + 8, ay + 23, ax + 4, ay + 28, ax + 1, ay + 23, ax - 3, ay + 28, ax - 7, ay + 23], (x, y) => ramp(P.metal, 4.5 - (y - ay - 19) * 0.35 - (x - ax) * 0.05 + dith(x, y, 0.4)));
   hline(b, ax - 8, ax + 9, ay + 19, P.metal[6]);
   b.rect(ax - 1, ay + 17, 4, 3, P.metal[3]);
-  // chain over the bulwark
-  for (let i = 0; i < 7; i++) b.set(ax + 1 + i, ay - 3 - i, i % 2 ? P.metal[5] : P.metal[3]);
+  b.set(ax - 5, ay + 21, P.rust[3]); b.set(ax + 6, ay + 22, P.rust[2]);
+  // chain: alternating side-on and edge-on links from the hawse up over the bulwark to the windlass
+  for (let i = 0; i < 8; i++) {
+    const x = ax + 1 + i, y = ay - 4 - i * 1.4;
+    if (i % 2) { b.rect(x, y - 1, 2, 3, P.metal[4]); b.set(x, y, P.metal[1]); b.set(x, y - 1, P.metal[6]); }
+    else { b.set(x, y, P.metal[5]); b.set(x + 1, y, P.metal[3]); }
+  }
+  // name board on the bow: a varnished plank with gold letters, and the port number under it
+  const nx = 464, ny = 117, tw = textWidth('KITTIWAKE');
+  b.rectFn(nx, ny, tw + 6, 9, (x, y) => {
+    if ((x === nx || x === nx + tw + 5) && (y === ny || y === ny + 8)) return -1;
+    let f = y === ny ? 6 : y === ny + 8 ? 1.2 : 3.6 - (y - ny) * 0.15;
+    f += (noise1(x * 0.35 + y * 5, 8) - 0.5) * 0.6;
+    return ramp(P.varnish, f + dith(x, y, 0.3));
+  });
+  pixelText(b, 'KITTIWAKE', nx + 3, ny + 2, P.yellow[6], P.varnish[0]);
+  pixelText(b, 'PZ 67', nx + 14, ny + 12, P.navy[1], P.cream[3]);
 }
 
-/** Tyre fenders hanging on the topsides. */
+/** Tyre fenders hanging on the topsides from the cap rail. */
 function paintFenders(b: PixelBuffer) {
-  for (const fx of [146, 258, 358]) {
+  for (const fx of FENDERS) {
     const sh = Math.round(sheerY(fx));
-    vline(b, fx, sh + 1, sh + 12, P.rope[3]);
+    // clove hitch on the rail, then the lanyard down
+    b.set(fx - 1, sh - 1, P.rope[4]); b.set(fx + 1, sh - 1, P.rope[4]); b.set(fx, sh - 2, P.rope[5]);
+    for (let y = sh; y <= sh + 11; y++) b.set(fx, y, (y & 1) ? P.rope[2] : P.rope[4]);
     tyre(b, fx, sh + 17, 6);
+    // lanyard through the tyre
+    for (let y = sh + 11; y <= sh + 14; y++) b.set(fx, y, P.rope[3]);
+    // scuffed paint and a dirt shadow behind the tyre
+    for (let k = 0; k < 10; k++) tint(b, fx - 5 + k, sh + 24, P.grime[2], 0.25);
   }
 }
 
-/** Exterior portholes along the lower deck. */
-const PORTHOLES: [number, number][] = [[92, 146], [272, 146], [318, 146], [388, 140], [446, 142]];
+/** Cleats and fairleads on the cap rail. */
+function paintRailFittings(b: PixelBuffer) {
+  for (const cx of [44, 128, 206, 346, 404, 492]) {
+    const sh = Math.round(sheerY(cx));
+    hline(b, cx - 2, cx + 2, sh - 3, P.metal[5]);
+    b.set(cx - 2, sh - 3, P.metal[7]);
+    b.set(cx - 1, sh - 2, P.metal[3]); b.set(cx + 1, sh - 2, P.metal[3]);
+  }
+}
 
 /** Deck gear that shows above the bulwark in exterior view. */
 function paintDeckGearExterior(b: PixelBuffer) {
-  // net heap aft with floats
+  // net heap aft with floats and a trailing corkline
   const dk = Math.round(deckY(86));
-  b.ellipseFn(86, dk - 2, 24, 12, (x, y, nx, ny) => (ny > 0.1 ? -1 : ramp(P.net, 3 - ny * 1.5 - nx * 0.8 + dith(x, y, 1))));
-  for (const [x, y] of [[74, dk - 8], [90, dk - 11], [100, dk - 6]]) {
-    b.disc(x, y, 2, P.yellow[5]);
-    b.set(x - 1, y - 1, P.yellow[6]);
+  b.ellipseFn(86, dk - 8, 24, 12, (x, y, nx, ny) => {
+    if (ny > 0.35) return -1;
+    const mesh = (x + y) % 3 === 0 || (x - y + 300) % 3 === 0;
+    return ramp(P.net, 3 - ny * 1.5 - nx * 0.8 + (mesh ? 0.6 : -0.3) + dith(x, y, 0.7));
+  });
+  for (let x = 64; x < 108; x++) if (hash2(x, 3, 9) > 0.7) b.set(x, dk - 9 - Math.round(Math.sin(x * 0.3) * 1.5 + 5 * (1 - Math.abs(x - 86) / 24)), P.net[4]);
+  for (const [x, y] of [[74, dk - 15], [90, dk - 18], [100, dk - 13], [82, dk - 12]]) {
+    b.disc(x, y, 2, P.orange[4]);
+    b.set(x - 1, y - 1, P.orange[5]);
+    b.set(x + 1, y + 1, P.orange[2]);
   }
-  // windlass drum peeking over the foredeck bulwark
+  // windlass on the foredeck: green casting, chain gypsy, warping drum
   const wx = 500, wd = Math.round(deckY(wx));
   b.rect(wx - 8, wd - 16, 16, 8, P.green[3]);
   b.rect(wx - 8, wd - 16, 16, 2, P.green[5]);
+  hline(b, wx - 8, wx + 7, wd - 9, P.green[1]);
   b.disc(wx + 10, wd - 13, 3, P.metal[4]);
+  b.set(wx + 9, wd - 14, P.metal[6]);
+  b.disc(wx - 11, wd - 13, 2.4, P.metal[3]);
+  b.set(wx - 12, wd - 14, P.metal[5]);
+  b.rect(wx - 2, wd - 20, 5, 4, P.green[2]);
+  // a coiled mooring warp on the foredeck, just peeking over the rail
+  const rx = 470, rd = Math.round(deckY(rx));
+  for (let k = 0; k < 3; k++) b.ellipseFn(rx, rd - 13 - k * 1.2, 9 - k * 1.6, 2.4, (x, y, nx, ny) => (Math.hypot(nx, ny) > 0.55 ? ramp(P.rope, 3.4 - ny * 1.2 - k * 0.2 + dith(x, y, 0.5)) : -1));
 }
 
 /** Paint the full exterior into `b`. Returns the near-bulwark front layer as well. */
-function paintExterior(storm: boolean): { buf: PixelBuffer; back: PixelBuffer; front: PixelBuffer; glow: PixelBuffer } {
+function paintExterior(storm: boolean): { buf: PixelBuffer; back: PixelBuffer; front: PixelBuffer; glow: PixelBuffer; fenders: PixelBuffer } {
   const rng = new Rng(4242);
   const back = new PixelBuffer(BOAT_W, BOAT_H);
   // things behind the hull: rigging, mast, wheelhouse, roof gear, deck gear
-  paintMastAndRig(back, storm, rng);
-  paintWheelhouseShell(back, false, rng);
+  const backFine = new PixelBuffer(BOAT_W, BOAT_H), frontFine = new PixelBuffer(BOAT_W, BOAT_H);
+  paintMastAndRig(back, backFine, storm, rng);
+  paintWheelhouseShell(back, backFine, false, rng);
   paintSternGear(back, rng);
   paintDeckGearExterior(back);
   // the hull (near side) is the front layer in exterior shots
   const front = new PixelBuffer(BOAT_W, BOAT_H);
   paintHullSkin(front, rng);
   paintRunningGear(front);
-  paintBowGear(front, rng);
-  paintFenders(front);
-  for (const [px, py] of PORTHOLES) porthole(front, px, py, 5);
-  // KITTIWAKE on the bow
-  pixelText(front, 'KITTIWAKE', 470, 116, P.navy[1], P.cream[2]);
-  pixelText(front, 'PZ 67', 486, 124, P.navy[2]);
-  // a few rust streaks from portholes
-  for (const [px, py] of PORTHOLES) if (rng.chance(0.6)) rustStreak(front, px + rng.int(-2, 2), py + 6, rng.int(6, 14), rng);
+  paintBowGear(front, frontFine, rng);
+  // fenders hang over the cut line, so they are kept on their own mask and go with the hull side in the cutaway
+  const fenders = new PixelBuffer(BOAT_W, BOAT_H);
+  paintFenders(fenders);
+  front.blit(fenders, 0, 0);
+  paintRailFittings(front);
+  for (const [px, py] of PORTHOLES) {
+    // eyebrow over each port, then the port
+    for (let x = px - 6; x <= px + 6; x++) {
+      const yy = py - 7 + Math.round(((x - px) / 6) ** 2 * 1.5);
+      front.set(x, yy, P.cream[6]);
+      front.set(x, yy + 1, P.cream[2]);
+    }
+    porthole(front, px, py, 5.5);
+  }
+  // rust and tannin streaks from the portholes
+  for (const [px, py] of PORTHOLES) if (rng.chance(0.7)) rustStreak(front, px + rng.int(-2, 2), py + 6, rng.int(6, 16), rng);
   front.outline(OL);
   back.outline(OLc);
+  // thin lines (rigging, rails, whips) go on after the outline pass so they keep their weight
+  backFine.blit(back, 0, 0);
+  back.data.set(backFine.data);
+  front.blit(frontFine, 0, 0);
   const buf = back.clone();
   buf.blit(front, 0, 0);
   // glow: windows and lights (the scene decides when they are lit)
   const glow = new PixelBuffer(BOAT_W, BOAT_H);
-  for (const wx of [228, 260, 292]) glow.rectFn(wx, 34, 26, 30, (x, y) => rgba(255, 214, 150, y > 50 ? 170 : 110 + ((x + y) & 1) * 30));
-  for (const [px, py] of PORTHOLES) glow.discFn(px, py, 3.4, () => rgba(255, 210, 140, 200));
+  for (const wx of [228, 260, 292]) glow.rectFn(wx + 1, 35, 25, 29, (x, y) => rgba(255, 214, 150, y > 50 ? 170 : 110 + ((x + y) & 1) * 30));
+  for (const [px, py] of PORTHOLES) glow.discFn(px, py, 3.2, () => rgba(255, 210, 140, 200));
   glow.rect(423, 6, 3, 2, rgba(255, 255, 240, 255));
   glow.rect(430, 56, 2, 4, rgba(255, 250, 220, 255));
+  glow.rect(427, 51, 2, 2, rgba(255, 250, 235, 255));
   glow.rect(26, 86, 3, 3, rgba(255, 255, 235, 255));
+  glow.rect(344, 11, 3, 3, rgba(120, 255, 160, 255));
   if (storm) wetSheen(buf, 1), wetSheen(back, 1), wetSheen(front, 1);
-  return { buf, back, front, glow };
+  return { buf, back, front, glow, fenders };
 }
 
 /** Storm: darker saturated wet surfaces, bright specular top edges and running rain streaks. */
@@ -1060,6 +1201,7 @@ export interface CutawaySet {
   glow?: PixelBuffer;
 }
 
+
 /** Everything needed to show the Kittiwake as a dollhouse: walk the deck, climb below, see inside. */
 export function paintBoatCutaway(o: PaintOpts = {}): CutawaySet {
   const e = paintExterior(!!o.storm);
@@ -1085,125 +1227,14 @@ export function paintBoatCutaway(o: PaintOpts = {}): CutawaySet {
     for (let x = 0; x < W; x++) {
       const c = e.front.get(x, y);
       if (!(c >>> 24)) continue;
-      if (inHull(x, y)) hull.set(x, y, c);
+      const fender = y > 100 && (e.fenders.get(x, y) | e.fenders.get(x - 1, y) | e.fenders.get(x + 1, y) | e.fenders.get(x, y - 1) | e.fenders.get(x, y + 1)) >>> 24;
+      if (inHull(x, y) || (fender && y > Math.round(deckY(x)) + 1)) hull.set(x, y, c);
       else front.set(x, y, c);
     }
-  // ---- interior
+  // ---- interior rooms
   const b = new PixelBuffer(W, H);
   const g = new PixelBuffer(W, H);
-  const rng = new Rng(21);
-  const G = (x: number, y: number, c: [number, number, number], a = 200) => g.set(x, y, withAlpha(rgba(Math.round(c[0] * 255), Math.round(c[1] * 255), Math.round(c[2] * 255)), a));
-  // back wall paneling (tongue & groove) + frames/ribs, with a curved hull bottom
-  for (let x = BH.engAft; x <= BH.holdFwd; x++) {
-    const top = lowCeil(x);
-    for (let y = top; y < H; y++) {
-      if (!M.at(x, y)) continue;
-      const floor = x > BH.bunkHold + 4 ? HOLD_FLOOR : LOW_FLOOR;
-      if (y > floor + 1) { b.set(x, y, ramp(P.bottom, 1.2 + dith(x, y, 0.6))); continue; } // bilge below the floor
-      const board = Math.floor((x + (y > 160 ? 3 : 0)) / 6);
-      let f = 3 + (noise1(board * 3.1, 7) - 0.5) * 1.6 - (y - top) * 0.012;
-      if ((x + (y > 160 ? 3 : 0)) % 6 === 0) f -= 1.4;
-      if (y === top || y === top + 1) f -= 1.8; // ceiling beam shadow
-      const room = x < BH.engGal ? P.steelIn : x < BH.galBunk ? P.paintIn : x < BH.bunkHold ? P.teak : P.wood;
-      b.set(x, y, ramp(room, f + dith(x, y, 0.5)));
-    }
-  }
-  // ribs every 24px
-  for (let x = BH.engAft + 12; x < BH.holdFwd; x += 24) for (let y = lowCeil(x); y <= LOW_FLOOR; y++) if (M.at(x, y)) { b.set(x, y, P.wood[2]); b.set(x + 1, y, P.wood[4]); }
-  // floors (planks) and bulkheads with doorways
-  const floorAt = (x: number) => (x > BH.bunkHold + 4 ? HOLD_FLOOR : LOW_FLOOR);
-  for (let x = BH.engAft; x <= BH.holdFwd; x++) {
-    const fy = floorAt(x);
-    for (let k = 0; k < 3; k++) b.set(x, fy + k, ramp(P.teak, 5 - k * 1.4 + ((x % 11) === 0 ? -1.5 : 0)));
-  }
-  for (const bx of [BH.engGal, BH.galBunk, BH.bunkHold]) {
-    for (let y = lowCeil(bx); y <= LOW_FLOOR; y++) {
-      const door = y > LOW_FLOOR - 26;
-      for (let k = 0; k < 4; k++) if (!door || k === 0 || k === 3) b.set(bx + k, y, ramp(P.wood, (k === 0 ? 5 : k === 3 ? 1 : 3) + dith(bx + k, y, 0.4)));
-    }
-    hline(b, bx, bx + 3, LOW_FLOOR - 27, P.brass[3]);
-  }
-  // portholes on the back wall (you see the sea through them)
-  for (const px of [140, 262, 380, 452]) porthole(b, px, 146, 5, null, false);
-  // ---- engine room (76..196)
-  rectRamp(b, 130, 164, 58, 36, P.engine, 3, 0.8, 0.6);             // engine block
-  rectRamp(b, 136, 156, 46, 8, P.engine, 4, 0.4);
-  for (let i = 0; i < 4; i++) rectRamp(b, 140 + i * 10, 148, 6, 9, P.metal, 4, 0.6);   // cylinder heads
-  rope(b, 182, 150, 196, 128, 2, P.metal[3]); rope(b, 184, 154, 196, 132, 2, P.metal[5]);
-  for (let i = 0; i < 3; i++) { ring(b, 104 + i * 12, 140, 0, 3.5, () => P.brass[4]); b.set(104 + i * 12, 139, P.metal[1]); b.set(105 + i * 12, 140, P.red[3]); } // gauges
-  rectRamp(b, 84, 180, 24, 4, P.wood, 4, 0.2); vline(b, 86, 184, 201, P.wood[2]); vline(b, 105, 184, 201, P.wood[2]); // workbench
-  for (let i = 0; i < 5; i++) b.set(88 + i * 4, 178 - (i % 2), P.metal[5 - (i % 3)]);              // tools on the bench
-  rectRamp(b, 84, 150, 20, 20, P.wood, 2, 0.2);                                                       // tool board
-  for (let i = 0; i < 4; i++) { vline(b, 87 + i * 4, 152, 158 + (i % 2) * 4, P.metal[5]); b.set(87 + i * 4, 152, P.red[4]); }
-  for (let i = 0; i < 2; i++) rectRamp(b, 112 + i * 9, 186, 8, 15, P.red, 3, 0.8);                   // oil drums
-  G(158, 128, [0.95, 0.92, 0.75]); // lamp glow seed
-  // ---- galley & mess (196..336)
-  rectRamp(b, 232, 176, 30, 26, P.metal, 3, 0.7);                   // stove
-  for (let i = 0; i < 2; i++) ring(b, 240 + i * 14, 176, 0, 3, () => P.metal[1]);
-  rectRamp(b, 236, 168, 10, 8, P.metal, 5, 0.5);                    // pot
-  rectRamp(b, 250, 170, 7, 6, P.brass, 4, 0.5);                     // kettle
-  for (let i = 0; i < 6; i++) { const x = 238 + i; for (let k = 0; k < 4; k++) if (rng.chance(0.5)) g.set(x, 160 - k * 3 - i % 2, withAlpha(rgba(255, 255, 255), 90)); } // steam
-  rectRamp(b, 200, 150, 30, 14, P.wood, 4, 0.3);                     // cupboards
-  hline(b, 200, 229, 156, P.wood[2]); b.set(214, 152, P.brass[5]); b.set(214, 159, P.brass[5]);
-  for (let i = 0; i < 5; i++) rectRamp(b, 202 + i * 5, 140, 3, 7, [P.green, P.red, P.yellow, P.navy, P.brass][i], 3, 0.6); // jars on a shelf
-  hline(b, 200, 230, 148, P.wood[5]);
-  for (let i = 0; i < 3; i++) { vline(b, 268 + i * 6, 128, 134 + i, P.metal[3]); rectRamp(b, 266 + i * 6, 134 + i, 5, 4, P.metal, 4, 0.5); } // hanging pans
-  rectRamp(b, 290, 178, 40, 4, P.teak, 5, 0.3);                     // mess table
-  vline(b, 300, 182, 201, P.teak[2]); vline(b, 320, 182, 201, P.teak[2]);
-  rectRamp(b, 286, 188, 8, 3, P.cushion, 3, 0.4); rectRamp(b, 326, 188, 8, 3, P.cushion, 3, 0.4);
-  rectRamp(b, 294, 174, 6, 4, P.white, 3, 0.4); rectRamp(b, 312, 175, 5, 3, P.brass, 4, 0.3); // plates, mugs
-  // chart of the southern ocean on the wall
-  rectRamp(b, 296, 138, 26, 18, P.paintIn, 5, 0.2);
-  for (let i = 0; i < 20; i++) b.set(299 + i, 147 + Math.round(Math.sin(i * 0.6) * 3), P.navy[3]);
-  b.set(316, 144, P.red[4]); b.set(317, 144, P.red[4]);
-  // ---- bunks (336..424)
-  for (const [y, q] of [[182, P.quiltR], [158, P.quiltB]] as const) {
-    rectRamp(b, 346, y, 56, 3, P.teak, 4, 0.2);
-    rectRamp(b, 348, y - 6, 52, 6, q, 3, 0.8, 0.8);
-    rectRamp(b, 348, y - 7, 10, 5, P.white, 4, 0.5);               // pillow
-  }
-  vline(b, 344, 150, 201, P.teak[2]); vline(b, 403, 150, 201, P.teak[2]);
-  rectRamp(b, 408, 150, 12, 50, P.navy, 2, 0.4);                    // locker
-  for (let y = 156; y < 196; y += 8) hline(b, 410, 418, y, P.navy[0]);
-  rectRamp(b, 360, 128, 14, 18, P.white, 3, 0.3); for (let i = 0; i < 8; i++) b.set(362 + i, 136 + (i % 3), P.green[4]); // poster
-  b.set(386, 136, P.red[4]); vline(b, 386, 136, 146, P.rope[3]);   // hanging jacket hook
-  rectRamp(b, 382, 138, 9, 12, P.yellow, 3, 0.6);                    // rain jacket
-  // ---- hold (424..496): crates, nets, specimen jars
-  for (const [x, y, w, h] of [[430, 176, 20, 20], [452, 184, 16, 12], [436, 158, 14, 18], [470, 180, 18, 16]] as const) {
-    rectRamp(b, x, y, w, h, P.wood, 3, 0.5, 0.8);
-    hline(b, x, x + w - 1, y + Math.floor(h / 2), P.wood[1]);
-    b.set(x + 2, y + 2, P.cream[5]);
-  }
-  for (let i = 0; i < 12; i++) for (let k = 0; k < 10; k++) if ((i + k) % 3 === 0) b.set(472 + i, 150 + k + Math.round(Math.sin(i) * 1), P.net[3]);
-  for (let i = 0; i < 4; i++) rectRamp(b, 452 + i * 5, 172, 4, 8, P.glass, 3, 0.4);              // specimen jars
-  // ---- wheelhouse interior
-  for (let y = WH_CEIL + 2; y < WH_FLOOR; y++) for (let x = WH_X0 + 2; x < WH_X1 - 1; x++) {
-    const win = y > WH_CEIL + 8 && y < WH_CEIL + 34 && ((x - WH_X0) % 30) > 4;
-    b.set(x, y, win ? withAlpha(ramp(P.glass, 4 - (y - WH_CEIL) * 0.06), 110) : ramp(P.teak, 3 + ((x % 8) === 0 ? -1 : 0) + dith(x, y, 0.5)));
-  }
-  rectRamp(b, 276, 80, 30, 22, P.teak, 4, 0.4);                      // helm console
-  for (let i = 0; i < 4; i++) { b.set(280 + i * 6, 84, P.brass[5]); b.set(280 + i * 6, 85, P.brass[2]); }
-  rectRamp(b, 282, 70, 10, 8, P.metal, 1, 0.3); b.set(285, 73, hex('#6affb0')); b.set(287, 74, hex('#6affb0'));   // sonar screen
-  G(286, 73, [0.4, 1, 0.7], 255);
-  rectRamp(b, 226, 84, 32, 4, P.teak, 5, 0.2);                       // chart table
-  rectRamp(b, 228, 80, 26, 4, P.paintIn, 5, 0.2);
-  rectRamp(b, 244, 60, 16, 12, P.metal, 3, 0.4); b.set(248, 64, P.red[4]); b.set(252, 64, hex('#ffd060')); // radio
-  G(248, 64, [1, 0.3, 0.2], 255); G(252, 64, [1, 0.8, 0.3], 255);
-  // lamp glows for the interior rooms (drawn additively)
-  for (const L of BOAT_LAYOUT.lamps.slice(0, 6)) {
-    for (let y = -10; y <= 10; y++) for (let x = -10; x <= 10; x++) {
-      const d = Math.hypot(x, y) / 10;
-      if (d < 1) { const a = Math.round((1 - d) * (1 - d) * 120); if (a > (g.get(L.x + x, L.y + y) >>> 24)) G(L.x + x, L.y + y, L.color, a); }
-    }
-  }
-  for (const L of BOAT_LAYOUT.lamps.slice(0, 5)) { rectRamp(b, L.x - 2, L.y - 2, 5, 4, P.brass, 4, 0.5); b.set(L.x, L.y + 1, hex('#fff2c0')); vline(b, L.x, L.y - 8, L.y - 3, P.metal[3]); }
-  // ladders
-  for (const ld of BOAT_LAYOUT.ladders) {
-    const x0 = ld.x - 5, x1 = ld.x + 5;
-    vline(b, x0, ld.y0, ld.y1, P.wood[5]); vline(b, x1, ld.y0, ld.y1, P.wood[5]);
-    vline(b, x0 + 1, ld.y0, ld.y1, P.wood[2]); vline(b, x1 + 1, ld.y0, ld.y1, P.wood[2]);
-    for (let y = ld.y0 + 3; y < ld.y1; y += 6) hline(b, x0, x1, y, P.wood[4]);
-  }
+  paintInterior(b, g, BOAT_LAYOUT.lamps, BOAT_LAYOUT.ladders, !!o.storm);
   const A = (buf: PixelBuffer): Sprite => ({ buf, ax: PIVOT[0], ay: PIVOT[1] });
   return { interior: { ...A(b), glow: g }, shell: A(shell), hullSide: A(hull), cabinWall: A(cabin), front: A(front), glow: e.glow };
 }
