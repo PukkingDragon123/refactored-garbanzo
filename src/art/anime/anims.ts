@@ -18,7 +18,7 @@ export const ANIME_ANIMS: Record<string, AnimInfo> = {
   // actions
   eat: A(4, 4), eatStand: A(4, 4), cook: A(4, 5), carry: A(8, 10), carryIdle: A(2, 2), carryHeavy: A(8, 6), carryPup: A(8, 10), carryPupIdle: A(2, 2), carryPupRun: A(8, 14), carryPupClimb: A(4, 6), grab: A(4, 12, false),
   pick: A(4, 9, false), kneel: A(4, 5), hammer: A(4, 8), wrench: A(4, 8), camera: A(2, 2), cameraCrouch: A(2, 2), photograph: A(2, 2),
-  fishCast: A(6, 12, false), fishWait: A(4, 2), fishReel: A(4, 10), research: A(4, 3), notebook: A(4, 4), laptop: A(4, 8), type: A(4, 8),
+  fishCast: A(6, 12, false), fishWait: A(4, 2), fishReel: A(4, 10), fishShow: A(4, 5), research: A(4, 3), notebook: A(4, 4), laptop: A(4, 8), type: A(4, 8),
   steer: A(4, 3), dig: A(4, 6), pour: A(4, 5), drink: A(4, 4), build: A(4, 8), sweep: A(4, 6),
   // emotions & talk
   talk: A(4, 5), point: A(2, 2), wave: A(4, 6), celebrate: A(4, 8), cheer: A(2, 4), think: A(2, 1.5), shrug: A(2, 2), facepalm: A(2, 2),
@@ -512,6 +512,18 @@ const POSES: Record<string, PoseFn> = {
     p.ba = { ik: add(s, (3 + cos(a) * 1.2) * k, (-5.4 + sin(a) * 1.2) * k), hand: 'grip' };
     p.props = [prop('rod', 0, 0, 1 + sin(a * 2) * 0.08, { t: 1, s: 0.8 })];
     p.bounce = Math.sin(a * 2) * 0.4;
+    return p;
+  },
+  fishShow: (b, t) => {
+    // the catch held up across the chest in both hands, lifted a little on each beat
+    const k = K(b);
+    const i = Math.floor(t * 4) % 4;
+    const up = [0, 0.7, 1.1, 0.7][i];
+    const p = stand(b, { lean: -0.05, fl: { f: [2.6 * k, b.ankleH] }, bl: { f: [-2.4 * k, b.ankleH] } });
+    const s = shoulderAt(b, p.hip, p.lean);
+    p.fa = { ik: add(s, 6.8 * k, (-1.6 + up) * k), hand: 'grip' };
+    p.ba = { ik: add(s, 2.2 * k, (-2.4 + up) * k), hand: 'grip' };
+    p.bounce = up * 0.25;
     return p;
   },
   research: (b, t) => {

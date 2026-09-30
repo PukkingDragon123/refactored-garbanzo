@@ -63,6 +63,10 @@ export class ShipScene4 extends FieldScene {
   engineOn = true;
   /** fishing line + bobber (world space, drawn outside the rocking transform) */
   bobber: { x: number; y: number; dip: number; fly: number } | null = null;
+  /** fishing effects in world space (cast arc preview, ripples, splashes): packed ABGR pixels */
+  fishFx: { x: number; y: number; c: number }[] | null = null;
+  /** a caught fish held up in Mori's hands (ABGR sprite facing right) */
+  held: { w: number; h: number; px: Uint32Array } | null = null;
   /** Mori is carrying Chunk in his arms */
   carrying = false;
   /** called every frame by the story module */
@@ -160,6 +164,7 @@ export class ShipScene4 extends FieldScene {
     }));
     main.add(new Custom(90, rr => draw(rr, 'deckFront')));
     main.add(new Custom(100, (rr, s) => this.drawLights(rr, s.time)));
+    main.add(new Custom(95, rr => this.drawHeld(rr)));
     // the sea in front of the hull, then rain
     // the near swell sits on the hull's plane vertically, so the waterline matches at any camera height
     st.addLayer('sea-near', BAND_P.near, 0, 0.6, 0, 1).add(this.ocean.band('near'));
@@ -336,23 +341,48 @@ export class ShipScene4 extends FieldScene {
   setBobber(b: { x: number; y: number; dip: number; fly: number } | null) {
     this.bobber = b;
   }
+  setFx(px: { x: number; y: number; c: number }[] | null) {
+    this.fishFx = px;
+  }
+  setHeld(spr: { w: number; h: number; px: Uint32Array } | null) {
+    this.held = spr;
+  }
   private drawLine(r: Renderer) {
+    if (this.fishFx) for (const q of this.fishFx) r.rect(Math.round(q.x), Math.round(q.y), 1, 1, q.c);
     const b = this.bobber;
     if (!b) return;
     const [tx, ty] = this.rodTip();
     const by = b.y + (b.fly > 0 ? 0 : b.dip);
     const n = Math.max(8, Math.ceil(Math.hypot(b.x - tx, by - ty) / 2));
-    const sag = b.fly > 0 ? 0 : Math.min(18, Math.abs(b.x - tx) * 0.12);
+    const sag = b.fly > 0 ? 0 : Math.min(18, Math.abs(b.x - tx) * 0.12) * (b.dip > 5 ? 0.3 : 1);
     for (let i = 0; i <= n; i++) {
       const u = i / n;
       const x = tx + (b.x - tx) * u, y = ty + (by - ty) * u + Math.sin(u * Math.PI) * sag;
       r.rect(Math.round(x), Math.round(y), 1, 1, packColor(0.92, 0.92, 0.95, 0.75));
     }
-    // bobber: red cap, white float
-    const X = Math.round(b.x) - 1, Y = Math.round(by) - 3;
-    r.rect(X, Y, 3, 2, packColor(0.85, 0.2, 0.18, 1));
-    r.rect(X, Y + 2, 3, 2, packColor(0.95, 0.95, 0.92, 1));
-    if (b.dip > 4) for (let i = 0; i < 3; i++) r.rect(X - 3 + i * 3, Y + 4, 2, 1, packColor(1, 1, 1, 0.8));
+    // bobber: red cap, white float; the part under the surface shows only faintly through the water
+    const X = Math.round(b.x) - 1, Y = Math.round(by) - 3, sy = Math.round(b.y) + 1;
+    const row = (y: number, h: number, cr: number, cg: number, cb: number) => {
+      for (let k = 0; k < h; k++) r.rect(X, Y + y + k, 3, 1, packColor(cr, cg, cb, b.fly > 0 || Y + y + k < sy ? 1 : 0.28));
+    };
+    row(0, 2, 0.85, 0.2, 0.18);
+    row(2, 2, 0.95, 0.95, 0.92);
+    if (b.fly <= 0) r.rect(X - 1, sy, 5, 1, packColor(1, 1, 1, 0.55));
+  }
+  /** the catch, held up in Mori's hands */
+  private drawHeld(r: Renderer) {
+    const h = this.held;
+    if (!h) return;
+    const p = this.player;
+    const hand = p.body.handPos();
+    if (!hand) return;
+    // held across the chest in both hands, head toward where he's facing
+    const f = p.facing;
+    const x0 = Math.round(hand[0] - f * 3 - h.w / 2), y0 = Math.round(hand[1] - h.h * 0.6);
+    for (let y = 0; y < h.h; y++) for (let x = 0; x < h.w; x++) {
+      const c = h.px[y * h.w + (f > 0 ? x : h.w - 1 - x)];
+      if (c >>> 24) r.rect(x0 + x, y0 + y, 1, 1, c);
+    }
   }
 
   /** a new resident for the lab tank */
