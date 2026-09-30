@@ -6,7 +6,10 @@
 // materials that read the part's local frame (height up the torso, around a limb, along a sleeve).
 
 import { PixelBuffer } from '../pixel';
-import { Build, Pose, solve, trimPair, P2 } from '../people-rig';
+import { Build, Pose, solve, trimPair, P2, Canvas, PropP } from '../people-rig';
+import { drawProp5 } from '../v5/props';
+import { finish5 } from '../v5/body';
+import type { Ctx, CharDef } from '../people-parts';
 import type { C } from '../color';
 import { Scene3D, V3, Hit, Mat, vadd, vsub, vsc, vnorm, vdot, vlerp, vlen, vcross, cel, Ramp6 } from './raster';
 
@@ -87,8 +90,14 @@ export function lift(ch: Char7, pose: Pose, yaw = YAW): J3 {
   const sh = P(J.shF);
   const shN = vadd(sh, shLat), shFa = vsub(sh, shLat);
   const out = 0.35;
-  const armN = (p: P2): V3 => vadd(shN, [p[0] - J.shF[0], p[1] - J.shF[1], out]);
-  const armF = (p: P2): V3 => vadd(shFa, [p[0] - J.shB[0], p[1] - J.shB[1], -out]);
+  // arms raised above the shoulder splay outward (abduct) so a wave or a cheer clears the face
+  // (the forward reach of a raised arm turns into a sideways reach, the hand up beside the head)
+  const raise = (dx: number, dy: number): [number, number] => {
+    const f = Math.max(0, Math.min(1, (dy + 1) / 6));
+    return [dx * (1 - 0.8 * f), f * (Math.abs(dx) * 0.8 + 1.5) + Math.max(0, dy) * 0.3];
+  };
+  const armN = (p: P2): V3 => { const dx = p[0] - J.shF[0], dy = p[1] - J.shF[1], [x, z] = raise(dx, dy); return vadd(shN, [x, dy, out + z]); };
+  const armF = (p: P2): V3 => { const dx = p[0] - J.shB[0], dy = p[1] - J.shB[1], [x, z] = raise(dx, dy); return vadd(shFa, [x, dy, -out - z]); };
   const hip = P(J.hip);
   const hpN = vadd(P(J.hipF), hpLat), hpF = vsub(P(J.hipB), hpLat);
   // feet keep their own tracks, a touch narrower than the hips
@@ -168,7 +177,9 @@ export function renderBody7(ch: Char7, pose: Pose): Frame7 {
   // ---- arms (upper, fore, hand)
   const arm = (near: boolean) => {
     const g = near ? G.armN : G.armF;
-    if (front.has(near ? 'armF' : 'armB')) s.layer = 1;
+    // a raised near arm (waving, cheering, hand at the face) goes in front of the head
+    const raised = near && (J.wrN[1] > J.neckTop[1] - 3 || J.elN[1] > J.neckTop[1] - 1);
+    if (front.has(near ? 'armF' : 'armB') || raised) s.layer = 1;
     const sh = near ? J.shN : J.shF, el = near ? J.elN : J.elF, wr = near ? J.wrN : J.wrF;
     const [r0, r1, r2] = ch.armR;
     s.limb(sh, el, r0, r1, g, pm(ch.upperArm, near));
@@ -189,6 +200,7 @@ export function renderBody7(ch: Char7, pose: Pose): Frame7 {
   arm(true);
 
   const r = s.finish({ ink: ch.ink });
+  if (pose.props?.length) drawProps(ch, pose, J, r.back, r.front ?? (r.front = new PixelBuffer(CW, CH)));
   const tr = trimPair(r.back, r.front, 1);
   const nt = J.neckTop;
   return {
@@ -201,3 +213,31 @@ export function renderBody7(ch: Char7, pose: Pose): Frame7 {
 }
 
 const flat = (v: V3): V3 => vnorm([v[0], 0, v[2]]);
+
+/**
+ * Held props reuse the side-view prop painter, placed at the projected 3D hands (absolute props are
+ * squeezed toward the body by the yaw). 'back' props go behind the body, the rest over it.
+ */
+function drawProps(ch: Char7, pose: Pose, J: J3, back: PixelBuffer, front: PixelBuffer) {
+  const b = { ...ch.build, shF: 0, shB: 0, legF: 0, legB: 0 };
+  const J2 = solve(b, pose);
+  J2.wrF = [J.wrN[0], J.wrN[1]];
+  J2.wrB = [J.wrF[0], J.wrF[1]];
+  const k = Math.cos(J.yaw);
+  for (const pr of pose.props ?? []) {
+    const c = new Canvas(CW, CH, OX, OY);
+    const q: PropP = pr.t ? { ...pr } : { ...pr, x: pr.x * k };
+    const x = { c, J: J2, P: pose, b, ch: ch as unknown as CharDef, anim: '', t: 0 } as unknown as Ctx;
+    drawProp5(x, q);
+    finish5(c.back);
+    const z = pr.z ?? 'hand';
+    const dst = pr.front ? front : back;
+    const d = c.back.data;
+    for (let i = 0; i < d.length; i++) {
+      const v = d[i];
+      if (!(v >>> 24)) continue;
+      if (z === 'back' && (dst.data[i] >>> 24)) continue;
+      dst.data[i] = v;
+    }
+  }
+}
