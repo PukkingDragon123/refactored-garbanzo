@@ -32,6 +32,16 @@ const CSS = `
   background: repeating-conic-gradient(rgba(255,240,200,0.16) 0 4deg, transparent 4deg 12deg); animation: cuBurst 1.9s ease-out both; }
 .cu-burst.bad { background: repeating-conic-gradient(rgba(200,220,255,0.1) 0 4deg, transparent 4deg 12deg); }
 @keyframes cuBurst { from { opacity: 0; transform: scale(0.4) rotate(0deg); } 15% { opacity: 1; } to { opacity: 0; transform: scale(1.1) rotate(25deg); } }
+.cu-say { position: absolute; left: 4%; top: 5%; max-width: min(56vw, 640px); pointer-events: none; font-family: 'Pixelify Sans', monospace; font-size: clamp(14px, 2vw, 21px);
+  line-height: 1.3; color: #0c0a0c; background: #fff; padding: 0.4em 0.7em 0.45em; box-shadow: 0 0 0 3px #0c0a0c, 5px 6px 0 3px rgba(0,0,0,0.45); transform-origin: 10% 100%;
+  animation: cuSay 0.3s cubic-bezier(.2,1.7,.4,1) both; }
+.cu-say.right { left: auto; right: 4%; transform-origin: 90% 100%; }
+.cu-say b { position: absolute; left: -3px; top: -1.55em; font-family: 'Silkscreen', monospace; font-size: 0.7em; letter-spacing: 0.08em; color: #fff; background: #0c0a0c; padding: 0.15em 0.6em;
+  box-shadow: inset 0.35em 0 0 var(--c, #3fbca6); }
+.cu-say.shout { font-weight: 700; animation: cuSay 0.3s cubic-bezier(.2,1.7,.4,1) both, cuShk 0.1s steps(2) infinite 0.3s; }
+.cu-say em { font-style: normal; color: #d0301e; }
+@keyframes cuSay { 0% { transform: scale(0.2); opacity: 0; } 45% { transform: scale(1.12, 0.9); opacity: 1; } 75% { transform: scale(0.96, 1.04); } 100% { transform: none; } }
+@keyframes cuShk { 50% { transform: translate(2px, -1px); } }
 .cu-flash { position: absolute; inset: 0; background: #fff; pointer-events: none; animation: cuFlash 0.35s ease-out both; }
 @keyframes cuFlash { from { opacity: 0.8; } to { opacity: 0; } }
 `;
@@ -47,6 +57,8 @@ export interface Closeup {
   hint(html: string, ms?: number): void;
   result(word: string, sub?: string, bad?: boolean): Promise<void>;
   flash(): void;
+  /** a character's line as an anime speech bubble in the corner (cleared by the next line or after ms) */
+  say(name: string, text: string, o?: { color?: string; shout?: boolean; right?: boolean; ms?: number }): void;
   close(): Promise<void>;
 }
 
@@ -72,6 +84,7 @@ export function openCloseup(): Closeup {
   fit();
   window.addEventListener('resize', fit);
   let hintT: ReturnType<typeof setTimeout> | null = null;
+  let sayEl: HTMLElement | null = null, sayT: ReturnType<typeof setTimeout> | null = null;
   const c: Closeup = {
     wrap, cv, buf, closed: false,
     present() { g.putImageData(img, 0, 0); },
@@ -88,6 +101,15 @@ export function openCloseup(): Closeup {
       return new Promise(res => setTimeout(() => { b.remove(); r.remove(); res(); }, 1900));
     },
     flash() { const f = el('div', 'cu-flash'); wrap.appendChild(f); setTimeout(() => f.remove(), 360); },
+    say(name, text, o = {}) {
+      sayEl?.remove();
+      if (sayT) clearTimeout(sayT);
+      const b = el('div', 'cu-say' + (o.shout ? ' shout' : '') + (o.right ? ' right' : ''), `<b>${name.toUpperCase()}</b>${text.replace(/\*([^*]+)\*/g, '<em>$1</em>')}`);
+      if (o.color) b.style.setProperty('--c', o.color);
+      wrap.appendChild(b);
+      sayEl = b;
+      sayT = setTimeout(() => { b.remove(); if (sayEl === b) sayEl = null; }, o.ms ?? 3600);
+    },
     close() {
       if (c.closed) return Promise.resolve();
       c.closed = true;
