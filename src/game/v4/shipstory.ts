@@ -451,7 +451,7 @@ export class ShipStory {
 
   private async engineFix() {
     const s = this.s;
-    const { runEngineRepair } = await import('../../ui/v4/engine');
+    const { runEngineRepair } = await import('../../ui/v6/engine');
     const ok = await runEngineRepair({
       onStep: async (k: string) => {
         // mirror the minigame with the sprites

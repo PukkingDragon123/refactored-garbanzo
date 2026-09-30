@@ -78,7 +78,7 @@ async function boot() {
     noodles: async () => (await import('./ui/v4/noodles')).runNoodleGame(),
     standoff: async () => { const a = await import('./game/v4/islearoha'); return (await import('./ui/v6/standoff')).runNegotiation(a.ROUNDS, a.EXTRA); },
     ramen: async () => (await import('./ui/v6/ramen')).runRamenPour(),
-    engine: async () => (await import('./ui/v4/engine')).runEngineRepair({}),
+    engine: async () => (await import('./ui/v6/engine')).runEngineRepair({}),
     /** stand Mori at the stern (ship scene) and go fishing; resolves with the catch or null */
     fish: async () => {
       const s = game.scene as unknown as { player: { x: number; y: number; facing: number }; snapCamera?(): void; cutscene: boolean };
