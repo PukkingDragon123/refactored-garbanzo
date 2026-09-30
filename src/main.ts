@@ -103,6 +103,8 @@ async function boot() {
       (window as unknown as { __fish?: unknown }).__fish = r;
       return r;
     },
+    steady: async () => (await import('./ui/v6/camp')).holdSteady('Hold the tent pole steady', 'Press <span class="key">Space</span> as the pole comes upright. Three pegs!'),
+    knot: async () => (await import('./ui/v6/camp')).lashingKnot(),
   };
 }
 

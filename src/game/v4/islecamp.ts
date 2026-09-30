@@ -446,7 +446,7 @@ export class IsleCamp {
       s.joshu.setAnim('hammer');
       const { holdSteady } = await import('./islearoha');
       st.pose('grab');
-      const ok = await holdSteady('Hold the tent pole steady', 'Press <span class="key">Space</span> when the marker is in the green. Three pegs!');
+      const ok = await holdSteady('Hold the tent pole steady', 'Press <span class="key">Space</span> as the pole comes upright. Three pegs!');
       st.pose(null);
       s.joshu.setAnim('idle');
       this.doneJob('tent');
