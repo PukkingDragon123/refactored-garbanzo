@@ -90,7 +90,7 @@ export class ShipScene4 extends FieldScene {
     const sub = this.phase === 'storm' || this.phase === 'wave' ? 'Day 1 · The storm' : 'Day 1 at sea';
     return {
       place: 'The Kittiwake', sub,
-      keys: '<span class="key">A</span><span class="key">D</span> move · <span class="key">W</span><span class="key">S</span> ladders · <span class="key">E</span> interact · <span class="key">Q</span> camera · <span class="key">Shift</span> run',
+      keys: '<span class="key">A</span><span class="key">D</span> move · <span class="key">W</span><span class="key">S</span> ladders · <span class="key">E</span> interact · <span class="key">Q</span> camera',
     };
   }
 

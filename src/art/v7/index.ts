@@ -22,7 +22,7 @@ export const ANIMS: Record<string, AnimInfo> = ANIMS7;
 export function animFor(id: string, anim: string): AnimInfo | null {
   id = norm(id);
   if (id === 'chunk') return CHUNK_ANIMS[anim] ?? null;
-  return animInfo7((CAST7[id] ?? CAST7.mori).build, anim);
+  return animInfo7((CAST7[id] ?? CAST7.mori).build, anim, id);
 }
 
 const human = () => [...ANIME_COMMON];

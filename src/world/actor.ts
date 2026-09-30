@@ -6,7 +6,7 @@ import type { Renderer, Frame } from '../gfx/renderer';
 import { packColor, WHITE } from '../gfx/renderer';
 import type { Drawable, Stage, Layer } from './stage';
 import type { Terrain } from './terrain';
-import type { PixelBuffer } from '../art/pixel';
+import { PixelBuffer } from '../art/pixel';
 import type { Speaker } from '../ui/bubbles';
 import { atlas, A } from '../game/assets';
 import { game } from '../game/game';
@@ -46,6 +46,27 @@ interface BodyCache { back: Frame; front: Frame | null; ax: number; ay: number; 
 const bodyCache = new Map<string, BodyCache>();
 const headCache = new Map<string, Frame>();
 const emoteCache = new Map<string, Frame[]>();
+const SLEEP = new Set(['sleep', 'sleepBunk', 'sleepBag']);
+let zFrames: Frame[] | null = null;
+/** pixel Z glyphs (big, small) with a dark outline, for the sleeping effect */
+function zGlyphs(): Frame[] {
+  if (zFrames) return zFrames;
+  const make = (rows: string[], key: string) => {
+    const w = rows[0].length + 2, h = rows.length + 2;
+    const pb = new PixelBuffer(w, h);
+    const on = (x: number, y: number) => y >= 0 && y < rows.length && x >= 0 && x < rows[0].length && rows[y][x] === '#';
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (on(x - 1, y - 1)) pb.data[y * w + x] = y < h / 2 ? 0xfffff4ec : 0xffe8d8c8;
+      else if (on(x - 2, y - 1) || on(x, y - 1) || on(x - 1, y - 2) || on(x - 1, y)) pb.data[y * w + x] = 0xff3a2436;
+    }
+    return atlas.add(key, pb, w / 2, h / 2);
+  };
+  zFrames = [
+    make(['#####', '...#.', '..#..', '.#...', '#####'], 'fx:z5'),
+    make(['###', '.#.', '###'], 'fx:z3'),
+  ];
+  return zFrames;
+}
 
 function bodyFrame(id: string, anim: string, frame: number): BodyCache | null {
   if (!people) return null;
@@ -472,6 +493,18 @@ export class Actor implements Drawable {
     r.draw(b.back, x, y, sx, sy, 0, col);
     if (!b.headBehind && head) r.draw(head, hx, hy, sx, hsy, hr, col);
     if (b.front) r.draw(b.front, x, y, sx, sy, 0, col);
+    // sleeping: Z's drifting up from the head, swaying, growing and fading out
+    if (SLEEP.has(this.anim)) {
+      const zs = zGlyphs(), t = this.animT;
+      for (let i = 0; i < 3; i++) {
+        const ph = (t * 0.32 + i / 3) % 1;
+        const a = Math.min(1, ph * 4) * Math.min(1, (1 - ph) * 2.5) * this.alpha;
+        const zx = hx + f * (3 + ph * 9) + Math.sin(ph * 6.3 + i) * 2.2, zy = hy - 6 - ph * 16;
+        r.emissive(0.6);
+        r.draw(ph < 0.4 ? zs[1] : zs[0], zx, zy, 0.7 + ph * 0.5, 0.7 + ph * 0.5, Math.sin(ph * 5 + i) * 0.2, packColor(1, 1, 1, a));
+        r.emissive();
+      }
+    }
     // emote above head
     if (this.emote) {
       const fr = emoteAnim(this.emote.kind);

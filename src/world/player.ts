@@ -34,6 +34,8 @@ export class Player implements Drawable {
   private pendT = 0;
   crouch = false;
   running = false;
+  /** running disabled (aboard the boat: you walk the decks) */
+  noRun = false;
   state: PState = 'normal';
   anim = 'idle';
   t = 0;
@@ -234,7 +236,7 @@ export class Player implements Drawable {
         return;
       }
     }
-    this.running = canControl && inp.down('run') && !this.crouch && !this.camera;
+    this.running = canControl && !this.noRun && inp.down('run') && !this.crouch && !this.camera;
     if (this.running && Math.abs(this.vx) > 80 * this.speedK) this.sinceRun = 0;
     const speed = (this.state === 'script' ? this.scriptSpeed : this.camera ? 28 : this.crouch ? 26 : this.running ? 118 : 60) * this.speedK;
     const target = ax * speed;

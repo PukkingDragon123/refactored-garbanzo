@@ -107,16 +107,31 @@ export function lift(ch: Char7, pose: Pose, yaw0 = YAW): J3 {
     const f = Math.max(0, Math.min(1, (dy + 1) / 6));
     return [dx * (1 - 0.8 * f), f * (Math.abs(dx) * 0.8 + 1.5) + Math.max(0, dy) * 0.3];
   };
-  const armN = (p: P2): V3 => { const dx = p[0] - J.shF[0], dy = p[1] - J.shF[1], [x, z] = raise(dx, dy); return vadd(shN, [x, dy, out + z]); };
-  const armF = (p: P2): V3 => { const dx = p[0] - J.shB[0], dy = p[1] - J.shB[1], [x, z] = raise(dx, dy); return vadd(shFa, [x, dy, -out - z]); };
-  const hip = P(J.hip);
-  const hpN = vadd(P(J.hipF), hpLat), hpF = vsub(P(J.hipB), hpLat);
-  // knees and feet hang off their hip, stepping in the legs' own (shallower) yaw
-  const legW = (hp: V3, root: P2, p: P2): V3 => vadd(W(hp), Wl([p[0] - root[0], p[1] - root[1], 0]));
+  // personality flags: lateral hip shift (sx), shoulder roll, sideways reach per arm (aoN / aoF)
+  const fl = pose.flags ?? {};
+  const sx = fl.sx ?? 0, roll = fl.roll ?? 0, aoN = fl.aoN ?? 0, aoF = fl.aoF ?? 0;
+  const shift: V3 = [0, 0, sx];
+  // swinging arms move along the direction of travel (a turn between torso and legs); arms that
+  // hold or reach for something (IK) stay in the torso's frame
+  const { W: Wa } = yawer(back ? yaw : yaw * 0.55);
+  const armW = (ik: boolean) => (ik ? W : Wa);
+  const armPt = (sh3: V3, root: P2, p: P2, side: number, ao: number, ik: boolean, k: number): V3 => {
+    const dx = p[0] - root[0], dy = p[1] - root[1], [x, z] = raise(dx, dy);
+    return vadd(W(sh3), armW(ik)([x, dy, side * (out + z + ao * k)]));
+  };
+  const hip = vadd(P(J.hip), shift);
+  const hpN = vadd(vadd(P(J.hipF), hpLat), shift), hpF = vadd(vsub(P(J.hipB), hpLat), shift);
+  const shN2 = vadd(vadd(shN, shift), [0, roll * ch.shW, 0]), shF2 = vadd(vadd(shFa, shift), [0, -roll * ch.shW, 0]);
+  const ikN = !!pose.fa.ik, ikF = !!pose.ba.ik;
+  // knees and feet hang off their hip, stepping in the legs' own (shallower) yaw; the feet stay put
+  // when the hips shift sideways (the knee takes half of it)
+  const legW = (hp: V3, root: P2, p: P2, k = 1): V3 => vsub(vadd(W(hp), Wl([p[0] - root[0], p[1] - root[1], 0])), W(vsc(shift, k)));
   const j = {
-    hip: W(hip), neckBase: W(P(J.neckBase)), neckTop: W(P(J.neckTop)),
-    shN: W(shN), shF: W(shFa), elN: W(armN(J.elF)), elF: W(armF(J.elB)), wrN: W(armN(J.wrF)), wrF: W(armF(J.wrB)),
-    hpN: W(hpN), hpF: W(hpF), knN: legW(hpN, J.hipF, J.knF), knF: legW(hpF, J.hipB, J.knB), anN: legW(hpN, J.hipF, J.anF), anF: legW(hpF, J.hipB, J.anB),
+    hip: W(hip), neckBase: W(vadd(P(J.neckBase), shift)), neckTop: W(vadd(P(J.neckTop), shift)),
+    shN: W(shN2), shF: W(shF2),
+    elN: armPt(shN2, J.shF, J.elF, 1, aoN, ikN, 0.6), elF: armPt(shF2, J.shB, J.elB, -1, aoF, ikF, 0.6),
+    wrN: armPt(shN2, J.shF, J.wrF, 1, aoN, ikN, 1), wrF: armPt(shF2, J.shB, J.wrB, -1, aoF, ikF, 1),
+    hpN: W(hpN), hpF: W(hpF), knN: legW(hpN, J.hipF, J.knF, 0.5), knF: legW(hpF, J.hipB, J.knB, 0.5), anN: legW(hpN, J.hipF, J.anF), anF: legW(hpF, J.hipB, J.anB),
     up: W(upS), fwd: W(twist(fwS, tw * 0.5)), lat: W(twist(latS, tw * 0.5)), yaw, legFwd: Wl([1, 0, 0]),
   } as J3;
   const T0 = W(hip);
@@ -127,7 +142,7 @@ export function lift(ch: Char7, pose: Pose, yaw0 = YAW): J3 {
 
 const CW = 128, CH = 118, OX = 64, OY = 100;
 
-export interface Frame7 { back: PixelBuffer; front: PixelBuffer | null; ax: number; ay: number; hx: number; hy: number; hand: [number, number]; look?: 'fwd' | 'up' | 'down' | 'back'; headBehind?: boolean; hrot?: number; hair?: number }
+export interface Frame7 { back: PixelBuffer; front: PixelBuffer | null; ax: number; ay: number; hx: number; hy: number; hand: [number, number]; look?: 'fwd' | 'up' | 'down' | 'back'; headBehind?: boolean; hrot?: number; hflip?: boolean; hair?: number }
 
 export function renderBody7(ch: Char7, pose: Pose): Frame7 {
   const s = new Scene3D(CW, CH, OX, OY);
@@ -211,7 +226,7 @@ export function renderBody7(ch: Char7, pose: Pose): Frame7 {
     ax: OX - tr.ox, ay: OY - tr.oy,
     hx: Math.round(OX + nt[0]) - tr.ox, hy: Math.round(OY - nt[1]) - tr.oy,
     hand: [Math.round(OX + J.wrN[0]) - tr.ox, Math.round(OY - J.wrN[1]) - tr.oy],
-    look: pose.flags?.back ? 'back' : pose.look, headBehind: pose.headBehind || undefined, hrot: pose.flags?.hrot,
+    look: pose.flags?.back ? 'back' : pose.look, headBehind: pose.headBehind || undefined, hrot: pose.flags?.hrot, hflip: (pose.flags?.hrot ?? 0) < 0 || undefined,
   };
 }
 
@@ -257,9 +272,12 @@ function hand7(s: Scene3D, wr: V3, el: V3, J: J3, near: boolean, type: string, k
   side = vnorm(side);
   let n = vnorm(vcross(d, side));
   if (vdot(n, J.lat) * (near ? 1 : -1) > 0) n = vsc(n, -1);
-  const P = (a: number, b: number, c: number): V3 => vadd(wr, vadd(vsc(d, a * k), vadd(vsc(side, b * k), vsc(n, c * k))));
-  // palm (the heel of the hand overlaps the wrist)
-  s.ellipsoid(P(1.0, 0, 0), vsc(d, 1.2 * k), vsc(side, 1.02 * k), vsc(n, 0.58 * k), g, mat);
+  const WR = 0.75;
+  const P = (a: number, b: number, c: number): V3 => vadd(wr, vadd(vsc(d, (a + WR) * k), vadd(vsc(side, b * k), vsc(n, c * k))));
+  // wrist: slimmer than the forearm, flaring into the heel of the hand
+  s.limb(wr, P(0, 0, 0), 0.72 * k, 0.66 * k, g, mat);
+  // palm
+  s.ellipsoid(P(1.0, 0, 0), vsc(d, 1.15 * k), vsc(side, 1.0 * k), vsc(n, 0.56 * k), g, mat);
   const fr = 0.46 * k;
   const curl = CURL[type] ?? 0.5;
   const LEN = [1.45, 1.7, 1.6, 1.25], OFF = [0.64, 0.22, -0.22, -0.62];

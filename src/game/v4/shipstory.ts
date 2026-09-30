@@ -49,6 +49,7 @@ export class ShipStory {
     const s = this.s;
     s.player.ground = 'wood';
     s.player.speedK = 0.8;
+    s.player.noRun = true;
     s.st.cam.tzoom = s.st.cam.zoom = 1.12;
     // Mori's bunk is a little platform so he can lie on it
     s.st.terrain.addPlatform([[348, 182], [398, 182]], 'bridge');

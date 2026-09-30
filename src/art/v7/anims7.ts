@@ -31,9 +31,34 @@ export const ANIMS7: Record<string, AnimInfo7> = {
 
 // ------------------------------------------------------------------ gait
 
-interface Gait { stride: number; stance: number; lift: number; bob: number; lean: number; swing: number; elbow: number; elbowSwing: number; drop: number; kick: number; flight: number; hand: ArmP['hand'] }
-const WALK = (b: Build): Gait => ({ stride: b.thigh * 1.5, stance: 0.6, lift: 2.3 * K(b), bob: 0.8 * K(b), lean: 0.05, swing: 0.36, elbow: 0.22, elbowSwing: 0.3, drop: 0.3 * K(b), kick: 0.2, flight: 0, hand: 'relax' });
-const RUN = (b: Build): Gait => ({ stride: b.thigh * 2.2, stance: 0.36, lift: 5.6 * K(b), bob: 1.2 * K(b), lean: 0.24, swing: 0.72, elbow: 1.3, elbowSwing: 0.28, drop: 1.1 * K(b), kick: 1, flight: 0.9 * K(b), hand: 'relax' });
+interface Gait { stride: number; stance: number; lift: number; bob: number; lean: number; swing: number; elbow: number; elbowSwing: number; drop: number; kick: number; flight: number; hand: ArmP['hand']; sway?: number; roll?: number; armOut?: number; headBob?: number }
+// personality gaits (k-scaled): each cast member moves their own way
+type GaitSet = { walk: (b: Build) => Gait; run: (b: Build) => Gait };
+const GAITS: Record<string, GaitSet> = {
+  // Mori: easy-going naturalist, loose arms, a relaxed lope when he runs
+  mori: {
+    walk: b => ({ stride: b.thigh * 1.45, stance: 0.6, lift: 2.3 * K(b), bob: 0.8 * K(b), lean: 0.05, swing: 0.4, elbow: 0.22, elbowSwing: 0.3, drop: 0.3 * K(b), kick: 0.2, flight: 0, hand: 'relax', sway: 0.35 * K(b) }),
+    run: b => ({ stride: b.thigh * 2.2, stance: 0.36, lift: 5.4 * K(b), bob: 1.2 * K(b), lean: 0.22, swing: 0.62, elbow: 1.2, elbowSwing: 0.25, drop: 1.1 * K(b), kick: 1, flight: 0.9 * K(b), hand: 'relax', sway: 0.25 * K(b) }),
+  },
+  // Jenna: quick light steps with a bounce and a hip sway, hands a little out from her sides
+  jenna: {
+    walk: b => ({ stride: b.thigh * 1.15, stance: 0.58, lift: 2.8 * K(b), bob: 1.25 * K(b), lean: 0.0, swing: 0.34, elbow: 0.75, elbowSwing: 0.35, drop: 0.35 * K(b), kick: 0.5, flight: 0, hand: 'relax', sway: 0.55 * K(b), roll: 0.05, armOut: 1.1 }),
+    run: b => ({ stride: b.thigh * 1.75, stance: 0.38, lift: 5.2 * K(b), bob: 1.4 * K(b), lean: 0.14, swing: 0.7, elbow: 1.0, elbowSwing: 0.45, drop: 0.9 * K(b), kick: 1.3, flight: 0.9 * K(b), hand: 'open', sway: 0.45 * K(b), armOut: 1.7 }),
+  },
+  // Aroha: upright and grounded, long smooth strides; runs like an athlete
+  aroha: {
+    walk: b => ({ stride: b.thigh * 1.65, stance: 0.62, lift: 2.0 * K(b), bob: 0.5 * K(b), lean: -0.01, swing: 0.3, elbow: 0.16, elbowSwing: 0.2, drop: 0.25 * K(b), kick: 0.2, flight: 0, hand: 'relax', sway: 0.4 * K(b), roll: 0.02 }),
+    run: b => ({ stride: b.thigh * 2.5, stance: 0.33, lift: 6.4 * K(b), bob: 1.0 * K(b), lean: 0.3, swing: 0.8, elbow: 1.45, elbowSwing: 0.2, drop: 1.2 * K(b), kick: 1, flight: 1.2 * K(b), hand: 'grip' }),
+  },
+  // Joshu: a heavy sailor's roll, short strides rocking side to side, arms held out round the belly
+  joshu: {
+    walk: b => ({ stride: b.thigh * 1.05, stance: 0.64, lift: 1.6 * K(b), bob: 0.45 * K(b), lean: -0.05, swing: 0.24, elbow: 0.36, elbowSwing: 0.15, drop: 0.3 * K(b), kick: 0, flight: 0, hand: 'relax', sway: 1.1 * K(b), roll: 0.09, armOut: 1.8 }),
+    run: b => ({ stride: b.thigh * 1.5, stance: 0.46, lift: 3.2 * K(b), bob: 1.3 * K(b), lean: 0.08, swing: 0.5, elbow: 1.1, elbowSwing: 0.2, drop: 0.9 * K(b), kick: 0.3, flight: 0.3 * K(b), hand: 'fist', sway: 0.8 * K(b), roll: 0.07, armOut: 2.2 }),
+  },
+};
+const gaitOf = (id: string) => GAITS[id] ?? GAITS.mori;
+const WALK = (b: Build, id = 'mori') => gaitOf(id).walk(b);
+const RUN = (b: Build, id = 'mori') => gaitOf(id).run(b);
 
 /** px travelled per cycle on screen: a foot slides back S over the stance, in the legs' yaw */
 export const gaitDist = (g: Gait) => (g.stride * LEG_YAW) / g.stance;
@@ -82,6 +107,8 @@ function gait(b: Build, t: number, g: Gait): Pose {
     fl: foot(b, g, t, -0.3 * k), bl: foot(b, g, t + 0.5, 0.4 * k),
     sway: (g.flight > 0 ? 1.1 : 0.35) + 0.35 * Math.sin(TAU * 2 * t),
     bounce: -bob * 0.4,
+    // the hips rock over the loaded leg, the shoulders roll with them
+    flags: { sx: (g.sway ?? 0) * Math.sin(TAU * t), roll: (g.roll ?? 0) * Math.sin(TAU * t), aoN: g.armOut ?? 0, aoF: g.armOut ?? 0 },
   };
   return p;
 }
@@ -125,11 +152,11 @@ function climb(b: Build, t: number): Pose {
 
 // ------------------------------------------------------------------ idle
 
-function idle(b: Build, t: number): Pose {
+function idle(b: Build, t: number, id: string): Pose {
   const k = K(b), br = Math.sin(TAU * t), sh = Math.sin(TAU * t + 0.8);
   const p = stand(b);
   // weight settled on the back leg, a slow breath, the arms hanging loose and swaying a touch
-  p.hip = [0.35 * k * sh, b.hipH - 0.35 - (br < 0 ? 0.35 : 0) * (-br)];
+  p.hip = [0.35 * k * sh, b.hipH - 0.35 - Math.max(0, -br) * 0.35];
   p.lean = 0.02 + br * 0.012;
   p.sq = 1 + br * 0.018;
   p.fl = { f: [-2.2 * k, b.ankleH], fa: 0 };
@@ -137,14 +164,41 @@ function idle(b: Build, t: number): Pose {
   p.fa = { a: 0.08 + br * 0.04 + sh * 0.02, e: 0.34 - br * 0.05, hand: 'relax' };
   p.ba = { a: -0.08 - br * 0.03, e: 0.28 + br * 0.04, hand: 'relax' };
   p.sway = 0.2 + 0.2 * br;
+  const hip = p.hip;
+  if (id === 'jenna') {
+    // hands clasped in front, rocking gently on her heels, a little head tilt
+    p.fa = { ik: [hip[0] + 3.4 * k, hip[1] + 1.4 * k + br * 0.2], hand: 'relax' };
+    p.ba = { ik: [hip[0] + 3.2 * k, hip[1] + 1.1 * k + br * 0.2], hand: 'relax' };
+    p.hip = [hip[0] + 0.3 * k * Math.sin(TAU * t * 2), hip[1]];
+    p.hd = [0.3 * k * sh, 0];
+    p.fl = { f: [-1.4 * k, b.ankleH], fa: 0 };
+    p.bl = { f: [1.2 * k, b.ankleH + Math.max(0, br) * 0.6], fa: Math.max(0, br) * 0.25 };
+    p.flags = { aoN: -3.2, aoF: -3.2, sx: 0.4 * k * sh };
+  } else if (id === 'aroha') {
+    // a hand on her hip, weight on the back leg, calm and watchful
+    p.fa = { ik: [hip[0] + 0.6 * k, hip[1] + 2.6 * k], hand: 'fist' };
+    p.flags = { aoN: 2.6, sx: 0.5 * k };
+    p.lean = 0.0 + br * 0.01;
+  } else if (id === 'joshu') {
+    // fists on his hips, chest out, rocking on his sea legs; the belly rises and falls
+    p.fa = { ik: [hip[0] + 0.4 * k, hip[1] + 2.4 * k], hand: 'fist' };
+    p.ba = { ik: [hip[0] - 0.2 * k, hip[1] + 2.4 * k], hand: 'fist' };
+    p.lean = -0.04 + br * 0.015;
+    p.sq = 1 + br * 0.03;
+    p.fl = { f: [-2.6 * k, b.ankleH], fa: 0 };
+    p.bl = { f: [2.8 * k, b.ankleH], fa: 0 };
+    p.flags = { aoN: 3.2, aoF: 3.2, sx: 0.7 * k * Math.sin(TAU * t), roll: 0.03 * Math.sin(TAU * t) };
+  } else {
+    p.flags = { sx: 0.3 * k * sh };
+  }
   return p;
 }
 
-const POSES7: Record<string, (b: Build, t: number) => Pose> = {
+const POSES7: Record<string, (b: Build, t: number, id: string) => Pose> = {
   idle,
-  walk: (b, t) => gait(b, t, WALK(b)),
-  run: (b, t) => gait(b, t, RUN(b)),
-  climb,
+  walk: (b, t, id) => gait(b, t, WALK(b, id)),
+  run: (b, t, id) => gait(b, t, RUN(b, id)),
+  climb: (b, t) => climb(b, t),
   climbIdle: b => climb(b, 0.25),
 };
 
@@ -154,15 +208,15 @@ export function pose7(id: string, anim: string, b: Build, frame: number): Pose {
   const info = ANIMS7[anim];
   const n = info.frames;
   const t = n <= 1 ? 0 : info.loop ? frame / n : frame / (n - 1);
-  return fn(b, t);
+  return fn(b, t, id);
 }
 
 /** per-character clip info: distance-driven locomotion needs the character's own stride */
-export function animInfo7(b: Build, anim: string): AnimInfo7 | null {
+export function animInfo7(b: Build, anim: string, id = 'mori'): AnimInfo7 | null {
   const info = ANIMS7[anim];
   if (!info) return null;
-  if (anim === 'walk') return { ...info, dist: gaitDist(WALK(b)) };
-  if (anim === 'run') return { ...info, dist: gaitDist(RUN(b)) };
+  if (anim === 'walk') return { ...info, dist: gaitDist(WALK(b, id)) };
+  if (anim === 'run') return { ...info, dist: gaitDist(RUN(b, id)) };
   if (anim === 'climb') return { ...info, dist: climbDist(b) };
   return info;
 }
