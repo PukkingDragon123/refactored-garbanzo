@@ -14,11 +14,11 @@ import { groundY } from '../../art/island4/layout';
 import type { IsleStory } from './islestory';
 import { wait } from './islestory';
 import { CAMP } from './islecamp';
-import { runNegotiation, NegRound } from '../../ui/v4/negotiate';
+import { runNegotiation, NegRound } from '../../ui/v6/standoff';
 
 export { holdSteady, lashingKnot } from '../../ui/v4/campmini';
 
-const ROUNDS: NegRound[] = [
+export const ROUNDS: NegRound[] = [
   {
     say: 'STAY BACK! Who are you? What are you doing on this island?!', expr: 'angry', time: 6,
     answers: [
@@ -60,7 +60,7 @@ const ROUNDS: NegRound[] = [
     ],
   },
 ];
-const EXTRA: NegRound[] = [
+export const EXTRA: NegRound[] = [
   {
     say: '...Fine. Ask me something. Anything. But no sudden moves.', expr: 'neutral', time: 7,
     answers: [

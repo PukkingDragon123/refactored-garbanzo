@@ -76,6 +76,7 @@ async function boot() {
     flag: (k: string, v = true) => { game.save.flags[k] = v; },
     moriOS: async (report = true) => (await import('./ui/v4/moriOS')).openMoriOS({ report }),
     noodles: async () => (await import('./ui/v4/noodles')).runNoodleGame(),
+    standoff: async () => { const a = await import('./game/v4/islearoha'); return (await import('./ui/v6/standoff')).runNegotiation(a.ROUNDS, a.EXTRA); },
     ramen: async () => (await import('./ui/v6/ramen')).runRamenPour(),
     engine: async () => (await import('./ui/v4/engine')).runEngineRepair({}),
   };
