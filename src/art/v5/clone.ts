@@ -65,12 +65,51 @@ export function renderClone(id: string, anim: string, frame: number): BodyFrame5
     const j = set.key.indexOf(ch);
     buf.data[k] = legs && Math.floor(k / w) >= legY ? legs[j] : pal[j];
   }
+  const W5 = id === 'joshu' ? bigBuild(buf, ax, ay, hx, hy) : { buf, ax, ay, hx, hy };
   const out: BodyFrame5 = {
-    back: buf, front: null, ax, ay, hx, hy, look: 'fwd',
-    hand: [ax + 5, ay - Math.round(h * 0.42)],
+    back: W5.buf, front: null, ax: W5.ax, ay: W5.ay, hx: W5.hx, hy: W5.hy, look: 'fwd',
+    hand: [W5.ax + 5, W5.ay - Math.round(W5.buf.h * 0.42)],
     headBehind: clip.headBehind?.includes(i) || undefined,
     hair: anim === 'run' ? 1 : 0,
   };
   cache.set(key, out);
   return out;
+}
+
+/**
+ * Joshu is built bigger than the boy whose frames he wears: a wider frame (a column through the
+ * middle of the body is repeated), a belly that pushes the front of his gansey out, and more
+ * height (rows repeated through the chest and the legs, spread out so no step shows).
+ */
+function bigBuild(src: PixelBuffer, ax: number, ay: number, hx: number, hy: number) {
+  const WIDEN = 4, BELLY = 3;
+  const w = src.w, h = src.h;
+  // 1. widen: repeat the column just behind the neck line
+  const cx = Math.max(1, Math.min(w - 2, hx));
+  const w1 = w + WIDEN + BELLY;
+  const a = new PixelBuffer(w1, h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w1; x++) {
+    const sx = x <= cx ? x : x <= cx + WIDEN ? cx : x - WIDEN;
+    a.data[y * w1 + x] = sx < w ? src.data[y * w + sx] : 0;
+  }
+  // 2. belly: the front half of the torso rows shifts forward along a round profile
+  const b0 = hy + 7, b1 = Math.min(h - 1, hy + 24), xs = cx + WIDEN + 3;
+  for (let y = b0; y <= b1; y++) {
+    const t = (y - b0) / (b1 - b0);
+    const k = Math.round(BELLY * Math.sin(Math.min(1, t * 1.15) * Math.PI) ** 0.7);
+    if (k <= 0) continue;
+    const row = a.data.slice(y * w1, y * w1 + w1);
+    for (let x = xs; x < w1; x++) a.data[y * w1 + x] = x - k >= xs ? row[x - k] : row[xs];
+  }
+  // 3. height: repeat rows through the chest and the shins
+  const dup = new Set([hy + 5, hy + 9, hy + 13, hy + 17, ay - 14, ay - 11, ay - 9, ay - 7, ay - 5].filter(y => y > 0 && y < h));
+  const h1 = h + dup.size;
+  const o = new PixelBuffer(w1, h1);
+  let yo = 0;
+  for (let y = 0; y < h; y++) {
+    o.data.set(a.data.subarray(y * w1, y * w1 + w1), yo * w1); yo++;
+    if (dup.has(y)) { o.data.set(a.data.subarray(y * w1, y * w1 + w1), yo * w1); yo++; }
+  }
+  const below = (yy: number) => [...dup].filter(d => d < yy).length;
+  return { buf: o, ax: ax + (ax > cx ? WIDEN : WIDEN >> 1), ay: ay + below(ay), hx: hx + (WIDEN >> 1) + 1, hy: hy + below(hy) };
 }

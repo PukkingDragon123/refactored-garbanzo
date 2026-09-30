@@ -93,7 +93,21 @@ const BOY_BUILD = { hipH: 17, thigh: 7.6, shin: 7.6, ankleH: 1.8, torso: 21, nec
 const GIRL_BUILD = { hipH: 25, thigh: 11.4, shin: 11.2, ankleH: 2.4, torso: 20, neck: 1, shY: 2.4, shF: -5.6, shB: 5.8, upArm: 8.6, foreArm: 7.8, legF: -2.8, legB: 2.8 };
 
 /** the boy's outfit: long tunic, a strap across the chest, belt, knee shorts, tall boots, gloves */
-function tunicChar(id: string, P: TunicPal): V5Char {
+/** Joshu: a head taller than the boy, broad and heavy, big arms */
+const BIG_BUILD = { ...BOY_BUILD, hipH: 22.5, thigh: 10.2, shin: 10.2, torso: 25, shF: -6.4, shB: 6.6, upArm: 9.4, foreArm: 8.2, legF: -3.4, legB: 3.4 };
+const bigProf = (p: [number, number, number][]): [number, number, number][] =>
+  p.map(([ly, b, f]) => { const t = ly / 21; const belly = Math.sin(Math.max(0, Math.min(1, (t + 0.1) / 0.8)) * Math.PI) * 2.2; return [ly * 25 / 21, b * 1.28, f * 1.3 + belly]; });
+
+function tunicChar(id: string, P: TunicPal, big = false): V5Char {
+  const c = tunicBase(id, P);
+  if (!big) return c;
+  c.build = { ...BIG_BUILD };
+  c.torso.prof = bigProf(c.torso.prof as [number, number, number][]);
+  c.leg.rThigh = 3.6; c.leg.rKnee = 3; c.leg.rAnkle = 2.4;
+  c.arm.rSh = 2.9; c.arm.rEl = 2.6; c.arm.rWr = 2.2;
+  return c;
+}
+function tunicBase(id: string, P: TunicPal): V5Char {
   return {
     id,
     build: { ...BOY_BUILD },
@@ -206,7 +220,7 @@ export const JOSHU5 = tunicChar('joshu', {
   boot: R6('#0c0607', '#1d0e0f', '#231518', '#2f1617', '#3a2f30', '#4a3a3a'),
   glove: R6('#0c0a10', '#141828', '#1a1e2e', '#20263a', '#2a3048', '#343c58'),
   sole: R6('#050303', '#0c0607', '#140a0a', '#1d0e0f', '#2a1818', '#382424'),
-});
+}, true);
 export const JENNA5 = dressChar('jenna', {
   skin: GIRL_SKIN,
   top: R6('#1c1111', '#372329', '#513f45', '#6d4855', '#7b5459', '#876465'),
@@ -232,7 +246,7 @@ export const V5_CHARS: Record<string, V5Char> = { mori: MORI5, jenna: JENNA5, jo
 export const V5_INFO: Record<string, { name: string; short: string; voice: number; height: number }> = {
   mori: { name: 'Mori', short: 'Mori', voice: 1, height: 56 },
   jenna: { name: 'Jenna', short: 'Jenna', voice: 1.5, height: 63 },
-  joshu: { name: 'Joshu', short: 'Joshu', voice: 0.62, height: 56 },
+  joshu: { name: 'Joshu', short: 'Joshu', voice: 0.62, height: 72 },
   aroha: { name: 'Aroha', short: 'Aroha', voice: 1.12, height: 63 },
   chunk: { name: 'Chunk', short: 'Chunk', voice: 1.3, height: 16 },
 };
