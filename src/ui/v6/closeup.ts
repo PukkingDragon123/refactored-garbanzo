@@ -10,7 +10,7 @@ import { guardInput } from '../../core/input';
 export const CW = 320, CH = 180;
 
 const CSS = `
-.cu-wrap { position: absolute; inset: 0; z-index: 34; background: #07060a; overflow: hidden; display: flex; align-items: center; justify-content: center;
+.cu-wrap { position: absolute; inset: 0; z-index: 34; background: #07060a; overflow: hidden; pointer-events: auto; touch-action: none; display: flex; align-items: center; justify-content: center;
   animation: cuIn 0.45s ease-out both; }
 @keyframes cuIn { from { opacity: 0; } }
 .cu-wrap.out { animation: cuOut 0.4s ease-in both; }

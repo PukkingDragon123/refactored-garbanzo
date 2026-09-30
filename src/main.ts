@@ -77,7 +77,7 @@ async function boot() {
     moriOS: async (report = true) => (await import('./ui/v4/moriOS')).openMoriOS({ report }),
     noodles: async () => (await import('./ui/v4/noodles')).runNoodleGame(),
     ramen: async () => (await import('./ui/v6/ramen')).runRamenPour(),
-    engine: async () => (await import('./ui/v4/engine')).runEngineRepair({}),
+    engine: async () => (await import('./ui/v6/engine')).runEngineRepair({}),
   };
 }
 
