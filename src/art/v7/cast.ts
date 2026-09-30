@@ -30,7 +30,7 @@ export const MORI7: Char7 = {
   id: 'mori',
   build: { hipH: 27.5, thigh: 13, shin: 12.8, ankleH: 2.2, torso: 19, neck: 1.2, shY: 2.4, shF: 0, shB: 0, upArm: 9.6, foreArm: 8.6, legF: 0, legB: 0 },
   shW: 5.2, hipW: 2.9, chest: [3.3, 4.4], waist: [2.8, 3.5], pelvis: [3.1, 3.7],
-  armR: [1.9, 1.6, 1.4], legR: [2.4, 1.9, 1.6], neckR: 1.5, hand: 1,
+  armR: [1.9, 1.6, 1.4], legR: [2.4, 1.9, 1.6], neckR: 1.5, hand: 1.12,
   skin: BOY_SKIN, ink: hex('#1a0e10'),
   torso(p) {
     const l = L(p);
@@ -66,7 +66,7 @@ export const JENNA7: Char7 = {
   id: 'jenna',
   build: { hipH: 25, thigh: 11.8, shin: 11.6, ankleH: 2.1, torso: 17, neck: 1.3, shY: 2.2, shF: 0, shB: 0, upArm: 8.6, foreArm: 7.8, legF: 0, legB: 0 },
   shW: 4.5, hipW: 2.8, chest: [3.2, 4.0], waist: [2.5, 3.1], pelvis: [3.0, 3.7],
-  armR: [1.8, 1.55, 1.25], legR: [2.2, 1.6, 1.3], neckR: 1.3, hand: 0.9,
+  armR: [1.8, 1.55, 1.25], legR: [2.2, 1.6, 1.3], neckR: 1.3, hand: 1.0,
   skin: GIRL_SKIN, ink: hex('#24141a'),
   torso(p) {
     const l = L(p);
@@ -96,7 +96,7 @@ export const AROHA7: Char7 = {
   id: 'aroha',
   build: { hipH: 26.4, thigh: 12.4, shin: 12.2, ankleH: 2.1, torso: 17.8, neck: 1.3, shY: 2.2, shF: 0, shB: 0, upArm: 9, foreArm: 8.2, legF: 0, legB: 0 },
   shW: 4.6, hipW: 2.8, chest: [3.3, 4.1], waist: [2.5, 3.1], pelvis: [3.0, 3.7],
-  armR: [1.75, 1.5, 1.25], legR: [2.2, 1.65, 1.3], neckR: 1.3, hand: 0.9,
+  armR: [1.75, 1.5, 1.25], legR: [2.2, 1.65, 1.3], neckR: 1.3, hand: 1.0,
   skin: DARK_SKIN, ink: hex('#140a08'),
   torso(p) {
     const l = L(p);

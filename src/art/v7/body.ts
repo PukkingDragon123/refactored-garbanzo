@@ -60,6 +60,8 @@ export interface J3 {
   /** world → torso-local [h(px), f, z] */
   local(p: V3): V3;
   yaw: number;
+  /** the legs' forward direction (world) */
+  legFwd: V3;
 }
 
 const G = { torso: 1, armN: 2, armF: 3, legN: 4, legF: 5, skirt: 6, extra: 7 };
@@ -74,10 +76,18 @@ function yawer(a: number) {
   };
 }
 
-export function lift(ch: Char7, pose: Pose, yaw = YAW): J3 {
+/** yaw for back views (climbing a ladder: we see the back, a little turned) */
+export const BACK_YAW = -1.22;
+
+export function lift(ch: Char7, pose: Pose, yaw0 = YAW): J3 {
   const b = { ...ch.build, shF: 0, shB: 0, legF: 0, legB: 0 };
   const J = solve(b, pose);
+  const back = !!pose.flags?.back;
+  const yaw = back ? BACK_YAW : yaw0;
   const { W } = yawer(yaw);
+  // the legs stride along the direction of travel: a shallower turn than the torso, so steps read
+  // on screen while the chest stays open to the camera (a natural hip-to-shoulder rotation)
+  const { W: Wl } = yawer(back ? yaw : yaw * 0.5);
   const P = (p: P2, z = 0): V3 => [p[0], p[1], z];
   // shoulders counter-rotate against the hips with the arm swing (walk / run twist)
   const aF = pose.fa.a ?? 0, aB = pose.ba.a ?? 0;
@@ -93,6 +103,7 @@ export function lift(ch: Char7, pose: Pose, yaw = YAW): J3 {
   // arms raised above the shoulder splay outward (abduct) so a wave or a cheer clears the face
   // (the forward reach of a raised arm turns into a sideways reach, the hand up beside the head)
   const raise = (dx: number, dy: number): [number, number] => {
+    if (back) return [dx, 1.2 + Math.max(0, dy) * 0.12];
     const f = Math.max(0, Math.min(1, (dy + 1) / 6));
     return [dx * (1 - 0.8 * f), f * (Math.abs(dx) * 0.8 + 1.5) + Math.max(0, dy) * 0.3];
   };
@@ -100,14 +111,13 @@ export function lift(ch: Char7, pose: Pose, yaw = YAW): J3 {
   const armF = (p: P2): V3 => { const dx = p[0] - J.shB[0], dy = p[1] - J.shB[1], [x, z] = raise(dx, dy); return vadd(shFa, [x, dy, -out - z]); };
   const hip = P(J.hip);
   const hpN = vadd(P(J.hipF), hpLat), hpF = vsub(P(J.hipB), hpLat);
-  // feet keep their own tracks, a touch narrower than the hips
-  const legN = (p: P2, k: number): V3 => [p[0], p[1], hpLat[2] * k];
-  const legF = (p: P2, k: number): V3 => [p[0], p[1], -hpLat[2] * k];
+  // knees and feet hang off their hip, stepping in the legs' own (shallower) yaw
+  const legW = (hp: V3, root: P2, p: P2): V3 => vadd(W(hp), Wl([p[0] - root[0], p[1] - root[1], 0]));
   const j = {
     hip: W(hip), neckBase: W(P(J.neckBase)), neckTop: W(P(J.neckTop)),
     shN: W(shN), shF: W(shFa), elN: W(armN(J.elF)), elF: W(armF(J.elB)), wrN: W(armN(J.wrF)), wrF: W(armF(J.wrB)),
-    hpN: W(hpN), hpF: W(hpF), knN: W(legN(J.knF, 1)), knF: W(legF(J.knB, 1)), anN: W(legN(J.anF, 0.85)), anF: W(legF(J.anB, 0.85)),
-    up: W(upS), fwd: W(twist(fwS, tw * 0.5)), lat: W(twist(latS, tw * 0.5)), yaw,
+    hpN: W(hpN), hpF: W(hpF), knN: legW(hpN, J.hipF, J.knF), knF: legW(hpF, J.hipB, J.knB), anN: legW(hpN, J.hipF, J.anF), anF: legW(hpF, J.hipB, J.anB),
+    up: W(upS), fwd: W(twist(fwS, tw * 0.5)), lat: W(twist(latS, tw * 0.5)), yaw, legFwd: Wl([1, 0, 0]),
   } as J3;
   const T0 = W(hip);
   j.T = (h, f, z) => vadd(T0, vadd(vsc(j.up, h), vadd(vsc(j.fwd, f), vsc(j.lat, z))));
@@ -117,7 +127,7 @@ export function lift(ch: Char7, pose: Pose, yaw = YAW): J3 {
 
 const CW = 128, CH = 118, OX = 64, OY = 100;
 
-export interface Frame7 { back: PixelBuffer; front: PixelBuffer | null; ax: number; ay: number; hx: number; hy: number; hand: [number, number]; look?: 'fwd' | 'up' | 'down'; headBehind?: boolean; hrot?: number; hair?: number }
+export interface Frame7 { back: PixelBuffer; front: PixelBuffer | null; ax: number; ay: number; hx: number; hy: number; hand: [number, number]; look?: 'fwd' | 'up' | 'down' | 'back'; headBehind?: boolean; hrot?: number; hair?: number }
 
 export function renderBody7(ch: Char7, pose: Pose): Frame7 {
   const s = new Scene3D(CW, CH, OX, OY);
@@ -139,7 +149,7 @@ export function renderBody7(ch: Char7, pose: Pose): Frame7 {
     s.limb(kn, an, r1, r2, g, pm(ch.shin, near));
     const fa = (near ? pose.fl.fa : pose.bl.fa) ?? 0;
     // shoe: an ellipsoid pointing along the foot
-    const fd = vnorm(vadd(vsc(flat(J.fwd), Math.cos(fa)), [0, Math.sin(fa), 0]));
+    const fd = vnorm(vadd(vsc(flat(J.legFwd), Math.cos(fa)), [0, Math.sin(fa), 0]));
     const upv = vnorm(vsub([0, 1, 0], vsc(fd, fd[1])));
     const lt = vnorm(vcross(fd, upv));
     const c = vadd(an, vadd(vsc(fd, 1.7), vsc(upv, -0.9)));
@@ -178,21 +188,14 @@ export function renderBody7(ch: Char7, pose: Pose): Frame7 {
   const arm = (near: boolean) => {
     const g = near ? G.armN : G.armF;
     // a raised near arm (waving, cheering, hand at the face) goes in front of the head
-    const raised = near && (J.wrN[1] > J.neckTop[1] - 3 || J.elN[1] > J.neckTop[1] - 1);
+    const raised = near && !pose.flags?.back && (J.wrN[1] > J.neckTop[1] - 3 || J.elN[1] > J.neckTop[1] - 1);
     if (front.has(near ? 'armF' : 'armB') || raised) s.layer = 1;
     const sh = near ? J.shN : J.shF, el = near ? J.elN : J.elF, wr = near ? J.wrN : J.wrF;
     const [r0, r1, r2] = ch.armR;
     s.limb(sh, el, r0, r1, g, pm(ch.upperArm, near));
     s.limb(el, wr, r1, r2, g, pm(ch.foreArm, near));
-    const d = vnorm(vsub(wr, el));
-    const hp = (near ? pose.fa.hand : pose.ba.hand) ?? 'fist';
-    const k = ch.hand;
-    if (hp !== 'none') {
-      const open = hp === 'open' || hp === 'flat';
-      const c = vadd(wr, vsc(d, open ? 1.8 * k : 1.2 * k));
-      const side = vnorm(vcross(d, [0, 0, 1]));
-      s.ellipsoid(c, vsc(d, (open ? 2.1 : 1.45) * k), vsc(side, 1.3 * k), [0, 0, (open ? 0.8 : 1.3) * k], g, pm(ch.hands, near));
-    }
+    const hp = (near ? pose.fa.hand : pose.ba.hand) ?? 'relax';
+    if (hp !== 'none') hand7(s, wr, el, J, near, hp, ch.hand, g, pm(ch.hands, near));
     s.layer = 0;
   };
   arm(false);
@@ -208,7 +211,7 @@ export function renderBody7(ch: Char7, pose: Pose): Frame7 {
     ax: OX - tr.ox, ay: OY - tr.oy,
     hx: Math.round(OX + nt[0]) - tr.ox, hy: Math.round(OY - nt[1]) - tr.oy,
     hand: [Math.round(OX + J.wrN[0]) - tr.ox, Math.round(OY - J.wrN[1]) - tr.oy],
-    look: pose.look, headBehind: pose.headBehind || undefined, hrot: pose.flags?.hrot,
+    look: pose.flags?.back ? 'back' : pose.look, headBehind: pose.headBehind || undefined, hrot: pose.flags?.hrot,
   };
 }
 
@@ -240,4 +243,40 @@ function drawProps(ch: Char7, pose: Pose, J: J3, back: PixelBuffer, front: Pixel
       dst.data[i] = v;
     }
   }
+}
+
+/**
+ * A hand: a palm and four two-jointed fingers plus a thumb, curled by the grip. The thumb sits on
+ * the body's forward side, the palm faces the body (hanging) or the thing held.
+ */
+const CURL: Record<string, number> = { fist: 1, grip: 0.82, relax: 0.42, open: 0.08, flat: 0, point: 1, pinch: 0.55 };
+function hand7(s: Scene3D, wr: V3, el: V3, J: J3, near: boolean, type: string, k: number, g: number, mat: Mat) {
+  const d = vnorm(vsub(wr, el));
+  let side = vsub(J.fwd, vsc(d, vdot(J.fwd, d)));
+  if (vlen(side) < 0.25) side = vsub(J.up, vsc(d, vdot(J.up, d)));
+  side = vnorm(side);
+  let n = vnorm(vcross(d, side));
+  if (vdot(n, J.lat) * (near ? 1 : -1) > 0) n = vsc(n, -1);
+  const P = (a: number, b: number, c: number): V3 => vadd(wr, vadd(vsc(d, a * k), vadd(vsc(side, b * k), vsc(n, c * k))));
+  // palm (the heel of the hand overlaps the wrist)
+  s.ellipsoid(P(1.0, 0, 0), vsc(d, 1.2 * k), vsc(side, 1.02 * k), vsc(n, 0.58 * k), g, mat);
+  const fr = 0.46 * k;
+  const curl = CURL[type] ?? 0.5;
+  const LEN = [1.45, 1.7, 1.6, 1.25], OFF = [0.64, 0.22, -0.22, -0.62];
+  const bend = (a: number): V3 => vnorm(vadd(vsc(d, Math.cos(a)), vsc(n, Math.sin(a))));
+  for (let i = 0; i < 4; i++) {
+    const c = type === 'point' && i === 0 ? 0.05 : type === 'pinch' && i === 0 ? 0.7 : curl;
+    const k0 = P(1.95, OFF[i], 0.05);
+    const a1 = c * 1.25, a2 = a1 + c * 1.55;
+    const m1 = vadd(k0, vsc(bend(a1), LEN[i] * 0.55 * k));
+    const tip = vadd(m1, vsc(bend(a2), LEN[i] * 0.48 * k));
+    s.limb(k0, m1, fr, fr * 0.94, g, mat);
+    s.limb(m1, tip, fr * 0.94, fr * 0.78, g, mat);
+  }
+  // thumb: out along the side when open, wrapped over the fingers in a fist
+  const tb = P(0.75, 0.82, 0.2);
+  const td = curl > 0.7 ? vnorm(vadd(vsc(d, 0.75), vadd(vsc(n, 0.55), vsc(side, -0.35)))) : curl > 0.3 ? vnorm(vadd(vsc(d, 0.8), vadd(vsc(side, 0.35), vsc(n, 0.35)))) : vnorm(vadd(vsc(d, 0.6), vsc(side, 0.8)));
+  const tm = vadd(tb, vsc(td, 0.8 * k));
+  s.limb(tb, tm, fr * 1.1, fr, g, mat);
+  s.limb(tm, vadd(tm, vsc(td, 0.65 * k)), fr, fr * 0.8, g, mat);
 }

@@ -373,9 +373,11 @@ export class Player implements Drawable {
     let a = this.anim;
     if (!this.poseOverride && this.animMap) {
       const m = this.animMap[a] ?? (a === 'climbIdle' ? this.animMap.climb : undefined);
-      if (m) { b.holdFrame = a === 'climbIdle' ? 0 : null; a = m; }
+      if (m) { b.holdFrame = a === 'climbIdle' ? (b.anim === m ? b.currentFrame() : 0) : null; a = m; }
     }
-    if (a === 'climbIdle') { a = 'climb'; b.holdFrame = 0; } else if (b.holdFrame !== null && a !== 'climb' && !this.animMap) b.holdFrame = null;
+    // resting on a ladder holds the current climb frame (hands stay on their rungs)
+    if (a === 'climbIdle') { a = 'climb'; if (b.holdFrame === null) b.holdFrame = b.anim === 'climb' ? b.currentFrame() : 3; }
+    else if (b.holdFrame !== null && (a === 'climb' || !this.animMap)) b.holdFrame = null;
     if (b.anim !== a && !b.walking) b.setAnim(a);
     if (this.poseOverride && this.poseFrame !== null) b.holdFrame = this.poseFrame;
     b.alpha = (this.state === 'hide' ? 0.6 : 1) * this.alpha * (this.hurtT > 0 && Math.floor(this.hurtT * 12) % 2 === 0 ? 0.35 : 1);

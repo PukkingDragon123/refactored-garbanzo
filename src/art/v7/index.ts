@@ -6,7 +6,7 @@ import { PixelBuffer } from '../pixel';
 import { renderBody7, Frame7 } from './body';
 import { renderHead7, HeadOpts7 } from './head';
 import { CAST7, INFO7 } from './cast';
-import { ANIMS7, pose7 } from './anims7';
+import { ANIMS7, pose7, animInfo7 } from './anims7';
 import { ANIME_COMMON, TRANSITIONS, AnimInfo } from '../anime/anims';
 import { CHUNK_ANIMS, renderChunkBody, renderChunkHead } from '../anime/chunk';
 import { renderAnimePortrait, PORTRAIT_EXPRS } from '../anime/portraits';
@@ -22,7 +22,7 @@ export const ANIMS: Record<string, AnimInfo> = ANIMS7;
 export function animFor(id: string, anim: string): AnimInfo | null {
   id = norm(id);
   if (id === 'chunk') return CHUNK_ANIMS[anim] ?? null;
-  return ANIMS7[anim] ?? null;
+  return animInfo7((CAST7[id] ?? CAST7.mori).build, anim);
 }
 
 const human = () => [...ANIME_COMMON];
@@ -69,7 +69,7 @@ export function renderBody(id: string, anim: string, frame: number): Frame7 {
 
 export function renderHead(id: string, o: HeadOpts7): { buf: PixelBuffer; ax: number; ay: number } {
   id = norm(id);
-  if (id === 'chunk') return renderChunkHead(o);
+  if (id === 'chunk') return renderChunkHead({ ...o, look: o.look === 'back' ? 'fwd' : o.look });
   return renderHead7(id, o);
 }
 

@@ -15,17 +15,17 @@ import { approach, clamp, rand } from '../core/math';
 
 // ------------------------------------------------------------------ art binding (src/art/people.ts, src/art/emotes.ts)
 
-export type Look = 'fwd' | 'up' | 'down';
+export type Look = 'fwd' | 'up' | 'down' | 'back';
 export interface BodyFrameArt { back: PixelBuffer; front: PixelBuffer | null; ax: number; ay: number; hx: number; hy: number; look?: Look; hand?: [number, number]; headBehind?: boolean; hrot?: number; hflip?: boolean; hair?: number }
 export interface PeopleArt {
-  ANIMS: Record<string, { frames: number; fps: number; loop: boolean }>;
+  ANIMS: Record<string, { frames: number; fps: number; loop: boolean; dist?: number }>;
   CHAR_ANIMS: Record<string, string[]>;
   CHAR_INFO: Record<string, { name: string; short: string; voice: number; height: number }>;
   renderBody(id: string, anim: string, frame: number): BodyFrameArt;
   renderHead(id: string, o: { expr: string; mouth: 0 | 1 | 2; blink: boolean; look: Look; hair?: number }): { buf: PixelBuffer; ax: number; ay: number };
   renderPortrait(id: string, expr: string, o?: { mouth?: 0 | 1 | 2; blink?: boolean }): PixelBuffer;
   /** per-character anim table (e.g. the pug has his own frame counts) */
-  animFor?(id: string, anim: string): { frames: number; fps: number; loop: boolean } | null;
+  animFor?(id: string, anim: string): { frames: number; fps: number; loop: boolean; dist?: number } | null;
   /** posture transition clip between two anims (sit down, stand up...) */
   transitionFor?(id: string, from: string, to: string): string | null;
 }
@@ -274,8 +274,18 @@ export class Actor implements Drawable {
     if (Math.abs(x - this.x) > 1) this.facing = x > this.x ? 1 : -1;
   }
 
+  private lastPX = NaN;
+  private lastPY = NaN;
+  /** current frame of the playing clip */
+  currentFrame() { return this.frameIndex(); }
+
   update(dt: number) {
-    this.animT += dt;
+    // locomotion clips advance by distance travelled, so planted feet (and hands on a ladder) never skate
+    const inf = animInfo(this.anim, this.id) as { frames: number; fps: number; dist?: number };
+    const moved = Number.isFinite(this.lastPX) ? Math.min(12, Math.hypot(this.x - this.lastPX, this.y - this.lastPY)) : 0;
+    this.lastPX = this.x; this.lastPY = this.y;
+    if (inf.dist && !this.trans && !this.once) this.animT += moved > 0.02 ? (moved / inf.dist) * (inf.frames / inf.fps) : dt * 0.25;
+    else this.animT += dt;
     // posture transition finished: continue into the target anim
     if (this.trans) {
       const info = animInfo(this.anim, this.id);

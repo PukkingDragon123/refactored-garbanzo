@@ -39,7 +39,7 @@ export const at = (r: C[], i: number) => r[clampi(Math.round(i), 0, r.length - 1
 
 // ------------------------------------------------------------------ skeleton
 
-export type Hand = 'fist' | 'open' | 'grip' | 'point' | 'flat' | 'pinch' | 'none';
+export type Hand = 'fist' | 'open' | 'grip' | 'point' | 'flat' | 'pinch' | 'relax' | 'none';
 
 export interface ArmP {
   /** FK: shoulder angle, 0 = hanging down, + swings forward (toward facing), PI = straight up */

@@ -7,11 +7,11 @@
 import { PixelBuffer } from '../pixel';
 import { C, hex, mix } from '../color';
 import { Scene3D, V3, Hit, cel, Ramp6, vadd } from './raster';
-import { YAW } from './body';
+import { YAW, BACK_YAW } from './body';
 import { trimPair } from '../people-rig';
 
 const R6 = (...h: string[]): Ramp6 => h.map(v => hex(v));
-export type Look = 'fwd' | 'up' | 'down';
+export type Look = 'fwd' | 'up' | 'down' | 'back';
 export interface HeadOpts7 { expr: string; mouth: 0 | 1 | 2; blink: boolean; look: Look; hair?: number }
 
 interface Lock { a: V3; b: V3; r0: number; r1: number; sway?: number }
@@ -180,7 +180,7 @@ const JOSHU: HeadDef7 = {
     // the full Santa beard, moustache and the red skipper's cap
     const beard = R6('#6a6462', '#9a948e', '#c8c2ba', '#ece6de', '#f8f4ee', '#ffffff');
     const bm = (h: Hit) => { const curl = Math.sin(h.x * 1.7 + h.y * 0.9) > 0.6; return curl ? beard[2] : cel(beard, h.l, 0.1, true); };
-    s.ellipsoid(W([1.8, 3.2, 0]), W([4.8, 0, 0]), [0, 4.2, 0], W([0, 0, 5.0]), 10, bm);
+    s.ellipsoid(W([2.4, 3.2, 0]), W([4.2, 0, 0]), [0, 4.2, 0], W([0, 0, 5.0]), 10, bm);
     s.ellipsoid(W([2.6, -0.8, 0]), W([4.4, 0, 0]), [0, 4.0, 0], W([0, 0, 4.4]), 10, bm);
     s.ellipsoid(W([3.4, -4.2, 0]), W([3.2, 0, 0]), [0, 2.8, 0], W([0, 0, 3.2]), 10, bm);
     s.ellipsoid(W([5.6, 4.8, 0]), W([1.6, 0, 0]), [0, 1.0, 0], W([0, 0, 3.0]), 11, h => cel(beard, h.l, 0.25, true));
@@ -207,8 +207,9 @@ export function renderHead7(id: string, o: HeadOpts7): { buf: PixelBuffer; ax: n
   const ex = EXPR[o.expr] ?? EXPR.neutral;
   const s = new Scene3D(HW, HH, HOX, HOY);
   // the head turns a little further toward the camera than the body, so both eyes read
-  const HY = YAW + 0.25, ca = Math.cos(HY), sa = Math.sin(HY);
-  const pitch = o.look === 'up' ? 0.2 : o.look === 'down' ? -0.24 : 0;
+  const back = o.look === 'back';
+  const HY = back ? BACK_YAW - 0.1 : YAW + 0.25, ca = Math.cos(HY), sa = Math.sin(HY);
+  const pitch = o.look === 'up' || back ? 0.2 : o.look === 'down' ? -0.24 : 0;
   const cp = Math.cos(pitch), sp = Math.sin(pitch);
   // head space → world: pitch about the neck (z axis), then yaw toward the camera
   const W = (p: V3): V3 => {
@@ -273,7 +274,7 @@ export function renderHead7(id: string, o: HeadOpts7): { buf: PixelBuffer; ax: n
   else if (mouth === 'shout') { mark(mx, my, dark); mark(mx, my + 1, dark); mark(mx - 1, my, dark); }
   if (ex.sweat) { const [sx, sy] = px([0, 11, d.skull[1][2] * 0.9]); mark(sx, sy, hex('#9ad8ff')); mark(sx, sy + 1, hex('#4a9ad8')); }
   const r = s.finish({ ink: d.ink, depthLine: 1.6 });
-  for (const [x, y, c] of marks) r.back.data[y * HW + x] = c;
+  if (!back) for (const [x, y, c] of marks) r.back.data[y * HW + x] = c;
   const tr = trimPair(r.back, null, 1);
   const out = { buf: tr.a, ax: HOX - tr.ox, ay: HOY - tr.oy };
   if (cache.size > 600) cache.clear();
