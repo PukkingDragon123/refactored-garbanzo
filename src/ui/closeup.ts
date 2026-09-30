@@ -3,9 +3,13 @@
 // a talking mouth, blinks and a subtle breathing bob. The line's bubble is anchored beside it.
 
 import { el } from './ui';
-import { renderBust, BustId, DESIGNS } from '../art/portrait/cast';
-import type { PExpr } from '../art/portrait/face';
+import { renderAnimePortraitHD } from '../art/anime/portraits';
 import type { PixelBuffer } from '../art/pixel';
+
+type BustId = string;
+type PExpr = string;
+const ALIAS: Record<string, string> = { rowan: 'mori', pip: 'jenna', crowe: 'joshu', lou: 'joshu' };
+const CAST = ['mori', 'jenna', 'joshu', 'aroha', 'chunk'];
 
 const CSS = `
 .cu { position: absolute; inset: 0; pointer-events: none; z-index: 4; overflow: hidden; }
@@ -34,7 +38,7 @@ const CSS = `
 `;
 
 const COLORS: Record<string, [string, string]> = {
-  rowan: ['#3d6fb0', '#101c34'], crowe: ['#b8382c', '#2a0e10'], aroha: ['#a8743e', '#2a1408'], lou: ['#2aa8a0', '#0a2624'], pip: ['#e8762a', '#2a1206'],
+  mori: ['#4a7a3a', '#0e1c10'], jenna: ['#b04a8a', '#2a0c22'], joshu: ['#2c4a7a', '#0a1224'], aroha: ['#a8743e', '#2a1408'], chunk: ['#d8502c', '#2a0e08'],
 };
 
 const cache = new Map<string, HTMLCanvasElement>();
@@ -42,7 +46,7 @@ function frame(id: BustId, expr: PExpr, talk: 0 | 1 | 2, blink: boolean): HTMLCa
   const key = `${id}|${expr}|${talk}|${blink ? 1 : 0}`;
   let c = cache.get(key);
   if (!c) {
-    const buf: PixelBuffer = renderBust(id, expr, { talk, blink, scale: 0.7 });
+    const buf: PixelBuffer = renderAnimePortraitHD(ALIAS[id] ?? id, expr, talk, blink);
     c = document.createElement('canvas');
     c.width = buf.w; c.height = buf.h;
     const img = new ImageData(new Uint8ClampedArray(buf.bytes.buffer, buf.bytes.byteOffset, buf.bytes.byteLength).slice(), buf.w, buf.h);
@@ -52,7 +56,7 @@ function frame(id: BustId, expr: PExpr, talk: 0 | 1 | 2, blink: boolean): HTMLCa
   return c;
 }
 
-export const isCastId = (id: string): id is BustId => id in DESIGNS;
+export const isCastId = (id: string): id is BustId => CAST.includes(ALIAS[id] ?? id);
 
 export class CloseUps {
   readonly root: HTMLElement;
@@ -91,7 +95,7 @@ export class CloseUps {
     this.who = id;
     this.expr = e;
     this.talking = o.talking;
-    const [c1, c2] = COLORS[id] ?? COLORS.rowan;
+    const [c1, c2] = COLORS[ALIAS[id] ?? id] ?? COLORS.mori;
     this.root.style.setProperty('--c1', c1);
     this.root.style.setProperty('--c2', c2);
     this.nm.textContent = o.name.toUpperCase();

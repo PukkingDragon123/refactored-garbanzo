@@ -34,6 +34,8 @@ interface Design {
   front(p: Pic, m: Mats): void;
   /** pixel details after the outline pass */
   post?(b: PixelBuffer, e: ExprDef, talk: 0 | 1 | 2): void;
+  /** the same details for the 2x close-up bust */
+  postHD?(b: PixelBuffer, S: number, e: ExprDef): void;
   /** eye centre rows/cols (viewer-left eye x, y) */
   eyeX?: number;
   eyeY?: number;
@@ -359,54 +361,75 @@ const JENNA: Design = {
 
 const JOSHU: Design = {
   skin: T('#f0b494', { sh: 0.14, deep: 0.3, hi: 0.06 }),
-  eyes: 'old', iris: ['#1a2a3a', '#4a6a8a', '#7a9aba'], lash: '#26181c', brow: '#eeeae2', browH: 2,
-  faceW: 1.12, chin: 1, eyeX: 18, eyeY: 25, mouthY: 38,
+  eyes: 'old', iris: ['#1a2a3a', '#4a6a8a', '#7a9aba'], lash: '#26181c', brow: '#f4f0e8', browH: 2, blush: '#f08a7a', rosy: true,
+  faceW: 1.16, chin: 1, eyeX: 17, eyeY: 25, mouthY: 40,
   back(p, m) {
-    const hair = T('#c8c4bc', { sh: 0.18 });
-    p.ell(CX, 22, 17, 12, hair[2], m.hairB);
+    const hair = T('#d8d4cc', { sh: 0.18 });
+    p.ell(CX, 21, 18.6, 13, hair[2], m.hairB);
+    p.where([m.hairB], (u, v) => u > CX + 10, hair[1]);
   },
   body(p, m) {
-    const knit = T('#303a5a', { sh: 0.14 }), susp = T('#744830');
-    // big broad shoulders in a cable-knit sweater, red suspenders
-    p.fill([[0, 60], [1.6, 50], [10, 45], [CX, 43.6], [PW - 10, 45], [PW - 1.6, 50], [PW, 60]], knit[2], m.cloth);
-    p.where([m.cloth], (u, v) => u > PW - 12 || v > 58, knit[1]);
-    p.where([m.cloth], (u, v) => ((u + 40) % 5) < 1.2 && v > 47, knit[1]);
-    p.fill([[9, 47], [13, 45.6], [15, 60], [10.6, 60]], susp[2], m.cloth2, { sharp: true });
-    p.fill([[PW - 9, 47], [PW - 13, 45.6], [PW - 15, 60], [PW - 10.6, 60]], susp[1], m.cloth2, { sharp: true });
+    const knit = T('#303a5a', { sh: 0.14 });
+    // huge shoulders and a barrel chest in the navy cable-knit gansey
+    p.fill([[-3, 60], [-1, 47.6], [8, 42], [CX, 40.6], [PW - 8, 42], [PW + 1, 47.6], [PW + 3, 60]], knit[2], m.cloth);
+    p.where([m.cloth], (u, v) => u > PW - 12 || v > 58.4, knit[1]);
+    // cables: twisted ropes of knit either side of the beard
+    p.where([m.cloth], (u, v) => v > 44 && (Math.abs(((u + 40) % 7) - 3.5) < 0.7 || Math.abs(((u + 40 + Math.sin(v * 1.2) * 1.2) % 7) - 1.2) < 0.45), knit[1]);
+    p.where([m.cloth], (u, v) => v > 44 && Math.abs(((u + 40 + Math.sin(v * 1.2 + 1.6) * 1.2) % 7) - 5.6) < 0.45, knit[3]);
+    // collar rib
+    p.fill([[CX - 13, 41.6], [CX, 40.2], [CX + 13, 41.6], [CX + 13, 44], [CX, 42.6], [CX - 13, 44]], knit[0], m.cloth2);
   },
   front(p, m) {
-    const hair = T('#c8c4bc', { sh: 0.18 }), beard = T('#dedad2', { sh: 0.16, deep: 0.3 }), cap = T('#8a3228', { sh: 0.2 });
-    // grey hair at the temples
-    p.fill([[CX - 16, 30], [CX - 16.6, 20], [CX - 12, 16], [CX - 12.6, 26]], hair[2], m.hair);
-    p.fill([[CX + 16, 30], [CX + 16.6, 20], [CX + 12, 16], [CX + 12.6, 26]], hair[1], m.hair);
-    // long beard: covers cheeks and chin, flows down over the chest; moustache over the mouth
-    p.fill([
-      [CX - 15, 28], [CX - 12.4, 33], [CX - 6, 35.6], [CX, 34.8], [CX + 6, 35.6], [CX + 12.4, 33], [CX + 15, 28],
-      [CX + 16, 38], [CX + 13, 49], [CX + 7, 56.6], [CX, 59.4], [CX - 7, 56.6], [CX - 13, 49], [CX - 16, 38],
-    ], beard[2], m.beard);
-    p.where([m.beard], (u, v) => u > CX + 7 || v > 54, beard[1]);
-    p.where([m.beard], (u, v) => v > 41 && ((u * 0.9 + v * 0.2 + 40) % 4.4) < 1, beard[1]);
-    p.where([m.beard], (u, v) => v > 37 && v < 44 && ((u + 40) % 5.2) < 1 && u < CX + 6, beard[3]);
-    // moustache
-    p.fill([[CX - 7.4, 38.4], [CX - 4, 35.4], [CX, 36.4], [CX + 4, 35.4], [CX + 7.4, 38.4], [CX + 3, 38.2], [CX, 37.8], [CX - 3, 38.2]], beard[3], m.beard);
-    // captain's cap: crown, band, black brim, gold anchor badge
-    p.fill([[CX - 15.6, 17.6], [CX - 16.8, 10], [CX - 8, 4.4], [CX + 8, 4.4], [CX + 16.8, 10], [CX + 15.6, 17.6]], cap[2], m.acc);
-    p.where([m.acc], (u, v) => v > 13.6, cap[0]);
-    p.where([m.acc], (u, v) => u > CX + 9 && v < 13.6, cap[1]);
-    p.fill([[CX - 15.6, 17], [CX + 15.6, 17], [CX + 13, 21], [CX - 13, 21]], col('#5a1c18'), m.cloth2, { sharp: true });
-    p.ell(CX, 10.6, 2.6, 2.2, col('#e8b848'), m.acc);
-    void m;
+    const hair = T('#e8e4dc', { sh: 0.16 }), beard = T('#eeeae2', { sh: 0.14, deep: 0.28, hi: 0.06 }), cap = T('#b0342a', { sh: 0.2 });
+    // fluffy white hair at the temples
+    p.fill([[CX - 17.4, 31], [CX - 19, 22], [CX - 16, 15.6], [CX - 12.6, 17], [CX - 13, 27]], hair[2], m.hair);
+    p.fill([[CX + 17.4, 31], [CX + 19, 22], [CX + 16, 15.6], [CX + 12.6, 17], [CX + 13, 27]], hair[1], m.hair);
+    // the Santa beard: from the sideburns over the cheeks and jaw, a big cloud down over the chest
+    const B: Pt[] = [
+      [CX - 15, 20], [CX - 18.4, 27], [CX - 20, 35], [CX - 19.8, 43], [CX - 17.6, 50], [CX - 13.6, 55.6], [CX - 9, 58.8], [CX - 4.4, 60],
+      [CX, 60.8], [CX + 4.4, 60], [CX + 9, 58.8], [CX + 13.6, 55.6], [CX + 17.6, 50], [CX + 19.8, 43], [CX + 20, 35], [CX + 18.4, 27], [CX + 15, 20],
+      [CX + 13.4, 26], [CX + 12.4, 30.6], [CX + 8.4, 33.8], [CX + 4.2, 35.2], [CX, 34.8], [CX - 4.2, 35.2], [CX - 8.4, 33.8], [CX - 12.4, 30.6], [CX - 13.4, 26],
+    ];
+    p.fill(B, beard[2], m.beard);
+    // curly scallops round the edge
+    for (let k = 0; k < 13; k++) {
+      const a = Math.PI * (0.06 + k * 0.068);
+      const x = CX - Math.cos(a) * 19.4, y = 36 + Math.sin(a) * 23.4;
+      p.ell(x, y, 2.6, 2.4, beard[2], m.beard);
+    }
+    // curl shading: wavy strands, deeper on the right and underneath, bright tufts top left
+    p.where([m.beard], (u, v) => Math.abs(Math.sin(u * 0.95 + Math.sin(v * 0.55) * 1.8)) < 0.22 && v > 38, beard[1]);
+    p.where([m.beard], (u, v) => (u - CX) * 0.6 + (v - 36) * 0.5 > 9 || v > 57.4, beard[1]);
+    p.where([m.beard], (u, v) => ((u - CX + 11) ** 2 / 20 + (v - 42) ** 2 / 26 < 1) || ((u - CX + 3) ** 2 / 14 + (v - 49) ** 2 / 10 < 1), beard[3]);
+    p.where([m.beard], (u, v) => Math.abs(Math.sin(u * 0.95 + Math.sin(v * 0.55) * 1.8 + 1.4)) < 0.12 && v > 44 && u < CX + 6, beard[3]);
+    // the big moustache, curled up at both ends
+    const mo = (d: number): Pt[] => [[CX + d * 0.4, 36], [CX + d * 4, 34.4], [CX + d * 8.4, 35.2], [CX + d * 11.4, 36.6], [CX + d * 13, 34.4], [CX + d * 13.6, 36.8], [CX + d * 12, 39.6], [CX + d * 8.4, 40.6], [CX + d * 4, 40], [CX + d * 0.4, 39]];
+    p.fill(mo(-1), beard[3], m.acc);
+    p.fill(mo(1), beard[2], m.acc);
+    p.where([m.acc], (u, v) => v > 38.6 && Math.abs(u - CX) < 13, beard[1]);
+    // captain's cap: crown, band, black brim, gold badge
+    p.fill([[CX - 16.6, 17.6], [CX - 17.8, 9.6], [CX - 8.4, 3.6], [CX + 8.4, 3.6], [CX + 17.8, 9.6], [CX + 16.6, 17.6]], cap[2], m.cloth2);
+    p.where([m.cloth2], (u, v) => v > 13.4 && v < 18, cap[0]);
+    p.where([m.cloth2], (u, v) => u > CX + 9 && v < 13.4, cap[1]);
+    p.fill([[CX - 16.6, 17], [CX + 16.6, 17], [CX + 13.6, 21], [CX - 13.6, 21]], col('#241a1c'), p.m(7, true, 0.4), { sharp: true });
+    p.ell(CX, 10.2, 2.8, 2.3, col('#e8b848'), p.m(8, true, 0.5));
   },
-  post(b, e) {
-    // old scar through the left eyebrow (viewer's left)
-    const sc = col('#e89a8a'), sd = col('#b86a5e');
-    for (const [x, y] of [[18, 19], [18, 20], [19, 21], [19, 22], [19, 23], [20, 24], [20, 29], [20, 30], [21, 31]]) if (b.get(x, y) >>> 24) b.set(x, y, y === 19 || y === 31 ? sd : sc);
-    // big round weathered nose
-    const nz = col('#e89878'), nl = col('#f8c0a0'), ns = col('#c07058');
-    for (const [x, y, c] of [[CX - 1, 31, nz], [CX, 31, nz], [CX + 1, 31, nz], [CX - 2, 32, nz], [CX - 1, 32, nl], [CX, 32, nz], [CX + 1, 32, nz], [CX + 2, 32, ns], [CX - 1, 33, ns], [CX, 33, ns], [CX + 1, 33, ns]] as [number, number, C][]) if (b.get(x, y) >>> 24) b.set(x, y, c);
+  post(b) {
+    // big round rosy nose
+    const nz = col('#ec9480'), nl = col('#fcc8b0'), ns = col('#c06a58');
+    for (const [x, y, c] of [[CX - 1, 30, nz], [CX, 30, nz], [CX + 1, 30, nz], [CX - 2, 31, nl], [CX - 1, 31, nl], [CX, 31, nz], [CX + 1, 31, nz], [CX + 2, 31, ns], [CX - 2, 32, nz], [CX - 1, 32, nz], [CX, 32, nz], [CX + 1, 32, ns], [CX + 2, 32, ns], [CX - 1, 33, ns], [CX, 33, ns], [CX + 1, 33, ns]] as [number, number, C][]) b.set(x, y, c);
     // anchor on the cap badge
-    b.set(CX, 9, col('#8a6420')); b.set(CX, 10, col('#8a6420')); b.set(CX, 11, col('#8a6420')); b.set(CX - 1, 11, col('#8a6420')); b.set(CX + 1, 11, col('#8a6420'));
-    void e;
+    for (const [x, y] of [[CX, 9], [CX, 10], [CX, 11], [CX - 1, 11], [CX + 1, 11]]) b.set(x, y, col('#8a6420'));
+  },
+  postHD(b, S) {
+    const c0 = col('#c06a58'), c1 = col('#ec9480'), c2 = col('#fcd0b8');
+    const nx = CX * S, ny = 31.4 * S;
+    for (let y = -4; y <= 4; y++) for (let x = -5; x <= 5; x++) {
+      const d = (x / 4.6) ** 2 + (y / 3.8) ** 2;
+      if (d > 1) continue;
+      b.set(nx + x, ny + y, d > 0.72 ? c0 : (x + 1.6) ** 2 + (y + 1.4) ** 2 < 3 ? c2 : x > 1 || y > 1.5 ? mix(c1, c0, 0.4) : c1);
+    }
+    for (const [x, y] of [[0, -3], [0, -2], [0, -1], [0, 0], [-1, 0], [1, 0], [-2, -1], [2, -1]]) b.set(CX * S + x, 10 * S + y, col('#8a6420'));
   },
 };
 
@@ -546,3 +569,264 @@ export function renderAnimePortrait(id: string, expr: string, talk: 0 | 1 | 2 = 
 }
 
 export const PORTRAIT_IDS = ['mori', 'jenna', 'joshu', 'aroha', 'chunk'];
+
+// ------------------------------------------------------------------ HD close-up busts (2x)
+// The same designs rasterised at twice the resolution for the cinematic close-ups, with painted
+// eyes (lid curves, a tall gradient iris, pupil, two glints, a thick upper lash with a flick, lower
+// lash and crease), thicker brows, smoothed mouths (scale2x of the templates), anime blush hatching
+// and a heavier outline.
+
+export const HD = 2;
+
+/** Scale2x (EPX) on a template grid: doubles it and rounds the diagonals */
+function epx(rows: string[]): string[] {
+  const h = rows.length, w = Math.max(...rows.map(r => r.length));
+  const at = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h ? '.' : rows[y][x] ?? '.');
+  const out: string[][] = Array.from({ length: h * 2 }, () => Array(w * 2).fill('.'));
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const P = at(x, y), A = at(x, y - 1), B = at(x + 1, y), C2 = at(x - 1, y), D = at(x, y + 1);
+    let e1 = P, e2 = P, e3 = P, e4 = P;
+    if (C2 === A && C2 !== D && A !== B) e1 = A;
+    if (A === B && A !== C2 && B !== D) e2 = B;
+    if (D === C2 && D !== B && C2 !== A) e3 = C2;
+    if (B === D && B !== A && D !== C2) e4 = D;
+    out[y * 2][x * 2] = e1; out[y * 2][x * 2 + 1] = e2; out[y * 2 + 1][x * 2] = e3; out[y * 2 + 1][x * 2 + 1] = e4;
+  }
+  return out.map(r => r.join(''));
+}
+const epxCache = new Map<string[], string[]>();
+const epx2 = (rows: string[]) => { let r = epxCache.get(rows); if (!r) { r = epx(rows); epxCache.set(rows, r); } return r; };
+
+interface EyeSpec { w: number; h: number; irx: number; iry: number; lash: number }
+const EYE_HD: Record<string, EyeSpec> = {
+  young: { w: 12, h: 10, irx: 3.3, iry: 4.3, lash: 2 },
+  girl: { w: 14, h: 12, irx: 3.9, iry: 5.1, lash: 3 },
+  old: { w: 12, h: 8, irx: 2.9, iry: 3.3, lash: 2 },
+};
+
+/** paint one HD eye with its outer corner toward +dir (dir 1: viewer-right eye) */
+function eyeHD(b: PixelBuffer, x0: number, y0: number, dir: 1 | -1, sp: EyeSpec, state: string, pal: { k: C; w: C; wS: C; I: C; i: C; j: C; skin: C; skinS: C }) {
+  const W = sp.w, H = sp.h;
+  const X = (lx: number) => (dir === 1 ? x0 + lx : x0 + W - 1 - lx);
+  const setp = (lx: number, y: number, c: C) => { const x = Math.round(X(lx)), yy = Math.round(y); if (b.get(x, yy) >>> 24) b.set(x, yy, c); };
+  const arc = (y: (t: number) => number, t0: number, t1: number, th: number, c: C) => {
+    for (let lx = Math.floor(t0 * (W - 1)); lx <= Math.ceil(t1 * (W - 1)); lx++) {
+      const t = lx / (W - 1), yy = y(t);
+      for (let k = 0; k < th; k++) setp(lx, yy + k, c);
+    }
+  };
+  if (state === 'happy' || state === 'wink') {
+    arc(t => y0 + H * 0.55 - Math.sin(t * Math.PI) * H * 0.38, 0.05, 0.95, 2, pal.k);
+    arc(t => y0 + H * 0.55 - Math.sin(t * Math.PI) * H * 0.38 + 2, 0.25, 0.75, 1, pal.skinS);
+    return;
+  }
+  if (state === 'closed') {
+    arc(t => y0 + H * 0.5 + Math.sin(t * Math.PI) * H * 0.18, 0.02, 1, 2, pal.k);
+    setp(W, y0 + H * 0.5 - 1, pal.k); setp(W + 1, y0 + H * 0.5 - 2, pal.k);
+    return;
+  }
+  if (state === 'pain') {
+    for (let k = 0; k <= W - 3; k++) {
+      const t = k / (W - 3);
+      const yy = y0 + H * 0.5 - Math.abs(t - 0.5) * H * 0.7;
+      setp(k + 1, yy, pal.k); setp(k + 1, yy + 1, pal.k);
+    }
+    return;
+  }
+  // lids: tilt (+ raises the outer corner), openness cut from the top
+  const tilt = state === 'angry' ? 0.3 : state === 'sad' ? -0.22 : 0;
+  const cut = state === 'half' ? 0.42 : state === 'angry' ? 0.12 : state === 'sad' ? 0.1 : 0;
+  const wide = state === 'wide' || state === 'tiny';
+  const upper = (t: number) => y0 + H * (0.12 + cut) + (2 * t - 1) ** 2 * H * 0.22 - (t - 0.5) * tilt * H * 0.6 - (wide ? 1 : 0);
+  const lower = (t: number) => y0 + H * 0.96 - (2 * t - 1) ** 2 * H * 0.2;
+  // sclera
+  for (let lx = 0; lx < W; lx++) {
+    const t = lx / (W - 1);
+    for (let y = Math.ceil(upper(t)); y <= Math.floor(lower(t)); y++) setp(lx, y, y <= upper(t) + 1.5 ? pal.wS : pal.w);
+  }
+  // iris: tall ellipse, dark top → light bottom, a ring, pupil, glints
+  const scale = state === 'tiny' ? 0.42 : state === 'wide' ? 0.82 : 1;
+  const icx = W * (state === 'side' ? 0.66 : 0.46), icy = y0 + H * 0.56;
+  const rx = sp.irx * scale, ry = sp.iry * scale;
+  for (let lx = 0; lx < W; lx++) {
+    const t = lx / (W - 1);
+    for (let y = Math.ceil(upper(t)); y <= Math.floor(lower(t)); y++) {
+      const dx = (lx + 0.5 - icx) / rx, dy = (y + 0.5 - icy) / ry, d = dx * dx + dy * dy;
+      if (d > 1) continue;
+      const vy = dy;
+      let c = d > 0.72 ? pal.I : vy < -0.25 ? pal.I : vy < 0.35 ? pal.i : pal.j;
+      if (state !== 'tiny' && (dx * 2.2) ** 2 + ((dy + 0.1) * 1.9) ** 2 < 0.55) c = mix(pal.I, 0xff000000, 0.35);
+      if (y <= upper(t) + 1.2) c = mix(c, pal.I, 0.6);
+      setp(lx, y, c);
+    }
+  }
+  // glints (a big one up-left, a small one low-right; sparkle adds more)
+  const G = 0xffffffff >>> 0;
+  if (state !== 'tiny') {
+    const gx = icx - rx * 0.45, gy = icy - ry * 0.45;
+    for (const [a, c2] of [[0, 0], [1, 0], [0, 1], [1, 1]]) setp(gx + a, gy + c2, G);
+    setp(icx + rx * 0.45, icy + ry * 0.4, G);
+    if (state === 'sparkle') { setp(icx + rx * 0.2, icy - ry * 0.7, G); setp(icx - rx * 0.6, icy + ry * 0.35, G); setp(icx + rx * 0.2, icy - ry * 0.7 + 1, G); }
+  }
+  if (state === 'sad') setp(icx - rx * 0.3, icy + ry * 0.55, G);
+  // upper lash (thick, with an outer flick), lower lash on the outer half, crease above
+  arc(t => upper(t) - sp.lash + 1, 0, 1, sp.lash, pal.k);
+  for (let k = 0; k < sp.lash + 1; k++) setp(W - 1 + k, upper(1) - sp.lash + 1 - k * 0.6, pal.k);
+  if (sp.lash >= 3) { setp(W - 3, upper(0.8) - 3, pal.k); setp(W - 5, upper(0.62) - 3, pal.k); }
+  arc(t => lower(t) + 1, 0.5, 1, 1, mix(pal.k, pal.skin, 0.45));
+  setp(W - 1, lower(1), pal.k);
+  arc(t => upper(t) - sp.lash - 1.2 - Math.sin(t * Math.PI) * 0.8, 0.22, 0.86, 1, pal.skinS);
+}
+
+function drawFeaturesHD(b: PixelBuffer, d: Design, e: ExprDef, talk: 0 | 1 | 2, blink: boolean) {
+  const S = HD;
+  const skin = e.pale ? T('#e6d2c6') : d.skin;
+  const kind = d.eyes === 'pug' ? 'young' : d.eyes;
+  const sp = EYE_HD[kind];
+  const eyeName = blink && e.eye !== 'happy' && e.eye !== 'closed' && e.eye !== 'wink' && e.eye !== 'pain' ? 'closed' : e.eye;
+  const set = EYES[kind];
+  const ew1 = Math.max(...(set[e.eye] ?? set.open).map(r => r.length));
+  const ex = (d.eyeX ?? 17) * S, ey = (d.eyeY ?? 26) * S;
+  const pal = { k: col(d.lash), w: col('#ffffff'), wS: col('#d8dcec'), I: col(d.iris[0]), i: col(d.iris[1]), j: col(d.iris[2]), skin: skin[2], skinS: skin[1] };
+  const rx = PW * S - ex - sp.w + (sp.w - ew1 * S) * 0; // mirrored position of the right eye
+  const lState = e.eye === 'wink' ? (blink ? 'closed' : 'open') : eyeName;
+  eyeHD(b, ex, ey, -1, sp, lState, pal);
+  eyeHD(b, rx, ey, 1, sp, eyeName, pal);
+  // brows: thick tapered strokes above each eye, inner ends tilted by browIn
+  const bc = col(d.brow), bcs = mix(bc, skin[0], 0.35);
+  const bh = (d.browH ?? 1) * 2;
+  const by = ey - 5 - Math.max(0, e.brow) * 2 + (e.brow < 0 ? 2 : 0);
+  for (let i = -1; i < sp.w + 1; i++) {
+    const tIn = (i + 1) / (sp.w + 1);
+    const arch = -Math.sin(tIn * Math.PI) * 1.4;
+    const th = Math.max(1, Math.round(bh * (0.55 + 0.45 * tIn)));
+    const offR = -(e.browIn * (1 - tIn)) * 1.1 + arch, offL = offR;
+    for (let k = 0; k < th; k++) {
+      const yR = Math.round(by + offR + k), yL = Math.round(by + offL + k);
+      const c = k === th - 1 && th > 1 ? bcs : bc;
+      const xr = rx + i, xl = ex + sp.w - 1 - i;
+      if (b.get(xr, yR) >>> 24) b.set(xr, yR, c);
+      if (b.get(xl, yL) >>> 24) b.set(xl, yL, c);
+    }
+  }
+  // nose: a soft shadow wedge and a highlight dot
+  const ny = ((d.eyeY ?? 26) + (d.eyes === 'old' ? 7 : 8)) * S;
+  const cx = PW; // PW*S/2
+  for (const [x, y] of [[1, 0], [1, 1], [0, 2], [-1, 3], [0, 3]]) if (b.get(cx + x, ny + y) >>> 24) b.set(cx + x, ny + y, skin[1]);
+  if (b.get(cx - 2, ny) >>> 24) b.set(cx - 2, ny, skin[3]);
+  // blush: a soft pink patch with anime hatch lines
+  const blush = col(d.blush ?? '#f4a0a0');
+  if (e.blush || d.rosy) {
+    const k = e.blush ? 1 : 0.5;
+    for (const side of [-1, 1]) {
+      const bx = side < 0 ? ex + sp.w * 0.5 : rx + sp.w * 0.5, byy = ey + sp.h + 4;
+      for (let y = -2; y <= 2; y++) for (let x = -5; x <= 5; x++) {
+        if ((x / 5.5) ** 2 + (y / 2.4) ** 2 > 1) continue;
+        const X = Math.round(bx + x), Y = byy + y;
+        if (!(b.get(X, Y) >>> 24)) continue;
+        const hatch = e.blush && ((x - y * 1.2 + 20) % 3 === 0) && Math.abs(y) < 2;
+        b.set(X, Y, hatch ? mix(blush, skin[0], 0.35) : mix(b.get(X, Y), blush, 0.4 * k));
+      }
+    }
+  }
+  // mouth: the template doubled with scale2x
+  let mn = e.mouth;
+  if (talk === 1) mn = mn === 'laugh' || mn === 'shout' ? mn : 'talk1';
+  if (talk === 2) mn = mn === 'laugh' || mn === 'shout' || mn === 'grin' ? mn : 'talk2';
+  const mt = epx2(MOUTHS[mn] ?? MOUTHS.line);
+  const mw = Math.max(...mt.map(r => r.length));
+  const my = (d.mouthY ?? (d.eyeY ?? 26) + 12) * S;
+  stampT(b, mt, PW - Math.floor(mw / 2), my, {
+    k: shade(skin[0], -0.35), m: mix(skin[0], col('#8a3040'), 0.35), M: col('#5a1a26'), R: col('#e0707e'), T: col('#fbf6ee'), s: skin[1],
+  });
+  if (e.sweat) {
+    const x = rx + sp.w + 2, y = ey - 8;
+    for (let k = 0; k < 7; k++) for (let q = -3; q <= 3; q++) {
+      const r = k < 3 ? k * 0.7 : 3 - (k - 3) * 0.4;
+      if (Math.abs(q) > r) continue;
+      b.set(x + q, y + k, k > 4 ? col('#4f9fd8') : q < 0 ? col('#dff4ff') : col('#7cc4f0'));
+    }
+  }
+  if (e.tear) for (let k = 0; k < 6; k++) { b.set(ex + 3, ey + sp.h + k, col(k < 2 ? '#dff4ff' : '#5ab0f0')); b.set(ex + 4, ey + sp.h + k + 1, col('#9ad8ff')); }
+  if (e.lines) for (let i = 0; i < 4; i++) for (const bx of [ex + 2 + i * 3, rx + 2 + i * 3]) for (let k = 0; k < 3; k++) if (b.get(bx, ey + sp.h + 2 + k) >>> 24) b.set(bx, ey + sp.h + 2 + k, skin[0]);
+}
+
+/** thicken the silhouette outline by one more pixel */
+function thicken(b: PixelBuffer, ink: C) {
+  const src = b.data.slice();
+  for (let y = 0; y < b.h; y++) for (let x = 0; x < b.w; x++) {
+    const i = y * b.w + x;
+    if (src[i] >>> 24) continue;
+    if ((x > 0 && src[i - 1] >>> 24) || (x < b.w - 1 && src[i + 1] >>> 24) || (y > 0 && src[i - b.w] >>> 24) || (y < b.h - 1 && src[i + b.w] >>> 24)) b.data[i] = ink;
+  }
+}
+
+/** upscale a 1x buffer 2x with scale2x (for Chunk's hand-placed face) */
+function epxBuf(src: PixelBuffer): PixelBuffer {
+  const w = src.w, h = src.h, o = new PixelBuffer(w * 2, h * 2);
+  const at = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : src.data[y * w + x]);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const P = at(x, y), A = at(x, y - 1), B = at(x + 1, y), C2 = at(x - 1, y), D = at(x, y + 1);
+    o.data[(y * 2) * o.w + x * 2] = C2 === A && C2 !== D && A !== B ? A : P;
+    o.data[(y * 2) * o.w + x * 2 + 1] = A === B && A !== C2 && B !== D ? B : P;
+    o.data[(y * 2 + 1) * o.w + x * 2] = D === C2 && D !== B && C2 !== A ? C2 : P;
+    o.data[(y * 2 + 1) * o.w + x * 2 + 1] = B === D && B !== A && D !== C2 ? D : P;
+  }
+  return o;
+}
+
+/** extra detail only the 2x bust has room for: hair strands and sheen, fringe shadow on the skin, cloth texture */
+function detailHD(p: Pic, m: Mats) {
+  const W = p.W, H = p.H;
+  const hair = new Set([m.hair, m.hairB]);
+  for (let y = 1; y < H - 2; y++) for (let x = 1; x < W - 1; x++) {
+    const i = y * W + x, mt = p.mat[i];
+    const u = p.U(x), v = p.V(y);
+    if (hair.has(mt)) {
+      // fine strands following the fall of the hair, a broken sheen band, light on the left edge
+      const flow = u * 1.9 + Math.sin(v * 0.42 + u * 0.2) * 1.4;
+      if (((flow % 2.6) + 2.6) % 2.6 < 0.34 && hash2(x, y >> 2) > 0.25) p.col[i] = shade(p.col[i], -0.14);
+      else if (((flow + 1.3) % 2.6 + 2.6) % 2.6 < 0.2 && v > 8 && v < 20 && hash2(x >> 1, y) > 0.4) p.col[i] = shade(p.col[i], 0.14);
+      if (!hair.has(p.mat[i - 1]) && p.mat[i - 1] === 0 && u < CX) p.col[i] = shade(p.col[i], 0.1);
+    } else if (mt === m.skin) {
+      // soft shadow cast by the fringe and the hair at the temples
+      if (hair.has(p.mat[i - W]) || hair.has(p.mat[i - 2 * W])) p.col[i] = mix(p.col[i], shade(p.col[i], -0.18), 0.7);
+      else if (hair.has(p.mat[i - 3 * W]) && (x + y) % 2 === 0) p.col[i] = mix(p.col[i], shade(p.col[i], -0.18), 0.5);
+    } else if (mt === m.cloth || mt === m.cloth2) {
+      // woven texture and a darker hem of shadow under the chin
+      if ((x + (y >> 1)) % 3 === 0 && (y & 1)) p.col[i] = shade(p.col[i], -0.06);
+      if (p.mat[i - W] === m.neck || p.mat[i - 2 * W] === m.neck) p.col[i] = shade(p.col[i], -0.16);
+    }
+  }
+}
+const hash2 = (x: number, y: number) => { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+
+const hdCache = new Map<string, PixelBuffer>();
+export function renderAnimePortraitHD(id: string, expr: string, talk: 0 | 1 | 2 = 0, blink = false): PixelBuffer {
+  const key = `${id}|${expr}|${talk}|${blink ? 1 : 0}`;
+  const hit = hdCache.get(key);
+  if (hit) return hit;
+  let out: PixelBuffer;
+  if (id === 'chunk') out = epxBuf(chunkPortrait(expr, talk, blink));
+  else {
+    const d = DESIGNS[id] ?? MORI;
+    const e = EXPR[expr] ?? EXPR.neutral;
+    const p = new Pic(PW * HD, PH * HD, HD);
+    const m = mats(p);
+    const skin = e.pale ? T('#e6d2c6') : d.skin;
+    const dd: Design = { ...d, skin };
+    d.back?.(p, m);
+    drawFace(p, m, dd);
+    d.body.call(dd, p, m);
+    d.front(p, m);
+    detailHD(p, m);
+    const ink = hex('#24161c');
+    out = p.finish({ outline: ink });
+    thicken(out, ink);
+    drawFeaturesHD(out, dd, e, talk, blink);
+    d.postHD?.(out, HD, e);
+  }
+  if (hdCache.size > 400) hdCache.clear();
+  hdCache.set(key, out);
+  return out;
+}

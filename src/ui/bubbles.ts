@@ -254,8 +254,8 @@ export class Bubbles {
   readonly cu: CloseUps;
   /** Stardew-style portrait dialogue box */
   readonly pb: PortraitBox;
-  /** 'box': blocking dialogue from the cast goes to the portrait box (close: false forces a bubble) */
-  mode: 'box' | 'bubble' = 'box';
+  /** 'bubble': anime speech bubbles over the speakers with cinematic close-up cut-ins on dramatic lines; 'box': the portrait box */
+  mode: 'box' | 'bubble' = 'bubble';
 
   constructor(parent: HTMLElement) {
     if (!styled) {
@@ -512,7 +512,7 @@ export class Bubbles {
         }
         this.pb.hide();
         // cinematic close-up for dramatic lines (kept while the same speaker keeps talking)
-        const dramatic = line.style === 'shout' || ['shocked', 'surprised', 'angry', 'scared'].includes(line.expr ?? '');
+        const dramatic = line.style === 'shout' || ['shocked', 'surprised', 'angry', 'scared', 'excited', 'cry', 'wow'].includes(line.expr ?? '');
         const close = isCastId(line.who) && (line.close ?? (dramatic || (this.cu.active && this.closeWho === line.who)));
         const ref = { lv: null as Live | null };
         if (close) this.cu.show(line.who as never, line.expr ?? (this.closeWho === line.who ? this.closeExpr : 'neutral'), { name: sp?.name ?? line.who, style: line.style, talking: () => !!ref.lv && !ref.lv.done });
