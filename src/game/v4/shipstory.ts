@@ -233,8 +233,8 @@ export class ShipStory {
     this.p.facing = 1;
     await this.say([{ who: 'mori', text: 'Kettle on. Now: the most delicate procedure in all of marine science.', expr: 'determined' }]);
     this.pose('pour');
-    const { runNoodleGame } = await import('../../ui/v4/noodles');
-    const res = await runNoodleGame();
+    const { runRamenPour } = await import('../../ui/v6/ramen');
+    const res = await runRamenPour();
     this.pose(null);
     const line: Record<string, BubbleLine> = {
       perfect: { who: 'mori', text: 'Right on the line. Textbook noodle hydration.', expr: 'smug' },
