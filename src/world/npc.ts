@@ -72,6 +72,8 @@ export interface Interactable {
   action: () => void | Promise<void>;
   /** where the player should stand */
   standX?: number;
+  /** the current quest step points here: a bouncing marker floats over it */
+  quest?: () => boolean;
 }
 
 /** Floating "E  Talk to Pip" prompt positioned over the canvas. */

@@ -142,10 +142,10 @@ export interface BubbleLine {
 const CSS = `
 .bubbles { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
 .bub { position: absolute; left: 0; top: 0; max-width: min(30em, 46vw); min-width: 5em; transform-origin: 50% 100%; pointer-events: none; will-change: transform; }
-.bub .box { position: relative; color: #0c0a0c; font-family: 'Pixelify Sans', 'Silkscreen', monospace; font-size: 1.05em; line-height: 1.32;
+.bub .box { position: relative; color: #0c0a0c; font-family: 'Jersey 15', 'Pixelify Sans', 'Silkscreen', monospace; font-size: 1.05em; line-height: 1.32;
   border-style: solid; border-width: 9px; border-image: var(--bub-img) 3 fill / 9px / 0 stretch; image-rendering: pixelated; padding: 0.15em 0.35em 0.2em;
   filter: drop-shadow(0 4px 0 rgba(0,0,0,0.45)); -webkit-font-smoothing: none; }
-.bub .nm { position: absolute; left: -2px; top: -1.75em; font-family: 'Silkscreen', 'Pixelify Sans', monospace; font-weight: 700; font-size: 0.72em; padding: 0.15em 0.6em 0.1em 0.5em;
+.bub .nm { position: absolute; left: -2px; top: -1.75em; font-family: 'Jersey 10', 'Silkscreen', 'Pixelify Sans', monospace; font-weight: 700; font-size: 0.72em; padding: 0.15em 0.6em 0.1em 0.5em;
   color: #fff; background: #0c0a0c; white-space: nowrap; letter-spacing: 0.06em; text-transform: uppercase; box-shadow: inset 0.35em 0 0 var(--c, #3fbca6), 0 3px 0 rgba(0,0,0,0.4); }
 .bub .inner { position: relative; isolation: isolate; }
 .bub .tx { position: relative; }
@@ -178,7 +178,7 @@ const CSS = `
 .bub .more { position: absolute; right: 2px; bottom: -3px; width: 0.8em; height: 0.55em; background: #0c0a0c; clip-path: polygon(0 0, 100% 0, 50% 100%); animation: bubNext 0.6s steps(2) infinite; opacity: 0; }
 .bub.done .more { opacity: 1; }
 .bub .chs { display: flex; flex-direction: column; gap: 0.3em; margin-top: 0.45em; pointer-events: auto; }
-.bub .chs button { text-align: left; font-family: 'Pixelify Sans', monospace; font-size: 0.95em; background: #fff; color: #0c0a0c; border: 0; box-shadow: 0 0 0 3px #0c0a0c;
+.bub .chs button { text-align: left; font-family: 'Jersey 15', 'Pixelify Sans', monospace; font-size: 0.95em; background: #fff; color: #0c0a0c; border: 0; box-shadow: 0 0 0 3px #0c0a0c;
   padding: 0.25em 0.6em; margin: 3px; cursor: pointer; }
 .bub .chs button:hover, .bub .chs button.sel { background: #0c0a0c; color: #fff; transform: translateX(4px); }
 .bub .chs button.sel::before { content: '▶ '; }
@@ -190,7 +190,7 @@ const CSS = `
   -webkit-mask: radial-gradient(closest-side, transparent 58%, #000 60%, #000 92%, transparent 100%); mask: radial-gradient(closest-side, transparent 58%, #000 60%, #000 92%, transparent 100%); }
 .bub.shout .fx.burst { opacity: 0.9; animation: burstSpin 0.4s steps(3) infinite; }
 @keyframes burstSpin { 0% { transform: rotate(0deg) scale(1); } 50% { transform: rotate(4deg) scale(1.04); } 100% { transform: rotate(8deg) scale(1); } }
-.bub .fx.marks { right: -0.9em; top: -1.4em; font-family: 'Silkscreen', monospace; font-weight: 700; font-size: 1.3em; color: #0c0a0c; display: none; text-shadow: 2px 2px 0 #fff, -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff; transform: rotate(12deg); }
+.bub .fx.marks { right: -0.9em; top: -1.4em; font-family: 'Jersey 10', 'Silkscreen', monospace; font-weight: 700; font-size: 1.3em; color: #0c0a0c; display: none; text-shadow: 2px 2px 0 #fff, -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff; transform: rotate(12deg); }
 .bub.shout .fx.marks { display: block; animation: marksPop 0.35s cubic-bezier(.2,1.9,.4,1) both; }
 @keyframes marksPop { from { transform: rotate(12deg) scale(0); } }
 .bub.shout .box { font-size: 1.2em; font-weight: 700; --bub-img: var(--bub-shout); }
@@ -199,7 +199,7 @@ const CSS = `
 .bub.whisper .fx.marks { display: block; content: ''; }
 .bub.think .box { --bub-img: var(--bub-cloud); color: #3a3a48; }
 .bub.think .tail { background-image: var(--think-img); width: 16px; height: 18px; bottom: -18px; }
-.bub.phone .box { --bub-img: var(--bub-phone); color: #9dffd8; font-family: 'Silkscreen', monospace; font-size: 0.95em; letter-spacing: 0.02em; }
+.bub.phone .box { --bub-img: var(--bub-phone); color: #9dffd8; font-family: 'Jersey 10', 'Silkscreen', monospace; font-size: 0.95em; letter-spacing: 0.02em; }
 .bub.phone .box::before { content: '◉ TRANSLATE.EXE'; display: block; font-size: 0.7em; color: #3fbca6; margin-bottom: 0.25em; animation: caret 1s steps(1) infinite; }
 .bub.phone .tail { background-image: var(--tail-phone); }
 .bub.phone .nm, .bub.phone .typing b, .bub.phone .caret { background: #9dffd8; color: #0c0a0c; }

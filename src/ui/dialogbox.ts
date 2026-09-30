@@ -13,7 +13,7 @@ const CSS = `
 .dbx { display: flex; align-items: stretch; gap: 6px; width: min(97vw, 1000px); }
 .dbx .dtx, .dbx .dpt { border-style: solid; border-width: calc(var(--sk-u, 3px) * 6); border-image: var(--sk-frame) 6 fill / calc(var(--sk-u, 3px) * 6) / 0 round;
   image-rendering: pixelated; filter: drop-shadow(0 5px 0 rgba(0,0,0,0.35)); }
-.dbx .dtx { position: relative; flex: 1; min-height: calc(60px * var(--ps) + 1.6em); color: #3a2614; font-family: 'Pixelify Sans', 'Silkscreen', monospace;
+.dbx .dtx { position: relative; flex: 1; min-height: calc(60px * var(--ps) + 1.6em); color: #3a2614; font-family: 'Jersey 15', 'Pixelify Sans', 'Silkscreen', monospace;
   font-size: clamp(15px, 2.05vw, 23px); line-height: 1.38; padding: 0.15em 0.45em; -webkit-font-smoothing: none; }
 .dbx .dtx .tx .w { white-space: nowrap; }
 .dbx .dtx .tx .c { opacity: 0; }
@@ -38,7 +38,7 @@ const CSS = `
 .dbx .dtx .chs button.sel, .dbx .dtx .chs button:hover { background: rgba(90,164,71,0.3); box-shadow: inset 0 0 0 2px #3f7a34; }
 .dbx .dtx .chs button.sel::before { content: '▶ '; color: #2f6b2a; }
 .dbx .dtx .chs .key { margin: 0 0.35em 0 0 !important; }
-.dbx .dtx .nmx { font-family: 'Silkscreen', monospace; font-size: 0.62em; color: #6a4a2a; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.1em; display: none; }
+.dbx .dtx .nmx { font-family: 'Jersey 10', 'Silkscreen', monospace; font-size: 0.62em; color: #6a4a2a; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.1em; display: none; }
 .dbx.noport .dtx .nmx { display: block; }
 .dbx .dpt { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding: 0; background: none; }
 .dbx.noport .dpt { display: none; }
@@ -49,7 +49,7 @@ const CSS = `
 @keyframes dbxBob { 30% { transform: translateY(-4%) scale(1.03, 0.98); } }
 .dbx.shake .dpt canvas, .dbx.shout .dtx { animation: dbxShakeBox 0.1s steps(2) infinite; }
 @keyframes dbxShakeBox { 50% { transform: translate(2px, -1px); } }
-.dbx .dpt .plate { margin-top: 4px; font-family: 'Silkscreen', 'Pixelify Sans', monospace; font-weight: 700; font-size: clamp(11px, 1.35vw, 16px); letter-spacing: 0.08em;
+.dbx .dpt .plate { margin-top: 4px; font-family: 'Jersey 10', 'Silkscreen', 'Pixelify Sans', monospace; font-weight: 700; font-size: clamp(11px, 1.35vw, 16px); letter-spacing: 0.08em;
   text-transform: uppercase; color: #fff; background: var(--pc3, #2f6b2a); padding: 0.18em 0.8em 0.12em; box-shadow: 0 0 0 2px #2a1a10, 0 3px 0 2px #2a1a10; white-space: nowrap; }
 .dbx.shout .dtx { font-weight: 700; }
 .dbx.whisper .dtx .tx { color: #7a6a58; }

@@ -52,21 +52,21 @@ export interface FishingHost {
 }
 
 const CSS = `
-.fsh-hint { position: absolute; left: 0; right: 0; bottom: 14%; z-index: 25; text-align: center; pointer-events: none; font-family: 'Pixelify Sans', monospace;
+.fsh-hint { position: absolute; left: 0; right: 0; bottom: 14%; z-index: 25; text-align: center; pointer-events: none; font-family: 'Jersey 15', 'Pixelify Sans', monospace;
   font-size: clamp(14px, 2vw, 20px); color: rgba(255, 246, 228, 0.92); text-shadow: 0 2px 0 #000, 0 0 12px rgba(0,0,0,0.6); opacity: 0; transition: opacity 0.6s; }
 .fsh-hint.on { opacity: 1; }
 .fsh-hint .key { margin: 0 0.25em !important; }
 .fsh-card { position: absolute; right: max(5vw, 20px); top: 48%; transform: translateY(-50%); z-index: 26; width: min(320px, 80vw); text-align: center; pointer-events: auto;
   border-style: solid; border-width: calc(var(--sk-u, 3px) * 6); border-image: var(--sk-frame) 6 fill / calc(var(--sk-u, 3px) * 6) / 0 round; image-rendering: pixelated; padding: 10px 16px;
-  font-family: 'Pixelify Sans', monospace; color: #3a2614; animation: fshCard 0.35s cubic-bezier(.2,1.7,.4,1) both; }
+  font-family: 'Jersey 15', 'Pixelify Sans', monospace; color: #3a2614; animation: fshCard 0.35s cubic-bezier(.2,1.7,.4,1) both; }
 @keyframes fshCard { from { transform: translateY(-50%) translateX(30px) scale(0.8); opacity: 0; } }
-.fsh-card h4 { margin: 0; font: 700 18px 'Silkscreen', monospace; color: #2f6b2a; text-transform: uppercase; }
+.fsh-card h4 { margin: 0; font: 700 18px 'Jersey 10', 'Silkscreen', monospace; color: #2f6b2a; text-transform: uppercase; }
 .fsh-card .mi { color: #8a6a4a; font-size: 13px; }
 .fsh-card canvas { image-rendering: pixelated; margin: 6px auto; display: block; }
 .fsh-card .st { color: #e8b840; font-size: 20px; letter-spacing: 3px; text-shadow: 0 2px 0 #6a4a1a; }
 .fsh-card .ft { font-size: 13px; margin-top: 4px; }
-.fsh-card .rare { color: #b04a8a; font: 700 12px 'Silkscreen', monospace; }
-.fsh-card .ok { margin-top: 8px; font: 700 12px 'Silkscreen', monospace; color: #6a4a2a; }
+.fsh-card .rare { color: #b04a8a; font: 700 12px 'Jersey 10', 'Silkscreen', monospace; }
+.fsh-card .ok { margin-top: 8px; font: 700 12px 'Jersey 10', 'Silkscreen', monospace; color: #6a4a2a; }
 `;
 let styled = false;
 

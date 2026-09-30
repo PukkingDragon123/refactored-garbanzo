@@ -29,7 +29,7 @@ const CSS = `
 @keyframes cuBreath { 50% { transform: translateY(-0.6%) scale(1.005); } }
 .cu.shake canvas { animation: cuShake 0.09s steps(2) infinite; }
 @keyframes cuShake { 50% { transform: translate(0.6%, -0.4%); } }
-.cu .nm { position: absolute; left: 3%; bottom: 5%; font-family: 'Silkscreen', 'Pixelify Sans', monospace; font-weight: 700; font-size: clamp(12px, 1.6vw, 20px); letter-spacing: 0.12em;
+.cu .nm { position: absolute; left: 3%; bottom: 5%; font-family: 'Jersey 10', 'Silkscreen', 'Pixelify Sans', monospace; font-weight: 700; font-size: clamp(12px, 1.6vw, 20px); letter-spacing: 0.12em;
   color: #fff; background: #0c0a0c; padding: 0.3em 0.9em 0.25em; box-shadow: inset 0.35em 0 0 var(--c1, #3fbca6), 0 4px 0 rgba(0,0,0,0.4); }
 .cu .fl { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
 .cu.flash .fl { animation: cuFlash 0.25s ease-out; }

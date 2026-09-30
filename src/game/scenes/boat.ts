@@ -340,9 +340,9 @@ export class BoatScene extends FieldScene {
       .bo-root svg { position: absolute; inset: 0; width: 100%; height: 100%; shape-rendering: crispEdges; }
       .bo-root svg polyline { fill: none; stroke: #fff; stroke-width: 3; stroke-dasharray: 2000; stroke-dashoffset: 2000; animation: boCrack 0.28s steps(6) forwards; }
       .bo-root.dark svg { animation: boShake 0.08s steps(2) 8, boFade 1.2s steps(6) 0.6s forwards; }
-      .bo-root .big { position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%) rotate(-6deg); font-family: 'Silkscreen', monospace; font-weight: 700; font-size: clamp(40px, 9vw, 120px); color: #fff; letter-spacing: 0.06em; text-shadow: 6px 6px 0 #d0301e; opacity: 0; }
+      .bo-root .big { position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%) rotate(-6deg); font-family: 'Jersey 10', 'Silkscreen', monospace; font-weight: 700; font-size: clamp(40px, 9vw, 120px); color: #fff; letter-spacing: 0.06em; text-shadow: 6px 6px 0 #d0301e; opacity: 0; }
       .bo-root.dark .big { animation: boBig 0.9s steps(8) forwards; }
-      .bo-root .lines { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(40em, 86vw); text-align: center; font-family: 'Pixelify Sans', monospace; color: #b8b8c4; font-size: 1.25em; line-height: 2; }
+      .bo-root .lines { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(40em, 86vw); text-align: center; font-family: 'Jersey 15', 'Pixelify Sans', monospace; color: #b8b8c4; font-size: 1.25em; line-height: 2; }
       .bo-root .lines div { opacity: 0; animation: boLine 2.4s steps(10) forwards; }
       @keyframes boFlash { 0% { opacity: 1; } 100% { opacity: 0; } }
       @keyframes boCrack { to { stroke-dashoffset: 0; } }

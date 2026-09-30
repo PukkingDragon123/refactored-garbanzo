@@ -17,11 +17,11 @@ const CSS = `
 @keyframes cuOut { to { opacity: 0; } }
 .cu-wrap canvas { image-rendering: pixelated; image-rendering: crisp-edges; animation: cuZoom 0.9s cubic-bezier(.2,.8,.3,1) both; }
 @keyframes cuZoom { from { transform: scale(1.35); filter: blur(6px) brightness(0.4); } to { transform: scale(1); filter: none; } }
-.cu-hint { position: absolute; left: 0; right: 0; bottom: 6%; text-align: center; font-family: 'Pixelify Sans', monospace; font-size: clamp(14px, 2.2vw, 22px);
+.cu-hint { position: absolute; left: 0; right: 0; bottom: 6%; text-align: center; font-family: 'Jersey 15', 'Pixelify Sans', monospace; font-size: clamp(14px, 2.2vw, 22px);
   color: rgba(255, 246, 228, 0.92); text-shadow: 0 2px 0 #000, 0 0 12px rgba(0,0,0,0.6); letter-spacing: 0.04em; opacity: 0; transition: opacity 0.6s; pointer-events: none; }
 .cu-hint.on { opacity: 1; }
 .cu-hint .key { margin: 0 0.25em !important; }
-.cu-res { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%) rotate(-5deg); font-family: 'Silkscreen', monospace; font-weight: 700;
+.cu-res { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%) rotate(-5deg); font-family: 'Jersey 10', 'Silkscreen', monospace; font-weight: 700;
   font-size: clamp(34px, 8vw, 96px); letter-spacing: 0.06em; color: #fff7d8; pointer-events: none; white-space: nowrap;
   text-shadow: 5px 5px 0 #c8341e, -2px -2px 0 #3a1408, 2px -2px 0 #3a1408, -2px 2px 0 #3a1408, 0 0 30px rgba(255,200,90,0.6); animation: cuRes 1.9s steps(12) both; }
 .cu-res.bad { color: #e8f2ff; text-shadow: 5px 5px 0 #2a4a8a, -2px -2px 0 #0a1428, 2px -2px 0 #0a1428, -2px 2px 0 #0a1428; }
@@ -32,11 +32,11 @@ const CSS = `
   background: repeating-conic-gradient(rgba(255,240,200,0.16) 0 4deg, transparent 4deg 12deg); animation: cuBurst 1.9s ease-out both; }
 .cu-burst.bad { background: repeating-conic-gradient(rgba(200,220,255,0.1) 0 4deg, transparent 4deg 12deg); }
 @keyframes cuBurst { from { opacity: 0; transform: scale(0.4) rotate(0deg); } 15% { opacity: 1; } to { opacity: 0; transform: scale(1.1) rotate(25deg); } }
-.cu-say { position: absolute; left: 4%; top: 5%; max-width: min(56vw, 640px); pointer-events: none; font-family: 'Pixelify Sans', monospace; font-size: clamp(14px, 2vw, 21px);
+.cu-say { position: absolute; left: 4%; top: 5%; max-width: min(56vw, 640px); pointer-events: none; font-family: 'Jersey 15', 'Pixelify Sans', monospace; font-size: clamp(14px, 2vw, 21px);
   line-height: 1.3; color: #0c0a0c; background: #fff; padding: 0.4em 0.7em 0.45em; box-shadow: 0 0 0 3px #0c0a0c, 5px 6px 0 3px rgba(0,0,0,0.45); transform-origin: 10% 100%;
   animation: cuSay 0.3s cubic-bezier(.2,1.7,.4,1) both; }
 .cu-say.right { left: auto; right: 4%; transform-origin: 90% 100%; }
-.cu-say b { position: absolute; left: -3px; top: -1.55em; font-family: 'Silkscreen', monospace; font-size: 0.7em; letter-spacing: 0.08em; color: #fff; background: #0c0a0c; padding: 0.15em 0.6em;
+.cu-say b { position: absolute; left: -3px; top: -1.55em; font-family: 'Jersey 10', 'Silkscreen', monospace; font-size: 0.7em; letter-spacing: 0.08em; color: #fff; background: #0c0a0c; padding: 0.15em 0.6em;
   box-shadow: inset 0.35em 0 0 var(--c, #3fbca6); }
 .cu-say.shout { font-weight: 700; animation: cuSay 0.3s cubic-bezier(.2,1.7,.4,1) both, cuShk 0.1s steps(2) infinite 0.3s; }
 .cu-say em { font-style: normal; color: #d0301e; }

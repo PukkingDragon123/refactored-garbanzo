@@ -555,7 +555,7 @@ function injectCss() {
 .vf .breathbar.on { opacity: 1; }
 .vf .breathbar i { position: absolute; left: 0; top: 0; bottom: 0; background: #bfe8ff; }
 .vf .lcd { position: absolute; left: 6%; bottom: calc(7% + 2.4em); width: 12.5em; padding: 0.55em 0.55em 2.2em; background: #f4f1e6; box-shadow: 0 0 0 3px #1b1a1f, 0 8px 0 rgba(0,0,0,0.4);
-  opacity: 0; transform: translateY(140%) rotate(-3deg); transition: opacity 0.2s, transform 0.55s steps(7); font-family: 'Silkscreen', var(--pix); font-size: 0.72em; color: #3b3226; pointer-events: auto; cursor: pointer; }
+  opacity: 0; transform: translateY(140%) rotate(-3deg); transition: opacity 0.2s, transform 0.55s steps(7); font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 0.72em; color: #3b3226; pointer-events: auto; cursor: pointer; }
 .vf .lcd.on { opacity: 1; transform: translateY(0) rotate(calc(-3deg + var(--sh, 0) * 8deg * var(--w, 1))); animation: prWiggle 0.12s steps(2) infinite; animation-play-state: paused; }
 .vf .lcd.on:not(.dry) { animation-play-state: running; animation-duration: calc(0.5s - var(--sh, 0) * 0.4s); }
 @keyframes prWiggle { 50% { --w: -1; margin-left: calc(var(--sh, 0) * 6px); } }

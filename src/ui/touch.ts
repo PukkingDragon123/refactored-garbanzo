@@ -75,7 +75,7 @@ function knobImg() {
 
 const CSS = `
 .touch { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 30; touch-action: none; --tu: clamp(3px, 0.62vmin, 6px);
-  font-family: 'Silkscreen', 'Pixelify Sans', monospace; image-rendering: pixelated; -webkit-user-select: none; user-select: none; }
+  font-family: 'Jersey 10', 'Silkscreen', 'Pixelify Sans', monospace; image-rendering: pixelated; -webkit-user-select: none; user-select: none; }
 .touch.on { display: block; }
 .touch.hide .tc-l, .touch.hide .tc-r, .touch.hide .tc-top { opacity: 0; pointer-events: none !important; }
 .touch .tc-l, .touch .tc-r, .touch .tc-top { transition: opacity 0.2s; }

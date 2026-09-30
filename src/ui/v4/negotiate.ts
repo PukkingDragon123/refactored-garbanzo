@@ -19,10 +19,10 @@ const CSS = `
 .neg .pt.shake { animation: negShake 0.35s linear; }
 @keyframes negShake { 20% { transform: translateX(-3px); } 40% { transform: translateX(3px); } 60% { transform: translateX(-2px); } 80% { transform: translateX(2px); } }
 .neg .txt { flex: 1; display: flex; flex-direction: column; gap: 0.4em; min-width: 0; }
-.neg .nm { font-family: 'Silkscreen', monospace; color: #8a4b2a; font-size: 0.9em; letter-spacing: 0.08em; }
+.neg .nm { font-family: 'Jersey 10', 'Silkscreen', monospace; color: #8a4b2a; font-size: 0.9em; letter-spacing: 0.08em; }
 .neg .line { font-size: clamp(14px, 1.9vw, 18px); line-height: 1.32; min-height: 3.2em; color: #2a1a10; }
 .neg .line.reply { color: #5a4024; font-style: italic; }
-.neg .meters { display: grid; grid-template-columns: auto 1fr; gap: 0.25em 0.5em; align-items: center; font-family: 'Silkscreen', monospace; font-size: 0.72em; }
+.neg .meters { display: grid; grid-template-columns: auto 1fr; gap: 0.25em 0.5em; align-items: center; font-family: 'Jersey 10', 'Silkscreen', monospace; font-size: 0.72em; }
 .neg .bar { height: 10px; background: #c8b48a; box-shadow: 0 0 0 2px #3a2614; position: relative; }
 .neg .bar i { position: absolute; left: 0; top: 0; bottom: 0; transition: width 0.35s; }
 .neg .bar.trust i { background: linear-gradient(#7ad07a, #3a9a4a); }
@@ -31,11 +31,11 @@ const CSS = `
 .neg .timer i { display: block; height: 100%; background: #e8b840; }
 .neg .timer.low i { background: #e8543a; }
 .neg .ans { display: flex; flex-direction: column; gap: 0.35em; }
-.neg .ans button { text-align: left; font-family: 'Pixelify Sans', monospace; font-size: clamp(13px, 1.7vw, 16px); padding: 0.45em 0.7em; background: #fff4d8; color: #2a1a10; border: 0; box-shadow: 0 0 0 2px #3a2614, 0 3px 0 #3a2614; cursor: pointer; }
+.neg .ans button { text-align: left; font-family: 'Jersey 15', 'Pixelify Sans', monospace; font-size: clamp(13px, 1.7vw, 16px); padding: 0.45em 0.7em; background: #fff4d8; color: #2a1a10; border: 0; box-shadow: 0 0 0 2px #3a2614, 0 3px 0 #3a2614; cursor: pointer; }
 .neg .ans button:hover, .neg .ans button.sel { background: #ffe39a; }
 .neg .ans button .key { margin-right: 0.5em; }
 .neg .ans button:disabled { opacity: 0.55; cursor: default; }
-.neg .pop { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'Silkscreen', monospace; font-size: clamp(28px, 6vw, 56px); color: #ffe45a;
+.neg .pop { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'Jersey 10', 'Silkscreen', monospace; font-size: clamp(28px, 6vw, 56px); color: #ffe45a;
   text-shadow: 0 0 20px #ff7a2a, 0 3px 0 #3a1a10; pointer-events: none; animation: negPop 0.9s ease-out both; }
 @keyframes negPop { from { transform: scale(0.3); opacity: 1; } 70% { opacity: 1; } to { transform: scale(1.4); opacity: 0; } }
 `;

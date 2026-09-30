@@ -203,13 +203,13 @@ export class IsleStory implements IsleHooks {
     const s = this.s;
     const self = this;
     // wake Jenna
-    this.it({ get x() { return s.jenna.x; }, get y() { return s.jenna.y; }, w: 20, label: 'Wake Jenna', get standX() { return s.jenna.x - 22; }, enabled: () => this.flag('v4:isleWoke') && !this.flag('v4:jennaAwake'), action: () => this.wakeJenna() } as never);
+    this.it({ get x() { return s.jenna.x; }, get y() { return s.jenna.y; }, w: 20, label: 'Wake Jenna', get standX() { return s.jenna.x - 22; }, quest: () => true, enabled: () => this.flag('v4:isleWoke') && !this.flag('v4:jennaAwake'), action: () => this.wakeJenna() } as never);
     // the wreck: in and out through the breach
     const ld = { x: WRECK.climbX, y0: WRECK.floor, y1: groundY(WRECK.climbX) };
-    this.it({ x: WRECK.climbX, y: ld.y1, w: 16, label: 'Climb in through the hole', standX: WRECK.climbX, enabled: () => !s.inWreck, action: () => this.climbIn(ld) });
+    this.it({ x: WRECK.climbX, y: ld.y1, w: 16, label: 'Climb in through the hole', standX: WRECK.climbX, quest: () => this.flag('v4:jennaAwake') && !this.flag('v4:chunkWreck'), enabled: () => !s.inWreck, action: () => this.climbIn(ld) });
     this.it({ x: WRECK.climbX, y: ld.y0, w: 16, label: 'Climb out onto the sand', standX: WRECK.climbX, enabled: () => s.inWreck && Math.abs(this.p.x - WRECK.climbX) < 40, action: () => s.climbLadder(ld, 1) });
     // Chunk, eating
-    this.it({ get x() { return s.chunk.x; }, get y() { return s.chunk.y; }, w: 18, label: 'Chunk!', get standX() { return s.chunk.x - 26; }, enabled: () => s.inWreck && this.flag('v4:jennaAwake') && !this.flag('v4:chunkWreck'), action: () => this.foundChunk() } as never);
+    this.it({ get x() { return s.chunk.x; }, get y() { return s.chunk.y; }, w: 18, label: 'Chunk!', get standX() { return s.chunk.x - 26; }, quest: () => true, enabled: () => s.inWreck && this.flag('v4:jennaAwake') && !this.flag('v4:chunkWreck'), action: () => this.foundChunk() } as never);
     // Chunk found before Jenna is awake
     this.it({ get x() { return s.chunk.x; }, get y() { return s.chunk.y; }, w: 18, label: 'Chunk!', get standX() { return s.chunk.x - 26; }, enabled: () => s.inWreck && !this.flag('v4:jennaAwake'), action: () => this.say([
       { who: 'mori', text: 'Chunk! You’re okay! ...And you’re eating. Of course you are.', expr: 'surprised' },
@@ -225,14 +225,14 @@ export class IsleStory implements IsleHooks {
     look(SPOT.engine, WRECK.floor, 'The engine', () => [{ who: 'mori', text: 'Full of sand and seawater. Jenna is going to cry. Then she is going to fix it. Then she is going to cry again.', expr: 'worried' }], () => s.inWreck);
     look(774, WRECK.floor, 'Mori’s bunk', () => [{ who: 'mori', text: 'My sample jars! ...Most of my sample jars. Somewhere out there is a very confused plankton colony.', expr: 'sad' }], () => s.inWreck);
     // Joshu's boots and the trail
-    this.it({ x: SPOT.boots, y: groundY(SPOT.boots), w: 18, label: 'Boots in the sand', standX: SPOT.boots - 16, enabled: () => this.flag('v4:sealDone') && !this.flag('v4:shoes'), action: () => this.boots() });
-    this.it({ x: 6130, y: groundY(6130), w: 16, label: 'A scrap of navy cloth', standX: 6118, enabled: () => this.flag('v4:shoes') && !this.flag('v4:joshuFound'), action: () => this.say([
+    this.it({ x: SPOT.boots, y: groundY(SPOT.boots), w: 18, label: 'Boots in the sand', standX: SPOT.boots - 16, quest: () => true, enabled: () => this.flag('v4:sealDone') && !this.flag('v4:shoes'), action: () => this.boots() });
+    this.it({ x: 6130, y: groundY(6130), w: 16, label: 'A scrap of navy cloth', standX: 6118, quest: () => true, enabled: () => this.flag('v4:shoes') && !this.flag('v4:joshuFound'), action: () => this.say([
       { who: 'mori', text: 'Navy wool, snagged on the twig. That’s from his jacket. He came this way, and not long ago.', expr: 'determined' },
       { who: 'chunk', text: '*sniff sniff sniff* BOOF.', expr: 'serious' },
     ]).then(() => {}) });
     // Joshu
-    this.it({ get x() { return s.joshu.x; }, get y() { return s.joshu.y; }, w: 26, get label() { return self.joshuLabel(); }, get standX() { return s.joshu.x - 30; }, enabled: () => this.flag('v4:joshuFound') && !this.flag('v4:joshuAwake'), action: () => this.helpJoshu() } as never);
-    this.it({ x: SPOT.creek, y: groundY(SPOT.creek), w: 18, label: 'Scoop up creek water in your hat', standX: SPOT.creek - 14, enabled: () => this.flag('v4:joshuChecked') && !this.flag('v4:water') && !this.flag('v4:joshuAwake'), action: () => this.fetchWater() });
+    this.it({ get x() { return s.joshu.x; }, get y() { return s.joshu.y; }, w: 26, get label() { return self.joshuLabel(); }, get standX() { return s.joshu.x - 30; }, quest: () => true, enabled: () => this.flag('v4:joshuFound') && !this.flag('v4:joshuAwake'), action: () => this.helpJoshu() } as never);
+    this.it({ x: SPOT.creek, y: groundY(SPOT.creek), w: 18, label: 'Scoop up creek water in your hat', standX: SPOT.creek - 14, quest: () => true, enabled: () => this.flag('v4:joshuChecked') && !this.flag('v4:water') && !this.flag('v4:joshuAwake'), action: () => this.fetchWater() });
   }
 
   private joshuLabel() {

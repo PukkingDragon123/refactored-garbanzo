@@ -9,7 +9,7 @@ import { audio } from '../../core/audio';
 
 const CSS = `
 .mg-wrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 30; background: rgba(8,6,10,0.42);
-  animation: mgIn 0.18s ease-out both; font-family: 'Pixelify Sans', 'Silkscreen', monospace; color: #3a2614; -webkit-font-smoothing: none; }
+  animation: mgIn 0.18s ease-out both; font-family: 'Jersey 15', 'Pixelify Sans', 'Silkscreen', monospace; color: #3a2614; -webkit-font-smoothing: none; }
 @keyframes mgIn { from { opacity: 0; } }
 .mg-wrap.out { animation: mgOut 0.16s ease-in both; }
 @keyframes mgOut { to { opacity: 0; } }
@@ -17,7 +17,7 @@ const CSS = `
   image-rendering: pixelated; filter: drop-shadow(0 6px 0 rgba(0,0,0,0.35)); padding: 0.4em 0.7em 0.6em; max-width: 96vw; max-height: 94vh; box-sizing: border-box;
   animation: mgPop 0.28s cubic-bezier(.2,1.6,.4,1) both; }
 @keyframes mgPop { from { transform: scale(0.85) translateY(10px); } }
-.mg h3 { margin: 0 0 0.3em; text-align: center; font-family: 'Silkscreen', monospace; font-size: clamp(14px, 2vw, 20px); color: #fff; letter-spacing: 0.06em; text-transform: uppercase;
+.mg h3 { margin: 0 0 0.3em; text-align: center; font-family: 'Jersey 10', 'Silkscreen', monospace; font-size: clamp(14px, 2vw, 20px); color: #fff; letter-spacing: 0.06em; text-transform: uppercase;
   text-shadow: 0 2px 0 #1f3a1c, 2px 0 0 #1f3a1c, -2px 0 0 #1f3a1c, 0 -2px 0 #1f3a1c; }
 .mg .cv { display: block; margin: 0 auto; image-rendering: pixelated; image-rendering: crisp-edges; background: #1a1418; box-shadow: 0 0 0 3px #3a2614, inset 0 0 0 2px #000; }
 .mg .hint { position: static; max-width: none; padding: 0; line-height: 1.4; text-align: center; font-size: clamp(12px, 1.6vw, 16px); margin-top: 0.45em; color: #5a4024; }
@@ -27,7 +27,7 @@ const CSS = `
 .mg .say canvas { width: 56px; height: 60px; image-rendering: pixelated; background: #f4e0b0; box-shadow: 0 0 0 2px #3a2614; flex: none; }
 .mg .say .t { font-size: clamp(13px, 1.7vw, 17px); line-height: 1.3; }
 .mg .say .t b { color: #b04a8a; }
-.mg .res { text-align: center; font-family: 'Silkscreen', monospace; font-size: clamp(16px, 2.4vw, 24px); color: #2f6b2a; min-height: 1.3em; margin-top: 0.3em; }
+.mg .res { text-align: center; font-family: 'Jersey 10', 'Silkscreen', monospace; font-size: clamp(16px, 2.4vw, 24px); color: #2f6b2a; min-height: 1.3em; margin-top: 0.3em; }
 .mg .res.bad { color: #a8382a; }
 .mg .steps { display: flex; justify-content: center; gap: 6px; margin-bottom: 0.4em; }
 .mg .steps i { width: 26px; height: 8px; background: #c8b48a; box-shadow: 0 0 0 2px #3a2614; }
@@ -149,7 +149,7 @@ export const px = {
   },
   text(g: CanvasRenderingContext2D, s: string, x: number, y: number, c: string, size = 8, align: CanvasTextAlign = 'left') {
     g.fillStyle = c;
-    g.font = `${size}px 'Pixelify Sans', monospace`;
+    g.font = `${size}px 'Jersey 15', 'Pixelify Sans', monospace`;
     g.textAlign = align;
     g.textBaseline = 'top';
     g.fillText(s, Math.round(x), Math.round(y));

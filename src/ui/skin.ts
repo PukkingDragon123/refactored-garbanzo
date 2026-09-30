@@ -58,43 +58,84 @@ export function well(b: PixelBuffer, x: number, y: number, w: number, h: number)
 }
 
 // ---------------------------------------------------------------- 9-slice images for CSS
+// V8 look: chunky leather tiles in thick gold frames with curled corner scrolls and a black outline
+// (like a classic adventure-game inventory), windows with a stitched leather band round a cream page.
+const G = { o: H('#1a0e06'), g0: H('#6a4406'), g1: H('#a87410'), g2: H('#e0a818'), g3: H('#ffd84a'), g4: H('#fff2a8') };
+const L = { d: H('#2a1408'), l0: H('#4a2a12'), l1: H('#6a3e1c'), l2: H('#8a5628'), l3: H('#a86e36'), l4: H('#c48a4a') };
+/** gold rim of thickness t (lit top-left, shaded bottom-right) inside a 1px outline, rounded corners */
+function goldRim(b: PixelBuffer, w: number, h: number, t = 2, cut = 2) {
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const cx = Math.min(x, w - 1 - x), cy = Math.min(y, h - 1 - y);
+    if (cx + cy < cut) continue;
+    const d = Math.min(cx, cy);
+    if (d === 0 || cx + cy === cut) { b.set(x, y, G.o); continue; }
+    if (d <= t) {
+      const tl = (x + y) < (w + h) / 2 ? 1 : 0;
+      const edge = d === 1 ? (tl ? G.g3 : G.g1) : d === t ? (tl ? G.g2 : G.g0) : G.g2;
+      b.set(x, y, edge);
+    }
+  }
+}
+/** a little curled gold scroll in a corner (mirrored by sx, sy) */
+function scroll(b: PixelBuffer, x0: number, y0: number, sx: number, sy: number) {
+  const px: [number, number, C][] = [[0, 0, G.g3], [1, 0, G.g2], [2, 0, G.g2], [0, 1, G.g2], [0, 2, G.g1], [2, 1, G.g4], [1, 2, G.g1], [2, 2, G.g0], [3, 1, G.o], [1, 3, G.o], [3, 3, G.o], [3, 2, G.o], [2, 3, G.o]];
+  for (const [x, y, c] of px) b.set(x0 + x * sx, y0 + y * sy, c);
+}
+function leather(b: PixelBuffer, x0: number, y0: number, w: number, h: number, lit = 0) {
+  b.rectFn(x0, y0, w, h, (x, y) => {
+    const n = noise(x, y, 17), m = noise(x >> 2, y >> 2, 23);
+    const v = (m - 0.5) * 0.6 + (n > 0.88 ? 0.5 : n < 0.1 ? -0.5 : 0) + lit - (y - y0) / Math.max(1, h) * 0.4;
+    return v > 0.45 ? L.l4 : v > 0.1 ? L.l3 : v > -0.3 ? L.l2 : L.l1;
+  });
+}
 function frameImg(): string {
-  const b = new PixelBuffer(32, 32);
-  paintParchment(b, 32, 32, { frame: 5 });
+  // 32x32, 6px border: outline, gold, leather band with stitches, a thin gold lip, then the page
+  const W = 32, b = new PixelBuffer(W, W);
+  goldRim(b, W, W, 2, 2);
+  leather(b, 3, 3, W - 6, W - 6, -0.1);
+  for (let i = 4; i < W - 4; i += 2) { b.set(i, 4, L.l4); b.set(i, W - 5, L.l1); b.set(4, i, L.l4); b.set(W - 5, i, L.l1); }
+  b.rect(5, 5, W - 10, 1, G.g1); b.rect(5, W - 6, W - 10, 1, G.g3); b.rect(5, 5, 1, W - 10, G.g1); b.rect(W - 6, 5, 1, W - 10, G.g3);
+  b.rectFn(6, 6, W - 12, W - 12, (x, y) => { const n = noise(x, y, 5); return n > 0.93 ? PAL.parch3 : n < 0.06 ? PAL.parch1 : PAL.parch2; });
+  b.rect(6, 6, W - 12, 1, PAL.parchEdge);
+  scroll(b, 2, 2, 1, 1); scroll(b, W - 3, 2, -1, 1); scroll(b, 2, W - 3, 1, -1); scroll(b, W - 3, W - 3, -1, -1);
   return toURL(b);
 }
 function button(c1: C, c2: C, c3: C, c4: C, pressed = false): string {
+  // gel button inside a thin gold rim
   const b = new PixelBuffer(12, 12);
-  b.rect(1, 0, 10, 12, PAL.out); b.rect(0, 1, 12, 10, PAL.out);
-  b.rect(1, 1, 10, 10, c1);
-  b.rect(1, 1, 10, pressed ? 10 : 8, c2);
-  b.rect(1, pressed ? 2 : 1, 10, 6, c3);
-  if (!pressed) { b.rect(2, 1, 8, 1, c4); b.set(1, 2, c4); }
+  goldRim(b, 12, 12, 1, 2);
+  b.rect(2, 2, 8, 8, c1);
+  b.rect(2, 2, 8, pressed ? 8 : 7, c2);
+  b.rect(2, pressed ? 3 : 2, 8, 4, c3);
+  if (!pressed) { b.rect(3, 2, 6, 1, c4); b.set(2, 3, c4); }
   return toURL(b);
 }
 function tab(): string {
+  // a leather banner with a gold rim for titles
   const b = new PixelBuffer(12, 12);
-  b.rect(1, 0, 10, 12, PAL.out); b.rect(0, 1, 12, 10, PAL.out);
-  b.rect(1, 1, 10, 10, PAL.green2);
-  b.rect(1, 1, 10, 4, PAL.green3);
-  b.rect(2, 1, 8, 1, PAL.green4);
-  b.rect(1, 9, 10, 2, PAL.green1);
+  goldRim(b, 12, 12, 1, 2);
+  leather(b, 2, 2, 8, 8, 0.2);
+  b.rect(2, 2, 8, 1, L.l4);
+  b.rect(2, 9, 8, 1, L.l0);
   return toURL(b);
 }
 function slot(): string {
-  const b = new PixelBuffer(12, 12);
-  b.rect(0, 0, 12, 12, PAL.out);
-  b.rect(1, 1, 10, 10, H('#b99a64'));
-  b.rect(2, 2, 8, 8, H('#dcc493'));
-  b.rect(2, 2, 8, 1, H('#a88a58'));
-  b.rect(2, 9, 8, 1, H('#efdcae'));
+  // 24x24 inventory tile: thick gold frame, curled corners, dark lip, brown leather well
+  const W = 24, b = new PixelBuffer(W, W);
+  goldRim(b, W, W, 3, 3);
+  b.rect(4, 4, W - 8, W - 8, L.d);
+  leather(b, 5, 5, W - 10, W - 10, 0.1);
+  b.rect(5, 5, W - 10, 1, L.l0); b.rect(5, 5, 1, W - 10, L.l0);
+  b.rect(5, W - 6, W - 10, 1, L.l4);
+  scroll(b, 3, 3, 1, 1); scroll(b, W - 4, 3, -1, 1); scroll(b, 3, W - 4, 1, -1); scroll(b, W - 4, W - 4, -1, -1);
   return toURL(b);
 }
 function closeBox(): string {
-  const b = new PixelBuffer(9, 9);
-  b.rect(0, 0, 9, 9, PAL.out);
-  b.rect(1, 1, 7, 7, H('#efe2bd'));
-  for (let i = 0; i < 5; i++) { b.set(2 + i, 2 + i, PAL.out); b.set(6 - i, 2 + i, PAL.out); }
+  const b = new PixelBuffer(11, 11);
+  goldRim(b, 11, 11, 1, 2);
+  b.rect(2, 2, 7, 7, H('#a8382a'));
+  b.rect(2, 2, 7, 3, H('#d8543e'));
+  for (let i = 0; i < 5; i++) { b.set(3 + i, 3 + i, H('#fff4e0')); b.set(7 - i, 3 + i, H('#fff4e0')); }
   return toURL(b);
 }
 function bubble(): string {
@@ -102,6 +143,34 @@ function bubble(): string {
   b.rect(2, 0, 8, 12, H('#0c0a0c')); b.rect(0, 2, 12, 8, H('#0c0a0c')); b.rect(1, 1, 10, 10, H('#0c0a0c'));
   b.rect(2, 1, 8, 10, H('#ffffff')); b.rect(1, 2, 10, 8, H('#ffffff'));
   b.rect(2, 9, 8, 1, H('#d8d8e0')); b.rect(10, 3, 1, 6, H('#d8d8e0'));
+  return toURL(b);
+}
+/** quest marker: a gold shield with an exclamation mark */
+function qmark(): string {
+  const W = 15, Hh = 19, b = new PixelBuffer(W, Hh);
+  for (let y = 0; y < Hh; y++) for (let x = 0; x < W; x++) {
+    const cx = x - 7;
+    const inShape = y < 13 ? Math.abs(cx) <= 6 - (y < 2 ? 2 - y : 0) : Math.abs(cx) <= 6 - (y - 12);
+    if (!inShape) continue;
+    const edge = !(y < 12 ? Math.abs(cx) <= 5 - (y < 3 ? 3 - y : 0) && y > 0 : Math.abs(cx) <= 5 - (y - 12) && y < Hh - 2);
+    b.set(x, y, edge ? G.o : y < 5 ? G.g3 : y < 10 ? G.g2 : G.g1);
+  }
+  for (let y = 3; y < 10; y++) { b.set(7, y, L.d); if (y < 8) b.set(6, y, L.d); }
+  b.set(6, 11, L.d); b.set(7, 11, L.d); b.set(6, 12, L.d); b.set(7, 12, L.d);
+  b.set(4, 2, G.g4); b.set(3, 3, G.g4);
+  return toURL(b);
+}
+/** edge arrow pointing up (rotated toward an off-screen target) */
+function qarrow(): string {
+  const W = 15, Hh = 15, b = new PixelBuffer(W, Hh);
+  for (let y = 0; y < Hh; y++) for (let x = 0; x < W; x++) {
+    const cx = Math.abs(x - 7);
+    const head = y < 8 && cx <= y;
+    const shaft = y >= 8 && cx <= 2;
+    if (!head && !shaft) continue;
+    const edge = (head && (cx === y || y === 7 && cx > 2)) || (shaft && (cx === 2 || y === Hh - 1));
+    b.set(x, y, edge ? G.o : y < 5 ? G.g3 : G.g2);
+  }
   return toURL(b);
 }
 
@@ -121,6 +190,8 @@ export function installSkin() {
   r.setProperty('--sk-slot', `url(${slot()})`);
   r.setProperty('--sk-x', `url(${closeBox()})`);
   r.setProperty('--sk-bubble', `url(${bubble()})`);
+  r.setProperty('--sk-qmark', `url(${qmark()})`);
+  r.setProperty('--sk-qarrow', `url(${qarrow()})`);
   const s = document.createElement('style');
   s.dataset.ui = 'skin';
   s.textContent = SKIN_CSS;
@@ -129,13 +200,15 @@ export function installSkin() {
 
 const SKIN_CSS = `
 :root {
-  --pix: 'Pixelify Sans', 'Silkscreen', ui-monospace, monospace;
-  --body: 'Pixelify Sans', 'Silkscreen', ui-monospace, monospace;
-  --hand: 'Pixelify Sans', 'Silkscreen', ui-monospace, monospace;
-  --head: 'Silkscreen', 'Pixelify Sans', ui-monospace, monospace;
+  --pix: 'Jersey 15', 'Pixelify Sans', ui-monospace, monospace;
+  --body: 'Jersey 15', 'Pixelify Sans', ui-monospace, monospace;
+  --hand: 'Jersey 15', 'Pixelify Sans', ui-monospace, monospace;
+  --head: 'Jersey 10', 'Jersey 15', ui-monospace, monospace;
   --sk-ink: #3a2614; --sk-ink2: #6a4a2a; --sk-green: #2f6b2a; --sk-u: 3px;
 }
 #ui { font-family: var(--pix); -webkit-font-smoothing: none; font-smooth: never; }
+/* Jersey has a small x-height: size every UI font by its x-height so text reads as large as before */
+html, #ui, #ui * { font-size-adjust: 0.62; }
 /* parchment window in a wooden frame */
 .panel, .pz-panel {
   background: none !important; clip-path: none !important; box-shadow: 0 6px 0 rgba(0,0,0,0.35) !important;
@@ -147,9 +220,9 @@ const SKIN_CSS = `
 /* green title tab, e.g. <div class="pz-tab">SETTINGS</div> */
 .pz-tab, .modal h2 {
   display: inline-block; font-family: var(--head) !important; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
-  color: #fff !important; text-shadow: 0 2px 0 #1f3a1c, 2px 0 0 #1f3a1c, -2px 0 0 #1f3a1c, 0 -2px 0 #1f3a1c;
+  color: #ffe9a8 !important; text-shadow: 0 2px 0 #1a0e06, 2px 0 0 #1a0e06, -2px 0 0 #1a0e06, 0 -2px 0 #1a0e06;
   border-style: solid; border-width: calc(var(--sk-u) * 3); border-image: var(--sk-tab) 4 fill / calc(var(--sk-u) * 3) / 0 stretch;
-  padding: 0.1em 0.9em !important; image-rendering: pixelated; font-size: 1.25em !important; line-height: 1.1;
+  padding: 0.05em 0.9em !important; image-rendering: pixelated; font-size: 1.5em !important; line-height: 1.1; letter-spacing: 0.04em;
 }
 .modal h2 { margin: -0.2em auto 0.6em !important; display: table; }
 /* chunky green pixel buttons */

@@ -30,6 +30,9 @@ export abstract class WorldScene implements Scene {
   main!: Layer;
   actors = new Map<string, Actor>();
   interact: Interactable[] = [];
+  /** extra quest targets that aren't interactables ("run to the engine room") */
+  questPoints: { x: () => number; y: () => number; on: () => boolean }[] = [];
+  private marks: QuestMarks | null = null;
   nodes: ResourceNode[] = [];
   prompt!: PromptView;
   hud: Hud2 | null = null;
@@ -249,8 +252,10 @@ export abstract class WorldScene implements Scene {
     this.hovered = null;
     for (const it of this.interact) {
       if (it.enabled && !it.enabled()) continue;
-      if (Math.abs(wx - it.x) < it.w && wy > it.y - it.h * 2 && wy < it.y + 6) this.hovered = it;
+      if (Math.abs(wx - it.x) < it.w + 4 && wy > it.y - it.h * 2 - 8 && wy < it.y + 8) this.hovered = it;
     }
+    game.r.canvas.style.cursor = this.hovered ? 'pointer' : '';
+    this.updateMarks();
     const near = nearestInteractable(this.interact, this.player.x, this.player.y);
     this.nearIt = near;
     const show = this.hovered ?? near;
@@ -274,6 +279,19 @@ export abstract class WorldScene implements Scene {
       if (this.hovered) this.runAction(this.hovered);
       else if (wy > 40) this.player.walkTo(Math.max(this.player.minX, Math.min(this.player.maxX, wx)), 64).catch(() => {});
     }
+  }
+
+  /** quest markers over the exact thing the current step needs (edge arrows when it's off screen) */
+  private updateMarks() {
+    if (!this.marks) this.marks = new QuestMarks(game.ui.prompts);
+    const pts: [number, number][] = [];
+    const hide = this.cutscene || game.ui.blocking;
+    if (!hide) {
+      for (const it of this.interact) if (it.quest && (!it.enabled || it.enabled()) && it.quest()) pts.push([it.x, it.y - it.h * 2 - 6]);
+      for (const q of this.questPoints) if (q.on()) pts.push([q.x(), q.y()]);
+    }
+    const r = game.r;
+    this.marks.draw(pts.map(([x, y]) => game.ui.artToCss(r.projectX(x, 1), r.projectY(y, 1), r.VW, r.VH) as [number, number]));
   }
 
   update(dt: number) {
@@ -300,9 +318,52 @@ export abstract class WorldScene implements Scene {
 
   exit() {
     this.prompt?.hide();
+    this.marks?.clear();
     this.hud?.destroy();
     this.hud = null;
     this.st?.clear();
     this.actors.clear();
   }
+}
+
+/** Pool of bouncing gold quest markers (HTML so they stay crisp), clamped to the screen edge as arrows. */
+class QuestMarks {
+  private els: HTMLElement[] = [];
+  constructor(private root: HTMLElement) {
+    if (!document.getElementById('qm-css')) {
+      const st = document.createElement('style');
+      st.id = 'qm-css';
+      st.textContent = `
+.qmark { position: absolute; width: 30px; height: 38px; margin: -38px 0 0 -15px; pointer-events: none; z-index: 3; transition: opacity 0.2s; }
+.qmark i { position: absolute; inset: 0; background: var(--sk-qmark) center / 100% 100% no-repeat; image-rendering: pixelated; animation: qmBob 0.9s ease-in-out infinite; transform-origin: 50% 100%;
+  filter: drop-shadow(0 3px 0 rgba(0,0,0,0.35)) drop-shadow(0 0 6px rgba(255,210,80,0.55)); }
+.qmark.edge i { background-image: var(--sk-qarrow); animation: none; }
+.qmark::after { content: ''; position: absolute; left: 50%; bottom: -8px; width: 16px; height: 5px; margin-left: -8px; border-radius: 50%; background: rgba(0,0,0,0.25); animation: qmShadow 0.9s ease-in-out infinite; }
+.qmark.edge::after { display: none; }
+@keyframes qmBob { 0%, 100% { transform: translateY(0) scale(1, 1); } 45% { transform: translateY(-7px) scale(0.94, 1.06); } 55% { transform: translateY(-7px); } 90% { transform: translateY(0) scale(1.08, 0.92); } }
+@keyframes qmShadow { 45%, 55% { transform: scale(0.7); opacity: 0.6; } }`;
+      document.head.appendChild(st);
+    }
+  }
+  draw(pts: [number, number][]) {
+    const R = this.root.getBoundingClientRect();
+    const W = R.width, H = R.height, m = 28;
+    while (this.els.length < pts.length) { const e = document.createElement('div'); e.className = 'qmark'; e.innerHTML = '<i></i>'; this.root.appendChild(e); this.els.push(e); }
+    this.els.forEach((e, i) => {
+      const p = pts[i];
+      if (!p) { e.style.display = 'none'; return; }
+      e.style.display = '';
+      let [x, y] = p;
+      const off = x < m || x > W - m || y < m + 30 || y > H - m;
+      e.classList.toggle('edge', off);
+      if (off) {
+        // pinned to the screen edge, pointing toward the target
+        const cx = W / 2, cy = H / 2, a = Math.atan2(y - cy, x - cx);
+        x = Math.max(m, Math.min(W - m, x)); y = Math.max(m + 30, Math.min(H - m, y));
+        (e.firstElementChild as HTMLElement).style.transform = `rotate(${a + Math.PI / 2}rad)`;
+      } else (e.firstElementChild as HTMLElement).style.transform = '';
+      e.style.left = x + 'px'; e.style.top = y + 'px';
+    });
+  }
+  clear() { for (const e of this.els) e.remove(); this.els = []; }
 }

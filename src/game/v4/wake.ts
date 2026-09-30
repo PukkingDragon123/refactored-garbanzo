@@ -54,7 +54,7 @@ export class BeachWakeScene implements Scene {
     audio.setAmbience('beach', false);
     audio.setMusic('none' as never);
     this.cap = el('div', '');
-    this.cap.style.cssText = "position:absolute;left:0;right:0;bottom:12%;text-align:center;z-index:20;font-family:'Pixelify Sans',monospace;font-size:clamp(15px,2.2vw,24px);color:#fff;text-shadow:0 2px 0 #000,2px 0 0 #000,-2px 0 0 #000,0 -2px 0 #000;opacity:0;transition:opacity 0.8s;pointer-events:none";
+    this.cap.style.cssText = "position:absolute;left:0;right:0;bottom:12%;text-align:center;z-index:20;font-family:'Jersey 15', 'Pixelify Sans',monospace;font-size:clamp(15px,2.2vw,24px);color:#fff;text-shadow:0 2px 0 #000,2px 0 0 #000,-2px 0 0 #000,0 -2px 0 #000;opacity:0;transition:opacity 0.8s;pointer-events:none";
     game.ui.sceneLayer.appendChild(this.cap);
   }
 

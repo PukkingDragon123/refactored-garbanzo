@@ -204,17 +204,17 @@ export class IsleCamp {
     const camp = () => F('v4:arohaJoined') && !F('v4:campDone');
     const self = this;
     // firewood: three sticks on the beach, then the pit
-    CAMP.sticks.forEach((x, i) => st.it({ x, y: groundY(x), w: 14, label: 'Pick up firewood', standX: x - 12, enabled: () => camp() && !this.job('firewood') && !this.stickTaken[i] && this.carrying !== 'crate', action: () => this.pickStick(i) }));
-    st.it({ x: CAMP.fire, y: groundY(CAMP.fire), w: 18, get label() { return self.sticks >= 3 ? 'Drop the firewood by the fire pit' : `Firewood (${self.sticks}/3)`; }, standX: CAMP.fire - 20, enabled: () => camp() && !this.job('firewood') && this.sticks >= 3, action: () => this.dropWood() } as never);
+    CAMP.sticks.forEach((x, i) => st.it({ x, y: groundY(x), w: 14, label: 'Pick up firewood', standX: x - 12, quest: () => true, enabled: () => camp() && !this.job('firewood') && !this.stickTaken[i] && this.carrying !== 'crate', action: () => this.pickStick(i) }));
+    st.it({ x: CAMP.fire, y: groundY(CAMP.fire), w: 18, get label() { return self.sticks >= 3 ? 'Drop the firewood by the fire pit' : `Firewood (${self.sticks}/3)`; }, standX: CAMP.fire - 20, quest: () => true, enabled: () => camp() && !this.job('firewood') && this.sticks >= 3, action: () => this.dropWood() } as never);
     // supplies: two crates from Jenna's salvage pile to the storage spot
-    st.it({ x: CAMP.salvage, y: groundY(CAMP.salvage), w: 20, get label() { return `Pick up a crate of salvage (${self.crates}/2)`; }, standX: CAMP.salvage + 22, enabled: () => camp() && !this.job('supplies') && this.carrying === null, action: () => this.pickCrate() } as never);
-    st.it({ x: CAMP.storage, y: groundY(CAMP.storage), w: 18, label: 'Stack the crate here', standX: CAMP.storage - 24, enabled: () => camp() && this.carrying === 'crate', action: () => this.dropCrate() });
-    st.it({ x: CAMP.tent, y: groundY(CAMP.tent), w: 20, label: JOB_NAME.tent, standX: CAMP.tent - 30, enabled: () => camp() && !this.job('tent') && this.carrying === null, action: () => this.pitchTent() });
-    st.it({ x: CAMP.research, y: groundY(CAMP.research), w: 20, label: JOB_NAME.research, standX: CAMP.research - 24, enabled: () => camp() && !this.job('research') && this.carrying === null, action: () => this.research() });
-    st.it({ x: CAMP.rack, y: groundY(CAMP.rack), w: 20, label: JOB_NAME.rack, standX: CAMP.rack - 26, enabled: () => camp() && !this.job('rack') && this.carrying === null, action: () => this.rack() });
-    st.it({ x: CAMP.bed, y: groundY(CAMP.bed), w: 16, label: JOB_NAME.bed, standX: CAMP.bed - 20, enabled: () => camp() && !this.job('bed') && this.job('firewood') && this.carrying === null, action: () => this.chunkBed() });
+    st.it({ x: CAMP.salvage, y: groundY(CAMP.salvage), w: 20, get label() { return `Pick up a crate of salvage (${self.crates}/2)`; }, standX: CAMP.salvage + 22, quest: () => true, enabled: () => camp() && !this.job('supplies') && this.carrying === null, action: () => this.pickCrate() } as never);
+    st.it({ x: CAMP.storage, y: groundY(CAMP.storage), w: 18, label: 'Stack the crate here', standX: CAMP.storage - 24, quest: () => true, enabled: () => camp() && this.carrying === 'crate', action: () => this.dropCrate() });
+    st.it({ x: CAMP.tent, y: groundY(CAMP.tent), w: 20, label: JOB_NAME.tent, standX: CAMP.tent - 30, quest: () => true, enabled: () => camp() && !this.job('tent') && this.carrying === null, action: () => this.pitchTent() });
+    st.it({ x: CAMP.research, y: groundY(CAMP.research), w: 20, label: JOB_NAME.research, standX: CAMP.research - 24, quest: () => true, enabled: () => camp() && !this.job('research') && this.carrying === null, action: () => this.research() });
+    st.it({ x: CAMP.rack, y: groundY(CAMP.rack), w: 20, label: JOB_NAME.rack, standX: CAMP.rack - 26, quest: () => true, enabled: () => camp() && !this.job('rack') && this.carrying === null, action: () => this.rack() });
+    st.it({ x: CAMP.bed, y: groundY(CAMP.bed), w: 16, label: JOB_NAME.bed, standX: CAMP.bed - 20, quest: () => true, enabled: () => camp() && !this.job('bed') && this.job('firewood') && this.carrying === null, action: () => this.chunkBed() });
     // after dinner: bed time
-    st.it({ x: CAMP.bag, y: groundY(CAMP.bag), w: 18, label: 'Tidy up and get some sleep', standX: CAMP.bag - 14, enabled: () => F('v4:dinner') && !F('v4:day1'), action: () => this.lightsOut() });
+    st.it({ x: CAMP.bag, y: groundY(CAMP.bag), w: 18, label: 'Tidy up and get some sleep', standX: CAMP.bag - 14, quest: () => true, enabled: () => F('v4:dinner') && !F('v4:day1'), action: () => this.lightsOut() });
     // chat around camp
     const talk = (who: 'jenna' | 'joshu' | 'aroha', lines: () => string[][]) => st.it({ get x() { return s.actor(who).x; }, get y() { return s.actor(who).y; }, w: 14, label: `Talk to ${who === 'jenna' ? 'Jenna' : who === 'joshu' ? 'Joshu' : 'Aroha'}`, get standX() { return s.actor(who).x - 22; }, enabled: () => camp() && s.actor(who).visible && this.carrying === null, action: () => { const l = rand.pick(lines()); return st.say([{ who, text: l[0], expr: l[1] }]).then(() => {}); } } as never);
     talk('jenna', () => [['The battery from the wreck still holds a charge! Lights, radio, and if I find a USB cable, SNACK-POWERED LAPTOP.', 'excited'], ['I have named the crab in the fuse panel. His name is Kevin. Kevin stays.', 'smug'], ['Aroha’s slingshot rocks go POP. I need to know the chemistry. For science. And revenge.', 'teasing']]);
@@ -811,9 +811,9 @@ async function showDayComplete() {
   const card = el('div', 'd1-card', `
     <style>
       .d1-card { position:absolute; inset:0; z-index:40; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#05060c;
-        color:#f4ecd8; font-family:'Pixelify Sans','Silkscreen',monospace; text-align:center; animation:d1in 2.4s ease-out both; }
+        color:#f4ecd8; font-family:'Jersey 15', 'Pixelify Sans','Jersey 10', 'Silkscreen',monospace; text-align:center; animation:d1in 2.4s ease-out both; }
       @keyframes d1in { from { opacity:0 } }
-      .d1-card .t { font-family:'Silkscreen',monospace; font-size:clamp(26px,5vw,54px); letter-spacing:0.08em; color:#ffe6a8; text-shadow:0 0 18px rgba(255,190,90,0.45); animation:d1rise 3s ease-out both; }
+      .d1-card .t { font-family:'Jersey 10', 'Silkscreen',monospace; font-size:clamp(26px,5vw,54px); letter-spacing:0.08em; color:#ffe6a8; text-shadow:0 0 18px rgba(255,190,90,0.45); animation:d1rise 3s ease-out both; }
       @keyframes d1rise { from { transform:translateY(12px); opacity:0 } }
       .d1-card .s { margin-top:0.6em; font-size:clamp(13px,1.8vw,18px); opacity:0.8; animation:d1in 3s 1.2s ease-out both; }
       .d1-card .st { margin-top:1.4em; display:flex; gap:1.6em; flex-wrap:wrap; justify-content:center; font-size:clamp(12px,1.6vw,16px); animation:d1in 2s 2.2s ease-out both; }

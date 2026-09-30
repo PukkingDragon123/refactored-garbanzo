@@ -16,14 +16,14 @@ export type { NegRound, NegAnswer };
 
 const CSS = `
 .cu-ans { position: absolute; left: 3%; bottom: 5%; display: flex; flex-direction: column; gap: 0.45em; align-items: flex-start; max-width: min(52vw, 560px); }
-.cu-ans .nm { font-family: 'Silkscreen', monospace; font-size: clamp(10px, 1.3vw, 14px); letter-spacing: 0.08em; color: #fff; background: #0c0a0c; padding: 0.15em 0.6em; box-shadow: inset 0.35em 0 0 #4a7a3a; }
-.cu-ans button { text-align: left; font-family: 'Pixelify Sans', monospace; font-size: clamp(13px, 1.8vw, 19px); line-height: 1.25; color: #0c0a0c; background: #fff; border: 0; cursor: pointer;
+.cu-ans .nm { font-family: 'Jersey 10', 'Silkscreen', monospace; font-size: clamp(10px, 1.3vw, 14px); letter-spacing: 0.08em; color: #fff; background: #0c0a0c; padding: 0.15em 0.6em; box-shadow: inset 0.35em 0 0 #4a7a3a; }
+.cu-ans button { text-align: left; font-family: 'Jersey 15', 'Pixelify Sans', monospace; font-size: clamp(13px, 1.8vw, 19px); line-height: 1.25; color: #0c0a0c; background: #fff; border: 0; cursor: pointer;
   padding: 0.35em 0.7em; box-shadow: 0 0 0 3px #0c0a0c, 4px 5px 0 3px rgba(0,0,0,0.45); animation: cuSay 0.3s cubic-bezier(.2,1.7,.4,1) both; }
 .cu-ans button:nth-child(3) { animation-delay: 0.06s; } .cu-ans button:nth-child(4) { animation-delay: 0.12s; }
 .cu-ans button:hover, .cu-ans button.sel { background: #0c0a0c; color: #fff; transform: translateX(4px); }
 .cu-ans button .key { margin-right: 0.5em; }
 .cu-ans button:disabled { opacity: 0.4; }
-.cu-pop { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%) rotate(-8deg); font-family: 'Silkscreen', monospace; font-weight: 700; font-size: clamp(40px, 11vw, 130px);
+.cu-pop { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%) rotate(-8deg); font-family: 'Jersey 10', 'Silkscreen', monospace; font-weight: 700; font-size: clamp(40px, 11vw, 130px);
   color: #fff7d8; text-shadow: 6px 6px 0 #c8341e, -3px -3px 0 #2a0a04, 3px -3px 0 #2a0a04, -3px 3px 0 #2a0a04; pointer-events: none; animation: cuRes 1.1s steps(10) both; }
 `;
 let styled = false;

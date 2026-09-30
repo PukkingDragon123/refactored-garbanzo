@@ -16,30 +16,30 @@ const CSS = `
 .h2 .loc span { font-size: 0.8em; opacity: 0.8; }
 .h2 .quest { position: absolute; right: 16px; top: 14px; width: min(20em, 34vw); padding: 0.55em 0.8em 0.6em; color: #3a2a1a; pointer-events: auto; cursor: pointer; }
 .h2 .quest .rb { display: flex; align-items: center; gap: 0.45em; margin: -0.1em 0 0.25em; }
-.h2 .quest .rb span { font-family: 'Silkscreen', var(--pix); font-size: 0.66em; letter-spacing: 0.12em; color: #fff; background: #3f7a32; padding: 0.15em 0.55em 0.1em; box-shadow: 0 2px 0 #1f3a18; }
+.h2 .quest .rb span { font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 0.66em; letter-spacing: 0.12em; color: #fff; background: #3f7a32; padding: 0.15em 0.55em 0.1em; box-shadow: 0 2px 0 #1f3a18; }
 .h2 .quest.side .rb span { background: #b8761c; box-shadow: 0 2px 0 #5a3408; }
-.h2 .quest .rb small { font-family: 'Silkscreen', var(--pix); font-size: 0.62em; color: #8a6a44; letter-spacing: 0.08em; margin-left: auto; }
+.h2 .quest .rb small { font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 0.62em; color: #8a6a44; letter-spacing: 0.08em; margin-left: auto; }
 .h2 .quest .rb img { width: 1.9em; height: 1.9em; image-rendering: pixelated; margin: -0.35em 0 -0.35em 0.2em; border-radius: 50%; background: #d8c49a; box-shadow: 0 0 0 2px #6a4a2a; }
-.h2 .quest .ti { font-family: 'Pixelify Sans', var(--pix); font-weight: 700; font-size: 1.05em; color: #2a1c10; letter-spacing: 0.02em; line-height: 1.1; }
+.h2 .quest .ti { font-family: 'Jersey 15', 'Pixelify Sans', var(--pix); font-weight: 700; font-size: 1.05em; color: #2a1c10; letter-spacing: 0.02em; line-height: 1.1; }
 .h2 .quest .dv { height: 2px; margin: 0.4em 0 0.35em; background: repeating-linear-gradient(90deg, #b89a6a 0 4px, transparent 4px 8px); }
-.h2 .quest .st { display: grid; grid-template-columns: 1.1em 1fr auto; gap: 0.1em 0.45em; align-items: start; font-family: 'Pixelify Sans', var(--pix); font-size: 0.88em; line-height: 1.25; margin: 0.12em 0; }
-.h2 .quest .st i { font-style: normal; font-family: 'Silkscreen', var(--pix); font-size: 0.85em; text-align: center; line-height: 1.45; }
+.h2 .quest .st { display: grid; grid-template-columns: 1.1em 1fr auto; gap: 0.1em 0.45em; align-items: start; font-family: 'Jersey 15', 'Pixelify Sans', var(--pix); font-size: 0.88em; line-height: 1.25; margin: 0.12em 0; }
+.h2 .quest .st i { font-style: normal; font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 0.85em; text-align: center; line-height: 1.45; }
 .h2 .quest .st.done { color: #9a8462; text-decoration: line-through; text-decoration-thickness: 2px; }
 .h2 .quest .st.done i { color: #3f7a32; text-decoration: none; }
 .h2 .quest .st.next { color: #a8926c; }
 .h2 .quest .st.cur { color: #1c120a; font-weight: 600; background: rgba(255, 236, 170, 0.55); margin: 0.2em -0.35em; padding: 0.2em 0.35em; box-shadow: inset 3px 0 0 #3f7a32; }
 .h2 .quest .st.cur i { color: #3f7a32; animation: qArrow 0.8s steps(2) infinite; }
-.h2 .quest .st b { font-family: 'Silkscreen', var(--pix); font-size: 0.8em; color: #fff; background: #2a1c10; padding: 0.1em 0.4em; }
+.h2 .quest .st b { font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 0.8em; color: #fff; background: #2a1c10; padding: 0.1em 0.4em; }
 @keyframes qArrow { 50% { transform: translateX(3px); } }
 .h2 .quest .pb { grid-column: 2 / 4; height: 6px; background: #c9b489; box-shadow: inset 0 0 0 1px #8a6a44; margin-top: 0.25em; }
 .h2 .quest .pb > div { height: 100%; background: linear-gradient(#8ad05a 0 50%, #5a9a3a 50%); transition: width 0.4s steps(6); }
 .h2 .quest .hn { grid-column: 2 / 4; font-size: 0.82em; color: #7a5a38; font-weight: 400; font-style: italic; }
 .h2 .quest.min .st.done, .h2 .quest.min .st.next, .h2 .quest.min .hn, .h2 .quest.min .dv { display: none; }
 .h2 .quest.flash { animation: qflash 0.9s ease-out; }
-.h2 .qbanner { position: absolute; left: 50%; top: 16%; transform: translateX(-50%); font-family: 'Pixelify Sans', var(--pix); font-weight: 700; font-size: 1.5em; letter-spacing: 0.08em;
+.h2 .qbanner { position: absolute; left: 50%; top: 16%; transform: translateX(-50%); font-family: 'Jersey 15', 'Pixelify Sans', var(--pix); font-weight: 700; font-size: 1.5em; letter-spacing: 0.08em;
   color: #fff6d8; padding: 0.35em 1.2em 0.3em; background: #3f7a32; box-shadow: 0 0 0 3px #1f3a18, 0 0 0 6px #fff6d8, 0 0 0 9px #1f3a18, 0 10px 0 6px rgba(0,0,0,0.35);
   text-shadow: 0 3px 0 #1f3a18; white-space: nowrap; pointer-events: none; animation: qBan 2.2s cubic-bezier(.2,1.6,.4,1) both; z-index: 4; }
-.h2 .qbanner small { display: block; font-family: 'Silkscreen', var(--pix); font-weight: 400; font-size: 0.45em; letter-spacing: 0.2em; color: #cfe8b8; text-shadow: none; text-align: center; }
+.h2 .qbanner small { display: block; font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-weight: 400; font-size: 0.45em; letter-spacing: 0.2em; color: #cfe8b8; text-shadow: none; text-align: center; }
 @keyframes qBan { 0% { transform: translateX(-50%) scale(2.4) rotate(-6deg); opacity: 0; } 12% { transform: translateX(-50%) scale(0.92) rotate(-2deg); opacity: 1; } 18% { transform: translateX(-50%) scale(1) rotate(-2deg); } 85% { opacity: 1; transform: translateX(-50%) scale(1) rotate(-2deg); } 100% { opacity: 0; transform: translateX(-50%) translateY(-12px) scale(0.96) rotate(-2deg); } }
 @keyframes qflash { 0% { box-shadow: 0 0 0 3px var(--amber2), 0 10px 30px var(--shadow); } 100% { box-shadow: 0 0 0 2px rgba(4,10,9,0.7), 0 10px 30px var(--shadow); } }
 .h2 .bar { position: absolute; left: 16px; bottom: 14px; display: flex; gap: 8px; align-items: flex-end; }
@@ -54,16 +54,17 @@ const CSS = `
 .h2 .rp b { color: var(--amber2); font-weight: 600; }
 .h2 .keys { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); font-size: 0.78em; opacity: 0.72; white-space: nowrap; text-shadow: 0 1px 2px #000; }
 .h2 .who { position: relative; pointer-events: none; display: flex; align-items: center; margin-right: 0.3em; }
-.h2 .who .med { width: 4.4em; height: 4.4em; border-radius: 50%; background: radial-gradient(circle at 50% 40%, #6aa0a8, #2a4a50); box-shadow: 0 0 0 3px #2a1a10, 0 0 0 6px #c08a48, 0 0 0 8px #2a1a10, 0 5px 0 5px rgba(0,0,0,0.35); overflow: hidden; display: grid; place-items: end center; z-index: 2; }
+.h2 .who .med { width: 4.6em; height: 4.6em; border-radius: 50%; background: radial-gradient(circle at 50% 38%, #c48a4a, #6a3e1c 70%); box-shadow: 0 0 0 3px #1a0e06, 0 0 0 5px #ffd84a, 0 0 0 7px #a87410, 0 0 0 9px #1a0e06, 0 5px 0 8px rgba(0,0,0,0.35); overflow: hidden; display: grid; place-items: end center; z-index: 2; }
 .h2 .who .med img { width: 118%; image-rendering: pixelated; margin-bottom: -0.2em; }
 .h2 .who .bars { margin-left: -0.9em; padding-left: 1.2em; display: flex; flex-direction: column; gap: 3px; z-index: 1; }
-.h2 .who .bars i { display: block; width: 8.5em; height: 0.75em; background: #2a1a10; box-shadow: 0 0 0 2px #2a1a10; position: relative; }
+.h2 .who .bars i { display: block; width: 9em; height: 0.8em; background: #2a1408; box-shadow: 0 0 0 2px #1a0e06, 0 0 0 4px #e0a818, 0 0 0 6px #1a0e06; position: relative; margin: 2px 0 4px 4px; }
 .h2 .who .bars i::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: var(--v, 100%); background: linear-gradient(#ff8a6a 0 35%, #d8543e 35% 75%, #a8382a 75%); transition: width 0.3s; }
 .h2 .who .bars i.b::after { background: linear-gradient(#8ad8ff 0 35%, #3a8ad8 35% 75%, #2a5aa8 75%); }
-.h2 .who .bars small { font-family: var(--head); font-size: 0.6em; color: #fff; text-shadow: 0 2px 0 #000; letter-spacing: 0.06em; }
-.h2 .belt { display: flex; gap: 2px; padding: 4px; background: #2a1a10; box-shadow: 0 0 0 3px #7a5028, 0 0 0 5px #2a1a10, 0 5px 0 5px rgba(0,0,0,0.3); }
-.h2 .belt span { width: 2.6em; height: 2.6em; background: var(--sk-slot) center / 100% 100%; image-rendering: pixelated; display: grid; place-items: center; }
-.h2 .belt span img { width: 2.1em; height: 2.1em; image-rendering: pixelated; }
+.h2 .who .bars small { font-family: var(--head); font-size: 0.72em; color: #ffe9a8; text-shadow: 0 2px 0 #1a0e06, 1px 0 0 #1a0e06, -1px 0 0 #1a0e06; letter-spacing: 0.08em; margin-left: 4px; }
+.h2 .belt { display: flex; gap: 4px; padding: 5px; background: linear-gradient(#6a3e1c, #4a2a12); box-shadow: 0 0 0 2px #1a0e06, 0 0 0 4px #e0a818, 0 0 0 6px #1a0e06, 0 6px 0 6px rgba(0,0,0,0.3); }
+.h2 .belt span { width: 3.1em; height: 3.1em; background: var(--sk-slot) center / 100% 100%; image-rendering: pixelated; display: grid; place-items: center; transition: transform 0.12s cubic-bezier(.2,1.8,.4,1); }
+.h2 .belt span:hover { transform: translateY(-3px) scale(1.06); }
+.h2 .belt span img { width: 2.1em; height: 2.1em; image-rendering: pixelated; filter: drop-shadow(0 2px 0 rgba(0,0,0,0.45)); }
 .flyitem { position: absolute; width: 36px; height: 36px; image-rendering: pixelated; pointer-events: none; z-index: 9; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.5)); }
 .pickup { position: absolute; transform: translate(-50%, -100%); font-family: var(--pix); font-size: 0.95em; color: #fff4c4; text-shadow: 0 2px 0 #1b1a1f, 0 0 6px rgba(0,0,0,0.6); pointer-events: none; animation: pickupRise 1.3s ease-out forwards; white-space: nowrap; }
 @keyframes pickupRise { 0% { opacity: 0; transform: translate(-50%, -80%) scale(0.7); } 15% { opacity: 1; transform: translate(-50%, -110%) scale(1.1); } 100% { opacity: 0; transform: translate(-50%, -260%) scale(1); } }

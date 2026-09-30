@@ -178,52 +178,34 @@ export class ShipStory {
     };
     const calm = () => s.phase !== 'storm' && s.phase !== 'wave';
     const fl = (k: string) => () => this.flag(k);
+    const rounds = () => this.flag('v4:ate') && (V()['v4:rounds'] ?? 0) < 4;
     const L = S4.lower.floor, H = S4.house.floor, B = S4.bridge.floor, D = S4.main.y;
 
     // breakfast
-    it({ x: SPOTS.kettle[0], y: H, label: 'Make instant noodles', standX: SPOTS.kettle[0] - 4, enabled: () => this.flag('v4:woke') && !this.flag('v4:noodles'), action: () => this.noodles() });
-    it({ x: SPOTS.messSeat[0], y: H, w: 16, label: 'Sit down and eat', standX: SPOTS.messSeat[0], enabled: () => this.flag('v4:noodles') && !this.flag('v4:ate'), action: () => this.eat() });
+    it({ x: SPOTS.kettle[0], y: H, label: 'Make instant noodles', standX: SPOTS.kettle[0] - 4, quest: () => true, enabled: () => this.flag('v4:woke') && !this.flag('v4:noodles'), action: () => this.noodles() });
+    it({ x: SPOTS.messSeat[0], y: H, w: 16, label: 'Sit down and eat', standX: SPOTS.messSeat[0], quest: () => true, enabled: () => this.flag('v4:noodles') && !this.flag('v4:ate'), action: () => this.eat() });
     // rounds
     const self = this;
-    it({ x: SPOTS.tank[0], y: L, w: 20, get label() { return self.flag('v4:fishToTank') && !self.flag('v4:fishUsed') ? 'Release your catch into the tank' : self.flag('v4:round:tank') ? 'Watch the fish' : 'Feed the fish'; }, standX: SPOTS.tank[0] + 22, enabled: calm, action: () => (this.flag('v4:fishToTank') && !this.flag('v4:fishUsed') ? this.releaseFish() : this.tank()) } as never);
-    it({ x: 160, y: L, w: 20, label: 'Check the engine gauges', standX: 160, enabled: () => calm() && s.phase !== 'engine', action: () => this.gauges() });
-    it({ x: s.joshu.x, y: B, w: 14, get label() { return self.flag('v4:fishToJoshu') && !self.flag('v4:fishUsed') ? 'Give Joshu the fish' : 'Talk to Joshu'; }, standX: s.joshu.x - 22, enabled: () => calm() && s.joshu.y === B, action: () => (this.flag('v4:fishToJoshu') && !this.flag('v4:fishUsed') ? this.giveFish() : this.talkJoshu()) } as never);
+    it({ x: SPOTS.tank[0], y: L, w: 20, get label() { return self.flag('v4:fishToTank') && !self.flag('v4:fishUsed') ? 'Release your catch into the tank' : self.flag('v4:round:tank') ? 'Watch the fish' : 'Feed the fish'; }, standX: SPOTS.tank[0] + 22, quest: () => (rounds() && !this.flag('v4:round:tank')) || (this.flag('v4:fishToTank') && !this.flag('v4:fishUsed')), enabled: calm, action: () => (this.flag('v4:fishToTank') && !this.flag('v4:fishUsed') ? this.releaseFish() : this.tank()) } as never);
+    it({ x: 160, y: L, w: 20, label: 'Check the engine gauges', standX: 160, quest: () => rounds() && !this.flag('v4:round:engine'), enabled: () => calm() && s.phase !== 'engine', action: () => this.gauges() });
+    it({ x: s.joshu.x, y: B, w: 14, get label() { return self.flag('v4:fishToJoshu') && !self.flag('v4:fishUsed') ? 'Give Joshu the fish' : 'Talk to Joshu'; }, standX: s.joshu.x - 22, quest: () => (rounds() && !this.flag('v4:round:joshu')) || (this.flag('v4:fishToJoshu') && !this.flag('v4:fishUsed')), enabled: () => calm() && s.joshu.y === B, action: () => (this.flag('v4:fishToJoshu') && !this.flag('v4:fishUsed') ? this.giveFish() : this.talkJoshu()) } as never);
     // fishing at the stern
-    it({ x: SPOTS.fishing[0], y: SPOTS.fishing[1], w: 18, label: 'Fish off the stern', standX: SPOTS.fishing[0] + 8, enabled: () => s.phase === 'deck', action: () => this.fish() });
-    it({ get x() { return s.jenna.x; }, get y() { return s.jenna.y; }, w: 14, label: 'Talk to Jenna', get standX() { return s.jenna.x + 22; }, enabled: () => calm() && s.phase !== 'engine', action: () => this.talkJenna() } as never);
+    it({ x: SPOTS.fishing[0], y: SPOTS.fishing[1], w: 18, label: 'Fish off the stern', standX: SPOTS.fishing[0] + 8, quest: () => (V()['v4:fishCaught'] ?? 0) < 1 && !this.flag('v4:fishUsed'), enabled: () => s.phase === 'deck', action: () => this.fish() });
+    it({ get x() { return s.jenna.x; }, get y() { return s.jenna.y; }, w: 14, label: 'Talk to Jenna', get standX() { return s.jenna.x + 22; }, quest: () => rounds() && !this.flag('v4:round:jenna'), enabled: () => calm() && s.phase !== 'engine', action: () => this.talkJenna() } as never);
+    s.questPoints.push({ x: () => 150, y: () => L - 34, on: () => s.phase === 'engine' && !this.flag('v4:engineArrive') });
     // laptop
-    it({ x: SPOTS.moriDesk[0] - 4, y: L, label: 'Use your laptop', standX: SPOTS.moriDesk[0] + 8, enabled: calm, action: () => this.laptop() });
+    it({ x: SPOTS.moriDesk[0] - 4, y: L, label: 'Use your laptop', standX: SPOTS.moriDesk[0] + 8, quest: () => (V()['v4:rounds'] ?? 0) >= 4 && !this.flag('v4:report'), enabled: calm, action: () => this.laptop() });
     // flavour: things to poke at around the boat
     const look = (x: number, y: number, label: string, lines: () => BubbleLine[], o: Partial<Interactable> = {}) => it({ x, y, label, standX: x, enabled: calm, action: () => this.say(lines()).then(() => {}), ...o });
-    look(SPOTS.chunkBed[0], L, 'Chunk’s bed', () => [{ who: 'mori', text: 'Chunk’s bed. Premium orthopaedic memory foam. He sleeps on my face anyway.', expr: 'teasing' }]);
-    look(410, L, 'Look at the photo board', () => [
-      { who: 'mori', text: 'Every species we’ve logged this trip. Forty-one birds, nine fish, two dolphins, one Chunk.', expr: 'happy' },
-      { who: 'mori', text: 'The Chunk entry says “Canis lupus snorfus. Habitat: my pillow.”', expr: 'teasing' },
-    ]);
-    look(342, L, 'Field guides', () => [{ who: 'mori', text: 'Birds of the Southern Ocean, Fishes of New Zealand, and “How to Train Your Pug”. Two of these have been useful.', expr: 'thinking' }]);
-    look(92, L, 'Jenna’s monitors', () => [
-      { who: 'mori', text: 'Three monitors, twelve terminals, and a cat video paused at the exact moment the cat falls off the table.', expr: 'neutral' },
-      { who: 'mori', text: 'Somewhere in here is the code that counts my seabirds. Also somewhere in here: 400 browser tabs.', expr: 'teasing' },
-    ], { enabled: () => calm() && s.jenna.x < 140 });
     look(SPOTS.chess[0], H, 'Look at the chess game', () => [
       { who: 'mori', text: 'Joshu versus Jenna, day nineteen of the same game. Joshu’s winning. Jenna says the knight is “emotionally compromised.”', expr: 'teasing' },
-    ]);
-    look(SPOTS.modelShip[0], H, 'The model ship', () => [
-      { who: 'mori', text: 'Joshu built this the winter after Jenna was born. It’s a tiny Kittiwake. It even has a tiny version of that dent in the bow.', expr: 'happy' },
     ]);
     look(SPOTS.photosJ[0], H, 'The framed photos', () => [
       { who: 'mori', text: 'Little Jenna holding a fish bigger than she is. She looks thrilled. The fish looks less thrilled.', expr: 'happy' },
       { who: 'mori', text: 'And the woman in the sun hat... Jenna’s mum. Joshu keeps her right where he can see her from his bunk.', expr: 'sad' },
     ]);
-    look(SPOTS.bowls[0], H, 'Chunk’s bowls', () => [{ who: 'mori', text: '“CHUNK” in glitter paint. Jenna made these. Chunk licked the glitter off within a week.', expr: 'teasing' }]);
     look(SPOTS.fridge[0], H, 'The fridge', () => [{ who: 'mori', text: 'Milk, eggs, a jar labelled “DO NOT EAT (SCIENCE)”, and a jar labelled “DO NOT EAT (JOSHU’S)”. I respect both.', expr: 'neutral' }]);
-    look(SPOTS.games[0], H, 'Board games shelf', () => [{ who: 'mori', text: 'Scrabble, a 1000-piece puzzle of a lighthouse, and a Monopoly set we are legally not allowed to open again.', expr: 'teasing' }]);
-    look(SPOTS.captainBunk[0], H, 'Joshu’s bunk', () => [{ who: 'mori', text: 'Perfectly made. Hospital corners. Forty years at sea will do that to a man.', expr: 'neutral' }]);
-    look(SPOTS.charts[0], B, 'The charts', () => [{ who: 'mori', text: 'Joshu’s route, pencilled in. There’s a little circle where he wrote “good fishing” and a bigger circle where he wrote “DON’T”.', expr: 'thinking' }]);
     look(SPOTS.herbs[0], SPOTS.herbs[1], 'Joshu’s herb garden', () => [{ who: 'mori', text: 'Basil, thyme, and a very determined chilli plant. Joshu talks to them every morning. They seem happier than me.', expr: 'happy' }]);
-    look(SPOTS.crane[0], SPOTS.crane[1], 'The research crane', () => [{ who: 'mori', text: 'The A-frame for the plankton nets. Jenna wants to “upgrade” it. I’ve hidden the toolbox.', expr: 'teasing' }]);
-    look(SPOTS.dogFood[0], L, 'Chunk’s food crate', () => [{ who: 'mori', text: 'A whole crate of canned dog food. Chunk knows exactly where it is. Chunk always knows exactly where it is.', expr: 'neutral' }]);
-    look(SPOTS.forepeak[0], L, 'The forepeak', () => [{ who: 'mori', text: 'Chain, paint cans and the spooky corner. Every boat has a spooky corner.', expr: 'worried' }]);
     look(SPOTS.microscope[0], L, 'The microscope', () => [{ who: 'mori', text: 'Yesterday’s plankton sample. Copepods, diatoms, and one very confused baby crab.', expr: 'happy' }]);
   }
 

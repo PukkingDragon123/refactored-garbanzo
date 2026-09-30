@@ -9,7 +9,7 @@ import { openSettings } from '../game/scenes/title';
 const CSS = `
 .pz-pause { width: min(360px, 90vw); padding: 1.2em 1.2em 1.1em; display: flex; flex-direction: column; gap: 0.55em; }
 .pz-pause h2 { text-align: center; margin: 0 0 0.1em !important; letter-spacing: 0.12em; }
-.pz-pause .where { text-align: center; font-family: 'Silkscreen', var(--pix); font-size: 0.78em; color: #6a4a2a; margin-bottom: 0.4em; }
+.pz-pause .where { text-align: center; font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 0.78em; color: #6a4a2a; margin-bottom: 0.4em; }
 .pz-pause .btn { width: 100%; text-align: left; display: flex; align-items: center; gap: 0.6em; font-size: 1.02em; padding: 0.5em 0.8em; white-space: nowrap; }
 .pz-pause .btn .ic { width: 1.5em; height: 1.5em; flex: none; image-rendering: pixelated; background: var(--ic) center / contain no-repeat; }
 .pz-pause .btn::after { content: '▶'; margin-left: auto; opacity: 0; font-size: 0.8em; transition: opacity 0.15s; }

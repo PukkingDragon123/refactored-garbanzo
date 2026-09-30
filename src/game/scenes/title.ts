@@ -29,15 +29,15 @@ const CSS = `
 .t3.open .t3-bar { height: 4.2%; }
 .t3-logo { position: absolute; left: 5vw; top: 9vh; opacity: 0; transform: translateY(-14px); transition: opacity 1.2s, transform 1.4s cubic-bezier(.2,.9,.3,1); z-index: 3; }
 .t3.logo .t3-logo { opacity: 1; transform: none; }
-.t3-logo small { display: block; font-family: 'Silkscreen', var(--pix); font-size: clamp(11px, 1.35vw, 19px); letter-spacing: 0.9em; color: #9ff0dc;
+.t3-logo small { display: block; font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: clamp(11px, 1.35vw, 19px); letter-spacing: 0.9em; color: #9ff0dc;
   text-shadow: 0 2px 0 #10302c, 2px 0 0 #10302c, -2px 0 0 #10302c, 0 -2px 0 #10302c; margin: 0 0 0.35em 0.25em; }
-.t3-logo h1 { margin: 0; font-family: 'Pixelify Sans', var(--pix); font-weight: 700; font-size: clamp(40px, 7.6vw, 118px); line-height: 0.9; letter-spacing: 0.03em;
+.t3-logo h1 { margin: 0; font-family: 'Jersey 15', 'Pixelify Sans', var(--pix); font-weight: 700; font-size: clamp(40px, 7.6vw, 118px); line-height: 0.9; letter-spacing: 0.03em;
   color: #fff0cc; position: relative;
   text-shadow: 3px 0 0 #2a1424, -3px 0 0 #2a1424, 0 3px 0 #2a1424, 0 -3px 0 #2a1424, 0 6px 0 #c0643a, 0 9px 0 #7a2e2a, 3px 9px 0 #2a1424, -3px 9px 0 #2a1424, 0 12px 0 #2a1424, 0 16px 12px rgba(0,0,0,0.45); }
 .t3-logo h1 i { font-style: normal; position: absolute; inset: 0; color: transparent; background: linear-gradient(100deg, transparent 40%, rgba(255,255,255,0.85) 48%, transparent 56%) -200% 0 / 200% 100% no-repeat;
   -webkit-background-clip: text; background-clip: text; text-shadow: none; animation: t3shine 5.5s 2s steps(24) infinite; }
 @keyframes t3shine { 0% { background-position: -120% 0; } 45%, 100% { background-position: 220% 0; } }
-.t3-logo p { margin: 1.1em 0 0 0.2em; font-family: 'Silkscreen', var(--pix); font-size: clamp(10px, 1.05vw, 15px); color: #ffe4c8; letter-spacing: 0.08em; text-shadow: 0 2px 0 #2a1424; max-width: 34em; }
+.t3-logo p { margin: 1.1em 0 0 0.2em; font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: clamp(10px, 1.05vw, 15px); color: #ffe4c8; letter-spacing: 0.08em; text-shadow: 0 2px 0 #2a1424; max-width: 34em; }
 .t3-logo p b { color: #ffc86a; font-weight: 400; }
 .t3-menu { position: absolute; left: 5vw; bottom: 9vh; width: clamp(240px, 30vw, 360px); padding: 1.1em 1.1em 1em; display: flex; flex-direction: column; gap: 0.55em;
   opacity: 0; transform: translateX(-30px); transition: opacity 0.8s, transform 0.9s cubic-bezier(.2,.9,.3,1); pointer-events: none; z-index: 3; }
@@ -46,12 +46,12 @@ const CSS = `
 .t3-menu .btn .ic { width: 1.6em; height: 1.6em; image-rendering: pixelated; flex: none; background: var(--ic) center / contain no-repeat; }
 .t3-menu .btn::after { content: '▶'; margin-left: auto; opacity: 0; transform: translateX(-6px); transition: opacity 0.15s, transform 0.15s; font-size: 0.8em; }
 .t3-menu .btn:hover::after, .t3-menu .btn:focus-visible::after { opacity: 1; transform: none; }
-.t3-menu .hd { font-family: 'Silkscreen', var(--pix); font-size: 0.78em; letter-spacing: 0.2em; color: #6a4a2a; text-align: center; margin-bottom: 0.2em; }
-.t3-foot { position: absolute; right: 2.2vw; bottom: 5.4%; font-family: 'Silkscreen', var(--pix); font-size: 0.72em; color: #ffe4c8; opacity: 0; transition: opacity 1s 1s; text-shadow: 0 2px 0 #000; z-index: 3; }
+.t3-menu .hd { font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 0.78em; letter-spacing: 0.2em; color: #6a4a2a; text-align: center; margin-bottom: 0.2em; }
+.t3-foot { position: absolute; right: 2.2vw; bottom: 5.4%; font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 0.72em; color: #ffe4c8; opacity: 0; transition: opacity 1s 1s; text-shadow: 0 2px 0 #000; z-index: 3; }
 .t3.menu .t3-foot { opacity: 0.75; }
-.t3-skip { position: absolute; right: 2.2vw; bottom: 1.2%; font-family: 'Silkscreen', var(--pix); font-size: 0.7em; color: #fff; opacity: 0.55; z-index: 4; }
+.t3-skip { position: absolute; right: 2.2vw; bottom: 1.2%; font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 0.7em; color: #fff; opacity: 0.55; z-index: 4; }
 .t3.menu .t3-skip { display: none; }
-.t3-cap { position: absolute; left: 0; right: 0; bottom: 18%; text-align: center; font-family: 'Silkscreen', var(--pix); font-size: clamp(11px, 1.3vw, 18px); color: #fff4e0; letter-spacing: 0.25em;
+.t3-cap { position: absolute; left: 0; right: 0; bottom: 18%; text-align: center; font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: clamp(11px, 1.3vw, 18px); color: #fff4e0; letter-spacing: 0.25em;
   text-shadow: 0 2px 0 #000; opacity: 0; transition: opacity 1.2s; z-index: 3; }
 .t3-cap.on { opacity: 0.9; }
 .settings { width: min(460px, 92vw); padding: 1.4em 1.6em; display: flex; flex-direction: column; gap: 1em; }
