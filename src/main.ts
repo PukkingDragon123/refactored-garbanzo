@@ -78,6 +78,30 @@ async function boot() {
     noodles: async () => (await import('./ui/v4/noodles')).runNoodleGame(),
     ramen: async () => (await import('./ui/v6/ramen')).runRamenPour(),
     engine: async () => (await import('./ui/v4/engine')).runEngineRepair({}),
+    /** stand Mori at the stern (ship scene) and go fishing; resolves with the catch or null */
+    fish: async () => {
+      const s = game.scene as unknown as { player: { x: number; y: number; facing: number }; snapCamera?(): void; cutscene: boolean };
+      const { SPOTS } = await import('./art/ship5');
+      s.player.x = SPOTS.fishing[0] + 8; s.player.y = SPOTS.fishing[1]; s.player.facing = -1;
+      s.snapCamera?.();
+      s.cutscene = true;
+      const c = await (await import('./ui/v4/fishing')).goFishing(s as never);
+      s.cutscene = false;
+      (window as unknown as { __fish?: unknown }).__fish = c ? { fish: c.fish.id, len: c.len, stars: c.stars } : null;
+      return c;
+    },
+    /** just the underwater fight close-up, for one fish id (hold Space to reel) */
+    fishFight: async (id = 'snapper', dep0?: number) => {
+      const { FISH } = await import('./ui/v4/fishing');
+      const { runFishFight } = await import('./ui/v6/fishfight');
+      const { Hold } = await import('./ui/v4/mini');
+      const hold = new Hold(document.body);
+      const f = FISH.find(x => x.id === id) ?? FISH[0];
+      const r = await runFishFight(f, hold, { cancelled: () => false, caughtSub: `${f.name} · 42 cm`, dep0 });
+      hold.dispose();
+      (window as unknown as { __fish?: unknown }).__fish = r;
+      return r;
+    },
   };
 }
 

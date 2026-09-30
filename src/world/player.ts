@@ -58,6 +58,8 @@ export class Player implements Drawable {
   hurtT = 0;
   alpha = 1;
   poseOverride: string | null = null;
+  /** with poseOverride: hold this frame of the clip (scripted, e.g. winding up a cast) */
+  poseFrame: number | null = null;
   frozen = false;
   underwater = false;
   /** deck tilt in radians (boat scenes): makes the player slide */
@@ -375,6 +377,7 @@ export class Player implements Drawable {
     }
     if (a === 'climbIdle') { a = 'climb'; b.holdFrame = 0; } else if (b.holdFrame !== null && a !== 'climb' && !this.animMap) b.holdFrame = null;
     if (b.anim !== a && !b.walking) b.setAnim(a);
+    if (this.poseOverride && this.poseFrame !== null) b.holdFrame = this.poseFrame;
     b.alpha = (this.state === 'hide' ? 0.6 : 1) * this.alpha * (this.hurtT > 0 && Math.floor(this.hurtT * 12) % 2 === 0 ? 0.35 : 1);
     b.shadow = !this.underwater && this.onGround;
     b.update(dt);
