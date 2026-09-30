@@ -17,8 +17,9 @@ const KIND: Record<ItemKind, { label: string; color: string }> = {
   tool: { label: 'Tool', color: '#9aa3a5' }, material: { label: 'Material', color: '#c9a878' }, plant: { label: 'Plant', color: '#8db34a' },
   fungus: { label: 'Fungus', color: '#3fbca6' }, insect: { label: 'Insect', color: '#f4b43c' }, animal: { label: 'Animal sample', color: '#e8614a' },
   lure: { label: 'Lure', color: '#9b7ce0' }, food: { label: 'Food', color: '#e0853a' }, key: { label: 'Key item', color: '#ffd57a' },
+  shell: { label: 'Shell', color: '#f0c8b0' },
 };
-const SORT_ORDER: ItemKind[] = ['lure', 'food', 'animal', 'insect', 'plant', 'fungus', 'material', 'key', 'tool'];
+const SORT_ORDER: ItemKind[] = ['lure', 'food', 'shell', 'animal', 'insect', 'plant', 'fungus', 'material', 'key', 'tool'];
 const EAT: Record<string, string> = { energy: 'Energy for a long day in the field', steady: 'Steady hands: less camera shake next trip', quiet: 'Light feet: animals hear you less next trip' };
 const MAX_SLOTS = 24;
 

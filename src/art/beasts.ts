@@ -46,7 +46,22 @@ export const BEAST_ANIMS = Object.fromEntries(
 
 export const BEAST_INFO = Object.fromEntries(
   Object.entries(SPECIES).map(([id, s]) => [id, { name: s!.name, kind: s!.kind, len: s!.len, height: s!.height }]),
-) as Record<BeastId, { name: string; kind: 'mammal' | 'bird' | 'amphibian'; len: number; height: number }>;
+) as Record<BeastId, { name: string; kind: SpeciesDef['kind']; len: number; height: number }>;
+
+/**
+ * V9: register a species painted with the same core from another module (src/art/v9/...). After
+ * this, renderBeast / BEAST_ANIMS / BEAST_INFO / the wild BeastBody all work with the new id.
+ */
+export function registerBeast(id: string, def: SpeciesDef) {
+  (SPECIES as Record<string, SpeciesDef>)[id] = def;
+  (BEAST_ANIMS as Record<string, SpeciesDef['anims']>)[id] = def.anims;
+  (BEAST_INFO as Record<string, { name: string; kind: SpeciesDef['kind']; len: number; height: number }>)[id] = { name: def.name, kind: def.kind, len: def.len, height: def.height };
+  if (!BEAST_IDS.includes(id as BeastId)) BEAST_IDS.push(id as BeastId);
+}
+/** V9: renderBeast for any registered id (string-typed) */
+export function renderAny(id: string, anim: string, frame: number, eye?: BeastEye, variant: 'adult' | 'juvenile' = 'adult'): BeastFrame {
+  return renderBeast(id as BeastId, anim, frame, eye, variant);
+}
 
 /** What the anchor of an anim means: 'ground' (feet), 'centre' (body centre) or 'grip'. */
 export function beastAnchorKind(id: BeastId, anim: string): 'ground' | 'centre' | 'grip' {

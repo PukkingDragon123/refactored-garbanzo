@@ -827,7 +827,7 @@ export interface DrawOut { head: V2; eye: V2 }
 export interface Canvas { w: number; h: number; ox: number; oy: number }
 export interface SpeciesDef {
   name: string;
-  kind: 'mammal' | 'bird' | 'amphibian';
+  kind: 'mammal' | 'bird' | 'amphibian' | 'fish' | 'reptile' | 'crustacean' | 'mollusc' | 'insect' | 'other';
   len: number;
   height: number;
   anims: Record<string, AnimDef>;

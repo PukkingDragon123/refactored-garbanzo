@@ -19,6 +19,7 @@ import type { Frame } from '../../gfx/renderer';
 import { ChunkBuddy } from './buddy';
 import { CorvexSeal } from './seal';
 import { startShoreLife } from './shorelife';
+import { startWildlife9 } from '../v9/wildlife';
 import { ISL, SPOT, WRECK, groundY } from '../../art/island4/layout';
 import * as CA from '../../art/island4/camp';
 import { clamp, rand, smoothstep } from '../../core/math';
@@ -169,6 +170,7 @@ export class IsleStory implements IsleHooks {
     this.buildProps();
     this.addInteractables();
     startShoreLife(s);
+    startWildlife9(s);
     s.onNewSpecies = sp => this.newSpecies(sp);
     this.camp.setup();
     await this.restore();

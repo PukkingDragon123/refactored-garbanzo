@@ -1,6 +1,6 @@
 // Items: tools, building materials, collectible samples, lures and food.
 
-export type ItemKind = 'tool' | 'material' | 'plant' | 'fungus' | 'insect' | 'animal' | 'lure' | 'food' | 'key';
+export type ItemKind = 'tool' | 'material' | 'plant' | 'fungus' | 'insect' | 'animal' | 'lure' | 'food' | 'key' | 'shell';
 
 export interface ItemDef {
   id: string;
@@ -120,6 +120,39 @@ def({ id: 'trap', name: 'Camera trap', kind: 'lure', stack: 3, desc: 'Motion-tri
 def({ id: 'ration', name: 'Ship biscuit', kind: 'food', stack: 10, desc: 'Hard as a brick. Filling.', eat: 'energy' });
 def({ id: 'stew', name: 'Lou’s stew', kind: 'food', stack: 4, desc: 'Hot, spicy, mysterious. Steadies the hands.', eat: 'steady' });
 def({ id: 'tea', name: 'Kawakawa tea', kind: 'food', stack: 4, desc: 'Peppery tea. Calm and quiet on your feet.', eat: 'quiet' });
+
+// ------------------------------------------------------------------ V9 island collectibles and harvestables
+// (placed and harvested in the island scene by src/game/v9/forage.ts; icons in src/art/itemicons.ts)
+def({ id: 'shell_sunwhorl', name: 'Sunwhorl shell', kind: 'shell', stack: 20, desc: 'A golden spiral shell, warm to the touch after a morning in the sun.', where: 'Landing beach sand' });
+def({ id: 'shell_fan', name: 'Fanshell', kind: 'shell', stack: 20, desc: 'A pink, deeply ribbed fan. Hold it to your ear: surf.', where: 'Tide line' });
+def({ id: 'shell_cone', name: 'Tiger cone', kind: 'shell', stack: 20, desc: 'A cone shell banded like a tiger. Empty, luckily.', where: 'Buried in wet sand (dig)' });
+def({ id: 'shell_opal', name: 'Opal ear', kind: 'shell', stack: 10, desc: 'An ear-shaped shell with a lining of blue-green fire.', where: 'Rock pools' });
+def({ id: 'shell_trycop', name: 'Trycop moult', kind: 'shell', stack: 5, desc: 'A whole shed claw of a Trycop crab, round spots and all. It is bigger than your hand.', where: 'Seal rocks',
+  lab: { rp: 14, time: 4, text: 'The moult is complete down to the joint membranes: the Trycop crab sheds its whole armour at once and hides for days while the new shell hardens.', species: 'trycop' } });
+def({ id: 'driftglass', name: 'Sea glass', kind: 'material', stack: 20, desc: 'Bottle glass tumbled frosty and smooth by the surf.', where: 'Tide line' });
+def({ id: 'kelp', name: 'Kelp ribbon', kind: 'material', stack: 20, desc: 'A leathery ribbon of kelp. Dries into cord.', where: 'Wrack line' });
+def({ id: 'flint', name: 'Flint nodule', kind: 'material', stack: 10, desc: 'Strikes a fat spark off the back of a knife.', where: 'Stream bed' });
+def({ id: 'clay', name: 'River clay', kind: 'material', stack: 10, desc: 'Grey, cold and slick. Good for sealing things.', where: 'Stream banks (trowel)' });
+def({ id: 'feather', name: 'Seabird feather', kind: 'material', stack: 20, desc: 'A long flight feather washed up on the sand.', where: 'Beach' });
+def({ id: 'plant_seaholly', name: 'Sea holly', kind: 'plant', stack: 10, desc: 'A spiky blue-silver coastal herb that smells of pepper and salt.', where: 'Dunes (knife)',
+  lab: { rp: 5, time: 2, text: 'Waxy, salt-proof leaves; the spines are hollow and full of bitter sap that keeps grazers off.' } });
+def({ id: 'plant_saltfern', name: 'Salt fern', kind: 'plant', stack: 10, desc: 'A fern that grows in the spray zone. Its fronds are crusted with salt crystals.', where: 'Cliffs and rocks (knife)',
+  lab: { rp: 6, time: 2, text: 'It pumps salt out through pores on the fronds. The crust reflects heat on the hottest rocks.' } });
+def({ id: 'plant_glowmoss', name: 'Glow moss', kind: 'plant', stack: 10, desc: 'A soft moss that glows faint green in the dark.', where: 'Sea cave walls',
+  lab: { rp: 10, time: 3, text: 'Not the moss itself: a film of luminous fungus lives in it. The cave glows are a partnership.' } });
+def({ id: 'plant_dunelily', name: 'Dune lily bulb', kind: 'plant', stack: 10, desc: 'A starchy bulb. Aroha says roast it in the embers.', where: 'Dunes (trowel)', eat: 'energy' });
+def({ id: 'berry_ember', name: 'Emberberries', kind: 'food', stack: 20, desc: 'Glossy red berries from the ember bushes. Sweet, a bit fizzy. Something else loves them too.', where: 'Ember bushes', eat: 'energy',
+  lab: { rp: 8, time: 3, text: 'The skins are covered in tiny bite marks: jewel hornets chew them open to drink the juice.', species: 'jewelhornet' } });
+def({ id: 'berry_dusk', name: 'Duskberries', kind: 'food', stack: 20, desc: 'Dusty purple berries that taste of plum and pine.', where: 'Bush edge', eat: 'energy' });
+def({ id: 'berry_gold', name: 'Goldcurrants', kind: 'food', stack: 20, desc: 'Tiny golden berries in clusters. Tart enough to make you blink.', where: 'Palm grove', eat: 'energy' });
+def({ id: 'pipi', name: 'Pipi', kind: 'food', stack: 12, desc: 'Smooth little clams from the wet sand. Twist your feet to find them.', where: 'Wet sand (dig)', eat: 'energy' });
+def({ id: 'bug_jewelbeetle', name: 'Jewel beetle', kind: 'insect', stack: 6, desc: 'A metallic green-gold beetle, gorgeous and grumpy.', where: 'Flowers (jar)',
+  lab: { rp: 8, time: 3, text: 'The shine is structural: layered chitin that bends light. No pigment at all.' } });
+def({ id: 'bug_sandhopper', name: 'Sand hopper', kind: 'insect', stack: 12, desc: 'A springy little amphipod from under the wrack. Bait, or a very small friend.', where: 'Wrack line (jar)' });
+def({ id: 'bug_lanternmoth', name: 'Lantern moth', kind: 'insect', stack: 6, desc: 'A pale moth with two glowing spots on its wings.', where: 'Bush at dusk (net)',
+  lab: { rp: 10, time: 3, text: 'The spots glow only when it flies: a flash to startle hunters, then darkness.' } });
+def({ id: 'bug_hornet', name: 'Jewel hornet', kind: 'insect', stack: 6, desc: 'A dead jewel hornet, striped teal, violet and gold. Even dead it looks cross.', where: 'Near ember bushes',
+  lab: { rp: 12, time: 4, text: 'The gut is full of fruit pulp, not meat: a hornet that gave up hunting for berries, and nests underground like an ant.', species: 'jewelhornet' } });
 
 export const item = (id: string) => ITEMS[id];
 export const isTool = (id: string) => ITEMS[id]?.kind === 'tool';
