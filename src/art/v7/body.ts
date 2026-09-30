@@ -6,7 +6,7 @@
 // materials that read the part's local frame (height up the torso, around a limb, along a sleeve).
 
 import { PixelBuffer } from '../pixel';
-import { Build, Pose, solve, trimPair, P2, Canvas, PropP } from '../people-rig';
+import { Build, Pose, solve, ik2, trimPair, P2, Canvas, PropP } from '../people-rig';
 import { drawProp5 } from '../v5/props';
 import { finish5 } from '../v5/body';
 import type { Ctx, CharDef } from '../people-parts';
@@ -45,8 +45,16 @@ export interface Char7 {
   shoe: PartMat;
   /** a skirt or tunic hem: from the waist down to `len` px below the hips, flaring */
   skirt?: { len: number; flare: number; top?: number; mat: PartMat };
-  /** extra 3D props on the body (straps, packs, pouches) */
-  extras?(s: Scene3D, J: J3, P: Pose): void;
+  /** gloves: a cuff over the wrist (radius, length back up the forearm; the hands' material unless given) */
+  cuff?: { r: number; len: number; mat?: PartMat };
+  /** finger thickness (insulated gloves > 1) */
+  fingerK?: number;
+  /** shoe size multipliers [length, height, width] (chunky snow and sea boots > 1) */
+  shoeK?: [number, number, number];
+  /** a boot shaft or gaiter hugging the shin from `t` (0 knee → 1 ankle) down, `r` px proud of it */
+  bootTop?: { t: number; r: number; mat: PartMat };
+  /** extra 3D props on the body (straps, packs, pouches), drawn between the far and the near arm */
+  extras?(s: Scene3D, J: J3, P: Pose, ch: Char7): void;
 }
 
 /** the lifted skeleton (world space) */
@@ -83,7 +91,8 @@ export function lift(ch: Char7, pose: Pose, yaw0 = YAW): J3 {
   const b = { ...ch.build, shF: 0, shB: 0, legF: 0, legB: 0 };
   const J = solve(b, pose);
   const back = !!pose.flags?.back;
-  const yaw = back ? BACK_YAW : yaw0;
+  // a pose may turn the figure less (flags.yaw), e.g. squaring up to the ship's wheel
+  const yaw = back ? BACK_YAW : pose.flags?.yaw ?? yaw0;
   const { W } = yawer(yaw);
   // the legs stride along the direction of travel: a shallower turn than the torso, so steps read
   // on screen while the chest stays open to the camera (a natural hip-to-shoulder rotation)
@@ -123,6 +132,25 @@ export function lift(ch: Char7, pose: Pose, yaw0 = YAW): J3 {
   const hpN = vadd(vadd(P(J.hipF), hpLat), shift), hpF = vadd(vsub(P(J.hipB), hpLat), shift);
   const shN2 = vadd(vadd(shN, shift), [0, roll * ch.shW, 0]), shF2 = vadd(vadd(shFa, shift), [0, -roll * ch.shW, 0]);
   const ikN = !!pose.fa.ik, ikF = !!pose.ba.ik;
+  // world-space fists (flags wN / wF): the arm's ik point is where the FIST should land, in world px
+  // from the ground anchor (x toward facing, y up), e.g. on the rim of the ship's wheel. Solve the
+  // side-plane target that puts the wrist a fist's length short of it, through this yaw and shoulder
+  const ca = Math.cos(yaw), sa = Math.sin(yaw);
+  const fistTo = (near: boolean) => {
+    const a = near ? pose.fa : pose.ba;
+    if (!a.ik || !(near ? fl.wN : fl.wF)) return;
+    const sh3 = near ? shN2 : shF2, root = near ? J.shF : J.shB, side = near ? 1 : -1, ao = near ? aoN : aoF;
+    const lz = sh3[2] + side * (out + ao), F = 2.3 * ch.hand, goal = a.ik;
+    let tx = goal[0], ty = goal[1], el: P2 = root, wr: P2 = root;
+    for (let it = 0; it < 3; it++) {
+      [el, wr] = ik2(root, [root[0] + (tx + lz * sa) / ca - sh3[0], root[1] + ty - sh3[1]], b.upArm, b.foreArm, a.flip ? 1 : -1);
+      const e3 = armPt(sh3, root, el, side, ao, true, 0.6), w3 = armPt(sh3, root, wr, side, ao, true, 1);
+      const dd = Math.hypot(w3[0] - e3[0], w3[1] - e3[1]) || 1;
+      tx = goal[0] - ((w3[0] - e3[0]) / dd) * F; ty = goal[1] - ((w3[1] - e3[1]) / dd) * F;
+    }
+    if (near) { J.elF = el; J.wrF = wr; } else { J.elB = el; J.wrB = wr; }
+  };
+  fistTo(true); fistTo(false);
   // knees and feet hang off their hip, stepping in the legs' own (shallower) yaw; the feet stay put
   // when the hips shift sideways (the knee takes half of it)
   const legW = (hp: V3, root: P2, p: P2, k = 1): V3 => vsub(vadd(W(hp), Wl([p[0] - root[0], p[1] - root[1], 0])), W(vsc(shift, k)));
@@ -162,13 +190,17 @@ export function renderBody7(ch: Char7, pose: Pose): Frame7 {
     const [r0, r1, r2] = ch.legR;
     s.limb(hp, kn, r0, r1, g, pm(ch.thigh, near));
     s.limb(kn, an, r1, r2, g, pm(ch.shin, near));
+    // a boot shaft / gaiter: a slightly thicker sleeve over the lower shin
+    const bt = ch.bootTop;
+    if (bt) { const top = vlerp(kn, an, bt.t), bm = pm(bt.mat, near); s.limb(top, an, r1 + (r2 - r1) * bt.t + bt.r, r2 + bt.r * 0.8, g, h => { h.t = bt.t + h.t * (1 - bt.t); return bm(h); }); }
     const fa = (near ? pose.fl.fa : pose.bl.fa) ?? 0;
-    // shoe: an ellipsoid pointing along the foot
+    // shoe: an ellipsoid pointing along the foot (bigger boots keep their sole on the ground)
+    const [k0, k1, k2] = ch.shoeK ?? [1, 1, 1];
     const fd = vnorm(vadd(vsc(flat(J.legFwd), Math.cos(fa)), [0, Math.sin(fa), 0]));
     const upv = vnorm(vsub([0, 1, 0], vsc(fd, fd[1])));
     const lt = vnorm(vcross(fd, upv));
-    const c = vadd(an, vadd(vsc(fd, 1.7), vsc(upv, -0.9)));
-    s.ellipsoid(c, vsc(fd, 3.1), vsc(upv, 1.55), vsc(lt, 1.7), g, pm(ch.shoe, near));
+    const c = vadd(an, vadd(vsc(fd, 1.7 + (k0 - 1) * 1.1), vsc(upv, -2.45 + 1.55 * k1)));
+    s.ellipsoid(c, vsc(fd, 3.1 * k0), vsc(upv, 1.55 * k1), vsc(lt, 1.7 * k2), g, pm(ch.shoe, near));
   };
   leg(false);
   leg(true);
@@ -210,11 +242,16 @@ export function renderBody7(ch: Char7, pose: Pose): Frame7 {
     s.limb(sh, el, r0, r1, g, pm(ch.upperArm, near));
     s.limb(el, wr, r1, r2, g, pm(ch.foreArm, near));
     const hp = (near ? pose.fa.hand : pose.ba.hand) ?? 'relax';
-    if (hp !== 'none') hand7(s, wr, el, J, near, hp, ch.hand, g, pm(ch.hands, near));
+    if (hp !== 'none') {
+      hand7(s, wr, el, J, near, hp, ch.hand, g, pm(ch.hands, near), ch.fingerK ?? 1);
+      // glove cuff over the wrist, flaring a little over the sleeve
+      const cf = ch.cuff;
+      if (cf) { const d = vnorm(vsub(wr, el)); s.limb(vadd(wr, vsc(d, -cf.len)), vadd(wr, vsc(d, 0.35 * ch.hand)), cf.r, cf.r * 0.9, g, pm(cf.mat ?? ch.hands, near)); }
+    }
     s.layer = 0;
   };
   arm(false);
-  ch.extras?.(s, J, pose);
+  ch.extras?.(s, J, pose, ch);
   arm(true);
 
   const r = s.finish({ ink: ch.ink });
@@ -265,7 +302,7 @@ function drawProps(ch: Char7, pose: Pose, J: J3, back: PixelBuffer, front: Pixel
  * the body's forward side, the palm faces the body (hanging) or the thing held.
  */
 const CURL: Record<string, number> = { fist: 1, grip: 0.82, relax: 0.42, open: 0.08, flat: 0, point: 1, pinch: 0.55 };
-function hand7(s: Scene3D, wr: V3, el: V3, J: J3, near: boolean, type: string, k: number, g: number, mat: Mat) {
+function hand7(s: Scene3D, wr: V3, el: V3, J: J3, near: boolean, type: string, k: number, g: number, mat: Mat, fk = 1) {
   const d = vnorm(vsub(wr, el));
   let side = vsub(J.fwd, vsc(d, vdot(J.fwd, d)));
   if (vlen(side) < 0.25) side = vsub(J.up, vsc(d, vdot(J.up, d)));
@@ -278,7 +315,7 @@ function hand7(s: Scene3D, wr: V3, el: V3, J: J3, near: boolean, type: string, k
   s.limb(wr, P(0, 0, 0), 0.72 * k, 0.66 * k, g, mat);
   // palm
   s.ellipsoid(P(1.0, 0, 0), vsc(d, 1.15 * k), vsc(side, 1.0 * k), vsc(n, 0.56 * k), g, mat);
-  const fr = 0.46 * k;
+  const fr = 0.46 * k * fk;
   const curl = CURL[type] ?? 0.5;
   const LEN = [1.45, 1.7, 1.6, 1.25], OFF = [0.64, 0.22, -0.22, -0.62];
   const bend = (a: number): V3 => vnorm(vadd(vsc(d, Math.cos(a)), vsc(n, Math.sin(a))));
