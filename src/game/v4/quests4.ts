@@ -12,10 +12,10 @@ export const V4_QUESTS: QuestDef[] = [
     id: 'v4morning', title: 'Rise and Shine', giver: 'story', main: true, chapter: 1,
     desc: 'Another morning aboard the Kittiwake. Breakfast first, then the rounds, then the report nobody else is going to write.',
     steps: [
-      { text: 'Make instant noodles in the galley', done: f('v4:noodles'), hint: 'The galley is up the forward ladder and aft through the deckhouse door.' },
+      { text: 'Make instant noodles in the galley', done: f('v4:noodles'), hint: 'The galley is right next door to the bunk room, below deck.' },
       { text: 'Eat breakfast at the mess table', done: f('v4:ate') },
-      { text: 'Do the morning rounds', done: () => v('v4:rounds') >= 4, progress: n('v4:rounds', 4), hint: 'Feed the fish in the lab, check the engine gauges, say morning to Joshu on the bridge and to Jenna in her cabin.' },
-      { text: 'Write the morning report on your laptop', done: f('v4:report'), hint: 'Your laptop is on the desk in your cabin.' },
+      { text: 'Do the morning rounds', done: () => v('v4:rounds') >= 4, progress: n('v4:rounds', 4), hint: 'Feed the fish in the hold, check the engine gauges, say morning to Jenna at her bench in the engine room and to Joshu up in the wheelhouse.' },
+      { text: 'Write the morning report on your laptop', done: f('v4:report'), hint: 'Your laptop is on your bunk.' },
     ],
     next: 'v4engine',
   },
@@ -34,7 +34,7 @@ export const V4_QUESTS: QuestDef[] = [
     steps: [
       { text: 'Photograph wildlife from the deck', done: () => v('v4:photoSpecies') >= 3, progress: n('v4:photoSpecies', 3), hint: 'Q raises the camera. Seabirds circle the mast; watch the water off the bow.' },
       { text: 'Catch a fish at the stern', done: () => v('v4:fishCaught') >= 1, hint: 'The rods are at the stern rail.' },
-      { text: 'Study your catch in the lab tank, or give it to Joshu to cook', done: f('v4:fishUsed') },
+      { text: 'Study your catch in the hold tank, or give it to Joshu to cook', done: f('v4:fishUsed') },
     ],
     next: 'v4storm',
   },
@@ -43,7 +43,7 @@ export const V4_QUESTS: QuestDef[] = [
     desc: 'Something massive hit the hull. The sky went black in minutes. And Chunk is nowhere to be seen.',
     steps: [
       { text: 'Find Chunk!', done: f('v4:chunkFound'), hint: 'He hates thunder. He hides somewhere small and dark.' },
-      { text: 'Get Chunk to the bridge', done: f('v4:bridge') },
+      { text: 'Get Chunk up to the wheelhouse', done: f('v4:bridge') },
     ],
   },
   {

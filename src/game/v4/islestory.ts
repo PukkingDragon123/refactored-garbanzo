@@ -178,7 +178,7 @@ export class IsleStory implements IsleHooks {
     const fl = (k: string) => () => this.flag(k);
     const notF = (k: string) => () => !this.flag(k);
     // in the wreck: the burst crate of Chunky Chow
-    this.prop('chow', CA.chunkyChow(), SPOT.chunkEat + 26, WRECK.floor + 1, () => true, -5.2);
+    this.prop('chow', CA.chunkyChow(), SPOT.chunkEat + 14, WRECK.floor - 5, () => true, -5.2);
     // Joshu's boots in the cove, his jacket on a twig up the track
     this.prop('boots', CA.boots(), SPOT.boots, groundY(SPOT.boots) + 6, notF('v4:joshuAwake'), -2);
     this.prop('scrap', CA.jacketScrap(), 6130, groundY(6130) - 18, () => true, -2);
@@ -223,7 +223,7 @@ export class IsleStory implements IsleHooks {
       { who: 'mori', text: 'Gerald, you absolute legend.', expr: 'happy' },
     ], () => s.inWreck);
     look(SPOT.engine, WRECK.floor, 'The engine', () => [{ who: 'mori', text: 'Full of sand and seawater. Jenna is going to cry. Then she is going to fix it. Then she is going to cry again.', expr: 'worried' }], () => s.inWreck);
-    look(700, WRECK.floor, 'Mori’s bunk... no, the lab bench', () => [{ who: 'mori', text: 'My sample jars! ...Most of my sample jars. Somewhere out there is a very confused plankton colony.', expr: 'sad' }], () => s.inWreck);
+    look(774, WRECK.floor, 'Mori’s bunk', () => [{ who: 'mori', text: 'My sample jars! ...Most of my sample jars. Somewhere out there is a very confused plankton colony.', expr: 'sad' }], () => s.inWreck);
     // Joshu's boots and the trail
     this.it({ x: SPOT.boots, y: groundY(SPOT.boots), w: 18, label: 'Boots in the sand', standX: SPOT.boots - 16, enabled: () => this.flag('v4:sealDone') && !this.flag('v4:shoes'), action: () => this.boots() });
     this.it({ x: 6130, y: groundY(6130), w: 16, label: 'A scrap of navy cloth', standX: 6118, enabled: () => this.flag('v4:shoes') && !this.flag('v4:joshuFound'), action: () => this.say([
@@ -273,7 +273,7 @@ export class IsleStory implements IsleHooks {
 
   chunkInWreck() {
     const c = this.s.chunk;
-    this.place(c, SPOT.chunkEat, 1, 'eat', WRECK.floor);
+    this.place(c, SPOT.chunkEat, 1, 'eat', WRECK.floor - 6);
     c.setExpr('eat');
     this.s.buddy.mode = 'script';
   }

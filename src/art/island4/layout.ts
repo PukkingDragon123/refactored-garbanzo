@@ -29,14 +29,14 @@ export function zoneAt(x: number): Zone {
 }
 
 /** the wreck: ship-local x (Kittiwake art) maps to island x = sx + WRECK.dx; ship y + WRECK.dy */
-export const WRECK = { x0: 470, sx0: 90, sx1: 968, dx: 380, dy: -166, floor: 190, breach: [846, 990] as [number, number], climbX: 870 };
+export const WRECK = { x0: 470, sx0: 24, sx1: 560, dx: 394, dy: -12, floor: 190, w: 416, breach: [780, 818] as [number, number], climbX: 799 };
 
 export const SPOT = {
   moriWake: 1760,
   jenna: 2010,
-  chunkEat: 812,
-  tank: 1065,
-  engine: 620,
+  chunkEat: 856,
+  tank: 838,
+  engine: 554,
   camp: 1980,
   fire: 1990,
   stream: 3780,

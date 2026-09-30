@@ -7,11 +7,12 @@
 import { PixelBuffer } from '../pixel';
 import { hex, mix, shade, C } from '../color';
 import { clamp, fbm1, hash2, noise1, noise2 } from '../../core/math';
-import { paintShip4, S4 } from '../ship4';
+import { paintShip4, S4 } from '../ship5';
+import { deckY } from '../boat';
 import { WRECK } from './layout';
 
 /** wreck space = ship space x [SX0, SX1), y [SY0, SY1) */
-export const WSP = { SX0: WRECK.sx0, SX1: WRECK.sx1, SY0: 196, SY1: 392 };
+export const WSP = { SX0: WRECK.sx0, SX1: WRECK.sx1, SY0: 60, SY1: 236 };
 
 export interface WreckArt {
   /** island-space top-left of every buffer */
@@ -51,8 +52,8 @@ export function paintWreck(): WreckArt {
     }
   };
   // deck gear only up to the aft ladder; the deckhouse and everything on it went over the side
-  blit(back, ship.deckBack, (sx, sy) => sy > S4.main.y - 14 || sx < 480);
-  blit(inner, ship.lower);
+  blit(back, ship.house, (sx, sy) => sy > deckY(sx) - 15 || sx < 130);
+  blit(inner, ship.lower, (sx, sy) => sy > S4.lower.ceil - 6);
   blit(hull, ship.hull);
   blit(front, ship.deckFront);
   const at = (b: PixelBuffer, sx: number, sy: number) => {
@@ -64,7 +65,7 @@ export function paintWreck(): WreckArt {
   const all = [back, inner, hull, front];
 
   // ---- torn forward end: a ragged vertical tear with bent frames and cables
-  const tearX = (sy: number) => 928 + (noise1(sy / 9, 3) - 0.5) * 46 + (sy > 330 ? (sy - 330) * 0.35 : 0);
+  const tearX = (sy: number) => 500 + (noise1(sy / 9, 3) - 0.5) * 30 + (sy > 196 ? (sy - 196) * 0.35 : 0);
   for (let sy = WSP.SY0; sy < WSP.SY1; sy++) {
     const tx = tearX(sy);
     for (let sx = Math.floor(tx); sx < WSP.SX1; sx++) for (const b of all) set(b, sx, sy, 0);
@@ -73,19 +74,19 @@ export function paintWreck(): WreckArt {
       if (get(inner, tx - k, sy) >>> 24) set(inner, tx - k, sy, hex('#1a1614'));
     }
   }
-  for (const sy of [286, 304, 322, 340]) {
+  for (const sy of [134, 150, 166, 184]) {
     const tx = tearX(sy);
     const len = 8 + hash2(sy, 1, 5) * 12;
     for (let k = 0; k < len; k++) { set(hull, tx - 2 + k, sy + k * 0.35, hex('#7a4a2e')); set(hull, tx - 2 + k, sy + 1 + k * 0.35, hex('#4a2e1e')); }
   }
   for (let i = 0; i < 5; i++) {
-    const x0 = 880 + i * 12, len = 18 + hash2(i, 2, 7) * 30;
+    const x0 = 462 + i * 8, len = 14 + hash2(i, 2, 7) * 26;
     for (let k = 0; k < len; k++) set(inner, x0 + Math.sin(k * 0.2 + i) * 2, S4.lower.ceil + 2 + k, [hex('#c8402e'), hex('#2a2a30'), hex('#e8b840')][i % 3]);
   }
 
   // ---- the breach at the hold: a torn hole you can climb through
   const [b0, b1] = [WRECK.breach[0] - WRECK.dx, WRECK.breach[1] - WRECK.dx];
-  const bcx = (b0 + b1) / 2, bcy = 334, brx = (b1 - b0) / 2, bry = 34;
+  const bcx = (b0 + b1) / 2, bcy = 178, brx = (b1 - b0) / 2, bry = 28;
   for (let sy = bcy - bry - 6; sy < bcy + bry + 6; sy++) for (let sx = b0 - 10; sx < b1 + 10; sx++) {
     const nx = (sx - bcx) / brx, ny = (sy - bcy) / bry;
     const q = nx * nx + ny * ny + (noise2(sx / 7, sy / 7, 11) - 0.5) * 0.5;
@@ -94,7 +95,7 @@ export function paintWreck(): WreckArt {
     else if (q < 1.35 && get(hull, sx, sy) >>> 24 && hash2(sx, sy, 13) < 0.4) set(hull, sx, sy, hex('#8a4a2a'));
   }
   // punctures elsewhere in the hull, showing the dark rooms behind
-  for (const [hx, hy, r] of [[250, 318, 7], [700, 306, 5], [790, 340, 6], [360, 346, 4]] as const) {
+  for (const [hx, hy, r] of [[150, 160, 6], [262, 150, 4], [330, 180, 5], [470, 170, 4]] as const) {
     for (let sy = hy - r - 2; sy <= hy + r + 2; sy++) for (let sx = hx - r - 2; sx <= hx + r + 2; sx++) {
       const q = ((sx - hx) / r) ** 2 + ((sy - hy) / (r * 0.8)) ** 2 + (noise2(sx / 3, sy / 3, 17) - 0.5) * 0.6;
       if (q < 1) set(hull, sx, sy, 0);
@@ -103,25 +104,25 @@ export function paintWreck(): WreckArt {
   }
 
   // ---- the deckhouse stumps: splintered frames along the deck where the house stood
-  for (let sx = 520; sx < 900; sx++) {
+  for (let sx = 212; sx < 340; sx++) {
     if (sx > tearX(S4.main.y)) break;
     const hgt = Math.max(0, (fbm1(sx / 14, 3, 21) - 0.45) * 30) * (sx % 40 < 6 ? 1.7 : 1);
-    for (let k = 0; k < hgt; k++) set(back, sx, S4.main.y - 1 - k, k > hgt - 2 ? hex('#3a2a1e') : sx % 40 < 6 ? hex('#56392a') : k > hgt - 4 ? hex('#8a7a66') : hex('#c8c0ae'));
+    for (let k = 0; k < hgt; k++) set(back, sx, deckY(sx) - 13 - k, k > hgt - 2 ? hex('#3a2a1e') : sx % 40 < 6 ? hex('#56392a') : k > hgt - 4 ? hex('#8a7a66') : hex('#c8c0ae'));
   }
   // a hole in the deck above the hold (a light shaft falls through it)
-  for (let sx = 560; sx < 600; sx++) for (let sy = S4.lower.ceil - 6; sy < S4.lower.ceil + 4; sy++) if (noise2(sx / 5, sy / 3, 23) > 0.3) { set(inner, sx, sy, 0); set(back, sx, sy, 0); }
+  for (let sx = 428; sx < 452; sx++) for (let sy = S4.lower.ceil - 8; sy < S4.lower.ceil + 4; sy++) if (noise2(sx / 5, sy / 3, 23) > 0.3) { set(inner, sx, sy, 0); set(back, sx, sy, 0); }
 
   // ---- weathering: weed and barnacles at the waterline, paint scraped to primer, rust
-  for (let sx = WSP.SX0; sx < WSP.SX1; sx++) for (let sy = 346; sy < WSP.SY1; sy++) {
+  for (let sx = WSP.SX0; sx < WSP.SX1; sx++) for (let sy = 196; sy < WSP.SY1; sy++) {
     const i = at(hull, sx, sy);
     if (i < 0 || !(hull.data[i] >>> 24)) continue;
     const n = noise2(sx / 6, sy / 4, 31);
-    if (sy > 356 && n > 0.55) hull.data[i] = mix(hull.data[i], hex('#3e5a2a'), 0.6);
-    if (sy > 362 && hash2(sx, sy, 32) < 0.08) hull.data[i] = hex('#d8d0c0');
+    if (sy > 204 && n > 0.55) hull.data[i] = mix(hull.data[i], hex('#3e5a2a'), 0.6);
+    if (sy > 210 && hash2(sx, sy, 32) < 0.08) hull.data[i] = hex('#d8d0c0');
   }
   for (let k = 0; k < 10; k++) {
     // long scrapes where the rocks took the paint off
-    const cx = WSP.SX0 + 30 + hash2(k, 3, 33) * (W - 80), cy = 290 + hash2(k, 4, 34) * 56, r = 2 + hash2(k, 5, 35) * 3;
+    const cx = WSP.SX0 + 30 + hash2(k, 3, 33) * (W - 80), cy = 130 + hash2(k, 4, 34) * 70, r = 2 + hash2(k, 5, 35) * 3;
     for (let sy = cy - r; sy < cy + r; sy++) for (let sx = cx - r * 5; sx < cx + r * 5; sx++) {
       const i = at(hull, sx, sy);
       if (i < 0 || !(hull.data[i] >>> 24)) continue;
@@ -132,18 +133,18 @@ export function paintWreck(): WreckArt {
     const sx = WSP.SX0 + 10 + hash2(k, 6, 36) * (W - 40);
     const len = 8 + hash2(k, 7, 37) * 26;
     for (let j = 0; j < len; j++) {
-      const i = at(hull, sx, S4.main.y + 4 + j);
+      const i = at(hull, sx, deckY(sx) + 4 + j);
       if (i >= 0 && hull.data[i] >>> 24) hull.data[i] = mix(hull.data[i], hex('#8a4a2a'), 0.55 * (1 - j / len));
     }
   }
   // kelp draped over the rail
   for (let k = 0; k < 9; k++) {
-    const sx = 140 + k * 86 + hash2(k, 8, 38) * 30;
-    if (sx > tearX(S4.main.y) - 10) continue;
+    const sx = 60 + k * 50 + hash2(k, 8, 38) * 20;
+    if (sx > tearX(deckY(sx)) - 10) continue;
     const len = 10 + hash2(k, 9, 39) * 22;
     for (let j = 0; j < len; j++) {
-      set(front, sx + Math.sin(j * 0.3 + k) * 1.5, S4.main.y - 8 + j, j % 4 === 0 ? hex('#6a7a3a') : hex('#4a5a2a'));
-      if (j % 5 === 2) set(front, sx + 1 + Math.sin(j * 0.3 + k) * 1.5, S4.main.y - 8 + j, hex('#8a8a3a'));
+      set(front, sx + Math.sin(j * 0.3 + k) * 1.5, deckY(sx) - 12 + j, j % 4 === 0 ? hex('#6a7a3a') : hex('#4a5a2a'));
+      if (j % 5 === 2) set(front, sx + 1 + Math.sin(j * 0.3 + k) * 1.5, deckY(sx) - 12 + j, hex('#8a8a3a'));
     }
   }
 
@@ -152,7 +153,7 @@ export function paintWreck(): WreckArt {
     const drift = Math.max(0, (fbm1(sx / 40, 3, 41) - 0.45) * 16) + (Math.abs(sx - bcx) < brx + 30 ? 5 * (1 - Math.abs(sx - bcx) / (brx + 30)) : 0);
     for (let k = 0; k < drift; k++) set(inner, sx, S4.lower.floor - k, k > drift - 1.5 ? hex('#e8cc92') : hex('#d4b07a'));
   }
-  for (const [px, pw] of [[330, 26], [700, 34], [860, 20]] as const) {
+  for (const [px, pw] of [[150, 20], [300, 24], [440, 14]] as const) {
     for (let sx = px - pw; sx < px + pw; sx++) for (let sy = S4.lower.floor - 1; sy <= S4.lower.floor + 1; sy++) {
       if (Math.abs(sx - px) / pw + (noise1(sx / 4, 43) - 0.5) * 0.3 > 1) continue;
       set(inner, sx, sy, hex('#3a5058'));
@@ -165,7 +166,7 @@ export function paintWreck(): WreckArt {
   }
 
   // ---- the dune piled against the keel (the hull disappears into the sand)
-  const sandTop = (sx: number) => 370 - Math.max(0, (fbm1(sx / 60, 3, 45) - 0.3)) * 18 - (sx < 160 ? (160 - sx) * 0.12 : 0);
+  const sandTop = (sx: number) => 216 - Math.max(0, (fbm1(sx / 60, 3, 45) - 0.3)) * 16 - (sx < 90 ? (90 - sx) * 0.14 : 0);
   for (let sx = WSP.SX0; sx < WSP.SX1; sx++) {
     const top = sandTop(sx);
     for (let sy = Math.floor(top); sy < WSP.SY1; sy++) {
@@ -179,7 +180,7 @@ export function paintWreck(): WreckArt {
 
   cache = {
     x: WSP.SX0 + WRECK.dx, y: WSP.SY0 + WRECK.dy, back, inner, hull, front, wet,
-    shafts: [[580 + WRECK.dx, S4.lower.ceil + WRECK.dy, 30], [bcx + WRECK.dx, bcy + WRECK.dy - 8, brx * 1.6], [250 + WRECK.dx, 318 + WRECK.dy, 10]],
+    shafts: [[440 + WRECK.dx, S4.lower.ceil + WRECK.dy, 22], [bcx + WRECK.dx, bcy + WRECK.dy - 8, brx * 1.6], [150 + WRECK.dx, 160 + WRECK.dy, 8]],
   };
   return cache;
 }

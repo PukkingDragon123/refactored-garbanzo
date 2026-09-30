@@ -131,13 +131,13 @@ export async function runStorm(s: ShipScene4) {
   game.ui.toast('The deck is pitching! Hold <b>S</b> to brace so you don’t slide. Find Chunk!', 'STORM', 'coral', 6500);
   // loose things start to slide
   const add = (buf: ReturnType<typeof FU.crate>, n: string, x: number, y: number, x0: number, x1: number) => s.addSlider(buf, n, x, y, x0, x1);
-  add(FU.dogBowl(true), 'bowl', 680, S4.house.floor, 530, 712);
-  add(FU.chair(), 'chair', 850, S4.house.floor, 728, 892);
-  add(FU.stool(), 'stool', 820, S4.lower.floor, 648, 930);
-  add(FU.crate(18, 16), 'crate', 560, S4.lower.floor, 408, 632);
-  add(FU.bucket(), 'bucket', 150, S4.main.y, 56, 500);
-  add(FU.cooler(), 'cooler', 300, S4.main.y, 56, 500);
-  add(FU.crate(22, 18, FU.P.plank, true), 'crate2', 1300, S4.main.y, 1130, 1580);
+  add(FU.dogBowl(true), 'bowl', 288, S4.house.floor, 206, 334);
+  add(FU.chair(), 'chair', 322, S4.house.floor, 276, 334);
+  add(FU.stool(), 'stool', 360, S4.lower.floor, 344, 420);
+  add(FU.crate(14, 12), 'crate', 470, S4.lower.floor - 6, 434, 492);
+  add(FU.bucket(), 'bucket', 90, S4.main.y, 44, 190);
+  add(FU.cooler(), 'cooler', 170, S4.main.y, 44, 190);
+  add(FU.crate(18, 14, FU.P.plank, true), 'crate2', 400, S4.main.y - 3, 360, 500);
   // storm life: rolling seas, extra jolts, spray over the rails
   let joltT = 5;
   s.st.layer('sea-horizon').add(updater(dt => {
@@ -190,7 +190,7 @@ async function findChunk(s: ShipScene4) {
   game.persist();
   s.hud?.refresh(true);
   s.cutscene = false;
-  game.ui.toast('Get to the <b>bridge</b>! (forward hatch → deck → roof ladder aft of the deckhouse)', 'STORM', 'coral', 6000);
+  game.ui.toast('Get to the <b>wheelhouse</b>! (up the companionway from the galley)', 'STORM', 'coral', 6000);
 }
 
 export async function rogueWave(s: ShipScene4) {
@@ -200,9 +200,9 @@ export async function rogueWave(s: ShipScene4) {
   s.phase = 'wave';
   s.cutscene = true;
   s.hud?.show(false);
-  p.walkTo(1000, 50).catch(() => {});
+  p.walkTo(298, 50).catch(() => {});
   // Jenna made it up too
-  s.jenna.x = 952; s.jenna.y = S4.bridge.floor; s.jenna.facing = 1; s.jenna.idleAnim = 'scared'; s.jenna.setAnim('scared');
+  s.jenna.x = 240; s.jenna.y = S4.bridge.floor; s.jenna.facing = 1; s.jenna.idleAnim = 'scared'; s.jenna.setAnim('scared');
   await say([
     { who: 'joshu', text: 'There’s my crew. Got the dog? Good lad.', expr: 'serious' },
     { who: 'jenna', text: 'Dad... Dad, what’s THAT?', expr: 'scared' },
@@ -210,7 +210,7 @@ export async function rogueWave(s: ShipScene4) {
   // the wall of water rises off the bow
   const wave = new GiantWave(s);
   wave.on = true;
-  wave.cx = 1920;
+  wave.cx = 1100;
   const L = s.st.addLayer('wave', 1, 0, 0.35, 0.42, 1);
   const li = s.st.layers.indexOf(L), j = s.st.layers.findIndex(x => x.name === 'sea-near');
   s.st.layers.splice(li, 1);
@@ -240,7 +240,7 @@ export async function rogueWave(s: ShipScene4) {
   for (const a of [s.jenna, s.joshu]) a.setAnim('brace');
   // slow motion as the lip comes over
   game.slowmo = 0.4;
-  await new Promise<void>(res => { const chk = () => (wave.cx < 1200 ? res() : requestAnimationFrame(chk)); chk(); });
+  await new Promise<void>(res => { const chk = () => (wave.cx < 420 ? res() : requestAnimationFrame(chk)); chk(); });
   audio.play('waveCrash', { vol: 1 });
   audio.play('shipCrash', { vol: 1 });
   s.st.shake(14, 1.2);

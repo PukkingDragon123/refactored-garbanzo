@@ -14,7 +14,8 @@ import { audio } from '../../core/audio';
 import { clamp, damp, rand } from '../../core/math';
 import { Ocean, BAND_P, applySeaEnv, updater, Weather } from '../../world/ocean';
 import { Sky, Rain, RAIN_P } from '../../world/ocean-sky';
-import { paintShip4, S4, LAMPS, WINDOWS, SPOTS, LADDERS, roomAt, ShipSprite, Ship4Art } from '../../art/ship4';
+import { paintShip4, S4, LAMPS, WINDOWS, SPOTS, LADDERS, roomAt, ShipSprite, Ship4Art, FLOORS, MOUNTS, TANK, PIVOT5, CUTLINE } from '../../art/ship5';
+import { paintBoatParts } from '../../art/boat';
 import { PixelBuffer } from '../../art/pixel';
 import { hex } from '../../art/color';
 import type { Actor } from '../../world/actor';
@@ -22,7 +23,7 @@ import { ChunkBuddy } from './buddy';
 import type { Interactable } from '../../world/npc';
 import type { Env } from '../../gfx/renderer';
 
-export const PIVOT: [number, number] = [820, S4.WATER];
+export const PIVOT: [number, number] = PIVOT5;
 
 export type ShipPhase = 'morning' | 'engine' | 'deck' | 'storm' | 'wave';
 
@@ -58,6 +59,7 @@ export class ShipScene4 extends FieldScene {
   private bubbles: { x: number; y: number; v: number }[] = [];
   sliders: Slider[] = [];
   private flagFr: Frame[] = [];
+  private partFr: Record<string, Frame[]> = {};
   engineOn = true;
   /** fishing line + bobber (world space, drawn outside the rocking transform) */
   bobber: { x: number; y: number; dip: number; fly: number } | null = null;
@@ -70,7 +72,7 @@ export class ShipScene4 extends FieldScene {
     let me: ShipScene4 | null = null;
     const art = paintShip4({});
     const site: FieldSite = {
-      id: 'boat', name: 'The Kittiwake', width: 1640, camY: 210, followY: true, minY: -140, maxY: 470,
+      id: 'boat', name: 'The Kittiwake', width: S4.W, camY: 120, followY: true, minY: -120, maxY: 300,
       spawnX: SPOTS.moriBed[0], exitX: 0, waterY: S4.WATER, ambience: 'boatCalm', music: 'voyage', ground: 'wood',
       noGuide: true, noExit: true, spawns: [], build: () => me!.buildShip(),
     };
@@ -98,8 +100,8 @@ export class ShipScene4 extends FieldScene {
 
   buildShip() {
     const st = this.st, r = game.r;
-    st.minX = -300;
-    st.maxX = 1940;
+    st.minX = -240;
+    st.maxX = S4.W + 240;
     st.envHook = (env, dt) => this.env(env, dt);
     this.ocean = new Ocean({ y: S4.WATER, horizon: S4.WATER - 120, seed: 11, weather: this.weather });
     this.sky = new Sky({ weather: this.weather, horizon: this.ocean.horizon, horizonP: BAND_P.horizon, seed: 7 });
@@ -168,13 +170,12 @@ export class ShipScene4 extends FieldScene {
     st.layer('sea-near').add(new Custom(50, rr => this.drawLine(rr)));
     // walkable decks and ladders
     const T = st.terrain;
-    T.addGround([[S4.lower.x0, S4.lower.floor], [S4.lower.x1, S4.lower.floor]], 'ground');
-    T.addGround([[S4.main.x0, S4.main.y], [S4.main.x1, S4.main.y]], 'bridge');
-    T.addGround([[S4.upper.x0, S4.upper.y], [S4.bridge.x1, S4.upper.y]], 'bridge');
+    T.addGround(FLOORS.lower, 'ground');
+    T.addGround(FLOORS.deck, 'bridge');
     for (const L of LADDERS) T.addClimb(L.x, L.top, L.bottom, 'ladder');
     // ladders: click / tap to climb
     for (const L of LADDERS) {
-      const nm = L.id === 'roof' ? 'the roof ladder' : L.id === 'bridge' ? 'the bridge ladder' : L.id === 'galley' ? 'the galley ladder' : 'the hatch';
+      const nm = L.id === 'galley' ? 'the companionway' : L.id === 'fwd' ? 'the fore hatch' : 'the engine hatch';
       this.interact.push(
         { x: L.x, y: L.top, w: 10, h: 14, label: `Climb down ${nm}`, standX: L.x, enabled: () => Math.abs(this.player.y - L.top) < 6 && this.player.state === 'normal', action: () => this.climbLadder({ x: L.x, y0: L.top, y1: L.bottom }, 1) } as Interactable,
         { x: L.x, y: L.bottom, w: 10, h: 14, label: `Climb up ${nm}`, standX: L.x, enabled: () => Math.abs(this.player.y - L.bottom) < 6 && this.player.state === 'normal', action: () => this.climbLadder({ x: L.x, y0: L.top, y1: L.bottom }, -1) } as Interactable,
@@ -190,8 +191,10 @@ export class ShipScene4 extends FieldScene {
     this.chunk = this.addActor('chunk', SPOTS.chunkBed[0], SPOTS.chunkBed[1], 1);
     this.chunk.z = 45;
     // tank life
-    for (let i = 0; i < 5; i++) this.tankFish.push({ x: 660 + rand.next() * 50, y: 314 + rand.next() * 18, vx: (rand.next() < 0.5 ? -1 : 1) * (6 + rand.next() * 8), k: i % 3, t: rand.next() * 10 });
-    for (let i = 0; i < 6; i++) this.bubbles.push({ x: 700 + rand.next() * 6, y: 310 + rand.next() * 28, v: 8 + rand.next() * 8 });
+    for (let i = 0; i < 4; i++) this.tankFish.push({ x: TANK.x0 + rand.next() * (TANK.x1 - TANK.x0), y: TANK.y0 + rand.next() * (TANK.y1 - TANK.y0), vx: (rand.next() < 0.5 ? -1 : 1) * (4 + rand.next() * 5), k: i % 3, t: rand.next() * 10 });
+    for (let i = 0; i < 4; i++) this.bubbles.push({ x: TANK.bx + rand.next() * 3, y: TANK.y0 + rand.next() * (TANK.y1 - TANK.y0), v: 5 + rand.next() * 5 });
+    const parts = paintBoatParts({});
+    for (const k of ['wheel', 'radar', 'flag'] as const) this.partFr[k] = parts[k].map((sp, i) => local.add(`s5:${k}${i}`, sp.buf, sp.ax, sp.ay));
     this.makeSmallFrames();
   }
 
@@ -234,9 +237,9 @@ export class ShipScene4 extends FieldScene {
     const k = this.inside;
     const mixv = (a: [number, number, number], b: [number, number, number], t: number): [number, number, number] => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
     const storm = this.weather.storm;
-    env.ambientTop = mixv(env.ambientTop, [0.3 - storm * 0.08, 0.27 - storm * 0.07, 0.29 - storm * 0.05], k * 0.9);
-    env.ambientBottom = mixv(env.ambientBottom, [0.22 - storm * 0.06, 0.2 - storm * 0.05, 0.22 - storm * 0.04], k * 0.9);
-    env.vignette = Math.max(env.vignette, 0.4 + 0.22 * k);
+    env.ambientTop = mixv(env.ambientTop, [0.62 - storm * 0.3, 0.58 - storm * 0.28, 0.54 - storm * 0.22], k * 0.8);
+    env.ambientBottom = mixv(env.ambientBottom, [0.5 - storm * 0.24, 0.46 - storm * 0.22, 0.44 - storm * 0.18], k * 0.8);
+    env.vignette = Math.max(env.vignette, 0.3 + 0.16 * k);
     env.bloom = env.bloom + 0.25 * k;
     env.bloomThreshold = Math.min(env.bloomThreshold, 0.9 - 0.15 * k);
     env.saturation *= 1 - 0.06 * k;
@@ -245,7 +248,7 @@ export class ShipScene4 extends FieldScene {
 
   private levelVis(room: string): number {
     if (room === 'deck') return 1;
-    const lv = ['engine', 'hold', 'lab', 'jenna', 'mori', 'forepeak'].includes(room) ? this.hullA : room === 'bridge' ? this.bridgeA : this.houseA;
+    const lv = room === 'bridge' ? this.bridgeA : this.hullA;
     return 1 - lv;
   }
 
@@ -266,7 +269,7 @@ export class ShipScene4 extends FieldScene {
       // warm pool reflected on the varnished floor under hanging bulbs
       if (L.kind === 'bulb' && L.room !== 'deck') {
         const lv = roomAt(L.x, L.y + 30);
-        const floorY = lv ? (lv.level === 'lower' ? S4.lower.floor : lv.level === 'house' ? S4.house.floor : S4.bridge.floor) : L.y + 60;
+        const floorY = lv ? (lv.level === 'bridge' ? S4.bridge.floor : lv.id === 'hold' ? S4.lower.floor - 6 : S4.lower.floor) : L.y + 60;
         r.fxDraw(A.glow, L.x, floorY + 2, 0.9, 0.12, 0, packColor(L.c[0], L.c[1] * 0.9, L.c[2] * 0.8, 1), 0.45 * k);
         r.fxDraw(A.glow, L.x, L.y, 0.32, 0.32, 0, packColor(L.c[0], L.c[1], L.c[2], 1), 0.55 * k);
       }
@@ -281,7 +284,8 @@ export class ShipScene4 extends FieldScene {
       r.light(W.x, W.y, W.porthole ? 26 : 40, 0.55, 0.7, 0.95, 0.5 * k);
     }
     // deck lights: mast lamp and the wheelhouse glow outside
-    r.light(1263, 31, 70, 1, 0.9, 0.62, 0.5 + storm * 0.8);
+    r.light(424, 7, 30, 1, 1, 0.95, storm > 0.3 ? 2 : 0.4);
+    r.light(276, 40, 70, 1, 0.82, 0.55, 0.3 + storm * 0.5);
   }
 
   private drawAnimated(r: Renderer, t: number) {
@@ -294,16 +298,13 @@ export class ShipScene4 extends FieldScene {
       for (const b of this.bubbles) r.draw(this.fr.dot, b.x, b.y, 1, 1, 0, col);
       r.emissive();
     }
-    // radar sweep on the bridge console
-    if (this.bridgeA < 0.98) {
-      const a = t * 2.4;
-      r.emissive(1);
-      for (let i = 1; i <= 5; i++) r.draw(this.fr.dot, 1058 + Math.round(Math.cos(a) * i), 168 + Math.round(Math.sin(a) * i), 1, 1, 0, packColor(0.5, 1, 0.6, 1 - this.bridgeA));
-      r.emissive();
-    }
-    // stern flag
-    const fi = Math.floor(t * (6 + this.weather.storm * 10)) % this.flagFr.length;
-    r.draw(this.flagFr[fi], 53, S4.main.y - 63);
+    // the boat's moving parts: wheel, radar, the stern flag
+    const storm = this.weather.storm;
+    const w = this.partFr.wheel, rd = this.partFr.radar, fl = this.partFr.flag;
+    if (w?.length) r.draw(w[Math.floor(Math.abs(this.rot) * 60 + t * (1 + storm * 6)) % w.length], MOUNTS.wheel[0], MOUNTS.wheel[1]);
+    if (rd?.length) r.draw(rd[Math.floor(t * 4) % rd.length], MOUNTS.radar[0], MOUNTS.radar[1]);
+    if (fl?.length) r.draw(fl[Math.floor(t * (6 + storm * 10)) % fl.length], MOUNTS.flag[0], MOUNTS.flag[1]);
+    void this.flagFr;
   }
 
   private drawSliders(r: Renderer) {
@@ -356,7 +357,7 @@ export class ShipScene4 extends FieldScene {
 
   /** a new resident for the lab tank */
   addTankFish() {
-    this.tankFish.push({ x: 686, y: 322, vx: 7, k: 2, t: 0 });
+    this.tankFish.push({ x: (TANK.x0 + TANK.x1) / 2, y: TANK.y0 + 4, vx: 5, k: 2, t: 0 });
   }
 
   /** keep Chunk in Mori's arms */
@@ -397,6 +398,7 @@ export class ShipScene4 extends FieldScene {
     if (!Number.isFinite(this.rot)) { this.rot = 0; this.jolt = 0; this.joltV = 0; }
     this.bob = clamp(this.bob, -30, 30);
     if (this.main.xf) { this.main.xf[2] = this.rot; this.main.xf[4] = this.bob; }
+    this.ocean?.setMask(CUTLINE.map(([x, y]) => this.shipToWorld(x, y)));
     p.tilt = this.rot * (storm > 0.2 ? 1.6 : 1);
     // cutaways
     const inLower = p.y > S4.lower.ceil + 2;
@@ -424,9 +426,10 @@ export class ShipScene4 extends FieldScene {
       f.t += dt;
       f.x += f.vx * dt;
       f.y += Math.sin(f.t * 1.7) * 3 * dt;
-      if (f.x < 658 || f.x > 712) { f.vx = -f.vx; f.x = clamp(f.x, 658, 712); }
+      if (f.x < TANK.x0 || f.x > TANK.x1) { f.vx = -f.vx; f.x = clamp(f.x, TANK.x0, TANK.x1); }
+      f.y = clamp(f.y, TANK.y0, TANK.y1);
     }
-    for (const b of this.bubbles) { b.y -= b.v * dt; b.x += Math.sin(b.y * 0.4) * 0.1; if (b.y < 310) { b.y = 338; b.x = 700 + rand.next() * 6; } }
+    for (const b of this.bubbles) { b.y -= b.v * dt; b.x += Math.sin(b.y * 0.4) * 0.1; if (b.y < TANK.y0) { b.y = TANK.y1; b.x = TANK.bx + rand.next() * 3; } }
     // sliding objects
     for (const s of this.sliders) {
       s.v += Math.sin(this.rot) * 420 * dt;

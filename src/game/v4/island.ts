@@ -200,14 +200,14 @@ export class IslandScene4 extends FieldScene {
       }
     }));
     // the floor inside, and the way in through the breach
-    this.st.terrain.addPlatform([[WRECK.x0 + 6, WRECK.floor], [WRECK.x0 + 836, WRECK.floor]], 'bridge');
+    this.st.terrain.addPlatform([[WRECK.x0 + 6, WRECK.floor], [WRECK.x0 + 348, WRECK.floor], [WRECK.x0 + 354, WRECK.floor - 6], [WRECK.x0 + WRECK.w - 4, WRECK.floor - 6]], 'bridge');
     this.st.terrain.addClimb(WRECK.climbX, WRECK.floor, groundY(WRECK.climbX), 'rope');
   }
 
   /** is the player standing on the wreck's floor? */
   get inWreck() {
     const p = this.player;
-    return p.x > WRECK.x0 && p.x < WRECK.x0 + 840 && p.y < ISL.GY - 10;
+    return p.x > WRECK.x0 && p.x < WRECK.x0 + WRECK.w && p.y < ISL.GY - 10;
   }
 
   // ---------------------------------------------------------------- lighting

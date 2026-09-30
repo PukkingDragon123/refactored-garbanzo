@@ -51,7 +51,7 @@ export class ShipStory {
     s.player.speedK = 0.8;
     s.st.cam.tzoom = s.st.cam.zoom = 1.12;
     // Mori's bunk is a little platform so he can lie on it
-    s.st.terrain.addPlatform([[1218, 346], [1278, 346]], 'bridge');
+    s.st.terrain.addPlatform([[348, 182], [398, 182]], 'bridge');
     s.buddy = new ChunkBuddy(s.chunk, { player: s.player, terrain: s.st.terrain, levelSpan: y => s.levelSpan(y) });
     this.addInteractables();
     if (!this.flag('v4:woke')) {
@@ -87,19 +87,19 @@ export class ShipStory {
     s.cutscene = true;
     s.hud?.show(false);
     // Mori asleep in his bunk, Chunk curled up on his chest
-    p.x = 1242;
-    p.y = 346;
+    p.x = 374;
+    p.y = 182;
     p.facing = -1;
     this.pose('sleepBunk');
     const c = s.chunk;
     c.terrain = null;
-    c.x = 1238; c.y = 339; c.facing = -1;
+    c.x = 370; c.y = 175; c.facing = -1;
     c.idleAnim = 'sleep'; c.setAnim('sleep');
     c.setExpr('sleep');
     p.body.setExpr('sleep');
     s.snapCamera();
-    s.st.cam.x = s.st.cam.tx = 1236;
-    s.st.cam.y = s.st.cam.ty = 300;
+    s.st.cam.x = s.st.cam.tx = 372;
+    s.st.cam.y = s.st.cam.ty = 150;
     s.st.cam.locked = true;
     game.r.post.fade = 1;
     game.fadeTo(1);
@@ -135,14 +135,14 @@ export class ShipStory {
     // Chunk hops down; Mori gets up, stretches, finds his glasses
     c.terrain = s.st.terrain;
     c.setAnim('jump');
-    c.walkTo(1206, 60, 'run');
+    c.walkTo(SPOTS.chunkBed[0], 60, 'run');
     c.idleAnim = 'idle';
     await wait(400);
     c.y = S4.lower.floor;
     c.react('land');
     await wait(300);
     p.y = S4.lower.floor;
-    p.x = 1232;
+    p.x = 362;
     p.facing = -1;
     await this.once('standUp');
     await this.once('stretch');
@@ -188,22 +188,22 @@ export class ShipStory {
     it({ x: 160, y: L, w: 20, label: 'Check the engine gauges', standX: 160, enabled: () => calm() && s.phase !== 'engine', action: () => this.gauges() });
     it({ x: s.joshu.x, y: B, w: 14, get label() { return self.flag('v4:fishToJoshu') && !self.flag('v4:fishUsed') ? 'Give Joshu the fish' : 'Talk to Joshu'; }, standX: s.joshu.x - 22, enabled: () => calm() && s.joshu.y === B, action: () => (this.flag('v4:fishToJoshu') && !this.flag('v4:fishUsed') ? this.giveFish() : this.talkJoshu()) } as never);
     // fishing at the stern
-    it({ x: SPOTS.fishing[0], y: D, w: 18, label: 'Fish off the stern', standX: SPOTS.fishing[0] + 8, enabled: () => s.phase === 'deck', action: () => this.fish() });
+    it({ x: SPOTS.fishing[0], y: SPOTS.fishing[1], w: 18, label: 'Fish off the stern', standX: SPOTS.fishing[0] + 8, enabled: () => s.phase === 'deck', action: () => this.fish() });
     it({ get x() { return s.jenna.x; }, get y() { return s.jenna.y; }, w: 14, label: 'Talk to Jenna', get standX() { return s.jenna.x + 22; }, enabled: () => calm() && s.phase !== 'engine', action: () => this.talkJenna() } as never);
     // laptop
     it({ x: SPOTS.moriDesk[0] - 4, y: L, label: 'Use your laptop', standX: SPOTS.moriDesk[0] + 8, enabled: calm, action: () => this.laptop() });
     // flavour: things to poke at around the boat
     const look = (x: number, y: number, label: string, lines: () => BubbleLine[], o: Partial<Interactable> = {}) => it({ x, y, label, standX: x, enabled: calm, action: () => this.say(lines()).then(() => {}), ...o });
     look(SPOTS.chunkBed[0], L, 'Chunk’s bed', () => [{ who: 'mori', text: 'Chunk’s bed. Premium orthopaedic memory foam. He sleeps on my face anyway.', expr: 'teasing' }]);
-    look(1255, L, 'Look at the photo board', () => [
+    look(410, L, 'Look at the photo board', () => [
       { who: 'mori', text: 'Every species we’ve logged this trip. Forty-one birds, nine fish, two dolphins, one Chunk.', expr: 'happy' },
       { who: 'mori', text: 'The Chunk entry says “Canis lupus snorfus. Habitat: my pillow.”', expr: 'teasing' },
     ]);
-    look(1170, L, 'Field guides', () => [{ who: 'mori', text: 'Birds of the Southern Ocean, Fishes of New Zealand, and “How to Train Your Pug”. Two of these have been useful.', expr: 'thinking' }]);
-    look(990, L, 'Jenna’s monitors', () => [
+    look(342, L, 'Field guides', () => [{ who: 'mori', text: 'Birds of the Southern Ocean, Fishes of New Zealand, and “How to Train Your Pug”. Two of these have been useful.', expr: 'thinking' }]);
+    look(92, L, 'Jenna’s monitors', () => [
       { who: 'mori', text: 'Three monitors, twelve terminals, and a cat video paused at the exact moment the cat falls off the table.', expr: 'neutral' },
       { who: 'mori', text: 'Somewhere in here is the code that counts my seabirds. Also somewhere in here: 400 browser tabs.', expr: 'teasing' },
-    ], { enabled: () => calm() && s.jenna.x > 940 });
+    ], { enabled: () => calm() && s.jenna.x < 140 });
     look(SPOTS.chess[0], H, 'Look at the chess game', () => [
       { who: 'mori', text: 'Joshu versus Jenna, day nineteen of the same game. Joshu’s winning. Jenna says the knight is “emotionally compromised.”', expr: 'teasing' },
     ]);
@@ -219,8 +219,8 @@ export class ShipStory {
     look(SPOTS.games[0], H, 'Board games shelf', () => [{ who: 'mori', text: 'Scrabble, a 1000-piece puzzle of a lighthouse, and a Monopoly set we are legally not allowed to open again.', expr: 'teasing' }]);
     look(SPOTS.captainBunk[0], H, 'Joshu’s bunk', () => [{ who: 'mori', text: 'Perfectly made. Hospital corners. Forty years at sea will do that to a man.', expr: 'neutral' }]);
     look(SPOTS.charts[0], B, 'The charts', () => [{ who: 'mori', text: 'Joshu’s route, pencilled in. There’s a little circle where he wrote “good fishing” and a bigger circle where he wrote “DON’T”.', expr: 'thinking' }]);
-    look(SPOTS.herbs[0], S4.upper.y, 'Joshu’s herb garden', () => [{ who: 'mori', text: 'Basil, thyme, and a very determined chilli plant. Joshu talks to them every morning. They seem happier than me.', expr: 'happy' }]);
-    look(SPOTS.crane[0], D, 'The research crane', () => [{ who: 'mori', text: 'The A-frame for the plankton nets. Jenna wants to “upgrade” it. I’ve hidden the toolbox.', expr: 'teasing' }]);
+    look(SPOTS.herbs[0], SPOTS.herbs[1], 'Joshu’s herb garden', () => [{ who: 'mori', text: 'Basil, thyme, and a very determined chilli plant. Joshu talks to them every morning. They seem happier than me.', expr: 'happy' }]);
+    look(SPOTS.crane[0], SPOTS.crane[1], 'The research crane', () => [{ who: 'mori', text: 'The A-frame for the plankton nets. Jenna wants to “upgrade” it. I’ve hidden the toolbox.', expr: 'teasing' }]);
     look(SPOTS.dogFood[0], L, 'Chunk’s food crate', () => [{ who: 'mori', text: 'A whole crate of canned dog food. Chunk knows exactly where it is. Chunk always knows exactly where it is.', expr: 'neutral' }]);
     look(SPOTS.forepeak[0], L, 'The forepeak', () => [{ who: 'mori', text: 'Chain, paint cans and the spooky corner. Every boat has a spooky corner.', expr: 'worried' }]);
     look(SPOTS.microscope[0], L, 'The microscope', () => [{ who: 'mori', text: 'Yesterday’s plankton sample. Copepods, diatoms, and one very confused baby crab.', expr: 'happy' }]);
@@ -401,7 +401,7 @@ export class ShipStory {
   // ---------------------------------------------------------------- engine
   private placeJenna(where: 'engine' | 'desk') {
     const j = this.s.jenna;
-    if (where === 'engine') { j.x = 250; j.y = S4.lower.floor; j.facing = -1; j.idleAnim = 'scared'; j.setAnim('scared'); }
+    if (where === 'engine') { j.x = 146; j.y = S4.lower.floor; j.facing = -1; j.idleAnim = 'scared'; j.setAnim('scared'); }
     else { j.x = SPOTS.jennaDesk[0]; j.y = S4.lower.floor; j.facing = 1; j.idleAnim = 'typeFast'; j.setAnim('typeFast'); }
   }
 
@@ -506,14 +506,14 @@ export class ShipStory {
     F()['v4:fishName:' + c.fish.name] = true;
     this.caught = c.fish.name;
     const ch = await this.say([
-      { who: 'mori', text: `A ${c.fish.name}! ${c.len} centimetres of pure science. Or dinner.`, expr: 'excited', choices: ['Study it in the lab tank', 'Give it to Joshu to cook'] },
+      { who: 'mori', text: `A ${c.fish.name}! ${c.len} centimetres of pure science. Or dinner.`, expr: 'excited', choices: ['Study it in the hold tank', 'Give it to Joshu to cook'] },
     ]);
     if (ch === 0) {
       this.set('v4:fishToTank');
-      game.ui.toast(`Take the ${c.fish.name.toLowerCase()} to the <b>tank in the lab</b> (lower deck).`, 'FISH', 'teal', 4200);
+      game.ui.toast(`Take the ${c.fish.name.toLowerCase()} to the <b>tank in the hold</b> (below deck, forward).`, 'FISH', 'teal', 4200);
     } else {
       this.set('v4:fishToJoshu');
-      game.ui.toast(`Take the ${c.fish.name.toLowerCase()} to <b>Joshu on the bridge</b>.`, 'FISH', 'teal', 4200);
+      game.ui.toast(`Take the ${c.fish.name.toLowerCase()} to <b>Joshu in the wheelhouse</b>.`, 'FISH', 'teal', 4200);
     }
   }
   private caught = 'fish';
@@ -566,7 +566,7 @@ export class ShipStory {
   update(dt: number) {
     const s = this.s, p = s.player;
     void dt;
-    if (s.phase === 'engine' && !this.flag('v4:engineArrive') && !s.cutscene && p.y > S4.lower.ceil && p.x < 400) this.engineArrive();
+    if (s.phase === 'engine' && !this.flag('v4:engineArrive') && !s.cutscene && p.y > S4.lower.ceil && p.x < 196) this.engineArrive();
     // the afternoon ends: once the deck quest wraps up, the storm arrives
     if (s.phase === 'deck' && !this.stormArmed && questStatus('v4deck') === 'done' && !s.cutscene) {
       this.stormArmed = true;
