@@ -77,6 +77,8 @@ async function boot() {
     moriOS: async (report = true) => (await import('./ui/v4/moriOS')).openMoriOS({ report }),
     noodles: async () => (await import('./ui/v4/noodles')).runNoodleGame(),
     ramen: async () => (await import('./ui/v6/ramen')).runRamenPour(),
+    steady: async () => (await import('./ui/v6/camp')).holdSteady('Hold the tent pole steady', 'Press <span class="key">Space</span> as the pole comes upright. Three pegs!'),
+    knot: async () => (await import('./ui/v6/camp')).lashingKnot(),
     engine: async () => (await import('./ui/v4/engine')).runEngineRepair({}),
   };
 }

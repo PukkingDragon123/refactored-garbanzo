@@ -16,7 +16,7 @@ import { wait } from './islestory';
 import { CAMP } from './islecamp';
 import { runNegotiation, NegRound } from '../../ui/v4/negotiate';
 
-export { holdSteady, lashingKnot } from '../../ui/v4/campmini';
+export { holdSteady, lashingKnot } from '../../ui/v6/camp';
 
 const ROUNDS: NegRound[] = [
   {
