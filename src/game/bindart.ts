@@ -1,7 +1,7 @@
 // Connects the art modules (V4 anime cast, fauna, jungle, camp) to the systems that draw them. The systems only know small
 // interfaces (so they compile and run without the art); this is the one place that wires them up.
 
-import * as people from '../art/v5';
+import * as people from '../art/v7';
 import * as emotes from '../art/emotes';
 import * as beasts from '../art/beasts';
 import * as insects from '../art/beasts-insects';
