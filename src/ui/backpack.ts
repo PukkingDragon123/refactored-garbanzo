@@ -1,5 +1,7 @@
 // Rowan's backpack: stacked slot grid (capacity grows with skills), tool belt, item details and actions
 // (eat, drop; crafting happens at the workbench), sorting and a capacity meter.
+// V10: the pack's weight (kg / capacity) and Mori's energy in the header, each item's weight, and Eat
+// for anything edible (energy back; unidentified forage is a gamble, researched poison asks first).
 
 import { game } from '../game/game';
 import { ITEMS, ItemKind } from '../game/items';
@@ -12,6 +14,8 @@ import { itemIconURL, uiIconURL } from '../art/itemicons';
 import { el } from './ui';
 import { paintParchment } from './skin';
 import { sfx, css, wait, pixelBackdrop, reduced, pushKeys, esc, confirmPop, H, fabric, stitch, uiPx, noise } from './laptop-kit';
+import { packWeight, packCapacity, weightOf, energy, maxEnergy } from '../game/v10/energy';
+import { foodInfo, canEat, eatFood, timesSick } from '../game/v10/forage10';
 
 const KIND: Record<ItemKind, { label: string; color: string }> = {
   tool: { label: 'Tool', color: '#9aa3a5' }, material: { label: 'Material', color: '#c9a878' }, plant: { label: 'Plant', color: '#8db34a' },
@@ -37,6 +41,17 @@ const CSS = `
 .bp-cap.full .bar i.on { background: var(--coral); }
 .bp-cap.full b { color: #ffb3a4; }
 .bp-head .btn { font-size: 0.9em; }
+.bp-v10 { display: grid; grid-template-columns: auto 7.5em; gap: 0.25em 0.5em; align-items: center; font-family: var(--pix); font-size: 0.85em; margin-left: 0.6em; }
+.bp-v10 span { text-align: right; white-space: nowrap; }
+.bp-v10 .m { height: 0.8em; background: rgba(0,0,0,0.35); box-shadow: inset 0 -2px 0 rgba(0,0,0,0.3); position: relative; }
+.bp-v10 .m i { position: absolute; left: 0; top: 0; bottom: 0; width: var(--v, 0%); background: var(--c, var(--amber)); box-shadow: inset 0 -2px 0 rgba(0,0,0,0.25), inset 0 2px 0 rgba(255,255,255,0.25); transition: width 0.3s; }
+.bp-v10 .en { --c: #8ac83a; }
+.bp-v10 .en.low { --c: var(--coral); }
+.bp-v10 .kg.over { --c: var(--coral); }
+.bp-v10 span.over b { color: #ffb3a4; }
+.bp-facts .warn { color: #9a5a08; }
+.bp-facts .bad { color: #a8382a; font-weight: 700; }
+.bp-facts .good { color: #2f6b2a; }
 .bp-body { flex: 1; min-height: 0; display: grid; grid-template-columns: auto 1fr; gap: calc(var(--px) * 8); }
 .bp-left { display: flex; flex-direction: column; gap: 0.5em; min-height: 0; }
 .bp-grid { display: grid; grid-template-columns: repeat(6, calc(var(--px) * 20)); grid-auto-rows: calc(var(--px) * 20); gap: calc(var(--px) * 1); padding: calc(var(--px) * 3); }
@@ -142,8 +157,9 @@ function beltBg(w: number, h: number): string {
 
 type Sel = { area: 'pack'; i: number } | { area: 'belt'; i: number } | null;
 
-/** Open the backpack. Resolves when it closes. onEat(id) applies the food's effect; if it doesn't consume the item, the backpack removes one. */
+/** Open the backpack. Resolves when it closes. (onEat is kept for old callers: V10 eating goes through v10/forage10.) */
 export function openBackpack(o: { onEat?: (id: string) => void | Promise<void> } = {}): Promise<void> {
+  void o;
   css('backpack', CSS);
   sfx('zipper');
   return new Promise<void>(resolve => {
@@ -151,12 +167,14 @@ export function openBackpack(o: { onEat?: (id: string) => void | Promise<void> }
     const root = el('div', 'bp-root k-ui');
     root.innerHTML = `<div class="bp-head"><img class="badge" src="${uiIconURL('pack', 4)}" alt=""><div><div class="t">Rowan’s backpack</div><div class="s">Smells faintly of wet dog and field notes</div></div>
       <div class="bp-cap"><span>Pockets <b class="used"></b></span><div class="bar"></div></div>
+      <div class="bp-v10"><span class="el">Energy <b></b></span><div class="m en"><i></i></div><span class="wl">Load <b></b></span><div class="m kg"><i></i></div></div>
       <button class="btn ghost sort" title="Sort and merge stacks">Sort</button><button class="btn ghost x">Close <span class="key">Tab</span></button></div>
       <div class="bp-body"><div class="bp-left"><div class="bp-grid"></div><div class="bp-belt"><span class="lbl">TOOLS</span></div></div><div class="bp-detail"></div></div>`;
     const grid = root.querySelector('.bp-grid') as HTMLElement;
     const belt = root.querySelector('.bp-belt') as HTMLElement;
     const detail = root.querySelector('.bp-detail') as HTMLElement;
     const capEl = root.querySelector('.bp-cap') as HTMLElement;
+    const v10El = root.querySelector('.bp-v10') as HTMLElement;
     let sel: Sel = stacks().length ? { area: 'pack', i: 0 } : game.save.tools.length ? { area: 'belt', i: 0 } : null;
     let busy = false;
     let popKeys = () => {};
@@ -191,6 +209,18 @@ export function openBackpack(o: { onEat?: (id: string) => void | Promise<void> }
       bar.innerHTML = '';
       for (let i = 0; i < cap; i++) bar.appendChild(el('i', i < used ? 'on' : ''));
       capEl.classList.toggle('full', freeSlots() <= 0);
+      // V10: energy and the load
+      const e = energy(), em = maxEnergy(), w = packWeight(), wc = packCapacity();
+      (v10El.querySelector('.el b') as HTMLElement).textContent = `${Math.ceil(e)}/${em}`;
+      const en = v10El.querySelector('.en') as HTMLElement;
+      en.style.setProperty('--v', `${Math.round((e / em) * 100)}%`);
+      en.classList.toggle('low', e / em < 0.25);
+      (v10El.querySelector('.wl b') as HTMLElement).textContent = `${w.toFixed(1)}/${wc} kg`;
+      (v10El.querySelector('.wl') as HTMLElement).classList.toggle('over', w > wc);
+      const kg = v10El.querySelector('.kg') as HTMLElement;
+      kg.style.setProperty('--v', `${Math.round(Math.min(1, w / wc) * 100)}%`);
+      kg.classList.toggle('over', w > wc);
+      v10El.title = w > wc ? 'Over capacity: you tire much faster and slow right down. Drop something heavy.' : 'Heavier packs cost more energy on expeditions and slow you down.';
     };
 
     const renderGrid = () => {
@@ -261,20 +291,34 @@ export function openBackpack(o: { onEat?: (id: string) => void | Promise<void> }
       detail.appendChild(el('div', 'bp-desc', esc(d?.desc ?? '')));
       const facts = detail.appendChild(el('dl', 'bp-facts'));
       const fact = (label: string, html: string) => facts.appendChild(el('div', '', `<dt>${label}</dt><dd style="margin:0">${html}</dd>`));
-      if (d?.kind === 'tool') fact('Belt', 'Always with you. Tools never take a pocket.');
-      else fact('Carrying', `${n} <span style="opacity:0.65">(stacks of ${d?.stack ?? 1})</span>`);
+      const kg = weightOf(id);
+      const kgs = (v: number) => (v < 0.1 ? `${Math.round(v * 1000)} g` : `${v.toFixed(v < 1 ? 2 : 1)} kg`);
+      if (d?.kind === 'tool') { fact('Belt', 'Always with you. Tools never take a pocket.'); fact('Weight', kgs(kg)); }
+      else {
+        fact('Carrying', `${n} <span style="opacity:0.65">(stacks of ${d?.stack ?? 1})</span>`);
+        fact('Weight', `${kgs(kg)}${n > 1 ? ` each <span style="opacity:0.65">· ${kgs(kg * n)} in all</span>` : ''}`);
+      }
       if (d?.where) fact('Found', esc(d.where));
       if (d?.lab) {
         const rp = analysisRp(id);
         const times = game.save.analyzed[id] ?? 0;
         fact('Laptop', rp > 0 ? `Analyse for <span class="rp">+${rp} RP</span>${times ? ` <span style="opacity:0.65">(analysed ×${times})</span>` : ' <span style="color:var(--teal2)">· new!</span>'}` : `Fully catalogued <span style="opacity:0.65">(×${times})</span>`);
       }
-      if (d?.eat) fact('Eat', EAT[d.eat] ?? d.eat);
+      const fi = foodInfo(id);
+      if (fi.edible) {
+        const sick = timesSick(id);
+        const verdict = fi.verdict === 'unknown' ? `<br><span class="warn">Unidentified: it might be poisonous.</span> Analyse a sample to be sure.${sick ? ` <span class="bad">It made you ill ${sick > 1 ? sick + ' times' : 'once'}.</span>` : ''}`
+          : fi.verdict === 'poison' ? '<br><span class="bad">POISONOUS</span> <span style="opacity:0.7">(researched)</span>'
+          : fi.risky ? '<br><span class="good">Safe to eat</span> <span style="opacity:0.7">(researched)</span>' : '';
+        fact('Eat', `${fi.energy ? `<span class="rp">+${fi.energy} energy</span>` : 'No energy to speak of'}${fi.buff ? ` · ${EAT[fi.buff]}` : ''}${verdict}`);
+      }
       if (d?.kind === 'lure') fact('Use', 'Set it down on an expedition to draw animals in.');
       const acts = detail.appendChild(el('div', 'bp-acts'));
       if (d?.kind === 'tool') return;
-      if (d?.eat) {
-        const b = acts.appendChild(el('button', 'btn teal', 'Eat')) as HTMLButtonElement;
+      if (fi.edible) {
+        // (skin: plain = green, amber = a gamble, red = poison)
+        const b = acts.appendChild(el('button', `btn${fi.verdict === 'unknown' ? ' amber' : fi.verdict === 'poison' ? ' red' : ''}`,
+          fi.verdict === 'unknown' ? 'Eat (risky)' : fi.verdict === 'poison' ? 'Eat anyway' : fi.energy ? `Eat · +${fi.energy}` : 'Eat')) as HTMLButtonElement;
         b.onclick = () => eat(id);
       }
       const usedIn = Object.values(RECIPE_BY_ID).filter(r => r.needs.some(([i]) => i === id));
@@ -300,19 +344,24 @@ export function openBackpack(o: { onEat?: (id: string) => void | Promise<void> }
       renderCap(); renderGrid(); renderBelt(); renderDetail();
     };
 
+    // V10: eatFood does the eating (energy, buffs, the forage gamble); o.onEat is no longer needed
     const eat = async (id: string) => {
       if (busy) return;
+      const can = canEat(id);
+      if (!can.ok) { sfx('wrong', { vol: 0.4 }); toast(id, can.reason ?? 'Not now'); return; }
+      if (foodInfo(id).verdict === 'poison') {
+        busy = true;
+        const c = await confirmPop(root, `<b>${esc(ITEMS[id]?.name ?? id)}</b> is poisonous. You’ll be ill. Eat it anyway?`, [{ label: 'Eat it' }, { label: 'Keep it', cls: 'ghost' }]);
+        busy = false;
+        if (c !== 0) return;
+      }
       busy = true;
-      const before = count(id);
       sfx('munch');
-      try {
-        if (o.onEat) { const r = o.onEat(id) as unknown; if (r && typeof (r as Promise<void>).then === 'function') await r; }
-        else if (ITEMS[id]?.eat) { game.save.buff = ITEMS[id].eat!; }
-      } catch (e) { console.error(e); }
-      if (count(id) >= before) remove(id, 1);
-      game.persist();
+      let r: ReturnType<typeof eatFood> | null = null;
+      try { r = eatFood(id, { quiet: true }); } catch (e) { console.error(e); }
       setTimeout(() => sfx('munch', { pitch: 1.2 }), 160);
-      toast(id, `Ate ${ITEMS[id]?.name ?? id}`);
+      const fx = r?.fx ?? 'none';
+      toast(id, fx === 'none' ? (r?.energy ? `+${r.energy} energy` : `Ate ${ITEMS[id]?.name ?? id}`) : fx === 'dizzy' ? 'Uh-oh. Dizzy...' : fx === 'big' ? 'Violently sick!' : 'Stomach ache...');
       busy = false;
       refresh();
     };
@@ -379,7 +428,7 @@ export function openBackpack(o: { onEat?: (id: string) => void | Promise<void> }
       if (e.code === 'ArrowDown' || e.code === 'KeyS') { move(0, 1); return true; }
       if (e.code === 'ArrowUp' || e.code === 'KeyW') { move(0, -1); return true; }
       if (e.code === 'Delete' || e.code === 'Backspace') { const id = selectedId(); if (id && sel?.area === 'pack' && ITEMS[id]?.kind !== 'key') drop(id); return true; }
-      if (e.code === 'KeyE' || e.code === 'Enter') { const id = selectedId(); if (id && ITEMS[id]?.eat && sel?.area === 'pack') eat(id); return true; }
+      if (e.code === 'KeyE' || e.code === 'Enter') { const id = selectedId(); if (id && foodInfo(id).edible && sel?.area === 'pack') eat(id); return true; }
     });
 
     renderCap(); renderGrid(); renderBelt(); renderDetail();

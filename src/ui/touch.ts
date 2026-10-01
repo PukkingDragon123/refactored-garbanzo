@@ -307,8 +307,11 @@ export function setupTouch() {
     }
     if (c && sc?.cam) {
       zv.textContent = `${(sc.cam.zoom ?? 1).toFixed(1)}x`;
-      shoot.b.classList.toggle('off', (sc.cam.develop ?? 1) < 1);
-      shoot.t.textContent = (sc.cam.develop ?? 1) < 1 ? 'WAIT' : 'SNAP';
+      // (V10: the shot goes when the steadiness ring is full: HOLD while it fills)
+      const hs = (sc.cam as { holdState?: string }).holdState ?? 'idle';
+      const holding = hs === 'filling' || hs === 'shaky' || hs === 'leaf';
+      shoot.b.classList.toggle('off', (sc.cam.develop ?? 1) < 1 || holding);
+      shoot.t.textContent = (sc.cam.develop ?? 1) < 1 ? 'WAIT' : holding ? 'HOLD' : 'SNAP';
       const br = (sc.cam as { breath?: number }).breath;
       bFill.style.setProperty('--v', `${Math.round((br ?? 1) * 100)}%`);
       // aim with the stick: push the virtual mouse around the view
