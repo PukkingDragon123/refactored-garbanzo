@@ -15,6 +15,7 @@ import { Sk, V2, V3, Px, rmp, drawEye, EyeSpec, BeastEye, SpeciesDef, AnimDef, T
 import { Frame2 } from '../../beasts-rig';
 import { spreadWing, foldedWing, birdLeg, tailFan, scallop, WingLook, WingPose, BirdLegLook } from '../../beasts-bird';
 import { hex } from '../../color';
+import type { PixelBuffer } from '../../pixel';
 
 // ------------------------------------------------------------------ look
 interface Cols {
@@ -570,3 +571,24 @@ export const TWINFAN = makeBird({
   airAnims: ['fly', 'glide', 'hawk', 'land'],
 });
 void hh;
+
+/**
+ * A bush twig for the twinfan to perch on (anchored at the perch point, the twig's top middle):
+ * a mossy stem sprouting from the left with a few small leaves.
+ */
+export function paintTwig(seed: number): { buf: PixelBuffer; ax: number; ay: number } {
+  const sk = new Sk(30, 14, 15, 3);
+  const bark = sk.m(rmp('#5a4632', { n: 4, dark: 0.5, light: 0.35 }), { edge: 1 });
+  const moss = sk.m(rmp('#6a7a32', { n: 4, dark: 0.5 }), { edge: 0 });
+  const leaf = sk.m(rmp('#4e7a34', { n: 5, dark: 0.55, light: 0.4 }), { edge: 1 });
+  sk.np();
+  const pts: V2[] = [[-15, 3 + hh(seed, 1, 2) * 3], [-6, 1.2], [6, 0.6], [11, 0.4 - hh(seed, 2, 2)]];
+  sk.tube(pts, t => 1.2 - t * 0.6, (p) => (p.v < -0.4 && hh(Math.floor(p.x), seed, 3) < 0.4 ? moss : bark), { z: 0 });
+  for (let i = 0; i < 4; i++) {
+    const x = -10 + i * 6 + hh(i, seed, 4) * 3, up = i % 2 ? -1 : 1;
+    const a = up < 0 ? -0.9 - hh(i, seed, 5) * 0.6 : 0.7 + hh(i, seed, 6) * 0.6;
+    sk.np();
+    sk.blade(x, 1, x + Math.cos(a) * 4, 1 + Math.sin(a) * 4, s => Math.sin(Math.min(1, s * 1.1) * Math.PI) * 1.3 + 0.2, leaf, { z0: 2, z1: 2 });
+  }
+  return { buf: sk.resolve(), ax: 15, ay: 3 };
+}

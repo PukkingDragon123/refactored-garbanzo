@@ -734,14 +734,18 @@ export class IsleStory implements IsleHooks {
   }
 
   newSpecies(sp: string) {
-    const names: Record<string, string> = { corvexseal: 'Corvex Seal', glasscrab: 'Glass Crab', swashrunner: 'Swashrunner', torea: 'Variable Oystercatcher', kelpskink: 'Kelp Skink', korora: 'Little Penguin', titiwai: 'Titiwai', piwakawaka: 'Fantail', wheke: 'Rock Pool Octopus' };
+    const names: Record<string, string> = { corvexseal: 'Corvex Seal', crownleech: 'Crown Leech', glasscrab: 'Glass Crab', swashrunner: 'Swashrunner', shellwrench: 'Pied Shellwrench', kelpskink: 'Kelp Skink', duskwaddler: 'Duskwaddler', starweb: 'Starweb Weaver', twinfan: 'Twinfan', periscope: 'Periscope Octopus' };
     game.ui.toast(`New species photographed: <b>${names[sp] ?? sp}</b>`, 'FIELD GUIDE', 'teal', 3600);
     const lines: Record<string, string> = {
       corvexseal: this.seal.state === 'tired' || this.seal.state === 'asleep' ? 'Corvex seal. Exhausted, snoring, magnificent. First photo in history, probably.' : 'I photographed a monster seal! While it was ASLEEP. Like a pro.',
-      glasscrab: 'See-through claws! Glass crabs. I’m calling them glass crabs.',
-      swashrunner: 'Look at it chase the waves. Tiny legs. So much commitment.',
-      titiwai: 'Titiwai in the dark. If that comes out, it’s going on the wall.',
-      piwakawaka: 'A fantail! They follow you through the bush to eat the bugs you stir up.',
+      crownleech: 'Leeches. In its neck. With little feathery crowns. Nature, you are disgusting and I love you.',
+      glasscrab: 'You can see its heart beating through the shell! Glass crabs. I’m calling them glass crabs.',
+      swashrunner: 'Look at it chase the waves. Snowshoe feet. So much commitment.',
+      shellwrench: 'Its bill crosses at the tip like pliers. It just twisted a mussel open!',
+      duskwaddler: 'Furry little penguin-things, waddling home to the dunes. My heart.',
+      starweb: 'Starweb weavers. A whole sky of them on the cave roof. If that comes out, it’s going on the wall.',
+      twinfan: 'It has TWO tails. Two fans! It’s following me to eat the bugs I stir up.',
+      periscope: 'Eyes on stalks, poking out of the pool like periscopes. And it’s wearing armour.',
     };
     if (lines[sp] && !game.ui.bubbles.active) this.s.bark('mori', lines[sp], { expr: 'excited' });
   }
