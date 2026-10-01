@@ -9,6 +9,9 @@ import * as castaway from '../art/castaway';
 import * as jungle from '../art/jungle';
 import { paintWreck } from '../art/boat';
 import { bindActorArt, PeopleArt, EmoteArt } from '../world/actor';
+// V9 painters registered as beasts up front, so field-guide portraits work from any scene
+import '../art/v9/shore';
+import '../art/v9/wild/register';
 import { bindBeastArt, BeastArt } from './wild/bodies';
 import { bindInsectArt, InsectArt } from './wild/insects';
 import { bindCampArt } from './scenes/camp2';

@@ -1,12 +1,14 @@
 // V4 island ground: the strip from the walk line down to the bottom of the screen, painted per
 // column by zone. Returns two buffers per chunk: `base` (everything) and `wet` (the pixels drawn a
 // second time with the renderer's water material, so wet sand, rock pools, the stream and the
-// creek mirror the cast and the sky).
+// creek mirror the cast and the sky). The sand itself and the west rock shelf come from v9/sand.ts.
 
 import { PixelBuffer } from '../pixel';
 import { hex, mix, shade, C } from '../color';
 import { bayer, clamp, fbm2, hash2, noise1, noise2, smoothstep } from '../../core/math';
-import { ISL, SPOT, groundY, zoneAt } from './layout';
+import { ISL, groundY, zoneAt } from './layout';
+import { eastGround, EG } from '../v9/eastground';
+import { sandCol, sandPixel, shelfPixel, SandCol } from '../v9/sand';
 
 export interface GroundChunk { x0: number; y0: number; base: PixelBuffer; wet: PixelBuffer }
 
@@ -16,23 +18,6 @@ const SAND = { lit: hex('#f0d8a2'), mid: hex('#e0c088'), low: hex('#caa46c'), de
 const WETS = { a: hex('#6e6452'), b: hex('#a08c6a') };
 const ROCK = [hex('#2e2a2a'), hex('#433c38'), hex('#5a5048'), hex('#72665a'), hex('#8a7e6e')];
 const SOIL = [hex('#2a1e16'), hex('#3a2a1c'), hex('#4c3824'), hex('#604830')];
-
-function sandDry(x: number, y: number, d: number): C {
-  const t = clamp((d - WET) / 150);
-  let c = mix(SAND.lit, SAND.mid, t * 0.8);
-  // soft hummocks lit from the upper left
-  const hum = fbm2(x / 150, y / 46, 3, 7) - 0.5;
-  c = shade(c, hum * 0.14);
-  // wind ripples: long gentle crests that open up toward the viewer
-  const rip = Math.sin((d / (1.7 + t * 4.4)) * 2.2 + fbm2(x / 70, y / 30, 2, 4) * 7);
-  if (rip > 0.9) c = shade(c, -0.075);
-  else if (rip > 0.8) c = shade(c, 0.05);
-  const g = hash2(x, y, 8);
-  if (g < 0.05) c = shade(c, -0.05);
-  else if (g > 0.976) c = shade(c, 0.06);
-  if (g > 0.9993) c = hex('#fbf2e4');
-  return c;
-}
 
 function sandWet(x: number, y: number, d: number): C {
   const k = d / WET;
@@ -76,27 +61,10 @@ function soil(x: number, y: number, d: number): C {
 }
 
 /** sand beach pixel: wet mirror band at the water's edge, wrack line, dry rippled sand, the stream */
-function beach(x: number, y: number, d: number, z: string, wrack: number): [C, boolean] {
-  let c: C, isWet = false;
-  if (d < WET) { c = sandWet(x, y, Math.max(0, d)); isWet = true; }
-  else {
-    c = sandDry(x, y, d);
-    if (d < WET + 5 && bayer(x, y) < 1 - (d - WET) / 5) c = mix(c, sandWet(x, y, d), 0.5);
-    if (Math.abs(d - wrack) < 1.5 && noise1(x / 7, 53) > 0.45) c = hash2(x, 0, 54) < 0.5 ? hex('#4a4a2a') : hex('#5e4a2e');
-    if (Math.abs(d - wrack) < 3 && hash2(x, y, 55) < 0.03) c = hex('#f4ece0');
-  }
-  // the stream: a shallow braided channel from the land to the sea
-  const sx = x - SPOT.stream + d * 0.18;
-  const half = 30 + d * 0.22 + Math.sin(d * 0.06) * 4;
-  if (z === 'stream' && Math.abs(sx) < half) {
-    const e = Math.abs(sx) / half;
-    const bar = noise2(x / 9, y / 5, 65) > 0.74 && e > 0.35;
-    if (!bar) {
-      c = e > 0.9 ? mix(hex('#8a7a5c'), c, 0.4) : mix(hex('#5a8a90'), hex('#3a6a78'), clamp(d / 140));
-      if (e < 0.9 && noise2(x / 5, y / 2.2 + d * 0.02, 67) > 0.78) c = mix(c, hex('#cfe6e4'), 0.45);
-      isWet = true;
-    } else c = mix(sandWet(x, y, 4), hex('#c8b48a'), 0.4);
-  }
+function beach(col: SandCol, x: number, y: number, d: number, z: string): [C, boolean] {
+  const [c, isWet] = sandPixel(col, x, y, d);
+  // (the stream mouth, the creek and the cave pool are painted by the east pass, art/v9/eastground.ts)
+  void z;
   return [c, isWet];
 }
 
@@ -115,50 +83,28 @@ export function paintGroundChunk(x0: number, w: number): GroundChunk {
   for (let x = x0; x < x0 + w; x++) {
     const top = Math.round(groundY(x));
     const z = zoneAt(x);
-    // wrack line (the high-tide mark): a wobbly line of dark kelp bits and shells
-    const wrack = WET + 3 + Math.round((noise1(x / 40, 51) - 0.5) * 6);
+    const col = sandCol(x);
     for (let y = top - 2; y < ISL.BOT; y++) {
       const d = y - top;
       let c: C = 0, isWet = false;
-      const rockK = 1 - smoothstep(290, 420, x);
       const caveK = Math.min(smoothstep(5030, 5100, x), 1 - smoothstep(5400, 5470, x));
-      const rockHere = rockK > 0 && fbm2(x / 20, y / 11, 2, 71) * 0.9 + 0.05 < rockK;
+      const shelf = x < 460 ? shelfPixel(x, y, d) : null;
       const caveHere = caveK > 0 && fbm2(x / 20, y / 11, 2, 72) * 0.9 + 0.05 < caveK;
-      if (rockHere) {
-        c = rock(x, y, d, true);
-        // rock pools in the shelf in front of the walk line
-        const pools: [number, number, number, number][] = [[90, 34, 34, 7], [200, 60, 46, 10], [300, 28, 22, 5]];
-        for (const [px, py, rx, ry] of pools) {
-          const nx = (x - px) / rx, ny = (d - py) / ry;
-          const q = nx * nx + ny * ny;
-          if (q < 1) { c = q > 0.8 ? hex('#2a3a3c') : mix(hex('#3a6470'), hex('#2a4a58'), clamp(ny + 0.5)); isWet = true; }
-          else if (q < 1.25) c = hex('#6e7a5a');
-        }
+      if (shelf) {
+        [c, isWet] = shelf;
       } else if (caveHere) {
         c = rock(x, y, d, false);
         c = shade(c, -0.18);
-        if (Math.abs(x - 5250) < 44 && d > 0 && d < 40 - Math.abs(x - 5250) * 0.4) { c = mix(hex('#1e3a44'), hex('#12262e'), d / 40); isWet = true; }
-        else if (noise2(x / 20, y / 6, 61) > 0.7) { c = mix(c, hex('#4a5a60'), 0.3); isWet = true; }
+        if (noise2(x / 20, y / 6, 61) > 0.7) { c = mix(c, hex('#4a5a60'), 0.3); isWet = true; }
       } else if (z === 'forest') {
         const bank = smoothstep(5900, 6080, x);
         if (fbm2(x / 26, y / 14, 3, 73) * 1.1 > 1.02 - bank) c = soil(x, y, d);
-        else [c, isWet] = beach(x, y, d, z, wrack);
-        const cr = Math.abs(x - SPOT.creek);
-        const half = 26 + d * 0.3 + (noise1(d / 9 + 3, 64) - 0.5) * 8;
-        if (cr < half && d >= 0) {
-          const e = cr / half;
-          c = e > 0.86 ? hex('#5a5048') : mix(hex('#3a5a58'), hex('#2a4448'), clamp(d / 120));
-          if (e < 0.86 && noise2(x / 6, y / 3, 63) > 0.8) c = mix(c, hex('#9ab8b0'), 0.4);
-          if (e < 0.86) isWet = true;
-          // stepping stones
-          for (const [sx, sy] of [[SPOT.creek - 8, 6], [SPOT.creek + 10, 22], [SPOT.creek - 4, 44]]) {
-            const nx = (x - sx) / 7, ny = (d - sy) / 3.4;
-            if (nx * nx + ny * ny < 1) { c = ny < -0.3 ? hex('#8a8272') : hex('#5e564c'); isWet = false; }
-          }
-        }
+        else [c, isWet] = beach(col, x, y, d, z);
       } else {
-        [c, isWet] = beach(x, y, d, z, wrack);
+        [c, isWet] = beach(col, x, y, d, z);
       }
+      // the east half's own ground (stream mouth, tide pools, cave floor, forest floor, creek)
+      if (eastGround(x, y, d, z, c, isWet)) { c = EG.c; isWet = EG.wet; }
       if (y >= y0 && y < ISL.BOT) put(x, y, c, isWet);
     }
   }

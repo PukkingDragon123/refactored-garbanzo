@@ -2,17 +2,20 @@
 // art (so every room is the one you walked around that morning), then wrecked: the deckhouse is gone
 // (just splintered stumps), the forward end is torn open with ribs and cables hanging out, the hull is
 // holed at the hold where you can climb in, barnacles and weed along the waterline, sand drifted in
-// over the floor and a dune piled against the keel.
+// over the floor and a dune piled against the keel. The dune is a mound that rises out of the beach
+// at both ends (never a slab with edges), and the art box reaches past the stern so the ensign staff
+// and the crane are never cut off by the buffer.
 
 import { PixelBuffer } from '../pixel';
 import { hex, mix, shade, C } from '../color';
-import { clamp, fbm1, hash2, noise1, noise2 } from '../../core/math';
+import { clamp, fbm1, hash2, noise1, noise2, smoothstep } from '../../core/math';
 import { paintShip4, S4 } from '../ship5';
 import { deckY } from '../boat';
-import { WRECK } from './layout';
+import { WRECK, groundY } from './layout';
 
-/** wreck space = ship space x [SX0, SX1), y [SY0, SY1) */
-export const WSP = { SX0: WRECK.sx0, SX1: WRECK.sx1, SY0: 60, SY1: 236 };
+/** wreck space = ship space x [SX0, SX1), y [SY0, SY1) (art only: a little wider than WRECK.sx0 so the
+ *  stern's ensign staff and flag fit inside the buffers) */
+export const WSP = { SX0: 2, SX1: WRECK.sx1, SY0: 60, SY1: 236 };
 
 export interface WreckArt {
   /** island-space top-left of every buffer */
@@ -149,7 +152,7 @@ export function paintWreck(): WreckArt {
   }
 
   // ---- inside: sand drifted over the sole, puddles, the lights dead
-  for (let sx = WSP.SX0; sx < WSP.SX1; sx++) {
+  for (let sx = S4.lower.x0 - 40; sx < tearX(S4.lower.floor) - 2; sx++) {
     const drift = Math.max(0, (fbm1(sx / 40, 3, 41) - 0.45) * 16) + (Math.abs(sx - bcx) < brx + 30 ? 5 * (1 - Math.abs(sx - bcx) / (brx + 30)) : 0);
     for (let k = 0; k < drift; k++) set(inner, sx, S4.lower.floor - k, k > drift - 1.5 ? hex('#e8cc92') : hex('#d4b07a'));
   }
@@ -165,17 +168,54 @@ export function paintWreck(): WreckArt {
     if (v >>> 24) inner.data[i] = shade(v, -0.1);
   }
 
-  // ---- the dune piled against the keel (the hull disappears into the sand)
-  const sandTop = (sx: number) => 216 - Math.max(0, (fbm1(sx / 60, 3, 45) - 0.3)) * 16 - (sx < 90 ? (90 - sx) * 0.14 : 0);
+  // ---- the dune piled against the keel: a mound rising out of the beach, burying the hull's bottom.
+  // It stops at the walk line (the ground takes over below), tapers into the sand at the stern and
+  // spills out past the tear, so there is no box edge anywhere.
+  const walk = (sx: number) => groundY(sx + WRECK.dx) - WRECK.dy;
+  const tearB = tearX(WSP.SY1 - 20);
+  const moundH = (sx: number) => {
+    const rise = smoothstep(WSP.SX0, 22, sx) * 0.5 + smoothstep(22, 80, sx) * 0.5, fall = 1 - smoothstep(tearB - 40, tearB + 40, sx);
+    const body = 19 + Math.max(0, fbm1(sx / 58, 3, 45) - 0.3) * 24 + (noise1(sx / 9, 46) - 0.5) * 2;
+    // a little extra heaped against the hull at the breach (the sea pushed sand into the hold)
+    const br = Math.max(0, 1 - Math.abs(sx - bcx) / (brx + 26)) * 6;
+    return Math.max(2.5 * Math.min(1, rise * 4, fall * 4), (body + br) * rise * fall);
+  };
   for (let sx = WSP.SX0; sx < WSP.SX1; sx++) {
-    const top = sandTop(sx);
+    const g = walk(sx), mh = moundH(sx);
+    const top = g - mh;
+    const inHull = sx < tearX(top) - 1;
     for (let sy = Math.floor(top); sy < WSP.SY1; sy++) {
-      const d = sy - top;
-      let c = d < 1 ? hex('#f4dca6') : d < 3 ? hex('#e8cc92') : mix(hex('#dcbc84'), hex('#c8a46c'), clamp(d / 20));
-      if (hash2(sx, sy, 46) < 0.05) c = shade(c, -0.06);
-      set(front, sx, sy, c);
+      // the buried hull: gone from the mound top down
       set(hull, sx, sy, 0);
+      if (sy > top + 2) { set(back, sx, sy, 0); if (sy > S4.lower.floor + 3) set(inner, sx, sy, 0); }
+      if (sy > g + 1) { set(front, sx, sy, 0); continue; }
+      const d = sy - top, k = clamp((sy - top) / Math.max(1, mh));
+      // dry and wind-lit on top, damp and darker toward the wet beach
+      let c = d < 1 ? hex('#f6e2b0') : d < 2.5 ? hex('#ecd29c') : mix(mix(hex('#e2c48e'), hex('#caa670'), k), hex('#a08c6a'), smoothstep(0.62, 1, k) * 0.8);
+      const rip = Math.sin((sx + sy * 3.1) * 0.55 + fbm1(sx / 20, 2, 47) * 6);
+      if (d > 2 && rip > 0.86) c = shade(c, -0.07);
+      if (hash2(sx, sy, 46) < 0.06) c = shade(c, hash2(sx, sy, 48) < 0.5 ? -0.07 : 0.05);
+      if (hash2(sx, sy, 49) < 0.006 && d > 2) c = hash2(sx, sy, 50) < 0.5 ? hex('#fbf4e6') : hex('#4a4a2a');
+      // contact shadow where the sand meets the hull above it
+      if (inHull && d < 1.5 && get(hull, sx, sy - 2) >>> 24) c = mix(c, hex('#8a7456'), 0.35);
+      set(front, sx, sy, c);
     }
+  }
+  // splintered frames and a snapped plank sticking out of the spill past the tear
+  for (const [px, len, ang] of [[tearB + 6, 16, -1.2], [tearB + 18, 11, -0.7], [tearB - 8, 20, -1.45]] as const) {
+    const g = walk(px) - moundH(px) + 2;
+    for (let k = 0; k < len; k++) {
+      const x = px + Math.cos(ang) * k, y = g + Math.sin(ang) * k;
+      set(front, x, y, k > len - 2 ? hex('#3a2a1e') : hex('#7a5638'));
+      set(front, x + 1, y, hex('#4a3222'));
+    }
+  }
+  // kelp and a tangle of line washed up against the mound
+  for (let k = 0; k < 14; k++) {
+    const sx = WSP.SX0 + 40 + hash2(k, 11, 51) * (tearB - 30);
+    const y0 = walk(sx) - 1;
+    const len = 6 + hash2(k, 12, 52) * 12;
+    for (let j = 0; j < len; j++) set(front, sx + j * (hash2(k, 13, 53) < 0.5 ? 1 : -1), y0 - Math.sin(j * 0.5) * 1.2, j % 3 ? hex('#4a4a22') : hex('#6a6428'));
   }
 
   cache = {

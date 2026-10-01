@@ -67,7 +67,11 @@ export class Player implements Drawable {
   /** deck tilt in radians (boat scenes): makes the player slide */
   tilt = 0;
   /** footstep surface for sfx */
-  ground: 'sand' | 'wood' | 'leaves' | 'grass' = 'leaves';
+  ground: 'sand' | 'wood' | 'leaves' | 'grass' | 'water' = 'leaves';
+  /** extra speed multiplier while wading (set by the water that the player is standing in) */
+  wadeK = 1;
+  /** called on every footstep (splashes, prints) */
+  onStep: ((p: Player) => void) | null = null;
   /** timed work (collecting, building) */
   private work: { anim: string; t: number; dur: number; res: (ok: boolean) => void; onTick?: (k: number) => void } | null = null;
   /** seconds since the player last ran hard (drives camera breathlessness) */
@@ -239,7 +243,7 @@ export class Player implements Drawable {
     }
     this.running = canControl && !this.noRun && inp.down('run') && !this.crouch && !this.camera;
     if (this.running && Math.abs(this.vx) > 80 * this.speedK) this.sinceRun = 0;
-    const speed = (this.state === 'script' ? this.scriptSpeed : this.camera ? 28 : this.crouch ? 26 : this.running ? 118 : 60) * this.speedK;
+    const speed = (this.state === 'script' ? this.scriptSpeed : this.camera ? 28 : this.crouch ? 26 : this.running ? 118 : 60) * this.speedK * this.wadeK;
     const target = ax * speed;
     this.vx = approach(this.vx, target, (this.onGround ? 640 : 280) * dt);
     // sliding on a tilted deck
@@ -329,7 +333,7 @@ export class Player implements Drawable {
     else if (steep && Math.abs(this.vx) > 30 && Math.sign(this.vx) === Math.sign(this.tilt) && ax === 0) this.anim = 'slip';
     else if (steep && !moving) this.anim = 'brace';
     else if (this.crouch) this.anim = moving ? 'crouchWalk' : 'crouch';
-    else if (moving) this.anim = Math.abs(this.vx) > 85 * this.speedK ? 'run' : 'walk';
+    else if (moving) this.anim = Math.abs(this.vx) > 85 * this.speedK * this.wadeK ? 'run' : 'walk';
     else this.anim = 'idle';
     // debounce ground-pose changes (idle/walk/brace/slip jitter on bumpy terrain)
     const soft = (a: string) => a === 'idle' || a === 'walk' || a === 'run' || a === 'brace' || a === 'slip';
@@ -345,8 +349,9 @@ export class Player implements Drawable {
       this.stepT += dt * Math.abs(this.vx) / 60;
       if (this.stepT > 0.36) {
         this.stepT = 0;
-        const s = this.ground === 'sand' ? 'stepSand' : this.ground === 'wood' ? 'stepWood' : this.ground === 'leaves' ? 'stepLeaves' : 'step';
-        audio.play((this.crouch ? 'stepSoft' : s) as 'step', { vol: this.running ? 0.55 : 0.3, pitch: 0.9 + Math.random() * 0.2 });
+        const s = this.ground === 'sand' ? 'stepSand' : this.ground === 'wood' ? 'stepWood' : this.ground === 'leaves' ? 'stepLeaves' : this.ground === 'water' ? 'stepWater' : 'step';
+        audio.play((this.crouch && this.ground !== 'water' ? 'stepSoft' : s) as 'step', { vol: this.running ? 0.55 : 0.3, pitch: 0.9 + Math.random() * 0.2 });
+        this.onStep?.(this);
       }
     }
     this.syncBody(dt);

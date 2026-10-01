@@ -212,7 +212,9 @@ export class SeaStrip implements Drawable {
     const H = this.f.h;
     const bob = Math.sin(st.time * 0.8 + this.y) * 0.5;
     let x = Math.floor((x0 - scroll) / tw) * tw + scroll;
-    for (; x < x1; x += tw) r.drawSub(this.f, 0, 0, tw, H, x, this.y + bob);
+    // the band's lowest rows stretched on downward underneath the next band: when the camera rises
+    // or zooms out the bands part (each has its own parallax), and this keeps sea in the gap
+    for (; x < x1; x += tw) { r.drawSub(this.f, 0, H - 3, tw, 3, x, this.y + bob + H - 3, 1, 8); r.drawSub(this.f, 0, 0, tw, H, x, this.y + bob); }
     // counter-drifting shimmer copy
     const s2 = -st.time * this.speed * 0.6 + 37;
     x = Math.floor((x0 - s2) / tw) * tw + s2;
@@ -290,6 +292,18 @@ export class Swash implements Drawable {
     this.sheets = this.sheets.filter(s => s.t < 5);
   }
   push(reach = rand.range(12, 22)) { this.sheets.push({ t: 0, reach, seed: rand.int(0, 999) }); }
+  /** 0..1: how much a sheet of water is covering the walk line at x right now (wading, splashes) */
+  coverAt(x: number): number {
+    if (wetAt(x) < 0.5) return 0;
+    let c = 0;
+    for (const s of this.sheets) {
+      const t = s.t;
+      const k = t < 1.1 ? smoothstep(0, 1.1, t) : t < 2 ? 1 : 1 - smoothstep(2, 4.6, t);
+      const edge = (s.reach + (noise1(x / 18 + s.seed, 3) - 0.5) * 8) * k;
+      if (edge > 3) c = Math.max(c, Math.min(1, edge / 10) * (t < 2.6 ? 1 : 1 - smoothstep(2.6, 4.8, t)));
+    }
+    return c;
+  }
   draw(r: Renderer) {
     const x0 = Math.floor(r.visibleX0(4) / 2) * 2, x1 = r.visibleX1(4);
     for (const s of this.sheets) {

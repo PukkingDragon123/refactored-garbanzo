@@ -550,7 +550,7 @@ function kauri(seed: number, H: number, o: TreeOpts): Sprite {
   const crownOn = o.crown !== false;
   const crownRX = crownOn ? tw * rng.range(2.3, 2.8) : 0;
   const crownH = crownOn ? tw * 2.5 : 0;
-  const W = Math.ceil(Math.max(crownRX * 2 + 60, tw * 6)), Hh = Math.ceil(H + crownH + SINK + 8);
+  const W = Math.ceil(Math.max(crownRX * 2 + 100, tw * 6)), Hh = Math.ceil(H + crownH + SINK + 8);
   const buf = newCanvas(W, Hh);
   const cx = Math.round(W / 2), gy = Hh - SINK - 1;
   const top = gy - H;
