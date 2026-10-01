@@ -18,6 +18,7 @@ import { paintShip4, S4, LAMPS, WINDOWS, SPOTS, LADDERS, roomAt, ShipSprite, Shi
 import { paintBoatParts } from '../../art/boat';
 import { PixelBuffer } from '../../art/pixel';
 import { hex } from '../../art/color';
+import { fishTank } from '../../art/v9/fish';
 import type { Actor } from '../../world/actor';
 import { ChunkBuddy } from './buddy';
 import type { Interactable } from '../../world/npc';
@@ -55,7 +56,8 @@ export class ShipScene4 extends FieldScene {
   jenna!: Actor;
   joshu!: Actor;
   private fr: Record<string, Frame> = {};
-  private tankFish: { x: number; y: number; vx: number; k: number; t: number }[] = [];
+  /** tank residents: Gerald (glass maomao), Captain Bubbles (bubble puffer), Tiny Tim and the shy one, plus your catches */
+  private tankFish: { x: number; y: number; vx: number; k: string; t: number; shy?: boolean }[] = [];
   private bubbles: { x: number; y: number; v: number }[] = [];
   sliders: Slider[] = [];
   private flagFr: Frame[] = [];
@@ -65,8 +67,11 @@ export class ShipScene4 extends FieldScene {
   bobber: { x: number; y: number; dip: number; fly: number } | null = null;
   /** fishing effects in world space (cast arc preview, ripples, splashes): packed ABGR pixels */
   fishFx: { x: number; y: number; c: number }[] | null = null;
-  /** a caught fish held up in Mori's hands (ABGR sprite facing right) */
+  /** a caught fish held up in Mori's hands (ABGR sprite facing right): across the chest or over his head */
   held: { w: number; h: number; px: Uint32Array } | null = null;
+  heldMode: 'chest' | 'overhead' = 'chest';
+  /** the fishing minigame draws its world (underwater view, shadows, line, float) through this */
+  fishDraw: ((r: Renderer) => void) | null = null;
   /** Mori is carrying Chunk in his arms */
   carrying = false;
   /** called every frame by the story module */
@@ -169,6 +174,8 @@ export class ShipScene4 extends FieldScene {
     // the near swell sits on the hull's plane vertically, so the waterline matches at any camera height
     st.addLayer('sea-near', BAND_P.near, 0, 0.6, 0, 1).add(this.ocean.band('near'));
     st.addLayer('sea-front', BAND_P.front, 0, 0.5, 0, 1).add(this.ocean.band('front'));
+    // fishing: the underwater cross-section, fish shadows, line and float, over the sea bands
+    st.addLayer('sea-fish', 1, 0, 0, 0, 1).add(new Custom(0, rr => this.fishDraw?.(rr)));
     st.addLayer('rain-mid', RAIN_P.mid, 0, 0, 0, 1).add(new Rain(this.weather, 'mid', 2));
     st.addLayer('rain-near', RAIN_P.near, 0, 0, 0, 1).add(new Rain(this.weather, 'near', 3));
     st.layer('sea-horizon').add(updater(dt => { this.weather.update(dt); this.ocean.update(dt); }));
@@ -196,7 +203,10 @@ export class ShipScene4 extends FieldScene {
     this.chunk = this.addActor('chunk', SPOTS.chunkBed[0], SPOTS.chunkBed[1], 1);
     this.chunk.z = 45;
     // tank life
-    for (let i = 0; i < 4; i++) this.tankFish.push({ x: TANK.x0 + rand.next() * (TANK.x1 - TANK.x0), y: TANK.y0 + rand.next() * (TANK.y1 - TANK.y0), vx: (rand.next() < 0.5 ? -1 : 1) * (4 + rand.next() * 5), k: i % 3, t: rand.next() * 10 });
+    for (const [k, shy] of [['glassmaomao', false], ['bubblepuffer', false], ['spinnaker', false], ['sixfinger', true]] as [string, boolean][]) {
+      this.tankFish.push({ x: TANK.x0 + rand.next() * (TANK.x1 - TANK.x0), y: shy ? TANK.y1 : TANK.y0 + rand.next() * (TANK.y1 - TANK.y0), vx: (rand.next() < 0.5 ? -1 : 1) * (shy ? 0.6 : 3 + rand.next() * 4), k, t: rand.next() * 10, shy });
+    }
+    for (const f of this.tankFish) this.tankFrame(f.k);
     for (let i = 0; i < 4; i++) this.bubbles.push({ x: TANK.bx + rand.next() * 3, y: TANK.y0 + rand.next() * (TANK.y1 - TANK.y0), v: 5 + rand.next() * 5 });
     const parts = paintBoatParts({});
     for (const k of ['wheel', 'radar', 'flag'] as const) this.partFr[k] = parts[k].map((sp, i) => local.add(`s5:${k}${i}`, sp.buf, sp.ax, sp.ay));
@@ -211,9 +221,7 @@ export class ShipScene4 extends FieldScene {
       b.set(4, 1, hex('#101010'));
       return b;
     };
-    this.fr.fish0 = local.add('s4:fish0', fish('#ff8a30', '#c85a1a'), 3, 1);
-    this.fr.fish1 = local.add('s4:fish1', fish('#5ab8ff', '#2a6ab8'), 3, 1);
-    this.fr.fish2 = local.add('s4:fish2', fish('#ffe060', '#c8a020'), 3, 1);
+    void fish;
     const dot = new PixelBuffer(1, 1);
     dot.set(0, 0, hex('#bfefff'));
     this.fr.dot = local.add('s4:dot', dot, 0, 0);
@@ -298,7 +306,7 @@ export class ShipScene4 extends FieldScene {
     if (this.hullA < 0.98) {
       const a = 1 - this.hullA;
       const col = packColor(1, 1, 1, a);
-      for (const f of this.tankFish) r.draw(this.fr['fish' + f.k], f.x, f.y, f.vx > 0 ? 1 : -1, 1, 0, col);
+      for (const f of this.tankFish) r.draw(this.tankFrame(f.k), f.x, f.y, f.vx > 0 ? 1 : -1, 1, 0, col);
       r.emissive(0.8);
       for (const b of this.bubbles) r.draw(this.fr.dot, b.x, b.y, 1, 1, 0, col);
       r.emissive();
@@ -344,8 +352,30 @@ export class ShipScene4 extends FieldScene {
   setFx(px: { x: number; y: number; c: number }[] | null) {
     this.fishFx = px;
   }
-  setHeld(spr: { w: number; h: number; px: Uint32Array } | null) {
+  setHeld(spr: { w: number; h: number; px: Uint32Array } | null, mode: 'chest' | 'overhead' = 'chest') {
     this.held = spr;
+    this.heldMode = mode;
+  }
+  setFishDraw(fn: ((r: Renderer) => void) | null) {
+    this.fishDraw = fn;
+  }
+  /** the hull bottom in world space (the fishing view's water stops above it inside the hull) */
+  hullLine(): [number, number][] {
+    return CUTLINE.map(([x, y]) => this.shipToWorld(x, y));
+  }
+  /** the hull below the waterline (keel, rudder, propeller), tinted, for the fishing view's underwater cross-section */
+  drawHullUnder(r: Renderer, color: number) {
+    const f = this.fr.hull, a = this.art.hull;
+    if (!f || !a) return;
+    const y0 = S4.WATER + 1 - a.y;
+    if (y0 >= f.h || y0 < 0) return;
+    r.pushTransform(PIVOT[0], PIVOT[1], this.rot, 0, this.bob);
+    r.drawSub(f, 0, y0, f.w, f.h - y0, a.x, a.y + y0, 1, 1, color);
+    r.popTransform();
+  }
+  private tankFrame(id: string): Frame {
+    const k = 'tank:' + id;
+    return this.fr[k] ??= local.add('s9:' + k, fishTank(id), Math.floor(fishTank(id).w / 2), Math.floor(fishTank(id).h / 2));
   }
   private drawLine(r: Renderer) {
     if (this.fishFx) for (const q of this.fishFx) r.rect(Math.round(q.x), Math.round(q.y), 1, 1, q.c);
@@ -376,9 +406,13 @@ export class ShipScene4 extends FieldScene {
     const p = this.player;
     const hand = p.body.handPos();
     if (!hand) return;
-    // held across the chest in both hands, head toward where he's facing
+    // held across the chest in both hands, head toward where he's facing; or held up high over his head
     const f = p.facing;
-    const x0 = Math.round(hand[0] - f * 3 - h.w / 2), y0 = Math.round(hand[1] - h.h * 0.6);
+    let x0 = Math.round(hand[0] - f * 3 - h.w / 2), y0 = Math.round(hand[1] - h.h * 0.6);
+    if (this.heldMode === 'overhead') {
+      const [tx, ty] = p.body.headTop();
+      x0 = Math.round(tx - h.w / 2); y0 = Math.round(Math.min(ty - 2, hand[1]) - h.h * 0.55);
+    }
     for (let y = 0; y < h.h; y++) for (let x = 0; x < h.w; x++) {
       const c = h.px[y * h.w + (f > 0 ? x : h.w - 1 - x)];
       if (c >>> 24) r.rect(x0 + x, y0 + y, 1, 1, c);
@@ -386,8 +420,8 @@ export class ShipScene4 extends FieldScene {
   }
 
   /** a new resident for the lab tank */
-  addTankFish() {
-    this.tankFish.push({ x: (TANK.x0 + TANK.x1) / 2, y: TANK.y0 + 4, vx: 5, k: 2, t: 0 });
+  addTankFish(id = 'snoutbass') {
+    this.tankFish.push({ x: (TANK.x0 + TANK.x1) / 2, y: TANK.y0 + 4, vx: 5, k: id, t: 0 });
   }
 
   /** keep Chunk in Mori's arms */
@@ -462,7 +496,7 @@ export class ShipScene4 extends FieldScene {
     for (const f of this.tankFish) {
       f.t += dt;
       f.x += f.vx * dt;
-      f.y += Math.sin(f.t * 1.7) * 3 * dt;
+      f.y += f.shy ? 0 : Math.sin(f.t * 1.7) * 3 * dt;
       if (f.x < TANK.x0 || f.x > TANK.x1) { f.vx = -f.vx; f.x = clamp(f.x, TANK.x0, TANK.x1); }
       f.y = clamp(f.y, TANK.y0, TANK.y1);
     }
