@@ -7,6 +7,7 @@ import type { Animal } from '../wild/animal';
 import { game } from '../game';
 import { audio } from '../../core/audio';
 import { TrycopCrab, disposeTrycopSprites, placeMoult } from './trycop';
+import { startHornets } from './hornets';
 import { WILD9 } from './species-wild';
 
 /** everything this module spawned in the current island scene (for debug hooks) */
@@ -88,6 +89,8 @@ export function startWildlife9(s: IslandScene4) {
     } as never);
   }
   placeMoult(s, 4495);
+  // ---------------------------------------------------------------- ember bushes and the jewel hornets
+  startHornets(s);
   // ---------------------------------------------------------------- first photos of these species count for the story
   const prev = s.cam.onShot;
   s.cam.onShot = ph => {
