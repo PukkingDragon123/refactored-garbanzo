@@ -129,7 +129,7 @@ export const V4_QUESTS: QuestDef[] = [
 ];
 
 /** kinds of shell found (forage.ts sets v9:found:<item> on the first find) */
-const shellKinds = () => ['shell_sunwhorl', 'shell_fan', 'shell_cone', 'shell_opal', 'shell_trycop'].filter(id => game.save.flags['v9:found:' + id]).length;
+const shellKinds = () => ['shell_sunwhorl', 'shell_fan', 'shell_cone', 'shell_opal', 'shell_trycop'].filter(id => game.save.flags['v9:found:' + id] || game.save.inv.some(s => s.id === id)).length;
 /** species photographed on the island (first photos, see shorelife.ts) */
 function islePhotos() { return Object.keys(game.save.flags).filter(k => k.startsWith('v4:photo:')).length; }
 /** island species uploaded on the laptop (the research app marks them in save.seen, or with v9:upload:<id>) */

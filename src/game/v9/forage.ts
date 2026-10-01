@@ -1,7 +1,7 @@
 // V9 island foraging: collectibles and harvestables placed all along the shoreline. Half-buried shells
 // and sea glass on the sand, kelp and sand hoppers on the wrack line, feathers, flint in the stream
 // bed, clay in its banks, dig spots with breathing holes (pipi and tiger cones), opal ears in the rock
-// pools, a Trycop moult on the seal rocks, shore plants (sea holly, salt fern, glow moss, dune lilies),
+// pools (the Trycop moult on the seal rocks is the wildlife module's), shore plants (sea holly, salt fern, glow moss, dune lilies),
 // berry bushes (duskberries, goldcurrants), jewel beetles on flowers, lantern moths at dusk, and the
 // survival haul Joshu teaches on the walk back (driftwood, flax, kawakawa, mussels, pipi, a good stone).
 //
@@ -68,7 +68,6 @@ export const KINDS: Record<string, Kind> = {
   sunwhorl: { item: 'shell_sunwhorl', n: [1, 1], verb: 'Dig out the golden shell', how: 'pick', time: 0.8, respawn: 420, art: 'sunwhorl', sfx: 'dig', fx: SANDFX, first: 'A sunwhorl! Warm from the sun. I’m calling it a sunwhorl. Nobody can stop me.' },
   fan: { item: 'shell_fan', n: [1, 1], verb: 'Pick up the fanshell', how: 'pick', time: 0.6, respawn: 420, art: 'fan', sfx: 'pluck', fx: SANDFX, first: 'Pink and ribbed. Hold it to your ear and... yep. Surf. Obviously. We’re on a beach.' },
   opal: { item: 'shell_opal', n: [1, 1], verb: 'Reach into the rock pool', how: 'kneel', time: 1.2, respawn: 900, art: 'opal', sfx: 'splash', fx: WATERFX, first: 'An opal ear! Look at the lining, it’s like a tiny aurora.' },
-  trycop: { item: 'shell_trycop', n: [1, 1], verb: 'Pick up the empty crab claw', how: 'kneel', time: 1.2, respawn: 0, art: 'trycop', sfx: 'pluck', fx: SANDFX, first: 'A whole moulted claw... bigger than my hand. Round spots. Whatever wore this is still out there, wearing a bigger one.' },
   glass: { item: 'driftglass', n: [1, 1], verb: 'Pick up the sea glass', how: 'pick', time: 0.5, respawn: 360, art: 'glass', sfx: 'jarClink', fx: [0.7, 1, 0.9], first: 'Sea glass. Some bottle, years ago, tumbled frosty. Jenna will want this for SOMETHING.' },
   kelp: { item: 'kelp', n: [1, 2], verb: 'Pull up a kelp ribbon', how: 'kneel', time: 0.9, respawn: 240, art: 'kelp', sfx: 'pluck', fx: [0.5, 0.45, 0.2] },
   feather: { item: 'feather', n: [1, 1], verb: 'Pick up the feather', how: 'pick', time: 0.5, respawn: 400, art: 'feather', sfx: 'rustle', fx: [0.95, 0.95, 0.9], first: 'A flight feather. Something big nests on these cliffs.' },
@@ -101,30 +100,29 @@ const PLACES: [string, number, number][] = [
   ['glass', 940, 4], ['drift', 1000, 4], ['stones', 1050, 5], ['kelp', 1110, 6], ['feather', 1180, 5], ['drift', 1240, 4], ['dig', 1290, 2], ['glass', 1330, 4],
   // the landing beach (camp goes up here)
   ['sunwhorl', 1505, 4], ['hopper', 1565, 7], ['holly', 1640, 9], ['dig', 1700, 2], ['sunwhorl', 1800, 4], ['fan', 1845, 5], ['lily', 1885, 9],
-  ['feather', 1950, 5], ['fan', 2125, 5], ['dig', 2160, 2], ['sunwhorl', 2215, 4], ['hopper', 2315, 7], ['holly', 2345, 9], ['sunwhorl', 2430, 4],
-  ['dig', 2455, 2], ['lily', 2515, 9], ['moth', 2560, 0], ['drift', 2585, 4],
-  // the palm grove and tide pools
-  ['mussels', 2660, 4], ['gold', 2705, 8], ['warm', 2770, 5], ['beetle', 2825, 8], ['drift', 2870, 4], ['moth', 2905, 0], ['feather', 2945, 5],
-  ['kawakawa', 2990, 8], ['gold', 3050, 8], ['mussels', 3080, 4], ['moth', 3125, 0], ['beetle', 3165, 8], ['drift', 3200, 4], ['gold', 3250, 8], ['dig', 3320, 2],
+  ['feather', 1950, 5], ['fan', 2125, 5], ['dig', 2160, 2], ['sunwhorl', 2215, 4], ['hopper', 2315, 7], ['holly', 2345, 9], ['sunwhorl', 2445, 4],
+  ['dig', 2475, 2], ['lily', 2505, 9], ['moth', 2590, 0], ['drift', 2615, 4],
+  // the palm grove and tide pools (the ember bushes and their hornet nests are the wildlife's: 2705, 2880, 3095, 3240)
+  ['mussels', 2660, 4], ['gold', 2745, 8], ['warm', 2790, 5], ['beetle', 2825, 8], ['drift', 2925, 4], ['moth', 2955, 0], ['feather', 2985, 5],
+  ['kawakawa', 3015, 8], ['gold', 3050, 8], ['mussels', 3135, 4], ['moth', 3160, 0], ['beetle', 3178, 8], ['drift', 3203, 4], ['dig', 3320, 2],
   // the stream mouth
   ['kawakawa', 3420, 8], ['dig', 3460, 2], ['glass', 3500, 4], ['hopper', 3540, 7], ['drift', 3580, 4], ['sunwhorl', 3620, 4], ['flax', 3700, 8],
   ['clay', 3722, 6], ['flint', 3762, 5], ['flint', 3800, 5], ['clay', 3842, 6], ['flax', 3870, 8], ['drift', 3890, 4], ['stones', 3960, 5],
   // the seal rocks
-  ['dig', 4060, 2], ['kelp', 4120, 6], ['opal', 4210, 6], ['glass', 4280, 4], ['feather', 4420, 5], ['trycop', 4520, 5], ['opal', 4600, 6], ['saltfern', 4650, 1],
+  ['dig', 4060, 2], ['kelp', 4120, 6], ['opal', 4210, 6], ['glass', 4280, 4], ['feather', 4420, 5], ['opal', 4600, 6], ['saltfern', 4650, 1],
   // under the cliffs and in the sea cave
   ['stones', 4720, 5], ['saltfern', 4780, 1], ['feather', 4860, 5], ['saltfern', 4930, 1], ['glass', 4980, 4],
   ['glowmoss', 5140, 2], ['opal', 5232, 5], ['glowmoss', 5330, 2], ['glowmoss', 5410, 2],
   // the hidden cove
   ['kelp', 5480, 6], ['fan', 5505, 5], ['dig', 5545, 2], ['sunwhorl', 5705, 4], ['glass', 5760, 4], ['drift', 5850, 4],
-  // the bush track
-  ['dusk', 5940, 7], ['stones', 6045, 4], ['moth', 6080, 0], ['beetle', 6205, 6], ['dusk', 6285, 7], ['kawakawa', 6350, 6], ['moth', 6410, 0],
-  ['beetle', 6460, 6], ['dusk', 6760, 7], ['moth', 6810, 0],
+  // the bush track (ember bushes at 6045, 6290, 6470, 6790)
+  ['dusk', 5940, 7], ['moth', 6085, 0], ['beetle', 6210, 6], ['kawakawa', 6350, 6], ['moth', 6410, 0], ['dusk', 6720, 7], ['moth', 6850, 0],
 ];
 
 interface Spot { key: string; k: Kind; x: number; y: number; ph: number; it: Interactable }
 
 const ARTS: Record<string, () => ForageSprite> = {
-  sunwhorl: FA.sunwhorl, fan: FA.fanshell, opal: FA.opalEar, trycop: FA.trycopMoult, glass: FA.seaGlass, kelp: FA.kelpHeap, feather: FA.feather,
+  sunwhorl: FA.sunwhorl, fan: FA.fanshell, opal: FA.opalEar, glass: FA.seaGlass, kelp: FA.kelpHeap, feather: FA.feather,
   flint: FA.flintStone, clay: FA.clayBank, dig: () => FA.digSpot(false), dug: () => FA.digSpot(true), holly: FA.seaHolly, saltfern: FA.saltFern,
   glowmoss: FA.glowMoss, lily: FA.duneLily, duskbush: () => FA.berryBush('dusk'), duskbare: () => FA.berryBush('dusk', true),
   goldbush: () => FA.berryBush('gold'), goldbare: () => FA.berryBush('gold', true), flowers: FA.flowerClump, wrack: FA.wrack,
