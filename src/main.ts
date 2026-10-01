@@ -79,30 +79,20 @@ async function boot() {
     standoff: async () => { const a = await import('./game/v4/islearoha'); return (await import('./ui/v6/standoff')).runNegotiation(a.ROUNDS, a.EXTRA); },
     ramen: async () => (await import('./ui/v6/ramen')).runRamenPour(),
     engine: async () => (await import('./ui/v6/engine')).runEngineRepair({}),
-    /** stand Mori at the stern (ship scene) and go fishing; resolves with the catch or null */
-    fish: async () => {
+    /** stand Mori at the stern (ship scene) and go fishing; resolves with the catch or null (window.__fish) */
+    fish: async (opts: { fish?: string; skipTo?: 'fight' } = {}) => {
       const s = game.scene as unknown as { player: { x: number; y: number; facing: number }; snapCamera?(): void; cutscene: boolean };
       const { SPOTS } = await import('./art/ship5');
       s.player.x = SPOTS.fishing[0] + 8; s.player.y = SPOTS.fishing[1]; s.player.facing = -1;
       s.snapCamera?.();
       s.cutscene = true;
-      const c = await (await import('./ui/v4/fishing')).goFishing(s as never);
+      const c = await (await import('./ui/v4/fishing')).goFishing(s as never, opts);
       s.cutscene = false;
-      (window as unknown as { __fish?: unknown }).__fish = c ? { fish: c.fish.id, len: c.len, stars: c.stars } : null;
+      (window as unknown as { __fish?: unknown }).__fish = c ? { fish: c.fish.id, len: c.len, stars: c.stars, parasite: c.parasite ?? null } : null;
       return c;
     },
-    /** just the underwater fight close-up, for one fish id (hold Space to reel) */
-    fishFight: async (id = 'snapper', dep0?: number) => {
-      const { FISH } = await import('./ui/v4/fishing');
-      const { runFishFight } = await import('./ui/v6/fishfight');
-      const { Hold } = await import('./ui/v4/mini');
-      const hold = new Hold(document.body);
-      const f = FISH.find(x => x.id === id) ?? FISH[0];
-      const r = await runFishFight(f, hold, { cancelled: () => false, caughtSub: `${f.name} · 42 cm`, dep0 });
-      hold.dispose();
-      (window as unknown as { __fish?: unknown }).__fish = r;
-      return r;
-    },
+    /** skip the cast: a fish of this species is already on the line, straight into the fight in the wide view */
+    fishFight: async (id = 'snoutbass') => (window as unknown as { zl: { fish(o: object): Promise<unknown> } }).zl.fish({ fish: id, skipTo: 'fight' }),
     steady: async () => (await import('./ui/v6/camp')).holdSteady('Hold the tent pole steady', 'Press <span class="key">Space</span> as the pole comes upright. Three pegs!'),
     knot: async () => (await import('./ui/v6/camp')).lashingKnot(),
   };

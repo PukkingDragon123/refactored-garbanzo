@@ -1024,13 +1024,19 @@ export function fishShadow(id: string, len: number, swing = 0, arch = 0): PixelB
 export const louseIcon = (size = 24) => fishIcon('snoutlouse', size);
 export const louseSide = (len: number) => fishSide('snoutlouse', len);
 
-/** where a side sprite's snout tip and eye sit (px, from its top-left), for placing the louse / hook */
-export function sideAnchor(id: string, len: number): { snout: Pt; eye: Pt; mouth: Pt } {
+/** pixel canvas of a buffer, scaled by an integer (DOM: banner, field guide) */
+export function canvasOf(buf: PixelBuffer, scale = 1): HTMLCanvasElement {
+  return buf.toCanvas(scale);
+}
+
+/** where a fish-local point (x, y) lands in fishSide(id, len) (px from its top-left, unbent) */
+export function sidePoint(id: string, len: number, x: number, y: number): Pt {
   const a = art(id);
-  const S = Math.max(4, Math.round(len)) / (a.x1 - a.x0);
-  const pts = a.parts.filter(p => !(p.iconOnly && len < 40)).flatMap(p => p.bounds);
+  const L = Math.max(4, Math.round(len));
+  const S = L / (a.x1 - a.x0);
+  const pts = a.parts.filter(p => !(p.iconOnly && L < 40)).flatMap(p => p.bounds);
   let y0 = Infinity, x0 = Infinity;
-  for (const [x, y] of pts) { y0 = Math.min(y0, y); x0 = Math.min(x0, x); }
-  const P = (x: number, y: number): Pt => [2 + (x - x0) * S - 2, 2 + (y - y0) * S - 2];
-  return { snout: P(a.x1, 0), eye: P(a.eye.x, a.eye.y), mouth: P(a.x1 - 0.02, 0.02) };
+  for (const [px, py] of pts) { y0 = Math.min(y0, py); x0 = Math.min(x0, px); }
+  // fishSide pads by 2 px and then trims the transparent border (the outline sits 1 px outside)
+  return [(x - x0) * S + 1, (y - y0) * S + 1];
 }

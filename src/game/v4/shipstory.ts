@@ -478,19 +478,27 @@ export class ShipStory {
     this.p.facing = -1;
     s.cutscene = true;
     const { goFishing } = await import('../../ui/v4/fishing');
-    const c = await goFishing(s as never);
-    s.cutscene = false;
-    if (!c) return;
+    // Mori keeps the catch in his hands while he decides what to do with it
+    const c = await goFishing(s as never, { keepHeld: true });
+    const putDown = () => { s.setHeld(null); this.pose(null); };
+    if (!c) { s.cutscene = false; return; }
     if (this.flag('v4:fishToTank') || this.flag('v4:fishToJoshu') || this.flag('v4:fishUsed')) {
       await this.say([{ who: 'mori', text: `Another ${c.fish.name.toLowerCase()}! You’re free to go, buddy. Tell your friends I’m nice.`, expr: 'happy' }]);
+      putDown();
+      audio.play('splash', { vol: 0.3 });
+      s.cutscene = false;
       return;
     }
     V()['v4:fishLen'] = c.len;
     F()['v4:fishName:' + c.fish.name] = true;
     this.caught = c.fish.name;
+    this.caughtId = c.fish.id;
+    F()['v4:fishId:' + c.fish.id] = true;
     const ch = await this.say([
       { who: 'mori', text: `A ${c.fish.name}! ${c.len} centimetres of pure science. Or dinner.`, expr: 'excited', choices: ['Study it in the hold tank', 'Give it to Joshu to cook'] },
     ]);
+    putDown();
+    s.cutscene = false;
     if (ch === 0) {
       this.set('v4:fishToTank');
       game.ui.toast(`Take the ${c.fish.name.toLowerCase()} to the <b>tank in the hold</b> (below deck, forward).`, 'FISH', 'teal', 4200);
@@ -500,13 +508,15 @@ export class ShipStory {
     }
   }
   private caught = 'fish';
+  private caughtId = 'snoutbass';
 
   private async releaseFish() {
     const s = this.s;
     s.cutscene = true;
     this.p.facing = -1;
     await this.p.doWork('pour', 1.2);
-    s.addTankFish();
+    const saved = Object.keys(F()).find(k => k.startsWith('v4:fishId:'));
+    s.addTankFish(saved ? saved.slice(10) : this.caughtId);
     audio.play('splash', { vol: 0.4 });
     await this.say([
       { who: 'mori', text: `In you go. Gerald, Captain Bubbles, everyone: this is our new colleague, the ${this.caught.toLowerCase()}.`, expr: 'happy' },
