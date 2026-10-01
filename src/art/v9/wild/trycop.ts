@@ -392,7 +392,7 @@ export function drawTrycop(sk: Sk, P: TrycopPose, o: TrycopOpts): TrycopOut {
       const zz = D * 0.93 - (yy + H * 0.28) * 0.25 - (xx * xx) * 0.04;
       const nn = X.dir(vnorm([xx * 0.08, 0.3, 1]));
       const q = pr(X.pt([xx, yy, zz]));
-      sk.dot(q[0], q[1], Math.abs(xx) > 3 ? M.rim : M.shellDark, light(nn, -0.06), q[2]);
+      sk.dot(q[0], q[1], Math.abs(xx) > 3 ? M.rim : small ? M.shell : M.shellDark, light(nn, small ? -0.12 : -0.06), q[2]);
     }
   // ---- mouthparts: the third maxillipeds part like doors over the mandibles
   const mouthC = X.pt([0, -H * 0.66, D * 0.99]);
@@ -407,7 +407,7 @@ export function drawTrycop(sk: Sk, P: TrycopPose, o: TrycopOpts): TrycopOut {
       sk.np();
       const c = s2(X.pt([s * (1.05 + gap * 0.75), -H * 0.66, D * 1.0]));
       const zc = pr(X.pt([s * 1.2, -H * 0.66, D * 1.02]))[2];
-      sk.ell(c[0], c[1], (small ? 0.85 : 1.05) * k, (small ? 1.3 : 1.75) * k, (p) => (small ? M.shellDark : detail > 0 && Math.abs(p.u * s + 0.7) < 0.22 ? M.fork : M.mouth), { z: zc, rz: 0.5 * k, rot: s * 0.12 });
+      sk.ell(c[0], c[1], (small ? 0.85 : 0.95) * k, (small ? 1.3 : 1.4) * k, (p) => (small ? M.rim : detail > 0 && Math.abs(p.u * s + 0.7) < 0.22 ? M.fork : M.mouth), { z: zc, rz: 0.5 * k, rot: s * 0.2 });
       if (detail > 1) for (let j = 0; j < 5; j++) sk.over(c[0] + s * (1.1 * k) + Math.sin(P.t * 9 + j) * 0.5, c[1] - 1.2 * k + j * 0.6 * k, hex('#e8d8f8', 170));
     }
   }
@@ -431,7 +431,7 @@ export function drawTrycop(sk: Sk, P: TrycopPose, o: TrycopOpts): TrycopOut {
     sk.np();
     const ec = vadd(tip, vmul(dir, 0.55));
     const e2 = pr(ec);
-    const er = (small ? 1.05 : 1.3) * k;
+    const er = (small ? 1.05 : 1.08) * k;
     sk.ell(e2[0], e2[1], er * 1.05, er, M.eye, { z: e2[2] + 0.5 * k, rz: er });
     const hx = Math.floor(e2[0] - er * 0.35), hy = Math.floor(e2[1] - er * 0.45);
     sk.over(hx, hy, hex('#ffffff'));

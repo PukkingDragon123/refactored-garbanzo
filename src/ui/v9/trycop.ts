@@ -18,16 +18,18 @@ import { clamp, damp } from '../../core/math';
 import type { IslandScene4 } from '../../game/v4/island';
 import type { TrycopCrab } from '../../game/v9/trycop';
 
-const K = 4.5, PHI = 0.5;
+const K = 4.8, PHI = 0.5;
 /** crab origin (ground under the body centre) in the frame */
-const OX = 160, OY = 150;
+const OX = 160, OY = 139;
 /** the water film on the ledge starts here */
-const FILM = 151;
+const FILM = 140;
 
-const ROCK = ['#141214', '#221e20', '#322c2c', '#443c38', '#5a5048', '#72665a'].map(hx);
-const WETR = ['#10161a', '#1a2428', '#263438', '#344850', '#4a6068'].map(hx);
-const POOL = ['#0a1c24', '#0e2a34', '#153c48', '#1f5460', '#2e6e78', '#4a9098', '#7ab8b8'].map(hx);
-const FAR = ['#3a4a50', '#4a5c62', '#5e7278', '#788c90', '#98acae', '#bccccc'].map(hx);
+const ROCK = ['#1a1418', '#2a2024', '#3c2e2e', '#504036', '#665240', '#82684e'].map(hx);
+const WETR = ['#141a20', '#1e2c34', '#2a4048', '#3a5a60', '#58787a'].map(hx);
+const POOL = ['#0e3a44', '#14525a', '#1c6e72', '#2a8a88', '#46a8a0', '#7ccabc', '#b8e8d8'].map(hx);
+const FAR = ['#4a4450', '#62585a', '#7c6e66', '#9a8a78', '#b8a68a', '#d8c8a8'].map(hx);
+const SKY = ['#8cc0d0', '#a8d4d8', '#c8e4dc', '#e8f0dc', '#fff4dc'].map(hx);
+const LICHEN = ['#8a4a14', '#c0701e', '#e09a34', '#f4c060'].map(hx);
 const LETTUCE = ['#1e4418', '#2e6424', '#48882e', '#6ea83c', '#9cc858'].map(hx);
 const CORAL = ['#5a2a3a', '#8a4052', '#b8607a', '#d888a0'].map(hx);
 const BARN = ['#6a6258', '#a09888', '#d0c8b8', '#f0ece0'].map(hx);
@@ -39,14 +41,23 @@ function paintBack(tint: number[]): { buf: Uint32Array; wet: Uint8Array } {
   const wet = new Uint8Array(CW * CH);
   for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) {
     let c: number;
-    const ridge = 58 + Math.sin(x * 0.021 + 1) * 10 + Math.sin(x * 0.057) * 5;
-    if (y < ridge) {
-      // soft sky and spray, out of focus
-      c = ramp(FAR, 0.95 - y / 140 + Math.sin(x * 0.013) * 0.05, x, y);
+    // the pool's far rim: jagged basalt with sunlit facets, the open sea behind it
+    const ridge = 66 + Math.sin(x * 0.021 + 1) * 9 + Math.sin(x * 0.057) * 4 + Math.abs(Math.sin(x * 0.11)) * -6 + (hash(x >> 3, 9) - 0.5) * 5;
+    if (y >= 50 && y < ridge) {
+      c = ramp(['#4a7a98', '#5e92aa', '#7aaabc', '#a8c8d0'].map(hx), 0.6 - (y - 50) / 60 + (Math.sin(x * 0.3 + y) > 0.92 ? 0.3 : 0), x, y);
+    } else if (y < ridge) {
+      // soft sky and spray, out of focus, the sun up to the left
+      const sun = Math.exp(-(((x - 60) / 90) ** 2 + ((y - 10) / 50) ** 2));
+      c = ramp(SKY, 0.15 + y / 70 + sun * 0.5 + Math.sin(x * 0.013) * 0.04, x, y);
     } else if (y < 96) {
       // the far rocks of the pool rim, blurred into big soft masses
-      const n = Math.sin(x * 0.043 + Math.sin(y * 0.05) * 2) * 0.5 + Math.sin(x * 0.011 + 2) * 0.3;
-      c = ramp(FAR, 0.34 + n * 0.12 - (y - ridge) / 120, x, y);
+      // facets: each rock column tilts toward or away from the sun
+      const col = Math.floor((x + Math.sin(y * 0.08) * 6) / 14), facet = hash(col, 3) - 0.5;
+      const lit = (x - col * 14) / 14 < 0.45 + facet * 0.4 ? 0.18 : -0.05;
+      c = ramp(FAR, 0.5 + lit + facet * 0.2 - (y - ridge) / 60, x, y);
+      // surf bursting at the foot of the rim
+      const foam = Math.sin(x * 0.07 + Math.sin(x * 0.023) * 4) + (hash(x >> 2, y >> 1, 5) - 0.5) * 0.8;
+      if (y > 88 && foam > 0.6 - (y - 88) * 0.1) c = mixc(c, hx('#f4f8f0'), 0.7);
     } else if (y < 134) {
       // the rock pool: deep teal, lighter toward us, lazy horizontal light bands
       const t = (y - 96) / 38;
@@ -59,6 +70,8 @@ function paintBack(tint: number[]): { buf: Uint32Array; wet: Uint8Array } {
       let v = 0.5 + (strata > 0.7 ? 0.14 : strata < -0.75 ? -0.12 : 0) + (n - 0.5) * 0.16 - (y - 134) / 160;
       if (y < 137) v += 0.22; // the lit lip of the ledge against the pool
       c = ramp(ROCK, v, x, y);
+      // orange lichen crusts on the drier rock
+      if (y < FILM + 4 && Math.sin(x * 0.15 + Math.sin(y * 0.4) * 2) * Math.sin(x * 0.031 + y * 0.12) > 0.55) c = ramp(LICHEN, 0.4 + (n - 0.5) * 0.6, x, y);
       if (y >= FILM) { c = mixc(c, ramp(WETR, 0.35 + (y - FILM) / 70, x, y), 0.55); wet[y * CW + x] = 1; }
     }
     b[y * CW + x] = c;
@@ -346,15 +359,26 @@ export async function examineTrycop(s: IslandScene4, crab: TrycopCrab | null): P
         blend(buf, x, y, 0xffffffff, a);
         blend(buf, x - 1, y, 0xffffffff, a * 0.5); blend(buf, x + 1, y, 0xffffffff, a * 0.5); blend(buf, x, y - 1, 0xffffffff, a * 0.5); blend(buf, x, y + 1, 0xffffffff, a * 0.5);
       }
-      // a beadlet anemone on the ledge at the left, tentacles swaying
-      for (let tn = 0; tn < 11; tn++) {
-        const base = 46 + tn * 2.2, a = -Math.PI / 2 + (tn - 5) * 0.2 + Math.sin(clock * 1.3 + tn * 0.6) * 0.18;
-        for (let q = 0; q < 12; q++) {
-          const L = q * 0.9, bend = Math.sin(clock * 1.7 + tn + q * 0.25) * q * 0.05;
-          put(buf, base + Math.cos(a + bend) * L, 147 + Math.sin(a + bend) * L * 0.8, ANEM[Math.min(4, 1 + Math.floor(q / 3))]);
+      // a beadlet anemone on the ledge at the left: a glossy red dome crowned with swaying tentacles
+      {
+        const ax = 40, ay = 150;
+        for (let tn = 0; tn < 22; tn++) {
+          const u = tn / 21, a = -Math.PI + 0.25 + u * (Math.PI - 0.5) + Math.sin(clock * 1.2 + tn * 0.5) * 0.12;
+          const bx = ax + Math.cos(a) * 9, by = ay - 6 + Math.sin(a) * 2.2;
+          for (let q = 0; q < 9; q++) {
+            const L = q * 0.85, bend = Math.sin(clock * 1.6 + tn + q * 0.3) * q * 0.06;
+            const tx = bx + Math.cos(a + bend) * L * 0.6, ty = by + Math.sin(a + bend) * L - q * 0.4;
+            put(buf, tx, ty, q > 6 ? ANEM[4] : ANEM[Math.min(3, 1 + (q >> 1))]);
+          }
         }
+        for (let y = ay - 8; y < ay + 3; y++) for (let x = ax - 11; x <= ax + 11; x++) {
+          const d = ((x - ax) / 11) ** 2 + ((y - ay + 2) / 6) ** 2;
+          if (d >= 1 || y > ay + 2) continue;
+          put(buf, x, y, d > 0.86 ? ANEM[0] : ramp(ANEM, 0.72 - (x - ax) / 26 - (y - ay + 6) / 14, x, y));
+        }
+        // the blue beads round its collar
+        for (let b = 0; b < 5; b++) put(buf, ax - 8 + b * 4, ay - 5 + Math.abs(b - 2) * 0.6, hx('#5ab8f0'));
       }
-      for (let y = 145; y < 154; y++) for (let x = 42; x < 74; x++) { const d = ((x - 57) / 15) ** 2 + ((y - 150) / 4.5) ** 2; if (d < 1) put(buf, x, y, ramp(ANEM, 0.55 - (y - 150) / 8, x, y)); }
       // vignette, and the camera flash washing over everything
       for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) {
         const d = ((x - CW / 2) / (CW * 0.62)) ** 2 + ((y - CH / 2) / (CH * 0.7)) ** 2;
