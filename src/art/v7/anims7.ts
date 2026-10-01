@@ -9,7 +9,7 @@
 // Everything else comes from the shared pose library.
 
 import type { Build, Pose, ArmP, LegP, P2 } from '../people-rig';
-import { stand, animePose, ANIME_ANIMS, AnimInfo } from '../anime/anims';
+import { stand, animePose, ANIME_ANIMS, AnimInfo, sitP, crouchP, neckAt, prop } from '../anime/anims';
 import { YAW } from './body';
 
 const TAU = Math.PI * 2;
@@ -36,6 +36,20 @@ export const ANIMS7: Record<string, AnimInfo7> = {
   steer: { frames: 8, fps: 4, loop: true, talk: 'steerTalk' },
   steerTalk: { frames: 8, fps: 5, loop: true },
   steerHard: { frames: 8, fps: 7, loop: true, talk: 'steerHard' },
+  // ship life (crewlife.ts): smooth procedural everyday loops
+  music: { frames: 16, fps: 8, loop: true, talk: 'talk' },
+  musicSit: { frames: 16, fps: 8, loop: true },
+  dance: { frames: 16, fps: 10, loop: true },
+  snack: { frames: 24, fps: 8, loop: true, talk: 'snackTalk' },
+  snackTalk: { frames: 8, fps: 5, loop: true },
+  sipTea: { frames: 24, fps: 8, loop: true, talk: 'teaTalk' },
+  teaTalk: { frames: 8, fps: 5, loop: true },
+  yawn: { frames: 16, fps: 12, loop: false },
+  stretch: { frames: 16, fps: 12, loop: false },
+  tapGlass: { frames: 16, fps: 8, loop: true },
+  radioTalk: { frames: 16, fps: 6, loop: true },
+  charts: { frames: 16, fps: 5, loop: true },
+  pet: { frames: 12, fps: 7, loop: true },
 };
 
 // ------------------------------------------------------------------ gait
@@ -258,6 +272,244 @@ function steerTalk(b: Build, t: number): Pose {
   return p;
 }
 
+// ------------------------------------------------------------------ ship life
+
+const smooth = (u: number) => { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); };
+/** 0 → 1 → 0 over [a, b] with eased ramps of width w at each end */
+const bump = (t: number, a: number, b: number, w: number) => smooth((t - a) / w) * (1 - smooth((t - (b - w)) / w));
+const lerp2 = (p: P2, q: P2, u: number): P2 => [p[0] + (q[0] - p[0]) * u, p[1] + (q[1] - p[1]) * u];
+const add2 = (p: P2, x: number, y: number): P2 => [p[0] + x, p[1] + y];
+/** where a relaxed hand hangs from the shoulder */
+const hang = (b: Build, s: P2, fwd = 1): P2 => [s[0] + fwd * K(b), s[1] - (b.upArm + b.foreArm) * 0.92];
+/** a beat pulse: 1 on the beat, easing to 0 between beats */
+const pulse = (u: number) => Math.pow(0.5 + 0.5 * Math.cos(TAU * frac(u)), 2);
+/** a hand on the hip (fist), arm out (Joshu's stance) */
+const onHip = (b: Build, hip: P2, x = -0.2): ArmP => ({ ik: [hip[0] + x * K(b), hip[1] + 2.4 * K(b)], hand: 'fist' });
+const ps = (id: string) => (id === 'joshu' ? 1.2 : id === 'jenna' ? 0.85 : 1);
+/**
+ * A world-space fist target near the head (flags wN): px from the ground anchor, measured from the
+ * yawed neck top, so a hand lands on the mouth or an ear whatever the build (unscaled head px).
+ */
+const wHead = (b: Build, p: Pose, dx: number, dy: number): P2 => {
+  const n = neckAt(b, p.hip, p.lean), hd = p.hd ?? [0, 0];
+  return [(n[0] + hd[0]) * Math.cos(YAW) + dx, n[1] + hd[1] + dy];
+};
+/** a relaxed hand hanging at the side, world space */
+const wHang = (b: Build, p: Pose, dx = 1): P2 => wHead(b, p, dx, -(b.shY + (b.upArm + b.foreArm) * 0.9));
+
+/**
+ * Headphones on, lost in the music: the head nods on every beat (four to the loop), the hips sway
+ * over two beats, the front foot taps, one hand presses an ear cup in close and the other bounces
+ * loose at her side, fingers snapping on the backbeat.
+ */
+function music(b: Build, t: number): Pose {
+  const k = K(b), u = t * 4, nod = pulse(u), tap = Math.max(0, -Math.cos(TAU * u));
+  const p = stand(b);
+  p.hip = [0.3 * k * Math.sin(TAU * t * 2), b.hipH - 0.35 - nod * 0.45 * k];
+  p.lean = 0.02 + 0.03 * nod;
+  p.hd = [0.35 * k * nod, -0.75 * k * nod];
+  p.sq = 1 - nod * 0.012;
+  p.fl = { f: [2.2 * k, b.ankleH + tap * 0.9 * k], fa: -0.55 * tap };
+  p.bl = { f: [-1.8 * k, b.ankleH], fa: 0 };
+  const s = shoulder(b, p.hip, p.lean);
+  p.fa = { ik: wHead(b, p, -4.4, 5.2 - nod * 0.4), hand: 'flat' };
+  const snap = pulse(u + 0.5);
+  p.ba = { ik: add2(hang(b, s, 1.6), 0.6 * k * snap, 2.6 * k + snap * 1.4 * k), hand: snap > 0.5 ? 'pinch' : 'relax' };
+  p.front = ['armF'];
+  p.flags = { sx: 0.9 * k * Math.sin(TAU * t * 2), roll: 0.04 * Math.sin(TAU * t * 2), aoF: 1.2, wN: 1, zN: 5.6 };
+  p.sway = 0.4 + 0.4 * nod;
+  p.bounce = -nod * 0.3;
+  return p;
+}
+
+/** sitting with the headphones on: nodding along, feet swinging, a hand drumming on her knee */
+function musicSit(b: Build, t: number): Pose {
+  const k = K(b), u = t * 4, nod = pulse(u);
+  const p = sitP(b);
+  p.hd = [0.3 * k * nod, -0.7 * k * nod];
+  p.lean = -0.02 + 0.04 * nod;
+  p.sq = 1 - nod * 0.01;
+  // feet swing out and back, alternately, under the seat
+  const sw = Math.sin(TAU * t * 2);
+  const f0 = p.fl.f as P2, f1 = p.bl.f as P2;
+  p.fl = { f: [f0[0] + 1.6 * k * sw, b.ankleH + Math.max(0, sw) * 1.2 * k], fa: 0.2 * sw };
+  p.bl = { f: [f1[0] - 1.6 * k * sw, b.ankleH + Math.max(0, -sw) * 1.2 * k], fa: -0.2 * sw };
+  const s = shoulder(b, p.hip, p.lean);
+  p.ba = { ik: add2(s, 1.2 * k, 3.6 * k - nod * 0.4 * k), hand: 'flat' };
+  const knee: P2 = [p.hip[0] + b.thigh * 0.85, p.hip[1] + 1.6 * k];
+  p.fa = { ik: add2(knee, 0, 0.4 * k + pulse(u * 2) * 1.2 * k), hand: 'flat' };
+  p.flags = { sx: 0.4 * k * Math.sin(TAU * t * 2) };
+  p.sway = 0.3 + 0.3 * nod;
+  return p;
+}
+
+/**
+ * A little dance: bouncing on every beat, stepping from foot to foot, fists pumping up in turn,
+ * hips and shoulders swinging, head bobbing.
+ */
+function dance(b: Build, t: number): Pose {
+  const k = K(b), u = t * 4, nod = pulse(u), side = Math.sin(TAU * t * 2);
+  const p = stand(b);
+  const step = Math.floor(frac(t * 2) * 2);
+  const lift = Math.max(0, Math.sin(TAU * u * 0.5));
+  p.hip = [0.6 * k * side, b.hipH - 0.6 * k - nod * 0.9 * k];
+  p.lean = 0.04 * side;
+  p.hd = [0.3 * k * nod + 0.3 * k * side, -0.6 * k * nod];
+  p.fl = { f: [2.4 * k + side * 1.2 * k, b.ankleH + (step === 0 ? lift * 1.8 * k : 0)], fa: step === 0 ? -0.4 * lift : 0 };
+  p.bl = { f: [-2.2 * k + side * 1.2 * k, b.ankleH + (step === 1 ? lift * 1.8 * k : 0)], fa: step === 1 ? -0.4 * lift : 0 };
+  const s = shoulder(b, p.hip, p.lean);
+  const pumpN = Math.max(0, Math.sin(TAU * t * 2)), pumpF = Math.max(0, -Math.sin(TAU * t * 2));
+  p.fa = { ik: add2(s, 3.2 * k, -4.2 * k + pumpN * 10.4 * k), hand: 'fist' };
+  p.ba = { ik: add2(s, 2.6 * k, -4.6 * k + pumpF * 10.4 * k), hand: 'fist' };
+  p.front = pumpN > 0.3 ? ['armF'] : undefined;
+  p.flags = { sx: 1.2 * k * side, roll: 0.06 * side, aoN: 0.6, aoF: 0.6 };
+  p.sway = 0.6 + 0.6 * nod;
+  p.bounce = -nod * 0.5;
+  return p;
+}
+
+/** a sandwich in hand: up for a bite, then chewing with it held at the chest */
+function snack(b: Build, t: number, id: string, talk = false): Pose {
+  const k = K(b);
+  const p = stand(b, { lean: 0.02 });
+  const br = Math.sin(TAU * t);
+  p.hip = [0, b.hipH - 0.3 - Math.max(0, -br) * 0.3];
+  p.fl = { f: [-1.6 * k, b.ankleH], fa: 0 };
+  p.bl = { f: [1.8 * k, b.ankleH], fa: 0 };
+  const up = talk ? 0 : bump(t, 0.12, 0.42, 0.1);
+  const chew = talk ? 0 : t > 0.36 && t < 0.8 ? Math.abs(Math.sin(TAU * t * 6)) : 0;
+  const s = shoulder(b, p.hip, p.lean);
+  p.hd = [0.25 * k * up, -0.3 * k * chew];
+  const chest = wHead(b, p, 3.2, -8 * k), mouth = wHead(b, p, 2.8, 3);
+  p.fa = { ik: lerp2(chest, mouth, up), hand: 'grip' };
+  p.ba = id === 'joshu' ? onHip(b, p.hip) : { ik: hang(b, s, 1.2), hand: 'relax' };
+  p.look = up > 0.5 || chew ? 'fwd' : 'down';
+  if (up > 0.4) p.front = ['armF'];
+  p.props = [prop('sandwich', 0.6 * k, 0.6 * k, 0.5, { t: 1, s: ps(id), front: up > 0.4 })];
+  p.flags = id === 'joshu' ? { aoF: 3.2, wN: 1, zN: 1.6 } : { sx: 0.3 * k * Math.sin(TAU * t), wN: 1, zN: 1.2 };
+  return p;
+}
+
+/** a mug of tea: held warm at the chest, lifted for a long sip */
+function sipTea(b: Build, t: number, id: string, talk = false): Pose {
+  const k = K(b);
+  const p = stand(b, { lean: -0.02 });
+  const br = Math.sin(TAU * t);
+  p.hip = [0, b.hipH - 0.35 - Math.max(0, -br) * 0.3];
+  p.sq = 1 + br * 0.02;
+  p.fl = { f: [-2.2 * k, b.ankleH], fa: 0 };
+  p.bl = { f: [2.4 * k, b.ankleH], fa: 0.05 };
+  const up = talk ? 0 : bump(t, 0.3, 0.82, 0.14);
+  const s = shoulder(b, p.hip, p.lean);
+  p.lean -= 0.06 * up;
+  const chest = wHead(b, p, 3.2, -8.4 * k), mouth = wHead(b, p, 2.6, 2.2);
+  p.fa = { ik: lerp2(chest, mouth, up), hand: 'grip' };
+  p.ba = id === 'joshu' ? onHip(b, p.hip) : { ik: add2(s, 2.8 * k, -6.4 * k), hand: 'flat' };
+  p.look = up > 0.6 ? 'up' : t < 0.25 ? 'down' : 'fwd';
+  if (up > 0.35) p.front = ['armF'];
+  p.props = [prop('mug', 0, -1.2 * k, 0, { t: 1, s: ps(id) * 0.9, front: up > 0.35 })];
+  p.flags = id === 'joshu' ? { aoF: 3.2, sx: 0.5 * k * Math.sin(TAU * t), roll: 0.02 * Math.sin(TAU * t), wN: 1, zN: 1.6 } : { sx: 0.3 * k * br, wN: 1, zN: 1.2 };
+  return p;
+}
+
+/** a big yawn: rising onto the toes, one arm reaching up behind the head, a hand over the mouth */
+function yawn(b: Build, t: number): Pose {
+  const k = K(b), e = bump(t, 0.02, 0.98, 0.32);
+  const p = stand(b);
+  p.hip = [0, b.hipH + 0.4 * k * e];
+  p.lean = 0.02 - 0.16 * e;
+  const s = shoulder(b, p.hip, p.lean);
+  const m = bump(t, 0.2, 0.85, 0.18);
+  p.fa = { ik: lerp2(wHang(b, p), wHead(b, p, 3, 2.4), m), hand: m > 0.5 ? 'flat' : 'relax' };
+  p.ba = { ik: lerp2(hang(b, s, -0.4), add2(s, -4.6 * k, 10.6 * k), e), hand: e > 0.5 ? 'fist' : 'relax' };
+  if (m > 0.4) p.front = ['armF'];
+  p.fl = { f: [-1.6 * k, b.ankleH + 0.7 * k * e], fa: -0.4 * e };
+  p.bl = { f: [1.9 * k, b.ankleH + 0.7 * k * e], fa: -0.4 * e };
+  if (e > 0.45) p.look = 'up';
+  p.sq = 1 + 0.03 * e;
+  p.flags = { wN: 1, zN: 1.2 };
+  return p;
+}
+
+/** a long stretch: both arms up over the head, up on the toes, a lean back, and down again */
+function stretch(b: Build, t: number): Pose {
+  const k = K(b), e = bump(t, 0.02, 0.98, 0.34);
+  const p = stand(b);
+  p.hip = [0, b.hipH + 0.7 * k * e];
+  p.lean = 0.02 - 0.2 * e;
+  const s = shoulder(b, p.hip, p.lean);
+  p.fa = { ik: lerp2(hang(b, s, 1), add2(s, 2.4 * k, 11.8 * k), e), hand: e > 0.6 ? 'fist' : 'relax' };
+  p.ba = { ik: lerp2(hang(b, s, -0.4), add2(s, -0.6 * k, 11.8 * k), e), hand: e > 0.6 ? 'fist' : 'relax' };
+  p.fl = { f: [-1.6 * k, b.ankleH + 1.1 * k * e], fa: -0.6 * e };
+  p.bl = { f: [1.9 * k, b.ankleH + 1.1 * k * e], fa: -0.6 * e };
+  if (e > 0.5) p.look = 'up';
+  p.sq = 1 + 0.04 * e;
+  return p;
+}
+
+/** tapping the barometer's glass with a knuckle, twice, peering at the needle */
+function tapGlass(b: Build, t: number, id: string): Pose {
+  const k = K(b);
+  const p = stand(b, { lean: 0.06 });
+  const reach = bump(t, 0.05, 0.75, 0.16);
+  const tap = t > 0.22 && t < 0.6 ? Math.max(0, Math.sin(TAU * (t - 0.22) * 4)) : 0;
+  const s = shoulder(b, p.hip, p.lean);
+  p.fa = { ik: lerp2(hang(b, s, 1), add2(s, (9.4 - tap * 1.2) * k, -1.2 * k), reach), hand: reach > 0.5 ? 'point' : 'relax' };
+  p.ba = id === 'joshu' ? onHip(b, p.hip) : { ik: hang(b, s, -0.4), hand: 'relax' };
+  p.lean += 0.06 * reach;
+  p.hd = [0.6 * k * reach, 0];
+  if (reach > 0.4) { p.look = 'up'; p.front = ['armF']; }
+  p.fl = { f: [1.2 * k, b.ankleH], fa: 0 };
+  p.bl = { f: [-2.2 * k, b.ankleH], fa: 0 };
+  p.flags = id === 'joshu' ? { aoF: 3.2, yaw: 0.95 - 0.5 * reach } : { yaw: 0.95 - 0.5 * reach };
+  return p;
+}
+
+/** on the radio: the handset up at his beard, chatting, the other fist on his hip */
+function radioTalk(b: Build, t: number, id: string): Pose {
+  const k = K(b);
+  const i = Math.floor(t * 8) % 8;
+  const p = stand(b, { lean: 0.02 + [0, 0.02, 0.03, 0.01, 0, 0.02, 0.04, 0.01][i] });
+  const s = shoulder(b, p.hip, p.lean);
+  p.hd = [0.2 * k * (i % 2), -0.2 * k * ((i + 1) % 2)];
+  p.fa = { ik: wHead(b, p, 2.4, 2.2), hand: 'grip' };
+  p.front = ['armF'];
+  p.ba = id === 'joshu' ? onHip(b, p.hip) : { ik: hang(b, s, -0.4), hand: 'relax' };
+  p.props = [prop('phone', 0, 0, 1.45, { t: 1, s: 0.9, front: true })];
+  p.hd = [0.2 * k * (i % 2), -0.2 * k * ((i + 1) % 2)];
+  p.flags = id === 'joshu' ? { aoF: 3.2, sx: 0.4 * k * Math.sin(TAU * t), wN: 1, zN: 1.6 } : { wN: 1, zN: 1.2 };
+  return p;
+}
+
+/** bent over the chart table: one hand planted, a finger tracing the course, the head down */
+function charts(b: Build, t: number, id: string): Pose {
+  const k = K(b);
+  const p = stand(b, { lean: 0.32, hip: [-1.4 * k, b.hipH - 0.6 * k] });
+  p.fl = { f: [1.4 * k, b.ankleH], fa: 0 };
+  p.bl = { f: [-3 * k, b.ankleH], fa: 0 };
+  const s = shoulder(b, p.hip, p.lean);
+  const tableY = b.hipH + 2.4 * k;
+  const trace = Math.sin(TAU * t) * 1.8 * k;
+  p.fa = { ik: [s[0] + 7.4 * k + trace, tableY + Math.max(0, Math.cos(TAU * t * 2)) * 0.6 * k], hand: 'point' };
+  p.ba = { ik: [s[0] + 5.2 * k, tableY - 0.4 * k], hand: 'flat' };
+  p.look = 'down';
+  p.flags = id === 'joshu' ? { yaw: 0.75 } : {};
+  return p;
+}
+
+/** crouched down giving the dog a scratch behind the ears */
+function pet(b: Build, t: number): Pose {
+  const k = K(b);
+  const p = crouchP(b, 0.56, 0.3);
+  const ruff = Math.sin(TAU * t);
+  p.fa = { ik: [p.hip[0] * Math.cos(YAW) + 9 * k + ruff * 0.8 * k, 6 * k + Math.abs(ruff) * 0.6 * k], hand: 'flat' };
+  p.ba = { ik: [p.hip[0] + 5.4 * k, p.hip[1] + 0.6 * k], hand: 'flat' };
+  p.hd = [0.3 * k, -0.2 * k * ruff];
+  p.look = 'down';
+  p.flags = { wN: 1 };
+  return p;
+}
+
 const POSES7: Record<string, (b: Build, t: number, id: string) => Pose> = {
   idle,
   steer: (b, t) => steer(b, t),
@@ -267,6 +519,19 @@ const POSES7: Record<string, (b: Build, t: number, id: string) => Pose> = {
   run: (b, t, id) => gait(b, t, RUN(b, id)),
   climb: (b, t) => climb(b, t),
   climbIdle: b => climb(b, 0.25),
+  music: (b, t) => music(b, t),
+  musicSit: (b, t) => musicSit(b, t),
+  dance: (b, t) => dance(b, t),
+  snack: (b, t, id) => snack(b, t, id),
+  snackTalk: (b, t, id) => snack(b, t, id, true),
+  sipTea: (b, t, id) => sipTea(b, t, id),
+  teaTalk: (b, t, id) => sipTea(b, t, id, true),
+  yawn: (b, t) => yawn(b, t),
+  stretch: (b, t) => stretch(b, t),
+  tapGlass: (b, t, id) => tapGlass(b, t, id),
+  radioTalk: (b, t, id) => radioTalk(b, t, id),
+  charts: (b, t, id) => charts(b, t, id),
+  pet: (b, t) => pet(b, t),
 };
 
 export function pose7(id: string, anim: string, b: Build, frame: number): Pose {

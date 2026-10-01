@@ -51,7 +51,7 @@ const sm = (t: number) => t * t * (3 - 2 * t);
 const sin = Math.sin, cos = Math.cos;
 const K = (b: Build) => b.torso / 15;
 const add = (p: P2, x: number, y: number): P2 => [p[0] + x, p[1] + y];
-const prop = (kind: string, x = 0, y = 0, a = 0, o: Partial<PropP> = {}): PropP => ({ kind, x, y, a, ...o });
+export const prop = (kind: string, x = 0, y = 0, a = 0, o: Partial<PropP> = {}): PropP => ({ kind, x, y, a, ...o });
 
 export function stand(b: Build, over: Partial<Pose> = {}): Pose {
   const k = K(b);
@@ -65,18 +65,18 @@ export function stand(b: Build, over: Partial<Pose> = {}): Pose {
     ...over,
   };
 }
-function shoulderAt(b: Build, hip: P2, lean: number): P2 {
+export function shoulderAt(b: Build, hip: P2, lean: number): P2 {
   const up: P2 = [sin(lean), cos(lean)], fwd: P2 = [cos(lean), -sin(lean)];
   const T = b.torso - b.shY;
   return [hip[0] + fwd[0] * b.shF + up[0] * T, hip[1] + fwd[1] * b.shF + up[1] * T];
 }
-function neckAt(b: Build, hip: P2, lean: number): P2 {
+export function neckAt(b: Build, hip: P2, lean: number): P2 {
   const up: P2 = [sin(lean), cos(lean)];
   const nUp: P2 = [sin(lean * 0.6), cos(lean * 0.6)];
   return [hip[0] + up[0] * b.torso + nUp[0] * b.neck, hip[1] + up[1] * b.torso + nUp[1] * b.neck];
 }
 /** a point in front of the face (mouth / eye height) relative to the neck top */
-function face(b: Build, hip: P2, lean: number, dx: number, dy: number): P2 {
+export function face(b: Build, hip: P2, lean: number, dx: number, dy: number): P2 {
   const n = neckAt(b, hip, lean), k = K(b);
   return [n[0] + dx * k, n[1] + dy * k];
 }
@@ -118,7 +118,7 @@ export function cycle(b: Build, t: number, o: CycleOpts): Pose {
 }
 const walkC = (b: Build, t: number) => cycle(b, t, { stride: b.thigh * 1.3, lift: 2.2 * K(b), bob: 0.9 * K(b), lean: 0.06, swing: 0.45, elbow: 0.25, elbowSwing: 0.4, stance: 0.56 });
 
-function crouchP(b: Build, depth = 0.62, lean = 0.34): Pose {
+export function crouchP(b: Build, depth = 0.62, lean = 0.34): Pose {
   const k = K(b);
   return stand(b, {
     hip: [-0.8 * k, b.hipH * depth], lean,
@@ -136,7 +136,7 @@ function kneelP(b: Build, lean = 0.4): Pose {
     legFwd: true,
   });
 }
-function sitP(b: Build, seat?: number): Pose {
+export function sitP(b: Build, seat?: number): Pose {
   const k = K(b);
   const sy = seat ?? b.shin + b.ankleH - 0.5 * k;
   const hip: P2 = [-2.2 * k, sy + 1.2 * k];
@@ -148,7 +148,7 @@ function sitP(b: Build, seat?: number): Pose {
     legFwd: true, legBFwd: true,
   });
 }
-function sitGroundP(b: Build, lean = -0.1): Pose {
+export function sitGroundP(b: Build, lean = -0.1): Pose {
   const k = K(b);
   const hip: P2 = [0, 2.6 * k];
   const L = b.thigh + b.shin;

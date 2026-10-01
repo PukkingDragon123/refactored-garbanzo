@@ -124,8 +124,13 @@ export function lift(ch: Char7, pose: Pose, yaw0 = YAW): J3 {
   // hold or reach for something (IK) stay in the torso's frame
   const { W: Wa } = yawer(back ? yaw : yaw * 0.55);
   const armW = (ik: boolean) => (ik ? W : Wa);
+  // flags.zN: the near hand goes to this lateral depth (body centre = 0) instead of splaying out, so
+  // it can come in to the mouth or the face (a sip, a bite, a hand over a yawn); the elbow follows part way
+  const zN = fl.zN;
   const armPt = (sh3: V3, root: P2, p: P2, side: number, ao: number, ik: boolean, k: number): V3 => {
-    const dx = p[0] - root[0], dy = p[1] - root[1], [x, z] = raise(dx, dy);
+    const dx = p[0] - root[0], dy = p[1] - root[1];
+    if (side > 0 && zN !== undefined) return vadd(W(sh3), armW(ik)([dx, dy, (zN - sh3[2]) * k]));
+    const [x, z] = raise(dx, dy);
     return vadd(W(sh3), armW(ik)([x, dy, side * (out + z + ao * k)]));
   };
   const hip = vadd(P(J.hip), shift);
@@ -140,7 +145,7 @@ export function lift(ch: Char7, pose: Pose, yaw0 = YAW): J3 {
     const a = near ? pose.fa : pose.ba;
     if (!a.ik || !(near ? fl.wN : fl.wF)) return;
     const sh3 = near ? shN2 : shF2, root = near ? J.shF : J.shB, side = near ? 1 : -1, ao = near ? aoN : aoF;
-    const lz = sh3[2] + side * (out + ao), F = 2.3 * ch.hand, goal = a.ik;
+    const lz = near && zN !== undefined ? zN : sh3[2] + side * (out + ao), F = 2.3 * ch.hand, goal = a.ik;
     let tx = goal[0], ty = goal[1], el: P2 = root, wr: P2 = root;
     for (let it = 0; it < 3; it++) {
       [el, wr] = ik2(root, [root[0] + (tx + lz * sa) / ca - sh3[0], root[1] + ty - sh3[1]], b.upArm, b.foreArm, a.flip ? 1 : -1);
