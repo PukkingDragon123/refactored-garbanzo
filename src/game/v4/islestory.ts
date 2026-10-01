@@ -434,7 +434,7 @@ export class IsleStory implements IsleHooks {
       await wait(600);
       await this.say([
         { who: 'mori', text: 'The Kittiwake...', expr: 'shocked' },
-        { who: 'mori', text: 'She broke in half. Half of her is on the beach and the other half is out on the reef.', expr: 'sad' },
+        { who: 'mori', text: 'She broke in half. The wave threw what’s left of her right up the beach. The rest is... gone.', expr: 'sad' },
       ]);
       await this.pan(p.x + 200, p.y - 40, 1.3, 1.8);
       await this.say([{ who: 'mori', text: 'Is that... pink hair? JENNA!', expr: 'surprised', react: 'jump' }]);
@@ -667,7 +667,7 @@ export class IsleStory implements IsleHooks {
       j.faceTo(this.p.x);
       await this.say([
         { who: 'jenna', text: 'Okay. Okay. Chunk: found. Mori: found. Me: extremely found.', expr: 'serious' },
-        { who: 'jenna', text: '...Dad was on the bridge when the wave hit. The bridge is on the OTHER half of the ship.', expr: 'sad' },
+        { who: 'jenna', text: '...Dad was on the bridge when the wave hit. The bridge is just... gone. The whole wheelhouse went over the side.', expr: 'sad' },
         { who: 'mori', text: 'Joshu’s the toughest man I’ve ever met. If anyone swam out of that, it’s him.', expr: 'determined' },
         { who: 'jenna', text: 'Yeah. Yeah! He once punched a shark. Allegedly. He tells it differently every time.', expr: 'determined' },
         { who: 'mori', text: 'Then let’s split up. You search the wreck and the rocks back west. Chunk and I take the shoreline east.', expr: 'thinking' },
@@ -747,7 +747,7 @@ export class IsleStory implements IsleHooks {
     this.trigger('cave', () => st() && this.flag('v4:sealDone') && px() > 5110 && px() < 5400, async () => {
       await this.say([
         { who: 'mori', text: '<i>(whispering)</i> Chunk... look up.', expr: 'surprised' },
-        { who: 'mori', text: 'Titiwai. Glowworms. Thousands of them. They fish with glowing silk.', expr: 'happy', emote: 'sparkle' },
+        { who: 'mori', text: 'A Starweb Weaver colony. Thousands of them across the roof, fishing with threads of glowing silk.', expr: 'happy', emote: 'sparkle' },
         { who: 'mori', text: 'Joshu... you walked through this and didn’t even stop to look, did you.', expr: 'teasing' },
       ]);
     });
