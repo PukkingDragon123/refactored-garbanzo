@@ -8,7 +8,7 @@
 //    behind with hands and feet gripping the rungs in a diagonal rhythm
 // Everything else comes from the shared pose library.
 
-import type { Build, Pose, ArmP, LegP } from '../people-rig';
+import type { Build, Pose, ArmP, LegP, P2 } from '../people-rig';
 import { stand, animePose, ANIME_ANIMS, AnimInfo } from '../anime/anims';
 import { YAW } from './body';
 
@@ -18,7 +18,12 @@ const frac = (v: number) => v - Math.floor(v);
 const ease = (u: number) => 0.5 - 0.5 * Math.cos(Math.PI * Math.max(0, Math.min(1, u)));
 const LEG_YAW = Math.cos(YAW * 0.5);
 
-export interface AnimInfo7 extends AnimInfo { /** screen px travelled per cycle (distance-driven clips) */ dist?: number }
+export interface AnimInfo7 extends AnimInfo {
+  /** screen px travelled per cycle (distance-driven clips) */
+  dist?: number;
+  /** the clip the Actor plays instead of `talk` while this one is the idle (keep hands on the job) */
+  talk?: string;
+}
 
 export const ANIMS7: Record<string, AnimInfo7> = {
   ...ANIME_ANIMS,
@@ -27,6 +32,10 @@ export const ANIMS7: Record<string, AnimInfo7> = {
   run: { frames: 12, fps: 18, loop: true },
   climb: { frames: 12, fps: 12, loop: true },
   climbIdle: { frames: 1, fps: 1, loop: true },
+  // at the helm: both fists on the wheel; talking keeps one of them there (the Actor plays `talk`)
+  steer: { frames: 8, fps: 4, loop: true, talk: 'steerTalk' },
+  steerTalk: { frames: 8, fps: 5, loop: true },
+  steerHard: { frames: 8, fps: 7, loop: true, talk: 'steerHard' },
 };
 
 // ------------------------------------------------------------------ gait
@@ -194,8 +203,66 @@ function idle(b: Build, t: number, id: string): Pose {
   return p;
 }
 
+// ------------------------------------------------------------------ at the helm
+
+/**
+ * The Kittiwake's wheel as the helmsman sees it from his spot (ship4: SPOTS.helm - 14, with the wheel
+ * sprite drawn at MOUNTS.wheel): the hub's offset from his ground anchor and the rim radius, world px.
+ */
+export const HELM = { x: 30, y: 36, r: 11.9 };
+
+/** the shoulder (ground space) for a hip and lean */
+function shoulder(b: Build, hip: P2, lean: number): P2 {
+  const T = b.torso - b.shY;
+  return [hip[0] + Math.sin(lean) * T, hip[1] + Math.cos(lean) * T];
+}
+
+/**
+ * Squared up to the wheel with both fists on the rim: world-space targets (flags wN / wF), so they
+ * land on the wheel's rim whatever the build. Hips in, feet planted wide, the grips easing a few
+ * degrees round the rim and back as he nurses her through the swell. `hard` fights heavy weather:
+ * lower and wider, leaning on the wheel, bigger swings.
+ */
+function steer(b: Build, t: number, hard = 0): Pose {
+  const k = K(b), ph = TAU * t;
+  const turn = Math.sin(ph) * (0.09 + hard * 0.2) + (hard ? Math.sin(ph * 3) * 0.04 : 0);
+  const p = stand(b, { lean: 0.1 + hard * 0.08, hip: [1.5 * k + turn * 2 * k, b.hipH - (0.4 + hard * 1.1) * k] });
+  p.fl = { f: [3.6 * k + hard * k, b.ankleH], fa: 0 };
+  p.bl = { f: [-2 * k - hard * k, b.ankleH], fa: hard ? -0.15 : 0 };
+  const rim = (a: number): P2 => [HELM.x + Math.cos(a + turn) * HELM.r, HELM.y + Math.sin(a + turn) * HELM.r];
+  // near fist low on the rim (about eight o'clock), far fist high (about eleven)
+  p.fa = { ik: rim(Math.PI * (1.2 - hard * 0.04)), hand: 'grip' };
+  p.ba = { ik: rim(Math.PI * (0.7 + hard * 0.03)), hand: 'grip' };
+  p.flags = { yaw: 0.55, wN: 1, wF: 1, sx: 0.4 * k * Math.sin(ph) };
+  p.sway = 0.3 + hard * 0.8;
+  p.bounce = hard ? Math.sin(ph * 2) * 0.4 : 0;
+  return p;
+}
+
+/**
+ * At the wheel, talking: the fists stay on the rim (a helmsman doesn't let go), the body leans in and
+ * bobs with the words, and once a cycle the near hand jabs a finger out over the wheel at the sea.
+ */
+function steerTalk(b: Build, t: number): Pose {
+  const k = K(b);
+  const i = Math.floor(t * 8) % 8;
+  const p = steer(b, t);
+  p.lean += [0, 0.03, 0.05, 0.02, 0, 0.04, 0.06, 0.02][i];
+  p.hd = [0.3 * k * (i % 2), -0.3 * k * ((i + 1) % 2)];
+  p.bounce = i % 2 ? 0.35 : 0;
+  if (i === 5 || i === 6) {
+    const s = shoulder(b, p.hip, p.lean);
+    p.fa = { ik: [s[0] + (i === 5 ? 8.6 : 9.4) * k, s[1] + (i === 5 ? -1.2 : -0.4) * k], hand: 'point', ha: 0.2 };
+    p.flags = { ...p.flags, wN: 0 };
+  }
+  return p;
+}
+
 const POSES7: Record<string, (b: Build, t: number, id: string) => Pose> = {
   idle,
+  steer: (b, t) => steer(b, t),
+  steerTalk: (b, t) => steerTalk(b, t),
+  steerHard: (b, t) => steer(b, t, 1),
   walk: (b, t, id) => gait(b, t, WALK(b, id)),
   run: (b, t, id) => gait(b, t, RUN(b, id)),
   climb: (b, t) => climb(b, t),

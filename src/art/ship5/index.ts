@@ -122,10 +122,9 @@ function furnish(b: PixelBuffer, g: PixelBuffer) {
   const mon = D5.monitor(11, 9); put(b, mon.buf, 81, 180, g, mon.glow);
   const lap = D5.laptop('term'); put(b, lap.buf, 93, 180, g, lap.glow);
   put(b, D5.stool(), 96, LOW_FLOOR);
-  // galley & mess: fridge, Chunk's bowls, chess on the table, the games shelf
+  // galley & mess: fridge, Chunk's bowls, the games shelf (the table top stays clear for breakfast)
   put(b, D5.fridge(), 268, LOW_FLOOR);
   put(b, D5.dogBowls(), 283, LOW_FLOOR);
-  put(b, D5.chessBoard(), 302, 181);
   put(b, D5.gamesShelf(), 318, 150);
   // bunk room: Chunk's bed, Mori's laptop on the bunk, the species photo board
   put(b, D5.dogBed(), 396, LOW_FLOOR);

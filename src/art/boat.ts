@@ -90,7 +90,7 @@ export const BOAT_LAYOUT: BoatLayout = {
     // main deck, stern to bow, up the aft stair, through the raised wheelhouse, down the fore stair
     { name: 'deck', pts: [...deckPts(30, 192), [212, WH_FLOOR], [WH_X1 + 2, WH_FLOOR], ...deckPts(356, 540)] },
     // lower deck: engine room, galley & mess, bunk room (one level), step up into the cargo hold
-    { name: 'lower', pts: [[BH.engAft + 6, LOW_FLOOR], [BH.bunkHold + 4, LOW_FLOOR], [BH.bunkHold + 10, HOLD_FLOOR], [BH.holdFwd - 10, HOLD_FLOOR]] },
+    { name: 'lower', pts: [[BH.engAft + 4, LOW_FLOOR], [BH.bunkHold + 4, LOW_FLOOR], [BH.bunkHold + 10, HOLD_FLOOR], [BH.holdFwd - 2, HOLD_FLOOR]] },
   ],
   ladders: [
     { name: 'engineHatch', x: 113, y0: Math.round(deckY(113)), y1: LOW_FLOOR },
@@ -124,7 +124,8 @@ export const BOAT_LAYOUT: BoatLayout = {
     hold: [446, HOLD_FLOOR],
   },
   lamps: [
-    { name: 'wheelhouse', x: 276, y: 32, color: [1, 0.82, 0.55], radius: 72 },
+    // hung over the chart table, clear of the helm (Joshu is tall: his head would be in the bulb)
+    { name: 'wheelhouse', x: 250, y: 30, color: [1, 0.82, 0.55], radius: 72 },
     { name: 'galley', x: 247, y: 130, color: [1, 0.78, 0.5], radius: 60 },
     { name: 'mess', x: 308, y: 134, color: [1, 0.8, 0.52], radius: 56 },
     { name: 'bunks', x: 380, y: 130, color: [1, 0.74, 0.48], radius: 50 },

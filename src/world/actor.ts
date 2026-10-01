@@ -18,16 +18,20 @@ import { approach, clamp, rand } from '../core/math';
 export type Look = 'fwd' | 'up' | 'down' | 'back';
 export interface BodyFrameArt { back: PixelBuffer; front: PixelBuffer | null; ax: number; ay: number; hx: number; hy: number; look?: Look; hand?: [number, number]; headBehind?: boolean; hrot?: number; hflip?: boolean; hair?: number }
 export interface PeopleArt {
-  ANIMS: Record<string, { frames: number; fps: number; loop: boolean; dist?: number }>;
+  ANIMS: Record<string, { frames: number; fps: number; loop: boolean; dist?: number; talk?: string }>;
   CHAR_ANIMS: Record<string, string[]>;
   CHAR_INFO: Record<string, { name: string; short: string; voice: number; height: number }>;
   renderBody(id: string, anim: string, frame: number): BodyFrameArt;
   renderHead(id: string, o: { expr: string; mouth: 0 | 1 | 2; blink: boolean; look: Look; hair?: number }): { buf: PixelBuffer; ax: number; ay: number };
   renderPortrait(id: string, expr: string, o?: { mouth?: 0 | 1 | 2; blink?: boolean }): PixelBuffer;
   /** per-character anim table (e.g. the pug has his own frame counts) */
-  animFor?(id: string, anim: string): { frames: number; fps: number; loop: boolean; dist?: number } | null;
+  animFor?(id: string, anim: string): { frames: number; fps: number; loop: boolean; dist?: number; talk?: string } | null;
   /** posture transition clip between two anims (sit down, stand up...) */
   transitionFor?(id: string, from: string, to: string): string | null;
+  /** outfits: what a character wears (sprites, portraits and close-ups all follow it) */
+  OUTFITS?: string[];
+  outfitOf?(id: string): string;
+  setOutfit?(id: string, outfit: string): string;
 }
 export interface EmoteArt {
   EMOTE_INFO: Record<string, { frames: number; fps: number; loop: boolean }>;
@@ -197,6 +201,22 @@ export class Actor implements Drawable {
 
   get name() {
     return CHAR_NAMES[this.id] ?? this.id;
+  }
+
+  /**
+   * What this character is wearing ('casual', 'winter', 'winterHood', 'storm'). Setting it dresses the
+   * character everywhere (this sprite, other actors with the same id, dialogue portraits, close-ups).
+   */
+  get outfit(): string {
+    return people?.outfitOf?.(this.id) ?? 'casual';
+  }
+  set outfit(o: string) {
+    people?.setOutfit?.(this.id, o);
+  }
+  /** the art id frames are rendered and cached under: 'mori' or 'mori@winter' */
+  private get artId() {
+    const o = this.outfit;
+    return o === 'casual' ? this.id : `${this.id}@${o}`;
   }
   get height() {
     return people?.CHAR_INFO[this.id]?.height ?? 64;
@@ -412,11 +432,11 @@ export class Actor implements Drawable {
 
   /** world position of the top of the head (for emotes and bubbles) */
   headTop(): [number, number] {
-    const b = bodyFrame(this.id, this.anim, this.frameIndex());
+    const b = bodyFrame(this.artId, this.anim, this.frameIndex());
     if (!b) return [this.x, this.y - 84 + this.hop];
     const hx = this.x + this.ox + this.facing * (b.hx - b.ax) * this.sqx;
     const hy = this.y + this.oy + this.hop + (b.hy - b.ay) * this.sqy;
-    const h = headFrame(this.id, this.expr, 0, false, 'fwd');
+    const h = headFrame(this.artId, this.expr, 0, false, 'fwd');
     const top = h ? (b.hflip ? h.h - h.ay : h.ay) : 17;
     return [hx, hy - top * this.sqy];
   }
@@ -448,8 +468,10 @@ export class Actor implements Drawable {
       anchor: () => this.cssAnchor(),
       talk: on => {
         this.talking = on;
-        if (on && (this.anim === this.idleAnim) && people?.CHAR_ANIMS[this.id]?.includes('talk') && this.walkX === null) this.setAnim('talk');
-        if (!on && this.anim === 'talk') this.setAnim(this.idleAnim);
+        // busy idles name their own talking clip (at the wheel the hands stay on it)
+        const tk = animInfo(this.idleAnim, this.id).talk ?? 'talk';
+        if (on && (this.anim === this.idleAnim) && tk !== this.idleAnim && (tk !== 'talk' || people?.CHAR_ANIMS[this.id]?.includes('talk')) && this.walkX === null) this.setAnim(tk);
+        if (!on && this.anim === tk && tk !== this.idleAnim) this.setAnim(this.idleAnim);
       },
       react: o => {
         if (o.expr) this.setExpr(o.expr, 0);
@@ -463,7 +485,8 @@ export class Actor implements Drawable {
     if (!this.visible || this.alpha <= 0) return;
     void st;
     const fi = this.frameIndex();
-    const b = bodyFrame(this.id, this.anim, fi);
+    const art = this.artId;
+    const b = bodyFrame(art, this.anim, fi);
     const sh = this.shakeT > 0 ? Math.sin(this.shakeT * 70) * this.shakeAmp : 0;
     const tr = this.tremble > 0 ? (Math.floor(this.tremble * 30) % 2 ? 0.5 : -0.5) : 0;
     const x = this.x + this.ox + sh + tr, y = this.y + this.oy + this.hop;
@@ -483,7 +506,7 @@ export class Actor implements Drawable {
     const lk: Look = this.look ?? b.look;
     const expr = this.expr;
     const blink = this.blinking > 0;
-    const head = headFrame(this.id, expr, this.mouth, blink, lk, b.hair);
+    const head = headFrame(art, expr, this.mouth, blink, lk, b.hair);
     const nod = this.nodT > 0 ? Math.sin((this.nodT / 0.35) * Math.PI) * 1.5 : 0;
     const hx = x + f * (b.hx - b.ax) * this.sqx, hy = y + (b.hy - b.ay) * this.sqy + nod;
     const sx = f * this.sqx, sy = this.sqy;
@@ -523,7 +546,7 @@ export class Actor implements Drawable {
 
   /** Hand position in world space (for held props & particles). */
   handPos(): [number, number] | null {
-    const b = bodyFrame(this.id, this.anim, this.frameIndex());
+    const b = bodyFrame(this.artId, this.anim, this.frameIndex());
     if (!b || !b.hand) return null;
     return [this.x + this.ox + this.facing * (b.hand[0] - b.ax), this.y + this.oy + this.hop + (b.hand[1] - b.ay)];
   }
@@ -538,7 +561,7 @@ export class Actor implements Drawable {
 const portraitCache = new Map<string, string>();
 export function portraitURL(id: string, expr = 'neutral', scale = 3): string {
   if (!people || !people.CHAR_INFO[id]) return '';
-  const key = `${id}|${expr}|${scale}`;
+  const key = `${id}@${people.outfitOf?.(id) ?? ''}|${expr}|${scale}`;
   let u = portraitCache.get(key);
   if (!u) {
     u = people.renderPortrait(id, expr).toDataURL(scale);

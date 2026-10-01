@@ -4,6 +4,7 @@
 
 import { el } from './ui';
 import { renderAnimePortraitHD } from '../art/anime/portraits';
+import { outfitOf } from '../art/v7/wardrobe';
 import type { PixelBuffer } from '../art/pixel';
 
 type BustId = string;
@@ -43,7 +44,8 @@ const COLORS: Record<string, [string, string]> = {
 
 const cache = new Map<string, HTMLCanvasElement>();
 function frame(id: BustId, expr: PExpr, talk: 0 | 1 | 2, blink: boolean): HTMLCanvasElement {
-  const key = `${id}|${expr}|${talk}|${blink ? 1 : 0}`;
+  // busts dress from the wardrobe, so the cache is per outfit
+  const key = `${id}@${outfitOf(ALIAS[id] ?? id)}|${expr}|${talk}|${blink ? 1 : 0}`;
   let c = cache.get(key);
   if (!c) {
     const buf: PixelBuffer = renderAnimePortraitHD(ALIAS[id] ?? id, expr, talk, blink);
@@ -124,7 +126,7 @@ export class CloseUps {
     if (!this.who) return;
     const talk = this.talking() ? ([0, 1, 2, 1] as const)[Math.floor(this.t * 11) % 4] : 0;
     const blink = this.blinkT < 0.12;
-    const key = `${this.who}|${this.expr}|${talk}|${blink}`;
+    const key = `${this.who}@${outfitOf(ALIAS[this.who] ?? this.who)}|${this.expr}|${talk}|${blink}`;
     if (key === this.last) return;
     this.last = key;
     const f = frame(this.who, this.expr, talk, blink);

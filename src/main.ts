@@ -79,32 +79,52 @@ async function boot() {
     standoff: async () => { const a = await import('./game/v4/islearoha'); return (await import('./ui/v6/standoff')).runNegotiation(a.ROUNDS, a.EXTRA); },
     ramen: async () => (await import('./ui/v6/ramen')).runRamenPour(),
     engine: async () => (await import('./ui/v6/engine')).runEngineRepair({}),
-    /** stand Mori at the stern (ship scene) and go fishing; resolves with the catch or null */
-    fish: async () => {
+    /** stand Mori at the stern (ship scene) and go fishing; resolves with the catch or null (window.__fish) */
+    fish: async (opts: { fish?: string; skipTo?: 'fight' } = {}) => {
       const s = game.scene as unknown as { player: { x: number; y: number; facing: number }; snapCamera?(): void; cutscene: boolean };
       const { SPOTS } = await import('./art/ship5');
       s.player.x = SPOTS.fishing[0] + 8; s.player.y = SPOTS.fishing[1]; s.player.facing = -1;
       s.snapCamera?.();
       s.cutscene = true;
-      const c = await (await import('./ui/v4/fishing')).goFishing(s as never);
+      const c = await (await import('./ui/v4/fishing')).goFishing(s as never, opts);
       s.cutscene = false;
-      (window as unknown as { __fish?: unknown }).__fish = c ? { fish: c.fish.id, len: c.len, stars: c.stars } : null;
+      (window as unknown as { __fish?: unknown }).__fish = c ? { fish: c.fish.id, len: c.len, stars: c.stars, parasite: c.parasite ?? null } : null;
       return c;
     },
-    /** just the underwater fight close-up, for one fish id (hold Space to reel) */
-    fishFight: async (id = 'snapper', dep0?: number) => {
-      const { FISH } = await import('./ui/v4/fishing');
-      const { runFishFight } = await import('./ui/v6/fishfight');
-      const { Hold } = await import('./ui/v4/mini');
-      const hold = new Hold(document.body);
-      const f = FISH.find(x => x.id === id) ?? FISH[0];
-      const r = await runFishFight(f, hold, { cancelled: () => false, caughtSub: `${f.name} · 42 cm`, dep0 });
-      hold.dispose();
-      (window as unknown as { __fish?: unknown }).__fish = r;
-      return r;
-    },
+    /** skip the cast: a fish of this species is already on the line, straight into the fight in the wide view */
+    fishFight: async (id = 'snoutbass') => (window as unknown as { zl: { fish(o: object): Promise<unknown> } }).zl.fish({ fish: id, skipTo: 'fight' }),
     steady: async () => (await import('./ui/v6/camp')).holdSteady('Hold the tent pole steady', 'Press <span class="key">Space</span> as the pole comes upright. Three pegs!'),
     knot: async () => (await import('./ui/v6/camp')).lashingKnot(),
+    /** the rogue-wave finale on the ship (skips the storm search) */
+    wave: async () => (await import('./game/v4/storm')).rogueWave(game.scene as never),
+    /**
+     * dress the cast: zl.outfit('mori', 'winter'), zl.outfit('all', 'storm'), zl.outfit('jenna') to undress;
+     * outfits: casual, winter, winterHood, storm. Returns who wears what.
+     */
+    outfit: async (who = 'all', name = 'casual') => {
+      const w = await import('./art/v7/wardrobe');
+      for (const id of who === 'all' ? ['mori', 'jenna', 'joshu', 'aroha'] : [who]) w.setOutfit(id, name);
+      return Object.fromEntries(['mori', 'jenna', 'joshu', 'aroha'].map(id => [id, w.outfitOf(id)]));
+    },
+    /** the HD close-up bust of anyone, for checking (zl.closeup('mori', 'shocked')) */
+    closeup: async (who = 'mori', expr = 'neutral', ms = 4000) => {
+      const ui = game.ui as unknown as { bubbles?: { cu?: { show(id: string, e: string, o: { name: string; talking: () => boolean }): void; hide(): void } } };
+      const cu = ui.bubbles?.cu;
+      if (!cu) return 'no closeups';
+      cu.show(who, expr, { name: who, talking: () => true });
+      setTimeout(() => cu.hide(), ms);
+      return 'ok';
+    },
+    /** V9: the Trycop close-up (the parasitised crab when the island is loaded) */
+    trycop: async () => { const w = await import('./game/v9/wildlife'); return (await import('./ui/v9/trycop')).examineTrycop(game.scene as never, w.W9.crabs.find(c => c.spec.parasite) ?? null); },
+    /** V9: a jewel hornet ambush at the nearest nest bush (or where Mori stands); resolves 'escaped' | 'stung' */
+    ambush: async () => (await import('./game/v9/hornets')).debugAmbush(game.scene as never),
+    /** ship scene: switch to the afternoon on deck and spawn the open-ocean wildlife */
+    deck: async () => {
+      const s = game.scene as unknown as { phase: string };
+      s.phase = 'deck';
+      return (await import('./game/v4/seafauna')).startDeckLife(game.scene as never);
+    },
     /** island story helpers (state, interactables, markers, teleport): see src/game/v9/islezl.ts */
     isle: null as unknown,
   };

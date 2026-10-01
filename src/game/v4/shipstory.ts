@@ -78,6 +78,8 @@ export class ShipStory {
     } else if (this.flag('v4:engineFixed')) {
       s.phase = 'deck';
       this.placeJenna('desk');
+      // the afternoon's wildlife (unless the storm is already on its way)
+      if (!this.flag('v4:fishUsed') || questStatus('v4deck') !== 'done') import('./seafauna').then(m => m.startDeckLife(s));
     }
     if (this.flag('v4:fishUsed') && !this.flag('v4:bridge')) setTimeout(() => this.storm(), 1500);
   }
@@ -197,10 +199,8 @@ export class ShipStory {
     it({ x: SPOTS.moriDesk[0] - 4, y: L, label: 'Use your laptop', standX: SPOTS.moriDesk[0] + 8, quest: () => (V()['v4:rounds'] ?? 0) >= 4 && !this.flag('v4:report'), enabled: calm, action: () => this.laptop() });
     // flavour: things to poke at around the boat
     const look = (x: number, y: number, label: string, lines: () => BubbleLine[], o: Partial<Interactable> = {}) => it({ x, y, label, standX: x, enabled: calm, action: () => this.say(lines()).then(() => {}), ...o });
-    look(SPOTS.chess[0], H, 'Look at the chess game', () => [
-      { who: 'mori', text: 'Joshu versus Jenna, day nineteen of the same game. Joshu’s winning. Jenna says the knight is “emotionally compromised.”', expr: 'teasing' },
-    ]);
-    look(SPOTS.photosJ[0], H, 'The framed photos', () => [
+    // (nothing to poke at on the mess table itself: it's where you sit down to eat)
+    look(SPOTS.photosJ[0], B, 'The framed photos', () => [
       { who: 'mori', text: 'Little Jenna holding a fish bigger than she is. She looks thrilled. The fish looks less thrilled.', expr: 'happy' },
       { who: 'mori', text: 'And the woman in the sun hat... Jenna’s mum. Joshu keeps her right where he can see her from his bunk.', expr: 'sad' },
     ]);
@@ -333,7 +333,7 @@ export class ShipStory {
       ]);
       this.round('joshu');
     } else if (s.phase === 'deck') {
-      await this.say([{ who: 'joshu', text: rand.pick(['Catch anything yet? Remember: patience, and a bit of bread on the hook when nobody’s looking.', 'That albatross has been following us since dawn. Good luck, that is.']), expr: 'happy' }]);
+      await this.say([{ who: 'joshu', text: rand.pick(['Catch anything yet? Remember: patience, and a bit of bread on the hook when nobody’s looking.', 'That vanebill’s been following us since dawn. Hear it whistlin’? Good luck, that is.']), expr: 'happy' }]);
     } else {
       await this.say([{ who: 'joshu', text: rand.pick(['Sea’s like glass. Makes me nervous.', 'You want to steer? Ha! Maybe when you can tie a bowline without looking it up.', 'Jenna’s mum used to say the sea keeps secrets. She was usually right.']), expr: 'neutral' }]);
     }
@@ -478,19 +478,27 @@ export class ShipStory {
     this.p.facing = -1;
     s.cutscene = true;
     const { goFishing } = await import('../../ui/v4/fishing');
-    const c = await goFishing(s as never);
-    s.cutscene = false;
-    if (!c) return;
+    // Mori keeps the catch in his hands while he decides what to do with it
+    const c = await goFishing(s as never, { keepHeld: true });
+    const putDown = () => { s.setHeld(null); this.pose(null); };
+    if (!c) { s.cutscene = false; return; }
     if (this.flag('v4:fishToTank') || this.flag('v4:fishToJoshu') || this.flag('v4:fishUsed')) {
       await this.say([{ who: 'mori', text: `Another ${c.fish.name.toLowerCase()}! You’re free to go, buddy. Tell your friends I’m nice.`, expr: 'happy' }]);
+      putDown();
+      audio.play('splash', { vol: 0.3 });
+      s.cutscene = false;
       return;
     }
     V()['v4:fishLen'] = c.len;
     F()['v4:fishName:' + c.fish.name] = true;
     this.caught = c.fish.name;
+    this.caughtId = c.fish.id;
+    F()['v4:fishId:' + c.fish.id] = true;
     const ch = await this.say([
       { who: 'mori', text: `A ${c.fish.name}! ${c.len} centimetres of pure science. Or dinner.`, expr: 'excited', choices: ['Study it in the hold tank', 'Give it to Joshu to cook'] },
     ]);
+    putDown();
+    s.cutscene = false;
     if (ch === 0) {
       this.set('v4:fishToTank');
       game.ui.toast(`Take the ${c.fish.name.toLowerCase()} to the <b>tank in the hold</b> (below deck, forward).`, 'FISH', 'teal', 4200);
@@ -500,13 +508,15 @@ export class ShipStory {
     }
   }
   private caught = 'fish';
+  private caughtId = 'snoutbass';
 
   private async releaseFish() {
     const s = this.s;
     s.cutscene = true;
     this.p.facing = -1;
     await this.p.doWork('pour', 1.2);
-    s.addTankFish();
+    const saved = Object.keys(F()).find(k => k.startsWith('v4:fishId:'));
+    s.addTankFish(saved ? saved.slice(10) : this.caughtId);
     audio.play('splash', { vol: 0.4 });
     await this.say([
       { who: 'mori', text: `In you go. Gerald, Captain Bubbles, everyone: this is our new colleague, the ${this.caught.toLowerCase()}.`, expr: 'happy' },

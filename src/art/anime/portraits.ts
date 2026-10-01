@@ -6,6 +6,8 @@
 import { PixelBuffer } from '../pixel';
 import { Pic, Pt, tones } from '../portrait/kit';
 import { hex, mix, shade, C } from '../color';
+import { outfitOf } from '../v7/wardrobe';
+import { PORTRAIT_WEAR } from './portrait-wear';
 
 export const PW = 56, PH = 60;
 const CX = 28;
@@ -20,7 +22,29 @@ interface Design {
   /** face half-width scale and chin drop */
   faceW?: number;
   chin?: number;
-  eyes: 'young' | 'girl' | 'old' | 'pug';
+  /** the right half of a custom face outline (top centre → chin centre); mirrored for the left */
+  jaw?: Pt[];
+  /** neck half-widths (under the jaw, at the collar) and an Adam's apple */
+  neck?: [number, number];
+  adam?: boolean;
+  /** mouth line colour (else a rosy lip tone), and a darker open mouth */
+  lip?: string;
+  /** blush strength (1 = the default pink patch) */
+  blushK?: number;
+  /** brows: extra gap below the default line (design px, + = lower, nearer the eye) and HD arch (px) */
+  browDrop?: number;
+  browArch?: number;
+  /** nose: a longer bridge shadow (HD) */
+  noseBridge?: boolean;
+  /** light stubble over the jaw, chin and upper lip (HD) */
+  stubble?: string;
+  /** the lit cheek patch: centre (design units) and radii */
+  cheek?: [number, number, number, number];
+  /** a weathered face: a furrow between the brows, crow's feet, bags under the eyes (HD) */
+  weathered?: boolean;
+  /** added to every expression's inner-brow tilt (negative: a permanent scowl) */
+  browBias?: number;
+  eyes: 'young' | 'girl' | 'old' | 'pug' | 'man' | 'fierce';
   iris: [string, string, string];
   lash: string;
   brow: string;
@@ -55,6 +79,11 @@ function mats(p: Pic): Mats {
 
 function faceShape(d: Design): Pt[] {
   const w = d.faceW ?? 1, ch = d.chin ?? 0;
+  if (d.jaw) {
+    // right half top → chin, then mirrored back up the left
+    const R = d.jaw;
+    return [...R, ...R.slice(1, -1).reverse().map(([u, v]): Pt => [2 * CX - u, v])];
+  }
   const pts: Pt[] = [
     [CX, 11], [CX + 11 * w, 12.5], [CX + 13.2 * w, 18], [CX + 13.4 * w, 25], [CX + 12.2 * w, 31], [CX + 9 * w, 36 + ch * 0.4],
     [CX + 4.6 * w, 40 + ch], [CX, 41.8 + ch],
@@ -67,8 +96,16 @@ function drawFace(p: Pic, m: Mats, d: Design) {
   const [sd, ss, sb, sl] = d.skin;
   const w = d.faceW ?? 1;
   // neck (its own material so the chin shadow stays on the neck)
-  p.fill([[CX - 4.8, 36], [CX + 4.8, 36], [CX + 5.4, 49], [CX - 5.4, 49]], sb, m.neck, { sharp: true });
-  p.where([m.neck], (u, v) => v < 42.6 + (d.chin ?? 0) || u > CX + 3.2, ss);
+  const [n0, n1] = d.neck ?? [4.8, 5.4];
+  p.fill([[CX - n0, 36], [CX + n0, 36], [CX + n1, 49], [CX - n1, 49]], sb, m.neck, { sharp: true });
+  p.where([m.neck], (u, v) => v < 42.6 + (d.chin ?? 0) || u > CX + n0 - 1.6, ss);
+  if (d.adam) {
+    // the Adam's apple: a small lit bump in the throat with its shadow under it, and the neck's cords
+    p.where([m.neck], (u, v) => (u - CX + 0.3) ** 2 / 1.2 + (v - 44.4) ** 2 / 1.4 < 1, sb);
+    p.where([m.neck], (u, v) => (u - CX + 0.6) ** 2 / 0.45 + (v - 44.1) ** 2 / 0.6 < 1, sl);
+    p.where([m.neck], (u, v) => Math.abs(u - CX - 0.2) < 1.1 && Math.abs(v - 45.8) < 0.45, ss);
+    p.where([m.neck], (u, v) => v > 43.4 && Math.abs(u - (CX - n0 + 1.3 + (v - 43.4) * 0.55)) < 0.4, ss);
+  }
   // ears
   p.ell(CX - 13.4 * w, 26.5, 2.6, 3.8, sb, m.skin);
   p.ell(CX + 13.4 * w, 26.5, 2.6, 3.8, sb, m.skin);
@@ -80,8 +117,9 @@ function drawFace(p: Pic, m: Mats, d: Design) {
     const r = (u - CX) / (13.4 * w);
     return (r > 0.74 && v > 17 && v < 34) || (r > 0.5 && v > 33.5);
   }, ss);
-  // soft light on the left cheek
-  p.where([m.skin], (u, v) => (u - (CX - 8)) ** 2 / 9 + (v - 31) ** 2 / 4 < 1, sl);
+  // soft light on the left cheek (a man's cheekbone: higher and narrower)
+  const [cu, cv, crx, cry] = d.cheek ?? [CX - 8, 31, 3, 2];
+  p.where([m.skin], (u, v) => (u - cu) ** 2 / (crx * crx) + (v - cv) ** 2 / (cry * cry) < 1, sl);
   void sd;
 }
 
@@ -145,6 +183,37 @@ const EYES: Record<string, Record<string, string[]>> = {
     sparkle: ['.kkkkkk', 'kkGIIGk', '.wIGiGw', '.wiGij.', '.wjjjj.', '..sss..'],
     pain: ['.......', 'k.....k', '.k...k.', '..kkk..', '.......', '.......'],
   },
+  // a young man: narrower, sharper eyes, the upper lid slanting down to the inner corner and cutting
+  // the top of a smaller iris, no lashes flicking out, only a hint of the lower lid
+  man: {
+    open: ['..kkkk', '.kwIGk', '.wwIiw', '...ss.'],
+    wide: ['.kkkkk', 'kwwIGk', '.wwIiw', '..sss.'],
+    half: ['......', '.kkkkk', '.wwIik', '...ss.'],
+    closed: ['......', '......', '.kkkkk', '...ss.'],
+    happy: ['......', '..kkk.', '.k...k', '......'],
+    sad: ['......', '.kkk..', '.kwIGk', '..wiw.'],
+    tiny: ['..kkk.', '.kwwwk', '.wwIw.', '..ss..'],
+    angry: ['k.....', '.kkkkk', '.kwIGk', '...ss.'],
+    side: ['..kkkk', '.kwwIG', '.wwwIi', '...ss.'],
+    wink: ['......', '..kkk.', '.k...k', '......'],
+    sparkle: ['..kkkk', '.kwGIG', '.wwIGw', '...ss.'],
+    pain: ['......', 'k....k', '.k..k.', '..kk..'],
+  },
+  // a hard old sea dog: always squinting, a heavy lid over a sliver of pale iris, bags beneath
+  fierce: {
+    open: ['.kkkkk', 'kkIGkk', '..sss.'],
+    wide: ['.kkkk.', 'kwIGwk', '..ss..'],
+    half: ['......', 'kkkkkk', '.kIGk.'],
+    closed: ['......', 'kkkkkk', '..ss..'],
+    happy: ['......', '.kkkk.', 'k....k'],
+    sad: ['..kkkk', '.kkIGk', '..sss.'],
+    tiny: ['.kkkk.', 'kwwIwk', '..ss..'],
+    angry: ['kk....', '.kkkkk', '.kIGkk'],
+    side: ['.kkkkk', 'kkkIGk', '..sss.'],
+    wink: ['......', '.kkkk.', 'k....k'],
+    sparkle: ['.kkkkk', 'kkGIGk', '..sss.'],
+    pain: ['......', 'k....k', '.kkkk.'],
+  },
   old: {
     open: ['......', '.kkkk.', 'kwIGwk', '..ss..'],
     wide: ['.kkkk.', 'kwIGwk', '.wwww.', '..ss..'],
@@ -200,6 +269,12 @@ function stampT(b: PixelBuffer, rows: string[], x0: number, y0: number, pal: Rec
   });
 }
 
+/** mouth template colours: a rosy lip line by default, or the design's own (a man's mouth has no lipstick) */
+function mouthPal(d: Design, skin: Tone): Record<string, C> {
+  if (d.lip) return { k: shade(skin[0], -0.3), m: col(d.lip), M: col('#2c0e10'), R: col('#6e2e2c'), T: col('#f0e8dc'), s: skin[1] };
+  return { k: shade(skin[0], -0.35), m: mix(skin[0], col('#8a3040'), 0.35), M: col('#5a1a26'), R: col('#e0707e'), T: col('#fbf6ee'), s: skin[1] };
+}
+
 function drawFeatures(b: PixelBuffer, d: Design, e: ExprDef, talk: 0 | 1 | 2, blink: boolean) {
   const skin = e.pale ? T('#e6d2c6') : d.skin;
   const set = EYES[d.eyes === 'pug' ? 'young' : d.eyes];
@@ -223,11 +298,12 @@ function drawFeatures(b: PixelBuffer, d: Design, e: ExprDef, talk: 0 | 1 | 2, bl
   // brows: 5 px strokes, inner end raised/lowered by browIn, whole brow by brow
   const bc = col(d.brow);
   const bh = d.browH ?? 1;
-  const by = ey - 3 - Math.max(0, e.brow) + (e.brow < 0 ? 1 : 0);
+  const by = ey - 3 - Math.max(0, e.brow) + (e.brow < 0 ? 1 : 0) + Math.floor(d.browDrop ?? 0);
   for (let i = 0; i < ew; i++) {
     const tIn = i / (ew - 1); // 0 outer → 1 inner (for the right eye inner is at i=0)
-    const off = Math.round(-(e.browIn * (1 - tIn)) * 0.5);
-    const offL = Math.round(-(e.browIn * tIn) * 0.5);
+    const bIn = e.browIn + (d.browBias ?? 0);
+    const off = Math.round(-(bIn * (1 - tIn)) * 0.5);
+    const offL = Math.round(-(bIn * tIn) * 0.5);
     for (let k = 0; k < bh; k++) {
       // right eye brow: inner end at the left (i = 0)
       const yR = by + off + k, yL = by + offL + k;
@@ -235,15 +311,17 @@ function drawFeatures(b: PixelBuffer, d: Design, e: ExprDef, talk: 0 | 1 | 2, bl
       if (b.get(lx + i, yL) >>> 24) b.set(lx + i, yL, bc);
     }
   }
-  // nose: a single shadow pixel pair
-  const ny = ey + (d.eyes === 'old' ? 7 : 8);
+  // nose: a single shadow pixel pair (a longer one down the bridge)
+  const ny = ey + (d.eyes === 'old' || d.eyes === 'fierce' ? 7 : 8);
+  if (d.noseBridge) b.set(CX, ny - 2, mix(skin[1], skin[2], 0.5));
   b.set(CX, ny, skin[1]);
   b.set(CX - 1, ny + 1, skin[1]);
   // blush
   const blush = d.blush ?? '#f4a0a0';
-  if (e.blush || d.rosy) {
-    const bcol = e.blush ? col(blush) : mix(skin[2], col(blush), 0.45);
-    for (const [x, y] of [[ex + 1, ey + ew - 0], [ex + 2, ey + ew - 0], [ex + 3, ey + ew - 0]]) {
+  const bk = d.blushK ?? 1;
+  if ((e.blush || d.rosy) && bk > 0) {
+    const bcol = e.blush ? mix(skin[2], col(blush), Math.min(1, bk)) : mix(skin[2], col(blush), 0.45 * bk);
+    for (const [x, y] of (bk < 1 ? [[ex + 2, ey + ew], [ex + 3, ey + ew]] : [[ex + 1, ey + ew - 0], [ex + 2, ey + ew - 0], [ex + 3, ey + ew - 0]])) {
       if (b.get(x, y) >>> 24) b.set(x, y, bcol);
       const x2 = PW - 1 - x;
       if (b.get(x2, y) >>> 24) b.set(x2, y, bcol);
@@ -256,9 +334,7 @@ function drawFeatures(b: PixelBuffer, d: Design, e: ExprDef, talk: 0 | 1 | 2, bl
   const mt = MOUTHS[mn] ?? MOUTHS.line;
   const mw = Math.max(...mt.map(r => r.length));
   const my = d.mouthY ?? ey + 12;
-  stampT(b, mt, CX - Math.floor(mw / 2), my, {
-    k: shade(skin[0], -0.35), m: mix(skin[0], col('#8a3040'), 0.35), M: col('#5a1a26'), R: col('#e0707e'), T: col('#fbf6ee'), s: skin[1],
-  });
+  stampT(b, mt, CX - Math.floor(mw / 2), my, mouthPal(d, skin));
   if (e.sweat) {
     const x = PW - ex - 1, y = ey - 4;
     b.set(x, y, col('#bfe6ff')); b.set(x, y + 1, col('#7cc4f0')); b.set(x - 1, y + 1, col('#7cc4f0')); b.set(x, y + 2, col('#4f9fd8'));
@@ -272,45 +348,66 @@ function drawFeatures(b: PixelBuffer, d: Design, e: ExprDef, talk: 0 | 1 | 2, bl
 
 // ------------------------------------------------------------------ cast
 
+// Mori: a young man, handsome but unmistakably masculine: a square jaw and a broad chin with a
+// shadow of stubble, a thick neck with an Adam's apple, broad square shoulders, narrower sharp eyes
+// under heavy straight brows, a longer nose, no blush or lip colour, short spiky hair off the brows
 const MORI: Design = {
-  skin: T('#f3b07e', { sh: 0.12, deep: 0.28, hi: 0.06 }),
-  eyes: 'young', iris: ['#1a0e0c', '#6a3a22', '#b07040'], lash: '#2a1c22', brow: '#36221c', browH: 1,
-  eyeX: 18, eyeY: 25,
+  skin: T('#f0ac7a', { sh: 0.13, deep: 0.3, hi: 0.06 }),
+  eyes: 'man', iris: ['#140a08', '#5a3220', '#9a6038'], lash: '#1e1216', brow: '#2a1a16', browH: 2, browDrop: 0.6, browArch: 0.5,
+  eyeX: 17, eyeY: 25, mouthY: 37,
+  jaw: [[CX, 11], [CX + 11.4, 12.4], [CX + 13.5, 17.6], [CX + 13.7, 24.4], [CX + 13.2, 29.6], [CX + 12.2, 33.4], [CX + 10, 37], [CX + 6.8, 40], [CX + 3.8, 41.5], [CX, 41.9]],
+  neck: [6.4, 7.4], adam: true, lip: '#b0664a', blushK: 0.3, noseBridge: true, stubble: '#5e4a52',
+  cheek: [CX - 8.6, 29.2, 2.8, 1.3],
   back(p, m) {
     const [hd, hs, hb] = T('#2e2426', { sh: 0.2, deep: 0.36 });
-    p.ell(CX, 20, 16, 14, hb, m.hairB);
-    p.where([m.hairB], (u, v) => v > 22, hs);
+    // short hair: the crown and back of the head, spiky on top, cropped above the ears
+    p.fill([[CX - 13.8, 24], [CX - 15.4, 16], [CX - 13.4, 8.6], [CX - 8.4, 4], [CX - 1, 2.2], [CX + 6.4, 3], [CX + 12, 6.6], [CX + 15.4, 13], [CX + 15.6, 20], [CX + 14, 24.4], [CX + 11, 20], [CX - 11, 20]], hb, m.hairB);
+    p.where([m.hairB], (u, v) => v > 19 || u > CX + 11, hs);
     void hd;
   },
   body(p, m) {
     const shirt = T('#453a3a'), vest = T('#5b4b4b', { sh: 0.18 }), strap = T('#744830');
-    // shoulders: olive vest over a khaki shirt
-    p.fill([[4, 60], [7, 51], [15, 46.5], [CX, 45], [PW - 15, 46.5], [PW - 7, 51], [PW - 4, 60]], vest[2], m.cloth);
-    p.where([m.cloth], (u, v) => u > PW - 16 || v > 57, vest[1]);
-    // shirt collar and placket
-    p.fill([[CX - 7, 44], [CX, 52.5], [CX + 7, 44], [CX + 4, 60], [CX - 4, 60]], shirt[2], m.cloth2, { sharp: true });
-    p.fill([[CX - 7.4, 43.4], [CX - 1, 49], [CX - 3, 51], [CX - 8.8, 46.6]], shirt[3], m.cloth2);
-    p.fill([[CX + 7.4, 43.4], [CX + 1, 49], [CX + 3, 51], [CX + 8.8, 46.6]], shirt[2], m.cloth2);
-    p.where([m.cloth2], (u, v) => u > CX + 1 && v > 48, shirt[1]);
+    // broad square shoulders, the trapezius sloping hard off a thick neck
+    p.fill([[-3, 60], [-1.4, 52.6], [3, 49], [11, 47], [CX - 8.4, 45.8], [CX, 45.6], [CX + 8.4, 45.8], [PW - 11, 47], [PW - 3, 49], [PW + 1.4, 52.6], [PW + 3, 60]], vest[2], m.cloth);
+    p.where([m.cloth], (u, v) => u > PW - 15 || v > 57.4, vest[1]);
+    // the fold of the sleeve seam at each shoulder
+    p.where([m.cloth], (u, v) => Math.abs(u - (6.4 - (v - 49.4) * 0.2)) < 0.5 && v > 49.8, vest[1]);
+    p.where([m.cloth], (u, v) => Math.abs(u - (PW - 6.4 + (v - 49.4) * 0.2)) < 0.5 && v > 49.8, vest[0]);
+    // shirt collar open at the throat, and the placket
+    p.fill([[CX - 8.2, 45.4], [CX, 54], [CX + 8.2, 45.4], [CX + 4.4, 60], [CX - 4.4, 60]], shirt[2], m.cloth2, { sharp: true });
+    p.fill([[CX - 8.6, 44.6], [CX - 1, 50.4], [CX - 3.2, 52.6], [CX - 10.2, 48]], shirt[3], m.cloth2);
+    p.fill([[CX + 8.6, 44.6], [CX + 1, 50.4], [CX + 3.2, 52.6], [CX + 10.2, 48]], shirt[2], m.cloth2);
+    p.where([m.cloth2], (u, v) => u > CX + 1 && v > 49, shirt[1]);
     // backpack straps (orange) over the shoulders
-    p.fill([[9, 49.5], [13.6, 47.6], [15.6, 60], [10.6, 60]], strap[2], m.acc, { sharp: true });
-    p.fill([[PW - 9, 49.5], [PW - 13.6, 47.6], [PW - 15.6, 60], [PW - 10.6, 60]], strap[1], m.acc, { sharp: true });
+    p.fill([[7, 49.4], [12, 47.4], [14.2, 60], [8.8, 60]], strap[2], m.acc, { sharp: true });
+    p.fill([[PW - 7, 49.4], [PW - 12, 47.4], [PW - 14.2, 60], [PW - 8.8, 60]], strap[1], m.acc, { sharp: true });
   },
   front(p, m) {
     const [hd, hs, hb, hl] = T('#2e2426', { sh: 0.2, deep: 0.36, hi: 0.2 });
-    // messy bangs: pointed locks over the forehead, parted toward his right
+    // short textured hair: a cap over the crown with the temples cropped (a short sideburn in front of
+    // each ear), a fringe of a few big locks swept across to his left that stops above the brows, and
+    // a couple of locks kicking up off the crown in the same direction
     p.fill([
-      [CX - 15, 26], [CX - 14.6, 16], [CX - 10, 9], [CX - 2, 6.4], [CX + 6, 7], [CX + 12.6, 10.4], [CX + 15.4, 17], [CX + 15, 27],
-      [CX + 12.8, 22.4], [CX + 11.6, 25], [CX + 9.4, 18.6], [CX + 6.8, 23.4], [CX + 4, 17.6], [CX + 1, 22.8], [CX - 2, 16.8],
-      [CX - 5, 22.6], [CX - 7.4, 17.4], [CX - 10.2, 23.2], [CX - 11.6, 19.2], [CX - 13, 27.6],
+      [CX - 14, 25.8], [CX - 14.7, 18], [CX - 13.2, 10.8], [CX - 9, 6], [CX - 2, 3.8], [CX + 5, 4.2], [CX + 11, 7.2], [CX + 14.5, 12.4], [CX + 15.1, 19.4], [CX + 14.3, 25.4],
+      [CX + 12.9, 20.6], [CX + 12, 16.2], [CX + 6, 14.6], [CX, 14.2], [CX - 6, 14.4], [CX - 11.6, 16], [CX - 12.6, 20.8],
     ], hb, m.hair, { sharp: true });
-    // tufts on top
-    p.fill([[CX - 4, 8], [CX - 6.6, 3.4], [CX - 1.4, 6.6]], hb, m.hair, { sharp: true });
-    p.fill([[CX + 1, 7], [CX + 3.6, 2.6], [CX + 5, 7.4]], hb, m.hair, { sharp: true });
-    // shading: darker right side and under-strands, light sheen band
-    p.where([m.hair, m.hairB], (u, v) => u > CX + 7 && v > 12, hs);
-    p.where([m.hair], (u, v) => v > 17.5 && u > CX - 12 && u < CX + 12 && ((u * 1.3 + v) % 5.2) < 1.4, hs);
-    p.where([m.hair], (u, v) => Math.abs(v - (10.6 + ((u - CX + 4) / 7) ** 2 * 2)) < 0.7 && u > CX - 11 && u < CX + 3, hl);
+    const lock = (b0: Pt, b1: Pt, tip: Pt, bend = 1.2) => {
+      const mx = (b0[0] + tip[0]) / 2 - bend, my = (b0[1] + tip[1]) / 2;
+      const nx = (b1[0] + tip[0]) / 2 - bend * 0.6, ny = (b1[1] + tip[1]) / 2;
+      p.fill([b0, [mx, my], tip, [nx, ny], b1], hb, m.hair, { sharp: true });
+    };
+    lock([CX - 12.8, 13.2], [CX - 7.2, 12.2], [CX - 9.8, 20.4], -0.6);
+    lock([CX - 8.4, 12.2], [CX - 1.6, 11.8], [CX - 2.6, 19.8]);
+    lock([CX - 2.8, 11.8], [CX + 4.8, 12], [CX + 4, 21]);
+    lock([CX + 3.6, 12], [CX + 11, 13.4], [CX + 10.6, 21.6]);
+    lock([CX + 10, 13.4], [CX + 13.4, 15.6], [CX + 13.6, 23.4], 0.4);
+    // locks kicking up off the crown, swept the same way
+    lock([CX - 7, 5.6], [CX + 0.6, 4.2], [CX + 1.6, 0.4], -1.2);
+    lock([CX + 2.4, 4.4], [CX + 9, 6.2], [CX + 10.8, 2.6], -1);
+    // shading: darker right side and under-strands between the locks, light sheen band
+    p.where([m.hair, m.hairB], (u, v) => u > CX + 7 && v > 11, hs);
+    p.where([m.hair], (u, v) => v > 14.4 && u > CX - 12 && u < CX + 12 && ((u * 1.1 - v * 0.55 + 40) % 5.6) < 1.1, hs);
+    p.where([m.hair], (u, v) => Math.abs(v - (9 + ((u - CX + 3) / 7) ** 2 * 2)) < 0.7 && u > CX - 11 && u < CX + 4, hl);
     void hd;
   },
   post() {},
@@ -359,9 +456,13 @@ const JENNA: Design = {
   },
 };
 
+// Joshu: a hard, weathered old sea dog: eyes always narrowed to a squint under heavy, furrowed white
+// brows, crow's feet and bags, a scar through his right brow, the cap's brim throwing his eyes into
+// shadow, a big weathered nose, a charcoal knit on massive shoulders; the full white beard stays
 const JOSHU: Design = {
-  skin: T('#f0b494', { sh: 0.14, deep: 0.3, hi: 0.06 }),
-  eyes: 'old', iris: ['#1a2a3a', '#4a6a8a', '#7a9aba'], lash: '#26181c', brow: '#f4f0e8', browH: 2, blush: '#f08a7a', rosy: true,
+  skin: T('#e8a282', { sh: 0.16, deep: 0.32, hi: 0.05 }),
+  eyes: 'fierce', iris: ['#1a2430', '#6a8296', '#a2b8c8'], lash: '#160a0c', brow: '#f2ede6', browH: 2.5, browDrop: 0.6, browArch: 0.2, browBias: -2,
+  blush: '#d47462', blushK: 0.45, weathered: true, lip: '#8a4a3c',
   faceW: 1.16, chin: 1, eyeX: 17, eyeY: 25, mouthY: 40,
   back(p, m) {
     const hair = T('#d8d4cc', { sh: 0.18 });
@@ -369,8 +470,8 @@ const JOSHU: Design = {
     p.where([m.hairB], (u, v) => u > CX + 10, hair[1]);
   },
   body(p, m) {
-    const knit = T('#303a5a', { sh: 0.14 });
-    // huge shoulders and a barrel chest in the navy cable-knit gansey
+    const knit = T('#22252d', { sh: 0.14 });
+    // huge shoulders and a barrel chest in the charcoal cable-knit gansey
     p.fill([[-3, 60], [-1, 47.6], [8, 42], [CX, 40.6], [PW - 8, 42], [PW + 1, 47.6], [PW + 3, 60]], knit[2], m.cloth);
     p.where([m.cloth], (u, v) => u > PW - 12 || v > 58.4, knit[1]);
     // cables: twisted ropes of knit either side of the beard
@@ -415,20 +516,48 @@ const JOSHU: Design = {
     p.ell(CX, 10.2, 2.8, 2.3, col('#e8b848'), p.m(8, true, 0.5));
   },
   post(b) {
-    // big round rosy nose
-    const nz = col('#ec9480'), nl = col('#fcc8b0'), ns = col('#c06a58');
+    // big weathered nose
+    const nz = col('#d08268'), nl = col('#eeae90'), ns = col('#a05644');
+    // the old scar through his right brow (viewer-left)
+    for (const [x, y] of [[19, 22], [20, 23], [21, 24], [22, 29], [22, 30]]) if (b.get(x, y) >>> 24) b.set(x, y, col('#f2c0a4'));
     for (const [x, y, c] of [[CX - 1, 30, nz], [CX, 30, nz], [CX + 1, 30, nz], [CX - 2, 31, nl], [CX - 1, 31, nl], [CX, 31, nz], [CX + 1, 31, nz], [CX + 2, 31, ns], [CX - 2, 32, nz], [CX - 1, 32, nz], [CX, 32, nz], [CX + 1, 32, ns], [CX + 2, 32, ns], [CX - 1, 33, ns], [CX, 33, ns], [CX + 1, 33, ns]] as [number, number, C][]) b.set(x, y, c);
     // anchor on the cap badge
     for (const [x, y] of [[CX, 9], [CX, 10], [CX, 11], [CX - 1, 11], [CX + 1, 11]]) b.set(x, y, col('#8a6420'));
   },
   postHD(b, S) {
-    const c0 = col('#c06a58'), c1 = col('#ec9480'), c2 = col('#fcd0b8');
-    const nx = CX * S, ny = 31.4 * S;
-    for (let y = -4; y <= 4; y++) for (let x = -5; x <= 5; x++) {
-      const d = (x / 4.6) ** 2 + (y / 3.8) ** 2;
-      if (d > 1) continue;
-      b.set(nx + x, ny + y, d > 0.72 ? c0 : (x + 1.6) ** 2 + (y + 1.4) ** 2 < 3 ? c2 : x > 1 || y > 1.5 ? mix(c1, c0, 0.4) : c1);
+    const skinT = new Set<C>(this.skin as C[]);
+    // the cap's brim throws a band of shadow over his eyes: they glint out of it (skin only)
+    const sh = col('#2a141c');
+    for (let y = 21 * S; y < 27 * S; y++) for (let x = 0; x < PW * S; x++) {
+      const v = b.get(x, y);
+      if (!skinT.has(v)) continue;
+      b.set(x, y, mix(v, sh, 0.4 * (1 - (y - 21 * S) / (6 * S)) ** 1.3));
     }
+    // the old scar through his right brow (viewer-left): a pale seam, stitch marks, skipping the eye
+    const sc0 = col('#f6caae'), sc1 = col('#a85c4a');
+    for (let k = 0; k < 17; k++) {
+      const x = Math.round(38 + k * 0.5 + Math.sin(k * 0.3) * 0.6), y = 42 + k;
+      if (y > 48 && y < 57) continue;
+      if (b.get(x, y) >>> 24) b.set(x, y, sc0);
+      if (k % 4 === 1) { if (b.get(x - 1, y) >>> 24) b.set(x - 1, y, sc1); if (b.get(x + 1, y) >>> 24) b.set(x + 1, y, sc1); }
+    }
+    // a big weathered nose: a lit bridge down from the brows, a broad tip, nostril wings in shadow
+    const n0 = col('#9c5444'), n1 = col('#cc8066'), n2 = col('#eaa888'), n3 = col('#f8c8aa');
+    const nx = CX * S, ny = 31.4 * S;
+    for (let y = -9; y <= 4; y++) for (let x = -6; x <= 6; x++) {
+      const tip = (x / 5.4) ** 2 + ((y - 0.6) / 3.8) ** 2 <= 1;
+      const bridge = y < -1 && Math.abs(x + 0.4 + y * 0.05) < 1.9 - (y + 9) * 0.05;
+      if (!tip && !bridge) continue;
+      const X = nx + x, Y = ny + y;
+      if (!(b.get(X, Y) >>> 24)) continue;
+      let c = n2;
+      if (tip) c = (x / 5.4) ** 2 + ((y - 0.6) / 3.8) ** 2 > 0.7 ? n1 : x > 1.2 || y > 2 ? mix(n2, n1, 0.5) : n2;
+      if (bridge && x < -0.6) c = n3;
+      if (bridge && x > 0.8) c = n1;
+      if (tip && (x + 1.8) ** 2 + (y + 0.6) ** 2 < 2.2) c = n3;
+      b.set(X, Y, c);
+    }
+    for (const x of [-4, -3, 3, 4]) if (b.get(nx + x, ny + 3) >>> 24) b.set(nx + x, ny + 3, n0);
     for (const [x, y] of [[0, -3], [0, -2], [0, -1], [0, 0], [-1, 0], [1, 0], [-2, -1], [2, -1]]) b.set(CX * S + x, 10 * S + y, col('#8a6420'));
   },
 };
@@ -550,7 +679,7 @@ function chunkPortrait(e: string, talk: 0 | 1 | 2, blink: boolean): PixelBuffer 
 
 const DESIGNS: Record<string, Design> = { mori: MORI, jenna: JENNA, joshu: JOSHU, aroha: AROHA };
 
-export function renderAnimePortrait(id: string, expr: string, talk: 0 | 1 | 2 = 0, blink = false): PixelBuffer {
+export function renderAnimePortrait(id: string, expr: string, talk: 0 | 1 | 2 = 0, blink = false, outfit = outfitOf(id)): PixelBuffer {
   if (id === 'chunk') return chunkPortrait(expr, talk, blink);
   const d = DESIGNS[id] ?? MORI;
   const e = EXPR[expr] ?? EXPR.neutral;
@@ -558,10 +687,13 @@ export function renderAnimePortrait(id: string, expr: string, talk: 0 | 1 | 2 = 
   const m = mats(p);
   const skin = e.pale ? T('#e6d2c6') : d.skin;
   const dd: Design = { ...d, skin };
-  d.back?.(p, m);
+  const wr = PORTRAIT_WEAR[id]?.[outfit];
+  if (!wr?.hideBack) d.back?.(p, m);
+  wr?.back?.(p, m);
   drawFace(p, m, dd);
-  d.body.call(dd, p, m);
+  if (wr) wr.body(p, m); else d.body.call(dd, p, m);
   d.front(p, m);
+  wr?.front?.(p, m);
   const b = p.finish({ outline: hex('#24161c') });
   drawFeatures(b, dd, e, talk, blink);
   d.post?.(b, e, talk);
@@ -597,11 +729,29 @@ function epx(rows: string[]): string[] {
 const epxCache = new Map<string[], string[]>();
 const epx2 = (rows: string[]) => { let r = epxCache.get(rows); if (!r) { r = epx(rows); epxCache.set(rows, r); } return r; };
 
-interface EyeSpec { w: number; h: number; irx: number; iry: number; lash: number }
+interface EyeSpec {
+  w: number; h: number; irx: number; iry: number; lash: number;
+  /** outer lash flick (px, default lash + 1; 0 for none: a man's eye) */
+  flick?: number;
+  /** lower lash strength 0..1 (default 0.55) */
+  lower?: number;
+  /** upper lid roundness (default 0.22), a permanent heavy lid (cut from the top, 0..0.5), outer-corner lift */
+  arch?: number;
+  lid?: number;
+  tilt?: number;
+  /** a weathered eye: creases fanning from the outer corner, a bag under it */
+  crow?: boolean;
+  /** a squint pushes the lower lid up (fraction of the eye height) */
+  low?: number;
+}
 const EYE_HD: Record<string, EyeSpec> = {
   young: { w: 12, h: 10, irx: 3.3, iry: 4.3, lash: 2 },
   girl: { w: 14, h: 12, irx: 3.9, iry: 5.1, lash: 3 },
   old: { w: 12, h: 8, irx: 2.9, iry: 3.3, lash: 2 },
+  // narrower and sharper: a flat lid rising to the outer corner over a smaller iris, no flick
+  man: { w: 13, h: 8, irx: 2.9, iry: 3.5, lash: 2, flick: 0, lower: 0.22, arch: 0.13, lid: 0.02, tilt: 0.3 },
+  // always squinting: a heavy lid over a sliver of pale iris, crow's feet and a bag beneath
+  fierce: { w: 12, h: 8, irx: 2.7, iry: 3.1, lash: 2, flick: 0, lower: 0.9, arch: 0.04, lid: 0.2, tilt: 0.36, crow: true, low: 0.22 },
 };
 
 /** paint one HD eye with its outer corner toward +dir (dir 1: viewer-right eye) */
@@ -615,14 +765,22 @@ function eyeHD(b: PixelBuffer, x0: number, y0: number, dir: 1 | -1, sp: EyeSpec,
       for (let k = 0; k < th; k++) setp(lx, yy + k, c);
     }
   };
+  const crease = mix(pal.skinS, pal.k, 0.25);
+  // crow's feet: three short creases fanning out of the outer corner (deeper when he grins)
+  const crow = (yc: number, k = 1) => {
+    if (!sp.crow) return;
+    for (const [a, n] of [[-0.55, 3], [0.05, 4], [0.6, 3]] as const) for (let i = 0; i < n * k; i++) setp(W + 1 + i, yc + a * (i + 1) * 1.4 - (a < 0 ? 1 : 0), crease);
+  };
   if (state === 'happy' || state === 'wink') {
     arc(t => y0 + H * 0.55 - Math.sin(t * Math.PI) * H * 0.38, 0.05, 0.95, 2, pal.k);
     arc(t => y0 + H * 0.55 - Math.sin(t * Math.PI) * H * 0.38 + 2, 0.25, 0.75, 1, pal.skinS);
+    crow(y0 + H * 0.55, 1.2);
     return;
   }
   if (state === 'closed') {
     arc(t => y0 + H * 0.5 + Math.sin(t * Math.PI) * H * 0.18, 0.02, 1, 2, pal.k);
-    setp(W, y0 + H * 0.5 - 1, pal.k); setp(W + 1, y0 + H * 0.5 - 2, pal.k);
+    if ((sp.flick ?? 1) > 0) { setp(W, y0 + H * 0.5 - 1, pal.k); setp(W + 1, y0 + H * 0.5 - 2, pal.k); }
+    crow(y0 + H * 0.5);
     return;
   }
   if (state === 'pain') {
@@ -631,14 +789,16 @@ function eyeHD(b: PixelBuffer, x0: number, y0: number, dir: 1 | -1, sp: EyeSpec,
       const yy = y0 + H * 0.5 - Math.abs(t - 0.5) * H * 0.7;
       setp(k + 1, yy, pal.k); setp(k + 1, yy + 1, pal.k);
     }
+    crow(y0 + H * 0.5, 1.2);
     return;
   }
-  // lids: tilt (+ raises the outer corner), openness cut from the top
-  const tilt = state === 'angry' ? 0.3 : state === 'sad' ? -0.22 : 0;
-  const cut = state === 'half' ? 0.42 : state === 'angry' ? 0.12 : state === 'sad' ? 0.1 : 0;
+  // lids: tilt (+ raises the outer corner), openness cut from the top (a heavy lid lifts in surprise)
   const wide = state === 'wide' || state === 'tiny';
-  const upper = (t: number) => y0 + H * (0.12 + cut) + (2 * t - 1) ** 2 * H * 0.22 - (t - 0.5) * tilt * H * 0.6 - (wide ? 1 : 0);
-  const lower = (t: number) => y0 + H * 0.96 - (2 * t - 1) ** 2 * H * 0.2;
+  const tilt = (state === 'angry' ? 0.3 : state === 'sad' ? -0.22 : 0) + (state === 'sad' ? 0 : sp.tilt ?? 0);
+  const cut = (state === 'half' ? 0.42 : state === 'angry' ? 0.12 : state === 'sad' ? 0.1 : 0) + Math.max(0, (sp.lid ?? 0) - (wide ? 0.26 : 0));
+  const arch = sp.arch ?? 0.22;
+  const upper = (t: number) => y0 + H * (0.12 + cut) + (2 * t - 1) ** 2 * H * arch - (t - 0.5) * tilt * H * 0.6 - (wide ? 1 : 0);
+  const lower = (t: number) => y0 + H * (0.96 - (wide ? 0 : sp.low ?? 0)) - (2 * t - 1) ** 2 * H * 0.2;
   // sclera
   for (let lx = 0; lx < W; lx++) {
     const t = lx / (W - 1);
@@ -660,22 +820,30 @@ function eyeHD(b: PixelBuffer, x0: number, y0: number, dir: 1 | -1, sp: EyeSpec,
       setp(lx, y, c);
     }
   }
-  // glints (a big one up-left, a small one low-right; sparkle adds more)
+  // glints (a big one up-left, a small one low-right; sparkle adds more), kept below a heavy lid
   const G = 0xffffffff >>> 0;
   if (state !== 'tiny') {
-    const gx = icx - rx * 0.45, gy = icy - ry * 0.45;
+    const gx = icx - rx * 0.45, gy = Math.max(icy - ry * 0.45, upper(icx / (W - 1)) + 1.4);
     for (const [a, c2] of [[0, 0], [1, 0], [0, 1], [1, 1]]) setp(gx + a, gy + c2, G);
     setp(icx + rx * 0.45, icy + ry * 0.4, G);
     if (state === 'sparkle') { setp(icx + rx * 0.2, icy - ry * 0.7, G); setp(icx - rx * 0.6, icy + ry * 0.35, G); setp(icx + rx * 0.2, icy - ry * 0.7 + 1, G); }
   }
   if (state === 'sad') setp(icx - rx * 0.3, icy + ry * 0.55, G);
-  // upper lash (thick, with an outer flick), lower lash on the outer half, crease above
+  // upper lash (thick, with an outer flick unless it's a man's eye), lower lash on the outer half, crease above
   arc(t => upper(t) - sp.lash + 1, 0, 1, sp.lash, pal.k);
-  for (let k = 0; k < sp.lash + 1; k++) setp(W - 1 + k, upper(1) - sp.lash + 1 - k * 0.6, pal.k);
-  if (sp.lash >= 3) { setp(W - 3, upper(0.8) - 3, pal.k); setp(W - 5, upper(0.62) - 3, pal.k); }
-  arc(t => lower(t) + 1, 0.5, 1, 1, mix(pal.k, pal.skin, 0.45));
-  setp(W - 1, lower(1), pal.k);
+  const flick = sp.flick ?? sp.lash + 1;
+  for (let k = 0; k < flick; k++) setp(W - 1 + k, upper(1) - sp.lash + 1 - k * 0.6, pal.k);
+  if (!flick) { setp(W, upper(1) - sp.lash + 2, pal.k); setp(-1, upper(0) + 1, pal.k); setp(-1, upper(0) + 2, mix(pal.k, pal.skin, 0.5)); }
+  if (sp.lash >= 3 && flick) { setp(W - 3, upper(0.8) - 3, pal.k); setp(W - 5, upper(0.62) - 3, pal.k); }
+  const lw = sp.lower ?? 0.55;
+  arc(t => lower(t) + 1, lw < 0.4 ? 0.62 : 0.5, 1, 1, mix(pal.k, pal.skin, 1 - lw));
+  setp(W - 1, lower(1), lw < 0.4 ? mix(pal.k, pal.skin, 0.5) : pal.k);
   arc(t => upper(t) - sp.lash - 1.2 - Math.sin(t * Math.PI) * 0.8, 0.22, 0.86, 1, pal.skinS);
+  if (sp.crow) {
+    // the bag under the eye and the creases at its corner
+    arc(t => lower(t) + 3 + Math.sin(t * Math.PI) * 0.6, 0.18, 0.82, 1, crease);
+    crow(y0 + H * 0.5);
+  }
 }
 
 function drawFeaturesHD(b: PixelBuffer, d: Design, e: ExprDef, talk: 0 | 1 | 2, blink: boolean) {
@@ -695,36 +863,58 @@ function drawFeaturesHD(b: PixelBuffer, d: Design, e: ExprDef, talk: 0 | 1 | 2, 
   // brows: thick tapered strokes above each eye, inner ends tilted by browIn
   const bc = col(d.brow), bcs = mix(bc, skin[0], 0.35);
   const bh = (d.browH ?? 1) * 2;
-  const by = ey - 5 - Math.max(0, e.brow) * 2 + (e.brow < 0 ? 2 : 0);
+  const by = ey - 5 - Math.max(0, e.brow) * 2 + (e.brow < 0 ? 2 : 0) + Math.round((d.browDrop ?? 0) * S);
+  const archK = d.browArch ?? 1.4;
   for (let i = -1; i < sp.w + 1; i++) {
     const tIn = (i + 1) / (sp.w + 1);
-    const arch = -Math.sin(tIn * Math.PI) * 1.4;
+    const arch = -Math.sin(tIn * Math.PI) * archK;
     const th = Math.max(1, Math.round(bh * (0.55 + 0.45 * tIn)));
-    const offR = -(e.browIn * (1 - tIn)) * 1.1 + arch, offL = offR;
+    const offR = -((e.browIn + (d.browBias ?? 0)) * (1 - tIn)) * 1.1 + arch, offL = offR;
     for (let k = 0; k < th; k++) {
       const yR = Math.round(by + offR + k), yL = Math.round(by + offL + k);
-      const c = k === th - 1 && th > 1 ? bcs : bc;
+      // a weathered scowl presses down to the lid but never over the eye
+      if (d.weathered && yR > ey + 1) continue;
+      let c = k === th - 1 && th > 1 ? bcs : bc;
+      // bushy old brows: streaks of shadow through the hair
+      if (d.weathered && k > 0 && k < th - 1 && (i + k * 2) % 4 === 0) c = mix(bc, bcs, 0.6);
       const xr = rx + i, xl = ex + sp.w - 1 - i;
       if (b.get(xr, yR) >>> 24) b.set(xr, yR, c);
       if (b.get(xl, yL) >>> 24) b.set(xl, yL, c);
     }
+    // stray hairs sticking up off the top edge, a tuft at the outer end
+    if (d.weathered && (i % 3 === 1 || i >= sp.w - 1)) {
+      const yR = Math.round(by + offR - 1 - (i >= sp.w - 1 ? 1 : 0)), yL = Math.round(by + offL - 1 - (i >= sp.w - 1 ? 1 : 0));
+      const xr = rx + i, xl = ex + sp.w - 1 - i;
+      if (b.get(xr, yR) >>> 24) b.set(xr, yR, mix(bc, skin[2], 0.3));
+      if (b.get(xl, yL) >>> 24) b.set(xl, yL, mix(bc, skin[2], 0.3));
+    }
   }
-  // nose: a soft shadow wedge and a highlight dot
-  const ny = ((d.eyeY ?? 26) + (d.eyes === 'old' ? 7 : 8)) * S;
   const cx = PW; // PW*S/2
+  if (d.weathered) {
+    // a furrow between the brows: two short creases, deeper when he scowls
+    const fc = mix(skin[1], skin[2], 0.3), n = e.browIn + (d.browBias ?? 0) < -1.5 ? 4 : 2;
+    for (let k = 0; k < n; k++) for (const x of [cx - 2, cx + 1]) { const Y = by + 2 + k; if (b.get(x, Y) >>> 24) b.set(x, Y, fc); }
+  }
+  // nose: a soft shadow wedge and a highlight dot (a man's nose runs a bridge down from the brows)
+  const ny = ((d.eyeY ?? 26) + (d.eyes === 'old' || d.eyes === 'fierce' ? 7 : 8)) * S;
+  if (d.noseBridge) {
+    for (let y = ey + 3; y < ny; y++) if (b.get(cx + 2, y) >>> 24) b.set(cx + 2, y, mix(skin[1], skin[2], 0.55));
+    for (const x of [cx - 2, cx + 2]) if (b.get(x, ny + 3) >>> 24) b.set(x, ny + 3, mix(skin[1], skin[0], 0.3));
+  }
   for (const [x, y] of [[1, 0], [1, 1], [0, 2], [-1, 3], [0, 3]]) if (b.get(cx + x, ny + y) >>> 24) b.set(cx + x, ny + y, skin[1]);
   if (b.get(cx - 2, ny) >>> 24) b.set(cx - 2, ny, skin[3]);
-  // blush: a soft pink patch with anime hatch lines
+  // blush: a soft pink patch with anime hatch lines (a faint warmth for the men)
   const blush = col(d.blush ?? '#f4a0a0');
-  if (e.blush || d.rosy) {
-    const k = e.blush ? 1 : 0.5;
+  const bk = d.blushK ?? 1;
+  if ((e.blush || d.rosy) && bk > 0) {
+    const k = (e.blush ? 1 : 0.5) * bk;
     for (const side of [-1, 1]) {
       const bx = side < 0 ? ex + sp.w * 0.5 : rx + sp.w * 0.5, byy = ey + sp.h + 4;
       for (let y = -2; y <= 2; y++) for (let x = -5; x <= 5; x++) {
         if ((x / 5.5) ** 2 + (y / 2.4) ** 2 > 1) continue;
         const X = Math.round(bx + x), Y = byy + y;
         if (!(b.get(X, Y) >>> 24)) continue;
-        const hatch = e.blush && ((x - y * 1.2 + 20) % 3 === 0) && Math.abs(y) < 2;
+        const hatch = e.blush && bk >= 0.5 && ((x - y * 1.2 + 20) % 3 === 0) && Math.abs(y) < 2 && Math.abs(x) < 5 * bk;
         b.set(X, Y, hatch ? mix(blush, skin[0], 0.35) : mix(b.get(X, Y), blush, 0.4 * k));
       }
     }
@@ -736,9 +926,7 @@ function drawFeaturesHD(b: PixelBuffer, d: Design, e: ExprDef, talk: 0 | 1 | 2, 
   const mt = epx2(MOUTHS[mn] ?? MOUTHS.line);
   const mw = Math.max(...mt.map(r => r.length));
   const my = (d.mouthY ?? (d.eyeY ?? 26) + 12) * S;
-  stampT(b, mt, PW - Math.floor(mw / 2), my, {
-    k: shade(skin[0], -0.35), m: mix(skin[0], col('#8a3040'), 0.35), M: col('#5a1a26'), R: col('#e0707e'), T: col('#fbf6ee'), s: skin[1],
-  });
+  stampT(b, mt, PW - Math.floor(mw / 2), my, mouthPal(d, skin));
   if (e.sweat) {
     const x = rx + sp.w + 2, y = ey - 8;
     for (let k = 0; k < 7; k++) for (let q = -3; q <= 3; q++) {
@@ -799,11 +987,26 @@ function detailHD(p: Pic, m: Mats) {
     }
   }
 }
+/** a faint shadow of stubble: sparse cool flecks along the jaw and the chin and over the upper lip (face skin only) */
+function stubbleHD(p: Pic, m: Mats, d: Design, k = 0.2) {
+  const sc = col(d.stubble!), my = d.mouthY ?? (d.eyeY ?? 26) + 12;
+  for (let y = 0; y < p.H; y++) for (let x = 0; x < p.W; x++) {
+    const i = y * p.W + x;
+    if (p.mat[i] !== m.skin) continue;
+    const u = p.U(x), v = p.V(y), dx = Math.abs(u - CX);
+    // the upper lip, the chin, and a band along the jawline up toward the ears
+    const lip = v > my - 2.4 && v < my - 0.6 && dx < 3.6;
+    const chin = v > my + 1.6 && dx < 6.5;
+    const jaw = v > 30 + dx * 0.05 && dx > 8.6 && v > 42 - (13.6 - dx) * 1.5;
+    if (!(lip || chin || jaw) || hash2(x, y) > 0.3) continue;
+    p.col[i] = mix(p.col[i], sc, k);
+  }
+}
 const hash2 = (x: number, y: number) => { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 
 const hdCache = new Map<string, PixelBuffer>();
-export function renderAnimePortraitHD(id: string, expr: string, talk: 0 | 1 | 2 = 0, blink = false): PixelBuffer {
-  const key = `${id}|${expr}|${talk}|${blink ? 1 : 0}`;
+export function renderAnimePortraitHD(id: string, expr: string, talk: 0 | 1 | 2 = 0, blink = false, outfit = outfitOf(id)): PixelBuffer {
+  const key = `${id}@${outfit}|${expr}|${talk}|${blink ? 1 : 0}`;
   const hit = hdCache.get(key);
   if (hit) return hit;
   let out: PixelBuffer;
@@ -815,11 +1018,15 @@ export function renderAnimePortraitHD(id: string, expr: string, talk: 0 | 1 | 2 
     const m = mats(p);
     const skin = e.pale ? T('#e6d2c6') : d.skin;
     const dd: Design = { ...d, skin };
-    d.back?.(p, m);
+    const wr = PORTRAIT_WEAR[id]?.[outfit];
+    if (!wr?.hideBack) d.back?.(p, m);
+    wr?.back?.(p, m);
     drawFace(p, m, dd);
-    d.body.call(dd, p, m);
+    if (wr) wr.body(p, m); else d.body.call(dd, p, m);
     d.front(p, m);
+    wr?.front?.(p, m);
     detailHD(p, m);
+    if (d.stubble) stubbleHD(p, m, d, e.pale ? 0.1 : 0.2);
     const ink = hex('#24161c');
     out = p.finish({ outline: ink });
     thicken(out, ink);
