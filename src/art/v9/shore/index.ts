@@ -20,6 +20,8 @@ import { CORVEXSEAL } from './seal';
 import { CROWNLEECH } from './leech';
 import { GLASSCRAB } from './crab';
 import { SWASHRUNNER, SHELLWRENCH, TWINFAN } from './birds';
+import { DUSKWADDLER } from './waddler';
+import { KELPSKINK } from './skink';
 
 /** a painter plus optional post-processing of the resolved frame (translucency, glow masks) */
 export interface ShoreDef extends SpeciesDef {
@@ -36,6 +38,8 @@ const DEFS: Record<string, ShoreDef> = {
   swashrunner: SWASHRUNNER,
   shellwrench: SHELLWRENCH,
   twinfan: TWINFAN,
+  duskwaddler: DUSKWADDLER,
+  kelpskink: KELPSKINK,
 };
 
 export const SHORE_IDS = Object.keys(DEFS);

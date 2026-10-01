@@ -256,7 +256,7 @@ function mats(sk: Sk, L: Look) {
     tailW: sk.m(rmp('#f4f2ec', { n: 4, dark: 0.35, at: 2 }), { edge: 2 }),
     bill: sk.m(rmp(c.bill, { n: 5, dark: 0.5, light: 0.45 }), { spec: 0.45 }),
     tip: sk.m(rmp(c.billTip ?? c.bill, { n: 5, dark: 0.5 }), { spec: 0.4 }),
-    leg: sk.m(rmp(c.leg, { n: 5, dark: 0.5 }), { edge: 1 }),
+    leg: sk.m(rmp(c.leg, { n: 5, dark: 0.45, cool: 0.08 }), { edge: 1 }),
     web: sk.m(rmp(c.web ?? c.leg, { n: 4, dark: 0.45, light: 0.4 }), { edge: 0 }),
     claw: sk.m(rmp(c.claw ?? '#2a2622', { n: 4, dark: 0.5 })),
     mark: sk.m(rmp(c.mark, { n: 5, dark: 0.55 }), { edge: 1 }),
@@ -278,7 +278,7 @@ function bodyPat(L: Look, M: M, p: Px): number {
   switch (L.id) {
     case 'swashrunner':
       // a bold black necklace across the breast, white below, sand above
-      if (p.u > 0.45 && p.v > -0.5 && p.v < 0.35) return M.mark;
+      if (p.u > 0.55 && p.v > -0.45 && p.v < 0.3) return M.mark;
       return belly ? M.belly : M.back;
     case 'shellwrench':
       // jet black above and on the breast, clean white below
@@ -389,7 +389,7 @@ function drawBird(sk: Sk, L: Look, P: BP, eyeSt: BeastEye, juv: boolean): { head
   if (nl > 0.6) {
     sk.np();
     sk.tube(qbez(nb, lerp2(nb, hp, 0.5), hp, 6), t => (L.neckR0 + (L.neckR1 - L.neckR0) * t) * k, (p) => {
-      if (L.id === 'swashrunner') return p.v > 0.2 ? M.belly : M.back;
+      if (L.id === 'swashrunner') return p.v > -0.15 ? M.mark : M.back; // the black necklace
       if (L.id === 'twinfan') return p.v > 0.3 ? M.mark : M.head;
       return M.head;
     }, { z: 1.5 });
@@ -522,7 +522,7 @@ const A = (frames: number, fps: number, loop = true): AnimDef => ({ frames, fps,
 export const SWASHRUNNER = makeBird({
   look: {
     id: 'swashrunner', name: 'Swashrunner', len: 12, height: 12,
-    rx: 3.8, ry: 3.1, stance: -0.22, neckL: 0.8, neckR0: 2.3, neckR1: 2, hrx: 2.2, hry: 2,
+    rx: 3.8, ry: 3.1, stance: -0.22, neckL: 1.4, neckR0: 2.3, neckR1: 2, hrx: 2.2, hry: 2,
     leg: { tib: 2.6, tar: 3.8, rT: 0.9, rt: 0.45, toe: 2.4, talon: 0.3 }, hipX: -0.4,
     tail: { L: 2.8, hw: 0.9, n: 5, spread: 0.3 },
     wing: { arm: 5, hand: 5, sec: 3, prim: 5, nS: 4, nP: 5, finger: 0, pw: 0.8, sw: 1, round: 0.2, foldExt: 1.4 },
