@@ -17,8 +17,8 @@ import { hex, mix, shade } from '../color';
 import { bayer, clamp, fbm2, hash2, noise1, noise2, smoothstep } from '../../core/math';
 import { SPOT } from '../island4/layout';
 import {
-  MAX_DD, MOUTH, CREEK, DELTA_THREADS, CREEK_STONES, CAVE_POOL, Stone, shelfAt, tidePoolAt,
-  baseTop, persp, realZ, mouthCx, mouthHw, mouthBend, threadE, creekCx, creekHw, creekStoneAt, cavePoolHw,
+  MAX_DD, MOUTH, CREEK, DELTA_THREADS, CAVE_POOL, shelfAt, tidePoolAt,
+  baseTop, persp, realZ, mouthCx, mouthHw, mouthBend, threadE, creekCx, creekHw, cavePoolHw,
 } from './eastgeo';
 
 /** the east half starts here (the stream mouth zone) */
@@ -32,7 +32,6 @@ const HX = new Map<string, C>();
 const H = (s: string): C => { let c = HX.get(s); if (c === undefined) HX.set(s, (c = hex(s))); return c; };
 // clear stream water over a pebble bed, darkest in the channel, lightest in the shallows
 const WATER = ['#1c4650', '#23555c', '#2d6668', '#3a7876', '#4c8a84', '#62a092', '#80b6a2', '#a4cab4'].map(H);
-const PEB = ['#5a5448', '#746c5c', '#8e8470', '#a89c84', '#6a6252', '#847a66'].map(H);
 const WETSAND = [H('#6a5e4a'), H('#7e705a'), H('#94836a'), H('#a8967a')];
 const GRAVEL = ['#6e685e', '#8a8274', '#a49a88', '#5c564c', '#c0b49c'].map(H);
 const ROCK = ['#26222a', '#353038', '#463e44', '#595052', '#6e6462', '#857a72'].map(H);
@@ -68,22 +67,6 @@ function pebble(x: number, y: number, sx: number, sy: number, seed: number, fill
   }
   PB.r = best;
   return id;
-}
-
-/** a stone in a stream (x, row, radius): rock shading, pale dry cap, dark wet waterline */
-function stonePx(x: number, dd: number, st: Stone, sx: number, sd: number, r: number): C | -1 {
-  const nx = (x - sx) / r, ny = (dd - sd) / (r * 0.55);
-  const lump = (noise2(x / 2.2, dd / 1.6, st.seed * 7) - 0.5) * 0.35;
-  const q = nx * nx + ny * ny + lump;
-  if (q > 1) return -1;
-  // lit from the upper left; wet (dark, glossy) along the lower half where the water laps
-  const l = -nx * 0.35 - ny * 0.75 + (1 - q) * 0.4;
-  let c = pick(ROCK, 2.4 + l * 2.6 + dith(x, dd, 0.8));
-  if (ny > 0.25) c = shade(c, -0.22);
-  if (ny > 0.1 && ny < 0.3 && hash2(x, dd, st.seed) < 0.5) c = H('#8ab6ae');
-  if (ny < -0.45 && hash2(x, dd, st.seed + 3) < 0.28) c = H('#9a9484');
-  if (st.seed % 3 === 0 && ny < -0.2 && noise2(x / 2, dd / 2, st.seed) > 0.55) c = pick(MOSS, 3 + l * 2);
-  return c;
 }
 
 // ------------------------------------------------------------------ the stream mouth
@@ -341,7 +324,7 @@ function creek(x: number, y: number, dd: number): boolean {
 function forestFloor(x: number, y: number, d: number, c0: C): boolean {
   const k = smoothstep(5930, 6030, x);
   if (k <= 0 || fbm2(x / 26, y / 14, 3, 73) * 1.1 <= 1.02 - smoothstep(5900, 6080, x)) return false;
-  const P = persp(d);
+  // (u stays unscaled here: the floor runs a kilometre, a perspective centre would smear its far ends)
   const u = x, v = realZ(d) * 300;
   // the worn track right under the walk line: trodden earth, a few roots across it
   if (d < 9 + noise1(x / 30, 161) * 4) {
