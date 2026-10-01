@@ -8,7 +8,9 @@ import { C, hex, mix, shade } from '../color';
 import { Rng, clamp, fbm2, hash2, noise1, noise2 } from '../../core/math';
 import { JP, Ramp, Sprite, rc, blade, frond, mossBlob, outlineSel, arc, tube, P } from '../jungle-core';
 
-const H = (s: string) => hex(s);
+const HX = new Map<string, C>();
+/** hex colour, parsed once (the painters call this per pixel) */
+const H = (s: string): C => { let c = HX.get(s); if (c === undefined) HX.set(s, (c = hex(s))); return c; };
 const ROCK: Ramp = ['#1e1b22', '#2a262e', '#38323a', '#4a4248', '#5c5358', '#716664', '#877a74', '#9e9086'].map(H);
 const BASALT: Ramp = ['#141418', '#1d1d23', '#27272e', '#33333a', '#414048', '#524f56', '#656068', '#7a747a'].map(H);
 

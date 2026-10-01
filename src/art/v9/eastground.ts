@@ -27,7 +27,9 @@ export const EAST_X0 = 3300;
 /** output of eastGround() */
 export const EG = { c: 0 as C, wet: false };
 
-const H = (s: string) => hex(s);
+const HX = new Map<string, C>();
+/** hex colour, parsed once (the painters call this per pixel) */
+const H = (s: string): C => { let c = HX.get(s); if (c === undefined) HX.set(s, (c = hex(s))); return c; };
 // clear stream water over a pebble bed, darkest in the channel, lightest in the shallows
 const WATER = ['#1c4650', '#23555c', '#2d6668', '#3a7876', '#4c8a84', '#62a092', '#80b6a2', '#a4cab4'].map(H);
 const PEB = ['#5a5448', '#746c5c', '#8e8470', '#a89c84', '#6a6252', '#847a66'].map(H);
@@ -194,7 +196,7 @@ function tidePools(x: number, y: number, dd: number, c0: C): boolean {
   const sh = shelfAt(x, dd);
   if (sh <= 0) return false;
   const P = persp(dd), u = (x - 4350) / P, v = realZ(dd) * 200;
-  const pool = tidePoolAt(x, dd);
+  const pool = tidePoolAt(x, dd, sh);
   let c: C;
   if (pool > 0) {
     // the pool: dark clear water over a floor of weed, anemones and pebbles
@@ -351,16 +353,16 @@ function forestFloor(x: number, y: number, d: number, c0: C): boolean {
   }
   // moss carpets and leaf litter drifts, both scaled by the perspective
   const moss = fbm2(u / 22, v / 10, 3, 166);
-  const drift = fbm2(u / 14 + 40, v / 7, 3, 167);
   let c: C;
   if (moss > 0.6) {
     const t = (moss - 0.6) * 6;
     c = pick(MOSS, 0.9 + t * 2 + (noise2(u / 1.6, v / 1.2, 168) - 0.5) * 1.6 + dith(x, y));
     if (hash2(x, y, 169) < 0.03) c = MOSS[5];
   } else {
-    c = pick(SOIL, 2.2 + (fbm2(u / 6, v / 4, 2, 170) - 0.5) * 2 + dith(x, y));
+    c = pick(SOIL, 2.2 + (noise2(u / 6, v / 4, 170) - 0.5) * 2 + dith(x, y));
     // fallen leaves: little lens shapes in autumn colours, denser in drifts
-    const lid = pebble(u * 1.2, v * 1.6, 2.6, 1.7, 171, 0.08 + drift * drift * 0.7);
+    const drift = noise2(u / 14 + 40, v / 7, 167);
+    const lid = drift < 0.25 ? -1 : pebble(u * 1.2, v * 1.6, 2.6, 1.7, 171, 0.08 + drift * drift * 0.7);
     if (lid >= 0 && PB.r < 0.9) {
       c = shade(pick(LITTER, lid * 7), -0.18);
       if (PB.ny < -0.3) c = shade(c, 0.12);
@@ -368,8 +370,10 @@ function forestFloor(x: number, y: number, d: number, c0: C): boolean {
     }
   }
   // roots snaking toward the camera from the trees on the walk line
-  const root = Math.abs(Math.sin(u * 0.09 + fbm2(u / 40, v / 30, 2, 172) * 7));
-  if (root < 0.045 && d < 70 && noise1(u / 26, 173) > 0.42) c = root < 0.02 ? H('#8a6a44') : H('#4e3622');
+  if (d < 70 && noise1(u / 26, 173) > 0.42) {
+    const root = Math.abs(Math.sin(u * 0.09 + fbm2(u / 40, v / 30, 2, 172) * 7));
+    if (root < 0.045) c = root < 0.02 ? H('#8a6a44') : H('#4e3622');
+  }
   // stones half sunk in the humus
   if (pebble(u, v, 17, 11, 174, 0.05) >= 0) {
     const l = -PB.nx * 0.4 - PB.ny * 0.6 + (1 - PB.r) * 0.4;

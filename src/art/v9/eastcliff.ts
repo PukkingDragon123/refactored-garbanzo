@@ -11,7 +11,9 @@ import { PixelBuffer } from '../pixel';
 import { C, hex, mix, shade } from '../color';
 import { Rng, bayer, clamp, fbm1, fbm2, hash2, noise1, noise2, smoothstep } from '../../core/math';
 
-const H = (s: string) => hex(s);
+const HX = new Map<string, C>();
+/** hex colour, parsed once (the painters call this per pixel) */
+const H = (s: string): C => { let c = HX.get(s); if (c === undefined) HX.set(s, (c = hex(s))); return c; };
 const FACE = ['#141316', '#1d1b1f', '#27242a', '#322e33', '#3f3a3e', '#4d4748', '#5d5654', '#6f6762', '#857b72', '#9c9084'].map(H);
 const CAVE = ['#0c0b0e', '#131116', '#1a181d', '#221f25', '#2c292e', '#39373a', '#4a4a48'].map(H);
 const BUSH = ['#12200f', '#1b3014', '#26421a', '#335620', '#436c27', '#58842f', '#709c3a'].map(H);

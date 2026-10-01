@@ -12,7 +12,9 @@ import { C, hex, mix, shade } from '../color';
 import { Rng, bayer, clamp, fbm1, fbm2, hash2, noise1, noise2, smoothstep } from '../../core/math';
 import { JP, Sprite, rc, frond, blade, outlineSel } from '../jungle-core';
 
-const H = (s: string) => hex(s);
+const HX = new Map<string, C>();
+/** hex colour, parsed once (the painters call this per pixel) */
+const H = (s: string): C => { let c = HX.get(s); if (c === undefined) HX.set(s, (c = hex(s))); return c; };
 const RK = ['#0b0a0d', '#121014', '#19161b', '#211d23', '#2b262c', '#363037', '#433c42', '#544b50', '#685d5e'].map(H);
 const pick = (r: C[], v: number) => r[clamp(Math.floor(v), 0, r.length - 1)];
 

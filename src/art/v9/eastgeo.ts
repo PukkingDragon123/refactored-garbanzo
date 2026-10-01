@@ -194,8 +194,7 @@ export function shelfAt(x: number, dd: number): number {
   return (n - 0.55 + 0.1 * zone * gap - smoothstep(30, 160, dd) * 0.1) * zone * gap - 0.02;
 }
 /** depth of a tide pool on the shelf at (x, dd): > 0 inside a pool */
-export function tidePoolAt(x: number, dd: number): number {
-  const sh = shelfAt(x, dd);
+export function tidePoolAt(x: number, dd: number, sh = shelfAt(x, dd)): number {
   if (sh <= 0.02) return -1;
   const P = persp(dd), u = (x - 4350) / P, v = realZ(dd) * 200;
   return 0.4 - fbm2(u / 13, v / 13, 2, 103) - (0.05 - Math.min(0.05, sh)) * 3;
