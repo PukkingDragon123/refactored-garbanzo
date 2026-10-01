@@ -29,6 +29,7 @@ import { dayNumber } from '../v10/day';
 import { discoveries, LOCATIONS } from '../v10/regions';
 import type { Discovery, DiscoveryKind } from '../v10/regions';
 import { currentExpedition } from '../v10/expedition';
+import { isRisky, markFoodKnown, foodInfo } from '../v10/forage10';
 import { SEA9 } from './species-sea';
 import { SHORE9 } from './species-shore';
 import { FISH9 } from './species-fish';
@@ -60,32 +61,31 @@ export interface Finding {
   beh: string[];
   bbox: [number, number, number, number];
   n: number;
+  /** V10 Auto-Tag: a known species tagged from a photo too poor to identify it fresh */
+  auto?: boolean;
 }
 
-/**
- * V10 data analysis: the identification bonus (fx10.idBonus, 0..1) lets the laptop's software clean
- * up a borderline subject before it is judged: blur and shake are partly corrected and small subjects
- * enhanced. A subject that is out of frame or hidden stays as it is.
- */
-function enhanced(s: PhotoSubject): PhotoSubject {
-  const k = Math.max(0, Math.min(1, fx10.idBonus()));
-  if (k <= 0) return s;
-  const fix = (v: number) => v + (1 - v) * k * 0.5;
-  return { ...s, focus: fix(s.focus), motion: fix(s.motion), shake: fix(s.shake), size: s.size * (1 + k * 0.6) };
-}
+/** the problems Auto-Tag can see past (not out of frame, hidden or too dark) */
+const AUTO_TAG = ['small', 'focus', 'motion', 'shake', 'leaf'];
 
-/** what the laptop makes of a photo: one finding per species in frame, identified ones first */
+/** what the laptop makes of a photo: one finding per species in frame, identified ones first
+ *  (judgeSubject applies the Research skills' identification bonus; with Auto-Tag a blurry or
+ *  small photo of a species already in the encyclopedia is still tagged, without behaviours) */
 export function analyse(p: RawPhoto): Finding[] {
   const by = new Map<string, PhotoSubject[]>();
   for (const s of p.subjects) { const l = by.get(s.species) ?? []; l.push(s); by.set(s.species, l); }
   const out: Finding[] = [];
   for (const [id, subs] of by) {
     const sp = SPECIES_BY_ID[id] ?? null;
-    const judged = subs.map(s => ({ s, j: judgeSubject(enhanced(s), p) }));
+    const judged = subs.map(s => ({ s, j: judgeSubject(s, p) }));
     const good = judged.filter(x => x.j.identified).sort((a, b) => b.j.score - a.j.score);
+    const tag = sp && !good.length && fx10.autoTag() && !!game.save.research[id]
+      ? judged.filter(x => x.j.code && AUTO_TAG.includes(x.j.code)).sort((a, b) => b.s.size * b.s.inFrame - a.s.size * a.s.inFrame)[0] : null;
     if (sp && good.length) {
       const beh = [...new Set(good.map(x => x.s.behavior).filter((b): b is string => !!b))];
       out.push({ species: id, sp, ok: true, stars: good[0].j.stars, beh, bbox: good[0].s.bbox, n: subs.length });
+    } else if (sp && tag) {
+      out.push({ species: id, sp, ok: true, auto: true, stars: 1, beh: [], bbox: tag.s.bbox, n: subs.length });
     } else {
       // the least-bad individual explains the failure
       const best = judged.sort((a, b) => b.s.inFrame * b.s.visible * b.s.size - a.s.inFrame * a.s.visible * a.s.size)[0];
@@ -146,19 +146,20 @@ export async function uploadPhoto(p: RawPhoto, where: 'ship' | 'field'): Promise
   const day = daySum();
   day.photos++;
   logEv('photo', String(rec.id), 0);
-  const depth = Math.max(1, Math.round(fx10.infoDepth()));
+  // research sheet sections per upload (Data Analysis depth; at 5, the Ecosystem Model, the whole sheet)
+  const d0 = Math.max(1, Math.round(fx10.infoDepth()));
+  const depth = d0 >= 5 ? 99 : d0;
   for (const f of found) {
     if (!f.ok || !f.sp) continue;
     let e = s.research[f.species];
-    // research sheet sections: the first photo reveals one less than the analysis depth, every
-    // later one the full depth, every new behaviour one more (see secOf)
+    // research sheet sections: every photo reveals the analysis depth, every new behaviour one more (see secOf)
     if (!e) {
       e = { first: rec.id, cover: rec.id, photos: [], beh: [], vid: [], facts: [], day: rec.day, n: Object.keys(s.research).length + 1, stars: 0, fresh: true };
       s.research[f.species] = e;
       out.newSpecies.push(f.species);
       out.rp += awardRp(NEW_SPECIES_RP, 'species', f.species);
       day.species.push(f.species);
-      r10().sec[f.species] = Math.max(1, depth - 1);
+      r10().sec[f.species] = depth;
     } else if (!e.photos.includes(rec.id)) r10().sec[f.species] = secOf(f.species) + depth;
     if (!e.photos.includes(rec.id)) e.photos.push(rec.id);
     e.stars = Math.max(e.stars, f.stars);
@@ -417,7 +418,7 @@ export function itemCat(id: string): ItemCat | null {
   if (/^(fossil|fos)_/.test(id) || FOSSIL_RE.test(d.name)) return 'fossil';
   if (/^(art|artifact|artefact|taonga|relic)_/.test(id) || ART_RE.test(d.name)) return 'artifact';
   if (d.kind === 'key') return null;
-  if (d.kind === 'plant' || d.kind === 'fungus') return 'flora';
+  if (d.kind === 'plant' || d.kind === 'fungus' || isRisky(id)) return 'flora';
   if (d.kind === 'insect' || d.kind === 'animal' || d.kind === 'shell') return 'sample';
   if (dk === 'sample' || dk === 'plant') return dk === 'plant' ? 'flora' : 'sample';
   if (d.lab) return /berr|fruit|nut|seed|leaf|root|bulb|tuber|flower|bloom|moss|fern|herb/i.test(id + ' ' + d.name) ? 'flora' : 'sample';
@@ -515,6 +516,8 @@ export interface LabOutcome {
   fact?: string;
   /** first of its kind ever (first artifact, first fossil...) */
   firstOfCat: boolean;
+  /** risky forage: the verdict now that it has been analysed */
+  edible?: 'safe' | 'mild' | 'poison';
 }
 
 const BASE_RP: Record<ItemCat, number> = { flora: 6, sample: 8, artifact: 20, fossil: 18 };
@@ -584,7 +587,8 @@ export function handIn(id: string, take: number): LabOutcome | null {
   const taonga = isTaonga(id);
   const prev = analysedTimes(id);
   const first = prev === 0;
-  const base = def.lab?.rp ?? BASE_RP[cat];
+  // Survey Methods pays more for every find, the Pocket Sequencer for samples (the agency rate on top, in awardRp)
+  const base = (def.lab?.rp ?? BASE_RP[cat]) * fx10.discoveryMult() * (cat === 'sample' || cat === 'flora' ? fx10.sampleRp() : 1);
   const repsLeft = cat === 'artifact' || cat === 'fossil' ? 0 : Math.max(0, REP_MAX - Math.max(0, prev - 1));
   const reps = Math.min(repsLeft, n - (first ? 1 : 0));
   // one ledger entry per hand-in that taught something (the weekly target counts these)
@@ -598,16 +602,26 @@ export function handIn(id: string, take: number): LabOutcome | null {
   const text = def.lab?.text ?? genericResult(id, def.name, cat, taonga);
   const times = prev + n;
   const rec = r.lab[id];
+  const rec0 = rec;
   if (rec) { rec.times = Math.max(rec.times, times); rec.rp += rp; }
   else r.lab[id] = { day: today(), times, rp, text, lines, generic, cat };
   s.analyzed[id] = Math.max(s.analyzed[id] ?? 0, times);
   s.flags['v10:researched:' + id] = true;
+  // risky forage: now it is known whether it's safe to eat (the backpack shows it, see v10/forage10)
+  const risky = isRisky(id);
+  if (risky) markFoodKnown(id);
   s.vars['analyses'] = (s.vars['analyses'] ?? 0) + 1;
   const out: LabOutcome = {
     id, name: def.name, cat, n, first, reps, rp, generic, taonga, firstOfCat,
     text: first ? text : reps ? `Replicate${reps === 1 ? '' : 's'} filed: consistent with the first sample.` : cat === 'artifact' || cat === 'fossil' ? 'Another one, catalogued beside the first.' : 'Already catalogued. Filed in the crate.',
     lines: first ? lines : [],
   };
+  if (risky) {
+    const fi = foodInfo(id);
+    out.edible = fi.tox === 0 ? 'safe' : fi.tox === 1 ? 'mild' : 'poison';
+    if (first) out.lines = [...out.lines, out.edible === 'safe' ? 'Edibility: safe to eat ✓' : out.edible === 'mild' ? 'Edibility: mildly poisonous ✕' : 'Edibility: POISONOUS ✕'];
+    if (rec0 === undefined) r.lab[id].lines = out.lines.slice();
+  }
   if (first && def.lab?.clue) { const isNew = addClue(def.lab.clue); out.clue = { id: def.lab.clue, name: CLUE_BY_ID[def.lab.clue]?.name ?? def.lab.clue, isNew }; }
   if (def.lab?.species) {
     s.hints[def.lab.species] = true;
@@ -637,7 +651,7 @@ export function fileNote(d: Discovery): number {
   if (r.filed[d.id]) return 0;
   r.filed[d.id] = today();
   const place = PLACE_KINDS.includes(d.kind);
-  const rp = awardRp(NOTE_RP[d.kind] ?? 5, place ? 'place' : 'note', d.id);
+  const rp = awardRp((NOTE_RP[d.kind] ?? 5) * fx10.discoveryMult(), place ? 'place' : 'note', d.id);
   if (place) daySum().places.push(d.id);
   game.persist();
   return rp;

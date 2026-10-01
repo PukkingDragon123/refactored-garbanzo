@@ -298,7 +298,7 @@ export function researchApps(os: OSCtx) {
       if (f.ok) {
         const isNew = out.newSpecies.includes(f.species);
         const bh = f.beh.map(x => `${out.newBeh.some(([s, b]) => s === f.species && b === x) ? '<em>+</em>' : ''}${esc(behLabel(f.sp, x))}`).join(', ');
-        ls.appendChild(el('div', 'ln ok', `<b>✓ ${esc(f.sp?.name ?? f.species)}</b>${f.n > 1 ? ` ×${f.n}` : ''}${isNew ? ' <span class="tag">NEW SPECIES</span>' : ''}<small>${bh ? bh + ' · ' : ''}<span class="st">${stars(f.stars)}</span></small>`));
+        ls.appendChild(el('div', 'ln ok', `<b>✓ ${esc(f.sp?.name ?? f.species)}</b>${f.n > 1 ? ` ×${f.n}` : ''}${isNew ? ' <span class="tag">NEW SPECIES</span>' : ''}<small>${f.auto ? 'Auto-tagged from a poor photo · ' : ''}${bh ? bh + ' · ' : ''}<span class="st">${stars(f.stars)}</span></small>`));
       } else {
         const nm = entry(f.species) ? f.sp?.name ?? f.species : 'Unidentified animal';
         ls.appendChild(el('div', 'ln no', `<b>✕ ${esc(nm)}</b><small>${esc(f.why ?? 'Not identifiable')}</small>`));

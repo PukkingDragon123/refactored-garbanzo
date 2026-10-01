@@ -17,6 +17,7 @@ import { itemIconURL, ICON_IDS } from '../../art/itemicons';
 import { location, LOCATIONS, discoveries } from '../../game/v10/regions';
 import type { Discovery, LocationDef } from '../../game/v10/regions';
 import { fx10 } from '../../game/v10/skills10';
+import { isRisky, foodInfo } from '../../game/v10/forage10';
 import {
   entry, coverOf, photosOf, setCover, markSeen, upload, secOf, r10, crateCount, returnedDay, isTaonga, itemCat,
   markEncSeen, filedDay, analysedTimes,
@@ -292,7 +293,15 @@ export function encyclopediaApp(os: OSCtx, ra: ResearchApps): EncApp {
     if (n < secs.length) parts.push(`<div class="sec nudge"><p>${secs.length - n} more ${secs.length - n === 1 ? 'section' : 'sections'} to reveal. Every new photo of the ${esc(sp.name)} uploads ${depth} more (Data Analysis depth ${depth}); every new behaviour, one more.</p></div>`);
     sh.innerHTML = parts.join('');
     const w = sh.querySelector('.fweb') as HTMLElement | null;
-    if (w) miniWeb(w, sp.id);
+    if (w) { if (fx10.ecoLinks()) miniWeb(w, sp.id); else webTeaser(w, tiesOf(sp.id).length); }
+  };
+
+  /** without the Food-Web Mapping skill the links stay undrawn */
+  const webTeaser = (w: HTMLElement, n: number) => {
+    w.classList.add('locked');
+    w.innerHTML = `<div class="tz"><b>🔒 ${plural(n, 'connection')} to map</b><span>Learn <em>Food-Web Mapping</em> (Data Analysis) and your uploads draw who eats whom, who lives on whom and who tags along.</span><div class="gel sm ctl skl">Open the Skill Tree</div></div>`;
+    const k = w.querySelector('.skl') as HTMLElement;
+    k.addEventListener('click', () => { os.from(k); os.open('skills', 'data_web'); });
   };
 
   /** a species and its ties in a little ring: predators above, prey below, parasites right, partners left */
@@ -333,6 +342,12 @@ export function encyclopediaApp(os: OSCtx, ra: ResearchApps): EncApp {
   /** every documented species and the links between them, laid out like a spring model */
   const bigWeb = (pg: HTMLElement) => {
     const ids = faunaPool().map(s => s.id).filter(id => !!entry(id));
+    if (!fx10.ecoLinks()) {
+      const n = linksAmong(new Set(ids)).length;
+      pg.innerHTML = `<div class="enc-webhd"><h2>Food web</h2><p>Every documented species and the links between them: predators, prey, parasites and partners.</p></div><div class="enc-bigweb fweb locked"></div>`;
+      webTeaser(pg.querySelector('.enc-bigweb') as HTMLElement, n);
+      return;
+    }
     pg.innerHTML = `<div class="enc-webhd"><h2>Food web</h2><p>Who eats whom, who lives on whom, and who just tags along: every documented species and the links between them. Undocumented partners stay hidden until you photograph them.</p><div class="lg">${(['predator', 'parasite', 'partner', 'rival'] as Role[]).map(r => `<span><i style="background:${ROLE_COL[r]}"></i>${r === 'predator' ? 'eats' : r === 'parasite' ? 'parasite of' : r === 'partner' ? 'partners' : 'rivals'}</span>`).join('')}</div></div><div class="enc-bigweb"></div>`;
     const box = pg.querySelector('.enc-bigweb') as HTMLElement;
     if (ids.length < 2) { box.innerHTML = `<div class="rl-empty"><b>Not enough species yet.</b><span>Document a few animals that eat, host or follow each other and the web starts to draw itself.</span></div>`; return; }
@@ -410,6 +425,13 @@ export function encyclopediaApp(os: OSCtx, ra: ResearchApps): EncApp {
       parts.push(`<div class="sec nudge"><p>Hand it in at the camp laptop (Upload Everything) and the lab will analyse it.</p></div>`);
     } else if (disc) {
       parts.push(`<div class="sec res"><h5>Field note</h5><p>${esc(disc.note ?? 'Noted in the field.')}</p></div>`);
+    }
+    if (isRisky(id)) {
+      // risky forage: what the research says about eating it (see v10/forage10)
+      const fi = foodInfo(id);
+      const txt = !fi.known ? 'Not identified yet: eating it is a gamble. Hand one in at camp and the lab will tell you.'
+        : fi.tox === 0 ? `Safe to eat${fi.energy ? `: about ${fi.energy} energy` : ''}.` : fi.tox === 1 ? 'Mildly poisonous: a stomach ache at best. Better left alone.' : 'Poisonous. Do not eat it, whatever Chunk thinks.';
+      parts.push(`<div class="sec ${!fi.known ? 'nudge' : fi.tox ? 'poison' : 'edible'}"><h5>${!fi.known ? 'Edible?' : fi.tox ? '✕ Not safe to eat' : '✓ Safe to eat'}</h5><p>${esc(txt)}</p></div>`);
     }
     if (c === 'artifact') parts.push(cultureNote(d.name, taonga, !!back));
     if (d.where || where) parts.push(`<div class="sec hab"><h5>Where it was found</h5><p>${esc(where ?? d.where ?? '')}${where && d.where ? ` · ${esc(d.where)}` : ''}</p></div>`);

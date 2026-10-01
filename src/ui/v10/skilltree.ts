@@ -1,15 +1,15 @@
 // MoriOS: the Skill Tree (V10). Four branches (Data Analysis, Camera, Research, Field Skills) read
-// from SKILL_TREE10 (filled in by the systems module; until then the app explains that the agency's
-// programme is still being drawn up). Nodes sit in rows by tier, ordered to keep the requirement
-// lines from crossing; owned nodes glow gold, affordable ones pulse, locked ones wait behind their
-// requirements. Buying (buy10, paid in RP) plays the unlock: a burst on the node, the RP counter
-// rolling down, the lines to the next skills lighting up and the expedition kit stats that changed
-// flashing. On narrow screens the branches become tabs.
+// from SKILL_TREE10 / BRANCHES10 (../../game/v10/skills10; an empty tree shows that the agency's
+// programme is still being drawn up). Nodes sit in rows by tier and in their lanes (or ordered to keep
+// the requirement lines from crossing); owned nodes glow gold, affordable ones pulse, locked ones
+// wait behind their requirements. Buying (canBuy10 / buy10, paid in RP) plays the unlock: a burst on
+// the node, the RP counter rolling down, the lines to the next skills lighting up and the expedition
+// kit stats that changed flashing. On narrow screens the branches become tabs.
 
 import { el } from '../ui';
 import { game } from '../../game/game';
 import { audio } from '../../core/audio';
-import { SKILL_TREE10, owned10, buy10, fx10 } from '../../game/v10/skills10';
+import { SKILL_TREE10, BRANCHES10, owned10, buy10, canBuy10, onSkill10, fx10 } from '../../game/v10/skills10';
 import type { Skill10, Branch10 } from '../../game/v10/skills10';
 import { skillIconURL } from '../../art/itemicons';
 import type { OSCtx } from '../v4/moriResearch';
@@ -20,27 +20,33 @@ import type { AgencyApp } from './agency';
 
 export interface SkillApp { open(id?: string): void; refresh(): void; buyable(): number }
 
-export const BRANCHES10: { id: Branch10; name: string; col: string; icon: string; blurb: string }[] = [
-  { id: 'data', name: 'Data Analysis', col: '#9b7ce0', icon: 'chart', blurb: 'Better software on the laptop: deeper research sheets, surer identifications and more from every upload.' },
-  { id: 'camera', name: 'Camera', col: '#f0a822', icon: 'lens', blurb: 'Steadier hands and a faster camera: quicker captures and photos that develop sooner.' },
-  { id: 'research', name: 'Research', col: '#22b4e2', icon: 'micro', blurb: 'Lab technique and standing with the agency: more Research Points from everything you hand in.' },
-  { id: 'field', name: 'Field Skills', col: '#4cb42c', icon: 'boot', blurb: 'Stamina, pack space and the know-how to get there, and back again.' },
-];
-
 /** the expedition kit: what the skills change, as gameplay reads it */
 const KIT: { k: string; label: string; v: () => string }[] = [
   { k: 'hold', label: 'Capture hold', v: () => `${+fx10.captureHold().toFixed(1)} s` },
   { k: 'dev', label: 'Photo develops in', v: () => `${+fx10.developTime().toFixed(1)} s` },
-  { k: 'energy', label: 'Energy use', v: () => `×${fx10.energyMult().toFixed(2)}` },
-  { k: 'pack', label: 'Pack capacity', v: () => `+${+fx10.packBonus().toFixed(1)} kg` },
-  { k: 'id', label: 'Identification bonus', v: () => `+${Math.round(fx10.idBonus() * 100)}%` },
-  { k: 'depth', label: 'Analysis depth', v: () => `${fx10.infoDepth()} sections / upload` },
+  { k: 'film', label: 'Extra film per trip', v: () => `+${fx10.film()}` },
+  { k: 'zoom', label: 'Zoom', v: () => `×${+fx10.zoomMax().toFixed(1)}` },
+  { k: 'depth', label: 'Sheet sections / upload', v: () => (fx10.infoDepth() >= 5 ? 'whole sheet' : String(fx10.infoDepth())) },
+  { k: 'web', label: 'Food-web links', v: () => (fx10.ecoLinks() ? 'mapped' : 'hidden') },
   { k: 'rp', label: 'Agency RP rate', v: () => `×${fx10.rpMult().toFixed(2)}` },
+  { k: 'disc', label: 'Discovery RP', v: () => `×${fx10.discoveryMult().toFixed(2)}` },
+  { k: 'id', label: 'Identification bonus', v: () => `+${Math.round(fx10.idBonus() * 100)}%` },
+  { k: 'tag', label: 'Auto-tag uploads', v: () => (fx10.autoTag() ? 'on' : 'off') },
+  { k: 'assay', label: 'Sample analysis time', v: () => `×${fx10.sampleTime().toFixed(2)}` },
+  { k: 'energy', label: 'Energy use', v: () => `×${fx10.energyMult().toFixed(2)}` },
+  { k: 'pack', label: 'Pack capacity', v: () => `+${+fx10.packBonus().toFixed(1)} kg · +${fx10.packSlots()} pockets` },
+  { k: 'max', label: 'Max energy', v: () => `+${fx10.maxEnergyBonus()}` },
 ];
+const BR = (b: Branch10) => BRANCHES10.find(x => x.id === b) ?? { id: b, name: b, color: '#7a8aa0', blurb: '', icon: 'chart' };
+
+/** the open Skill Tree, refreshed when a skill is learned anywhere (one listener for the module) */
+let current: (() => void) | null = null;
+let hooked = false;
 const kitNow = () => Object.fromEntries(KIT.map(x => { try { return [x.k, x.v()]; } catch { return [x.k, '?']; } }));
 
-/** a skill icon picked from its words (falls back to the branch icon) */
+/** a skill's icon (its own, else picked from its words, else the branch icon) */
 function skillIcon(s: Skill10): string {
+  if (s.icon) return s.icon;
   const t = `${s.name} ${s.effect} ${s.desc}`.toLowerCase();
   const M: [RegExp, string][] = [
     [/video|film|record/, 'video'], [/night|dark|low.?light/, 'night'], [/zoom|lens|telephoto/, 'lens'], [/focus|sharp/, 'af'], [/steady|stabil|shake|hold/, 'stab'],
@@ -49,11 +55,11 @@ function skillIcon(s: Skill10): string {
     [/energy|stamina|endur|rest|sleep|food/, 'heart'], [/climb|swim|grip|hand/, 'hand'], [/sneak|quiet|stealth|step/, 'boot'], [/track|trail|map|scout/, 'track'], [/spot|eye|see|binocular/, 'eye'], [/lure|bait/, 'lure'],
   ];
   for (const [re, ic] of M) if (re.test(t)) return ic;
-  return BRANCHES10.find(b => b.id === s.branch)?.icon ?? 'chart';
+  return BR(s.branch).icon;
 }
 
 type State = 'owned' | 'ready' | 'poor' | 'locked';
-const stateOf = (s: Skill10): State => owned10(s.id) ? 'owned' : !s.req.every(owned10) ? 'locked' : game.save.rp >= s.cost ? 'ready' : 'poor';
+const stateOf = (s: Skill10): State => owned10(s.id) ? 'owned' : !s.req.every(owned10) ? 'locked' : canBuy10(s.id).ok ? 'ready' : 'poor';
 
 export function skillTreeApp(os: OSCtx, agency: AgencyApp): SkillApp {
   let w: HTMLElement | null = null;
@@ -63,6 +69,7 @@ export function skillTreeApp(os: OSCtx, agency: AgencyApp): SkillApp {
   let flash = new Set<string>();
   let shownRp = game.save.rp;
   const live = () => !!w && w.isConnected && !os.closed();
+  if (!hooked) { hooked = true; onSkill10(() => current?.()); }
 
   const open = (id?: string) => {
     if (id) { sel = id; const s = SKILL_TREE10.find(x => x.id === id); if (s) tab = s.branch; }
@@ -72,6 +79,7 @@ export function skillTreeApp(os: OSCtx, agency: AgencyApp): SkillApp {
     const W = os.win('skills', 'Skill Tree', 'skills', 980, 600, w);
     if (!W) return;
     shownRp = game.save.rp;
+    current = () => { if (live()) { shownRp = game.save.rp; render(); os.badges(); } };
     render();
   };
 
@@ -79,7 +87,7 @@ export function skillTreeApp(os: OSCtx, agency: AgencyApp): SkillApp {
     if (!w) return;
     const tree = SKILL_TREE10;
     w.innerHTML = `<div class="sk-top"><span class="ic"></span><b>Skill Tree</b><span class="tip">Research Points come from the agency for every upload</span><span class="rp"><em>${shownRp}</em> RP</span></div>
-      <div class="sk-tabs">${BRANCHES10.map(b => `<span class="ctl${b.id === tab ? ' on' : ''}" data-b="${b.id}" style="--bc:${b.col}"><img src="${skillIconURL(b.icon, 1)}" alt="">${esc(b.name)}</span>`).join('')}</div>
+      <div class="sk-tabs">${BRANCHES10.map(b => `<span class="ctl${b.id === tab ? ' on' : ''}" data-b="${b.id}" style="--bc:${b.color}"><img src="${skillIconURL(b.icon, 1)}" alt="">${esc(b.name)}</span>`).join('')}</div>
       <div class="sk-body"><div class="sk-tree"></div><div class="sk-info"></div></div>`;
     (w.querySelector('.sk-top .ic') as HTMLElement).appendChild(os.icon('skills', 1.2));
     w.querySelectorAll<HTMLElement>('.sk-tabs span').forEach(t => t.addEventListener('click', () => { tab = t.dataset.b as Branch10; sfx.pick(); render(); }));
@@ -89,7 +97,7 @@ export function skillTreeApp(os: OSCtx, agency: AgencyApp): SkillApp {
     for (const br of BRANCHES10) {
       const skills = tree.filter(s => s.branch === br.id);
       const col = el('div', 'sk-col' + (br.id === tab ? ' on' : ''));
-      col.style.setProperty('--bc', br.col);
+      col.style.setProperty('--bc', br.color);
       const own = skills.filter(s => owned10(s.id)).length;
       col.innerHTML = `<div class="hd"><img src="${skillIconURL(br.icon, 1)}" alt=""><b>${esc(br.name)}</b><span>${own}/${skills.length}</span></div><div class="nodes"></div>`;
       layout(col.querySelector('.nodes') as HTMLElement, skills);
@@ -106,9 +114,15 @@ export function skillTreeApp(os: OSCtx, agency: AgencyApp): SkillApp {
     const rows: Skill10[][] = [];
     for (const t of tiers) {
       const row = skills.filter(s => s.tier === t);
-      const bary = (s: Skill10) => { const r = s.req.map(id => lane.get(id)).filter((v): v is number => v !== undefined); return r.length ? r.reduce((a, v) => a + v, 0) / r.length : 0.5; };
-      row.sort((a, b) => bary(a) - bary(b) || a.id.localeCompare(b.id));
-      row.forEach((s, i) => lane.set(s.id, (i + 1) / (row.length + 1)));
+      if (row.every(s => typeof s.lane === 'number')) {
+        // the skill's own lane (-1, 0, 1)
+        row.forEach(s => lane.set(s.id, clamp(0.5 + (s.lane ?? 0) * 0.3, 0.12, 0.88)));
+      } else {
+        // ordered by where the requirements sit (fewer crossings)
+        const bary = (s: Skill10) => { const r = s.req.map(id => lane.get(id)).filter((v): v is number => v !== undefined); return r.length ? r.reduce((a, v) => a + v, 0) / r.length : 0.5; };
+        row.sort((a, b) => bary(a) - bary(b) || a.id.localeCompare(b.id));
+        row.forEach((s, i) => lane.set(s.id, (i + 1) / (row.length + 1)));
+      }
       rows.push(row);
     }
     const RH = 104;
@@ -141,7 +155,7 @@ export function skillTreeApp(os: OSCtx, agency: AgencyApp): SkillApp {
   };
 
   const emptyTree = (T: HTMLElement) => {
-    T.innerHTML = `<div class="sk-empty"><span class="ms"></span><div><b>The skill programme is still being drawn up.</b><p>The agency’s training department is finalising the four branches. Your Research Points are safe in the meantime: you have <b>${game.save.rp} RP</b> to spend when it opens.</p></div></div><div class="sk-brs">${BRANCHES10.map(b => `<div class="sk-br" style="--bc:${b.col}"><img src="${skillIconURL(b.icon, 2)}" alt=""><b>${esc(b.name)}</b><p>${esc(b.blurb)}</p></div>`).join('')}</div>`;
+    T.innerHTML = `<div class="sk-empty"><span class="ms"></span><div><b>The skill programme is still being drawn up.</b><p>The agency’s training department is finalising the four branches. Your Research Points are safe in the meantime: you have <b>${game.save.rp} RP</b> to spend when it opens.</p></div></div><div class="sk-brs">${BRANCHES10.map(b => `<div class="sk-br" style="--bc:${b.color}"><img src="${skillIconURL(b.icon, 2)}" alt=""><b>${esc(b.name)}</b><p>${esc(b.blurb)}</p></div>`).join('')}</div>`;
     (T.querySelector('.ms') as HTMLElement).appendChild(mascot('wink', 1.6));
   };
 
@@ -157,13 +171,13 @@ export function skillTreeApp(os: OSCtx, agency: AgencyApp): SkillApp {
       flash = new Set();
       return;
     }
-    const br = BRANCHES10.find(b => b.id === s.branch)!;
+    const br = BR(s.branch);
     const st = stateOf(s);
-    const missing = s.req.filter(r => !owned10(r));
-    I.innerHTML = `<div class="sk-card ${st}" style="--bc:${br.col}"><div class="h"><img src="${skillIconURL(skillIcon(s), 2)}" alt=""><div><b>${esc(s.name)}</b><span>${esc(br.name)} · tier ${s.tier}</span></div></div>
+    const why = canBuy10(s.id).reason ?? '';
+    I.innerHTML = `<div class="sk-card ${st}" style="--bc:${br.color}"><div class="h"><img src="${skillIconURL(skillIcon(s), 2)}" alt=""><div><b>${esc(s.name)}</b><span>${esc(br.name)} · tier ${s.tier}</span></div></div>
       <p class="efx">${esc(s.effect)}</p><p>${esc(s.desc)}</p>
       ${s.req.length ? `<div class="rq">${s.req.map(r => `<span class="${owned10(r) ? 'ok' : ''}">${owned10(r) ? '✓' : '✕'} ${esc(SKILL_TREE10.find(x => x.id === r)?.name ?? r)}</span>`).join('')}</div>` : ''}
-      <div class="buy">${st === 'owned' ? '<div class="own">✓ Unlocked</div>' : `<div class="gel ${st === 'ready' ? 'green' : 'glass'} big ctl go">${st === 'locked' ? 'Locked' : `Unlock · ${s.cost} RP`}</div>`}<div class="why">${st === 'poor' ? `You need ${s.cost - game.save.rp} more RP. Upload some research!` : st === 'locked' ? `Unlock ${missing.map(r => esc(SKILL_TREE10.find(x => x.id === r)?.name ?? r)).join(' and ')} first.` : ''}</div></div></div>` + kitHtml;
+      <div class="buy">${st === 'owned' ? '<div class="own">✓ Unlocked</div>' : `<div class="gel ${st === 'ready' ? 'green' : 'glass'} big ctl go">${st === 'locked' ? 'Locked' : `Unlock · ${s.cost} RP`}</div>`}<div class="why">${st === 'poor' ? (game.save.rp < s.cost ? `You need ${s.cost - game.save.rp} more RP. Upload some research!` : esc(why)) : st === 'locked' ? `${esc(why)} first.` : ''}</div></div></div>` + kitHtml;
     flash = new Set();
     (I.querySelector('.go') as HTMLElement | null)?.addEventListener('click', buy);
   };
@@ -177,9 +191,14 @@ export function skillTreeApp(os: OSCtx, agency: AgencyApp): SkillApp {
     const nope = (msg: string) => { sfx.bad(); if (go) os.retrigger(go, 'mos-shake'); if (node) os.retrigger(node, 'mos-shake'); const c = os.center(go ?? node ?? w!); os.floatText(c.x, c.y - 24, msg, '#ffd0c8'); };
     if (st === 'owned') return;
     if (st === 'locked') { nope('requirements first'); return; }
-    if (st === 'poor') { nope(`${s.cost - game.save.rp} RP short`); return; }
+    if (st === 'poor') { nope(game.save.rp < s.cost ? `${s.cost - game.save.rp} RP short` : canBuy10(s.id).reason ?? 'not yet'); return; }
     const before = kitNow(), rp0 = game.save.rp;
-    if (!buy10(s.id)) { nope('the agency said no'); return; }
+    // (the unlock animation re-renders by itself: the learned-a-skill refresh waits)
+    const cur0 = current;
+    current = null;
+    const ok = buy10(s.id);
+    current = cur0;
+    if (!ok) { nope(canBuy10(s.id).reason ?? 'the agency said no'); return; }
     game.persist();
     const after = kitNow();
     flash = new Set(KIT.map(x => x.k).filter(k => before[k] !== after[k]));
@@ -228,4 +247,3 @@ export function skillTreeApp(os: OSCtx, agency: AgencyApp): SkillApp {
   };
 }
 
-export const clampTier = (t: number) => clamp(t, 0, 9);

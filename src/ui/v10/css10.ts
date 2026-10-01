@@ -87,12 +87,19 @@ export const CSS10 = `
 .rl-sheet .sec.culture { grid-column: 1 / -1; background: linear-gradient(180deg, #fffdf6, #f8f0de); box-shadow: 0 0 0 1px #d8c8a0; color: #4a3a20; }
 .rl-sheet .sec.culture h5 { color: #8a5a18; } .rl-sheet .sec.culture p + p { margin-top: 6px; }
 .rl-sheet .sec small { color: #6a849a; }
+.rl-sheet .sec.edible { background: linear-gradient(180deg, #f4ffe8, #e2f8cc); box-shadow: 0 0 0 1px #6cc44a; } .rl-sheet .sec.edible h5 { color: #2a8a18; }
+.rl-sheet .sec.poison { background: linear-gradient(180deg, #fff3ef, #ffe0d6); box-shadow: 0 0 0 1px #e8583a; } .rl-sheet .sec.poison h5 { color: #a8301c; }
 .enc-ln { display: inline-block; padding: 0 6px; border-radius: 9px; }
 .enc-ln.ctl { color: #0a6db0; background: #e4f4fe; box-shadow: 0 0 0 1px #9ad0f0; transition: transform 0.35s cubic-bezier(.25,1.9,.45,1); }
 .enc-ln.ctl.hov { transform: translateY(-1px); box-shadow: 0 0 0 1px #3aa6e0, 0 0 8px rgba(80,200,255,0.6); }
 .enc-ln.off { color: #6a849a; }
 /* the little food web */
 .fweb { position: relative; height: 230px; margin-top: 8px; border-radius: 8px; background: radial-gradient(ellipse at 50% 50%, #ffffff 0 30%, #eef6fb 75%); box-shadow: inset 0 0 0 1px #d4e4ee; }
+.fweb.locked { display: grid; place-items: center; height: auto; min-height: 120px; padding: 14px; background: repeating-linear-gradient(135deg, #f4f8fb 0 10px, #edf3f7 10px 20px); }
+.enc-bigweb.fweb.locked { min-height: 300px; height: auto; }
+.fweb .tz { max-width: 380px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; color: #3a5a78; }
+.fweb .tz b { font: 21px/1 'Jersey 10', 'Pixelify Sans', monospace; font-weight: 400; color: #0b4a7a; }
+.fweb .tz em { font-style: normal; color: #6a3ab0; }
 .fweb svg, .enc-bigweb svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .fweb svg line { stroke-linecap: round; opacity: 0.8; }
 .wn { position: absolute; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background-color: #0b1a26; background-repeat: no-repeat; image-rendering: pixelated; box-shadow: 0 0 0 2px #fff, 0 0 0 3px #6a8aa6, 0 3px 6px rgba(0,30,60,0.25); transition: transform 0.4s cubic-bezier(.25,1.9,.45,1); animation: wnIn 0.5s cubic-bezier(.25,1.8,.45,1) both; display: grid; place-items: center; font: 26px/1 'Jersey 10', 'Pixelify Sans', monospace; color: #9ab0c4; }

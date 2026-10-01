@@ -197,7 +197,7 @@ export function uploadAllApp(os: OSCtx, ra: ResearchApps): UploadApp {
       cap.textContent = h.cat === 'artifact' ? `Documenting the ${nm}: photographs and measurements only` : h.cat === 'fossil' ? `Scanning the ${nm}` : `Analysing ${nm}${h.take > 1 ? ` ×${h.take}` : ''}`;
       // the analysis: spinning ring, a dancing spectrum, a filling bar
       let lastQ = -1;
-      const T = (h.cat === 'artifact' ? 1.5 : 1.15) * k;
+      const T = (h.cat === 'artifact' ? 1.5 : 1.15) * k * (h.cat === 'sample' || h.cat === 'flora' ? clamp(fx10.sampleTime(), 0.3, 1) : 1);
       await new Promise<void>(res => {
         let t = 0;
         os.animate(dt => {
@@ -226,7 +226,7 @@ export function uploadAllApp(os: OSCtx, ra: ResearchApps): UploadApp {
         audio.play('fact', { vol: 0.4 });
         os.fx.sparkle(c.x, c.y, 10, 70);
       } else if (out.first) {
-        stamp.className = 'stamp new'; stamp.innerHTML = `New ${CAT_WORD[out.cat] ?? 'find'}!<small>${esc(nm)}</small>`;
+        stamp.className = 'stamp new'; stamp.innerHTML = `New ${CAT_WORD[out.cat] ?? 'find'}!<small>${out.edible ? (out.edible === 'safe' ? 'safe to eat ✓' : out.edible === 'mild' ? 'mildly poisonous ✕' : 'POISONOUS ✕') : esc(nm)}</small>`;
         audio.play('discover', { vol: 0.5 });
         if (out.firstOfCat) os.fx.confetti(c.x, c.y - scope.offsetHeight / 2, 50, scope.offsetWidth);
         os.fx.sparkle(c.x, c.y, 14, 110);
@@ -274,6 +274,7 @@ export function uploadAllApp(os: OSCtx, ra: ResearchApps): UploadApp {
     if (o.species) extra.push(o.species.documented ? `Matches the <b>${esc(o.species.name)}</b>` : 'Points to an animal nobody has photographed yet');
     if (o.clue) extra.push(`${o.clue.isNew ? 'New clue' : 'Clue'}: <b>${esc(CLUE_BY_ID[o.clue.id]?.name ?? o.clue.name)}</b>`);
     if (o.fact) extra.push(`✦ ${esc(o.fact)}`);
+    if (o.edible && !o.first) extra.push(o.edible === 'safe' ? 'Safe to eat ✓' : 'Not safe to eat ✕');
     const card = el('div', 'ln lab ' + (o.taonga ? 'care' : o.first ? 'ok' : 'rep'),
       `<img src="${itemSrc(o.id)}" alt=""><div><b>${esc(o.name)}${o.n > 1 ? ` ×${o.n}` : ''}</b>${o.first && !o.taonga ? ' <span class="tag">NEW</span>' : ''}${o.rp ? `<em class="rp">+${o.rp} RP</em>` : ''}<small>${esc(o.text)}</small>${o.lines.length ? `<small class="ms">${o.lines.map(esc).join(' · ')}</small>` : ''}${extra.map(x => `<small class="x">${x}</small>`).join('')}</div>`);
     feed.appendChild(card);
