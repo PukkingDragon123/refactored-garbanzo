@@ -123,7 +123,7 @@ export const V4_QUESTS: QuestDef[] = [
     desc: 'The laptop survived. Every animal on this island is a page nobody has written yet: photograph it, then upload that photo to research it.',
     steps: [
       { text: 'Photograph 6 island species', done: () => islePhotos() >= 6, progress: () => [Math.min(6, islePhotos()), 6], hint: 'Q raises the camera. Crabs, shorebirds, skinks, the seal, the glowworms in the cave...' },
-      { text: 'Upload the photos to your laptop', done: () => isleUploads() >= 6, progress: () => [Math.min(6, isleUploads()), 6], hint: 'Open the laptop and upload each species’ photo to research it.' },
+      { text: 'Upload the photos to your laptop', done: () => isleUploads() >= 6, progress: () => [Math.min(6, isleUploads()), 6], hint: 'Open the laptop (L) and upload a photo of each species to research it.' },
     ],
     reward: { rp: 60, text: 'Six new pages in the field guide. Probably the first ever written.' },
   },
@@ -133,9 +133,5 @@ export const V4_QUESTS: QuestDef[] = [
 const shellKinds = () => ['shell_sunwhorl', 'shell_fan', 'shell_cone', 'shell_opal', 'shell_trycop'].filter(id => game.save.flags['v9:found:' + id] || game.save.inv.some(s => s.id === id)).length;
 /** species photographed on the island (first photos, see shorelife.ts) */
 function islePhotos() { return Object.keys(game.save.flags).filter(k => k.startsWith('v4:photo:')).length; }
-/** island species uploaded on the laptop (the research app marks them in save.seen, or with v9:upload:<id>) */
-function isleUploads() {
-  const f = game.save.flags, sp = Object.keys(f).filter(k => k.startsWith('v4:photo:')).map(k => k.slice(9));
-  const extra = Object.keys(f).filter(k => k.startsWith('v9:upload:') && f[k]).map(k => k.slice(10));
-  return new Set([...sp.filter(id => game.save.seen[id] || f['v9:upload:' + id]), ...extra]).size;
-}
+/** species researched on the laptop (an uploaded photo creates its research log entry) */
+function isleUploads() { return Object.keys(game.save.research ?? {}).length; }
