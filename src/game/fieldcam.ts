@@ -418,7 +418,7 @@ export class FieldCamera {
   /** The instant print slides out of the camera and slowly develops; shake it (R, mouse wiggle, click) to speed it up. */
   private lcd(img: string) {
     const l = this.els.lcd;
-    l.innerHTML = `<div class="pic"><img src="${img}" alt=""></div><span class="cap">DEVELOPING… shake it! <b>R</b></span><span class="n">${rawPhotos().length} to review</span>`;
+    l.innerHTML = `<div class="pic"><img src="${img}" alt=""></div><span class="cap">DEVELOPING… shake it! <b>R</b></span><span class="n">${rawPhotos().length} to upload</span>`;
     l.classList.remove('on', 'dry');
     void l.offsetWidth;
     l.classList.add('on');
