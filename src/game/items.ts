@@ -15,10 +15,18 @@ export interface ItemDef {
   where?: string;
   /** food: effect id */
   eat?: string;
+  /** V10: carried weight in kg (see v10/energy.ts for the per-kind defaults) */
+  weight?: number;
+  /** V10: energy restored when eaten (food) */
+  energy?: number;
+  /** V10: an unidentified forageable: may be poisonous until researched */
+  risky?: boolean;
 }
 
 export const ITEMS: Record<string, ItemDef> = {};
 const def = (d: ItemDef) => (ITEMS[d.id] = d);
+/** V10: modules add their own items (artifacts, samples, food, parts) from their own files */
+export const defineItem = def;
 
 // ------------------------------------------------------------------ tools (kept on the tool belt)
 def({ id: 'camera', name: 'Field camera', kind: 'tool', stack: 1, desc: 'A battered mirrorless camera with a long lens. Your most important tool.' });
