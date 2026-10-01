@@ -23,6 +23,7 @@ import { ISL, SPOT, groundY, zoneAt } from '../../art/island4/layout';
 import { paintSeaStack, paintReef, paintBowWreck, paintCliff, paintCaveArch, paintDuneGrass } from '../../art/island4/scenery';
 import type { IslandScene4 } from './island';
 import { layerY } from './island';
+import { dressEast } from '../v9/east';
 
 export interface IsleLayers { mid: Layer; near: Layer; back: Layer; main: Layer; front: Layer }
 
@@ -224,5 +225,7 @@ export function dressIsland(s: IslandScene4, L: IsleLayers) {
   const ax = 5030 * pf - 30, ay = layerY(pf, -8);
   L.front.add(new Custom(4, rr => rr.draw(archF, ax, ay, 1, 1, 0, packColor(0.8, 0.8, 0.82, 1))));
   void clamp; void smoothstep;
+  // V9: the east half (x >= 3300) is hand-dressed in v9/east.ts
+  dressEast(s, L);
 }
 

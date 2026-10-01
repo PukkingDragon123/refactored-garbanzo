@@ -6,7 +6,8 @@
 import { PixelBuffer } from '../pixel';
 import { hex, mix, shade, C } from '../color';
 import { bayer, clamp, fbm2, hash2, noise1, noise2, smoothstep } from '../../core/math';
-import { ISL, SPOT, groundY, zoneAt } from './layout';
+import { ISL, groundY, zoneAt } from './layout';
+import { eastGround, EG } from '../v9/eastground';
 
 export interface GroundChunk { x0: number; y0: number; base: PixelBuffer; wet: PixelBuffer }
 
@@ -85,18 +86,8 @@ function beach(x: number, y: number, d: number, z: string, wrack: number): [C, b
     if (Math.abs(d - wrack) < 1.5 && noise1(x / 7, 53) > 0.45) c = hash2(x, 0, 54) < 0.5 ? hex('#4a4a2a') : hex('#5e4a2e');
     if (Math.abs(d - wrack) < 3 && hash2(x, y, 55) < 0.03) c = hex('#f4ece0');
   }
-  // the stream: a shallow braided channel from the land to the sea
-  const sx = x - SPOT.stream + d * 0.18;
-  const half = 30 + d * 0.22 + Math.sin(d * 0.06) * 4;
-  if (z === 'stream' && Math.abs(sx) < half) {
-    const e = Math.abs(sx) / half;
-    const bar = noise2(x / 9, y / 5, 65) > 0.74 && e > 0.35;
-    if (!bar) {
-      c = e > 0.9 ? mix(hex('#8a7a5c'), c, 0.4) : mix(hex('#5a8a90'), hex('#3a6a78'), clamp(d / 140));
-      if (e < 0.9 && noise2(x / 5, y / 2.2 + d * 0.02, 67) > 0.78) c = mix(c, hex('#cfe6e4'), 0.45);
-      isWet = true;
-    } else c = mix(sandWet(x, y, 4), hex('#c8b48a'), 0.4);
-  }
+  // (the stream mouth, the creek and the cave pool are painted by the east pass, art/v9/eastground.ts)
+  void z;
   return [c, isWet];
 }
 
@@ -137,28 +128,16 @@ export function paintGroundChunk(x0: number, w: number): GroundChunk {
       } else if (caveHere) {
         c = rock(x, y, d, false);
         c = shade(c, -0.18);
-        if (Math.abs(x - 5250) < 44 && d > 0 && d < 40 - Math.abs(x - 5250) * 0.4) { c = mix(hex('#1e3a44'), hex('#12262e'), d / 40); isWet = true; }
-        else if (noise2(x / 20, y / 6, 61) > 0.7) { c = mix(c, hex('#4a5a60'), 0.3); isWet = true; }
+        if (noise2(x / 20, y / 6, 61) > 0.7) { c = mix(c, hex('#4a5a60'), 0.3); isWet = true; }
       } else if (z === 'forest') {
         const bank = smoothstep(5900, 6080, x);
         if (fbm2(x / 26, y / 14, 3, 73) * 1.1 > 1.02 - bank) c = soil(x, y, d);
         else [c, isWet] = beach(x, y, d, z, wrack);
-        const cr = Math.abs(x - SPOT.creek);
-        const half = 26 + d * 0.3 + (noise1(d / 9 + 3, 64) - 0.5) * 8;
-        if (cr < half && d >= 0) {
-          const e = cr / half;
-          c = e > 0.86 ? hex('#5a5048') : mix(hex('#3a5a58'), hex('#2a4448'), clamp(d / 120));
-          if (e < 0.86 && noise2(x / 6, y / 3, 63) > 0.8) c = mix(c, hex('#9ab8b0'), 0.4);
-          if (e < 0.86) isWet = true;
-          // stepping stones
-          for (const [sx, sy] of [[SPOT.creek - 8, 6], [SPOT.creek + 10, 22], [SPOT.creek - 4, 44]]) {
-            const nx = (x - sx) / 7, ny = (d - sy) / 3.4;
-            if (nx * nx + ny * ny < 1) { c = ny < -0.3 ? hex('#8a8272') : hex('#5e564c'); isWet = false; }
-          }
-        }
       } else {
         [c, isWet] = beach(x, y, d, z, wrack);
       }
+      // the east half's own ground (stream mouth, tide pools, cave floor, forest floor, creek)
+      if (eastGround(x, y, d, z, c, isWet)) { c = EG.c; isWet = EG.wet; }
       if (y >= y0 && y < ISL.BOT) put(x, y, c, isWet);
     }
   }
