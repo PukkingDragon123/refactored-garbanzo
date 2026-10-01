@@ -189,7 +189,7 @@ export class FieldScene extends WorldScene implements WildHost {
     this.player.ground = s.ground ?? 'leaves';
     this.main.add(this.player);
     // guide
-    if (game.save.flags['aroha:met'] && !s.underwater && !s.noGuide) {
+    if ((game.save.flags['aroha:met'] || game.save.flags['v4:arohaJoined']) && !s.underwater && !s.noGuide) {
       const a = this.addActor('aroha', s.spawnX - 50, this.st.terrain.groundY(s.spawnX - 50), 1);
       a.idleAnim = 'staff';
       a.setAnim('staff');
@@ -224,6 +224,8 @@ export class FieldScene extends WorldScene implements WildHost {
 
   async enter() {
     await super.enter();
+    // V10: the expedition runtime (map reveal, ways deeper, finds, events) for every field scene
+    await (await import('../v10/field10')).onFieldEnter(this);
     await this.site.onEnter?.(this);
   }
 
@@ -349,8 +351,9 @@ export class FieldScene extends WorldScene implements WildHost {
     this.cam.raise(false);
     const n = rawPhotos().length;
     if (this.guide) await this.say([{ who: 'aroha', text: n ? `Home, then. You’ve got ${n} photo${n > 1 ? 's' : ''} to go through on that laptop.` : 'Home, then. Next time, take some photos.', expr: 'happy' }]);
-    const { goCamp } = await import('./flow');
-    goCamp(true);
+    // V10: home to the island camp (the day module plays the arrival)
+    const { returnToCamp } = await import('../v10/expedition');
+    await returnToCamp('walk');
   }
 
   // ---------------------------------------------------------------- frame
