@@ -105,6 +105,8 @@ async function boot() {
     },
     steady: async () => (await import('./ui/v6/camp')).holdSteady('Hold the tent pole steady', 'Press <span class="key">Space</span> as the pole comes upright. Three pegs!'),
     knot: async () => (await import('./ui/v6/camp')).lashingKnot(),
+    /** the rogue-wave finale on the ship (skips the storm search) */
+    wave: async () => (await import('./game/v4/storm')).rogueWave(game.scene as never),
   };
 }
 

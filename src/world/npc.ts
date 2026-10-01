@@ -104,9 +104,10 @@ export function nearestInteractable(list: Interactable[], x: number, y: number, 
   for (const it of list) {
     if (it.enabled && !it.enabled()) continue;
     const d = Math.abs(it.x - x);
-    if (d < it.w + range && Math.abs(it.y - y) < it.h + 30 && d < bd) {
-      bd = d;
-      best = it;
+    if (d < it.w + range && Math.abs(it.y - y) < it.h + 30) {
+      // whatever the current quest step points at wins over a ladder or a curio next to it
+      const score = d - (it.quest?.() ? 1000 : 0);
+      if (score < bd) { bd = score; best = it; }
     }
   }
   return best;

@@ -197,10 +197,8 @@ export class ShipStory {
     it({ x: SPOTS.moriDesk[0] - 4, y: L, label: 'Use your laptop', standX: SPOTS.moriDesk[0] + 8, quest: () => (V()['v4:rounds'] ?? 0) >= 4 && !this.flag('v4:report'), enabled: calm, action: () => this.laptop() });
     // flavour: things to poke at around the boat
     const look = (x: number, y: number, label: string, lines: () => BubbleLine[], o: Partial<Interactable> = {}) => it({ x, y, label, standX: x, enabled: calm, action: () => this.say(lines()).then(() => {}), ...o });
-    look(SPOTS.chess[0], H, 'Look at the chess game', () => [
-      { who: 'mori', text: 'Joshu versus Jenna, day nineteen of the same game. Joshu’s winning. Jenna says the knight is “emotionally compromised.”', expr: 'teasing' },
-    ]);
-    look(SPOTS.photosJ[0], H, 'The framed photos', () => [
+    // (nothing to poke at on the mess table itself: it's where you sit down to eat)
+    look(SPOTS.photosJ[0], B, 'The framed photos', () => [
       { who: 'mori', text: 'Little Jenna holding a fish bigger than she is. She looks thrilled. The fish looks less thrilled.', expr: 'happy' },
       { who: 'mori', text: 'And the woman in the sun hat... Jenna’s mum. Joshu keeps her right where he can see her from his bunk.', expr: 'sad' },
     ]);

@@ -246,6 +246,8 @@ export abstract class WorldScene implements Scene {
     if (this.cutscene || game.ui.blocking || this.busyAction || this.player.state === 'work') {
       this.prompt.hide();
       for (const n of this.nodes) n.hover = false;
+      // no quest markers hanging over cutscenes and minigames
+      this.marks?.draw([]);
       return;
     }
     const [wx, wy] = this.worldMouse();

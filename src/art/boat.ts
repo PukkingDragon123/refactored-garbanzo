@@ -90,7 +90,7 @@ export const BOAT_LAYOUT: BoatLayout = {
     // main deck, stern to bow, up the aft stair, through the raised wheelhouse, down the fore stair
     { name: 'deck', pts: [...deckPts(30, 192), [212, WH_FLOOR], [WH_X1 + 2, WH_FLOOR], ...deckPts(356, 540)] },
     // lower deck: engine room, galley & mess, bunk room (one level), step up into the cargo hold
-    { name: 'lower', pts: [[BH.engAft + 6, LOW_FLOOR], [BH.bunkHold + 4, LOW_FLOOR], [BH.bunkHold + 10, HOLD_FLOOR], [BH.holdFwd - 10, HOLD_FLOOR]] },
+    { name: 'lower', pts: [[BH.engAft + 4, LOW_FLOOR], [BH.bunkHold + 4, LOW_FLOOR], [BH.bunkHold + 10, HOLD_FLOOR], [BH.holdFwd - 2, HOLD_FLOOR]] },
   ],
   ladders: [
     { name: 'engineHatch', x: 113, y0: Math.round(deckY(113)), y1: LOW_FLOOR },

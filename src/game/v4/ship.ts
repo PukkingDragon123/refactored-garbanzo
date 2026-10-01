@@ -438,6 +438,13 @@ export class ShipScene4 extends FieldScene {
     this.houseA = damp(this.houseA, inHouse ? 0 : 1, 9, dt);
     this.bridgeA = damp(this.bridgeA, onBridge ? 0 : 1, 9, dt);
     this.inside = damp(this.inside, inLower || inHouse || onBridge ? 1 : 0, 3.5, dt);
+    // safety net: nobody drops out through the bottom of the boat (off the end of a floor, a bad stand spot)
+    if (p.state !== 'climb' && p.y > S4.lower.floor + 14) {
+      const f = FLOORS.lower;
+      p.x = clamp(p.x, f[0][0] + 4, f[f.length - 1][0] - 4);
+      p.y = this.st.terrain.surfaceBelow(p.x, S4.lower.ceil + 4)?.y ?? S4.lower.floor;
+      p.vy = 0;
+    }
     // per-level walking bounds
     if (p.state !== 'climb') {
       const [a, b] = this.levelSpan(p.y);
