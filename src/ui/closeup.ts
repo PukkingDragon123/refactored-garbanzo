@@ -1,11 +1,17 @@
-// Anime / visual-novel cut-ins: for dramatic lines (shouts, shock, anger, or when a script asks) a
-// slanted band slashes open across the screen and the speaker's HD pixel bust punches in on it.
-// Everything is drawn into one low-res canvas at the bust's own pixel scale (so the panel art, the
-// effects and the bust share one crisp pixel grid): a dithered gradient, a screentone fade, and a
-// mood layer picked from the expression (focus-line burst + shake for shouts and shock, a cold
-// vignette, gloom lines and a shiver when scared, sparkles when happy, rain when sad, drifting speed
-// lines otherwise). The bust gets a light rim and a drop shadow, breathes, lip-syncs, and breaks out
-// of the band's top edge. A slanted name plate rides under it and the line's bubble docks beside it.
+// Visual-novel cut-ins: for dramatic lines (shouts, shock, anger, or when a script asks) a slanted
+// band opens across the screen and the speaker's HD pixel bust comes in on it. Everything is drawn
+// into one low-res canvas at the bust's own pixel scale (panel art, effects and bust share one crisp
+// pixel grid). Each character has a look:
+//  - Jenna, 'anime': the full kawaii treatment for every mood. A pink/sakura palette (lilac when
+//    scared or sad), screentone, sakura petals drifting across the whole screen, twinkles and little
+//    hearts, a bouncy drop-in entrance with squash and a hop on each new line, pink focus lines on shouts.
+//  - Mori, Joshu, Aroha, 'clean': a calm panel in their own colours, a subtle gradient and no
+//    particles. Only big moments (shouts, shock, anger) add a short shake, one white flash and a few
+//    thin focus lines in the character's accent; scared adds a cold vignette and a shiver.
+//  - Chunk, 'plain': a deliberately bland flat card. Hard cut in, no rim, no shadow, a slow deadpan
+//    zoom, and one comic beat: a sweat drop sliding down, or a flat "boof." caption.
+// The bust breathes, lip-syncs and breaks out of the band's top edge. A name plate rides under it
+// and the line's bubble docks beside it.
 
 import { el } from './ui';
 import { renderAnimePortraitHD } from '../art/anime/portraits';
@@ -14,6 +20,8 @@ import { outfitOf } from '../art/v7/wardrobe';
 type BustId = string;
 type PExpr = string;
 type Mood = 'burst' | 'cold' | 'happy' | 'sad' | 'cool' | 'calm';
+type Look = 'anime' | 'clean' | 'plain';
+const lookOf = (id: string): Look => { const b = ALIAS[id] ?? id; return b === 'jenna' ? 'anime' : b === 'chunk' ? 'plain' : 'clean'; };
 const ALIAS: Record<string, string> = { rowan: 'mori', pip: 'jenna', crowe: 'joshu', lou: 'joshu' };
 const CAST = ['mori', 'jenna', 'joshu', 'aroha', 'chunk'];
 
@@ -39,8 +47,43 @@ const CSS = `
 .cu .fl { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
 .cu.flash .fl { animation: cuFlash 0.22s ease-out; }
 @keyframes cuFlash { from { opacity: 0.6; } to { opacity: 0; } }
+.cu.anime .np div { color: #fff; background: #d0488e; box-shadow: inset 0.4em 0 0 #ffd0e6, 0.28em 0.28em 0 #ffd0e6, 0.28em 0.28em 0 2px #6a1a4a; animation: cuNpBounce 0.5s cubic-bezier(.2,1.9,.4,1) both 0.14s; }
+.cu.anime .np span::after { content: ' ♥'; color: #ffd0e6; }
+@keyframes cuNpBounce { 0% { transform: skewX(-14deg) translateY(160%) scale(0.6); } }
+.cu.plain .dim { background: rgba(10,8,6,0.22); }
+.cu.plain .np div { color: #2a2420; background: #f4eee0; transform: none; letter-spacing: 0.06em; box-shadow: 0 0 0 2px #2a2420; animation: none; }
+.cu.plain .np span { transform: none; }
+.cu.plain .np.out div { animation: none; opacity: 0; }
+.cu .bf { position: absolute; left: 0; top: 0; font-family: 'Jersey 10', 'Pixelify Sans', monospace; font-size: var(--nps, 18px); line-height: 1; color: #2a2420; background: #fffdf6;
+  padding: 0.2em 0.5em 0.15em; box-shadow: 0 0 0 2px #2a2420; opacity: 0; white-space: nowrap; }
+.cu .bf.on { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .cu .np div { animation: none; } }
 `;
+
+/** Jenna's kawaii palettes per mood: [light, mid, dark, accent] */
+const KAWAII: Record<Mood, string[]> = {
+  happy: ['#ffd4e6', '#f48cbc', '#8a3470', '#fff3f9'],
+  calm: ['#ffcfe3', '#ee86b8', '#7e2e66', '#fff1f8'],
+  cool: ['#ffc6de', '#e872aa', '#6e2458', '#fff0f7'],
+  burst: ['#ffa6cc', '#e4508c', '#5a1040', '#fff6fb'],
+  cold: ['#d6c8f4', '#8a72c8', '#2a1c52', '#f6eeff'],
+  sad: ['#e0c8e8', '#a07cb8', '#33224a', '#fcf2ff'],
+};
+const hmix = (a: string, b: string, t: number) => {
+  const x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16);
+  const c = (s: number) => Math.round(((x >> s) & 255) * (1 - t) + ((y >> s) & 255) * t);
+  return '#' + ((c(16) << 16) | (c(8) << 8) | c(0)).toString(16).padStart(6, '0');
+};
+/** the panel palette for a look and mood */
+function paletteOf(look: Look, id: string, mood: Mood): string[] {
+  if (look === 'plain') return ['#e2d4b0', '#e2d4b0', '#5a4a34', '#fffaf0'];
+  if (look === 'anime') return KAWAII[mood];
+  const c = COLORS[id] ?? COLORS.mori;
+  // calm panels stay in the character's colours; fear cools them, sadness greys them
+  if (mood === 'cold') return [hmix(c[0], '#5a6aa8', 0.55), hmix(c[1], '#262c66', 0.55), hmix(c[2], '#070818', 0.5), '#d8e2ff'];
+  if (mood === 'sad') return [hmix(c[0], '#8a96a4', 0.5), hmix(c[1], '#3e4a5a', 0.5), hmix(c[2], '#101820', 0.4), c[3]];
+  return c;
+}
 
 /** per-cast panel colours: [light, mid, dark, accent] */
 const COLORS: Record<string, string[]> = {
@@ -49,12 +92,6 @@ const COLORS: Record<string, string[]> = {
   joshu: ['#6c9ad8', '#2f4f86', '#0a1226', '#d4e6ff'],
   aroha: ['#e8a860', '#9a6230', '#2a1408', '#ffe6b4'],
   chunk: ['#f0904c', '#c04a26', '#2a0e08', '#ffe0a8'],
-};
-const MOODS: Record<Exclude<Mood, 'cool' | 'calm'>, string[]> = {
-  burst: ['#ff7a3c', '#c8241e', '#2a060c', '#fff1c8'],
-  cold: ['#5a6ab0', '#262c66', '#070818', '#b8c8ff'],
-  happy: ['#ffe48a', '#ff8ab4', '#8a3a7a', '#fffaf0'],
-  sad: ['#7a96b4', '#3a506e', '#101a2a', '#cfe0f0'],
 };
 
 function moodOf(expr: string, style?: string): Mood {
@@ -92,6 +129,11 @@ const pick = (r: number[], t: number, x: number, y: number) => {
   const f = clamp01(t) * (r.length - 1) * 0.9999, i = Math.floor(f);
   return f - i > dith(x, y) ? r[Math.min(r.length - 1, i + 1)] : r[i];
 };
+
+/** tiny sprites: sakura petal spin frames, a heart, Chunk's sweat drop (k ink, b blue, w white) */
+const PETAL = [[' ##', '###', '## '], ['## ', '###', ' ##'], [' #', '##', '# '], ['###', ' # ']];
+const HEART = ['.#.#.', '#####', '.###.', '..#..'];
+const DROP = ['..k..', '.kbk.', '.kbk.', 'kbbbk', 'kwbbk', 'kwbbk', 'kbbbk', '.kkk.'];
 
 // ------------------------------------------------------------------ bust frames
 interface Frame { w: number; h: number; px: Uint32Array; rim: Uint8Array; top: number }
@@ -133,6 +175,8 @@ export class CloseUps {
   private expr: PExpr = 'neutral';
   private style = '';
   private mood: Mood = 'calm';
+  private look: Look = 'clean';
+  private bf: HTMLElement;
   private pal: number[] = [];
   private col: number[] = [];
   /** time since the cut-in opened, since the current line started, and into the exit (-1: not leaving) */
@@ -154,7 +198,8 @@ export class CloseUps {
   constructor(parent: HTMLElement) {
     document.head.appendChild(el('style', '', CSS));
     this.root = parent.appendChild(el('div', 'cu'));
-    this.root.innerHTML = `<div class="dim"></div><canvas></canvas><div class="np"><div><span></span></div></div><div class="fl"></div>`;
+    this.root.innerHTML = `<div class="dim"></div><canvas></canvas><div class="np"><div><span></span></div></div><div class="bf"></div><div class="fl"></div>`;
+    this.bf = this.root.querySelector('.bf') as HTMLElement;
     this.cv = this.root.querySelector('canvas') as HTMLCanvasElement;
     this.g = this.cv.getContext('2d')!;
     this.np = this.root.querySelector('.np') as HTMLElement;
@@ -174,7 +219,9 @@ export class CloseUps {
     const e = (expr || 'neutral') as PExpr;
     const again = this.who === id && this.outT < 0;
     const mood = moodOf(e, o.style);
-    const loud = o.style === 'shout' || e === 'shocked' || e === 'angry';
+    const look = lookOf(id);
+    // Chunk stays deadpan: no impact frames, no shake
+    const loud = look !== 'plain' && (o.style === 'shout' || e === 'shocked' || e === 'angry');
     this.who = id;
     this.shown = id;
     this.expr = e;
@@ -182,11 +229,17 @@ export class CloseUps {
     this.talking = o.talking;
     this.loud = loud;
     this.mood = mood;
+    this.look = look;
     const cc = COLORS[ALIAS[id] ?? id] ?? COLORS.mori;
-    const mc = mood === 'cool' || mood === 'calm' ? cc : MOODS[mood];
+    const mc = paletteOf(look, ALIAS[id] ?? id, mood);
     this.pal = mc.map(hx);
     this.col = grad([mc[0], mc[1], mc[2]].map(hx), 9);
     this.root.style.setProperty('--c1', cc[0]);
+    this.root.classList.toggle('anime', look === 'anime');
+    this.root.classList.toggle('plain', look === 'plain');
+    // Chunk's one comic beat: a flat caption when he is excited or loud, otherwise a sweat drop
+    this.bf.textContent = look === 'plain' && (mood === 'happy' || mood === 'burst' || o.style === 'shout') ? (mood === 'burst' || o.style === 'shout' ? 'BOOF.' : 'boof.') : '';
+    this.bf.classList.remove('on');
     (this.np.querySelector('span') as HTMLElement).textContent = o.name.toUpperCase();
     this.root.classList.toggle('cold', mood === 'cold');
     this.lineT = 0;
@@ -211,6 +264,7 @@ export class CloseUps {
     this.who = null;
     this.outT = 0;
     this.np.classList.add('out');
+    this.bf.classList.remove('on');
     this.root.classList.remove('on', 'flash');
   }
 
@@ -265,39 +319,42 @@ export class CloseUps {
 
   // ---------------------------------------------------------------- drawing
   private draw() {
-    const { buf, cw, ch, t, pal, col, mood } = this;
+    const { buf, cw, ch, t, pal, col, mood, look } = this;
+    const anime = look === 'anime', plain = look === 'plain';
     const id = this.shown!;
     buf.fill(0);
     const leaving = this.outT >= 0;
-    // ---- open / close: a slash line wipes across, the band snaps open from it with an overshoot
-    const wipe = easeOutCubic(t / 0.1);
-    let open = easeOutBack((t - 0.05) / 0.24);
-    if (leaving) open *= 1 - easeInCubic(this.outT / 0.2);
+    // ---- open / close: Jenna's band springs open with an overshoot, the calm panels ease open,
+    // Chunk's card just cuts in and out
+    let open = plain ? (t > 0.03 ? 1 : 0) : anime ? easeOutBack((t - 0.05) / 0.3) : easeOutCubic((t - 0.03) / 0.22);
+    if (leaving) open *= plain ? (this.outT > 0.05 ? 0 : 1) : 1 - easeInCubic(this.outT / 0.2);
     // ---- shake: a hard decaying kick on loud lines, a fine shiver when scared
     let sx = 0, sy = 0;
     const tick = Math.floor(t * 30);
     if (this.loud) {
-      const a = Math.max(this.style === 'shout' ? 1 : 0, 5 * (1 - this.lineT / 0.45));
+      const a = Math.max(this.style === 'shout' ? (anime ? 1 : 0.6) : 0, (anime ? 5 : 3.5) * (1 - this.lineT / (anime ? 0.45 : 0.32)));
       if (a > 0.5) { sx = Math.round((hash(tick, 1) - 0.5) * 2 * a); sy = Math.round((hash(tick, 2) - 0.5) * 1.4 * a); }
-    } else if (mood === 'cold' && tick % 2 === 0) sx = hash(tick, 3) < 0.5 ? -1 : 1;
+    } else if (mood === 'cold' && !plain && tick % 2 === 0) sx = hash(tick, 3) < 0.5 ? -1 : 1;
     const by0 = this.bandY + sy;
     const mid = by0 + BH / 2;
-    const slant = 0.05; // the band rises to the right
+    const slant = plain ? 0.02 : 0.05; // the band rises to the right
     const half = (BH / 2) * open;
     const impact = this.impact > 0 && this.impact < 0.12;
     // the focus point (the bust's face), for bursts and the vignette
     const fx = this.bustX + 56 + sx, fy = this.bustY + 44 + sy;
     const tk = Math.floor(t * 12); // effects animate on 12s, like hand-drawn frames
-    const light = pal[0], dark = pal[2], accent = pal[3];
-    const ink = hx('#0c0a0c');
+    const dark = pal[2], accent = pal[3];
+    const ink = hx(plain ? '#2a2420' : '#0c0a0c');
 
     // ---- back layer: a wider accent band at a steeper angle, peeking out above and below
-    if (open > 0.02) for (let x = 0; x < cw; x++) {
+    // (Jenna's scrolls its stripes; the calm panels' stays still; Chunk gets none)
+    if (open > 0.02 && !plain) for (let x = 0; x < cw; x++) {
       const c = mid - (x - cw * 0.3) * (slant + 0.025);
       const h2 = half + 6 * open;
       const y0 = Math.max(0, Math.round(c - h2)), y1 = Math.min(ch - 1, Math.round(c + h2));
-      const back = mix(pal[1], dark, 0.35);
-      for (let y = y0; y <= y1; y++) buf[y * cw + x] = y === y0 || y === y1 ? ink : (x + y + Math.floor(t * 24)) % 6 < 3 ? back : mix(back, dark, 0.5);
+      const back = mix(pal[1], dark, anime ? 0.2 : 0.35);
+      const roll = anime ? Math.floor(t * 24) : 0;
+      for (let y = y0; y <= y1; y++) buf[y * cw + x] = y === y0 || y === y1 ? ink : (x + y + roll) % 6 < 3 ? back : mix(back, dark, anime ? 0.3 : 0.5);
     }
 
     // ---- main band
@@ -307,48 +364,66 @@ export class CloseUps {
       if (bot - top < 1) continue;
       for (let y = Math.max(0, top); y <= Math.min(ch - 1, bot); y++) {
         const i = y * cw + x;
-        // edges: a dark rim, then a bright cream stripe
+        // edges: a dark rim, then a bright cream stripe (Chunk's card: just the rim)
         const et = y - top, eb = bot - y;
         if (et < 1 || eb < 1) { buf[i] = ink; continue; }
+        if (plain) { buf[i] = pal[0]; continue; }
         if (et < 3 || eb < 3) { buf[i] = accent; continue; }
-        if (impact) { buf[i] = mood === 'burst' ? hx('#fff4e0') : hx('#ffffff'); continue; }
+        if (impact) { buf[i] = anime ? hx('#fff0f8') : hx('#ffffff'); continue; }
         const v = (y - top) / Math.max(1, bot - top); // 0 top .. 1 bottom
         const dx = (x - fx) / cw, dy = (y - fy) / BH;
-        // gradient: lit behind the face, darker toward the right and the bottom
-        let g = 0.12 + v * 0.55 + Math.max(0, dx) * 0.55 + Math.hypot(dx * 1.4, dy * 0.6) * 0.2;
-        if (mood === 'cold') g += Math.hypot(dx * 2, dy) * 0.35;
+        // gradient: lit behind the face, darker toward the right and the bottom (softer on calm panels)
+        let g = anime
+          ? 0.08 + v * 0.45 + Math.max(0, dx) * 0.45 + Math.hypot(dx * 1.4, dy * 0.6) * 0.2
+          : 0.18 + v * 0.38 + Math.max(0, dx) * 0.4 + Math.hypot(dx * 1.4, dy * 0.6) * 0.12;
+        if (mood === 'cold') g += Math.hypot(dx * 2, dy) * 0.3;
         // a soft dithered spotlight behind the head frames the bust
         const sp = Math.hypot((x - fx) / 62, (y - fy + 6) / 52);
-        if (sp < 1) g -= (1 - sp) * 0.45;
+        if (sp < 1) g -= (1 - sp) * (anime ? 0.5 : mood === 'happy' ? 0.42 : 0.3);
         let p = pick(col, g, x, y);
-        if (sp < 1 && sp > 0.93 && mood !== 'cold') p = mix(p, accent, 0.35);
-        // screentone: halftone dots growing toward the lower right
-        const tone = clamp01(v * 0.9 + dx * 1.2 - 0.25);
-        if (tone > 0.05) {
-          const cx = x % 5, cy = (y + (Math.floor(x / 5) & 1) * 2) % 5;
-          const r = tone * 2.4;
-          if ((cx - 2) ** 2 + (cy - 2) ** 2 < r * r) p = mix(p, dark, 0.55);
+        if (anime) {
+          if (sp < 1 && sp > 0.93 && mood !== 'cold') p = mix(p, accent, 0.4);
+          // screentone: halftone dots growing toward the lower right
+          const tone = clamp01(v * 0.9 + dx * 1.2 - 0.25);
+          if (tone > 0.05) {
+            const cx = x % 5, cy = (y + (Math.floor(x / 5) & 1) * 2) % 5;
+            const r = tone * 2.4;
+            if ((cx - 2) ** 2 + (cy - 2) ** 2 < r * r) p = mix(p, dark, 0.45);
+          }
         }
         buf[i] = p;
       }
     }
 
-    if (open > 0.3 && !impact) this.moodLayer(fx, fy, mid, half, slant, tk, sx);
+    if (open > 0.3 && !impact && !plain) this.moodLayer(fx, fy, mid, half, slant, tk);
 
     // ---- the bust: shadow, light rim, pixels; head breaks out of the band's top edge
     const talk = this.talking() ? ([0, 1, 2, 1] as const)[Math.floor(this.lineT * 11) % 4] : 0;
     const blink = this.blinkT < 0.12;
     const f = frame(id, this.expr, talk, blink);
-    const enter = easeOutBack((t - 0.07) / 0.32);
     const exitP = leaving ? easeInCubic(this.outT / 0.2) : 0;
-    let ox = Math.round(-(1 - enter) * 90 - exitP * 120) + sx;
-    // breathing bob (1px), plus a tiny hop on open mouth frames
-    let oy = Math.round(Math.sin(t * 2.4) * 0.8 + 0.2) + (talk === 2 ? -1 : 0) + sy;
-    // scale punch on entry and on each loud line (nearest-neighbour, back to exactly 1:1)
-    const punch = Math.max(0, 1 - t / 0.28) * 0.14 + (this.loud ? Math.max(0, 1 - this.lineT / 0.18) * 0.08 : 0);
-    const sc = 1 + punch;
-    const squash = 1 - Math.sin(clamp01(t / 0.3) * Math.PI) * 0.05;
-    const scx = sc / squash, scy = sc * squash;
+    let ox: number, oy: number, scx: number, scy: number;
+    if (anime) {
+      // bouncy: drops in from below with a big overshoot, squashes on landing, hops on each new line
+      const enter = clamp01((t - 0.06) / 0.42);
+      const drop = (1 - easeOutBack(enter)) * 46;
+      ox = Math.round(-exitP * 120) + sx;
+      const hop = this.t - this.lineT > 0.2 ? Math.sin(clamp01(this.lineT / 0.26) * Math.PI) * 5 : 0;
+      oy = Math.round(drop - hop + Math.sin(t * 3) * 1.2 + 0.2) + (talk === 2 ? -1 : 0) + sy;
+      const land = Math.sin(clamp01((t - 0.2) / 0.3) * Math.PI) * 0.09 + Math.sin(clamp01((this.lineT - 0.18) / 0.2) * Math.PI) * (this.t - this.lineT > 0.2 ? 0.05 : 0);
+      const sc = 1 + Math.max(0, 1 - t / 0.3) * 0.12 + (this.loud ? Math.max(0, 1 - this.lineT / 0.18) * 0.08 : 0);
+      scx = sc * (1 + land); scy = sc * (1 - land);
+    } else if (plain) {
+      // deadpan: no entrance at all, then a slow, creeping zoom
+      ox = 0; oy = 0;
+      scx = scy = 1 + Math.min(this.t, 6) * 0.012;
+    } else {
+      // calm: a smooth slide in from the left, a small punch only on loud lines
+      const enter = easeOutCubic((t - 0.05) / 0.3);
+      ox = Math.round(-(1 - enter) * 70 - exitP * 120) + sx;
+      oy = Math.round(Math.sin(t * 2.2) * 0.6 + 0.2) + (talk === 2 ? -1 : 0) + sy;
+      scx = scy = 1 + (this.loud ? Math.max(0, 1 - this.lineT / 0.18) * 0.06 : 0);
+    }
     const fw = Math.round(f.w * scx), fh = Math.round(f.h * scy);
     ox += Math.round((f.w - fw) / 2);
     oy += f.h - fh;
@@ -357,7 +432,7 @@ export class CloseUps {
     const clipTop = (x: number) => Math.round(mid - (x - cw * 0.3) * slant - half - POP * open * 1.6);
     const clipBot = (x: number) => Math.round(mid - (x - cw * 0.3) * slant + half) - 1;
     const shadow = mix(dark, ink, 0.5), rimC = impact ? ink : accent;
-    for (let pass = 0; pass < 3; pass++) {
+    for (let pass = plain ? 2 : 0; pass < 3; pass++) {
       const dx0 = pass === 0 ? 4 : 0, dy0 = pass === 0 ? 2 : 0;
       // the last row repeats down to the band's lower edge, so the chest never ends in mid-air
       for (let y = 0; y < fh + 24; y++) {
@@ -369,12 +444,13 @@ export class CloseUps {
           const v = f.px[si];
           if (pass === 0) { if (v >>> 24 > 127) buf[Y * cw + X] = shadow; }
           else if (pass === 1) { if (f.rim[si]) buf[Y * cw + X] = rimC; }
-          else if (v >>> 24 > 127) buf[Y * cw + X] = impact ? (mood === 'burst' ? hx('#c8241e') : ink) : v;
+          else if (v >>> 24 > 127) buf[Y * cw + X] = impact ? (anime ? hx('#c8246e') : ink) : v;
         }
       }
     }
-    // anime gloom when scared: a blue pall and vertical lines fall over the upper face
-    if (mood === 'cold' && open > 0.5 && !impact) {
+    // gloom when scared: Jenna gets the full anime pall and vertical lines over the upper face,
+    // the calm panels only a faint blue pall
+    if (mood === 'cold' && open > 0.5 && !impact && !plain) {
       const y0 = f.top + 14, y1 = 70, pall = hx('#2a2a78'), line = hx('#141040');
       for (let fy2 = y0; fy2 < y1; fy2++) {
         const k = 1 - (fy2 - y0) / (y1 - y0);
@@ -383,22 +459,29 @@ export class CloseUps {
           const X = bx + fx2, Y = byy + fy2;
           if (X < 0 || X >= cw || Y < 0 || Y >= ch || Y < clipTop(X)) continue;
           const i = Y * cw + X;
+          if (!anime) { buf[i] = mix(buf[i], pall, k * 0.22); continue; }
           const len = 0.25 + hash(fx2 >> 2, 4) * 0.6 + Math.sin(t * 3 + (fx2 >> 2)) * 0.05;
           const ln = (fx2 & 3) === 0 && k > 1 - len;
           buf[i] = mix(buf[i], ln ? line : pall, ln ? 0.75 : k * 0.5);
         }
       }
     }
-    // happy sparkles also twinkle in front of the bust
-    if (mood === 'happy' && open > 0.5 && !impact) for (let k = 0; k < 4; k++) {
-      const ph = (t * 0.9 + hash(k, 21)) % 1;
-      this.star(bx + 10 + Math.round(hash(k, 22, Math.floor(t * 0.9 + hash(k, 21))) * 96), byy + 10 + Math.round(hash(k, 23, Math.floor(t * 0.9 + hash(k, 21))) * 60), Math.sin(ph * Math.PI) * 3.2, hx('#ffffff'));
+    if (anime && open > 0.5 && !impact) this.kawaiiFront(bx, byy, mid, half, slant);
+    if (plain && open > 0.5 && !this.bf.textContent) {
+      // Chunk's sweat drop: appears after a beat, then slides slowly down beside his head
+      const beat = this.lineT - 0.35;
+      if (beat > 0) this.sprite(DROP, bx + Math.round(f.w * 0.8), byy + f.top + 6 + Math.min(12, Math.floor(beat * 5)), 2, { k: ink, b: hx('#8ccff4'), w: hx('#ffffff') });
     }
     this.g.putImageData(this.img!, 0, 0);
     // name plate under the bust, riding the band's lower edge
     const nx = (this.bustX - 4 + Math.round(-exitP * 120)) * this.s;
     const ny = (mid - (this.bustX - cw * 0.3) * slant + half - 6) * this.s;
     this.np.style.transform = `translate(${Math.round(nx)}px, ${Math.round(ny)}px)`;
+    if (plain && this.bf.textContent) {
+      // the flat "boof." caption, a beat after the line starts
+      this.bf.classList.toggle('on', open > 0.5 && this.lineT > 0.4 && !leaving);
+      this.bf.style.transform = `translate(${Math.round((bx + f.w * 0.82) * this.s)}px, ${Math.round((byy + f.top + 4) * this.s)}px)`;
+    }
   }
 
   /** 4-point twinkle star */
@@ -411,89 +494,132 @@ export class CloseUps {
     if (n >= 2) { put(x - 1, y - 1, c); put(x + 1, y - 1, c); put(x - 1, y + 1, c); put(x + 1, y + 1, c); }
   }
 
-  private moodLayer(fx: number, fy: number, mid: number, half: number, slant: number, tk: number, sx: number) {
-    const { buf, cw, ch, pal, mood, t } = this;
+  /** a tiny string sprite ('.' and ' ' are clear; other chars index the colour map) at an integer scale */
+  private sprite(rows: string[], x: number, y: number, k: number, cols: Record<string, number>, inside?: (X: number, Y: number) => boolean) {
+    const { buf, cw, ch } = this;
+    for (let r = 0; r < rows.length; r++) for (let c = 0; c < rows[r].length; c++) {
+      const col = cols[rows[r][c]];
+      if (col === undefined) continue;
+      for (let a = 0; a < k; a++) for (let b = 0; b < k; b++) {
+        const X = x + c * k + b, Y = y + r * k + a;
+        if (X < 0 || Y < 0 || X >= cw || Y >= ch || (inside && !inside(X, Y))) continue;
+        buf[Y * cw + X] = col;
+      }
+    }
+  }
+
+  /** a sakura petal: spins through its frames as it falls */
+  private petal(x: number, y: number, ph: number, light: boolean, inside?: (X: number, Y: number) => boolean, k = 1) {
+    const fr = PETAL[Math.floor(ph * 4) & 3];
+    this.sprite(fr, Math.round(x), Math.round(y), k, { '#': hx(light ? '#ffe2ee' : '#ffaacb') }, inside);
+    // one deeper pixel at the notch
+    const X = Math.round(x), Y = Math.round(y);
+    if (X >= 0 && Y >= 0 && X < this.cw && Y < this.ch && (!inside || inside(X, Y)) && fr[0][0] === '#') this.buf[Y * this.cw + X] = hx('#f07aa8');
+  }
+
+  /** Jenna, in front of everything: sakura petals drifting across the whole screen, twinkles and hearts */
+  private kawaiiFront(bx: number, by: number, mid: number, half: number, slant: number) {
+    const { cw, ch, t, mood } = this;
+    const nP = mood === 'burst' ? 10 : mood === 'sad' || mood === 'cold' ? 12 : 22;
+    const fall = mood === 'sad' ? 0.55 : 1;
+    for (let k = 0; k < nP; k++) {
+      const sp = (14 + hash(k, 51) * 16) * fall;
+      const span = ch + 20;
+      const y = ((t * sp + hash(k, 52) * span) % span) - 10;
+      const x = ((hash(k, 53) * (cw + 60) - y * 0.45 + Math.sin(t * (0.8 + hash(k, 54)) + k) * 8) % (cw + 60) + cw + 60) % (cw + 60) - 30;
+      this.petal(x, y, (t * (0.9 + hash(k, 55) * 0.8) + hash(k, 56)) % 1, k % 3 === 0, undefined, k % 4 === 0 ? 1 : 2);
+    }
+    if (mood === 'sad' || mood === 'cold') return;
+    // twinkles around the head
+    for (let k = 0; k < 5; k++) {
+      const cyc = Math.floor(t * 0.9 + hash(k, 21));
+      const ph = (t * 0.9 + hash(k, 21)) % 1;
+      this.star(bx + 6 + Math.round(hash(k, 22, cyc) * 104), by + 6 + Math.round(hash(k, 23, cyc) * 64), Math.sin(ph * Math.PI) * 3.4, hx('#ffffff'));
+    }
+    // little hearts floating up from beside her (happy and calm moments)
+    if (mood === 'burst') return;
+    const inBand = (X: number, Y: number) => { const c = mid - (X - cw * 0.3) * slant; return Y > c - half - POP * 1.6 && Y < c + half - 2; };
+    const nH = mood === 'happy' ? 5 : 2;
+    for (let k = 0; k < nH; k++) {
+      const life = 2.2 + hash(k, 61);
+      const ph = (t / life + hash(k, 62)) % 1;
+      const cyc = Math.floor(t / life + hash(k, 62));
+      const x = bx + 96 + Math.round(hash(k, 63, cyc) * 40 + Math.sin(ph * 6 + k) * 3);
+      const y = by + 70 - Math.round(ph * 64);
+      if (ph > 0.85 && (Math.floor(t * 12) & 1)) continue; // blink out
+      this.sprite(HEART, x, y, 1, { '#': hx(k & 1 ? '#ff6aa8' : '#ffffff') }, inBand);
+    }
+  }
+
+  private moodLayer(fx: number, fy: number, mid: number, half: number, slant: number, tk: number) {
+    const { buf, cw, ch, pal, mood, t, look } = this;
+    const anime = look === 'anime';
     const inBand = (x: number, y: number) => { const c = mid - (x - cw * 0.3) * slant; return y > c - half + 3 && y < c + half - 3; };
     const light = pal[0], accent = pal[3];
-    const x0 = 0, x1 = cw;
     const yA = Math.max(0, Math.round(mid - half - cw * slant)), yB = Math.min(ch - 1, Math.round(mid + half + cw * slant));
     if (mood === 'burst') {
-      // focus lines converging on the face; the set is redrawn on 12s
-      const N = 120;
-      for (let y = yA; y <= yB; y++) for (let x = x0; x < x1; x++) {
+      // focus lines converging on the face, redrawn on 12s: dense and pink for Jenna, a few thin
+      // accent-coloured lines on the calm panels
+      const N = anime ? 120 : 56;
+      for (let y = yA; y <= yB; y++) for (let x = 0; x < cw; x++) {
         if (!inBand(x, y)) continue;
         const dx = x - fx, dy = (y - fy) * 1.6, r = Math.hypot(dx, dy);
         const a = (Math.atan2(dy, dx) / (Math.PI * 2) + 0.5) * N;
         const k = Math.floor(a), fr = a - k;
-        const w = 0.1 + hash(k, 5, tk) * 0.3;
-        const inner = 34 + hash(k, 6, tk) * 60;
+        if (!anime && hash(k, 8, tk) < 0.45) continue;
+        const w = anime ? 0.1 + hash(k, 5, tk) * 0.3 : 0.06 + hash(k, 5, tk) * 0.1;
+        const inner = (anime ? 34 : 54) + hash(k, 6, tk) * 60;
         if (r > inner && Math.abs(fr - 0.5) < w * Math.min(1, (r - inner) / 60)) {
           const i = y * cw + x;
-          buf[i] = hash(k, 7, tk) < 0.3 ? accent : mix(buf[i], light, 0.75);
+          buf[i] = anime ? (hash(k, 7, tk) < 0.3 ? accent : mix(buf[i], light, 0.75)) : mix(buf[i], accent, 0.5);
         }
       }
-    } else if (mood === 'happy') {
-      // soft bokeh dots drifting up, and twinkles all over the band
-      for (let k = 0; k < 16; k++) {
-        const bxp = Math.round(hash(k, 11) * cw + Math.sin(t * 0.6 + k) * 6);
-        const byp = Math.round(mid + half - ((t * (8 + hash(k, 12) * 10) + hash(k, 13) * 200) % (half * 2 + 20)));
-        const r = 3 + Math.round(hash(k, 14) * 5);
-        for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) {
-          const X = bxp + x, Y = byp + y;
-          if (X < 0 || Y < 0 || X >= cw || Y >= ch || !inBand(X, Y)) continue;
-          const d = (x * x + y * y) / (r * r);
-          if (d > 1 || dith(X, Y) < 0.55) continue;
-          const i = Y * cw + X;
-          buf[i] = mix(buf[i], accent, d > 0.7 ? 0.6 : 0.3);
-        }
+      if (anime) for (let k = 0; k < 6; k++) {
+        const cyc = Math.floor(t * 2 + hash(k, 71)), ph = (t * 2 + hash(k, 71)) % 1;
+        const X = Math.round(hash(k, 72, cyc) * cw), Y = Math.round(mid + (hash(k, 73, cyc) - 0.5) * half * 1.6);
+        if (inBand(X, Y)) this.star(X, Y, Math.sin(ph * Math.PI) * 4, hx('#ffffff'));
       }
-      for (let k = 0; k < 14; k++) {
-        const cyc = Math.floor(t * 0.8 + hash(k, 15));
-        const ph = (t * 0.8 + hash(k, 15)) % 1;
-        const X = Math.round(hash(k, 16, cyc) * cw), Y = Math.round(mid + (hash(k, 17, cyc) - 0.5) * half * 1.7);
-        if (inBand(X, Y)) this.star(X, Y, Math.sin(ph * Math.PI) * (2 + hash(k, 18) * 2.5), hash(k, 19) < 0.5 ? accent : hx('#ffffff'));
-      }
-    } else if (mood === 'sad') {
-      // slanted rain, darker at the top
-      for (let k = 0; k < 90; k++) {
-        const sp = 140 + hash(k, 31) * 80, len = 6 + Math.round(hash(k, 32) * 8);
-        const span = half * 2 + 40;
-        const yy = ((t * sp + hash(k, 33) * span) % span) + mid - half - 20;
-        const xx = Math.round(hash(k, 34) * (cw + 40) - yy * 0.25);
-        for (let j = 0; j < len; j++) {
-          const X = Math.round(xx + (yy + j) * 0.25) - 10, Y = Math.round(yy + j);
-          if (X < 0 || Y < 0 || X >= cw || Y >= ch || !inBand(X, Y)) continue;
-          const i = Y * cw + X;
-          buf[i] = mix(buf[i], accent, 0.25 + j / len * 0.35);
-        }
-      }
-    } else if (mood === 'cold') {
-      // a cold vignette closing in, and wavering vertical lines
-      for (let y = yA; y <= yB; y++) for (let x = x0; x < x1; x++) {
+      return;
+    }
+    if (mood === 'cold') {
+      // a cold vignette closing in (Jenna adds wavering lines)
+      for (let y = yA; y <= yB; y++) for (let x = 0; x < cw; x++) {
         if (!inBand(x, y)) continue;
         const d = Math.hypot((x - fx) / (cw * 0.55), (y - fy) / (half * 1.4));
         const i = y * cw + x;
-        if (d > 0.75 && dith(x, y) < (d - 0.75) * 1.3) buf[i] = mix(buf[i], hx('#04040c'), 0.7);
-        else if ((x + Math.round(Math.sin(y * 0.2 + t * 4) * 1.5)) % 11 === 0 && d > 0.4) buf[i] = mix(buf[i], accent, 0.12);
+        if (d > 0.75 && dith(x, y) < (d - 0.75) * (anime ? 1.3 : 0.9)) buf[i] = mix(buf[i], hx('#04040c'), anime ? 0.6 : 0.5);
+        else if (anime && (x + Math.round(Math.sin(y * 0.2 + t * 4) * 1.5)) % 11 === 0 && d > 0.4) buf[i] = mix(buf[i], accent, 0.12);
       }
-    } else {
-      // speed lines streaming left past the bust (fast and bright for determined lines)
-      const fast = mood === 'cool';
-      const n = fast ? 34 : 18;
-      for (let k = 0; k < n; k++) {
-        const Y0 = Math.round(mid + (hash(k, 41) - 0.5) * half * 1.9);
-        const len = (fast ? 30 : 18) + Math.round(hash(k, 42) * (fast ? 70 : 40));
-        const sp = (fast ? 420 : 110) + hash(k, 43) * 120;
-        const span = cw + len * 2;
-        const X0 = Math.round(cw + len - ((t * sp + hash(k, 44) * span) % span));
-        for (let j = 0; j < len; j++) {
-          const X = X0 + j, Y = Y0 - Math.round((X - cw * 0.3) * slant);
-          if (X < 0 || Y < 0 || X >= cw || Y >= ch || !inBand(X, Y)) continue;
-          const i = Y * cw + X;
-          buf[i] = mix(buf[i], j < 2 ? hx('#ffffff') : light, (fast ? 0.7 : 0.4) * (1 - j / len));
-        }
+      return;
+    }
+    if (!anime) return; // calm panels: no particles
+    // Jenna: soft bokeh hearts-and-dots drifting up, sakura petals behind her, twinkles all over the band
+    for (let k = 0; k < (mood === 'sad' ? 6 : 14); k++) {
+      const bxp = Math.round(hash(k, 11) * cw + Math.sin(t * 0.6 + k) * 6);
+      const byp = Math.round(mid + half - ((t * (8 + hash(k, 12) * 10) + hash(k, 13) * 200) % (half * 2 + 20)));
+      const r = 3 + Math.round(hash(k, 14) * 5);
+      for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) {
+        const X = bxp + x, Y = byp + y;
+        if (X < 0 || Y < 0 || X >= cw || Y >= ch || !inBand(X, Y)) continue;
+        const d = (x * x + y * y) / (r * r);
+        if (d > 1 || dith(X, Y) < 0.55) continue;
+        const i = Y * cw + X;
+        buf[i] = mix(buf[i], accent, d > 0.7 ? 0.6 : 0.3);
       }
     }
-
+    for (let k = 0; k < 16; k++) {
+      const sp = 9 + hash(k, 81) * 10;
+      const span = half * 2 + 10;
+      const y = mid - half + ((t * sp + hash(k, 82) * span) % span) - 5;
+      const x = ((hash(k, 83) * cw - (y - mid) * 0.5 + Math.sin(t + k) * 5) % cw + cw) % cw;
+      this.petal(x, y, (t * 0.7 + hash(k, 84)) % 1, k % 2 === 0, inBand);
+    }
+    if (mood === 'sad') return;
+    for (let k = 0; k < 10; k++) {
+      const cyc = Math.floor(t * 0.8 + hash(k, 15));
+      const ph = (t * 0.8 + hash(k, 15)) % 1;
+      const X = Math.round(hash(k, 16, cyc) * cw), Y = Math.round(mid + (hash(k, 17, cyc) - 0.5) * half * 1.7);
+      if (inBand(X, Y)) this.star(X, Y, Math.sin(ph * Math.PI) * (2 + hash(k, 18) * 2.5), hash(k, 19) < 0.5 ? accent : hx('#ffffff'));
+    }
   }
 }

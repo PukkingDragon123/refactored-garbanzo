@@ -8,6 +8,8 @@ import { guardInput } from '../core/input';
 import { SPECIES, CLUES } from '../game/species';
 import { ITEMS } from '../game/items';
 import { CloseUps, isCastId } from './closeup';
+
+const ALIAS_JENNA = ['jenna', 'pip'];
 import { PortraitBox, hasPortrait } from './dialogbox';
 
 // ---------------------------------------------------------------- pixel bubble skins
@@ -311,6 +313,8 @@ export class Bubbles {
 
   private closeWho = '';
   private closeExpr = 'neutral';
+  /** follow-up lines the current close-up has already been kept for */
+  private closeRun = 0;
   private makeBoxed(line: BubbleLine): Live {
     const sp = this.speakers.get(line.who);
     const style = line.style ?? 'say';
@@ -527,9 +531,14 @@ export class Bubbles {
           continue;
         }
         this.pb.hide();
-        // cinematic close-up for dramatic lines (kept while the same speaker keeps talking)
-        const dramatic = line.style === 'shout' || ['shocked', 'surprised', 'angry', 'scared', 'excited', 'cry', 'wow'].includes(line.expr ?? '');
-        const close = isCastId(line.who) && (line.close ?? (dramatic || (this.cu.active && this.closeWho === line.who)));
+        // cinematic close-up for genuinely dramatic lines only: shouts, shock, anger, tears (and Jenna's
+        // starry-eyed "wow"); routine surprise, excitement and worry stay in plain bubbles. It is kept
+        // for at most two more lines while the same speaker keeps talking.
+        const ex = line.expr ?? '';
+        const dramatic = line.style === 'shout' || ['shocked', 'angry', 'cry'].includes(ex) || ((ALIAS_JENNA.includes(line.who)) && ex === 'wow');
+        const keep = this.cu.active && this.closeWho === line.who && this.closeRun < 2 && line.style !== 'whisper';
+        const close = isCastId(line.who) && (line.close ?? (dramatic || keep));
+        this.closeRun = close && !dramatic && line.close === undefined && this.closeWho === line.who ? this.closeRun + 1 : 0;
         const ref = { lv: null as Live | null };
         if (close) this.cu.show(line.who as never, line.expr ?? (this.closeWho === line.who ? this.closeExpr : 'neutral'), { name: sp?.name ?? line.who, style: line.style, talking: () => !!ref.lv && !ref.lv.done });
         else this.cu.hide();
