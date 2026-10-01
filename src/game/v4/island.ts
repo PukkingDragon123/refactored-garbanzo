@@ -87,7 +87,7 @@ export class IslandScene4 extends FieldScene {
     const camp = !!game.save.flags['v4:arohaJoined'] && x > 1400 && x < 2560;
     const place = camp ? 'Camp' : z === 'wreck' ? 'The wreck' : z === 'forest' ? 'The bush track' : z === 'cave' ? 'Sea cave' : z === 'cove' ? 'Hidden cove' : z === 'seal' ? 'Seal rocks' : z === 'stream' ? 'Stream mouth' : z === 'grove' ? 'Palm grove' : z === 'rocks' ? 'West point' : z === 'cliffs' ? 'Under the cliffs' : 'Kittiwake Beach';
     return {
-      place, sub: `Day 1 · ${when}`,
+      place, sub: `Day ${game.save.day || 1} · ${when}`,
       keys: '<span class="key">A</span><span class="key">D</span> move · <span class="key">Shift</span> run · <span class="key">E</span> interact · <span class="key">Q</span> camera · <span class="key">Tab</span> pack',
     };
   }

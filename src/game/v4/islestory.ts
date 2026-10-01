@@ -26,6 +26,7 @@ import { clamp, rand, smoothstep } from '../../core/math';
 import { IsleCamp, CAMP } from './islecamp';
 import { startForage, Forage } from '../v9/forage';
 import { IsleTools } from '../v9/isletools';
+import { campDayTime } from '../v10/day';
 
 export const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 const F = () => game.save.flags;
@@ -34,7 +35,7 @@ const V = () => game.save.vars;
 /** where the sun should be for this save when the island loads */
 export function dayTimeForSave(): number {
   const f = F();
-  if (f['v4:day1']) return 3.96;
+  if (f['v4:day1']) return campDayTime();
   if (f['v4:dinner']) return 3.9;
   if (f['v4:arohaJoined']) return 2.85;
   if (f['v4:back']) return 2.55;
@@ -85,6 +86,8 @@ export class IsleStory implements IsleHooks {
   /** says run one after another (two overlapping conversations would strand the first one) */
   private sayQ: Promise<unknown> = Promise.resolve();
   private cutDepth = 0;
+  /** the Day 1 end card is up: the last cutscene keeps the camera (and the HUD hidden) */
+  holdCam = false;
   /** Chunk before the reveal: 1 = a black shape with glinting eyes, 0 = himself */
   private shadowK = 1;
   /** the can of Chunky Chow stuck on his face (seconds left) */
@@ -142,7 +145,7 @@ export class IsleStory implements IsleHooks {
       this.cutDepth = Math.max(0, this.cutDepth - 1);
       s.cutscene = false; this.busy = false; this.pose(null);
       // the outermost cutscene always hands the camera back
-      if (this.cutDepth === 0 && !this.flag('v4:day1')) {
+      if (this.cutDepth === 0 && !this.holdCam) {
         if (this.camTw) { const r = this.camTw.res; this.camTw = null; r(); }
         s.st.cam.locked = false;
         s.hud?.show(true);
