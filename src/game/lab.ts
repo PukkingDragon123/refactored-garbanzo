@@ -4,6 +4,7 @@ import { game } from './game';
 import { ITEMS, isSample } from './items';
 import { count, remove } from './inventory';
 import { perks } from './skills';
+import { fx10 } from './v10/skills10';
 import { addClue } from './research';
 import { CLUE_BY_ID, SPECIES_BY_ID } from './species';
 
@@ -37,7 +38,7 @@ export function labSamples(): { id: string; n: number; times: number }[] {
 }
 
 export function analysisTime(id: string) {
-  return (ITEMS[id]?.lab?.time ?? 3) * perks.labTime();
+  return (ITEMS[id]?.lab?.time ?? 3) * perks.labTime() * fx10.sampleTime();
 }
 
 /** RP the next analysis of this item would give. */
@@ -46,7 +47,7 @@ export function analysisRp(id: string) {
   if (!lab) return 0;
   const times = game.save.analyzed[id] ?? 0;
   const base = times === 0 ? lab.rp : times < 4 ? Math.max(1, Math.round(lab.rp * 0.2)) : 0;
-  return Math.round(base * perks.labRp() * perks.rpMul());
+  return Math.round(base * perks.labRp() * perks.rpMul() * fx10.sampleRp());
 }
 
 /** Consume one sample and analyse it. */

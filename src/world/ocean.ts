@@ -17,7 +17,11 @@
 //     splash(x, amount): void                    // spray burst at the surface at x (e.g. bow slam)
 //     setMask(pts: [number, number][] | null)    // near band: never draw above this world polyline
 //                                                // (cutaway hull: pass the transformed BOAT_LAYOUT.cutLine)
+//     maskY(x): number                           // that polyline's y at world x (-Infinity outside it)
 //     fields: SurfaceField[]                     // extra height fields (the giant wave adds itself)
+//     caps: number                               // 0..1 passing whitecaps riding the moving water (off by default)
+//   weather.cruise may change at any time (the boat slowing / speeding up): the bands' drift and the
+//   swell phase integrate it, so nothing jumps
 //   export const BAND_P: Record<BandName, number> // parallax each band's stage layer must use
 //   export function applySeaEnv(env: Env, w: Weather, base?: Env): void   // storm/lightning lighting & grade
 //   export function addSeaLayers(st, parts, opts?) // one-call stage assembly, see bottom of file
@@ -103,6 +107,11 @@ export class Ocean {
   reflect = 0.22;
   /** set false to skip the (additive) sun glitter */
   glitter = true;
+  /** 0..1: little whitecaps that build, break and fizzle on the wavelets, carried along with the moving
+   *  water (so they slide past with the boat's speed and each band's parallax) */
+  caps = 0;
+  /** distance the water has moved past the boat, px at the boat plane (the integral of weather.cruise) */
+  private cruiseDist = 0;
   private sheet = new Sheet();
   private bands = {} as Record<BandName, Band>;
   private glints: Frame[];
@@ -193,6 +202,7 @@ export class Ocean {
   update(dt: number) {
     const w = this.weather;
     this.time += dt;
+    this.cruiseDist += w.cruise * dt;
     this.updateAmps();
     const drift = w.cruise + Math.max(0, -w.windSpeed) * 0.12;
     for (const name of O.BAND_NAMES) {
@@ -206,22 +216,24 @@ export class Ocean {
 
   /** Raw swell elevation (up = +) of a band at layer-world x (Gerstner with fixed-point inversion). */
   private elev(B: Band, x: number) {
-    const t = this.time + this.weather.cruise * 0; // phase time
-    const cr = this.weather.cruise;
+    const t = this.time;
+    // the swell travels at its own speed plus the water streaming past the boat (integrated, so a
+    // change of speed never makes the crests jump)
+    const run = this.cruiseDist * B.spec.p;
     const W = B.waves, A = B.amp;
     let x0 = x;
     for (let it = 0; it < 3; it++) {
       let d = 0;
       for (let i = 0; i < W.length; i++) {
         const w = W[i];
-        d += w.q * A[i] * Math.sin(w.k * (x0 + (w.c + cr * B.spec.p) * t) + w.ph);
+        d += w.q * A[i] * Math.sin(w.k * (x0 + w.c * t + run) + w.ph);
       }
       x0 = x + d;
     }
     let y = 0;
     for (let i = 0; i < W.length; i++) {
       const w = W[i];
-      y += A[i] * Math.cos(w.k * (x0 + (w.c + cr * B.spec.p) * t) + w.ph);
+      y += A[i] * Math.cos(w.k * (x0 + w.c * t + run) + w.ph);
     }
     return y;
   }
@@ -256,6 +268,10 @@ export class Ocean {
     }
     const s = [...pts].sort((a, b) => a[0] - b[0]);
     this.mask = { x: Float32Array.from(s.map(p => p[0])), y: Float32Array.from(s.map(p => p[1])) };
+  }
+  /** y of the cutaway mask at world x (-Infinity where there is none): effects on the near water stay below it */
+  maskY(x: number): number {
+    return this.maskAt(x);
   }
   private maskAt(x: number): number {
     const m = this.mask;
@@ -437,6 +453,7 @@ export class Ocean {
         r.drawSub(B.trail, u, 0, cw, B.trail.h, x, y + 2, 1, 1, col(1, 1, 1, ta));
       }
     }
+    if (this.caps > 0.01 && spec.p >= 0.3) this.drawCaps(r, B, x0, x1, cw, hs);
     r.emissive();
     if (this.glitter && s < 0.6) this.drawGlitter(r, B, x0, x1, cw, hs);
     if (isNear) {
@@ -446,6 +463,52 @@ export class Ocean {
   }
   private colH = new Float32Array(0);
   private colE = new Float32Array(0);
+
+  /** Passing whitecaps: each slot builds a little cap of foam on a wavelet, holds it, then breaks it
+   *  up into fizzing dots. They are pinned to the band's texture, so they ride past with the moving
+   *  water: quick and big on the near bands, small and slow toward the horizon. */
+  private drawCaps(r: Renderer, B: Band, x0: number, x1: number, cw: number, hs: Float32Array) {
+    const w = this.weather;
+    const k = this.caps * (0.75 + w.storm * 0.4 + Math.max(0, w.gust - 0.45) * 0.5);
+    if (k <= 0.01) return;
+    const spec = B.spec, texW = spec.texW, t = this.time;
+    const n = Math.round((texW / 22) * Math.min(1.4, k));
+    const base = Math.floor((x0 + B.scroll) / texW) * texW;
+    const light = 0.9 + w.lightning * 0.6;
+    const fade = 0.5 + spec.p * 0.4;
+    const isNear = B.name === 'near';
+    for (let rep = 0; rep < 3; rep++) {
+      const off = base + rep * texW - B.scroll;
+      if (off > x1) break;
+      for (let i = 0; i < n; i++) {
+        const life = 2.2 + hash2(i, 3, B.seed) * 2.8;
+        const cyc = t / life + hash2(i, 5, B.seed);
+        const gen = Math.floor(cyc), ph = cyc - gen;
+        // not every slot breaks every cycle (a calm sea only breaks here and there)
+        if (hash2(i, gen, B.seed + 7) > 0.32 + k * 0.3) continue;
+        const x = Math.round(off + hash2(i, gen, B.seed + 11) * texW);
+        if (x < x0 || x > x1) continue;
+        const ci = clamp(Math.floor((x - x0) / cw) + 1, 1, hs.length - 2);
+        // nearer rows of the band get bigger caps
+        const dz = Math.pow(hash2(i, gen, B.seed + 13), 1.4);
+        const y = Math.round(hs[ci] + 2 + dz * spec.texH * 0.5);
+        if (isNear && this.mask && this.maskAt(x) > y - 2) continue;
+        const L = Math.max(1, Math.round((0.7 + dz * 1.1) * (0.6 + spec.detail * 0.7) * 3.2));
+        // build up (0..0.2), hold (..0.45), break up and fizzle out (..1)
+        const grow = clamp(ph / 0.2), brk = clamp((ph - 0.45) / 0.55);
+        const a = clamp((ph < 0.2 ? grow : 1 - brk * brk)) * fade * Math.min(1, k * 1.6);
+        if (a < 0.03) continue;
+        const len = Math.max(1, Math.round(L * (0.4 + grow * 0.6) * (1 + brk * 0.5)));
+        const c0 = col(light, light, light * 1.02, a), c1 = col(light * 0.82, light * 0.9, light * 0.94, a * 0.7);
+        for (let j = 0; j < len; j++) {
+          if (brk > 0.05 && hash2(i * 31 + j, gen + Math.floor(ph * 10), B.seed + 17) < brk * 0.75) continue;
+          r.rect(x + j - (len >> 1), y, 1, 1, c0);
+        }
+        // the spill down the face of the wavelet, under the cap
+        if (L > 2 && ph < 0.75) for (let j = 1; j < len - 1; j++) if (hash2(i * 17 + j, gen, B.seed + 19) < 0.6 - brk * 0.5) r.rect(x + j - (len >> 1) + 1, y + 1, 1, 1, c1);
+      }
+    }
+  }
 
   /** Sun glitter: twinkling glints stuck to the moving texture, dense under the sun. */
   private drawGlitter(r: Renderer, B: Band, x0: number, x1: number, cw: number, hs: Float32Array) {

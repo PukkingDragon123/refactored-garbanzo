@@ -81,6 +81,12 @@ export class Player implements Drawable {
 
   /** movement speed multiplier (V4 scenes are scaled for the smaller anime cast) */
   speedK = 1;
+  /** V10 (v10/energy.ts): pack weight and exhaustion on the legs, a speed multiplier */
+  loadK = 1;
+  /** V10: too loaded or worn out to sprint */
+  noSprint = false;
+  /** V10: dizzy from bad forage, 0..1: the controls wobble and he staggers */
+  dizzy = 0;
   /** remap automatic anims (e.g. carrying Chunk: idle -> carryPupIdle, walk -> carryPup) */
   animMap: Record<string, string> | null = null;
 
@@ -202,7 +208,7 @@ export class Player implements Drawable {
       if (this.body.inTransition && this.body.anim === 'climbOn') ay = 0;
       // the climb clip's frame is the place on the ladder, so this speed is how fast the limbs work:
       // two rungs per hand per 12 px
-      this.y = clamp(this.y + ay * (this.autoClimb ? 50 : 40) * dt, c.y0, c.y1);
+      this.y = clamp(this.y + ay * (this.autoClimb ? 50 : 40 * Math.max(0.5, this.loadK)) * dt, c.y0, c.y1);
       this.x = approach(this.x, c.x, 120 * dt);
       this.anim = 'climb';
       if (ay) {
@@ -259,10 +265,15 @@ export class Player implements Drawable {
         return;
       }
     }
-    this.running = canControl && !this.noRun && inp.down('run') && !this.crouch && !this.camera;
-    if (this.running && Math.abs(this.vx) > 80 * this.speedK) this.sinceRun = 0;
-    const speed = (this.state === 'script' ? this.scriptSpeed : this.camera ? 28 : this.crouch ? 26 : this.running ? 118 : 60) * this.speedK * this.wadeK;
-    const target = ax * speed;
+    this.running = canControl && !this.noRun && !this.noSprint && inp.down('run') && !this.crouch && !this.camera;
+    if (this.running && Math.abs(this.vx) > 80 * this.speedK * this.loadK) this.sinceRun = 0;
+    const speed = (this.state === 'script' ? this.scriptSpeed : this.camera ? 28 : this.crouch ? 26 : this.running ? 118 : 60) * this.speedK * this.wadeK * (this.state === 'script' ? 1 : this.loadK);
+    let target = ax * speed;
+    // dizzy: he veers, stalls and staggers a step on his own (facing still follows the keys)
+    if (this.dizzy > 0 && canControl) {
+      const w = Math.sin(this.t * 1.3) * 0.6 + Math.sin(this.t * 3.7 + 1) * 0.4;
+      target = ax ? target + w * 0.9 * this.dizzy * speed : Math.abs(w) > 0.72 ? Math.sign(w) * 0.45 * this.dizzy * speed : 0;
+    }
     this.vx = approach(this.vx, target, (this.onGround ? 640 : 280) * dt);
     // sliding on a tilted deck
     if (this.onGround && Math.abs(this.tilt) > 0.03) this.vx += Math.sin(this.tilt) * 520 * dt * (this.crouch ? 0.35 : 1);
@@ -353,7 +364,7 @@ export class Player implements Drawable {
     else if (steep && Math.abs(this.vx) > 30 && Math.sign(this.vx) === Math.sign(this.tilt) && ax === 0) this.anim = 'slip';
     else if (steep && !moving) this.anim = 'brace';
     else if (this.crouch) this.anim = moving ? 'crouchWalk' : 'crouch';
-    else if (moving) this.anim = Math.abs(this.vx) > 85 * this.speedK * this.wadeK ? 'run' : 'walk';
+    else if (moving) this.anim = Math.abs(this.vx) > 85 * this.speedK * this.wadeK * this.loadK ? 'run' : 'walk';
     else this.anim = 'idle';
     // debounce ground-pose changes (idle/walk/brace/slip jitter on bumpy terrain)
     const soft = (a: string) => a === 'idle' || a === 'walk' || a === 'run' || a === 'brace' || a === 'slip';
@@ -381,7 +392,7 @@ export class Player implements Drawable {
     const inp = game.input;
     const ax = canControl ? inp.axisX() : 0;
     const ay = canControl ? (inp.down('down') ? 1 : 0) - (inp.down('up') || inp.down('jump') ? 1 : 0) : 0;
-    const sp = inp.down('run') ? 72 : 44;
+    const sp = (inp.down('run') && !this.noSprint ? 72 : 44) * this.loadK;
     this.vx = approach(this.vx, ax * sp, 90 * dt);
     this.vy = approach(this.vy, ay * sp + 4, 90 * dt);
     this.x = clamp(this.x + this.vx * dt, this.minX, this.maxX);

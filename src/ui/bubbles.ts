@@ -8,9 +8,12 @@ import { guardInput } from '../core/input';
 import { SPECIES, CLUES } from '../game/species';
 import { ITEMS } from '../game/items';
 import { CloseUps, isCastId } from './closeup';
-
-const ALIAS_JENNA = ['jenna', 'pip'];
 import { PortraitBox, hasPortrait } from './dialogbox';
+
+/** expressions that bring the speaker's close-up in (cast only; a line's `close` overrides) */
+const CLOSE_EXPR = ['shocked', 'surprised', 'angry', 'scared', 'excited', 'laugh', 'wow', 'sad', 'cry'];
+const CLOSE_CHUNK = ['shocked', 'angry', 'cry'];
+const CHUNK_IDS = ['chunk'];
 
 // ---------------------------------------------------------------- pixel bubble skins
 function px(w: number, h: number, rows: (x: number, y: number) => string | null): string {
@@ -186,12 +189,8 @@ const CSS = `
 .bub .chs button.sel::before { content: '▶ '; }
 .bub .chs .key { box-shadow: none !important; background: #0c0a0c !important; color: #fff !important; }
 .bub .chs button.sel .key { background: #fff !important; color: #0c0a0c !important; }
-/* anime effects */
+/* shout marks (no line bursts) */
 .bub .fx { position: absolute; pointer-events: none; }
-.bub .fx.burst { inset: -1.6em -2.2em; z-index: -1; opacity: 0; background: repeating-conic-gradient(from 0deg, #0c0a0c 0 3deg, transparent 3deg 14deg);
-  -webkit-mask: radial-gradient(closest-side, transparent 58%, #000 60%, #000 92%, transparent 100%); mask: radial-gradient(closest-side, transparent 58%, #000 60%, #000 92%, transparent 100%); }
-.bub.shout .fx.burst { opacity: 0.9; animation: burstSpin 0.4s steps(3) infinite; }
-@keyframes burstSpin { 0% { transform: rotate(0deg) scale(1); } 50% { transform: rotate(4deg) scale(1.04); } 100% { transform: rotate(8deg) scale(1); } }
 .bub .fx.marks { right: -0.9em; top: -1.4em; font-family: 'Jersey 10', 'Silkscreen', monospace; font-weight: 700; font-size: 1.3em; color: #0c0a0c; display: none; text-shadow: 2px 2px 0 #fff, -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff; transform: rotate(12deg); }
 .bub.shout .fx.marks { display: block; animation: marksPop 0.35s cubic-bezier(.2,1.9,.4,1) both; }
 @keyframes marksPop { from { transform: rotate(12deg) scale(0); } }
@@ -222,7 +221,7 @@ const CSS = `
 @keyframes bubOut { to { transform: scale(1.25, 0.2); opacity: 0; } }
 @keyframes bubNext { 50% { transform: translateY(3px); } }
 @keyframes bubShake { 0% { transform: translate(0, 0); } 50% { transform: translate(2px, -1px); } 100% { transform: translate(-1px, 1px); } }
-@media (prefers-reduced-motion: reduce) { .bub.shout .inner, .bub .tx .c.on, .bub.shout .fx.burst { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .bub.shout .inner, .bub .tx .c.on { animation: none !important; } }
 `;
 
 interface Live {
@@ -343,7 +342,7 @@ export class Bubbles {
     const b = el('div', `bub ${style}${bark ? ' bark' : ' pre'}`);
     b.style.visibility = 'hidden';
     const marks = style === 'shout' ? (/[?]/.test(line.text) ? '!?' : '!!') : '';
-    b.innerHTML = `<div class="pp"><div class="inner"><div class="fx burst"></div><div class="box"><div class="nm"></div><div class="typing"><b></b><b></b><b></b></div><div class="tx"></div><div class="chs"></div><div class="more"></div></div><div class="tail"></div><div class="fx marks">${marks}</div></div></div>`;
+    b.innerHTML = `<div class="pp"><div class="inner"><div class="box"><div class="nm"></div><div class="typing"><b></b><b></b><b></b></div><div class="tx"></div><div class="chs"></div><div class="more"></div></div><div class="tail"></div><div class="fx marks">${marks}</div></div></div>`;
     const nm = b.querySelector('.nm') as HTMLElement;
     nm.textContent = sp?.name ?? line.who;
     b.style.setProperty('--c', sp?.color ?? '#3fbca6');
@@ -531,11 +530,12 @@ export class Bubbles {
           continue;
         }
         this.pb.hide();
-        // cinematic close-up for genuinely dramatic lines only: shouts, shock, anger, tears (and Jenna's
-        // starry-eyed "wow"); routine surprise, excitement and worry stay in plain bubbles. It is kept
-        // for at most two more lines while the same speaker keeps talking.
+        // cinematic close-up for the expressive lines of the main cast: shouts, shock and surprise,
+        // anger, fear, joy and laughter, sadness and tears (Chunk's deadpan card only for shouts, shock,
+        // anger and tears); the everyday lines (neutral, happy, thinking, serious, worried, teasing...)
+        // stay in plain bubbles. It is kept for at most two more lines while the same speaker keeps talking.
         const ex = line.expr ?? '';
-        const dramatic = line.style === 'shout' || ['shocked', 'angry', 'cry'].includes(ex) || ((ALIAS_JENNA.includes(line.who)) && ex === 'wow');
+        const dramatic = line.style === 'shout' || (CHUNK_IDS.includes(line.who) ? CLOSE_CHUNK : CLOSE_EXPR).includes(ex);
         const keep = this.cu.active && this.closeWho === line.who && this.closeRun < 2 && line.style !== 'whisper';
         const close = isCastId(line.who) && (line.close ?? (dramatic || keep));
         this.closeRun = close && !dramatic && line.close === undefined && this.closeWho === line.who ? this.closeRun + 1 : 0;

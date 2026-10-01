@@ -27,6 +27,7 @@ import { rawPhotos } from '../photos';
 import { A } from '../assets';
 import { clamp, rand } from '../../core/math';
 import type { Frame } from '../../gfx/renderer';
+import { tickBody, bodyExit } from '../v10/energy';
 
 export interface SpawnV2 {
   species: string;
@@ -375,6 +376,8 @@ export class FieldScene extends WorldScene implements WildHost {
     super.update(dt);
     this.cam.update(dt, this.st, p.x, p.eyeY, p.crouch || p.state === 'hide', this.animals);
     if (!this.cam.active && this.site.followY) this.st.cam.ty = p.y - 60;
+    // V10: energy, the pack's weight, bad forage, the quick-eat key
+    tickBody(dt, this);
     this.guide?.update(dt);
     this.insects.update(dt);
     // lures age
@@ -425,6 +428,7 @@ export class FieldScene extends WorldScene implements WildHost {
   exit() {
     this.cam?.destroy();
     audio.setDanger(0);
+    bodyExit(this);
     super.exit();
   }
 }

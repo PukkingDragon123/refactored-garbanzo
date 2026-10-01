@@ -21,6 +21,7 @@ import { updateQuests } from '../quests';
 import { addClue } from '../research';
 import { CLUE_BY_ID } from '../species';
 import { openBackpack } from '../../ui/backpack';
+import { eatFood } from '../v10/forage10';
 import { A } from '../assets';
 import { rand } from '../../core/math';
 
@@ -228,16 +229,9 @@ export abstract class WorldScene implements Scene {
     this.hud?.refresh(true);
   }
 
-  /** eat food from the backpack: sets the expedition buff */
+  /** eat food from the backpack (V10: energy back, stew / tea buffs, the gamble on unknown forage) */
   eat(id: string) {
-    const d = ITEMS[id];
-    if (!d?.eat) return;
-    game.save.buff = d.eat;
-    audio.play('munch' as 'ui', { vol: 0.6 });
-    this.player.body.setExpr('happy', 1.5);
-    this.player.body.showEmote('heart', 1.2);
-    const what = d.eat === 'steady' ? 'Steady hands for the next trip.' : d.eat === 'quiet' ? 'Calm and quiet on your feet.' : 'Energy for extra shots.';
-    game.ui.toast(`Ate <b>${d.name}</b>. ${what}`, 'FOOD', 'teal', 3200);
+    eatFood(id);
   }
 
   updateInteraction() {

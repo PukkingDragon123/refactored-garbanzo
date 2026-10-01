@@ -4,7 +4,6 @@
 import { game } from './game';
 import { add, count } from './inventory';
 import { buildDone, buildLevel } from './crafting';
-import { ITEMS } from './items';
 import { SPECIES, SPECIES_BY_ID } from './species';
 import { V4_QUESTS } from './v4/quests4';
 
@@ -271,15 +270,15 @@ export function completeQuest(id: string) {
   const s = game.save;
   s.quests[id] = 'done';
   const r = q.reward;
-  const bits: string[] = [];
-  if (r?.rp) { s.rp += r.rp; s.totalRp += r.rp; bits.push(`+${r.rp} RP`); }
-  if (r?.items) for (const [it, n] of r.items) { add(it, n); bits.push(`${ITEMS[it]?.name ?? it}${n > 1 ? ' ×' + n : ''}`); }
+  if (r?.rp) { s.rp += r.rp; s.totalRp += r.rp; }
+  if (r?.items) for (const [it, n] of r.items) add(it, n);
   if (r?.flag) s.flags[r.flag] = true;
   if (s.tracked === id) s.tracked = null;
   game.persist();
-  game.ui.toast(`${q.main ? 'Chapter complete' : 'Quest complete'}: <b>${q.title}</b>${bits.length ? ' · ' + bits.join(', ') : ''}${r?.text ? '<br>' + r.text : ''}`, 'DONE', 'teal', 4600);
+  // no "chapter / quest complete" popup: the tracker quietly moves on to the next quest (the RP
+  // counter counts any reward up on its own)
   onQuestEvent?.('done', q);
-  if (q.next) startQuest(q.next);
+  if (q.next) startQuest(q.next, true);
 }
 
 

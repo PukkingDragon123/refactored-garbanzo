@@ -8,6 +8,7 @@ import type { SiteId } from './species';
 import { SPECIES_BY_ID } from './species';
 import { game } from './game';
 import { perks } from './skills';
+import { fx10 } from './v10/skills10';
 import { addEvidence } from './research';
 import type { PhotoRecord } from './save';
 
@@ -135,11 +136,13 @@ export function sharpness(s: PhotoSubject) {
 export function judgeSubject(s: PhotoSubject, p: RawPhoto): Judgement {
   const sharp = sharpness(s);
   const fail = (reason: string, code: IdProblem): Judgement => ({ identified: false, reason, code, score: 0, stars: 0, sharp });
-  if (s.inFrame < 0.35) return fail('Mostly out of frame', 'frame');
-  if (s.visible < perks.idVisible()) return fail(`Hidden behind cover (${Math.round(s.visible * 100)}% visible)`, 'hidden');
-  if (s.size < 0.045) return fail('Too far away to identify', 'small');
+  // V10 Research skills: identify from blurrier, smaller, more hidden animals
+  const idb = fx10.idBonus();
+  if (s.inFrame < 0.35 * (1 - idb * 0.3)) return fail('Mostly out of frame', 'frame');
+  if (s.visible < perks.idVisible() * (1 - idb * 0.4)) return fail(`Hidden behind cover (${Math.round(s.visible * 100)}% visible)`, 'hidden');
+  if (s.size < 0.045 * (1 - idb * 0.45)) return fail('Too far away to identify', 'small');
   if (p.light < 0.25 && !perks.nightClean()) return fail('Too dark to make out', 'dark');
-  if (sharp < perks.idSharp()) {
+  if (sharp < perks.idSharp() * (1 - idb * 0.45)) {
     const worst = Math.min(s.focus, s.motion, s.shake);
     return worst === s.focus ? (p.af === 'foreground' ? fail('The focus grabbed a leaf in front', 'leaf') : fail('Out of focus', 'focus')) : worst === s.motion ? fail('Motion blur, it moved too fast', 'motion') : fail('Camera shake', 'shake');
   }
@@ -159,7 +162,7 @@ export function judgeSubject(s: PhotoSubject, p: RawPhoto): Judgement {
   score += (rarity - 1) * 0.02;
   score = Math.max(0, Math.min(1, score));
   let stars = score >= 0.84 ? 5 : score >= 0.7 ? 4 : score >= 0.55 ? 3 : score >= 0.38 ? 2 : 1;
-  if (s.behavior && perks.behaviourStar()) stars = Math.min(5, stars + 1);
+  if (s.behavior && fx10.behaviourStar()) stars = Math.min(5, stars + 1);
   return { identified: true, score, stars, sharp };
 }
 

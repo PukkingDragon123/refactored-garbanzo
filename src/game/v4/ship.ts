@@ -21,6 +21,7 @@ import { hex } from '../../art/color';
 import { fishTank, gripOf } from '../../art/v9/fish';
 import type { Actor } from '../../world/actor';
 import { ChunkBuddy } from './buddy';
+import { Underway } from './underway';
 import type { Interactable } from '../../world/npc';
 import type { Env } from '../../gfx/renderer';
 
@@ -41,6 +42,8 @@ export class ShipScene4 extends FieldScene {
   weather = new Weather();
   ocean!: Ocean;
   sky!: Sky;
+  /** the boat under way: bow wave, wake, waterline foam, wind lines; drives weather.cruise from the engine */
+  underway!: Underway;
   art!: Ship4Art;
   rot = 0;
   bob = 0;
@@ -128,9 +131,12 @@ export class ShipScene4 extends FieldScene {
       if (big) r.post.flash = 0.45;
     };
     st.addScreenLayer('sky').add(this.sky);
+    this.underway = new Underway(this);
     // distant bands barely move vertically (the horizon stays at eye level as you climb the decks)
     for (const b of ['horizon', 'far', 'mid'] as const) st.addLayer('sea-' + b, BAND_P[b], 0, 0.6, 0, b === 'mid' ? 0.85 : BAND_P[b]).add(this.ocean.band(b));
     st.addLayer('rain-far', RAIN_P.far, 0, 0, 0).add(new Rain(this.weather, 'far', 1));
+    // wind streaks blowing aft across the sky and the far sea, behind the boat
+    st.addLayer('wind-far', 0.7, 0, 0, 0.2, 0.85).add(new Custom(0, rr => this.underway.drawWind(rr, 'far')));
     const main = st.addLayer('main', 1, 0, 1, 0);
     main.xf = [PIVOT[0], PIVOT[1], 0, 0, 0];
     this.main = main;
@@ -182,12 +188,16 @@ export class ShipScene4 extends FieldScene {
     // the near swell sits on the hull's plane vertically, so the waterline matches at any camera height
     st.addLayer('sea-near', BAND_P.near, 0, 0.6, 0, 1).add(this.ocean.band('near'));
     st.addLayer('sea-front', BAND_P.front, 0, 0.5, 0, 1).add(this.ocean.band('front'));
+    // ...and across the deck and the near water, in front of it
+    st.addLayer('wind-near', 1.1, 0, 0, 0.2, 1).add(new Custom(0, rr => this.underway.drawWind(rr, 'near')));
     // fishing: the underwater cross-section, fish shadows, line and float, over the sea bands
     st.addLayer('sea-fish', 1, 0, 0, 0, 1).add(new Custom(0, rr => this.fishDraw?.(rr)));
     st.addLayer('rain-mid', RAIN_P.mid, 0, 0, 0, 1).add(new Rain(this.weather, 'mid', 2));
     st.addLayer('rain-near', RAIN_P.near, 0, 0, 0, 1).add(new Rain(this.weather, 'near', 3));
     st.layer('sea-horizon').add(updater(dt => { this.weather.update(dt); this.ocean.update(dt); }));
     st.layer('sea-near').add(new Custom(50, rr => this.drawLine(rr)));
+    // the bow wave, the waterline foam and the stern's wake, on the near water
+    st.layer('sea-near').add(new Custom(10, rr => this.underway.drawNear(rr)));
     // walkable decks and ladders
     const T = st.terrain;
     T.addGround(FLOORS.lower, 'ground');
@@ -445,8 +455,9 @@ export class ShipScene4 extends FieldScene {
     }
     r.popTransform();
   }
-  /** boat speed through the water (px/s), for the fishing view's wake */
-  cruise() { return this.weather.cruise; }
+  /** boat speed through the water (px/s), for the fishing view's wake (scaled so the fishing view keeps
+   *  the flow it was tuned for: 18 at full ahead, against the bands' 30) */
+  cruise() { return this.weather.cruise * 0.6; }
   private keelPts: [number, number][] | null = null;
   /** the running gear in world space: the propeller hub, where the stern meets the water, and points along the keel */
   gear(): { prop: [number, number]; stern: [number, number]; keel: [number, number][] } {
@@ -552,6 +563,8 @@ export class ShipScene4 extends FieldScene {
   }
 
   private placeSub = 'Day 1 at sea';
+  /** how far the camera has eased down while Mori is out on the open deck */
+  private deckCam = 0;
   /** where Mori's carrying hand sits relative to his feet (facing right) */
   private carryOff: [number, number] = [5, -24];
   /** keep Chunk in Mori's arms */
@@ -601,6 +614,8 @@ export class ShipScene4 extends FieldScene {
     this.bob = clamp(this.bob, -30, 30);
     if (this.main.xf) { this.main.xf[2] = this.rot; this.main.xf[4] = this.bob; }
     this.ocean?.setMask(CUTLINE.map(([x, y]) => this.shipToWorld(x, y)));
+    // under way: speed from the engine, bow wave, wake, foam and wind (after the roll, so it sits on the hull)
+    this.underway?.update(dt);
     // the deck only slides you about while you're in control (not through dialogue and cutscenes)
     const held = this.cutscene || this.busyAction || p.state === 'script' || p.state === 'work';
     p.tilt = held ? 0 : this.rot * (storm > 0.2 ? 1.6 : 1);
@@ -657,6 +672,13 @@ export class ShipScene4 extends FieldScene {
       }
     }
     super.update(dt);
+    // up on deck (and through the wheelhouse) the camera sits lower, so the sea along the hull (the bow
+    // wave, the waterline foam, the wake) stays in the frame above the HUD; below deck it's as before
+    const onDeck = this.level() === 'main' && p.state !== 'climb';
+    this.deckCam = damp(this.deckCam, onDeck ? 72 : 0, 2.5, dt);
+    // (the field scene resets ty every frame unless the photo camera is up; a locked camera ignores
+    // it, and the fishing view eases back to it, so it lands on the deck framing)
+    if (!this.cam.active) this.st.cam.ty += this.deckCam;
     // the HUD's place line follows the story ("Day 1 · The storm")
     const ho = this.hudOpts();
     if (ho.sub !== this.placeSub && this.hud) { this.placeSub = ho.sub; this.hud.setPlace(ho.place, ho.sub); }

@@ -1,6 +1,6 @@
 // V6 close-up minigames: the camera cuts in to a full-screen, native-resolution pixel-art shot of the
 // action (hands, cup, kettle, engine...), with no panel, title or buttons. A faint hint line fades
-// in and out at the bottom, and the result lands as a big anime-style word with a burst. Scenes draw
+// in and out at the bottom, and the result lands as a big word (no line burst behind it). Scenes draw
 // into a 32-bit pixel buffer with a few blending helpers, so the art stays crisp at any size.
 
 import { game } from '../../game/game';
@@ -28,10 +28,6 @@ const CSS = `
 .cu-res small { display: block; font-size: 0.32em; letter-spacing: 0.1em; text-align: center; margin-top: 0.2em; color: #ffe6b0; text-shadow: 2px 2px 0 #3a1408; }
 @keyframes cuRes { 0% { opacity: 0; transform: translate(-50%, -50%) rotate(-5deg) scale(2.2); } 12% { opacity: 1; transform: translate(-50%, -50%) rotate(-5deg) scale(1); }
   85% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -50%) rotate(-5deg) scale(1.08); } }
-.cu-burst { position: absolute; left: 50%; top: 42%; width: 140vmax; height: 140vmax; margin: -70vmax 0 0 -70vmax; pointer-events: none;
-  background: repeating-conic-gradient(rgba(255,240,200,0.16) 0 4deg, transparent 4deg 12deg); animation: cuBurst 1.9s ease-out both; }
-.cu-burst.bad { background: repeating-conic-gradient(rgba(200,220,255,0.1) 0 4deg, transparent 4deg 12deg); }
-@keyframes cuBurst { from { opacity: 0; transform: scale(0.4) rotate(0deg); } 15% { opacity: 1; } to { opacity: 0; transform: scale(1.1) rotate(25deg); } }
 .cu-say { position: absolute; left: 4%; top: 5%; max-width: min(56vw, 640px); pointer-events: none; font-family: 'Jersey 15', 'Pixelify Sans', monospace; font-size: clamp(14px, 2vw, 21px);
   line-height: 1.3; color: #0c0a0c; background: #fff; padding: 0.4em 0.7em 0.45em; box-shadow: 0 0 0 3px #0c0a0c, 5px 6px 0 3px rgba(0,0,0,0.45); transform-origin: 10% 100%;
   animation: cuSay 0.3s cubic-bezier(.2,1.7,.4,1) both; }
@@ -95,10 +91,10 @@ export function openCloseup(): Closeup {
       hintT = setTimeout(() => hintEl.classList.remove('on'), ms);
     },
     result(word, sub, bad) {
-      const b = el('div', 'cu-burst' + (bad ? ' bad' : ''));
-      const r = el('div', 'cu-res' + (bad ? ' bad' : ''), word + (sub ? `<small>${sub}</small>` : ''));
-      wrap.append(b, r);
-      return new Promise(res => setTimeout(() => { b.remove(); r.remove(); res(); }, 1900));
+      // just the word (or nothing, for a wordless beat): no radial line burst behind it
+      const r = word || sub ? el('div', 'cu-res' + (bad ? ' bad' : ''), word + (sub ? `<small>${sub}</small>` : '')) : null;
+      if (r) wrap.append(r);
+      return new Promise(res => setTimeout(() => { r?.remove(); res(); }, 1900));
     },
     flash() { const f = el('div', 'cu-flash'); wrap.appendChild(f); setTimeout(() => f.remove(), 360); },
     say(name, text, o = {}) {
