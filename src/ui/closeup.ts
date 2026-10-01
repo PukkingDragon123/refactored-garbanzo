@@ -1,17 +1,20 @@
-// Visual-novel cut-ins: for dramatic lines (shouts, shock, anger, or when a script asks) a slanted
-// band opens across the screen and the speaker's HD pixel bust comes in on it. Everything is drawn
-// into one low-res canvas at the bust's own pixel scale (panel art, effects and bust share one crisp
-// pixel grid). Each character has a look:
-//  - Jenna, 'anime': the full kawaii treatment for every mood. A pink/sakura palette (lilac when
-//    scared or sad), screentone, sakura petals drifting across the whole screen, twinkles and little
-//    hearts, a bouncy drop-in entrance with squash and a hop on each new line, pink focus lines on shouts.
+// Visual-novel cut-ins: for the expressive lines (shouts, shock, fear, joy, tears, or when a script
+// asks) a slanted band opens across the screen and the speaker's HD pixel bust comes in on it.
+// Everything is drawn into one low-res canvas at the bust's own pixel scale (panel art, effects and
+// bust share one crisp pixel grid). No speed lines, focus lines or radial line bursts for anyone.
+// Each character has a look:
+//  - Jenna, 'anime': her pink kawaii panel, kept clean: a soft dithered pink wash that is palest in a
+//    glow behind her head, a handful of sakura petals tumbling through the band, a few twinkles round
+//    her hair, and a gentle entrance (she rises into the band and dissolves in on the pixel grid,
+//    with a little lift on each new line). Lilac, slower petals and no twinkles when scared or sad.
 //  - Mori, Joshu, Aroha, 'clean': a calm panel in their own colours, a subtle gradient and no
-//    particles. Only big moments (shouts, shock, anger) add a short shake, one white flash and a few
-//    thin focus lines in the character's accent; scared adds a cold vignette and a shiver.
+//    particles. Big moments (shouts, shock, anger) add a short shake, an impact frame and one white
+//    flash; scared adds a cold vignette and a shiver.
 //  - Chunk, 'plain': a deliberately bland flat card. Hard cut in, no rim, no shadow, a slow deadpan
 //    zoom, and one comic beat: a sweat drop sliding down, or a flat "boof." caption.
 // The bust breathes, lip-syncs and breaks out of the band's top edge. A name plate rides under it
-// and the line's bubble docks beside it.
+// and the line's bubble docks beside it. The cut-in only ever draws in this band, mid-screen: it is
+// never used as a small profile picture (the HUD and the portrait box keep the normal portraits).
 
 import { el } from './ui';
 import { renderAnimePortraitHD } from '../art/anime/portraits';
@@ -47,9 +50,15 @@ const CSS = `
 .cu .fl { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
 .cu.flash .fl { animation: cuFlash 0.22s ease-out; }
 @keyframes cuFlash { from { opacity: 0.6; } to { opacity: 0; } }
-.cu.anime .np div { color: #fff; background: #d0488e; box-shadow: inset 0.4em 0 0 #ffd0e6, 0.28em 0.28em 0 #ffd0e6, 0.28em 0.28em 0 2px #6a1a4a; animation: cuNpBounce 0.5s cubic-bezier(.2,1.9,.4,1) both 0.14s; }
+.cu.anime .dim { background: radial-gradient(ellipse at 35% 58%, rgba(40,8,32,0.1) 25%, rgba(36,8,30,0.5) 100%); }
+.cu.anime.cold .dim { background: radial-gradient(ellipse at 35% 58%, rgba(20,12,44,0.2) 20%, rgba(14,8,36,0.66) 100%); }
+.cu.anime .fl { background: #fff4fa; }
+.cu.anime.flash .fl { animation: cuFlashSoft 0.3s ease-out; }
+@keyframes cuFlashSoft { from { opacity: 0.45; } to { opacity: 0; } }
+.cu.anime .np div { color: #fff; background: #d0488e; box-shadow: inset 0.4em 0 0 #ffd0e6, 0.28em 0.28em 0 #ffd0e6, 0.28em 0.28em 0 2px #6a1a4a; animation: cuNpRise 0.42s cubic-bezier(.25,1.45,.45,1) both 0.16s; }
 .cu.anime .np span::after { content: ' ♥'; color: #ffd0e6; }
-@keyframes cuNpBounce { 0% { transform: skewX(-14deg) translateY(160%) scale(0.6); } }
+@keyframes cuNpRise { 0% { transform: skewX(-14deg) translateY(70%) scale(0.86); opacity: 0; } 40% { opacity: 1; } }
+.cu.anime .np.out div { animation: cuNpOut 0.14s ease-in both; }
 .cu.plain .dim { background: rgba(10,8,6,0.22); }
 .cu.plain .np div { color: #2a2420; background: #f4eee0; transform: none; letter-spacing: 0.06em; box-shadow: 0 0 0 2px #2a2420; animation: none; }
 .cu.plain .np span { transform: none; }
@@ -63,11 +72,11 @@ const CSS = `
 /** Jenna's kawaii palettes per mood: [light, mid, dark, accent] */
 const KAWAII: Record<Mood, string[]> = {
   happy: ['#ffd4e6', '#f48cbc', '#8a3470', '#fff3f9'],
-  calm: ['#ffcfe3', '#ee86b8', '#7e2e66', '#fff1f8'],
-  cool: ['#ffc6de', '#e872aa', '#6e2458', '#fff0f7'],
-  burst: ['#ffa6cc', '#e4508c', '#5a1040', '#fff6fb'],
-  cold: ['#d6c8f4', '#8a72c8', '#2a1c52', '#f6eeff'],
-  sad: ['#e0c8e8', '#a07cb8', '#33224a', '#fcf2ff'],
+  calm: ['#ffd2e5', '#f096c2', '#7e2e66', '#fff1f8'],
+  cool: ['#ffcae0', '#ea82b4', '#6e2458', '#fff0f7'],
+  burst: ['#ffc0da', '#ec6aa2', '#5a1040', '#fff6fb'],
+  cold: ['#ddd2f6', '#9a86d2', '#2a1c52', '#f6f0ff'],
+  sad: ['#e4d2ec', '#aa8cc2', '#33224a', '#fcf4ff'],
 };
 const hmix = (a: string, b: string, t: number) => {
   const x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16);
@@ -112,7 +121,8 @@ const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 const dith = (x: number, y: number) => (BAYER[(y & 3) * 4 + (x & 3)] + 0.5) / 16;
 const hash = (x: number, y = 0, s = 0) => { let h = (x * 374761393 + y * 668265263 + s * 982451653) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 const clamp01 = (v: number) => v < 0 ? 0 : v > 1 ? 1 : v;
-const easeOutBack = (p: number) => { const c = 1.9; p = clamp01(p) - 1; return 1 + (c + 1) * p * p * p + c * p * p; };
+/** ease out with a small, soft overshoot */
+const easeOutSoft = (p: number) => { const c = 1.15; p = clamp01(p) - 1; return 1 + (c + 1) * p * p * p + c * p * p; };
 const easeOutCubic = (p: number) => 1 - (1 - clamp01(p)) ** 3;
 const easeInCubic = (p: number) => clamp01(p) ** 3;
 
@@ -130,9 +140,8 @@ const pick = (r: number[], t: number, x: number, y: number) => {
   return f - i > dith(x, y) ? r[Math.min(r.length - 1, i + 1)] : r[i];
 };
 
-/** tiny sprites: sakura petal spin frames, a heart, Chunk's sweat drop (k ink, b blue, w white) */
-const PETAL = [[' ##', '###', '## '], ['## ', '###', ' ##'], [' #', '##', '# '], ['###', ' # ']];
-const HEART = ['.#.#.', '#####', '.###.', '..#..'];
+/** a sakura petal tumbling through four frames (L petal, W its lit tip, D the deeper base), and Chunk's sweat drop (k ink, b blue, w white) */
+const PETALS = [['.LWL.', 'LLLLL', '.DLL.'], ['..LW', '.LLL', 'DLL.'], ['.LW', 'DL.'], ['DL..', '.LLL', '..LW']];
 const DROP = ['..k..', '.kbk.', '.kbk.', 'kbbbk', 'kwbbk', 'kwbbk', 'kbbbk', '.kkk.'];
 
 // ------------------------------------------------------------------ bust frames
@@ -233,7 +242,9 @@ export class CloseUps {
     const cc = COLORS[ALIAS[id] ?? id] ?? COLORS.mori;
     const mc = paletteOf(look, ALIAS[id] ?? id, mood);
     this.pal = mc.map(hx);
-    this.col = grad([mc[0], mc[1], mc[2]].map(hx), 9);
+    // Jenna's wash runs from near-white through her pinks and stops short of the dark (soft, airy);
+    // the calm panels use their full light-to-dark ramp
+    this.col = look === 'anime' ? grad([mc[3], mc[0], mc[1], hmix(mc[1], mc[2], 0.3)].map(hx), 12) : grad([mc[0], mc[1], mc[2]].map(hx), 9);
     this.root.style.setProperty('--c1', cc[0]);
     this.root.classList.toggle('anime', look === 'anime');
     this.root.classList.toggle('plain', look === 'plain');
@@ -250,11 +261,14 @@ export class CloseUps {
       void this.np.offsetWidth;
       this.np.classList.add('on');
     }
-    // impact frames + a flash on loud entrances (and when a running cut-in gets louder)
+    // a short punch on loud entrances (and when a running cut-in gets louder): a flash, and on the
+    // calm panels one impact frame
     if (loud && (!again || o.style === 'shout')) {
       this.impact = 0.16;
       this.root.classList.remove('flash'); void this.root.offsetWidth; this.root.classList.add('flash');
     }
+    // Jenna never gets the impact frame (it reads as a glitch on her soft panel)
+    if (look === 'anime') this.impact = 0;
     this.root.classList.add('on');
     this.layout();
   }
@@ -324,37 +338,40 @@ export class CloseUps {
     const id = this.shown!;
     buf.fill(0);
     const leaving = this.outT >= 0;
-    // ---- open / close: Jenna's band springs open with an overshoot, the calm panels ease open,
-    // Chunk's card just cuts in and out
-    let open = plain ? (t > 0.03 ? 1 : 0) : anime ? easeOutBack((t - 0.05) / 0.3) : easeOutCubic((t - 0.03) / 0.22);
+    // ---- open / close: Jenna's band opens with a soft settle, the calm panels ease open, Chunk's
+    // card just cuts in and out
+    let open = plain ? (t > 0.03 ? 1 : 0) : anime ? easeOutSoft((t - 0.03) / 0.34) : easeOutCubic((t - 0.03) / 0.22);
     if (leaving) open *= plain ? (this.outT > 0.05 ? 0 : 1) : 1 - easeInCubic(this.outT / 0.2);
-    // ---- shake: a hard decaying kick on loud lines, a fine shiver when scared
+    // ---- shake: a short decaying kick on loud lines (just a nudge for Jenna), a fine shiver when a
+    // calm panel is scared
     let sx = 0, sy = 0;
     const tick = Math.floor(t * 30);
     if (this.loud) {
-      const a = Math.max(this.style === 'shout' ? (anime ? 1 : 0.6) : 0, (anime ? 5 : 3.5) * (1 - this.lineT / (anime ? 0.45 : 0.32)));
+      const a = anime ? 2.4 * (1 - this.lineT / 0.26) : Math.max(this.style === 'shout' ? 0.6 : 0, 3.5 * (1 - this.lineT / 0.32));
       if (a > 0.5) { sx = Math.round((hash(tick, 1) - 0.5) * 2 * a); sy = Math.round((hash(tick, 2) - 0.5) * 1.4 * a); }
-    } else if (mood === 'cold' && !plain && tick % 2 === 0) sx = hash(tick, 3) < 0.5 ? -1 : 1;
+    } else if (mood === 'cold' && !plain && !anime && tick % 2 === 0) sx = hash(tick, 3) < 0.5 ? -1 : 1;
     const by0 = this.bandY + sy;
     const mid = by0 + BH / 2;
     const slant = plain ? 0.02 : 0.05; // the band rises to the right
     const half = (BH / 2) * open;
     const impact = this.impact > 0 && this.impact < 0.12;
-    // the focus point (the bust's face), for bursts and the vignette
+    // the face, for the glow behind the head and the vignette
     const fx = this.bustX + 56 + sx, fy = this.bustY + 44 + sy;
-    const tk = Math.floor(t * 12); // effects animate on 12s, like hand-drawn frames
     const dark = pal[2], accent = pal[3];
     const ink = hx(plain ? '#2a2420' : '#0c0a0c');
+    // Jenna's band is edged in deep plum rather than black
+    const edge = anime ? mix(dark, ink, 0.35) : ink;
 
-    // ---- back layer: a wider accent band at a steeper angle, peeking out above and below
-    // (Jenna's scrolls its stripes; the calm panels' stays still; Chunk gets none)
-    if (open > 0.02 && !plain) for (let x = 0; x < cw; x++) {
-      const c = mid - (x - cw * 0.3) * (slant + 0.025);
-      const h2 = half + 6 * open;
-      const y0 = Math.max(0, Math.round(c - h2)), y1 = Math.min(ch - 1, Math.round(c + h2));
-      const back = mix(pal[1], dark, anime ? 0.2 : 0.35);
-      const roll = anime ? Math.floor(t * 24) : 0;
-      for (let y = y0; y <= y1; y++) buf[y * cw + x] = y === y0 || y === y1 ? ink : (x + y + roll) % 6 < 3 ? back : mix(back, dark, anime ? 0.3 : 0.5);
+    // ---- back layer: a wider flat band at a steeper angle, peeking out above and below (Chunk: none)
+    if (open > 0.02 && !plain) {
+      const back = anime ? mix(pal[0], pal[1], 0.55) : mix(pal[1], dark, 0.35);
+      const lip = anime ? mix(pal[0], accent, 0.5) : mix(pal[1], dark, 0.55);
+      for (let x = 0; x < cw; x++) {
+        const c = mid - (x - cw * 0.3) * (slant + 0.025);
+        const h2 = half + 6 * open;
+        const y0 = Math.max(0, Math.round(c - h2)), y1 = Math.min(ch - 1, Math.round(c + h2));
+        for (let y = y0; y <= y1; y++) buf[y * cw + x] = y === y0 || y === y1 ? edge : y - y0 < 2 || y1 - y < 2 ? lip : back;
+      }
     }
 
     // ---- main band
@@ -366,36 +383,35 @@ export class CloseUps {
         const i = y * cw + x;
         // edges: a dark rim, then a bright cream stripe (Chunk's card: just the rim)
         const et = y - top, eb = bot - y;
-        if (et < 1 || eb < 1) { buf[i] = ink; continue; }
+        if (et < 1 || eb < 1) { buf[i] = edge; continue; }
         if (plain) { buf[i] = pal[0]; continue; }
         if (et < 3 || eb < 3) { buf[i] = accent; continue; }
-        if (impact) { buf[i] = anime ? hx('#fff0f8') : hx('#ffffff'); continue; }
+        if (impact) { buf[i] = hx('#ffffff'); continue; }
         const v = (y - top) / Math.max(1, bot - top); // 0 top .. 1 bottom
         const dx = (x - fx) / cw, dy = (y - fy) / BH;
-        // gradient: lit behind the face, darker toward the right and the bottom (softer on calm panels)
-        let g = anime
-          ? 0.08 + v * 0.45 + Math.max(0, dx) * 0.45 + Math.hypot(dx * 1.4, dy * 0.6) * 0.2
-          : 0.18 + v * 0.38 + Math.max(0, dx) * 0.4 + Math.hypot(dx * 1.4, dy * 0.6) * 0.12;
-        if (mood === 'cold') g += Math.hypot(dx * 2, dy) * 0.3;
-        // a soft dithered spotlight behind the head frames the bust
-        const sp = Math.hypot((x - fx) / 62, (y - fy + 6) / 52);
-        if (sp < 1) g -= (1 - sp) * (anime ? 0.5 : mood === 'happy' ? 0.42 : 0.3);
-        let p = pick(col, g, x, y);
+        let g: number;
         if (anime) {
-          if (sp < 1 && sp > 0.93 && mood !== 'cold') p = mix(p, accent, 0.4);
-          // screentone: halftone dots growing toward the lower right
-          const tone = clamp01(v * 0.9 + dx * 1.2 - 0.25);
-          if (tone > 0.05) {
-            const cx = x % 5, cy = (y + (Math.floor(x / 5) & 1) * 2) % 5;
-            const r = tone * 2.4;
-            if ((cx - 2) ** 2 + (cy - 2) ** 2 < r * r) p = mix(p, dark, 0.45);
-          }
+          // a soft pink wash: palest in a wide glow behind her head, deepening gently to the lower right
+          g = 0.14 + v * 0.4 + Math.max(0, dx) * 0.55;
+          const sp = Math.hypot((x - fx) / 80, (y - fy + 4) / 62);
+          if (sp < 1) g -= (1 - sp) * (1 - sp) * 0.8;
+          if (mood === 'cold') g += Math.hypot(dx * 2, dy) * 0.18;
+        } else {
+          // lit behind the face, darker toward the right and the bottom
+          g = 0.18 + v * 0.38 + Math.max(0, dx) * 0.4 + Math.hypot(dx * 1.4, dy * 0.6) * 0.12;
+          if (mood === 'cold') g += Math.hypot(dx * 2, dy) * 0.3;
+          // a soft dithered spotlight behind the head frames the bust
+          const sp = Math.hypot((x - fx) / 62, (y - fy + 6) / 52);
+          if (sp < 1) g -= (1 - sp) * (mood === 'happy' ? 0.42 : 0.3);
         }
-        buf[i] = p;
+        buf[i] = pick(col, g, x, y);
       }
     }
 
-    if (open > 0.3 && !impact && !plain) this.moodLayer(fx, fy, mid, half, slant, tk);
+    // a cold vignette closing in when scared (dithered, no lines)
+    if (mood === 'cold' && open > 0.3 && !impact && !plain) this.vignette(fx, fy, mid, half, slant, anime ? hx('#2a1c52') : hx('#04040c'), anime ? 0.4 : 0.5);
+    // Jenna: petals drifting behind her
+    if (anime && open > 0.3) this.petals(mid, half, slant, false);
 
     // ---- the bust: shadow, light rim, pixels; head breaks out of the band's top edge
     const talk = this.talking() ? ([0, 1, 2, 1] as const)[Math.floor(this.lineT * 11) % 4] : 0;
@@ -403,16 +419,17 @@ export class CloseUps {
     const f = frame(id, this.expr, talk, blink);
     const exitP = leaving ? easeInCubic(this.outT / 0.2) : 0;
     let ox: number, oy: number, scx: number, scy: number;
+    /** 0..1: how much of the bust has dissolved in (Jenna appears on the pixel grid, and fades out the same way) */
+    let solid = 1;
     if (anime) {
-      // bouncy: drops in from below with a big overshoot, squashes on landing, hops on each new line
-      const enter = clamp01((t - 0.06) / 0.42);
-      const drop = (1 - easeOutBack(enter)) * 46;
-      ox = Math.round(-exitP * 120) + sx;
-      const hop = this.t - this.lineT > 0.2 ? Math.sin(clamp01(this.lineT / 0.26) * Math.PI) * 5 : 0;
-      oy = Math.round(drop - hop + Math.sin(t * 3) * 1.2 + 0.2) + (talk === 2 ? -1 : 0) + sy;
-      const land = Math.sin(clamp01((t - 0.2) / 0.3) * Math.PI) * 0.09 + Math.sin(clamp01((this.lineT - 0.18) / 0.2) * Math.PI) * (this.t - this.lineT > 0.2 ? 0.05 : 0);
-      const sc = 1 + Math.max(0, 1 - t / 0.3) * 0.12 + (this.loud ? Math.max(0, 1 - this.lineT / 0.18) * 0.08 : 0);
-      scx = sc * (1 + land); scy = sc * (1 - land);
+      // gentle: rises into the band with a soft settle while dissolving in, a small lift on each new
+      // line, and on the way out she dissolves and sinks a little
+      const enter = clamp01((t - 0.05) / 0.4);
+      const lift = this.t - this.lineT > 0.3 ? Math.sin(clamp01(this.lineT / 0.24) * Math.PI) * 2 : 0;
+      ox = sx;
+      oy = Math.round((1 - easeOutSoft(enter)) * 22 + exitP * 10 - lift + Math.sin(t * 2.4) * 0.8 + 0.2) + (talk === 2 ? -1 : 0) + sy;
+      scx = scy = 1;
+      solid = Math.min(clamp01((t - 0.04) / 0.24), 1 - exitP);
     } else if (plain) {
       // deadpan: no entrance at all, then a slow, creeping zoom
       ox = 0; oy = 0;
@@ -431,7 +448,7 @@ export class CloseUps {
     // clip: inside the band, plus the pop-out above it while open
     const clipTop = (x: number) => Math.round(mid - (x - cw * 0.3) * slant - half - POP * open * 1.6);
     const clipBot = (x: number) => Math.round(mid - (x - cw * 0.3) * slant + half) - 1;
-    const shadow = mix(dark, ink, 0.5), rimC = impact ? ink : accent;
+    const shadow = anime ? mix(pal[1], dark, 0.4) : mix(dark, ink, 0.5), rimC = impact ? ink : accent;
     for (let pass = plain ? 2 : 0; pass < 3; pass++) {
       const dx0 = pass === 0 ? 4 : 0, dy0 = pass === 0 ? 2 : 0;
       // the last row repeats down to the band's lower edge, so the chest never ends in mid-air
@@ -440,33 +457,35 @@ export class CloseUps {
         for (let x = 0; x < fw; x++) {
           const X = bx + x + dx0, Y = byy + y + dy0;
           if (X < 0 || X >= cw || Y < 0 || Y >= ch || Y < clipTop(X) || Y > clipBot(X)) continue;
+          if (solid < 1 && dith(X, Y) >= solid) continue;
           const sxx = Math.min(f.w - 1, Math.floor(x / scx)), si = syy * f.w + sxx;
           const v = f.px[si];
           if (pass === 0) { if (v >>> 24 > 127) buf[Y * cw + X] = shadow; }
           else if (pass === 1) { if (f.rim[si]) buf[Y * cw + X] = rimC; }
-          else if (v >>> 24 > 127) buf[Y * cw + X] = impact ? (anime ? hx('#c8246e') : ink) : v;
+          else if (v >>> 24 > 127) buf[Y * cw + X] = impact ? ink : v;
         }
       }
     }
-    // gloom when scared: Jenna gets the full anime pall and vertical lines over the upper face,
-    // the calm panels only a faint blue pall
+    // a faint cold pall over the upper face when scared
     if (mood === 'cold' && open > 0.5 && !impact && !plain) {
-      const y0 = f.top + 14, y1 = 70, pall = hx('#2a2a78'), line = hx('#141040');
+      const y0 = f.top + 14, y1 = 70, pall = hx(anime ? '#3a2c7c' : '#2a2a78');
       for (let fy2 = y0; fy2 < y1; fy2++) {
         const k = 1 - (fy2 - y0) / (y1 - y0);
         for (let fx2 = 18; fx2 < f.w - 18; fx2++) {
           if (f.px[fy2 * f.w + fx2] >>> 24 < 128) continue;
           const X = bx + fx2, Y = byy + fy2;
           if (X < 0 || X >= cw || Y < 0 || Y >= ch || Y < clipTop(X)) continue;
+          if (solid < 1 && dith(X, Y) >= solid) continue;
           const i = Y * cw + X;
-          if (!anime) { buf[i] = mix(buf[i], pall, k * 0.22); continue; }
-          const len = 0.25 + hash(fx2 >> 2, 4) * 0.6 + Math.sin(t * 3 + (fx2 >> 2)) * 0.05;
-          const ln = (fx2 & 3) === 0 && k > 1 - len;
-          buf[i] = mix(buf[i], ln ? line : pall, ln ? 0.75 : k * 0.5);
+          buf[i] = mix(buf[i], pall, k * (anime ? 0.18 : 0.22));
         }
       }
     }
-    if (anime && open > 0.5 && !impact) this.kawaiiFront(bx, byy, mid, half, slant);
+    if (anime && open > 0.5) {
+      // a couple of nearer petals in front of her, and a few twinkles round her hair on bright moods
+      this.petals(mid, half, slant, true);
+      if (solid > 0.9 && (mood === 'happy' || mood === 'calm' || mood === 'cool')) this.twinkles(bx, byy + f.top);
+    }
     if (plain && open > 0.5 && !this.bf.textContent) {
       // Chunk's sweat drop: appears after a beat, then slides slowly down beside his head
       const beat = this.lineT - 0.35;
@@ -474,7 +493,7 @@ export class CloseUps {
     }
     this.g.putImageData(this.img!, 0, 0);
     // name plate under the bust, riding the band's lower edge
-    const nx = (this.bustX - 4 + Math.round(-exitP * 120)) * this.s;
+    const nx = (this.bustX - 4 + Math.round(anime ? 0 : -exitP * 120)) * this.s;
     const ny = (mid - (this.bustX - cw * 0.3) * slant + half - 6) * this.s;
     this.np.style.transform = `translate(${Math.round(nx)}px, ${Math.round(ny)}px)`;
     if (plain && this.bf.textContent) {
@@ -482,16 +501,6 @@ export class CloseUps {
       this.bf.classList.toggle('on', open > 0.5 && this.lineT > 0.4 && !leaving);
       this.bf.style.transform = `translate(${Math.round((bx + f.w * 0.82) * this.s)}px, ${Math.round((byy + f.top + 4) * this.s)}px)`;
     }
-  }
-
-  /** 4-point twinkle star */
-  private star(x: number, y: number, r: number, c: number) {
-    const { buf, cw, ch } = this;
-    const n = Math.round(r);
-    if (n < 1) return;
-    const put = (X: number, Y: number, k: number) => { if (X >= 0 && Y >= 0 && X < cw && Y < ch) buf[Y * cw + X] = k; };
-    for (let d = -n; d <= n; d++) { put(x + d, y, c); put(x, y + d, c); }
-    if (n >= 2) { put(x - 1, y - 1, c); put(x + 1, y - 1, c); put(x - 1, y + 1, c); put(x + 1, y + 1, c); }
   }
 
   /** a tiny string sprite ('.' and ' ' are clear; other chars index the colour map) at an integer scale */
@@ -508,118 +517,66 @@ export class CloseUps {
     }
   }
 
-  /** a sakura petal: spins through its frames as it falls */
-  private petal(x: number, y: number, ph: number, light: boolean, inside?: (X: number, Y: number) => boolean, k = 1) {
-    const fr = PETAL[Math.floor(ph * 4) & 3];
-    this.sprite(fr, Math.round(x), Math.round(y), k, { '#': hx(light ? '#ffe2ee' : '#ffaacb') }, inside);
-    // one deeper pixel at the notch
-    const X = Math.round(x), Y = Math.round(y);
-    if (X >= 0 && Y >= 0 && X < this.cw && Y < this.ch && (!inside || inside(X, Y)) && fr[0][0] === '#') this.buf[Y * this.cw + X] = hx('#f07aa8');
-  }
-
-  /** Jenna, in front of everything: sakura petals drifting across the whole screen, twinkles and hearts */
-  private kawaiiFront(bx: number, by: number, mid: number, half: number, slant: number) {
-    const { cw, ch, t, mood } = this;
-    const nP = mood === 'burst' ? 10 : mood === 'sad' || mood === 'cold' ? 12 : 22;
-    const fall = mood === 'sad' ? 0.55 : 1;
-    for (let k = 0; k < nP; k++) {
-      const sp = (14 + hash(k, 51) * 16) * fall;
-      const span = ch + 20;
-      const y = ((t * sp + hash(k, 52) * span) % span) - 10;
-      const x = ((hash(k, 53) * (cw + 60) - y * 0.45 + Math.sin(t * (0.8 + hash(k, 54)) + k) * 8) % (cw + 60) + cw + 60) % (cw + 60) - 30;
-      this.petal(x, y, (t * (0.9 + hash(k, 55) * 0.8) + hash(k, 56)) % 1, k % 3 === 0, undefined, k % 4 === 0 ? 1 : 2);
-    }
-    if (mood === 'sad' || mood === 'cold') return;
-    // twinkles around the head
-    for (let k = 0; k < 5; k++) {
-      const cyc = Math.floor(t * 0.9 + hash(k, 21));
-      const ph = (t * 0.9 + hash(k, 21)) % 1;
-      this.star(bx + 6 + Math.round(hash(k, 22, cyc) * 104), by + 6 + Math.round(hash(k, 23, cyc) * 64), Math.sin(ph * Math.PI) * 3.4, hx('#ffffff'));
-    }
-    // little hearts floating up from beside her (happy and calm moments)
-    if (mood === 'burst') return;
-    const inBand = (X: number, Y: number) => { const c = mid - (X - cw * 0.3) * slant; return Y > c - half - POP * 1.6 && Y < c + half - 2; };
-    const nH = mood === 'happy' ? 5 : 2;
-    for (let k = 0; k < nH; k++) {
-      const life = 2.2 + hash(k, 61);
-      const ph = (t / life + hash(k, 62)) % 1;
-      const cyc = Math.floor(t / life + hash(k, 62));
-      const x = bx + 96 + Math.round(hash(k, 63, cyc) * 40 + Math.sin(ph * 6 + k) * 3);
-      const y = by + 70 - Math.round(ph * 64);
-      if (ph > 0.85 && (Math.floor(t * 12) & 1)) continue; // blink out
-      this.sprite(HEART, x, y, 1, { '#': hx(k & 1 ? '#ff6aa8' : '#ffffff') }, inBand);
+  /** Jenna's sakura: a few petals tumbling down through the band on a light breeze (kept inside the
+   *  band, never across the rest of the screen); fewer, slower and lilac when she is scared or sad */
+  private petals(mid: number, half: number, slant: number, front: boolean) {
+    const { cw, t, mood } = this;
+    const low = mood === 'sad' || mood === 'cold';
+    const n = front ? (low ? 1 : 2) : low ? 4 : 7;
+    // pale petals with a deeper base, so they read against the pink wash
+    const C = low ? { L: hx('#f4eeff'), W: hx('#ffffff'), D: hx('#9c86cc') } : { L: hx('#fff0f6'), W: hx('#ffffff'), D: hx('#e2639a') };
+    const inBand = (X: number, Y: number) => { const c = mid - (X - cw * 0.3) * slant; return Y > c - half + 3 && Y < c + half - 3; };
+    // the cycle runs over the full band height, so the petals don't jump while the band opens
+    const span = BH + 14, wrap = cw + 40;
+    for (let k = 0; k < n; k++) {
+      const seed = k + (front ? 40 : 0);
+      const fall = (low ? 5 : 8) + hash(seed, 51) * (low ? 3 : 6);
+      const u = t * fall + hash(seed, 52) * span;
+      const cyc = Math.floor(u / span), yr = u - cyc * span;
+      // drifting down and to the left, swaying a little
+      const x = (((hash(seed, 53, cyc) * wrap - yr * 0.7 + Math.sin(t * (0.6 + hash(seed, 54) * 0.5) + k * 1.7) * 5) % wrap) + wrap) % wrap - 20;
+      const y = mid - (x - cw * 0.3) * slant - span / 2 + yr;
+      const fr = PETALS[Math.floor((t * (0.8 + hash(seed, 55) * 0.6) + hash(seed, 56)) * 4) & 3];
+      this.sprite(fr, Math.round(x), Math.round(y), front ? 2 : 1, C, inBand);
     }
   }
 
-  private moodLayer(fx: number, fy: number, mid: number, half: number, slant: number, tk: number) {
-    const { buf, cw, ch, pal, mood, t, look } = this;
-    const anime = look === 'anime';
-    const inBand = (x: number, y: number) => { const c = mid - (x - cw * 0.3) * slant; return y > c - half + 3 && y < c + half - 3; };
-    const light = pal[0], accent = pal[3];
+  /** a few soft twinkles round her hair (never over the face): each lights up, glints and goes out */
+  private twinkles(bx: number, top: number) {
+    // spots relative to the bust's top-left and the top of the head: beside the hair and just above it
+    const spots: [number, number][] = [[10, 16], [16, 2], [98, 8], [104, 26], [6, 36], [92, -6]];
+    for (let k = 0; k < 3; k++) {
+      const P = 2 + hash(k, 31) * 1.1, u = (this.t + hash(k, 32) * P) / P;
+      const cyc = Math.floor(u), ph = u - cyc;
+      if (ph > 0.45) continue;
+      const s = spots[Math.floor(hash(k, 33, cyc) * spots.length)];
+      const x = bx + s[0] + Math.round((hash(k, 34, cyc) - 0.5) * 8), y = top + s[1] + Math.round((hash(k, 35, cyc) - 0.5) * 8);
+      this.twinkle(x, y, Math.sin((ph / 0.45) * Math.PI) * 3);
+    }
+  }
+  private twinkle(x: number, y: number, r: number) {
+    const { buf, cw, ch } = this;
+    const put = (X: number, Y: number, c: number) => { if (X >= 0 && Y >= 0 && X < cw && Y < ch) buf[Y * cw + X] = c; };
+    if (r < 0.5) return;
+    const n = Math.round(r), core = hx('#ffffff'), arm = hx('#ffd8ea');
+    put(x, y, core);
+    for (let d = 1; d <= n; d++) {
+      const c = d < n ? core : arm;
+      put(x + d, y, c); put(x - d, y, c); put(x, y + d, c); put(x, y - d, c);
+    }
+    // a soft glint between the arms at full size
+    if (n >= 2) { put(x - 1, y - 1, arm); put(x + 1, y - 1, arm); put(x - 1, y + 1, arm); put(x + 1, y + 1, arm); }
+  }
+
+  /** dithered vignette darkening the band toward its ends (fear) */
+  private vignette(fx: number, fy: number, mid: number, half: number, slant: number, c: number, k: number) {
+    const { buf, cw, ch } = this;
     const yA = Math.max(0, Math.round(mid - half - cw * slant)), yB = Math.min(ch - 1, Math.round(mid + half + cw * slant));
-    if (mood === 'burst') {
-      // focus lines converging on the face, redrawn on 12s: dense and pink for Jenna, a few thin
-      // accent-coloured lines on the calm panels
-      const N = anime ? 120 : 56;
-      for (let y = yA; y <= yB; y++) for (let x = 0; x < cw; x++) {
-        if (!inBand(x, y)) continue;
-        const dx = x - fx, dy = (y - fy) * 1.6, r = Math.hypot(dx, dy);
-        const a = (Math.atan2(dy, dx) / (Math.PI * 2) + 0.5) * N;
-        const k = Math.floor(a), fr = a - k;
-        if (!anime && hash(k, 8, tk) < 0.45) continue;
-        const w = anime ? 0.1 + hash(k, 5, tk) * 0.3 : 0.06 + hash(k, 5, tk) * 0.1;
-        const inner = (anime ? 34 : 54) + hash(k, 6, tk) * 60;
-        if (r > inner && Math.abs(fr - 0.5) < w * Math.min(1, (r - inner) / 60)) {
-          const i = y * cw + x;
-          buf[i] = anime ? (hash(k, 7, tk) < 0.3 ? accent : mix(buf[i], light, 0.75)) : mix(buf[i], accent, 0.5);
-        }
-      }
-      if (anime) for (let k = 0; k < 6; k++) {
-        const cyc = Math.floor(t * 2 + hash(k, 71)), ph = (t * 2 + hash(k, 71)) % 1;
-        const X = Math.round(hash(k, 72, cyc) * cw), Y = Math.round(mid + (hash(k, 73, cyc) - 0.5) * half * 1.6);
-        if (inBand(X, Y)) this.star(X, Y, Math.sin(ph * Math.PI) * 4, hx('#ffffff'));
-      }
-      return;
-    }
-    if (mood === 'cold') {
-      // a cold vignette closing in (Jenna adds wavering lines)
-      for (let y = yA; y <= yB; y++) for (let x = 0; x < cw; x++) {
-        if (!inBand(x, y)) continue;
-        const d = Math.hypot((x - fx) / (cw * 0.55), (y - fy) / (half * 1.4));
-        const i = y * cw + x;
-        if (d > 0.75 && dith(x, y) < (d - 0.75) * (anime ? 1.3 : 0.9)) buf[i] = mix(buf[i], hx('#04040c'), anime ? 0.6 : 0.5);
-        else if (anime && (x + Math.round(Math.sin(y * 0.2 + t * 4) * 1.5)) % 11 === 0 && d > 0.4) buf[i] = mix(buf[i], accent, 0.12);
-      }
-      return;
-    }
-    if (!anime) return; // calm panels: no particles
-    // Jenna: soft bokeh hearts-and-dots drifting up, sakura petals behind her, twinkles all over the band
-    for (let k = 0; k < (mood === 'sad' ? 6 : 14); k++) {
-      const bxp = Math.round(hash(k, 11) * cw + Math.sin(t * 0.6 + k) * 6);
-      const byp = Math.round(mid + half - ((t * (8 + hash(k, 12) * 10) + hash(k, 13) * 200) % (half * 2 + 20)));
-      const r = 3 + Math.round(hash(k, 14) * 5);
-      for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) {
-        const X = bxp + x, Y = byp + y;
-        if (X < 0 || Y < 0 || X >= cw || Y >= ch || !inBand(X, Y)) continue;
-        const d = (x * x + y * y) / (r * r);
-        if (d > 1 || dith(X, Y) < 0.55) continue;
-        const i = Y * cw + X;
-        buf[i] = mix(buf[i], accent, d > 0.7 ? 0.6 : 0.3);
-      }
-    }
-    for (let k = 0; k < 16; k++) {
-      const sp = 9 + hash(k, 81) * 10;
-      const span = half * 2 + 10;
-      const y = mid - half + ((t * sp + hash(k, 82) * span) % span) - 5;
-      const x = ((hash(k, 83) * cw - (y - mid) * 0.5 + Math.sin(t + k) * 5) % cw + cw) % cw;
-      this.petal(x, y, (t * 0.7 + hash(k, 84)) % 1, k % 2 === 0, inBand);
-    }
-    if (mood === 'sad') return;
-    for (let k = 0; k < 10; k++) {
-      const cyc = Math.floor(t * 0.8 + hash(k, 15));
-      const ph = (t * 0.8 + hash(k, 15)) % 1;
-      const X = Math.round(hash(k, 16, cyc) * cw), Y = Math.round(mid + (hash(k, 17, cyc) - 0.5) * half * 1.7);
-      if (inBand(X, Y)) this.star(X, Y, Math.sin(ph * Math.PI) * (2 + hash(k, 18) * 2.5), hash(k, 19) < 0.5 ? accent : hx('#ffffff'));
+    for (let y = yA; y <= yB; y++) for (let x = 0; x < cw; x++) {
+      const cc = mid - (x - cw * 0.3) * slant;
+      if (y <= cc - half + 3 || y >= cc + half - 3) continue;
+      const d = Math.hypot((x - fx) / (cw * 0.55), (y - fy) / (half * 1.4));
+      if (d > 0.75 && dith(x, y) < (d - 0.75) * 0.9) { const i = y * cw + x; buf[i] = mix(buf[i], c, k); }
     }
   }
 }
