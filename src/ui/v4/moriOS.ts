@@ -91,7 +91,7 @@ function photo(kind: PhotoKind, w = 96, h = 64): HTMLCanvasElement {
 // ------------------------------------------------------------------ data
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const BIRDS = ['Albatross', 'Petrel', 'Gull', 'Shearwater'];
+const BIRDS = ['Vanebill', 'Sackjaw', 'Tern', 'Scythewing'];
 const COUNTS = [
   [3, 7, 12, 9], [4, 6, 10, 14], [2, 9, 8, 11], [5, 5, 14, 10], [3, 8, 11, 15], [4, 10, 9, 12], [6, 7, 13, 16],
 ];
@@ -523,7 +523,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
     closed: () => closed,
     from: e => { lastPress = center(e); },
     badges: () => badges(),
-    oldPhotos: ([['albatross', 'Wandering albatross, day 20. 3.1 m wingspan!'], ['dolphins', 'Hector’s dolphins riding the bow wave'], ['sunset', 'The Kittiwake at sunset (Jenna took this one)'], ['jennaSleep', 'Jenna, asleep on her keyboard at 3 a.m. "zzzzzzzzzzzzzzzz" x 4000'], ['joshuFish', 'Joshu and The Fish That Was Bigger Last Time He Told It'], ['chunkBucket', 'Chunk in a bucket. He chose this.']] as [PhotoKind, string][])
+    oldPhotos: ([['albatross', 'Fluting vanebill, day 20. Whistled at me the whole time.'], ['dolphins', 'Moonfin porpoises riding the bow wave'], ['sunset', 'The Kittiwake at sunset (Jenna took this one)'], ['jennaSleep', 'Jenna, asleep on her keyboard at 3 a.m. "zzzzzzzzzzzzzzzz" x 4000'], ['joshuFish', 'Joshu and The Fish That Was Bigger Last Time He Told It'], ['chunkBucket', 'Chunk in a bucket. He chose this.']] as [PhotoKind, string][])
       .map(([k, cap]) => ({ key: k, cap, make: () => photo(k) })),
   };
   const RA = researchApps(os);
@@ -631,7 +631,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
       }
       b.innerHTML = `<div class="head"><b>Morning Report · Day 23 · RV Kittiwake</b></div>
         <div class="q"><label>1. Most sighted seabird this week</label><div class="s1"></div><div class="tip t1"></div></div>
-        <div class="q"><label>2. Total albatross sightings this week</label><div class="s2"></div><div class="tip t2"></div></div>
+        <div class="q"><label>2. Total vanebill sightings this week</label><div class="s2"></div><div class="tip t2"></div></div>
         <div class="q"><label>3. Water temperature trend</label><div class="s3"></div><div class="tip t3"></div></div>
         <div class="q"><label>4. Photo of the day</label><div class="thumbs"></div><div class="tip t4"></div></div>
         <div class="act"><div class="gel green big go ctl">Send report ➤</div><div class="pw"></div></div><div class="out"></div>`;
@@ -650,7 +650,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
       kinds.forEach((k, i) => {
         const f = el('div', 'th ctl');
         const c = photo(k);
-        f.title = ['Chunk’s behind', 'Albatross in flight', 'Something blurry'][i];
+        f.title = ['Chunk’s behind', 'Vanebill in flight', 'Something blurry'][i];
         f.appendChild(c);
         f.addEventListener('pointerdown', () => {
           pick = i;
@@ -664,11 +664,11 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
       });
       const go = b.querySelector('.go') as HTMLElement;
       go.addEventListener('click', () => {
-        const ok1 = q1.value === 'Shearwater', ok2 = +q2.value === sumCol(0), ok3 = q3.value === 'Falling', ok4 = pick === 1;
+        const ok1 = q1.value === 'Scythewing', ok2 = +q2.value === sumCol(0), ok3 = q3.value === 'Falling', ok4 = pick === 1;
         const mark = (e: HTMLElement, ok: boolean) => { e.classList.remove('ok', 'bad'); e.classList.add(ok ? 'ok' : 'bad'); if (!ok) retrigger(e, 'mos-shake'); };
         mark(q1.el, ok1); mark(q2.v, ok2); mark(q3.el, ok3); mark(th, ok4);
         (b.querySelector('.t1') as HTMLElement).textContent = ok1 ? '' : 'Check the spreadsheet: click the SUM row to total each column.';
-        (b.querySelector('.t2') as HTMLElement).textContent = ok2 ? '' : 'Add up the Albatross column (or click its SUM cell).';
+        (b.querySelector('.t2') as HTMLElement).textContent = ok2 ? '' : 'Add up the Vanebill column (or click its SUM cell).';
         (b.querySelector('.t3') as HTMLElement).textContent = ok3 ? '' : 'Look at the temperature chart in the spreadsheet.';
         (b.querySelector('.t4') as HTMLElement).textContent = ok4 ? '' : pick === 0 ? 'The university will not accept Chunk’s behind. Again.' : 'Pick the one with an actual bird in it.';
         if (!(ok1 && ok2 && ok3 && ok4)) { sfx.bad(); retrigger(go, 'mos-shake'); return; }
@@ -695,7 +695,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
           sfx.win();
           if (b.isConnected) {
             act.innerHTML = '';
-            (b.querySelector('.out') as HTMLElement).innerHTML = `<div class="done-stamp"><b>✓ Report complete!</b>Shearwaters lead the week, ${sumCol(0)} albatross, and the water is cooling fast. Cooling fast... huh. Might mention that to Joshu.</div>`;
+            (b.querySelector('.out') as HTMLElement).innerHTML = `<div class="done-stamp"><b>✓ Report complete!</b>Scythewings lead the week, ${sumCol(0)} vanebills, and the water is cooling fast. Cooling fast... huh. Might mention that to Joshu.</div>`;
             const c = center(b);
             fx.confetti(c.x - b.offsetWidth * 0.3, c.y - b.offsetHeight / 2, 70, b.offsetWidth * 0.5); fx.confetti(c.x + b.offsetWidth * 0.3, c.y - b.offsetHeight / 2, 70, b.offsetWidth * 0.5);
             fx.bubbles(c.x, c.y, 16, b.offsetWidth * 0.6);
@@ -910,7 +910,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
         jenna: 'hi mori!!! if you\'re reading this you\'re in my terminal!!! get out!!! (love you, nerd)',
         joshu: 'Joshu does not use computers. Joshu uses the sun, the stars and his knee.',
       };
-      const fortunes = ['A pug\'s wrinkles need cleaning every day. Chunk disagrees.', 'Albatrosses can fly for years without landing.', 'The ocean is 94% of the living space on Earth. Chunk is 94% snacks.', 'Sea otters hold hands when they sleep.'];
+      const fortunes = ['A pug\'s wrinkles need cleaning every day. Chunk disagrees.', 'A vanebill can glide for a week without one flap.', 'The ocean is 94% of the living space on Earth. Chunk is 94% snacks.', 'Sea otters hold hands when they sleep.'];
       const run = (raw: string) => {
         const v = raw.trim().toLowerCase();
         if (v === 'clear') { out.textContent = ''; return; }
