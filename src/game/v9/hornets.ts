@@ -665,6 +665,6 @@ export function startHornets(s: IslandScene4) {
     }
   }
   // drawing: bushes and ambient hornets on the walk line, the swarm and the scout in front of Mori
-  s.main.add(new Custom(-2.45, (rr, st) => { for (const b of S.bushes) b.draw(rr, st.time); S.drawPass(rr, false); }, dt => S.update(dt)));
+  s.main.add(new Custom(-1.3, (rr, st) => { for (const b of S.bushes) b.draw(rr, st.time); S.drawPass(rr, false); }, dt => S.update(dt)));
   s.main.add(new Custom(56, rr => S.drawPass(rr, true)));
 }
