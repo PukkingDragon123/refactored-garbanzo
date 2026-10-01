@@ -73,8 +73,9 @@ export class FightSim {
     this.x = x; this.y = y;
     this.d = fish.diff / 100;
     this.nextRun = 0.9 + Math.random() * 0.8;
-    // it bolts the moment the hook goes in
+    // it bolts the moment the hook goes in (a gentler first run, while you get your hand on the reel)
     this.startTell(0.25);
+    this.runPow *= 0.7;
   }
 
   /** line out, metres */
@@ -145,7 +146,7 @@ export class FightSim {
     if (this.ten < 0.55) this.warned = false;
     if (this.ten >= 1) {
       this.over += dt * (this.ten >= 1.22 ? 3 : 1);
-      if (this.over > 0.38) { this.end = 'snap'; ev.push('snap'); return ev; }
+      if (this.over > (this.t < 3 ? 0.7 : 0.38)) { this.end = 'snap'; ev.push('snap'); return ev; }
     } else this.over = Math.max(0, this.over - dt * 2);
     // ---------------------------------------------------------------- motion
     if (this.leap < 0) {
