@@ -22,6 +22,8 @@ import { GLASSCRAB } from './crab';
 import { SWASHRUNNER, SHELLWRENCH, TWINFAN } from './birds';
 import { DUSKWADDLER } from './waddler';
 import { KELPSKINK } from './skink';
+import { PERISCOPE } from './octopus';
+import { STARWEB } from './starweb';
 
 /** a painter plus optional post-processing of the resolved frame (translucency, glow masks) */
 export interface ShoreDef extends SpeciesDef {
@@ -40,6 +42,8 @@ const DEFS: Record<string, ShoreDef> = {
   twinfan: TWINFAN,
   duskwaddler: DUSKWADDLER,
   kelpskink: KELPSKINK,
+  periscope: PERISCOPE,
+  starweb: STARWEB,
 };
 
 export const SHORE_IDS = Object.keys(DEFS);
