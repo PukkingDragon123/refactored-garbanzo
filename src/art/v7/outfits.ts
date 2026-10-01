@@ -8,6 +8,8 @@
 //              coil of cable; Joshu: a heavy waxed parka, a rope coil, a sheath knife, a carabiner, his
 //              cap; Aroha: her woven kete, slingshot in the belt, pounamu over the zip, taniko trim)
 //  winterHood  the same with the fur-trimmed hood up (goggles on the hood; Joshu's cap under it)
+//  ship        the everyday ship clothes aboard the Kittiwake (outfits-ship.ts); 'shipPhones' is the
+//              same with Jenna's cat-ear headphones on her head
 //  storm       foul-weather gear: oilskins with a hard sheen, a life-jacket harness, sea boots, hoods up
 // An outfit rebuilds the character (bulkier volumes, new part materials, gear as extras) and gives
 // the head its wear. The facade (index.ts) dresses ids like 'mori@winter' and caches per outfit.
@@ -17,10 +19,11 @@ import { cel, Ramp6, Scene3D } from './raster';
 import type { Char7, Part, PartMat, J3 } from './body';
 import type { Pose } from '../people-rig';
 import { CAST7 } from './cast';
+import { SHIP_OUTFITS } from './outfits-ship';
 import type { HeadWear7, Lock } from './head';
 import { R6, PAL, GG, lb, quilt, tape, gloss, furMat, knit, plain, backpack, pouch, radio, ropeCoil, carabiner, knife, collar, onStraps, onSash, tEll, tLimb, beanie, hood, goggles, headlamp, wear, hash2, ropeMat } from './gear';
 
-export const OUTFIT_NAMES = ['casual', 'winter', 'winterHood', 'storm'] as const;
+export const OUTFIT_NAMES = ['casual', 'ship', 'shipPhones', 'winter', 'winterHood', 'storm'] as const;
 export interface Outfit7 { body(base: Char7): Char7; head?: HeadWear7 }
 
 const L = (p: Part) => p.hit.l;
@@ -342,6 +345,8 @@ export const OUTFITS7: Record<string, Record<string, Outfit7>> = {
     storm: { body: arohaStorm, head: wear([fierceHood(P.oilGreen, undefined, 1.04, undefined, true)], { hideShell: true, hideExtras: true, hideLock: l => !(l.a[0] > 2.5), tuck: 11 }) },
   },
 };
+
+for (const [id, o] of Object.entries(SHIP_OUTFITS)) Object.assign(OUTFITS7[id], o);
 
 const dressed = new Map<string, Char7>();
 /** a character in an outfit (unknown outfits fall back to their everyday clothes) */
