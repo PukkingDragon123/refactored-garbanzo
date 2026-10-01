@@ -18,6 +18,7 @@ import { fx10 } from './skills10';
 import { audio } from '../../core/audio';
 import type * as ExpMod from './expedition';
 import type * as DayMod from './day';
+import type * as RegMod from './regions';
 import type { Player } from '../../world/player';
 import type { Stage } from '../../world/stage';
 
@@ -51,8 +52,10 @@ interface BodyState {
 // (Function declarations and `var`s below for the same reason: callers may reach in while this loads.)
 var expMod: typeof ExpMod | null = null; // eslint-disable-line no-var
 var dayMod: typeof DayMod | null = null; // eslint-disable-line no-var
+var regMod: typeof RegMod | null = null; // eslint-disable-line no-var
 void import('./expedition').then(m => { expMod = m; });
 void import('./day').then(m => { dayMod = m; });
+void import('./regions').then(m => { regMod = m; });
 
 function S(): BodyState { return bucket<BodyState>('energy', () => ({ e: 100, day: '', out: false, ail: [] })); }
 function clamp(v: number, a = 0, b = 1) { return v < a ? a : v > b ? b : v; }
@@ -108,9 +111,10 @@ export function spend(n: number, why = ''): void {
   }
 }
 
-/** spend energy for physical effort: scaled by Field Skills (fx10.energyMult) and the pack's weight */
+/** spend energy for physical effort (a cliff, a river crossing...): scaled by Field Skills
+ *  (fx10.energyMult), the pack's weight and the route's difficulty */
 export function effort(n: number, why = ''): void {
-  spend(n * fx10.energyMult() * loadCostK(), why);
+  spend(n * fx10.energyMult() * loadCostK() * routeK(), why);
 }
 
 export function restore(n: number): void {
@@ -154,6 +158,10 @@ const KG: Record<string, number> = {
   // food
   ration: 0.15, stew: 0.7, tea: 0.35, mussel: 0.08, pipi: 0.04, berry_ember: 0.02, berry_dusk: 0.02, berry_gold: 0.02,
 };
+
+// published on the item defs too, so anything reading ItemDef.weight sees them (items other modules
+// define later bring their own weight, or fall back to their kind's)
+for (const [id, kg] of Object.entries(KG)) if (ITEMS[id] && ITEMS[id].weight === undefined) ITEMS[id].weight = kg;
 
 /** carried weight of one unit, kg (ItemDef.weight wins, then the table above, then the kind default) */
 export function weightOf(id: string): number {
@@ -206,6 +214,13 @@ export function onExpedition(): boolean {
   if (!site) return false;
   if (game.save.flags['v10:testExp']) return true;
   return !site.noExit;
+}
+
+/** rough country costs more: the current location's difficulty (1..5) adds up to a third to effort */
+export function routeK(): number {
+  const id = expMod?.currentExpedition();
+  const d = id ? regMod?.location(id)?.difficulty ?? 1 : 1;
+  return 1 + (Math.max(1, Math.min(5, d)) - 1) * 0.08;
 }
 
 // ---------------------------------------------------------------- the blackout
@@ -355,7 +370,7 @@ export function tickBody(dt: number, s: FieldLike) {
     let cost = rate * dt;
     if (p.onGround && p.state === 'normal' && up > 0 && up < 30) cost += up * COST.uphill;
     if (wasGround && !p.onGround && p.vy < -80 && p.state === 'normal') cost += COST.jump;
-    spend(cost * fx10.energyMult() * loadCostK(enc), activity);
+    spend(cost * fx10.energyMult() * loadCostK(enc) * routeK(), activity);
   }
   lastX = p.x; lastY = p.y; wasGround = p.onGround;
   // ---- ailments (they run at camp too: a stomach ache doesn't care where you are)

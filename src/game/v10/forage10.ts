@@ -33,11 +33,23 @@ const FOOD: Record<string, FoodDef> = {
   moonfruit: { energy: 10, tox: 0, risky: true }, plant_dunelily: { energy: 9, tox: 1, risky: true }, kawakawa: { energy: 2, tox: 0, risky: true },
   plant_seaholly: { energy: 2, tox: 1, risky: true }, glowcap: { energy: 3, tox: 2, risky: true }, inkcap: { energy: 3, tox: 1, risky: true },
 };
+// published on the item defs too (ItemDef.energy / risky), for anything that reads them directly
+for (const [id, f] of Object.entries(FOOD)) {
+  const d = ITEMS[id];
+  if (!d) continue;
+  if (d.energy === undefined && f.energy !== undefined) d.energy = f.energy;
+  if (d.risky === undefined && f.risky) d.risky = true;
+}
 /** energy by kind when nothing else says */
 const KIND_ENERGY: Partial<Record<string, number>> = { food: 10, plant: 3, fungus: 3 };
 
 /** register (or override) the food values of an item from another module */
-export function defineFood(id: string, d: FoodDef) { FOOD[id] = { ...FOOD[id], ...d }; }
+export function defineFood(id: string, d: FoodDef) {
+  FOOD[id] = { ...FOOD[id], ...d };
+  const it = ITEMS[id];
+  if (it && d.energy !== undefined) it.energy = d.energy;
+  if (it && d.risky !== undefined) it.risky = d.risky;
+}
 
 // forage that had nothing for the laptop to analyse: now the analysis says whether it's safe
 const LAB: Record<string, { rp: number; time: number; text: string }> = {
