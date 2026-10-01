@@ -290,6 +290,18 @@ export class Swash implements Drawable {
     this.sheets = this.sheets.filter(s => s.t < 5);
   }
   push(reach = rand.range(12, 22)) { this.sheets.push({ t: 0, reach, seed: rand.int(0, 999) }); }
+  /** 0..1: how much a sheet of water is covering the walk line at x right now (wading, splashes) */
+  coverAt(x: number): number {
+    if (wetAt(x) < 0.5) return 0;
+    let c = 0;
+    for (const s of this.sheets) {
+      const t = s.t;
+      const k = t < 1.1 ? smoothstep(0, 1.1, t) : t < 2 ? 1 : 1 - smoothstep(2, 4.6, t);
+      const edge = (s.reach + (noise1(x / 18 + s.seed, 3) - 0.5) * 8) * k;
+      if (edge > 3) c = Math.max(c, Math.min(1, edge / 10) * (t < 2.6 ? 1 : 1 - smoothstep(2.6, 4.8, t)));
+    }
+    return c;
+  }
   draw(r: Renderer) {
     const x0 = Math.floor(r.visibleX0(4) / 2) * 2, x1 = r.visibleX1(4);
     for (const s of this.sheets) {

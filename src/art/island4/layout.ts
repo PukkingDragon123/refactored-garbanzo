@@ -84,8 +84,9 @@ export function groundY(x: number): number {
 /** how reflective the ground just in front of the walk line is (wet sand, pools) */
 export function wetAt(x: number): number {
   const z = zoneAt(x);
-  if (z === 'forest') return Math.abs(x - SPOT.creek) < 40 ? 1 : 0;
-  if (z === 'cave') return Math.abs(x - 5250) < 44 ? 1 : 0.35;
+  // (no sea swash up on the plateau's creek or in the cave pool: their water is still / running)
+  if (z === 'forest') return 0;
+  if (z === 'cave') return 0.35;
   if (z === 'rocks') return clamp((x - 330) / 90);
   return 1;
 }

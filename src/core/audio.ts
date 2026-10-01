@@ -32,6 +32,8 @@ export type Sfx =
   | 'stepSand' | 'stepWood' | 'stepLeaves' | 'shipCrash'
   // fishing: the reel's ratchet, line tearing off the drag, the catch fanfare
   | 'reelClick' | 'reelDrag' | 'catchJingle'
+  // water on the island: wading steps, cave drips, the babble of running water
+  | 'stepWater' | 'drip' | 'trickle'
   // animal vocalizations: the pitch param sets the caller's size/voice (<1 bigger & slower, >1 smaller & quicker)
   | 'callChirp' | 'callTrill' | 'callHoot' | 'callScreech' | 'callHiss' | 'callRattle' | 'callGrunt'
   | 'callBark' | 'callSqueak' | 'callGrowl' | 'callHonk' | 'callCroak' | 'callClick' | 'callWhale' | 'callPurr';
@@ -489,7 +491,7 @@ const UI_SFX: ReadonlySet<Sfx> = new Set<Sfx>([
 
 /** Minimum seconds between repeats of the same sfx (per pitch bucket for animal calls). */
 const THROTTLE: Partial<Record<Sfx, number>> = {
-  stepSand: 0.07, stepWood: 0.07, stepLeaves: 0.07, typing: 0.2, bubblePop: 0.045, collectPop: 0.035,
+  stepSand: 0.07, stepWood: 0.07, stepLeaves: 0.07, stepWater: 0.08, drip: 0.05, trickle: 0.12, typing: 0.2, bubblePop: 0.045, collectPop: 0.035,
   scanBeep: 0.12, hammer: 0.07, saw: 0.18, rope: 0.15, zipper: 0.25, pluck: 0.06, dig: 0.08,
   netSwish: 0.08, jarClink: 0.08, munch: 0.08, gulp: 0.12, craft: 0.15, skillUnlock: 0.2,
   lanternOn: 0.2, fireLight: 0.3, emoteSurprise: 0.08, emoteQuestion: 0.08, emoteLaugh: 0.1,
@@ -3379,6 +3381,39 @@ export class AudioEngine {
         this.burst(v, { noise: 'pink', t, a: 0.002, d: 0.06, vol: 0.8, ft: 'bandpass', f: 620 * pp, Q: 2.2 });
         this.burst(v, { t, a: 0.001, d: 0.015, vol: 0.18, ft: 'highpass', f: 2500 * pp, Q: 0.7 });
         if (Math.random() < 0.18) this.synCreak(v, t + 0.03, pp * 1.3, rand(0.12, 0.2), false, 0.3);
+        break;
+      }
+      case 'stepWater': {
+        // a wading step: the slosh of a foot pushing through water, a low plop and a few droplets
+        const pp = p * rand(0.9, 1.1);
+        const v = V(0.36, 0.6, 0.06);
+        this.burst(v, { t, a: 0.01, hold: 0.02, d: rand(0.12, 0.18), vol: 0.6, ft: 'bandpass', f: rand(900, 1300) * pp, f2: 420 * pp, Q: 1.1 });
+        this.burst(v, { noise: 'brown', t, a: 0.008, d: 0.1, vol: 0.55, ft: 'lowpass', f: 380 * pp });
+        this.tone(v, { f: 210 * pp, f2: 120 * pp, glide: 0.06, t: t + 0.01, a: 0.004, d: 0.08, vol: 0.18 });
+        const n = randi(2, 4);
+        for (let i = 0; i < n; i++) {
+          const f = rand(900, 1900) * pp;
+          this.tone(v, { f, f2: f * 1.5, glide: 0.025, t: t + rand(0.06, 0.26), a: 0.002, d: 0.04, vol: 0.07 });
+        }
+        break;
+      }
+      case 'drip': {
+        // a single drop falling into a still pool: the rising "plink" with a long cave tail
+        const v = V(0.3, 1.4, 0.55, true);
+        const f = rand(700, 1100) * p;
+        this.tone(v, { f, f2: f * 2.1, glide: 0.035, t, a: 0.001, d: 0.09, vol: 0.5 });
+        this.tone(v, { f: f * 0.5, f2: f * 0.9, glide: 0.05, t: t + 0.004, a: 0.002, d: 0.06, vol: 0.12 });
+        break;
+      }
+      case 'trickle': {
+        // a moment of running water: bubbly droplet tones over a soft wash of noise
+        const v = V(0.22, 0.9, 0.2);
+        this.burst(v, { noise: 'pink', t, a: 0.08, hold: 0.15, d: 0.35, vol: 0.35, ft: 'bandpass', f: rand(1400, 2400) * p, Q: 0.6 });
+        const n = randi(3, 7);
+        for (let i = 0; i < n; i++) {
+          const f = rand(500, 1400) * p;
+          this.tone(v, { f, f2: f * rand(1.3, 2), glide: 0.03, t: t + rand(0, 0.45), a: 0.002, d: rand(0.03, 0.06), vol: rand(0.06, 0.14) });
+        }
         break;
       }
       case 'stepLeaves': {
