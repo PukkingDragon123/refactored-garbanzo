@@ -79,6 +79,11 @@ function warmStep(budgetMs: number) {
 type Pass = 'back' | 'front' | 'under' | 'top';
 
 abstract class Critter implements Drawable {
+  /** near-plane animals at the waterline are hidden where they'd paint over the open lower-deck cutaway */
+  behindCutaway(): boolean {
+    const s = (this as unknown as { s?: { hullA: number } }).s;
+    return !!s && this.p >= 0.9 && s.hullA < 0.9 && this.x > 66 && this.x < 510 && this.y > 118 && this.y < 214;
+  }
   z = 50;
   x = 0;
   y = 0;
@@ -170,6 +175,7 @@ abstract class Critter implements Drawable {
   draw(r: Renderer) { this.pass(r, 'front'); }
   /** draw for one of the layer passes: front / back of the ship, under the surface, over the sea band */
   pass(r: Renderer, which: Pass) {
+    if (this.behindCutaway()) return;
     if (which !== (this.back ? 'back' : 'front') || this.hidden >= 0.99) return;
     const f = this.frame();
     r.draw(f.fr, this.x, this.y, this.facing * this.scale, this.scale, this.rot);
@@ -698,6 +704,7 @@ class Moonfin extends Critter {
     s.ocean?.spray(this.x + 6, this.sea() - 2, 0, 0, -1);
   }
   pass(r: Renderer, which: Pass) {
+    if (this.behindCutaway()) return;
     if (which === 'under') {
       // seen through the surface: a dark translucent shape, the glow lines still faintly showing
       if (this.hidden <= 0.05) return;
@@ -910,6 +917,7 @@ class Reefback extends Critter {
     this.speed = 3;
   }
   pass(r: Renderer, which: Pass) {
+    if (this.behindCutaway()) return;
     if (this.mode === 'deep') return;
     if (which === 'top') {
       if (this.spoutT < 0) return;
