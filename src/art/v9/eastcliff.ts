@@ -12,7 +12,7 @@ import { C, hex, mix, shade } from '../color';
 import { Rng, bayer, clamp, fbm1, fbm2, hash2, noise1, noise2, smoothstep } from '../../core/math';
 
 const H = (s: string) => hex(s);
-const FACE = ['#15131a', '#1e1b23', '#28242d', '#332e37', '#403941', '#4e464c', '#5e5559', '#706664', '#847870', '#9a8c80'].map(H);
+const FACE = ['#141316', '#1d1b1f', '#27242a', '#322e33', '#3f3a3e', '#4d4748', '#5d5654', '#6f6762', '#857b72', '#9c9084'].map(H);
 const CAVE = ['#0c0b0e', '#131116', '#1a181d', '#221f25', '#2c292e', '#39373a', '#4a4a48'].map(H);
 const BUSH = ['#12200f', '#1b3014', '#26421a', '#335620', '#436c27', '#58842f', '#709c3a'].map(H);
 const pick = (r: C[], v: number) => r[clamp(Math.floor(v), 0, r.length - 1)];
@@ -44,10 +44,12 @@ export function paintEastCliff(w: number, h: number, seed: number, o: EastCliffO
   const crest = (x: number) => h * 0.1 + (fbm1(x / 110, 4, seed) - 0.5) * h * 0.16 + (noise1(x / 13, seed + 1) - 0.5) * 6;
   const endK = (x: number) => {
     // 0 on the beach .. 1 at full height; stepped by blocky noise so the ends are crags, not ramps
-    const a = smoothstep(o.left - 150, o.left, x + (noise1(x / 24, seed + 2) - 0.5) * 40);
-    const z = 1 - smoothstep(o.right, o.right + 170, x + (noise1(x / 26, seed + 3) - 0.5) * 50);
+    const a = smoothstep(o.left - 240, o.left, x + (noise1(x / 18, seed + 2) - 0.5) * 50);
+    const z = 1 - smoothstep(o.right, o.right + 230, x + (noise1(x / 20, seed + 3) - 0.5) * 60);
     const k = Math.min(a, z);
-    return Math.round(k * 7) / 7 * 0.7 + k * 0.3;
+    // crags: short steps with sloping treads, never one tall wall
+    const st = Math.round(k * 16) / 16;
+    return st * 0.55 + k * 0.45;
   };
   const tops = new Float32Array(w);
   for (let x = 0; x < w; x++) tops[x] = h - (h - crest(x)) * endK(x) - (noise1(x / 5, seed + 4) - 0.5) * 3;
@@ -113,7 +115,7 @@ export function paintEastCliff(w: number, h: number, seed: number, o: EastCliffO
         else if (q >= 2 && q < 7 + noise1(x / 9, seed + j) * 4) shadow = 1 - (q - 2) / 10;
       }
       const joint = u < 1 / cw * 1.01;
-      let v = 4.4 + ct * 1.4 + (u < 0.22 ? 1 : u > 0.8 ? -1 : 0) + (fbm2(x / 5, y / 9, 2, seed + 40) - 0.5) * 1.4;
+      let v = 4.6 + ct * 1.8 + (u < 0.2 ? 1.6 : u < 0.35 ? 0.6 : u > 0.78 ? -1.3 : 0) + (fbm2(x / 7, y / 14, 2, seed + 40) - 0.5) * 1.1;
       v -= smoothstep(h * 0.55, h, y) * 1.2; // the lower face is in the beach's shade
       // horizontal breaks in each column
       const brk = Math.abs(Math.sin(y * 0.11 + k * 1.7 + noise1(y / 30, k + seed) * 2));
@@ -121,8 +123,8 @@ export function paintEastCliff(w: number, h: number, seed: number, o: EastCliffO
       else if (brk < 0.09 && Math.sin(y * 0.11 + k * 1.7) > 0) v += 0.8;
       if (joint) v -= 2.2;
       if (shadow) v -= 2.6 * shadow;
-      if (ledge) v = 7 - (y - ledgeAt(x, jl));
-      c = pick(FACE, v + (bayer(x, y) - 0.5) * 0.6);
+      if (ledge) v = 8 - (y - ledgeAt(x, jl)) * 1.5;
+      c = pick(FACE, v + (bayer(x, y) - 0.5) * 0.45);
       // seeps: dark wet streaks running down from the ledges, green at their feet
       const seep = noise1(x / 7, seed + 50);
       if (seep > 0.78 && d > 8) {
@@ -134,10 +136,13 @@ export function paintEastCliff(w: number, h: number, seed: number, o: EastCliffO
       if (jl < 0) for (let j = 1; j < ledgeY.length; j++) {
         const ly = ledgeAt(x, j);
         const q = y - ly;
-        if (q > 1 && q < 20 && noise1(x / 3, seed + 60 + j) > 0.72 && hash2(x, j, seed + 61) < 0.8 - q / 26) c = mix(c, H('#dcd8cc'), 0.75 - q / 30);
+        // only under the colonies (a slow noise picks them), in irregular runs of uneven length
+        const col = noise1(x / 40, seed + 62 + j);
+        const len = 6 + noise1(x / 2.3, seed + 63 + j) * 18 * col;
+        if (col > 0.58 && q > 1 && q < len && noise1(x / 2.2, seed + 60 + j) > 0.55 && hash2(x, j, seed + 61) < 0.9 - q / len) c = mix(c, H('#d4d0c4'), 0.7 - q / (len * 1.6));
       }
       // lichen on the dry upper face
-      if (y < h * 0.5 && noise2(x / 6, y / 5, seed + 70) > 0.76) c = mix(c, noise2(x, y, seed + 71) > 0.5 ? H('#a89040') : H('#8a9a58'), 0.35);
+      if (y < h * 0.45 && noise2(x / 3, y / 2.5, seed + 70) > 0.84) c = mix(c, noise2(x, y, seed + 71) > 0.5 ? H('#b89a44') : H('#8a9a58'), 0.4);
       // the wave-cut notch and the wet, weedy foot
       if (fromFoot < 22 + noise1(x / 20, seed + 80) * 8) {
         c = shade(c, -0.3);

@@ -17,7 +17,7 @@ import { hex, mix, shade } from '../color';
 import { bayer, clamp, fbm2, hash2, noise1, noise2, smoothstep } from '../../core/math';
 import { SPOT } from '../island4/layout';
 import {
-  MAX_DD, MOUTH, DELTA_THREADS, CREEK_STONES, TIDE_POOLS, CAVE_POOL, Stone,
+  MAX_DD, MOUTH, CREEK, DELTA_THREADS, CREEK_STONES, CAVE_POOL, Stone, shelfAt, tidePoolAt,
   baseTop, persp, realZ, mouthCx, mouthHw, mouthBend, threadE, creekCx, creekHw, creekStoneAt, cavePoolHw,
 } from './eastgeo';
 
@@ -112,7 +112,7 @@ function stream(x: number, y: number, dd: number, c0: C, wet0: boolean): boolean
   const e = (x - cx) / hw, ae = Math.abs(e);
   if (ae > 2.2) return false;
   // ripple scale follows the perspective
-  const u = x / P, v = realZ(dd) * 260;
+  const u = (x - MOUTH.x) / P, v = realZ(dd) * 260;
   const bend = mouthBend(dd);
   // a wobbly waterline (sub-row noise so the banks never run as straight curbs)
   const wob = (noise1(dd / 4 + (e > 0 ? 50 : 0), 80) - 0.5) * 0.12 + (noise1(dd / 1.3 + (e > 0 ? 9 : 0), 79) - 0.5) * 0.05;
@@ -184,46 +184,39 @@ function stream(x: number, y: number, dd: number, c0: C, wet0: boolean): boolean
 
 /** rippled wet sand under the delta's film of water */
 function sandRipple(x: number, y: number, dd: number, P: number): C {
-  const r = Math.sin((x / P) * 0.9 + Math.sin(dd * 0.35) * 2 + fbm2(x / 30, dd / 8, 2, 92) * 5);
+  const r = Math.sin(((x - MOUTH.x) / P) * 0.9 + Math.sin(dd * 0.35) * 2 + fbm2(x / 30, dd / 8, 2, 92) * 5);
   return r > 0.6 ? WETSAND[3] : r > -0.2 ? WETSAND[2] : WETSAND[1];
 }
 
 // ------------------------------------------------------------------ seal rocks: shelves and tide pools
 
 function tidePools(x: number, y: number, dd: number, c0: C): boolean {
-  for (const [px, pd, rw, rh] of TIDE_POOLS) {
-    const P = persp(pd);
-    const rx = rw * P * 1.9, ry = rh * 2.4;
-    const nx = (x - px) / rx, ny = (dd - pd) / ry;
-    if (nx * nx + ny * ny > 1.3) continue;
-    const edgeN = (noise2(x / 7, dd / 3, 101) - 0.5) * 0.5 + (noise2(x / 2.5, dd / 1.5, 102) - 0.5) * 0.18;
-    const shelf = nx * nx + ny * ny + edgeN;
-    if (shelf > 1) continue;
-    // the pool inside its shelf of basalt
-    const qx = (x - px) / (rw * P), qy = (dd - pd) / rh;
-    const q = qx * qx + qy * qy + edgeN * 0.8;
-    let c: C;
-    if (q < 1) {
-      const k = clamp(1 - q);
-      c = pick(POOL, 1 + (1 - k) * 3 + (fbm2(x / 5, dd / 3, 2, 103) - 0.5) * 1.6 + dith(x, y));
-      // weed and anemones on the pool floor, visible through the water
-      const g = noise2(x / 3, dd / 2, 104);
-      if (g > 0.72) c = mix(c, WEED[1 + Math.floor(g * 10) % 2], 0.55);
-      if (hash2(x, y, 105) < 0.012) c = mix(c, hash2(x, y, 106) < 0.5 ? H('#c8384a') : H('#58b070'), 0.7);
-      if (q > 0.86) c = mix(c, POOL[4], 0.5);
-      EG.c = c; EG.wet = true;
-      return true;
-    }
-    // the rim: wet black rock with weed, barnacle crusts and limpets
-    const l = -((x - px) / rx) * 0.3 - ((dd - pd) / ry) * 0.7;
-    c = pick(ROCK, 2.2 + l * 1.8 + (fbm2(x / 6, dd / 3, 2, 107) - 0.5) * 2 + dith(x, y));
-    if (q < 1.25 && noise2(x / 2.4, dd / 1.4, 108) > 0.45) c = pick(WEED, noise2(x / 5, dd / 5, 109) * 4);
-    else if (hash2(x, y, 110) < 0.16 && q > 1.3) c = pick(BARN, hash2(x, y, 111) * 3);
-    if (shelf > 0.9) c = mix(c, c0, 0.4);
-    EG.c = c; EG.wet = q < 1.45;
+  const sh = shelfAt(x, dd);
+  if (sh <= 0) return false;
+  const P = persp(dd), u = (x - 4350) / P, v = realZ(dd) * 200;
+  const pool = tidePoolAt(x, dd);
+  let c: C;
+  if (pool > 0) {
+    // the pool: dark clear water over a floor of weed, anemones and pebbles
+    const k = clamp(pool * 6);
+    c = pick(POOL, 4.2 - k * 3.6 + (fbm2(u / 5, v / 5, 2, 103) - 0.5) * 1.2 + dith(x, y, 0.5));
+    const g = noise2(u / 3, v / 3, 104);
+    if (g > 0.7) c = mix(c, WEED[1 + (Math.floor(g * 10) % 2)], 0.5);
+    if (hash2(x, y, 105) < 0.01) c = mix(c, hash2(x, y, 106) < 0.5 ? H('#c8384a') : H('#58b070'), 0.7);
+    if (pool < 0.03) c = mix(c, POOL[4], 0.6);
+    EG.c = c; EG.wet = true;
     return true;
   }
-  return false;
+  // the shelf: lumpy basalt, each lump lit on its upper side; weed round the pools, barnacle crusts
+  const lump = noise2(u / 5, v / 5, 112);
+  const above = noise2(u / 5, (v - 1.6) / 5, 112);
+  c = pick(ROCK, 2.3 + (lump - 0.5) * 3 + (above < lump - 0.06 ? 1.4 : 0) + Math.min(1, sh * 8) * 0.6 + dith(x, y, 0.5));
+  if (pool > -0.05 && noise2(u / 3, v / 3, 108) > 0.38) c = pick(WEED, noise2(u / 6, v / 6, 109) * 4);
+  else if (noise2(u / 3, v / 3, 110) > 0.7 && hash2(x, y, 111) < 0.55) c = pick(BARN, hash2(x, y, 113) * 3);
+  // the shelf's edge sinks into the sand
+  if (sh < 0.025) c = mix(c, c0, 0.45);
+  EG.c = c; EG.wet = sh < 0.06 || pool > -0.08;
+  return true;
 }
 
 // ------------------------------------------------------------------ the sea cave: floor and pool
@@ -257,7 +250,7 @@ function caveFloor(x: number, y: number, d: number, c0: C, wet0: boolean): boole
   const k = Math.min(smoothstep(5030, 5100, x), 1 - smoothstep(5400, 5470, x));
   if (k <= 0 || fbm2(x / 20, y / 11, 2, 72) * 0.9 + 0.05 >= k) return false;
   const P = persp(d);
-  const u = x / P;
+  const u = (x - CAVE_POOL.x) / P;
   const puddle = fbm2(u / 16, d / 7, 3, 123);
   if (puddle > 0.64 && d > 6) {
     EG.c = mix(POOL[1], POOL[3], clamp((puddle - 0.64) * 6));
@@ -282,7 +275,7 @@ function shingle(x: number, y: number, d: number, c0: C, wet0: boolean): boolean
   const kk = Math.max(k, k2);
   if (kk <= 0.05) return false;
   const P = persp(d);
-  const pid = pebble(x / P, realZ(d) * 240, 4.2, 3, 131, 0.7 * kk);
+  const pid = pebble(x - (x - 4880) * (1 - 1 / P) * 0.15, realZ(d) * 240, 4.2, 3, 131, 0.7 * kk);
   if (pid < 0) return false;
   const l = -PB.nx * 0.45 - PB.ny * 0.6 + (1 - PB.r) * 0.5;
   let c = pick(GRAVEL, 0.6 + l * 2.6 + pid * 1.5);
@@ -321,13 +314,7 @@ function creek(x: number, y: number, dd: number): boolean {
   const cx = creekCx(dd), hw = creekHw(dd), P = persp(dd);
   const e = (x - cx) / hw, ae = Math.abs(e);
   if (ae > 1.9) return false;
-  for (const st of CREEK_STONES) {
-    const [sx, sd, r] = creekStoneAt(st);
-    if (Math.abs(x - sx) > r + 1 || Math.abs(dd - sd) > r) continue;
-    const c = stonePx(x, dd, st, sx, sd, r);
-    if (c !== -1) { EG.c = c; EG.wet = false; return true; }
-  }
-  const u = x / P, v = realZ(dd) * 260;
+  const u = (x - CREEK.x) / P, v = realZ(dd) * 260;
   if (ae >= 1) {
     // mossy banks: dark wet earth, moss cushions and fern shade, roots dipping in
     const b = (ae - 1) * hw / P;
@@ -353,7 +340,7 @@ function forestFloor(x: number, y: number, d: number, c0: C): boolean {
   const k = smoothstep(5930, 6030, x);
   if (k <= 0 || fbm2(x / 26, y / 14, 3, 73) * 1.1 <= 1.02 - smoothstep(5900, 6080, x)) return false;
   const P = persp(d);
-  const u = x / P, v = realZ(d) * 300;
+  const u = x, v = realZ(d) * 300;
   // the worn track right under the walk line: trodden earth, a few roots across it
   if (d < 9 + noise1(x / 30, 161) * 4) {
     let c = pick(TRACK, 2.6 - d * 0.18 + (fbm2(x / 8, y / 3, 2, 162) - 0.5) * 1.6 + dith(x, y));
@@ -366,16 +353,16 @@ function forestFloor(x: number, y: number, d: number, c0: C): boolean {
   const moss = fbm2(u / 22, v / 10, 3, 166);
   const drift = fbm2(u / 14 + 40, v / 7, 3, 167);
   let c: C;
-  if (moss > 0.56) {
-    const t = (moss - 0.56) * 6;
-    c = pick(MOSS, 1.4 + t * 2.2 + (noise2(u / 1.6, v / 1.2, 168) - 0.5) * 1.6 + dith(x, y));
+  if (moss > 0.6) {
+    const t = (moss - 0.6) * 6;
+    c = pick(MOSS, 0.9 + t * 2 + (noise2(u / 1.6, v / 1.2, 168) - 0.5) * 1.6 + dith(x, y));
     if (hash2(x, y, 169) < 0.03) c = MOSS[5];
   } else {
     c = pick(SOIL, 2.2 + (fbm2(u / 6, v / 4, 2, 170) - 0.5) * 2 + dith(x, y));
     // fallen leaves: little lens shapes in autumn colours, denser in drifts
-    const lid = pebble(u * 1.2, v * 1.6, 2.6, 1.7, 171, 0.2 + drift * 0.8);
+    const lid = pebble(u * 1.2, v * 1.6, 2.6, 1.7, 171, 0.08 + drift * drift * 0.7);
     if (lid >= 0 && PB.r < 0.9) {
-      c = pick(LITTER, lid * 7);
+      c = shade(pick(LITTER, lid * 7), -0.18);
       if (PB.ny < -0.3) c = shade(c, 0.12);
       if (PB.r > 0.6) c = shade(c, -0.15);
     }
@@ -384,7 +371,7 @@ function forestFloor(x: number, y: number, d: number, c0: C): boolean {
   const root = Math.abs(Math.sin(u * 0.09 + fbm2(u / 40, v / 30, 2, 172) * 7));
   if (root < 0.045 && d < 70 && noise1(u / 26, 173) > 0.42) c = root < 0.02 ? H('#8a6a44') : H('#4e3622');
   // stones half sunk in the humus
-  if (pebble(u, v, 11, 7, 174, 0.12) >= 0) {
+  if (pebble(u, v, 17, 11, 174, 0.05) >= 0) {
     const l = -PB.nx * 0.4 - PB.ny * 0.6 + (1 - PB.r) * 0.4;
     c = pick(ROCK, 2 + l * 2.6);
     if (PB.ny < -0.35 && hash2(x, y, 175) < 0.5) c = MOSS[3];
@@ -415,8 +402,8 @@ function turfLip(x: number, d: number): boolean {
 export function eastGround(x: number, y: number, d: number, zone: string, c0: C, wet0: boolean): boolean {
   if (x < EAST_X0) return false;
   switch (zone) {
-    case 'stream': return stream(x, y, y - baseTop(x), c0, wet0);
-    case 'seal': return d > 6 && tidePools(x, y, d, c0);
+    case 'seal': case 'stream': if (x >= 3990 && tidePools(x, y, y - baseTop(x), c0)) return true;
+      return zone === 'stream' && stream(x, y, y - baseTop(x), c0, wet0);
     case 'cliffs': return shingle(x, y, d, c0, wet0);
     case 'cave': return caveFloor(x, y, d, c0, wet0);
     case 'cove': return shingle(x, y, d, c0, wet0) || cove(x, y, d, c0, wet0);

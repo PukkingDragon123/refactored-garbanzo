@@ -20,7 +20,7 @@ import { foreground } from '../../art/jungle-fg';
 import type { PixelBuffer } from '../../art/pixel';
 import { Rng, clamp, smoothstep } from '../../core/math';
 import { ISL, SPOT, groundY, zoneAt } from '../../art/island4/layout';
-import { paintSeaStack, paintReef, paintBowWreck, paintCliff, paintCaveArch, paintDuneGrass } from '../../art/island4/scenery';
+import { paintSeaStack, paintReef, paintBowWreck, paintCliff, paintDuneGrass } from '../../art/island4/scenery';
 import type { IslandScene4 } from './island';
 import { layerY } from './island';
 import { dressEast } from '../v9/east';
@@ -82,11 +82,7 @@ export function dressIsland(s: IslandScene4, L: IsleLayers) {
   const backY = layerY(pb, 216);
   const west = paintCliff(560, 250, 7, { right: 480 });
   L.back.add(new Prop(bigFrame(r, west, 0, west.h), -60, backY + 4, 0));
-  // the long cliff with the sea cave, then the cove, falling away to the bush
-  const cx0 = Math.round(4560 * pb), cw = Math.round(6080 * pb) - cx0;
-  const caveL = Math.round(4990 * pb) - cx0, caveR = Math.round(5500 * pb) - cx0;
-  const cliff = paintCliff(cw, 260, 9, { left: 70, right: cw - 90, cave: [caveL, caveR], arch: 190 });
-  L.back.add(new Prop(bigFrame(r, cliff, 0, cliff.h), cx0, backY + 4, 0));
+  // (the long cliff with the sea cave and the cove is painted by v9/east.ts)
   // boulders at the foot of the cliffs and around the west point
   for (const x of [120, 340, 520, 4620, 4760, 4880, 5580, 5700]) {
     const c = sprite(`boulder:${x % 3}`, () => deadwood('rock', 60 + (x % 3), 40 + (x % 3) * 12));
@@ -218,12 +214,7 @@ export function dressIsland(s: IslandScene4, L: IsleLayers) {
     const c = sprite(`fpalm:${x % 2}`, () => foreground('palm', 930 + (x % 2), 220));
     if (c) L.front.add(new Prop(c.f, x * pf, layerY(pf, -40) + rng.range(-10, 10), 2, { sway: 0.5, flip: rng.chance(0.5), tint: packColor(0.4, 0.46, 0.42, 1) }));
   }
-  // the rock arch of the sea cave
-  const archW = Math.round((5470 - 5030) * pf) + 60, archH = 300;
-  const arch = paintCaveArch(archW, archH, 5, [[Math.round(archW * 0.38), 9], [Math.round(archW * 0.66), 7]]);
-  const archF = bigFrame(r, arch);
-  const ax = 5030 * pf - 30, ay = layerY(pf, -8);
-  L.front.add(new Custom(4, rr => rr.draw(archF, ax, ay, 1, 1, 0, packColor(0.8, 0.8, 0.82, 1))));
+  // (the sea cave's rock arch is v9/east.ts too)
   void clamp; void smoothstep;
   // V9: the east half (x >= 3300) is hand-dressed in v9/east.ts
   dressEast(s, L);

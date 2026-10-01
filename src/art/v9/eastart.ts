@@ -157,41 +157,58 @@ export function paintAnemone(seed: number, open: number, green = false): PixelBu
   return b;
 }
 
-/** the creek's ledge: stacked mossy boulders with a notch the water pours through (anchor: notch lip) */
+/**
+ * The creek's ledge: a mossy rock step (w wide, its lip h above the pool) that slumps down to the
+ * forest floor at both ends, a notch in the lip where the water pours, boulders crowding its crest and
+ * ferns spilling from the cracks. Anchor: the foot of the pour (bottom centre).
+ */
 export function paintLedge(seed: number, w: number, h: number, notch: number): Sprite {
   const rng = new Rng(seed);
-  const b = new PixelBuffer(w, h + 4);
-  const cx = w / 2;
-  // boulders either side of the notch, a flat lip stone under the pour
-  const stones: [number, number, number, number][] = [];
-  for (const side of [-1, 1]) {
-    let x = cx + side * (notch + 4);
-    for (let i = 0; i < 4; i++) {
-      const r = rng.range(7, 13) * (1 - i * 0.12);
-      stones.push([x + side * r * 0.4, h - rng.range(0, h * 0.5) - r * 0.4 * (i === 0 ? 1.4 : 1), r, rng.range(0.7, 1)]);
-      x += side * r * rng.range(0.9, 1.3);
+  const H2 = h + 14;
+  const b = new PixelBuffer(w, H2);
+  const cx = w / 2, foot = H2 - 2;
+  // the crest: full height in the middle, slumping to the ground at the ends, dipping at the notch
+  const crest = (x: number) => {
+    const u = Math.abs(x - cx) / (w / 2);
+    const hk = 1 - smoothstepE(0.55, 1, u + (noise1(x / 7, seed) - 0.5) * 0.18);
+    const dip = Math.abs(x - cx) < notch ? 3 + (1 - Math.abs(x - cx) / notch) * 2 : 0;
+    return foot - h * hk + dip + (noise1(x / 4, seed + 1) - 0.5) * 3;
+  };
+  for (let x = 0; x < w; x++) {
+    const top = crest(x);
+    for (let y = Math.max(0, Math.floor(top)); y <= foot; y++) {
+      const d = y - top;
+      const blk = Math.floor((x + noise1(y / 6, seed + 2) * 6) / 9) + Math.floor(y / 8) * 13;
+      const l = (hash2(blk, 0, seed) - 0.5) * 1.6 - d * 0.03 + (fbm2(x / 3, y / 3, 2, seed + 3) - 0.5) * 0.8;
+      let c = rc(ROCK, 3.4 + l * 1.8);
+      // cracks between the blocks
+      if (Math.abs(noise2(x / 6, y / 4, seed + 8) - 0.5) < 0.035) c = rc(ROCK, 1.5);
+      // moss on the crest and the block tops, wet and dark under the pour
+      if (d < 3 + noise1(x / 3, seed + 4) * 3 && Math.abs(x - cx) > notch - 1) c = rc(JP.moss, 4 + noise2(x / 2, y / 2, seed + 5) * 4);
+      if (Math.abs(x - cx) < notch + 1) c = shade(c, -0.3);
+      b.data[y * w + x] = c;
     }
   }
-  stones.push([cx, h - 3, notch + 3, 0.45]);
-  stones.sort((a, q) => a[1] - q[1]);
-  for (const [sx, sy, r, sq] of stones) {
-    b.ellipseFn(sx, sy, r, r * sq, (x, y, nx, ny) => {
-      const l = -nx * 0.5 - ny * 0.75 + (fbm2(x / 3, y / 3, 2, seed) - 0.5) * 0.6;
-      let c = rc(ROCK, 3 + l * 2.6);
-      if (ny < -0.2 && noise2(x / 2.5, y / 2, seed + 1) > 0.42) c = rc(JP.moss, 4 + l * 3);
-      if (ny > 0.55) c = shade(c, -0.2);
-      return c;
+  // boulders on the crest either side of the notch
+  for (const side of [-1, 1]) for (let i = 0; i < 3; i++) {
+    const x = cx + side * (notch + 4 + i * rng.range(8, 13));
+    const r = rng.range(5, 9) * (1 - i * 0.18);
+    b.ellipseFn(x, crest(x) + 1, r * 1.2, r * 0.8, (px, py, nx, ny) => {
+      const l = -nx * 0.5 - ny * 0.8 + (fbm2(px / 3, py / 3, 2, seed + 6) - 0.5) * 0.5;
+      return ny < -0.25 && noise2(px / 2.5, py / 2, seed + 7) > 0.4 ? rc(JP.moss, 4 + l * 3) : rc(ROCK, 3 + l * 2.6);
     });
   }
-  // ferns and moss tufts spilling from the cracks
-  for (let i = 0; i < 5; i++) {
-    const x = rng.range(4, w - 4);
+  // ferns spilling from the cracks
+  for (let i = 0; i < 7; i++) {
+    const x = rng.range(6, w - 6);
     if (Math.abs(x - cx) < notch + 3) continue;
-    frond(b, { x, y: rng.range(h * 0.2, h * 0.6), ang: -Math.PI / 2 + rng.range(-1, 1), len: rng.range(7, 13), droop: 0.9, ramp: JP.fern, base: 5, pinna: 2.4, sweep: 0.9, rng });
+    frond(b, { x, y: crest(x) + rng.range(1, h * 0.5), ang: -Math.PI / 2 + rng.range(-1.1, 1.1), len: rng.range(7, 14), droop: 0.9, ramp: JP.fern, base: 5, pinna: 2.4, sweep: 0.9, rng });
   }
   outlineSel(b, 0.5);
-  return { buf: b, ax: Math.round(cx), ay: h };
+  return { buf: b, ax: Math.round(cx), ay: foot };
 }
+
+const smoothstepE = (a: number, z: number, v: number) => { const t = clamp((v - a) / (z - a)); return t * t * (3 - 2 * t); };
 
 /** a bleached driftwood log with a root plate (anchor bottom centre) */
 export function paintDriftwood(seed: number, len: number): Sprite {
@@ -228,6 +245,54 @@ export function paintMossMound(seed: number, w: number): Sprite {
   }
   outlineSel(b, 0.45);
   return { buf: b, ax: Math.round((w + 4) / 2), ay: h - 1 };
+}
+
+/**
+ * A pōhutukawa limb reaching in over the frame from its top-left anchor: leaf clusters lit from
+ * above, crimson flowers, twigs and leaf sprays trailing below, everything kept inside the buffer
+ * (ragged on every side, so no clipped straight edge can show).
+ */
+export function paintLimb(seed: number, w: number, h: number): Sprite {
+  const b = new PixelBuffer(w, h);
+  const rng = new Rng(seed);
+  const leaf = [H('#1e3a22'), H('#2a4c2a'), H('#3a6232'), H('#4e7a3a'), H('#5e8a40')];
+  const limb: P[] = [];
+  for (let i = 0; i <= 40; i++) { const t = i / 40; limb.push([t * w * 0.7, 4 + Math.sin(t * 3 + seed) * 6 + t * t * h * 0.3]); }
+  tube(b, limb, t => 5 * (1 - t) + 1.4, JP.bark, 4);
+  const blobs: [number, number, number][] = [];
+  for (let i = 0; i < 24; i++) {
+    const [lx, ly] = limb[rng.int(6, 40)];
+    const r = rng.range(8, 17);
+    blobs.push([clamp(lx + rng.range(-12, 16), r * 1.3 + 2, w - r * 1.3 - 2), Math.min(h * 0.7 - r, ly + rng.range(-2, 18)), r]);
+  }
+  for (const [cx, cy, r] of blobs) {
+    b.ellipseFn(cx, cy, r * 1.3, r, (x, y, nx, ny) => {
+      const q = nx * nx + ny * ny + (noise2(x / 3, y / 3, seed) - 0.5) * 0.8;
+      if (q > 1) return -1;
+      const l = clamp(0.55 - ny * 0.45 - nx * 0.15 + (fbm2(x / 2, y / 2, 2, seed + 1) - 0.5) * 0.35);
+      return leaf[clamp(Math.floor(l * 5), 0, 4)];
+    });
+  }
+  // trailing sprays below the clusters
+  for (let i = 0; i < 14; i++) {
+    const [cx, cy, r] = blobs[rng.int(0, blobs.length - 1)];
+    const x0 = cx + rng.range(-r, r), y0 = cy + r * 0.6;
+    const len = rng.range(6, Math.max(7, Math.min(26, h - y0 - 2)));
+    for (let k = 0; k < len; k++) {
+      const x = x0 + Math.sin(k * 0.3 + i) * 1.2, y = y0 + k;
+      b.set(x, y, rc(JP.bark, 3));
+      if (k % 3 === 1) { b.set(x - 1, y, leaf[2]); b.set(x + 1, y + 1, leaf[3]); }
+    }
+  }
+  for (let i = 0; i < 46; i++) {
+    const [cx, cy, r] = blobs[rng.int(0, blobs.length - 1)];
+    const x = Math.round(cx + rng.range(-r, r)), y = Math.round(cy - r * rng.range(0.1, 0.85));
+    for (const [dx, dy, c] of [[0, 0, '#e8323a'], [1, 0, '#c8202e'], [0, -1, '#ff5a52'], [-1, 0, '#b8182a'], [0, 1, '#9a1424'], [1, -1, '#ffd24a']] as const) {
+      if (b.opaque(x + dx, y + dy)) b.set(x + dx, y + dy, H(c));
+    }
+  }
+  outlineSel(b, 0.4);
+  return { buf: b, ax: 0, ay: 0 };
 }
 
 export { mix, clamp };

@@ -232,21 +232,27 @@ export class CascadeFx implements Drawable {
     const x = CREEK.x;
     if (x + 60 < r.visibleX0(10) || x - 60 > r.visibleX1(10)) return;
     const t = st.time;
-    const top = baseTop(x) - CREEK.fall, bot = baseTop(x) - 1;
+    const top = baseTop(x) - CREEK.fall + 4, bot = baseTop(x) - 1;
     const day = 1 - this.clock.night * 0.7;
     const W = CREEK.fallW;
-    // the sheet: vertical strands in three tones, each with bright blobs racing down
+    // the sheet: strands in three tones, the water bowing out over the lip and fanning as it falls,
+    // gaps where the rock shows through, bright blobs racing down each strand
     for (let i = -W; i <= W; i++) {
       const edge = Math.abs(i) / W;
-      const bow = (1 - edge * edge) * 1.5; // the water bulges out over the lip
       const base = hash2(i, 1, 9);
-      const tone = base < 0.3 ? packColor(0.5, 0.7, 0.72, 0.85) : base < 0.7 ? packColor(0.66, 0.84, 0.86, 0.8) : packColor(0.84, 0.94, 0.95, 0.8);
-      const y0 = top + edge * 2 - bow;
-      r.rect(x + i, y0, 1, bot - y0, tone);
+      if (edge > 0.7 && base < 0.35) continue;
+      const tone = base < 0.3 ? packColor(0.5, 0.7, 0.72, 0.6) : base < 0.7 ? packColor(0.66, 0.84, 0.86, 0.7) : packColor(0.86, 0.95, 0.96, 0.8);
+      const y0 = top + edge * edge * 3;
+      const len = bot - y0;
+      // three segments: under the lip, mid-fall, the splay into the churn
+      for (let s = 0; s < 3; s++) {
+        const fy = y0 + (len * s) / 3, fx = x + i * (1 + s * 0.12);
+        r.rect(Math.round(fx), Math.round(fy), 1, Math.ceil(len / 3) + 1, tone);
+      }
       for (let k = 0; k < 3; k++) {
         const ph = (t * (1.6 + base * 0.8) + k / 3 + base) % 1;
-        const yy = y0 + ph * ph * (bot - y0);
-        r.rect(x + i, Math.round(yy), 1, 2 + Math.round(ph * 3), packColor(0.95, 1, 1, (0.5 + base * 0.4) * day + 0.2));
+        const yy = y0 + ph * ph * len;
+        r.rect(Math.round(x + i * (1 + ph * 0.36)), Math.round(yy), 1, 2 + Math.round(ph * 3), packColor(0.95, 1, 1, (0.5 + base * 0.4) * day + 0.2));
       }
     }
     // the lip: a bright rolling edge

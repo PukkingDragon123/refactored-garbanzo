@@ -14,7 +14,7 @@
 //   the cave pool (x 5250): a still pool in the cave floor, fed by drips from the roof.
 //   tide pools: rock pools in front of the walk line at the seal rocks.
 
-import { clamp, noise1, smoothstep } from '../../core/math';
+import { clamp, fbm2, noise1, noise2, smoothstep } from '../../core/math';
 import { ISL, SPOT, groundY } from '../island4/layout';
 
 /** rows from the walk line up to the vanishing horizon (world px on the gameplay plane) */
@@ -130,7 +130,7 @@ export const CREEK = {
   /** the ledge the creek falls over, behind the walk line: height above the walk line */
   fall: 30,
   /** half width of the falling sheet */
-  fallW: 9,
+  fallW: 12,
   /** flow speed toward the camera (realZ units per second) */
   flow: 0.07,
 };
@@ -175,10 +175,31 @@ export function cavePoolHw(dd: number): number {
 
 // ------------------------------------------------------------------ tide pools at the seal rocks
 
-/** rock pools in front of the walk line: centre x, centre row, half width, half height */
+/** rock pools in front of the walk line: centre x, centre row, half width, half height (where the
+ * pool life lives; the shelves and pools themselves are the noise fields below) */
 export const TIDE_POOLS: [number, number, number, number][] = [
   [4070, 34, 24, 7], [4190, 58, 34, 10], [4440, 30, 20, 6], [4560, 64, 40, 11], [4660, 40, 22, 7],
 ];
+
+/**
+ * The seal rocks' reef platform in front of the walk line: > 0 on the basalt shelf (how far in), with
+ * open sand where the seal sleeps and between the outcrops. Noise is sampled in perspective.
+ */
+export function shelfAt(x: number, dd: number): number {
+  if (x < 3990 || x > 4730 || dd < 4) return -1;
+  const P = persp(dd), u = (x - 4350) / P, v = realZ(dd) * 200;
+  const zone = smoothstep(3990, 4070, x) * (1 - smoothstep(4650, 4730, x));
+  const gap = 1 - 0.8 * Math.exp(-(((x - 4330) / 80) ** 2));
+  const n = fbm2(u / 34, v / 34, 3, 101) + (noise2(u / 8, v / 8, 102) - 0.5) * 0.16;
+  return (n - 0.55 + 0.1 * zone * gap - smoothstep(30, 160, dd) * 0.1) * zone * gap - 0.02;
+}
+/** depth of a tide pool on the shelf at (x, dd): > 0 inside a pool */
+export function tidePoolAt(x: number, dd: number): number {
+  const sh = shelfAt(x, dd);
+  if (sh <= 0.02) return -1;
+  const P = persp(dd), u = (x - 4350) / P, v = realZ(dd) * 200;
+  return 0.4 - fbm2(u / 13, v / 13, 2, 103) - (0.05 - Math.min(0.05, sh)) * 3;
+}
 
 // ------------------------------------------------------------------ water at the walk line
 
