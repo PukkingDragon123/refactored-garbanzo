@@ -23,6 +23,7 @@ import { el } from '../../ui/ui';
 import { A, local } from '../assets';
 import { PixelBuffer } from '../../art/pixel';
 import { rgba } from '../../art/color';
+import { climbFrame } from '../../art/ladder';
 
 const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 const F = () => game.save.flags;
@@ -213,10 +214,18 @@ function climbActor(s: ShipScene4, a: Actor, L: { x: number; top: number; bottom
   a.y = dir > 0 ? L.top : L.bottom;
   a.setAnim('climb');
   const to = dir > 0 ? L.bottom : L.top;
+  let fy = a.y;
   return new Promise(res => tick(s, dt => {
-    const d = to - a.y, step = 46 * dt;
+    // turn to the ladder first, then climb with the frame locked to the place on it (rung by rung)
+    const d = to - fy, step = a.inTransition ? 0 : 40 * dt;
     a.x = L.x;
-    if (Math.abs(d) > step) { a.y += Math.sign(d) * step; return; }
+    if (a.inTransition || Math.abs(d) > step) {
+      fy += Math.sign(d) * step;
+      const dd = Math.round(fy - L.top);
+      a.y = L.top + dd;
+      if (!a.inTransition) a.holdFrame = climbFrame(dd, L.bottom - L.top);
+      return;
+    }
     a.y = to;
     a.terrain = s.st.terrain;
     a.setAnim(a.idleAnim === 'climb' ? 'idle' : a.idleAnim);

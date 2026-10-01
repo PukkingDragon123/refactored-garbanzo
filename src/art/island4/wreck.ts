@@ -12,6 +12,7 @@ import { clamp, fbm1, hash2, noise1, noise2, smoothstep } from '../../core/math'
 import { paintShip4, S4 } from '../ship5';
 import { deckY } from '../boat';
 import { WRECK, groundY } from './layout';
+import { RUNG_PITCH, RUNG_OFF, GRAB_H, RAIL_X, RAIL_W } from '../ladder';
 
 /** wreck space = ship space x [SX0, SX1), y [SY0, SY1) (art only: a little wider than WRECK.sx0 so the
  *  stern's ensign staff and flag fit inside the buffers) */
@@ -216,6 +217,35 @@ export function paintWreck(): WreckArt {
     const y0 = walk(sx) - 1;
     const len = 6 + hash2(k, 12, 52) * 12;
     for (let j = 0; j < len; j++) set(front, sx + j * (hash2(k, 13, 53) < 0.5 ? 1 : -1), y0 - Math.sin(j * 0.5) * 1.2, j % 3 ? hex('#4a4a22') : hex('#6a6428'));
+  }
+
+  // ---- the way in: a rope ladder (salvaged slats) hung from a beam lashed across the breach, on the same
+  // rung grid as the ship's ladders (ladder.ts) so climbing hands and feet land on its slats; its ropes
+  // run on up past the floor's lip to the beam as handholds
+  {
+    const lx = WRECK.climbX - WRECK.dx, ly0 = WRECK.floor - WRECK.dy, ly1 = groundY(WRECK.climbX) - WRECK.dy;
+    const rope = [hex('#c8b07a'), hex('#a8905e'), hex('#6a5634')];
+    const beamY = ly0 - GRAB_H - 2;
+    for (let sx = lx - 13; sx <= lx + 13; sx++) {
+      const sag = Math.round(Math.abs(sx - lx) > 11 ? (hash2(sx, 3, 61) - 0.5) * 2 : 0);
+      set(front, sx, beamY + sag, hex('#8a6a46')); set(front, sx, beamY + 1 + sag, hex('#5a4030')); set(front, sx, beamY + 2 + sag, hex('#3a2a1e'));
+    }
+    for (const side of [-1, 1]) {
+      const rx = side < 0 ? lx - RAIL_X - RAIL_W + 1 : lx + RAIL_X;
+      for (let sy = beamY - 1; sy <= ly1; sy++) {
+        const w = Math.round(Math.sin((sy - ly0) * 0.35 + side) * 0.4);
+        set(front, rx + w, sy, rope[0]); set(front, rx + 1 + w, sy, rope[1]); set(front, rx + 2 + w, sy, rope[2]);
+      }
+      // the lashing round the beam
+      set(front, rx - 1, beamY - 1, rope[1]); set(front, rx + 3, beamY - 1, rope[2]); set(front, rx + 1, beamY + 3, rope[2]);
+    }
+    for (let sy = ly0 + RUNG_OFF; sy < ly1 - 1; sy += RUNG_PITCH) {
+      for (let sx = lx - RAIL_X + 1; sx < lx + RAIL_X; sx++) {
+        set(front, sx, sy, hex('#b08a5a'));
+        set(front, sx, sy + 1, hex('#7a5a3a'));
+        set(front, sx, sy + 2, hex('#4a3624'));
+      }
+    }
   }
 
   cache = {

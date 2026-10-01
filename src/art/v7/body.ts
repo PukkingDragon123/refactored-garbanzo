@@ -84,15 +84,17 @@ function yawer(a: number) {
   };
 }
 
-/** yaw for back views (climbing a ladder: we see the back, a little turned) */
-export const BACK_YAW = -1.22;
+/** yaw for back views (climbing a ladder: we see the back, only a little turned, so the climber sits
+ *  square on the flat-painted ladder and both hands and feet read on its rungs) */
+export const BACK_YAW = -1.42;
 
 export function lift(ch: Char7, pose: Pose, yaw0 = YAW): J3 {
   const b = { ...ch.build, shF: 0, shB: 0, legF: 0, legB: 0 };
   const J = solve(b, pose);
   const back = !!pose.flags?.back;
-  // a pose may turn the figure less (flags.yaw), e.g. squaring up to the ship's wheel
-  const yaw = back ? BACK_YAW : pose.flags?.yaw ?? yaw0;
+  // a pose may turn the figure less (flags.yaw), e.g. squaring up to the ship's wheel, or part way
+  // round to the ladder (stepping on and off it)
+  const yaw = pose.flags?.yaw ?? (back ? BACK_YAW : yaw0);
   const { W } = yawer(yaw);
   // the legs stride along the direction of travel: a shallower turn than the torso, so steps read
   // on screen while the chest stays open to the camera (a natural hip-to-shoulder rotation)
@@ -125,11 +127,13 @@ export function lift(ch: Char7, pose: Pose, yaw0 = YAW): J3 {
   const { W: Wa } = yawer(back ? yaw : yaw * 0.55);
   const armW = (ik: boolean) => (ik ? W : Wa);
   // flags.zN: the near hand goes to this lateral depth (body centre = 0) instead of splaying out, so
-  // it can come in to the mouth or the face (a sip, a bite, a hand over a yawn); the elbow follows part way
-  const zN = fl.zN;
+  // it can come in to the mouth or the face (a sip, a bite, a hand over a yawn); the elbow follows part way.
+  // flags.zF does the same for the far hand (both hands on a camera, both hands on a ladder's rungs)
+  const zN = fl.zN, zF = fl.zF;
   const armPt = (sh3: V3, root: P2, p: P2, side: number, ao: number, ik: boolean, k: number): V3 => {
     const dx = p[0] - root[0], dy = p[1] - root[1];
-    if (side > 0 && zN !== undefined) return vadd(W(sh3), armW(ik)([dx, dy, (zN - sh3[2]) * k]));
+    const zs = side > 0 ? zN : zF;
+    if (zs !== undefined) return vadd(W(sh3), armW(ik)([dx, dy, (zs - sh3[2]) * k]));
     const [x, z] = raise(dx, dy);
     return vadd(W(sh3), armW(ik)([x, dy, side * (out + z + ao * k)]));
   };
@@ -145,7 +149,8 @@ export function lift(ch: Char7, pose: Pose, yaw0 = YAW): J3 {
     const a = near ? pose.fa : pose.ba;
     if (!a.ik || !(near ? fl.wN : fl.wF)) return;
     const sh3 = near ? shN2 : shF2, root = near ? J.shF : J.shB, side = near ? 1 : -1, ao = near ? aoN : aoF;
-    const lz = near && zN !== undefined ? zN : sh3[2] + side * (out + ao), F = 2.3 * ch.hand, goal = a.ik;
+    const zs = near ? zN : zF;
+    const lz = zs !== undefined ? zs : sh3[2] + side * (out + ao), F = 2.3 * ch.hand, goal = a.ik;
     let tx = goal[0], ty = goal[1], el: P2 = root, wr: P2 = root;
     for (let it = 0; it < 3; it++) {
       [el, wr] = ik2(root, [root[0] + (tx + lz * sa) / ca - sh3[0], root[1] + ty - sh3[1]], b.upArm, b.foreArm, a.flip ? 1 : -1);

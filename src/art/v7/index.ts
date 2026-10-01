@@ -48,9 +48,19 @@ const CHUNK_TRANS: Record<string, Record<string, string>> = {
   lie: { idle: 'getUp', walk: 'getUp', run: 'getUp' },
   sleep: { idle: 'getUp', walk: 'getUp', run: 'getUp' },
 };
+// V7 extras: turning onto / off a ladder, raising / lowering the camera
+const ON_FOOT = ['idle', 'walk', 'run', 'crouch', 'crouchWalk', 'brace', 'slip'];
+const TRANS7: Record<string, Record<string, string>> = {};
+const tr = (from: string[], to: string[], clip: string) => { for (const f of from) for (const t of to) (TRANS7[f] ??= {})[t] = clip; };
+tr(ON_FOOT, ['climb'], 'climbOn');
+tr(['climb'], ON_FOOT, 'climbOff');
+tr(['idle', 'walk', 'run', 'brace', 'slip'], ['camera', 'cameraWalk'], 'cameraUp');
+tr(['crouch', 'crouchWalk'], ['cameraCrouch', 'cameraCrouchWalk'], 'cameraUpC');
+tr(['camera', 'cameraWalk'], ['idle', 'walk', 'run', 'brace', 'slip'], 'cameraDown');
+tr(['cameraCrouch', 'cameraCrouchWalk'], ['crouch', 'crouchWalk', 'idle', 'walk'], 'cameraDownC');
 export function transitionFor(id: string, from: string, to: string): string | null {
-  const t = parse(id)[0] === 'chunk' ? CHUNK_TRANS : TRANSITIONS;
-  return t[from]?.[to] ?? null;
+  if (parse(id)[0] === 'chunk') return CHUNK_TRANS[from]?.[to] ?? null;
+  return TRANS7[from]?.[to] ?? TRANSITIONS[from]?.[to] ?? null;
 }
 
 const cache = new Map<string, Frame7>();

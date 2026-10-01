@@ -12,6 +12,7 @@
 // are fixed by BOAT_LAYOUT and ship5, and nothing here moves them.
 
 import { PixelBuffer } from './pixel';
+import { RUNG_PITCH, RUNG_OFF, GRAB_H, RAIL_X, RAIL_W } from './ladder';
 import { C, hex, rgba, shade, withAlpha } from './color';
 import { Rng, hash2, noise1, noise2, smoothstep } from '../core/math';
 import type { Obj } from './ship4/kit';
@@ -198,15 +199,15 @@ function paintCeiling(b: PixelBuffer) {
     }
   }
   // hatch openings above the ladders (the hatch coaming frames the light)
-  for (const hx0 of [106, 455]) {
-    const top = lowCeil(hx0 + 7);
-    for (let x = hx0; x <= hx0 + 14; x++) {
+  for (const hx0 of [103, 452]) {
+    const top = lowCeil(hx0 + 10);
+    for (let x = hx0; x <= hx0 + 20; x++) {
       for (let y = top - 2; y <= top + 5; y++) if (M.at(x, y)) b.set(x, y, ramp(P.wood, 1 + (y - top) * 0.1));
       b.set(x, top + 5, P.wood[5]);
       b.set(x, top + 6, P.wood[3]);
     }
     vline(b, hx0, top, top + 6, P.wood[5]);
-    vline(b, hx0 + 14, top, top + 6, P.wood[2]);
+    vline(b, hx0 + 20, top, top + 6, P.wood[2]);
   }
 }
 
@@ -908,10 +909,10 @@ function paintWheelhouse(b: PixelBuffer, G: GlowFn) {
     b.set(x, WH_FLOOR + 1, P.teak[3]);
   }
   // companionway hatch coaming in the sole
-  for (let x = 218; x <= 230; x++) { b.set(x, WH_FLOOR - 4, P.varnish[6]); b.set(x, WH_FLOOR - 3, P.metal[0]); b.set(x, WH_FLOOR - 2, P.metal[0]); b.set(x, WH_FLOOR - 1, P.metal[1]); }
+  for (let x = 215; x <= 233; x++) { b.set(x, WH_FLOOR - 4, P.varnish[6]); b.set(x, WH_FLOOR - 3, P.metal[0]); b.set(x, WH_FLOOR - 2, P.metal[0]); b.set(x, WH_FLOOR - 1, P.metal[1]); }
   // brass grab rail over the companionway
-  hline(b, 218, 230, 66, P.brass[6]); hline(b, 218, 230, 67, P.brass[2]);
-  b.set(218, 68, P.brass[3]); b.set(230, 68, P.brass[3]);
+  hline(b, 215, 233, 66, P.brass[6]); hline(b, 215, 233, 67, P.brass[2]);
+  b.set(215, 68, P.brass[3]); b.set(233, 68, P.brass[3]);
 
   // --- Joshu's settee berth, made up tight: navy cushion, a tartan blanket folded square, a pillow
   sticker(b, 231, 86, 22, 16, o => {
@@ -1032,26 +1033,46 @@ function paintLamps(b: PixelBuffer, g: PixelBuffer, lamps: Lamp[], G: GlowFn) {
   }
 }
 
-function paintLadders(b: PixelBuffer, ladders: Ladder[]) {
+/**
+ * The ladder rails carried on up past the hatch as brass handrails (what the climber's hands hold while
+ * stepping on and off). Also painted onto the deck shell (boat.ts), which is what shows from outside.
+ */
+export function paintHandrails(b: PixelBuffer, ladders: Ladder[]) {
   for (const ld of ladders) {
-    const x0 = ld.x - 5, x1 = ld.x + 5;
+    for (const rx of [ld.x - RAIL_X - RAIL_W + 1, ld.x + RAIL_X]) {
+      for (let y = ld.y0 - GRAB_H; y < ld.y0; y++) {
+        b.set(rx, y, P.brass[6]);
+        b.set(rx + 1, y, P.brass[4]);
+        b.set(rx + 2, y, P.brass[2]);
+      }
+      b.set(rx, ld.y0 - GRAB_H - 1, P.brass[5]); b.set(rx + 1, ld.y0 - GRAB_H - 1, P.brass[6]); b.set(rx + 2, ld.y0 - GRAB_H - 1, P.brass[3]);
+      // a flange where the rail meets the deck
+      b.set(rx - 1, ld.y0 - 1, P.brass[3]); b.set(rx + 3, ld.y0 - 1, P.brass[1]);
+    }
+  }
+}
+
+function paintLadders(b: PixelBuffer, ladders: Ladder[]) {
+  // symmetric about ld.x (the climber's x) and on the shared rung grid (ladder.ts), so the climbing
+  // animation's hands and feet land on these rungs; the rails run on up past the hatch as handrails
+  for (const ld of ladders) {
+    const rails = [ld.x - RAIL_X - RAIL_W + 1, ld.x + RAIL_X];
     for (let y = ld.y0; y <= ld.y1; y++) {
-      for (const rx of [x0, x1]) {
+      for (const rx of rails) {
         b.set(rx, y, P.wood[6]);
         b.set(rx + 1, y, P.wood[3]);
         b.set(rx + 2, y, withAlpha(P.wood[0], 150));
       }
     }
-    for (let y = ld.y0 + 3; y < ld.y1; y += 6) {
-      for (let x = x0 + 2; x < x1; x++) {
+    paintHandrails(b, [ld]);
+    for (let y = ld.y0 + RUNG_OFF; y < ld.y1; y += RUNG_PITCH) {
+      for (let x = ld.x - RAIL_X + 1; x < ld.x + RAIL_X; x++) {
         const worn = Math.abs(x - ld.x) < 3;
         b.set(x, y, worn ? P.wood[7] : P.wood[5]);
         b.set(x, y + 1, P.wood[2]);
         b.set(x, y + 2, withAlpha(P.wood[0], 110));
       }
     }
-    // brass grab handles where the ladder meets the hatch
-    for (const hx of [x0 - 1, x1 + 2]) { vline(b, hx, ld.y0 - 6, ld.y0 + 4, P.brass[5]); b.set(hx, ld.y0 - 7, P.brass[6]); }
   }
 }
 

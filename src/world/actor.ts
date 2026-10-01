@@ -223,7 +223,9 @@ export class Actor implements Drawable {
   }
 
   /** posture transition in progress: plays a clip, then switches to `to` */
-  private trans: { to: string } | null = null;
+  private trans: { to: string; from: string } | null = null;
+  /** a posture transition clip is playing (e.g. turning onto a ladder: hold still until it is done) */
+  get inTransition() { return this.trans !== null; }
   /** insert posture transitions (sit down / stand up / lie down / get up) automatically */
   transitions = true;
 
@@ -231,12 +233,15 @@ export class Actor implements Drawable {
   setAnim(anim: string) {
     if (this.anim === anim && !this.once && !this.trans) return;
     if (this.trans?.to === anim) return;
+    // the clip already playing also leads to the new target (raising the camera, then starting to
+    // creep with it; stepping off a ladder, then walking away): keep it going, just retarget it
+    if (this.trans && this.transitions && people?.transitionFor?.(this.id, this.trans.from, anim) === this.anim) { this.trans.to = anim; return; }
     if (this.once) { const o = this.once; this.once = null; o.res(); }
     const from = this.trans ? this.trans.to : this.anim;
     this.trans = null;
     const clip = this.transitions ? people?.transitionFor?.(this.id, from, anim) : null;
     this.anim = clip ?? anim;
-    if (clip) this.trans = { to: anim };
+    if (clip) this.trans = { to: anim, from };
     this.animT = 0;
     this.holdFrame = null;
   }
@@ -351,7 +356,8 @@ export class Actor implements Drawable {
       }
     }
     // scripted walking
-    if (this.walkX !== null) {
+    // (not while turning onto or off a ladder: that turn happens on the spot)
+    if (this.walkX !== null && !(this.trans && (this.anim === 'climbOn' || this.anim === 'climbOff'))) {
       const d = this.walkX - this.x;
       if (Math.abs(d) < 1.2) {
         this.x = this.walkX;

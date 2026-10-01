@@ -10,7 +10,9 @@
 
 import type { Build, Pose, ArmP, LegP, P2 } from '../people-rig';
 import { stand, animePose, ANIME_ANIMS, AnimInfo, sitP, crouchP, neckAt, prop } from '../anime/anims';
-import { YAW } from './body';
+import { YAW, BACK_YAW } from './body';
+import { RUNG_PITCH, RUNG_OFF, GRAB_H, GRIP_X, C_CYC, C_BOT, CLIMB_FRAMES, climbFrame } from '../ladder';
+
 
 const TAU = Math.PI * 2;
 const K = (b: Build) => b.torso / 15;
@@ -30,8 +32,23 @@ export const ANIMS7: Record<string, AnimInfo7> = {
   idle: { frames: 8, fps: 5, loop: true },
   walk: { frames: 12, fps: 16, loop: true },
   run: { frames: 12, fps: 18, loop: true },
-  climb: { frames: 12, fps: 12, loop: true },
-  climbIdle: { frames: 1, fps: 1, loop: true },
+  // ladder climbing: the frame is the climber's place on the ladder (climbFrame), held by the caller
+  climb: { frames: CLIMB_FRAMES, fps: 1, loop: true },
+  climbIdle: { frames: CLIMB_FRAMES, fps: 1, loop: true },
+  carryPupClimb: { frames: CLIMB_FRAMES, fps: 1, loop: true },
+  // turning onto and off a ladder (transitions, see index.ts)
+  climbOn: { frames: 4, fps: 22, loop: false },
+  climbOff: { frames: 4, fps: 22, loop: false },
+  // the camera: held up at the eye (a slow breath), raised / lowered in short clips, crept along with
+  camera: { frames: 8, fps: 3, loop: true },
+  cameraCrouch: { frames: 8, fps: 3, loop: true },
+  photograph: { frames: 8, fps: 3, loop: true },
+  cameraUp: { frames: 6, fps: 24, loop: false },
+  cameraDown: { frames: 5, fps: 24, loop: false },
+  cameraUpC: { frames: 6, fps: 24, loop: false },
+  cameraDownC: { frames: 5, fps: 24, loop: false },
+  cameraWalk: { frames: 12, fps: 12, loop: true },
+  cameraCrouchWalk: { frames: 12, fps: 12, loop: true },
   // at the helm: both fists on the wheel; talking keeps one of them there (the Actor plays `talk`)
   steer: { frames: 8, fps: 4, loop: true, talk: 'steerTalk' },
   steerTalk: { frames: 8, fps: 5, loop: true },
@@ -138,38 +155,105 @@ function gait(b: Build, t: number, g: Gait): Pose {
 
 // ------------------------------------------------------------------ ladder climb (back view)
 
-/** half a climb cycle: one reach of one hand (px, scaled) */
-const RUNG = (b: Build) => 7 * K(b);
-export const climbDist = (b: Build) => 2 * RUNG(b);
+// ladder geometry and the climb frame encoding live in ../ladder.ts (shared with the ladder art and
+// whoever moves a climber: the player, the crew): the frame IS the place on the ladder (climbFrame)
+export { RUNG_PITCH, RUNG_OFF, GRAB_H, climbFrame };
 
-function climb(b: Build, t: number): Pose {
-  const k = K(b), R = RUNG(b);
-  const p = stand(b, { lean: -0.04, hip: [-0.6 * k, b.hipH - 0.6 * k] });
-  const T = b.torso;
-  const shY = p.hip[1] + T - b.shY;
-  // a limb planted on a rung slides down at the climbing speed; the free one reaches up in an arc
-  const track = (ph: number, lo: number): [number, number] => {
-    ph = frac(ph);
-    if (ph < 0.5) return [lo + R - (ph / 0.5) * R, 0];
-    const u = (ph - 0.5) / 0.5, e = ease(u);
-    return [lo + e * R, Math.sin(Math.PI * u)];
+/** lateral half spread of the hands (body px): on the rails, out beside the head where they read */
+const HAND_Z = GRIP_X / Math.sin(-BACK_YAW);
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
+/**
+ * Climbing, seen from behind, locked to the rungs. Heights are world px; W is measured up from the top
+ * of the ladder (rungs at W = -3, -9, -15...; the deck at 0; the grab handles up to GRAB_H; the floor
+ * at -L). Each limb takes a new hold every 12 px climbed (two rungs up), keeps it while the body rises
+ * past (so it is fixed on screen), then reaches for the next in a quick arc; the hands alternate, each
+ * with the opposite foot. Near the top the hands come off the rungs onto the grab handles and the feet
+ * step onto the deck (a stoop down into the hatch); at the bottom the feet step down onto the floor.
+ * `carry`: Chunk is tucked under the near arm and the far hand climbs alone.
+ */
+function climbPose(b: Build, frame: number, carry = false): Pose {
+  const k = K(b);
+  const d = Math.floor(frame / C_BOT), e = frame % C_BOT;
+  const u = -d; // height of the feet anchor over the top
+  const floorW = e < C_BOT - 1 ? -(d + e) : -1e9;
+  const T = b.torso, arm = b.upArm + b.foreArm, leg = b.thigh + b.shin;
+  const P = 0.66; // share of each limb's cycle spent holding on
+  // reach heights (where a limb takes a hold, over the feet anchor), snapped to the rung grid
+  const q = (r: number) => RUNG_OFF + RUNG_PITCH * Math.round((r - RUNG_OFF) / RUNG_PITCH);
+  const hip0 = b.hipH - 0.6 * k, sh0 = hip0 + T - b.shY;
+  const rH = q(sh0 + arm * 0.95), rF = q(b.ankleH + 9.2 * k);
+  const handW = (W: number) => Math.min(W, GRAB_H - 3);
+  const footW = (W: number) => Math.max(floorW, Math.min(0, W));
+  // one limb: [height of its hold over the anchor, swing arc 0..1]
+  const limb = (r: number, c: number, clampW: (W: number) => number): [number, number] => {
+    const s = (u + c) / C_CYC, kk = Math.floor(s), ph = s - kk;
+    const W0 = clampW(r - c + C_CYC * kk), W1 = clampW(r - c + C_CYC * (kk + 1));
+    if (ph < P || W0 === W1) return [W0 - u, 0];
+    const v = (ph - P) / (1 - P);
+    return [W0 + (W1 - W0) * ease(v) - u, Math.sin(Math.PI * v)];
   };
-  const hand = (ph: number): ArmP => {
-    const [y, arc] = track(ph, shY + 7.4 * k);
-    return { ik: [1.8 * k - arc * 1.2 * k, y], hand: arc > 0.15 ? 'relax' : 'grip' };
-  };
-  const legP = (ph: number): LegP => {
-    const [y, arc] = track(ph, b.ankleH + 0.4 * k);
-    return { f: [1.4 * k - arc * 1.4 * k, y], fa: 0.1 - arc * 0.3 };
-  };
-  // diagonal rhythm: near hand with the far foot
-  p.fa = hand(t); p.ba = hand(t + 0.5);
-  p.fl = legP(t + 0.5); p.bl = legP(t);
-  // the hips shift toward the loaded leg, the body stays close to the ladder
-  p.hip = [p.hip[0] + 0.3 * k * Math.sin(TAU * t), p.hip[1] + 0.5 * k * Math.cos(TAU * 2 * t)];
+  // diagonal pairs: near hand with the far foot, far hand with the near foot
+  const [hN, aN] = limb(rH, 0, handW), [hF, aF] = limb(rH, 6, handW);
+  const [gF, bF] = limb(rF, 0, footW), [gN, bN] = limb(rF, 6, footW);
+  // the body hangs a little back from the ladder (x = 0 is the ladder's face)
+  const hx = -3.4 * k;
+  // the wrist sits a fist below the rung it grips; the ankle a heel above the rung it stands on
+  const FIST = 1 + 1.6 * k;
+  const wN = hN - FIST, wF = hF - FIST, anN = gN + b.ankleH + 0.3, anF = gF + b.ankleH + 0.3;
+  // hips as high as the climb wants, but low enough for both feet and the hands to reach (a stoop to
+  // the grab handles at the top of a hatch), with a little push and pull on every rung
+  const legR = (an: number) => an + Math.sqrt(Math.max(1, (leg * 0.985) ** 2 - (hx - 0.9 * k) ** 2));
+  const armDown = (w: number) => w + Math.sqrt(Math.max(1, (arm * 0.93) ** 2 - (hx * 0.6) ** 2)) - (T - b.shY);
+  let hipY = Math.min(hip0 + 0.35 * k * Math.cos(TAU * u / RUNG_PITCH), legR(Math.min(anN, anF)));
+  hipY = Math.min(hipY, armDown(carry ? wF : Math.min(wN, wF)));
+  const stoop = clamp01((hip0 - hipY) / (6 * k));
+  const p = stand(b, { lean: -0.04 + 0.26 * stoop, hip: [hx - 1.2 * k * stoop, hipY] });
+  const hand = (w: number, arc: number): ArmP => ({ ik: [-arc * 2 * k - stoop * 0.8 * k, w - arc * 1.2 * k], hand: arc > 0.2 ? 'relax' : 'grip' });
+  const foot = (an: number, arc: number): LegP => ({ f: [0.9 * k - arc * 2.4 * k, an + arc * 1.2 * k], fa: 0.12 - arc * 0.45 });
+  p.fa = hand(wN, aN);
+  p.ba = hand(wF, aF);
+  p.fl = foot(anN, bN);
+  p.bl = foot(anF, bF);
   p.legFwd = true;
-  p.flags = { back: 1 };
-  p.sway = 0.3;
+  p.sway = 0.25;
+  // hands on the rungs just inside the rails; the weight swings gently over the loaded foot
+  const sx = 0.35 * k * Math.sin(TAU * u / C_CYC);
+  p.flags = { back: 1, zN: HAND_Z, zF: -HAND_Z, sx };
+  // the cast's big heads would hide hands holding on beside them: the arms draw over the head
+  p.front = ['armF', 'armB'];
+  if (carry) {
+    // Chunk hugged against the ribs under the near arm; the far hand does the climbing
+    const s = shoulder(b, p.hip, p.lean);
+    p.fa = { ik: [s[0] + 1.4 * k, s[1] - 9.4 * k], hand: 'flat' };
+    p.flags = { back: 1, zF: -HAND_Z, aoN: 1.4, sx };
+  }
+  return p;
+}
+
+/**
+ * Stepping onto (u 0 → 1) or off (u 1 → 0) a ladder: the body turns from the cast's three-quarter front
+ * round to its back, the hands come up onto the rails and the feet close together. A short transition.
+ */
+function climbTurn(b: Build, u: number): Pose {
+  const k = K(b), e = ease(u);
+  const p = stand(b, { lean: 0.02 - 0.06 * e, hip: [-2.6 * k * e, b.hipH - 0.5 * k * e] });
+  const s = shoulder(b, p.hip, p.lean);
+  p.fl = { f: [(-1.6 * (1 - e) + 0.9 * e) * k, b.ankleH], fa: 0 };
+  p.bl = { f: [(2 * (1 - e) + 0.9 * e) * k, b.ankleH + 1.4 * k * Math.sin(Math.PI * u)], fa: 0 };
+  const yaw = YAW + (BACK_YAW - YAW) * e;
+  if (yaw < -0.45) {
+    // facing the ladder: the hands reach up for the rails
+    const r = clamp01((e - 0.6) / 0.4);
+    p.fa = { ik: [0, s[1] + (4 + 7 * r) * k], hand: 'grip' };
+    p.ba = { ik: [0, s[1] + (2 + 5 * r) * k], hand: 'grip' };
+    p.flags = { back: 1, yaw, zN: HAND_Z, zF: -HAND_Z };
+    p.front = ['armF', 'armB'];
+  } else {
+    p.fa = { a: 0.1 + 0.6 * e, e: 0.4 + 1.3 * e, hand: 'relax' };
+    p.ba = { a: -0.04 + 0.6 * e, e: 0.32 + 1.3 * e, hand: 'relax' };
+    p.flags = { yaw };
+  }
   return p;
 }
 
@@ -510,6 +594,54 @@ function pet(b: Build, t: number): Pose {
   return p;
 }
 
+// ------------------------------------------------------------------ the camera
+
+/** creeping with the camera up: short careful steps on soft knees, the upper body steady */
+const CAM_GAIT = (b: Build, crouch: boolean): Gait => ({
+  stride: b.thigh * (crouch ? 0.75 : 0.9), stance: 0.66, lift: (crouch ? 1.3 : 1.5) * K(b), bob: 0.2 * K(b), lean: crouch ? 0.14 : 0.04,
+  swing: 0, elbow: 0, elbowSwing: 0, drop: (crouch ? 6 : 0.7) * K(b), kick: 0, flight: 0, hand: 'grip',
+});
+
+/**
+ * Taking a photo: u 0 = arms hanging (the camera just come off its strap), 0.35 = both hands on it at
+ * the chest, lens tipped down, 1 = up at the eye. Near hand on the grip with a finger on the shutter,
+ * far hand cupping the lens from below, elbows tucked in under it, a little lean into the viewfinder.
+ * Raising and lowering are short clips through u. `crouch` low on bent knees, `walk` (a gait phase)
+ * creeping along with it raised; `t` a slow breath the camera rides.
+ */
+function cameraPose(b: Build, u: number, crouch: boolean, walk: number | null, t = 0): Pose {
+  const k = K(b);
+  let p: Pose;
+  if (walk !== null) p = gait(b, walk, CAM_GAIT(b, crouch));
+  else if (crouch) { p = crouchP(b, 0.66, 0.12); }
+  else {
+    p = stand(b, { lean: 0.02 });
+    p.fl = { f: [2.3 * k, b.ankleH], fa: 0 };
+    p.bl = { f: [-2.5 * k, b.ankleH], fa: 0.04 };
+    p.hip = [0.2 * k, b.hipH - 0.35 * k];
+  }
+  const br = Math.sin(TAU * t);
+  if (walk === null) p.hip = [p.hip[0], p.hip[1] + br * 0.18 * k];
+  const up = smooth((u - 0.35) / 0.65), grab = smooth(u / 0.35);
+  p.lean += 0.06 * up;
+  p.hd = [0.35 * k * up, -0.25 * k * up];
+  // the camera: at the chest, lens tipped down → at the eye, level
+  const eye = wHead(b, p, 4.6, 6.2), chest = wHead(b, p, 5.2, -8.6 * k);
+  const C = lerp2(chest, eye, up);
+  const ang = -0.85 * (1 - up);
+  const rot = (dx: number, dy: number): P2 => [C[0] + dx * Math.cos(ang) - dy * Math.sin(ang), C[1] + dx * Math.sin(ang) + dy * Math.cos(ang)];
+  const gripN = rot(-1.4, -1.7), gripF = rot(2.2, -2.3);
+  const hangN = wHang(b, p, 1.2), hangF = wHang(b, p, 0.2);
+  p.fa = { ik: lerp2(hangN, gripN, grab), hand: grab > 0.6 ? 'grip' : 'relax' };
+  p.ba = { ik: lerp2(hangF, gripF, grab), hand: grab > 0.6 ? 'grip' : 'relax' };
+  p.flags = { ...(p.flags ?? {}), wN: 1, wF: 1, zN: 2.6 - 1.2 * up, zF: -1.2 + 1.4 * grab, aoN: 0, aoF: 0 };
+  p.front = grab > 0.5 ? ['armF', 'armB'] : ['armF'];
+  p.look = up > 0.5 ? 'fwd' : 'down';
+  if (grab > 0.05) p.props = [prop('camera', C[0] / Math.cos(YAW), C[1], ang, { t: 0, s: 0.85, front: true })];
+  p.sway = 0.2;
+  return p;
+}
+
 const POSES7: Record<string, (b: Build, t: number, id: string) => Pose> = {
   idle,
   steer: (b, t) => steer(b, t),
@@ -517,8 +649,21 @@ const POSES7: Record<string, (b: Build, t: number, id: string) => Pose> = {
   steerHard: (b, t) => steer(b, t, 1),
   walk: (b, t, id) => gait(b, t, WALK(b, id)),
   run: (b, t, id) => gait(b, t, RUN(b, id)),
-  climb: (b, t) => climb(b, t),
-  climbIdle: b => climb(b, 0.25),
+  // the climb clips take their frame straight (see pose7), not a phase
+  climb: b => climbPose(b, 0),
+  carryPupClimb: b => climbPose(b, 0, true),
+  climbIdle: b => climbPose(b, 0),
+  climbOn: (b, t) => climbTurn(b, t),
+  climbOff: (b, t) => climbTurn(b, 1 - t),
+  camera: (b, t) => cameraPose(b, 1, false, null, t),
+  cameraCrouch: (b, t) => cameraPose(b, 1, true, null, t),
+  cameraUp: (b, t) => cameraPose(b, t, false, null),
+  cameraDown: (b, t) => cameraPose(b, 1 - t, false, null),
+  cameraUpC: (b, t) => cameraPose(b, t, true, null),
+  cameraDownC: (b, t) => cameraPose(b, 1 - t, true, null),
+  cameraWalk: (b, t) => cameraPose(b, 1, false, t),
+  cameraCrouchWalk: (b, t) => cameraPose(b, 1, true, t),
+  photograph: (b, t) => cameraPose(b, 1, false, null, t),
   music: (b, t) => music(b, t),
   musicSit: (b, t) => musicSit(b, t),
   dance: (b, t) => dance(b, t),
@@ -537,6 +682,7 @@ const POSES7: Record<string, (b: Build, t: number, id: string) => Pose> = {
 export function pose7(id: string, anim: string, b: Build, frame: number): Pose {
   const fn = POSES7[anim];
   if (!fn) return animePose(id, anim, b, frame);
+  if (anim === 'climb' || anim === 'climbIdle' || anim === 'carryPupClimb') return climbPose(b, frame, anim === 'carryPupClimb');
   const info = ANIMS7[anim];
   const n = info.frames;
   const t = n <= 1 ? 0 : info.loop ? frame / n : frame / (n - 1);
@@ -549,6 +695,7 @@ export function animInfo7(b: Build, anim: string, id = 'mori'): AnimInfo7 | null
   if (!info) return null;
   if (anim === 'walk') return { ...info, dist: gaitDist(WALK(b, id)) };
   if (anim === 'run') return { ...info, dist: gaitDist(RUN(b, id)) };
-  if (anim === 'climb') return { ...info, dist: climbDist(b) };
+  if (anim === 'cameraWalk') return { ...info, dist: gaitDist(CAM_GAIT(b, false)) };
+  if (anim === 'cameraCrouchWalk') return { ...info, dist: gaitDist(CAM_GAIT(b, true)) };
   return info;
 }

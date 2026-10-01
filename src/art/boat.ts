@@ -37,7 +37,7 @@ import {
   WH_X0, WH_X1, WH_FLOOR, WH_CEIL, WH_ROOF, LOW_FLOOR, HOLD_FLOOR, BH, lowCeil,
   ramp, dith, vline, hline, rope, rope2, ring, lifebuoy, tyre, porthole, pixelText, textWidth, tint,
 } from './boatKit';
-import { paintInterior } from './boatInterior';
+import { paintInterior, paintHandrails } from './boatInterior';
 
 export { BOAT_W, BOAT_H, WATERLINE, deckY };
 
@@ -1232,6 +1232,8 @@ export function paintBoatCutaway(o: PaintOpts = {}): CutawaySet {
       if (inHull(x, y) || (fender && y > Math.round(deckY(x)) + 1)) hull.set(x, y, c);
       else front.set(x, y, c);
     }
+  // the deck hatches' handrails stand up out of the deck: on the shell too, so they show from outside
+  paintHandrails(shell, BOAT_LAYOUT.ladders.filter(l => l.name !== 'companionway'));
   // ---- interior rooms
   const b = new PixelBuffer(W, H);
   const g = new PixelBuffer(W, H);
