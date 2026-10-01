@@ -64,7 +64,7 @@ export const furMat = (r: Ramp6, rag = 0.5): Mat => h => {
   return cel(r, h.l, n > 0.72 ? 0.28 : n < 0.24 ? -0.32 : 0.02);
 };
 /** knit: vertical ribs */
-export const knit = (r: Ramp6, l: number, rib: number, bias = 0): C => cel(r, l, bias + (frac(rib) < 0.34 ? -0.3 : 0));
+export const knit = (r: Ramp6, l: number, rib: number, bias = 0): C => cel(r, l, bias + (frac(rib) < 0.22 ? -0.22 : 0.04));
 /** a plain cel material for a piece of gear */
 export const plain = (r: Ramp6, bias = 0, shine = false): Mat => h => cel(r, h.l, bias, shine);
 
@@ -98,13 +98,15 @@ export interface PackOpts {
   antenna?: boolean;
   /** a coil of rope under the lid */
   rope?: boolean;
+  /** shift toward the near side, so the pack shows past the near arm in the 3/4 view */
+  z?: number;
 }
 /** an expedition pack on the back, with whatever's strapped to it */
 export function backpack(s: Scene3D, J: J3, ch: Char7, o: PackOpts) {
   const T = ch.build.torso;
-  const back = -(ch.chest[0] + o.d * 0.42), hc = T * o.top - o.h * 0.5, hw = o.w * 0.5;
-  const lid = o.lid ?? o.col;
-  tEll(s, J, [hc, back, 0], [o.d * 0.55, o.h * 0.5, hw], GG.pack, h => {
+  const back = -(ch.chest[0] + o.d * 0.55 + 0.4), hc = T * o.top - o.h * 0.5, hw = o.w * 0.5;
+  const lid = o.lid ?? o.col, z0 = o.z ?? 0;
+  tEll(s, J, [hc, back, z0], [o.d * 0.55, o.h * 0.5, hw], GG.pack, h => {
     // a lid flap over the top, a front pocket, compression straps
     if (h.q[1] > 0.55) return cel(lid, h.l, 0.05);
     if (Math.abs(h.q[1] - 0.2) < 0.06 || Math.abs(h.q[1] + 0.35) < 0.06) return cel(PAL.webbing, h.l, 0.1);
@@ -114,16 +116,16 @@ export function backpack(s: Scene3D, J: J3, ch: Char7, o: PackOpts) {
   if (o.roll) {
     // a rolled sleeping mat across the top, bound with two straps
     const y = hc + o.h * 0.5 + 1.1;
-    tLimb(s, J, [y, back + 0.2, -hw - 0.8], [y, back + 0.2, hw + 0.8], 1.6, 1.6, GG.roll, h => (Math.abs(h.t - 0.25) < 0.05 || Math.abs(h.t - 0.75) < 0.05 ? cel(PAL.webbing, h.l, 0.1) : h.t < 0.03 || h.t > 0.97 ? cel(o.roll!, h.l, -0.35) : cel(o.roll!, h.l)));
+    tLimb(s, J, [y, back + 0.2, z0 - hw - 0.8], [y, back + 0.2, z0 + hw + 0.8], 1.6, 1.6, GG.roll, h => (Math.abs(h.t - 0.25) < 0.05 || Math.abs(h.t - 0.75) < 0.05 ? cel(PAL.webbing, h.l, 0.1) : h.t < 0.03 || h.t > 0.97 ? cel(o.roll!, h.l, -0.35) : cel(o.roll!, h.l)));
   }
-  if (o.bottle) tLimb(s, J, [hc - o.h * 0.32, back + 0.4, hw + 0.8], [hc + o.h * 0.08, back + 0.4, hw + 0.8], 1.0, 0.95, GG.bottle, h => (h.t > 0.86 ? cel(PAL.black, h.l, 0.1) : cel(o.bottle!, h.l, 0.05, true)));
+  if (o.bottle) tLimb(s, J, [hc - o.h * 0.32, back + 0.4, z0 + hw + 0.8], [hc + o.h * 0.08, back + 0.4, z0 + hw + 0.8], 1.0, 0.95, GG.bottle, h => (h.t > 0.86 ? cel(PAL.black, h.l, 0.1) : cel(o.bottle!, h.l, 0.05, true)));
   for (let i = 0; i < (o.jars ?? 0); i++) {
     // little glass specimen jars, a lid each, something green swimming in them
     const y = hc - o.h * 0.1 + i * 1.9;
-    tEll(s, J, [y, back + o.d * 0.2, hw + 0.9], [0.62, 0.82, 0.62], GG.clip, h => (h.q[1] > 0.5 ? cel(PAL.steel, h.l, 0.2) : h.q[1] < -0.1 ? cel(PAL.glassGreen, h.l, 0.1) : cel(PAL.glassGreen, h.l, 0.4, true)));
+    tEll(s, J, [y, back + o.d * 0.2, z0 + hw + 0.9], [0.62, 0.82, 0.62], GG.clip, h => (h.q[1] > 0.5 ? cel(PAL.steel, h.l, 0.2) : h.q[1] < -0.1 ? cel(PAL.glassGreen, h.l, 0.1) : cel(PAL.glassGreen, h.l, 0.4, true)));
   }
   if (o.antenna) {
-    const base: V3 = [hc + o.h * 0.4, back, -hw * 0.6];
+    const base: V3 = [hc + o.h * 0.4, back, z0 - hw * 0.6];
     tLimb(s, J, base, [base[0] + 9, base[1] - 1.4, base[2] - 0.4], 0.32, 0.22, GG.tool, plain(PAL.black, 0.2));
     tEll(s, J, [base[0] + 9.2, base[1] - 1.45, base[2] - 0.4], [0.5, 0.5, 0.5], GG.tool, plain(PAL.orange, 0.2));
   }
@@ -231,8 +233,8 @@ export function beanie(o: BeanieOpts) {
       const lim = cutY(h.q);
       if (h.q[1] < lim) return -1;
       const rib = Math.atan2(h.q[2], h.q[0]) * 9;
-      if (h.q[1] < lim + 0.3) return knit(fold, h.l, rib, 0.02);
-      return knit(o.col, h.l, rib * 0.5, 0.05);
+      if (h.q[1] < lim + 0.32) return h.q[1] > lim + 0.27 ? cel(fold, h.l, -0.4) : knit(fold, h.l, rib, 0.2);
+      return knit(o.col, h.l, rib * 0.5, 0.12);
     });
     if (o.pom) s.ellipsoid(W([c[0] - 0.4, c[1] + r[1] + 0.6, 0]), W([1.5, 0, 0]), W([0, 1.4, 0]), W([0, 0, 1.5]), 21, furMat(o.pom, 0.35));
     if (o.ears) for (const z of [-1, 1]) {
@@ -264,11 +266,10 @@ export function hood(o: HoodOpts) {
     // the lining: a dark backdrop behind the face, seen round it inside the hood
     s.ellipsoid(W([c[0] - 1.6, c[1] - 0.6, 0]), W([r[0] * 0.45, 0, 0]), W([0, r[1] * 0.92, 0]), W([0, 0, r[2] * 0.9]), 22, h => cel(lining, h.l, -0.2));
     // the hood: its outer shell with the face opening (an ellipse on the front) cut away
-    const mat = o.mat ?? ((h: Hit) => cel(o.col, h.l, Math.abs(h.q[2]) < 0.08 && h.q[1] > 0.2 ? -0.35 : 0.02));
+    const mat = o.mat ?? ((h: Hit) => cel(o.col, h.l, Math.abs(h.q[2]) < 0.05 && h.q[1] > 0.3 && h.q[0] < 0.4 ? -0.3 : 0.02));
     s.ellipsoid(W(c), W([r[0], 0, 0]), W([0, r[1], 0]), W([0, 0, r[2]]), 23, h => {
-      const p = h.p; void p;
       const y = c[1] + h.q[1] * r[1], z = h.q[2] * r[2];
-      const inFace = h.q[0] > 0.05 && ((y - (ey - op.low + op.top) / 2 - 0.2) / ((op.top + op.low) / 2)) ** 2 + (z / op.w) ** 2 < 1;
+      const inFace = h.q[0] > 0.05 && ((y - ey - (op.top - op.low) / 2) / ((op.top + op.low) / 2)) ** 2 + (z / op.w) ** 2 < 1;
       return inFace ? -1 : mat(h);
     });
     if (o.fur) {
@@ -294,17 +295,19 @@ export interface GogglesOpts { y: number; lens: Ramp6; band?: Ramp6; frame?: Ram
 export function goggles(o: GogglesOpts) {
   return (s: Scene3D, W: (p: V3) => V3, d: HeadDef7) => {
     const [c0, r0] = d.shell, k = o.k ?? 1.08;
-    const band = o.band ?? PAL.webbing, frame = o.frame ?? PAL.black;
+    const band = o.band ?? PAL.webbing, frame = o.frame ?? PAL.steel;
+    // the strap shows behind and at the sides; the front is all lens
     for (let i = 0; i <= 18; i++) {
       const a = -Math.PI + (i / 18) * TAU;
+      if (Math.cos(a) > 0.55) continue;
       const p: V3 = [c0[0] + Math.cos(a) * r0[0] * k, o.y - Math.cos(a) * 0.4, Math.sin(a) * r0[2] * k];
-      s.ellipsoid(W(p), W([0.8, 0, 0]), W([0, 0.62, 0]), W([0, 0, 0.8]), 25, h => cel(band, h.l, 0.05));
+      s.ellipsoid(W(p), W([0.7, 0, 0]), W([0, 0.5, 0]), W([0, 0, 0.7]), 25, h => cel(band, h.l, 0.1));
     }
-    const fx = c0[0] + r0[0] * k * 0.9;
+    const fx = c0[0] + r0[0] * k * 0.88;
     for (const z of [-1, 1]) {
-      const zc = z * r0[2] * 0.4;
-      s.ellipsoid(W([fx - 0.2, o.y + 0.2, zc]), W([0.9, 0, 0]), W([0, 1.25, 0]), W([0, 0, 1.55]), 26, h => cel(frame, h.l, 0.1));
-      s.ellipsoid(W([fx + 0.35, o.y + 0.2, zc]), W([0.6, 0, 0]), W([0, 0.95, 0]), W([0, 0, 1.2]), 27, h => (h.q[1] > 0.3 && h.q[2] * z < 0 ? o.lens[5] : cel(o.lens, h.l, 0.15, true)));
+      const zc = z * r0[2] * 0.42;
+      s.ellipsoid(W([fx - 0.25, o.y + 0.2, zc]), W([0.8, 0, 0]), W([0, 1.15, 0]), W([0, 0, 1.45]), 26, h => cel(frame, h.l, -0.15));
+      s.ellipsoid(W([fx + 0.3, o.y + 0.2, zc]), W([0.62, 0, 0]), W([0, 1.0, 0]), W([0, 0, 1.25]), 27, h => (h.q[1] > 0.35 && h.q[2] * z < 0.1 ? o.lens[5] : cel(o.lens, h.l, 0.35, true)));
     }
   };
 }
@@ -324,7 +327,7 @@ export function headlamp(o: { y: number; k?: number }) {
 }
 
 /** head wear from pieces: which hair to tuck away, and the pieces in order */
-export function wear(pieces: ((s: Scene3D, W: (p: V3) => V3, d: HeadDef7, o: HeadOpts7) => void)[], o: { hideLock?: (l: Lock, i: number) => boolean; hideShell?: boolean; hideExtras?: boolean } = {}): HeadWear7 {
+export function wear(pieces: ((s: Scene3D, W: (p: V3) => V3, d: HeadDef7, o: HeadOpts7) => void)[], o: { hideLock?: (l: Lock, i: number) => boolean; tuck?: number; hideShell?: boolean; hideExtras?: boolean } = {}): HeadWear7 {
   return { ...o, draw: (s, W, ho, d) => { for (const p of pieces) p(s, W, d, ho); } };
 }
 

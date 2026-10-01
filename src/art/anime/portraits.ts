@@ -6,6 +6,7 @@
 import { PixelBuffer } from '../pixel';
 import { Pic, Pt, tones } from '../portrait/kit';
 import { hex, mix, shade, C } from '../color';
+import { outfitOf } from '../v7/wardrobe';
 
 export const PW = 56, PH = 60;
 const CX = 28;
@@ -677,7 +678,7 @@ function chunkPortrait(e: string, talk: 0 | 1 | 2, blink: boolean): PixelBuffer 
 
 const DESIGNS: Record<string, Design> = { mori: MORI, jenna: JENNA, joshu: JOSHU, aroha: AROHA };
 
-export function renderAnimePortrait(id: string, expr: string, talk: 0 | 1 | 2 = 0, blink = false): PixelBuffer {
+export function renderAnimePortrait(id: string, expr: string, talk: 0 | 1 | 2 = 0, blink = false, outfit = outfitOf(id)): PixelBuffer {
   if (id === 'chunk') return chunkPortrait(expr, talk, blink);
   const d = DESIGNS[id] ?? MORI;
   const e = EXPR[expr] ?? EXPR.neutral;
@@ -1000,8 +1001,8 @@ function stubbleHD(p: Pic, m: Mats, d: Design) {
 const hash2 = (x: number, y: number) => { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 
 const hdCache = new Map<string, PixelBuffer>();
-export function renderAnimePortraitHD(id: string, expr: string, talk: 0 | 1 | 2 = 0, blink = false): PixelBuffer {
-  const key = `${id}|${expr}|${talk}|${blink ? 1 : 0}`;
+export function renderAnimePortraitHD(id: string, expr: string, talk: 0 | 1 | 2 = 0, blink = false, outfit = outfitOf(id)): PixelBuffer {
+  const key = `${id}@${outfit}|${expr}|${talk}|${blink ? 1 : 0}`;
   const hit = hdCache.get(key);
   if (hit) return hit;
   let out: PixelBuffer;

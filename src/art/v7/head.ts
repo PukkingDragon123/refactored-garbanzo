@@ -23,6 +23,8 @@ export interface Lock { a: V3; b: V3; r0: number; r1: number; sway?: number }
  */
 export interface HeadWear7 {
   hideLock?(l: Lock, i: number): boolean;
+  /** locks rooted above this height (head space) start from it instead: bangs come out from under the brim */
+  tuck?: number;
   hideShell?: boolean;
   hideExtras?: boolean;
   draw(s: Scene3D, W: (p: V3) => V3, o: HeadOpts7, d: HeadDef7): void;
@@ -287,7 +289,15 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '')
   d.locks.forEach((l, i) => {
     if (wear?.hideLock?.(l, i)) return;
     const tip: V3 = vadd(l.b, [-(l.sway ?? 0) * sway * 1.2, (l.sway ?? 0) * sway * 0.3, 0]);
-    s.limb(W(l.a), W(tip), l.r0, l.r1, 3, hairM);
+    let a = l.a, r0 = l.r0;
+    const tk = wear?.tuck;
+    if (tk !== undefined && a[1] > tk) {
+      if (tip[1] >= tk) return;
+      const u = (a[1] - tk) / (a[1] - tip[1]);
+      a = [a[0] + (tip[0] - a[0]) * u, tk, a[2] + (tip[2] - a[2]) * u];
+      r0 = l.r0 + (l.r1 - l.r0) * u;
+    }
+    s.limb(W(a), W(tip), r0, l.r1, 3, hairM);
   });
   if (!wear?.hideExtras) d.extras?.(s, W, o);
   wear?.draw(s, W, o, d);
