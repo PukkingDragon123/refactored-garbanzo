@@ -74,6 +74,8 @@ export async function runStorm(s: ShipScene4) {
   const p = s.player;
   s.phase = 'storm';
   F()['v4:stormStarted'] = true;
+  // the front's rolling in: the crew are in their foul-weather gear (oilskins, life-jacket harnesses, sea boots)
+  for (const a of [p.body, s.jenna, s.joshu]) a.outfit = 'storm';
   game.persist();
   s.hud?.refresh(true);
   // the calm before
