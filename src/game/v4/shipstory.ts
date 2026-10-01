@@ -84,6 +84,8 @@ export class ShipStory {
       s.phase = 'engine';
       this.placeJenna('engine');
       audio.setEngine(0);
+      // reloaded with the engine dead: she's adrift (no way on, no bow wave, no wake)
+      s.engineOn = false;
     } else if (this.flag('v4:engineFixed')) {
       s.phase = 'deck';
       this.placeJenna('desk');
