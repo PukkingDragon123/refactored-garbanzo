@@ -988,7 +988,7 @@ function detailHD(p: Pic, m: Mats) {
   }
 }
 /** a faint shadow of stubble: sparse cool flecks along the jaw and the chin and over the upper lip (face skin only) */
-function stubbleHD(p: Pic, m: Mats, d: Design) {
+function stubbleHD(p: Pic, m: Mats, d: Design, k = 0.2) {
   const sc = col(d.stubble!), my = d.mouthY ?? (d.eyeY ?? 26) + 12;
   for (let y = 0; y < p.H; y++) for (let x = 0; x < p.W; x++) {
     const i = y * p.W + x;
@@ -999,7 +999,7 @@ function stubbleHD(p: Pic, m: Mats, d: Design) {
     const chin = v > my + 1.6 && dx < 6.5;
     const jaw = v > 30 + dx * 0.05 && dx > 8.6 && v > 42 - (13.6 - dx) * 1.5;
     if (!(lip || chin || jaw) || hash2(x, y) > 0.3) continue;
-    p.col[i] = mix(p.col[i], sc, 0.2);
+    p.col[i] = mix(p.col[i], sc, k);
   }
 }
 const hash2 = (x: number, y: number) => { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
@@ -1026,7 +1026,7 @@ export function renderAnimePortraitHD(id: string, expr: string, talk: 0 | 1 | 2 
     d.front(p, m);
     wr?.front?.(p, m);
     detailHD(p, m);
-    if (d.stubble) stubbleHD(p, m, d);
+    if (d.stubble) stubbleHD(p, m, d, e.pale ? 0.1 : 0.2);
     const ink = hex('#24161c');
     out = p.finish({ outline: ink });
     thicken(out, ink);
