@@ -295,10 +295,6 @@ function paintGuide(buf: Uint32Array, t: number, L: number, down: boolean, a: nu
     else c = y === TOP ? hx('#8a7c66') : hx('#a89a82');
     blend(buf, x0 + x, y0 + y + dy, c, a);
   }
-  // little impact ticks around the key on each press
-  if (press && !down) for (const [ox, oy, sx] of [[-3, -1, -1], [W / 2, -4, 0], [W + 2, -1, 1]] as const) {
-    for (let k = 0; k < 3; k++) blend(buf, x0 + ox + sx * k, y0 + oy - (sx === 0 ? k : 0), hx('#fff6e0'), a);
-  }
 }
 
 /** sparkles around the rim after a perfect pour */
@@ -391,8 +387,9 @@ export async function runRamenPour(): Promise<Outcome> {
           audio.play(outcome === 'perfect' ? 'star' : 'wrong', { vol: 0.5 });
           if (outcome === 'perfect') { joy = 1; cu.flash(); }
           outT = t;
-          // no words: just the burst (warm for a perfect pour, cold otherwise)
-          cu.result('', undefined, outcome !== 'perfect').then(() => cu.close().then(() => done(outcome!)));
+          // no words and no line effects: a short beat on the result (twinkles round the rim for a
+          // perfect pour), then cut back
+          setTimeout(() => cu.close().then(() => done(outcome!)), 1700);
         }
       } else {
         tilt += (0 - tilt) * Math.min(1, dt * 4);
