@@ -872,7 +872,14 @@ class Twigs implements Drawable {
   constructor(readonly list: Perch[]) {}
   draw(r: Renderer) {
     const x0 = r.visibleX0(30), x1 = r.visibleX1(30);
-    for (const q of this.list) if (q.x > x0 && q.x < x1) r.draw(q.fr, q.x, q.y + 0.5);
+    for (const q of this.list) {
+      if (q.x < x0 || q.x > x1) continue;
+      // a sapling: a thin stem from the forest floor up to the perching twig
+      const gy = groundY(q.x - 9);
+      r.rect(q.x - 10, q.y + 2, 1, gy - q.y - 1, packColor(0.27, 0.21, 0.15, 1));
+      r.rect(q.x - 9, q.y + 6, 1, gy - q.y - 6, packColor(0.2, 0.16, 0.11, 1));
+      r.draw(q.fr, q.x, q.y + 0.5);
+    }
   }
 }
 
@@ -1010,6 +1017,10 @@ export function startShoreLife(s: IslandScene4) {
   const colony = new StarwebColony(s, [[5122, 104], [5178, 98], [5236, 108], [5298, 100], [5362, 106]]);
   s.main.add(colony);
   for (const c of colony.clusters) addA(c.subj);
+  // pre-render the animation strips a few at a time (the seal warms its own while it sleeps)
+  const queue: [string, string][] = [];
+  for (const id of ['glasscrab', 'swashrunner', 'shellwrench', 'kelpskink', 'twinfan', 'periscope', 'starweb', 'crownleech', 'duskwaddler']) for (const a of Object.keys(shoreAnims(id))) queue.push([id, a]);
+  s.main.add({ z: 0, dead: false, draw() {}, update(this: Drawable) { const q = queue.shift(); if (q) gframe(q[0], q[1], 0); else this.dead = true; } } as Drawable);
   // first photos of each species
   const prev = s.cam.onShot;
   s.cam.onShot = ph => {

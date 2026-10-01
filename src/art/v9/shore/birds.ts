@@ -286,8 +286,8 @@ function bodyPat(L: Look, M: M, p: Px): number {
       if (belly && p.u < 0.45) return M.belly;
       return M.back;
     default:
-      // twinfan: warm buff belly, sooty back, a paler rump
-      if (belly) return M.belly;
+      // twinfan: warm rufous breast and belly, sooty back, a paler rump
+      if (p.v > -0.3 - p.u * 0.55) return M.belly;
       if (p.u < -0.62 && p.v > -0.4) return M.cov;
       return M.back;
   }
@@ -376,6 +376,12 @@ function drawBird(sk: Sk, L: Look, P: BP, eyeSt: BeastEye, juv: boolean): { head
   // --- folded wing (+ the shellwrench's orange carpal spur at the wrist)
   if (P.wing === 'fold') {
     foldedWing(sk, B, rx * k, ry * k, WL, () => ry * k * 0.9 + 0.8, { ext: L.wing.foldExt, droop: P.droop, lift: P.lift, nP: 4, nS: 3 });
+    if (L.id === 'twinfan') {
+      // upright percher: the rufous breast puffs out in front of the folded wing
+      sk.np();
+      const bc = B.p(rx * 0.22, ry * 0.5);
+      sk.ell(bc[0], bc[1], rx * 0.62 * k, ry * 0.58 * k, M.belly, { rot: P.ba, rz: ry * 0.5 * k, z: ry * k * 0.9 + 8 });
+    }
     if (L.id === 'shellwrench') {
       sk.np();
       const w = B.p(rx * 0.42, -ry * 0.2 - P.spur * 0.6);
@@ -469,7 +475,7 @@ function twinFans(sk: Sk, M: M, L: Look, rump: V2, tA: number, P: BP, k: number)
   const fan = (a: number, spread: number, z: number, outer: 'up' | 'down') => {
     const n = 4;
     tailFan(sk, rump, a, L.tail.L * k * (0.95 + spread * 0.15), L.tail.hw, n, 0.08 + spread * 0.7, (p, i) => {
-      if (p.t > 0.84) return M.tailW;
+      if (p.t > 0.78) return M.tailW;
       // (screen angles: a larger angle points a backward feather further up)
       const edge = outer === 'up' ? i === n - 1 : i === 0;
       if (edge && spread > 0.4 && p.t > 0.3) return M.tailW;
@@ -556,18 +562,18 @@ export const SHELLWRENCH = makeBird({
 
 export const TWINFAN = makeBird({
   look: {
-    id: 'twinfan', name: 'Twinfan', len: 12, height: 9,
-    rx: 2.9, ry: 2.5, stance: -0.95, neckL: 0.6, neckR0: 1.9, neckR1: 1.7, hrx: 2, hry: 1.9,
-    leg: { tib: 1.4, tar: 1.8, rT: 0.8, rt: 0.45, toe: 1.4, talon: 0.4 }, hipX: -0.2,
-    tail: { L: 6.5, hw: 0.8, n: 4, spread: 0.2 },
-    wing: { arm: 4.5, hand: 4.5, sec: 2.6, prim: 4.2, nS: 4, nP: 5, finger: 0.2, pw: 0.8, sw: 0.9, round: 0.6, foldExt: 0.8 },
-    eye: { r: 0.7, iris: hex('#141012'), lash: hex('#141012') },
-    cols: { back: '#5a4c40', belly: '#e0b680', head: '#4a3e34', wing: '#4e4238', prim: '#2a2420', cov: '#7a6a58', tail: '#241e1a', bill: '#1e1a1a', leg: '#3a3230', mark: '#1e1a1a', mark2: '#f4f0e8' },
-    flap: 1.15, sleek: true, perch: true, bellyBias: 0.12,
+    id: 'twinfan', name: 'Twinfan', len: 15, height: 11,
+    rx: 3.6, ry: 3, stance: -0.95, neckL: 0.7, neckR0: 2.3, neckR1: 2.1, hrx: 2.5, hry: 2.35,
+    leg: { tib: 1.6, tar: 2, rT: 0.9, rt: 0.5, toe: 1.6, talon: 0.45 }, hipX: -0.2,
+    tail: { L: 8.5, hw: 1, n: 4, spread: 0.2 },
+    wing: { arm: 5.5, hand: 5.5, sec: 3.2, prim: 5.2, nS: 4, nP: 5, finger: 0.2, pw: 0.95, sw: 1.05, round: 0.6, foldExt: 1 },
+    eye: { r: 0.8, iris: hex('#141012'), lash: hex('#141012') },
+    cols: { back: '#4a3c32', belly: '#ec9e5a', head: '#3a3029', wing: '#3e3229', prim: '#221c18', cov: '#6a5848', tail: '#1e1814', bill: '#1a1616', leg: '#3a3230', mark: '#16120f', mark2: '#fbf8f2' },
+    flap: 1.15, sleek: true, perch: true, bellyBias: 0.15, light: 0.32,
   },
   anims: { idle: A(4, 4), hop: A(4, 10), fan: A(4, 8), call: A(2, 6), alert: A(2, 3), fly: A(4, 18), glide: A(2, 3), hawk: A(4, 14), land: A(3, 10, false) },
-  ground: { w: 34, h: 30, ox: 16, oy: 22 },
-  flight: { w: 40, h: 36, ox: 20, oy: 18 },
+  ground: { w: 40, h: 36, ox: 19, oy: 26 },
+  flight: { w: 48, h: 44, ox: 24, oy: 22 },
   airAnims: ['fly', 'glide', 'hawk', 'land'],
 });
 void hh;
