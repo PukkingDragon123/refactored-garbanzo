@@ -12,6 +12,7 @@ import type { BubbleLine } from '../../ui/bubbles';
 import { ChunkBuddy } from './buddy';
 import { rand } from '../../core/math';
 import { shipUploadDue } from '../v9/research9';
+import { startCrewLife, CrewLife } from '../v9/crewlife';
 
 const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 const F = () => game.save.flags;
@@ -56,6 +57,7 @@ export class ShipStory {
     s.st.terrain.addPlatform([[348, 182], [398, 182]], 'bridge');
     s.buddy = new ChunkBuddy(s.chunk, { player: s.player, terrain: s.st.terrain, levelSpan: y => s.levelSpan(y) });
     this.addInteractables();
+    this.crew = startCrewLife(s);
     if (!this.flag('v4:woke')) {
       await this.wakeUp();
     } else {
@@ -193,7 +195,7 @@ export class ShipStory {
     const self = this;
     it({ x: SPOTS.tank[0], y: L, w: 20, get label() { return self.flag('v4:fishToTank') && !self.flag('v4:fishUsed') ? 'Release your catch into the tank' : self.flag('v4:round:tank') ? 'Watch the fish' : 'Feed the fish'; }, standX: SPOTS.tank[0] + 22, quest: () => (rounds() && !this.flag('v4:round:tank')) || (this.flag('v4:fishToTank') && !this.flag('v4:fishUsed')), enabled: calm, action: () => (this.flag('v4:fishToTank') && !this.flag('v4:fishUsed') ? this.releaseFish() : this.tank()) } as never);
     it({ x: 160, y: L, w: 20, label: 'Check the engine gauges', standX: 160, quest: () => rounds() && !this.flag('v4:round:engine'), enabled: () => calm() && s.phase !== 'engine', action: () => this.gauges() });
-    it({ x: s.joshu.x, y: B, w: 14, get label() { return self.flag('v4:fishToJoshu') && !self.flag('v4:fishUsed') ? 'Give Joshu the fish' : 'Talk to Joshu'; }, standX: s.joshu.x - 22, quest: () => (rounds() && !this.flag('v4:round:joshu')) || (this.flag('v4:fishToJoshu') && !this.flag('v4:fishUsed')), enabled: () => calm() && s.joshu.y === B, action: () => (this.flag('v4:fishToJoshu') && !this.flag('v4:fishUsed') ? this.giveFish() : this.talkJoshu()) } as never);
+    it({ get x() { return s.joshu.x; }, y: B, w: 14, get label() { return self.flag('v4:fishToJoshu') && !self.flag('v4:fishUsed') ? 'Give Joshu the fish' : 'Talk to Joshu'; }, get standX() { return s.joshu.x - 22; }, quest: () => (rounds() && !this.flag('v4:round:joshu')) || (this.flag('v4:fishToJoshu') && !this.flag('v4:fishUsed')), enabled: () => calm() && s.joshu.y === B, action: () => (this.flag('v4:fishToJoshu') && !this.flag('v4:fishUsed') ? this.giveFish() : this.talkJoshu()) } as never);
     // fishing at the stern
     it({ x: SPOTS.fishing[0], y: SPOTS.fishing[1], w: 18, label: 'Fish off the stern', standX: SPOTS.fishing[0] + 8, quest: () => (V()['v4:fishCaught'] ?? 0) < 1 && !this.flag('v4:fishUsed'), enabled: () => s.phase === 'deck', action: () => this.fish() });
     it({ get x() { return s.jenna.x; }, get y() { return s.jenna.y; }, w: 14, label: 'Talk to Jenna', get standX() { return s.jenna.x + 22; }, quest: () => rounds() && !this.flag('v4:round:jenna'), enabled: () => calm() && s.phase !== 'engine', action: () => this.talkJenna() } as never);
@@ -559,9 +561,11 @@ export class ShipStory {
   private stormArmed = false;
 
   // ---------------------------------------------------------------- per frame
+  /** the crew's daily routines (v9/crewlife.ts) */
+  crew: CrewLife | null = null;
   update(dt: number) {
     const s = this.s, p = s.player;
-    void dt;
+    this.crew?.update(dt);
     if (s.phase === 'engine' && !this.flag('v4:engineArrive') && !s.cutscene && p.y > S4.lower.ceil && p.x < 196) this.engineArrive();
     // the afternoon ends: once the deck quest wraps up, the storm arrives
     if (s.phase === 'deck' && !this.stormArmed && questStatus('v4deck') === 'done' && !s.cutscene) {
