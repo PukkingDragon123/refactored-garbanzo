@@ -20,6 +20,7 @@ import { clamp, rand } from '../../core/math';
 import type { IsleStory } from './islestory';
 import { wait } from './islestory';
 import { runStandoff } from './islearoha';
+import { enableFieldLaptop, openFieldLaptop } from '../v9/research9';
 
 /** camp layout on the landing beach */
 export const CAMP = {
@@ -196,6 +197,7 @@ export class IsleCamp {
       if (rand.chance(0.05)) m.particles.spawn({ frame: A.soft, x, y: y - 16, vx: rand.range(-4, 4) + stg.wind * 6, vy: -14, life: 3, color: [0.4, 0.38, 0.4], alpha: 0.25, alpha1: 0, size: 0.3, size1: 1 });
     }));
     this.addCampInteractables();
+    enableFieldLaptop(s);
   }
 
   private addCampInteractables() {
@@ -211,6 +213,7 @@ export class IsleCamp {
     st.it({ x: CAMP.storage, y: groundY(CAMP.storage), w: 18, label: 'Stack the crate here', standX: CAMP.storage - 24, quest: () => true, enabled: () => camp() && this.carrying === 'crate', action: () => this.dropCrate() });
     st.it({ x: CAMP.tent, y: groundY(CAMP.tent), w: 20, label: JOB_NAME.tent, standX: CAMP.tent - 30, quest: () => true, enabled: () => camp() && !this.job('tent') && this.carrying === null, action: () => this.pitchTent() });
     st.it({ x: CAMP.research, y: groundY(CAMP.research), w: 20, label: JOB_NAME.research, standX: CAMP.research - 24, quest: () => true, enabled: () => camp() && !this.job('research') && this.carrying === null, action: () => this.research() });
+    st.it({ x: CAMP.research, y: groundY(CAMP.research), w: 20, label: 'Use your laptop', standX: CAMP.research - 16, enabled: () => this.job('research') && this.carrying === null && !this.inBag, action: () => openFieldLaptop(s, { table: true }) });
     st.it({ x: CAMP.rack, y: groundY(CAMP.rack), w: 20, label: JOB_NAME.rack, standX: CAMP.rack - 26, quest: () => true, enabled: () => camp() && !this.job('rack') && this.carrying === null, action: () => this.rack() });
     st.it({ x: CAMP.bed, y: groundY(CAMP.bed), w: 16, label: JOB_NAME.bed, standX: CAMP.bed - 20, quest: () => true, enabled: () => camp() && !this.job('bed') && this.job('firewood') && this.carrying === null, action: () => this.chunkBed() });
     // after dinner: bed time
