@@ -175,6 +175,8 @@ export async function runStorm(s: ShipScene4) {
   const p = s.player;
   s.phase = 'storm';
   F()['v4:stormStarted'] = true;
+  // the front's rolling in: the crew are in their foul-weather gear (oilskins, life-jacket harnesses, sea boots)
+  for (const a of [p.body, s.jenna, s.joshu]) a.outfit = 'storm';
   game.persist();
   s.hud?.refresh(true);
   // the calm before
@@ -204,7 +206,7 @@ export async function runStorm(s: ShipScene4) {
   audio.setAmbience('boatStorm', false);
   audio.setMusic('storm');
   // Joshu back to the wheel (if he was cooking); Jenna to her cabin
-  s.joshu.x = SPOTS.helm[0] - 14; s.joshu.y = S4.bridge.floor; s.joshu.idleAnim = 'steer'; s.joshu.setAnim('steer');
+  s.joshu.x = SPOTS.helm[0] - 14; s.joshu.y = S4.bridge.floor; s.joshu.idleAnim = 'steerHard'; s.joshu.setAnim('steerHard');
   await say([
     { who: 'joshu', text: 'WHAT IN THE... Something HIT us! Everyone grab hold of something!', style: 'shout', expr: 'shocked' },
     { who: 'jenna', text: 'Was that a WHALE?! Dad! Was that a WHALE?!', style: 'shout', expr: 'scared' },

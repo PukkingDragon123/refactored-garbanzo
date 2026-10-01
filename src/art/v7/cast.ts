@@ -28,9 +28,10 @@ const M = {
 };
 export const MORI7: Char7 = {
   id: 'mori',
+  // a man's frame: broad shoulders over narrow hips, a thicker neck and arms
   build: { hipH: 27.5, thigh: 13, shin: 12.8, ankleH: 2.2, torso: 19, neck: 1.2, shY: 2.4, shF: 0, shB: 0, upArm: 9.6, foreArm: 8.6, legF: 0, legB: 0 },
-  shW: 5.2, hipW: 2.9, chest: [3.3, 4.4], waist: [2.8, 3.5], pelvis: [3.1, 3.7],
-  armR: [1.9, 1.6, 1.4], legR: [2.4, 1.9, 1.6], neckR: 1.5, hand: 1.12,
+  shW: 5.8, hipW: 2.8, chest: [3.4, 4.9], waist: [2.8, 3.6], pelvis: [3.0, 3.5],
+  armR: [2.1, 1.75, 1.5], legR: [2.45, 1.95, 1.65], neckR: 1.8, hand: 1.16,
   skin: BOY_SKIN, ink: hex('#1a0e10'),
   torso(p) {
     const l = L(p);
@@ -51,7 +52,8 @@ export const MORI7: Char7 = {
   thigh(p) { return cel(M.shorts, L(p), lb(p)); },
   shin(p) { return p.t < 0.18 ? cel(BOY_SKIN, L(p), lb(p)) : p.t < 0.28 ? cel(M.boot, L(p), lb(p) + 0.25) : cel(M.boot, L(p), lb(p)); },
   shoe(p) { return p.hit.q[1] < -0.45 ? M.boot[0] : cel(M.boot, L(p), lb(p) + 0.05); },
-  skirt: { len: 7, flare: 1.8, mat: p => (p.t > 0.86 ? cel(M.tunic, L(p), -0.35) : Math.sin(Math.atan2(p.z, p.f) * 5) > 0.75 ? cel(M.tunic, L(p), -0.25) : cel(M.tunic, L(p))) },
+  // the tunic ends in a short straight hem at the hips (a field shirt, not a dress)
+  skirt: { len: 4.2, flare: 0.5, mat: p => (p.t > 0.8 ? cel(M.tunic, L(p), -0.35) : Math.sin(Math.atan2(p.z, p.f) * 5) > 0.8 ? cel(M.tunic, L(p), -0.25) : cel(M.tunic, L(p))) },
 };
 
 // ------------------------------------------------------------------ Jenna
@@ -123,34 +125,42 @@ export const AROHA7: Char7 = {
 
 // ------------------------------------------------------------------ Joshu
 const Jo = {
-  knit: R6('#0a0c16', '#161a2c', '#222a44', '#303a5a', '#3e4a70', '#4e5c86'),
-  trousers: R6('#0c0a08', '#1a1814', '#2a2620', '#3a342c', '#4a4238', '#5a5246'),
+  // a charcoal-black fisherman's knit (cool, nearly black: the white beard and red cap pop off it)
+  knit: R6('#050507', '#0d0e13', '#17191f', '#22252d', '#2f333d', '#3e434f'),
+  trousers: R6('#0c0a08', '#1c1914', '#2c2720', '#3c352c', '#4c4438', '#5c5346'),
   boot: R6('#040304', '#0e0a0c', '#1a1416', '#262022', '#342c2e', '#443a3c'),
+  belt: R6('#0e0806', '#241410', '#361e16', '#4a2a1c', '#5e3a28', '#744c34'),
 };
 const knitM = (p: Part, bias = 0): C => {
-  // cable-knit: twisted ropes running down the gansey
+  // cable-knit: twisted ropes running down the gansey, a moss-stitch fleck between them
   const rope = Math.abs(Math.sin((p.z * 1.6) + Math.sin(p.hh * 30) * 0.6)) > 0.93;
-  return rope ? cel(Jo.knit, L(p), bias - 0.35) : cel(Jo.knit, L(p), bias);
+  if (rope) return cel(Jo.knit, L(p), bias - 0.35);
+  const fleck = ((p.hit.x * 3 + p.hit.y * 5) % 7) === 0 && L(p) + bias > 0.1;
+  return fleck ? cel(Jo.knit, L(p), bias + 0.3) : cel(Jo.knit, L(p), bias);
 };
 export const JOSHU7: Char7 = {
   id: 'joshu',
-  build: { hipH: 28.6, thigh: 13.6, shin: 13.2, ankleH: 2.4, torso: 23.5, neck: 1, shY: 3, shF: 0, shB: 0, upArm: 10.8, foreArm: 9.6, legF: 0, legB: 0 },
-  shW: 7.4, hipW: 3.8, chest: [4.6, 6.4], waist: [4.8, 5.6], pelvis: [4.2, 5.0], belly: 3.4,
-  armR: [2.9, 2.5, 2.1], legR: [3.2, 2.5, 2.1], neckR: 2.3, hand: 1.35,
-  skin: JOSHU_SKIN, ink: hex('#1c1012'),
+  // big and strong: broad square shoulders, thick arms and neck, big hands, the round belly
+  build: { hipH: 28.6, thigh: 13.6, shin: 13.2, ankleH: 2.4, torso: 24, neck: 1, shY: 3.2, shF: 0, shB: 0, upArm: 11.2, foreArm: 10, legF: 0, legB: 0 },
+  shW: 8.3, hipW: 3.9, chest: [5.1, 7.2], waist: [4.9, 5.9], pelvis: [4.3, 5.1], belly: 3.4,
+  armR: [3.4, 3.0, 2.45], legR: [3.4, 2.7, 2.2], neckR: 2.9, hand: 1.6,
+  skin: JOSHU_SKIN, ink: hex('#140c0e'),
   torso(p) {
     if (p.hh < 0.1) return cel(Jo.knit, L(p), -0.3); // ribbed hem
+    // a worn leather belt under the belly, just showing below the hem at the front
+    if (p.hh > 0.1 && p.hh < 0.16 && p.f > 0) return p.f > 3.4 && Math.abs(p.z) < 1.1 ? hex('#b08a3a') : cel(Jo.belt, L(p), 0.1);
     if (p.hh > 0.92) return cel(Jo.knit, L(p), -0.2); // roll collar
     return knitM(p);
   },
   upperArm(p) { return knitM(p, lb(p)); },
-  // rolled sleeves: hairy forearms with an anchor tattoo on the near one
+  // sleeves shoved up past the elbow: thick hairy forearms with an anchor tattoo on the near one
   foreArm(p) {
     if (p.t < 0.28) return cel(Jo.knit, L(p), lb(p) + 0.15);
-    if (p.near && p.t > 0.45 && p.t < 0.65 && Math.abs(p.hit.q[1] - 0.6) < 0.5) return hex('#3a5a8a');
-    return cel(JOSHU_SKIN, L(p), lb(p));
+    if (p.near && p.t > 0.45 && p.t < 0.65 && Math.abs(p.hit.q[1] - 0.6) < 0.5) return hex('#34507a');
+    const hair = p.t > 0.34 && ((p.hit.x * 7 + p.hit.y * 3) % 5) === 0 && L(p) > -0.2;
+    return hair ? cel(JOSHU_SKIN, L(p), lb(p) - 0.45) : cel(JOSHU_SKIN, L(p), lb(p));
   },
-  hands(p) { return cel(JOSHU_SKIN, L(p), lb(p) + 0.1); },
+  hands(p) { return cel(JOSHU_SKIN, L(p), lb(p) + 0.05); },
   thigh(p) { return cel(Jo.trousers, L(p), lb(p)); },
   shin(p) { return p.t > 0.45 ? cel(Jo.boot, L(p), lb(p) + 0.1) : cel(Jo.trousers, L(p), lb(p)); },
   shoe(p) { return p.hit.q[1] < -0.45 ? Jo.boot[0] : cel(Jo.boot, L(p), lb(p) + 0.1, true); },

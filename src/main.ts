@@ -107,6 +107,24 @@ async function boot() {
     knot: async () => (await import('./ui/v6/camp')).lashingKnot(),
     /** the rogue-wave finale on the ship (skips the storm search) */
     wave: async () => (await import('./game/v4/storm')).rogueWave(game.scene as never),
+    /**
+     * dress the cast: zl.outfit('mori', 'winter'), zl.outfit('all', 'storm'), zl.outfit('jenna') to undress;
+     * outfits: casual, winter, winterHood, storm. Returns who wears what.
+     */
+    outfit: async (who = 'all', name = 'casual') => {
+      const w = await import('./art/v7/wardrobe');
+      for (const id of who === 'all' ? ['mori', 'jenna', 'joshu', 'aroha'] : [who]) w.setOutfit(id, name);
+      return Object.fromEntries(['mori', 'jenna', 'joshu', 'aroha'].map(id => [id, w.outfitOf(id)]));
+    },
+    /** the HD close-up bust of anyone, for checking (zl.closeup('mori', 'shocked')) */
+    closeup: async (who = 'mori', expr = 'neutral', ms = 4000) => {
+      const ui = game.ui as unknown as { bubbles?: { cu?: { show(id: string, e: string, o: { name: string; talking: () => boolean }): void; hide(): void } } };
+      const cu = ui.bubbles?.cu;
+      if (!cu) return 'no closeups';
+      cu.show(who, expr, { name: who, talking: () => true });
+      setTimeout(() => cu.hide(), ms);
+      return 'ok';
+    },
   };
 }
 

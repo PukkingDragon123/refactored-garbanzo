@@ -156,7 +156,7 @@ export class PortraitBox {
   private frame(expr: string, mouth: 0 | 1 | 2, blink: boolean): HTMLCanvasElement | null {
     const art = peopleArt();
     if (!art) return null;
-    const key = `${this.who}|${expr}|${mouth}|${blink ? 1 : 0}`;
+    const key = `${this.who}@${art.outfitOf?.(this.who) ?? ''}|${expr}|${mouth}|${blink ? 1 : 0}`;
     let c = this.cache.get(key);
     if (!c) {
       const buf = art.renderPortrait(this.who, expr, { mouth, blink });
