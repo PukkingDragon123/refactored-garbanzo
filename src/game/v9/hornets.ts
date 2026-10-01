@@ -19,3 +19,8 @@ export async function hornetAmbush(s: IslandScene4, x: number, y: number): Promi
   void s; void x; void y;
   return 'escaped';
 }
+
+/** debug: an ambush at the nearest nest (zl.ambush) */
+export async function debugAmbush(s: IslandScene4): Promise<AmbushEnd> {
+  return hornetAmbush(s, s.player.x, s.player.y);
+}
