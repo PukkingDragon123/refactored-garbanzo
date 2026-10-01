@@ -290,7 +290,7 @@ export class IsleWater implements Drawable {
         const dir = Math.sign(vx);
         const k = Math.min(1, sp / 60);
         for (let j = 1; j < 9; j++) for (const arm of [-1, 1]) {
-          const wx = x - dir * (half * 0.6 + j * 2.2), wy = top + (arm > 0 ? j * 0.35 : -j * 0.12);
+          const wx = x - dir * (line * 0.6 + j * 2.2), wy = top + (arm > 0 ? j * 0.35 : -j * 0.12);
           if (Math.sin(t * 9 + j * 1.3 + arm) < -0.4) continue;
           r.rect(Math.round(wx), Math.round(wy), 2, 1, packColor(0.9, 0.98, 1, (0.7 - j * 0.07) * k));
         }
