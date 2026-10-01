@@ -96,12 +96,15 @@ export const SKILL_TREE10: Skill10[] = [
 
 export const SKILL10_BY_ID: Record<string, Skill10> = Object.fromEntries(SKILL_TREE10.map(s => [s.id, s]));
 export const skill10 = (id: string): Skill10 | null => SKILL10_BY_ID[id] ?? null;
+/** one branch's skills, root first */
+export const branch10 = (b: Branch10): Skill10[] => SKILL_TREE10.filter(s => s.branch === b).sort((x, y) => x.tier - y.tier || (x.lane ?? 0) - (y.lane ?? 0));
 
 /** owned skills: id -> the day it was learned */
 const state = () => bucket('skills10', () => ({ owned: {} as Record<string, number> }));
 
 export function owned10(id: string): boolean {
-  return !!state().owned[id];
+  // (testing: ?flags=v10:allSkills owns the whole tree)
+  return !!state().owned[id] || !!game.save.flags['v10:allSkills'];
 }
 
 export function skillState10(id: string): 'owned' | 'available' | 'locked' {

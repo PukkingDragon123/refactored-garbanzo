@@ -181,7 +181,8 @@ export class FieldCamera {
     this.my = damp(this.my, clamp(inp.my / r.VH), 9, dt);
     // handheld motion: slow sway + fast tremor
     this.swayT += dt;
-    const steady = perks.shake() * fx10.shake() * (brace ? 0.55 : 1) * (this.holding ? 0.3 : 1) * (1 + this.breathless * 2.5) * (this.host.tod === 'night' ? 1.25 : 1);
+    const dizzy = (this.host.player as { dizzy?: number }).dizzy ?? 0;
+    const steady = perks.shake() * fx10.shake() * (1 + dizzy * 1.6) * (brace ? 0.55 : 1) * (this.holding ? 0.3 : 1) * (1 + this.breathless * 2.5) * (this.host.tod === 'night' ? 1.25 : 1);
     const a = this.zoom * steady * 1.35;
     const s = this.swayT;
     // random hand jolts (less when holding your breath or bracing), and recoil after each shot

@@ -39,6 +39,14 @@ const KIND_ENERGY: Partial<Record<string, number>> = { food: 10, plant: 3, fungu
 /** register (or override) the food values of an item from another module */
 export function defineFood(id: string, d: FoodDef) { FOOD[id] = { ...FOOD[id], ...d }; }
 
+// forage that had nothing for the laptop to analyse: now the analysis says whether it's safe
+const LAB: Record<string, { rp: number; time: number; text: string }> = {
+  berry_dusk: { rp: 5, time: 2, text: 'No alkaloids, no cyanogenic compounds: sugars, a little pine resin and a lot of purple pigment. Safe to eat.' },
+  berry_gold: { rp: 5, time: 2, text: 'Citric acid and a heap of vitamin C, nothing harmful. Sour enough to fold your face, but safe to eat.' },
+  plant_dunelily: { rp: 6, time: 3, text: 'The raw bulb is packed with needle crystals of calcium oxalate: eaten raw it burns and upsets the gut. Roasting breaks them down.' },
+};
+for (const [id, lab] of Object.entries(LAB)) if (ITEMS[id] && !ITEMS[id].lab) ITEMS[id].lab = lab;
+
 interface ForageState {
   /** identified by research: 1 */
   known: Record<string, number>;

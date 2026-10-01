@@ -85,17 +85,23 @@ export function energyFrac() { return energy() / maxEnergy(); }
 type SpendFn = (n: number, why: string) => void;
 /** listeners live on hoisted functions so modules in an import cycle can register while this one loads */
 function spendFns(): SpendFn[] { const f = spendFns as unknown as { l?: SpendFn[] }; return (f.l ??= []); }
-/** called on every spend (HUD flashes, tests) */
-export function onSpend(fn: SpendFn) { spendFns().push(fn); }
+/** called on every spend (HUD flashes, tests); returns an unsubscribe */
+export function onSpend(fn: SpendFn): () => void {
+  spendFns().push(fn);
+  return () => { const l = spendFns(), i = l.indexOf(fn); if (i >= 0) l.splice(i, 1); };
+}
 
-/** spend raw energy (poison, hazards...); reaching 0 on an expedition fires the blackout once */
+/** spend raw energy (poison, hazards...); reaching 0 on an expedition fires the blackout once (away
+ *  from an expedition it never drops below 5: camp is safe) */
 export function spend(n: number, why = ''): void {
   if (!(n > 0)) return;
   const b = S();
   sync(b);
-  b.e = Math.max(0, Math.min(maxEnergy(), b.e) - n);
+  const cur = Math.min(maxEnergy(), b.e);
+  const exp = onExpedition();
+  b.e = Math.max(exp ? 0 : Math.min(cur, 5), cur - n);
   for (const f of spendFns()) f(n, why);
-  if (b.e <= 0 && !b.out && onExpedition()) {
+  if (b.e <= 0 && !b.out && exp) {
     b.out = true;
     game.persist();
     fireBlackout();
@@ -206,8 +212,11 @@ export function onExpedition(): boolean {
 
 type BlackoutFn = () => void;
 function blackoutFns(): BlackoutFn[] { const f = blackoutFns as unknown as { l?: BlackoutFn[] }; return (f.l ??= []); }
-/** called once when energy hits 0 during an expedition (the camp module plays the carry-home) */
-export function onBlackout(fn: BlackoutFn) { blackoutFns().push(fn); }
+/** called once when energy hits 0 during an expedition (the camp module plays the carry-home); returns an unsubscribe */
+export function onBlackout(fn: BlackoutFn): () => void {
+  blackoutFns().push(fn);
+  return () => { const l = blackoutFns(), i = l.indexOf(fn); if (i >= 0) l.splice(i, 1); };
+}
 /** run the blackout listeners (or, with none, a simple fallback: Mori drops and comes to later) */
 export function fireBlackout() {
   const l = blackoutFns();

@@ -63,8 +63,8 @@ export function mountBodyHud(root: HTMLElement, who: HTMLElement): BodyHud {
   const packBar = bars.querySelector('i.a') as HTMLElement | null;
   const num = lab.querySelector('b') as HTMLElement, st = lab.querySelector('.v10s') as HTMLElement;
   const sick = dim.querySelector('.sick') as HTMLElement, dizzy = dim.querySelector('.dizzy') as HTMLElement;
-  let on: boolean | null = null, hitT = 0, t = 1, alive = true, keyStatus = '';
-  onSpend(n => { if (alive && n >= 4) hitT = 0.6; });
+  let on: boolean | null = null, hitT = 0, t = 1, keyStatus = '';
+  const off = onSpend(n => { if (n >= 4) hitT = 0.6; });
   const vis = (v: boolean) => {
     lab.style.display = bar.style.display = v ? '' : 'none';
     if (!v) {
@@ -111,7 +111,7 @@ export function mountBodyHud(root: HTMLElement, who: HTMLElement): BodyHud {
       }
     },
     destroy() {
-      alive = false;
+      off();
       dim.remove();
     },
   };

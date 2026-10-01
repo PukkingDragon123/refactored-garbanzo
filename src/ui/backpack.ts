@@ -49,11 +49,9 @@ const CSS = `
 .bp-v10 .en.low { --c: var(--coral); }
 .bp-v10 .kg.over { --c: var(--coral); }
 .bp-v10 span.over b { color: #ffb3a4; }
-.bp-acts .btn.risky { background: #e8a030; }
-.bp-acts .btn.poison { background: rgba(232,97,74,0.85); color: #fff; }
-.bp-facts .warn { color: #ffc86a; }
-.bp-facts .bad { color: #ffb3a4; }
-.bp-facts .good { color: var(--teal2); }
+.bp-facts .warn { color: #9a5a08; }
+.bp-facts .bad { color: #a8382a; font-weight: 700; }
+.bp-facts .good { color: #2f6b2a; }
 .bp-body { flex: 1; min-height: 0; display: grid; grid-template-columns: auto 1fr; gap: calc(var(--px) * 8); }
 .bp-left { display: flex; flex-direction: column; gap: 0.5em; min-height: 0; }
 .bp-grid { display: grid; grid-template-columns: repeat(6, calc(var(--px) * 20)); grid-auto-rows: calc(var(--px) * 20); gap: calc(var(--px) * 1); padding: calc(var(--px) * 3); }
@@ -318,7 +316,8 @@ export function openBackpack(o: { onEat?: (id: string) => void | Promise<void> }
       const acts = detail.appendChild(el('div', 'bp-acts'));
       if (d?.kind === 'tool') return;
       if (fi.edible) {
-        const b = acts.appendChild(el('button', `btn ${fi.verdict === 'unknown' ? 'risky' : fi.verdict === 'poison' ? 'poison' : 'teal'}`,
+        // (skin: plain = green, amber = a gamble, red = poison)
+        const b = acts.appendChild(el('button', `btn${fi.verdict === 'unknown' ? ' amber' : fi.verdict === 'poison' ? ' red' : ''}`,
           fi.verdict === 'unknown' ? 'Eat (risky)' : fi.verdict === 'poison' ? 'Eat anyway' : fi.energy ? `Eat · +${fi.energy}` : 'Eat')) as HTMLButtonElement;
         b.onclick = () => eat(id);
       }
