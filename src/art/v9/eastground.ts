@@ -252,15 +252,15 @@ function caveFloor(x: number, y: number, d: number, c0: C, wet0: boolean): boole
   const P = persp(d);
   const u = (x - CAVE_POOL.x) / P;
   const puddle = fbm2(u / 16, d / 7, 3, 123);
-  if (puddle > 0.64 && d > 6) {
-    EG.c = mix(POOL[1], POOL[3], clamp((puddle - 0.64) * 6));
+  if (puddle > 0.7 && d > 6) {
+    EG.c = mix(POOL[1], POOL[3], clamp((puddle - 0.7) * 6));
     EG.wet = true;
     return true;
   }
   const ridge = Math.abs(Math.sin(u * 0.16 + fbm2(u / 30, d / 20, 2, 124) * 5));
   let c = c0;
   if (ridge < 0.1) c = shade(c0, 0.12);
-  if (puddle > 0.58) { c = mix(c, H('#3a4a4e'), 0.5); EG.c = c; EG.wet = true; return true; }
+  if (puddle > 0.65) { c = mix(c, H('#3a4a4e'), 0.5); EG.c = c; EG.wet = true; return true; }
   // damp sheen: glossy patches shimmer with the water material
   EG.c = c;
   EG.wet = wet0 || noise2(u / 6, d / 3, 125) > 0.66;

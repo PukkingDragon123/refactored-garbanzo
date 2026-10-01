@@ -257,7 +257,8 @@ export function paintLimb(seed: number, w: number, h: number): Sprite {
   const rng = new Rng(seed);
   const leaf = [H('#1e3a22'), H('#2a4c2a'), H('#3a6232'), H('#4e7a3a'), H('#5e8a40')];
   const limb: P[] = [];
-  for (let i = 0; i <= 40; i++) { const t = i / 40; limb.push([t * w * 0.7, 4 + Math.sin(t * 3 + seed) * 6 + t * t * h * 0.3]); }
+  // it comes down out of the top of the buffer (a tree above the frame), so no cut end ever shows
+  for (let i = 0; i <= 40; i++) { const t = i / 40; limb.push([w * 0.06 + t * w * 0.64, -4 + Math.sin(t * 3 + seed) * 5 + t * h * 0.16 + t * t * h * 0.24]); }
   tube(b, limb, t => 5 * (1 - t) + 1.4, JP.bark, 4);
   const blobs: [number, number, number][] = [];
   for (let i = 0; i < 24; i++) {

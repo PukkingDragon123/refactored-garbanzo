@@ -35,8 +35,9 @@ export function paintCaveFront(w: number, h: number, seed: number, o: { roof: nu
   // the pillars' inner edges (ragged), the roof's underside, the lip's top
   const pillarL = (y: number) => P * (0.75 + (fbm1(y / 26, 3, seed) - 0.5) * 0.7) + Math.max(0, (o.roof - y)) * 0.6 + Math.max(0, y - (h - o.lip)) * 0.5;
   const pillarR = (y: number) => w - P * (0.75 + (fbm1(y / 24, 3, seed + 1) - 0.5) * 0.7) - Math.max(0, (o.roof - y)) * 0.6 - Math.max(0, y - (h - o.lip)) * 0.5;
-  const roofAt = (x: number) => o.roof * (0.78 + fbm1(x / 46, 3, seed + 2) * 0.4) + (noise1(x / 9, seed + 3) - 0.5) * 10;
-  const lipAt = (x: number) => h - o.lip * (0.55 + fbm1(x / 30, 3, seed + 4) * 0.8);
+  // the roof's underside and the lip's top wander by a fixed amount however much rock lies beyond them
+  const roofAt = (x: number) => o.roof + 92 * (fbm1(x / 46, 3, seed + 2) * 0.4 - 0.22) + (noise1(x / 9, seed + 3) - 0.5) * 10;
+  const lipAt = (x: number) => h - o.lip + 54 * (0.45 - fbm1(x / 30, 3, seed + 4) * 0.8);
   // the outer hull: the mass reaches the buffer's sides only up in the roof (off the top of the
   // screen); lower down its outer faces are ragged crags, so no straight edge ever shows outside
   const hullL = (y: number) => P * 0.42 * smoothstep(o.roof * 0.15, h * 0.9, y) * (0.7 + fbm1(y / 14, 3, seed + 12) * 0.7) + (noise1(y / 3, seed + 13) - 0.5) * 3;

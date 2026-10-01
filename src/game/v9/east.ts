@@ -234,10 +234,12 @@ function seaCave(c: Ctx) {
   const { s, L, rng } = c;
   const st = s.st, pf = L.front.p;
   // the rock in front of the camera: roof, entrance pillars, the lip of tumbled boulders
-  const fx0 = 4985 * pf, fw = Math.round((5515 - 4985) * pf), fh = 300;
-  const front = paintCaveFront(fw, fh, 5, { roof: 92, lip: 54, pillar: 88, skylights: [[Math.round(5190 * pf - fx0), 11], [Math.round(5330 * pf - fx0), 9]] });
+  // (the buffer runs from well above to well below the frame at every zoom from 1.0 up, so neither its
+  // top nor its bottom edge can ever show)
+  const fx0 = 4985 * pf, fw = Math.round((5515 - 4985) * pf), above = 90, below = 80, fh = 300 + above + below;
+  const front = paintCaveFront(fw, fh, 5, { roof: 92 + above, lip: 54 + below, pillar: 88, skylights: [[Math.round(5190 * pf - fx0), 11], [Math.round(5330 * pf - fx0), 9]] });
   const ff = bigFrame(game.r, front.buf);
-  const fy = layerY(pf, -8);
+  const fy = layerY(pf, -8) - above;
   L.front.add(new Custom(4, rr => rr.draw(ff, fx0, fy, 1, 1, 0, packColor(0.8, 0.8, 0.84, 1))));
   // flowstone columns and curtains between the walk line and the back wall, on their own depth
   const mid = st.addLayer('cave-mid', 0.96, 0, 0.7, 0, 0.96);
@@ -377,16 +379,13 @@ function frontFraming(c: Ctx) {
       f = sp('fgtoetoe' + v, () => EA.paintToetoe(740 + v, 90 + v * 14));
       dy = 20;
     }
-    F.add(new Prop(f, X, fyAt(x) + dy, rng.next(), { sway, flip: rng.chance(0.5), tint }));
+    // the bottom of the frame at zoom 1.0 is ~40 px below the rest row: every sprite's foot goes under it
+    F.add(new Prop(f, X, fyAt(x) + Math.max(dy, 0) + 46, rng.next(), { sway, flip: rng.chance(0.5), tint }));
   }
-  // overhead: pōhutukawa limbs reaching in over the stream and the cove, palm fronds between
+  // overhead: pōhutukawa limbs hanging in from above the frame over the stream and the cove
   const pohu = [0, 1].map(i => sprite(`v9e:pohu${i}`, () => EA.paintLimb(950 + i, 300, 150))!.f);
   for (const [x, flip] of [[3560, false], [4010, true], [5560, false], [5890, true]] as const) {
-    F.add(new Prop(pohu[x % 2], x * pf + (flip ? 300 : 0), fyAt(x, -24), 2, { sway: 0.25, flip, tint: packColor(0.5, 0.52, 0.5, 1) }));
-  }
-  for (const x of [3800, 4350]) {
-    const f = sprite(`fpalm:${x % 2}`, () => foreground('palm', 930 + (x % 2), 220))!.f;
-    F.add(new Prop(f, x * pf, fyAt(x, -60), 2, { sway: 0.5, flip: x % 3 === 0, tint: packColor(0.4, 0.46, 0.42, 1) }));
+    F.add(new Prop(pohu[x % 2], x * pf + (flip ? 300 : 0), fyAt(x, -90), 2, { sway: 0.25, flip, tint: packColor(0.5, 0.52, 0.5, 1) }));
   }
   for (let x = 5960; x < ISL.W + 200; x += rng.range(130, 230)) {
     const f = sprite(`fcan:${x % 3}`, () => canopyClump(770 + (x % 3), 300, 140))!.f;
