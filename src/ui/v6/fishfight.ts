@@ -21,6 +21,8 @@ export type FightEvent = 'tell' | 'run' | 'runEnd' | 'leap' | 'splash' | 'strain
 
 /** px per metre on the boat plane (Mori is 62 px, 1.8 m) */
 export const PX_M = 34.4;
+/** line wound in per turn of the handle, metres */
+export const REEL_M = 1.1;
 /** line on the reel, metres */
 export const LINE_MAX = 22;
 
@@ -152,18 +154,18 @@ export class FightSim {
       // the fish's own swimming
       let sx: number, sy: number;
       if (running) {
-        const v = 40 + 95 * this.runPow;
+        const v = 30 + 70 * this.runPow;
         sx = this.runDir[0] * v; sy = this.runDir[1] * v;
       } else {
         // resting: nosing slowly away and down, less as it tires
-        const v = 5 + 13 * this.stam;
+        const v = 3 + 10 * this.stam;
         sx = -dx / dl * v * 0.9 + Math.sin(this.t * 0.9) * 6; sy = 4 * this.stam + Math.sin(this.t * 1.3) * 5;
       }
-      // the reel: each turn winds in ~0.7 m; hardly any gain against a run
-      const vin = crank * PX_M * 0.72 * (running ? 0.12 : 1) * (1 - 0.35 * P);
+      // the reel: each turn winds in ~1 m; hardly any gain against a run
+      const vin = crank * PX_M * REEL_M * (running ? 0.12 : 1) * (1 - 0.3 * P);
       sx += dx / dl * vin; sy += dy / dl * vin;
       // the drag pays out while it runs and you're not winding
-      this.drag = running ? Math.max(0, (Math.hypot(sx, sy) - vin) / (PX_M * 0.72)) : 0;
+      this.drag = running ? Math.max(0, (Math.hypot(sx, sy) - vin) / (PX_M * REEL_M)) : 0;
       this.vx += (sx - this.vx) * Math.min(1, dt * 5);
       this.vy += (sy - this.vy) * Math.min(1, dt * 5);
       this.x += this.vx * dt;

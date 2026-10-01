@@ -27,7 +27,7 @@ import { el } from '../ui';
 import { audio } from '../../core/audio';
 import { guardInput } from '../../core/input';
 import type { Renderer } from '../../gfx/renderer';
-import { FightSim, PX_M, LINE_MAX } from '../v6/fishfight';
+import { FightSim, PX_M, LINE_MAX, REEL_M } from '../v6/fishfight';
 import { FishView, Shade, sideFrame, resetViewFrames } from '../v9/fishview';
 import { Reel, FishInput } from '../v9/reel';
 import { showBanner, catchPhotos } from '../v9/catchshow';
@@ -209,9 +209,12 @@ export async function goFishing(host: FishingHost, o: FishOpts = {}): Promise<Fi
     cam.x += (tx - cam.x) * k;
     cam.y += (ty - cam.y) * k;
     if (view.spring > 0) {
-      // a bouncy zoom: a spring that overshoots and settles
-      view.zv += ((view.z - cam.zoom) * 90 - view.zv * 11) * dt;
-      cam.zoom += view.zv * dt;
+      // a bouncy zoom: a spring that overshoots and settles (substepped so slow frames stay stable)
+      for (let n = Math.ceil(dt / (1 / 120)), i = 0; i < n; i++) {
+        const h = dt / n;
+        view.zv += ((view.z - cam.zoom) * 90 - view.zv * 10) * h;
+        cam.zoom += view.zv * h;
+      }
     } else cam.zoom += (view.z - cam.zoom) * Math.min(1, dt * 2.2);
     cam.tzoom = cam.zoom;
   };
@@ -360,7 +363,7 @@ export async function goFishing(host: FishingHost, o: FishOpts = {}): Promise<Fi
         if (biter?.state === 'bite' && Math.random() < dt * 18) fv.splash(fv.bobber!.x, 2, 0.6);
         // winding the reel brings the float back toward the stern
         if (inp.crank > 0.05) {
-          const v = inp.crank * PX_M * 0.72;
+          const v = inp.crank * PX_M * REEL_M;
           bobX = Math.min(fv.area.x1 + 4, bobX + v * dt);
           b.x += (bobX - b.x) * Math.min(1, dt * 3);
           b.y = Math.max(surf + 3, b.y - v * dt * 0.8);
@@ -399,6 +402,7 @@ export async function goFishing(host: FishingHost, o: FishOpts = {}): Promise<Fi
     audio.play('whoosh', { vol: 0.45, pitch: 1.4 });
     const [mx0, my0] = fv.mouth(hooked);
     const sim = new FightSim(fish, mx0, my0, { tip: host.rodTip(), surface: x => host.seaY(x), bed: x => fv.bed(x), minX: fv.area.x0, maxX: fv.area.x1 });
+    (window as unknown as { __fishSim?: FightSim }).__fishSim = sim;
     inp.keyCrank = true;
     inp.clear();
     reel.gauge = true;
@@ -508,7 +512,7 @@ export async function goFishing(host: FishingHost, o: FishOpts = {}): Promise<Fi
     host.setHeld?.(heldSprite(fish, len, 0, !!louse), 'overhead');
     // the camera bounces in on Mori holding it up high
     const [hx, hy] = p.body.headTop();
-    view.x = p.x; view.y = hy + 16; view.z = 2.35; view.spring = 1; view.zv = 0;
+    view.x = p.x; view.y = hy + 34; view.z = 2.2; view.spring = 1; view.zv = 0;
     audio.play('catchJingle', { vol: 0.8 });
     fv.sparkle(hx, hy - 8, 14, 18);
     fv.confetti(hx, hy - 10, 40, 1);
@@ -541,7 +545,7 @@ export async function goFishing(host: FishingHost, o: FishOpts = {}): Promise<Fi
       p.body.setExpr('surprised', 1.4);
       p.body.showEmote('question', 1.6);
       audio.play('emoteQuestion', { vol: 0.6 });
-      view.z = 3.1; view.zv = 0;
+      view.z = 2.9; view.y = hy + 26;
       await sleep(0.9, show);
       audio.play('discover', { vol: 0.6 });
       const [x2, y2] = p.body.headTop();

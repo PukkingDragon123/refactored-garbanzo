@@ -87,12 +87,12 @@ const waterFrame = () => frame('fsh9:water', () => {
 }, 0, 0);
 /** the float: red cap, white body, dark outline and a little antenna */
 const bobberFrame = () => frame('fsh9:bobber', () => {
-  const rows = ['..k..', '.krk.', 'krRrk', 'krrrk', 'kwWwk', 'kwwwk', '.kwk.', '..k..'];
-  const P: Record<string, number> = { k: hex('#1a1014'), r: hex('#d8342a'), R: hex('#ff8a6a'), w: hex('#e8ecf0'), W: hex('#ffffff') };
-  const b = new PixelBuffer(5, 8);
-  rows.forEach((row, y) => [...row].forEach((ch, x) => { if (P[ch]) b.data[y * 5 + x] = P[ch]; }));
+  const rows = ['...k...', '..krk..', '.krRrk.', 'krRrrrk', 'krrrrrk', 'kwWwwwk', 'kwWwwwk', '.kwwwk.', '..kwk..', '...k...'];
+  const P: Record<string, number> = { k: hex('#1a1014'), r: hex('#d8342a'), R: hex('#ff8a6a'), w: hex('#e0e6ec'), W: hex('#ffffff') };
+  const b = new PixelBuffer(7, 10);
+  rows.forEach((row, y) => [...row].forEach((ch, x) => { if (P[ch]) b.data[y * 7 + x] = P[ch]; }));
   return b;
-}, 2.5, 5);
+}, 3.5, 6);
 /** a wriggle of bait on the hook */
 const baitFrame = () => frame('fsh9:bait', () => {
   const rows = ['.pp', 'pPp', 'gp.'];
@@ -169,13 +169,18 @@ export class FishView {
   bed(x: number) { return this.level + 238 + (fbm1(x * 0.006, 3, 5) - 0.5) * 40 - this.rock(x); }
   /** height of a rock outcrop at x (0 = open sand) */
   rock(x: number) {
-    const c = Math.floor(x / 110);
+    // reefs: patches of boulders, each a lumpy dome, big ones in the middle of a patch
+    const P = 260, c = Math.floor(x / P);
     let h = 0;
     for (let k = c - 1; k <= c + 1; k++) {
-      if (hash2(k, 3, 7) > 0.5) continue;
-      const cx = k * 110 + hash2(k, 4, 7) * 70, rw = 26 + hash2(k, 5, 7) * 34, rh = 10 + hash2(k, 6, 7) * 24;
-      const d = (x - cx) / rw;
-      if (Math.abs(d) < 1) h = Math.max(h, rh * Math.pow(Math.cos(d * Math.PI / 2), 0.7) + (fbm1(x * 0.09, 2, 9) - 0.5) * 7 * (1 - d * d));
+      if (hash2(k, 3, 7) > 0.55) continue;
+      const pc = k * P + hash2(k, 4, 7) * 120, pw = 50 + hash2(k, 5, 7) * 70;
+      for (let j = 0; j < 5; j++) {
+        const cx = pc + (hash2(k, 10 + j, 7) - 0.5) * pw * 2, rw = 9 + hash2(k, 20 + j, 7) * 18;
+        const rh = (5 + hash2(k, 30 + j, 7) * 16) * (1 - Math.abs(cx - pc) / (pw * 1.4));
+        const d = (x - cx) / rw;
+        if (Math.abs(d) < 1 && rh > 0) h = Math.max(h, rh * Math.sqrt(1 - d * d) * (0.9 + (fbm1(x * 0.2, 2, 9 + j) - 0.5) * 0.3));
+      }
     }
     return Math.max(0, h);
   }
@@ -283,7 +288,7 @@ export class FishView {
     }
     // the hooked fish breathes out a trail of bubbles when it fights
     const h = this.hooked;
-    if (h && Math.random() < dt * 5) this.bubble(h.x, h.y - h.px * 0.1, 1);
+    if (h && Math.random() < dt * (Math.hypot(h.vx, h.vy) > 30 ? 5 : 1.2)) this.bubble(h.x, h.y - h.px * 0.2, 1);
   }
 
   private think(s: Shade, dt: number, bait: FishView['bait'], busy: Shade | null) {
@@ -340,8 +345,8 @@ export class FishView {
         if (!bait) { s.state = 'cruise'; s.t = 0; break; }
         s.faceT = bait.x < s.x ? -1 : 1;
         tx = bait.x - s.faceT * (s.px * 0.5 + 4); ty = bait.y;
-        sp = s.speed * 0.7 * clamp(Math.hypot(tx - s.x, ty - s.y) / 30, 0.25, 1);
-        if (Math.hypot(tx - s.x, ty - s.y) < 3 || s.t > 9) {
+        sp = Math.max(12, s.speed) * clamp(Math.hypot(tx - s.x, ty - s.y) / 30, 0.4, 1.1);
+        if (Math.hypot(tx - s.x, ty - s.y) < 3.5 || s.t > 5) {
           s.state = 'nibble'; s.t = 0; s.sub = 0;
           s.nib = s.def.nibbles[0] + Math.floor(Math.random() * (s.def.nibbles[1] - s.def.nibbles[0] + 1));
         }
@@ -485,7 +490,7 @@ export class FishView {
     // the seabed far below: sand dunes, rocks, kelp, lost in the blue
     this.drawBed(r, vx0, vx1, vy1, k);
     // the Kittiwake's keel, rudder and propeller through the water
-    this.host.drawHullUnder?.(r, packColor(0.36 * U + (1 - U), 0.56 * U + (1 - U), 0.7 * U + (1 - U), 1));
+    this.host.drawHullUnder?.(r, packColor(0.5 * U + (1 - U), 0.68 * U + (1 - U), 0.8 * U + (1 - U), 1));
     // fish shadows, deepest first
     const list = [...this.shades].sort((p, q) => q.y - p.y);
     for (const s of list) this.drawShade(r, s, U);
@@ -529,9 +534,11 @@ export class FishView {
         // a rock: lit top, darker flanks, a dark foot where it meets the sand
         const slope = this.bed(X + 3) - this.bed(X - 1);
         const litK = slope > 1.5 ? 0.35 : slope < -1.5 ? 0.75 : 0.55;
-        r.rect(X, top, 2, 2, fog(0.42, 0.5, 0.5, 0.5));
-        r.rect(X, top + 2, 2, Math.max(2, rk * 0.45), fog(0.3 * litK + 0.12, 0.36 * litK + 0.14, 0.38 * litK + 0.16, 0.55));
-        r.rect(X, top + 2 + rk * 0.45, 2, vy1 - top, fog(0.14, 0.2, 0.24, 0.55));
+        const body = Math.max(3, rk * 0.9);
+        r.rect(X, top, 2, 2, fog(0.4 * litK + 0.2, 0.46 * litK + 0.22, 0.44 * litK + 0.2, 0.5));
+        r.rect(X, top + 2, 2, body * 0.5, fog(0.3 * litK + 0.14, 0.36 * litK + 0.16, 0.36 * litK + 0.16, 0.55));
+        r.rect(X, top + 2 + body * 0.5, 2, body * 0.5, fog(0.2, 0.25, 0.27, 0.58));
+        r.rect(X, top + 2 + body, 2, vy1 - top, fog(0.3, 0.33, 0.32, 0.6));
         if (hash2(X, 13, 2) < 0.08) r.rect(X, top + 3 + hash2(X, 14, 2) * rk * 0.5, 2, k, fog(0.6, 0.66, 0.6, 0.5));
       } else {
         // sand: a pale rim, faint ripples, darker below
@@ -542,31 +549,30 @@ export class FishView {
         if (hash2(X, 11, 2) < 0.05) r.rect(X, top + 2 + hash2(X, 12, 2) * 6, k * 2, k, fog(0.75, 0.72, 0.62, 0.45));
       }
     }
-    // kelp swaying up from the bottom
-    const cw = 58;
+    // kelp: a stipe up from the rocks, long fronds streaming off it with the current
+    const cw = 52;
     for (let i = Math.floor(vx0 / cw) - 2; i <= Math.ceil(vx1 / cw) + 1; i++) {
-      if (hash2(i, 21, 4) > 0.4) continue;
-      const bx = i * cw + hash2(i, 22, 4) * 40, yb = this.bed(bx) + 2;
-      if (yb - 170 > vy1) continue;
-      const H = 46 + hash2(i, 23, 4) * 120, ph = hash2(i, 24, 4) * 6;
-      const sh = 0.8 + hash2(i, 25, 4) * 0.3;
-      const cStem = fog(0.22 * sh, 0.34 * sh, 0.16 * sh, 0.5, 0.95);
-      const cLeaf = fog(0.3 * sh, 0.46 * sh, 0.2 * sh, 0.45, 0.9);
-      const cLit = fog(0.42 * sh, 0.6 * sh, 0.28 * sh, 0.45, 0.9);
-      for (let s = 0; s < H; s += 2) {
+      if (hash2(i, 21, 4) > 0.36) continue;
+      const bx = i * cw + hash2(i, 22, 4) * 40, yb = this.bed(bx) + 3;
+      if (yb - 190 > vy1) continue;
+      const H = 50 + hash2(i, 23, 4) * 130, ph = hash2(i, 24, 4) * 6;
+      const sh = 0.8 + hash2(i, 25, 4) * 0.35;
+      const cStem = fog(0.3 * sh, 0.36 * sh, 0.14 * sh, 0.42, 0.95);
+      const cLeaf = fog(0.36 * sh, 0.5 * sh, 0.18 * sh, 0.4, 0.9);
+      const cLit = fog(0.5 * sh, 0.64 * sh, 0.26 * sh, 0.4, 0.9);
+      const stipe = (u: number) => bx + Math.sin(u * 2.6 + t * 0.7 + ph) * 8 * u + Math.sin(t * 1.2 + ph + u * 4) * 2 * u + u * u * 10;
+      for (let s = 0; s < H; s += 1.5) {
         const u = s / H;
-        const x = bx + Math.sin(u * 3 + t * 0.8 + ph) * 7 * u + Math.sin(t * 1.3 + ph + u * 5) * 1.5 * u;
-        const y = yb - s;
-        r.rect(x - 1, y, 2, 2, cStem);
-        // long blades trailing off the stalk with the current, a gas bladder at each root
-        if (s % 10 === 4 && u > 0.08) {
-          const side = (s / 10) % 2 ? 1 : -1, bl = 9 + hash2(i, s, 5) * 9;
-          r.rect(x + side * 2 - 1, y - 1, 2, 2, cLit);
-          for (let j = 0; j < bl; j += 1.5) {
-            const wv = Math.sin(t * 1.6 + j * 0.35 + ph + s) * 1.6 * (j / bl);
-            const bw = j < bl * 0.7 ? 2.5 : 1.5;
-            r.rect(x + side * (2 + j), y - j * 0.55 + wv, 1.6, bw, j < bl * 0.4 ? cLit : cLeaf);
-          }
+        r.rect(stipe(u) - 1, yb - s, 2.5, 2, cStem);
+      }
+      for (let s = 8; s < H; s += 9 + hash2(i, 26, 4) * 4) {
+        const u = s / H, x = stipe(u), y = yb - s;
+        const side = hash2(i, Math.floor(s), 5) < 0.75 ? 1 : -1, bl = 12 + hash2(i, Math.floor(s), 6) * 14 * (1 - u * 0.5);
+        for (let j = 0; j < bl; j += 1.2) {
+          const v = j / bl;
+          const wv = Math.sin(t * 1.5 + j * 0.3 + ph + s * 0.2) * 2.4 * v;
+          const bw = 3.2 * Math.sin(Math.PI * Math.min(1, v * 1.1 + 0.08));
+          r.rect(x + side * j * 0.95, y - j * 0.42 + wv - bw * 0.5, 1.5, bw, v < 0.35 ? cLit : cLeaf);
         }
       }
     }
@@ -581,7 +587,7 @@ export class FishView {
     const depth = clamp((s.y - surf) / Math.max(40, this.bed(s.x) - surf), 0, 1);
     const hooked = s === this.hooked;
     // deeper shadows are fainter and bluer; the hooked fish is darker and sharper
-    const a = (hooked ? 0.74 : 0.62 - depth * 0.22) * s.alpha * U;
+    const a = (hooked ? 0.9 : 0.66 - depth * 0.22) * s.alpha * U;
     const sx = Math.abs(s.face) < 0.16 ? 0.16 * Math.sign(s.face || 1) : s.face;
     const pitch = clamp(Math.atan2(s.vy, Math.abs(s.vx) + 6) * 0.55, -0.5, 0.5) * Math.sign(s.face || 1);
     r.draw(fr[fi], s.x, s.y, sx, 1, pitch, packColor(0.02 + depth * 0.04, 0.07 + depth * 0.06, 0.16 + depth * 0.08, a));
@@ -604,10 +610,13 @@ export class FishView {
     };
     // the arc the float will fly, dots marching along it
     const arcH = 40 + Math.abs(bx - hx) * 0.18;
-    for (let i = 0; i < 16; i++) {
-      const u = 0.12 + ((i + a.t * 2.5) % 16) / 16 * 0.88;
+    for (let i = 0; i < 14; i++) {
+      const u = 0.1 + ((i + a.t * 2.5) % 14) / 14 * 0.9;
       const x = hx + (bx - hx) * u, y = hy + (by - hy) * u - Math.sin(u * Math.PI) * arcH;
-      dot(x, y, 0xffffff, 0.45 + u * 0.5);
+      // a little round bead: dark rim, bright middle
+      const al = 0.65 + u * 0.35, rim = packColor(0.1, 0.16, 0.26, 0.6 * al), mid = col(0xfff6c0, al);
+      r.rect(x - k, y, 5 * k, 3 * k, rim); r.rect(x, y - k, 3 * k, 5 * k, rim);
+      r.rect(x, y, 3 * k, 3 * k, mid); r.rect(x, y, k, k, col(0xffffff, al));
     }
     // where it lands: a pulsing ring on the water, and a dashed drop to where the bait will settle
     const pulse = 0.6 + Math.sin(a.t * 9) * 0.3;
@@ -619,12 +628,13 @@ export class FishView {
   }
 
   /** a curved line in screen-pixel dots */
-  private seg(r: Renderer, ax: number, ay: number, bx: number, by: number, c: number, k: number, sag: number, vib = 0) {
+  private seg(r: Renderer, ax: number, ay: number, bx: number, by: number, c: number, k: number, sag: number, vib = 0, shadow = false) {
     const n = Math.ceil(Math.hypot(bx - ax, by - ay) / k) + 1;
     for (let i = 0; i <= n; i++) {
       const u = i / n;
       let x = ax + (bx - ax) * u, y = ay + (by - ay) * u + Math.sin(u * Math.PI) * sag;
       if (vib) { const w = vib * Math.sin(Math.PI * u) * Math.sin(this.time * 70 + u * 9); x += w * 0.3; y += w; }
+      if (shadow) r.rect(x, y + k, k, k, packColor(0.08, 0.14, 0.22, 0.35));
       r.rect(x, y, k, k, c);
     }
   }
@@ -640,25 +650,25 @@ export class FishView {
       const vib = T > 0.62 ? (T - 0.62) * 3 : 0;
       if (L.under) {
         // above water to where it cuts in, then (fainter) down to the fish
-        this.seg(r, L.tip[0], L.tip[1], L.to[0], L.to[1], lc, k, L.sag, vib);
+        this.seg(r, L.tip[0], L.tip[1], L.to[0], L.to[1], lc, k, L.sag, vib, true);
         this.seg(r, L.to[0], L.to[1], L.under[0], L.under[1], packColor(c[0], c[1], c[2], 0.55 * this.under * flick), k, L.sag * 0.3, vib);
         // the line tugs the surface into a little peak where it goes in
         r.rect(L.to[0] - k, L.to[1] - k, 3 * k, k, packColor(1, 1, 1, 0.7));
-      } else this.seg(r, L.tip[0], L.tip[1], L.to[0], L.to[1], lc, k, L.sag, vib);
+      } else this.seg(r, L.tip[0], L.tip[1], L.to[0], L.to[1], lc, k, L.sag, vib, true);
     }
     if (b) {
       // the float: the part under the surface shows faintly through the water
       const bf = bobberFrame();
       const surf = b.fly > 0 ? Infinity : this.surface(b.x);
       const y = b.y + b.dip;
-      const top = y - 5 * k;
-      const cut = clamp(Math.round((surf - top) / k), 0, 8);
-      if (cut >= 8 || b.fly > 0) r.draw(bf, b.x, y, k, k, b.tilt);
+      const top = y - 6 * k;
+      const cut = clamp(Math.round((surf - top) / k), 0, 10);
+      if (cut >= 10 || b.fly > 0) r.draw(bf, b.x, y, k, k, b.tilt);
       else {
-        if (cut > 0) r.drawSub(bf, 0, 0, 5, cut, b.x - 2.5 * k, top, k, k);
-        r.drawSub(bf, 0, cut, 5, 8 - cut, b.x - 2.5 * k, top + cut * k, k, k, packColor(0.8, 0.9, 1, 0.35));
+        if (cut > 0) r.drawSub(bf, 0, 0, 7, cut, b.x - 3.5 * k, top, k, k);
+        r.drawSub(bf, 0, cut, 7, 10 - cut, b.x - 3.5 * k, top + cut * k, k, k, packColor(0.8, 0.9, 1, 0.35));
       }
-      if (b.fly <= 0) r.rect(b.x - 3 * k, surf, 6 * k, k, packColor(1, 1, 1, 0.55));
+      if (b.fly <= 0) r.rect(b.x - 4 * k, surf, 8 * k, k, packColor(1, 1, 1, 0.6));
     }
   }
 

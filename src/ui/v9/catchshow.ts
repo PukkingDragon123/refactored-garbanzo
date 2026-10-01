@@ -32,7 +32,7 @@ const CSS = `
 @keyframes fcsPop { from { transform: translate(-50%, -50%) scale(0) rotate(-40deg); } }
 .fcs .tx { flex: 1; min-width: 0; }
 .fcs .l1 { font-size: clamp(15px, 2.2vw, 21px); line-height: 1.05; }
-.fcs .l1 b { font: 700 clamp(22px, 3.6vw, 36px) 'Jersey 10', 'Silkscreen', monospace; letter-spacing: 0.04em; color: #ffe27a; text-transform: uppercase;
+.fcs .l1 b { white-space: nowrap; font: 700 clamp(22px, 3.6vw, 36px) 'Jersey 10', 'Silkscreen', monospace; letter-spacing: 0.04em; color: #ffe27a; text-transform: uppercase;
   text-shadow: 0 3px 0 #5a2a0a, 2px 0 0 #5a2a0a, -2px 0 0 #5a2a0a, 0 -2px 0 #5a2a0a, 2px 2px 0 #5a2a0a, -2px 2px 0 #5a2a0a; }
 .fcs .l1 i { font-style: normal; display: inline-block; animation: fcsLetter 0.3s cubic-bezier(.2,2.2,.4,1) both; }
 @keyframes fcsLetter { from { transform: translateY(-14px) scale(0.3); opacity: 0; } }
