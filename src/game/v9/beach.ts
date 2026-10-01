@@ -28,6 +28,7 @@ import { sandCol } from '../../art/v9/sand';
 import { Rng } from '../../core/math';
 import { SPOT, WRECK, groundY } from '../../art/island4/layout';
 import type { IslandScene4 } from '../v4/island';
+import { BeachAmbience } from './beachfx';
 import { layerY } from '../v4/island';
 
 /** everything west of this world x is dressed here (the stream mouth and beyond belong to isleprops) */
@@ -93,6 +94,9 @@ export function dressWest(s: IslandScene4, L: WestLayers) {
   const sp = (key: string, gen: () => Sprite) => sprite('v9w:' + key, gen)?.f ?? null;
   const walk = new Strip(-3.2), band = new Strip(56), front = new Strip(2, false);
   L.main.add(walk); L.main.add(band); L.front.add(front);
+  const amb = L.main.add(new BeachAmbience(s));
+  const brk = s.breakers.onBreak;
+  s.breakers.onBreak = i => { brk?.(i); setTimeout(() => amb.spray(), 700); };
 
   // keep the story spots, the climb into the wreck, the camp and the gathering nodes readable
   const busy: [number, number][] = [[SPOT.moriWake - 40, SPOT.moriWake + 50], [SPOT.jenna - 40, SPOT.jenna + 40], [WRECK.climbX - 34, WRECK.climbX + 34],
@@ -124,7 +128,7 @@ export function dressWest(s: IslandScene4, L: WestLayers) {
     const k = rng.next();
     const v = rng.int(0, 3);
     if (camp(x) && k > 0.55) continue;
-    if (k < 0.14) walk.add(sp(`kh:${v}`, () => W.kelpHeap(300 + v, 22 + v * 7, 'none'))!, x, groundY(x) + 1, { flip: rng.chance(0.5) });
+    if (k < 0.14) { walk.add(sp(`kh:${v}`, () => W.kelpHeap(300 + v, 22 + v * 7, 'none'))!, x, groundY(x) + 1, { flip: rng.chance(0.5) }); amb.kelp.push([x, groundY(x)]); }
     else if (k < 0.45) walk.add(sp(`kst:${v}`, () => W.kelpStrand(310 + v, 50 + v * 10, 'none'))!, x, groundY(x) + 1, { flip: rng.chance(0.5) });
     else if (k < 0.58) walk.add(sp(`ws:${v}`, () => W.shellScatter(320 + v, 26, 8))!, x, groundY(x) + 1);
     else if (k < 0.72 && !camp(x)) walk.add(sp(`wl:${v}`, () => D.driftLog(330 + v, 60 + v * 18, 'wet'))!, x, groundY(x) + 2, { flip: rng.chance(0.5), sh: 60 + v * 18 });
@@ -142,7 +146,7 @@ export function dressWest(s: IslandScene4, L: WestLayers) {
   for (let x = 450; x < WEST_END; x += rng.range(30, 70)) {
     const d = sandCol(x).wet + 4 + rng.range(-2, 3);
     const k = rng.next(), v = rng.int(0, 4);
-    if (k < 0.2) onBand(sp(`bk:${v}`, () => W.kelpHeap(400 + v, 18 + v * 6, 'none')), x, d, { flip: rng.chance(0.5) });
+    if (k < 0.2) { onBand(sp(`bk:${v}`, () => W.kelpHeap(400 + v, 18 + v * 6, 'none')), x, d, { flip: rng.chance(0.5) }); amb.kelp.push([x, groundY(x) + d]); }
     else if (k < 0.36) onBand(sp(`bks:${v}`, () => W.kelpStrand(405 + v, 30 + v * 8, 'none')), x, d, { flip: rng.chance(0.5) });
     else if (k < 0.7) onBand(sp(`bs:${v}`, () => W.shellScatter(410 + v, 22 + v * 3, 6 + v)), x, d);
     else onBand(sp(`bf:${v}`, () => W.find((['paua', 'kina', 'star', 'cuttle', 'whelk'] as const)[v], 420 + v, 'damp')), x, d + rng.range(0, 4));
@@ -208,5 +212,4 @@ export function dressWest(s: IslandScene4, L: WestLayers) {
     const f = sp(`frk:${x}`, () => W.boulder(800 + x, w, h, 'shore', 'none'));
     if (f) front.add(f, x * pf, fy + 26, { tint: dark(1) });
   }
-  void s;
 }
