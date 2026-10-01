@@ -1040,3 +1040,17 @@ export function sidePoint(id: string, len: number, x: number, y: number): Pt {
   // fishSide pads by 2 px and then trims the transparent border (the outline sits 1 px outside)
   return [(x - x0) * S + 1, (y - y0) * S + 1];
 }
+
+/** where a hand holds a side-view fish sprite (facing right) by the tail: the narrowest column in
+ *  the tail third (the wrist of the tail, just ahead of the fin), at the middle of the body there */
+export function gripOf(h: { w: number; h: number; px?: Uint32Array; data?: Uint32Array }): Pt {
+  const px = h.px ?? h.data!;
+  let best = -1, bh = Infinity, by = h.h / 2;
+  for (let x = Math.floor(h.w * 0.1); x <= Math.ceil(h.w * 0.36); x++) {
+    let t = -1, b = -1;
+    for (let y = 0; y < h.h; y++) if (px[y * h.w + x] >>> 24) { if (t < 0) t = y; b = y; }
+    if (t < 0) continue;
+    if (b - t < bh) { bh = b - t; best = x; by = (t + b) / 2; }
+  }
+  return [best < 0 ? Math.round(h.w * 0.2) : best, Math.round(by)];
+}

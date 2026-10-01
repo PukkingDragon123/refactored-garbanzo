@@ -14,10 +14,11 @@
 //          wheel, or hold Space) to wind the fish in while it rests, ease off while it runs, or the
 //          line snaps (../v6/fishfight.ts). The line goes white, amber, red; the reel shakes; the drag
 //          buzzes as it takes line
-//  catch   the fish bursts out of the water into Mori's raised hands, the camera zooms in with a
-//          bounce, sparkles and confetti, a jingle, and the banner: "I caught a SNOUT BASS!" with
-//          the pun, the length and stars (../v9/catchshow.ts). A photo of the catch is filed for
-//          the laptop. Now and then a snout bass has a passenger in its trunk...
+//  catch   the fish bursts out of the water into Mori's raised hand (he holds it up by the tail in
+//          one fist), the camera zooms in with a bounce, sparkles and confetti, a jingle, and the
+//          banner: "I caught a SNOUT BASS!" with the pun, the length and stars (../v9/catchshow.ts).
+//          The moment is photographed (a zoomed crop of the game frame) for the laptop. Now and then
+//          a snout bass has a passenger in its trunk...
 //
 // goFishing(host) resolves with { fish, len, stars } or null (cancelled / got away). Escape cancels
 // at any point before the catch (and skips the show after it).
@@ -30,8 +31,8 @@ import type { Renderer } from '../../gfx/renderer';
 import { FightSim, PX_M, REEL_M } from '../v6/fishfight';
 import { FishView, Shade, resetViewFrames } from '../v9/fishview';
 import { Reel, FishInput } from '../v9/reel';
-import { showBanner, catchPhotos } from '../v9/catchshow';
-import { fishIcon, fishSide, louseIcon, louseSide, sidePoint, canvasOf } from '../../art/v9/fish';
+import { showBanner, catchPhoto, lousePhoto } from '../v9/catchshow';
+import { fishIcon, fishSide, louseIcon, louseSide, sidePoint, canvasOf, gripOf } from '../../art/v9/fish';
 
 export type Temper = 'smooth' | 'dart' | 'sinker' | 'floater' | 'mixed';
 export interface FishDef {
@@ -87,10 +88,17 @@ export interface FishingHost {
   rodTip(): [number, number];
   /** draw the fishing world (underwater view, shadows, line, float) on a layer in front of the sea */
   setFishDraw(fn: ((r: Renderer) => void) | null): void;
-  /** show the catch in Mori's hands */
-  setHeld?(spr: { w: number; h: number; px: Uint32Array } | null, mode?: 'chest' | 'overhead'): void;
+  /** show the catch in Mori's hand (one hand, by the tail; `grip` is the sprite pixel his fist closes on) */
+  setHeld?(spr: HeldSprite | null, mode?: 'chest' | 'overhead'): void;
+  /** world AABB of the held catch as last drawn, and a sprite pixel of it in world space */
+  heldBox?: [number, number, number, number] | null;
+  heldPoint?(u: number, v: number): [number, number] | null;
+  /** ship-local (the boat plane Mori stands on) → world */
+  shipToWorld?(x: number, y: number): [number, number];
   hullLine?(): [number, number][];
   drawHullUnder?(r: Renderer, color: number): void;
+  cruise?(): number;
+  gear?(): { prop: [number, number]; stern: [number, number]; keel: [number, number][] };
   st: {
     shake(a: number, t: number): void;
     cam: { x: number; y: number; zoom: number; tzoom: number; locked: boolean; tx?: number; ty?: number };
@@ -105,7 +113,7 @@ export interface FishOpts {
   /** debug: hook this species straight away and go to the fight */
   fish?: string;
   skipTo?: 'fight';
-  /** leave the fish in Mori's hands (chest) when it resolves; the caller clears it with setHeld(null) */
+  /** leave the fish in Mori's hand (pose fishHold) when it resolves; the caller clears it with setHeld(null) */
   keepHeld?: boolean;
 }
 
@@ -161,16 +169,31 @@ function pickFish(dist: number, depth: number): FishDef | null {
   return pool[0]?.[0] ?? null;
 }
 
-/** a fish sprite as the host's held-sprite format (with the louse in its trunk, if any) */
-function heldSprite(f: FishDef, len: number, arch = 0, louse = false) {
+export interface HeldSprite { w: number; h: number; px: Uint32Array; grip?: [number, number]; louse?: [number, number] }
+/** a fish sprite as the host's held-sprite format (with the louse in its trunk, if any). The grip
+ *  (where Mori's fist closes, the wrist of the tail) is found on the straight fish and shared by the
+ *  flexed ones so the fish stays put in his hand while it flops */
+function heldSprite(f: FishDef, len: number, arch = 0, louse = false, grip?: [number, number]): HeldSprite {
   const px = Math.max(6, (len / 100) * PX_M);
   let b = fishSide(f.id, px, { arch });
+  let lp: [number, number] | undefined;
   if (louse) {
     b = b.clone();
     const [lx, ly] = sidePoint(f.id, px, 0.975, 0.11);
     b.blit(louseSide(3), Math.round(lx) - 1, Math.round(ly) - 1);
+    lp = [Math.round(lx) + 0.5, Math.round(ly) + 0.5];
   }
-  return { w: b.w, h: b.h, px: b.data };
+  const s: HeldSprite = { w: b.w, h: b.h, px: b.data, louse: lp };
+  s.grip = grip ?? gripOf(s);
+  return s;
+}
+/** the straight held sprite of a catch (debug: zl.hold) */
+export const holdSprite = (f: FishDef, len: number, louse = false) => heldSprite(f, len, 0, louse);
+/** the held fish straight and flexed both ways (a flop plays through these) */
+function heldSet(f: FishDef, len: number, louse: boolean) {
+  const flat = heldSprite(f, len, 0, louse);
+  const g = flat.grip!;
+  return { flat, flex: [-0.7, -0.35, 0.35, 0.7].map(a => heldSprite(f, len, a, louse, [g[0], g[1]])) };
 }
 
 export async function goFishing(host: FishingHost, o: FishOpts = {}): Promise<FishCatch | null> {
@@ -489,47 +512,74 @@ export async function goFishing(host: FishingHost, o: FishOpts = {}): Promise<Fi
     fv.hooked = null;
     fv.shades = fv.shades.filter(s => s !== hooked);
     fv.line = null; fv.bobber = null;
-    // it bursts out of the water and flies up into Mori's hands
+    // it bursts out of the water and flies up into Mori's raised hand
     const from: [number, number] = [sim.x, host.seaY(sim.x)];
     fv.splash(from[0], 30, 1.5); fv.ring(from[0], 1.3); fv.ring(from[0], 0.9);
     audio.play('splashBig', { vol: 0.6 });
     st.shake(0.8, 0.25);
-    p.poseOverride = 'cheer';
+    p.poseOverride = 'fishRaise';
+    p.poseFrame = null;
     p.body.setExpr('excited');
     const px = hooked.px;
+    const held = heldSet(fish, len, !!louse);
+    const W = (x: number, y: number): [number, number] => host.shipToWorld?.(x, y) ?? [x, y];
+    const f0 = p.facing >= 0 ? 1 : -1;
+    // where it will hang: from the fist, head down
+    const hangAt = (): [number, number] => {
+      const h = p.body.handPos() ?? p.body.headTop();
+      return W(h[0], h[1] - 1.5 + (held.flat.w - held.flat.grip![0]) - held.flat.w / 2);
+    };
     let bk = 0;
     await loop(dt => {
       tick(dt);
       bk = Math.min(1, bk + dt / 0.6);
-      const [hx, hy] = p.body.headTop();
-      const to: [number, number] = [hx, hy - 6];
+      const to = hangAt();
       const e = ease(bk);
-      fv.flier = { id: fish.id, px, x: from[0] + (to[0] - from[0]) * e, y: from[1] + (to[1] - from[1]) * e - Math.sin(bk * Math.PI) * 50, rot: (1 - bk) * Math.PI * 2.5 * p.facing, flip: p.facing };
+      fv.flier = { id: fish.id, px, x: from[0] + (to[0] - from[0]) * e, y: from[1] + (to[1] - from[1]) * e - Math.sin(bk * Math.PI) * 50, rot: f0 * ((1 - bk) * Math.PI * 2.5 + bk * Math.PI / 2), flip: f0 };
       return bk < 1 && !cancelled;
     });
     fv.flier = null;
-    host.setHeld?.(heldSprite(fish, len, 0, !!louse), 'overhead');
+    host.setHeld?.(held.flat, 'overhead');
     // the camera bounces in on Mori holding it up high
     const [hx, hy] = p.body.headTop();
     view.x = p.x; view.y = hy + 34; view.z = 2.2; view.spring = 1; view.zv = 0;
     audio.play('catchJingle', { vol: 0.8 });
-    fv.sparkle(hx, hy - 8, 14, 18);
-    fv.confetti(hx, hy - 10, 40, 1);
+    const fistW = () => { const h = p.body.handPos() ?? p.body.headTop(); return W(h[0], h[1]); };
+    { const [fx, fy] = fistW(); fv.sparkle(fx, fy + 6, 14, 18); fv.confetti(fx, fy - 4, 40, 1); }
     p.body.showEmote('sparkle', 2);
-    let flopT = 0.7, flop = 0;
+    let flopT = 0.7, flop = 0, showT = 0;
+    let photo: Promise<string> | null = null;
+    // the photo of the moment: Mori and the fish he's holding up, cropped from the frame
+    const snapPhoto = () => {
+      if (photo) return photo;
+      const fb = host.heldBox;
+      const [tx, ty] = W(...p.body.headTop());
+      // head and shoulders and the fish: a close, chest-up shot
+      const around: [number, number, number, number] = [tx - 12, ty - 4, tx + 12, ty + 30];
+      if (fb) { around[0] = Math.min(around[0], fb[0] - 3); around[1] = Math.min(around[1], fb[1] - 3); around[2] = Math.max(around[2], fb[2] + 3); around[3] = Math.max(around[3], fb[3]); }
+      const fishBox: [number, number, number, number] = fb ? [fb[0], fb[1], fb[2], fb[3]] : [tx - 6, ty - 10, tx + 6, ty];
+      audio.play('shutter', { vol: 0.35 });
+      return (photo = catchPhoto(fish, len, around, fishBox));
+    };
     const show = (dt: number) => {
       tick(dt);
-      // the fish flops in his hands now and then; sparkles keep popping
+      showT += dt;
+      // the fish flops on his fist now and then; sparkles keep popping round it
       flopT -= dt;
       if (flopT <= 0) { flopT = 0.8 + Math.random() * 1.2; flop = 0.4; if (Math.random() < 0.5) audio.play('splash', { vol: 0.08, pitch: 1.9 }); }
-      if (flop > 0) { flop -= dt; host.setHeld?.(heldSprite(fish, len, flop > 0 ? Math.sin(flop * 28) * 0.7 : 0, !!louse), 'overhead'); }
-      if (Math.random() < dt * 5) { const [x, y] = p.body.headTop(); fv.sparkle(x, y - 8, 1, 16); }
+      const mode = p.poseOverride === 'fishHold' ? 'chest' : 'overhead';
+      if (flop > 0) {
+        flop -= dt;
+        const w = flop > 0 ? Math.sin(flop * 28) : 0;
+        host.setHeld?.(Math.abs(w) < 0.25 ? held.flat : held.flex[w < -0.6 ? 0 : w < 0 ? 1 : w < 0.6 ? 2 : 3], mode);
+      }
+      if (Math.random() < dt * 5) { const b = host.heldBox; if (b) fv.sparkle((b[0] + b[2]) / 2, (b[1] + b[3]) / 2, 1, 14); }
+      // once the bounce has settled and the fish is still: click
+      if (showT > 1 && !photo && flop <= 0) void snapPhoto();
     };
     await sleep(0.35, show);
     const meta = `<span>${len} cm</span><span class="st">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</span>${isNew ? '<span class="bd new">NEW!</span>' : ''}${fish.rare ? '<span class="bd rare">RARE</span>' : ''}`;
     const banner = showBanner(fishIcon(fish.id), 'I caught a', fish.name, fish.pun, meta);
-    catchPhotos(fish, len, !!louse);
-    audio.play('shutter', { vol: 0.35 });
     inp.clear();
     const waitBanner = (b: ReturnType<typeof showBanner>) => loop(dt => {
       show(dt);
@@ -538,27 +588,35 @@ export async function goFishing(host: FishingHost, o: FishOpts = {}): Promise<Fi
       return true;
     });
     await waitBanner(banner);
+    // skipped through before the shutter went: take it now
+    if (!cancelled) await snapPhoto();
     await banner.close();
     if (louse && !cancelled) {
       // ...wait. Something in its trunk is looking back.
       p.body.setExpr('surprised', 1.4);
       p.body.showEmote('question', 1.6);
       audio.play('emoteQuestion', { vol: 0.6 });
-      view.z = 2.9; view.y = hy + 26;
+      const lp = held.flat.louse ? host.heldPoint?.(held.flat.louse[0], held.flat.louse[1]) : null;
+      if (lp) { view.x = lp[0]; view.y = lp[1] + 4; } else view.y = hy + 26;
+      view.z = 2.9;
+      flop = 0; flopT = 9;
+      host.setHeld?.(held.flat, 'overhead');
       await sleep(0.9, show);
       audio.play('discover', { vol: 0.6 });
-      const [x2, y2] = p.body.headTop();
-      fv.sparkle(x2, y2 - 8, 10, 10);
+      const lp2 = held.flat.louse ? host.heldPoint?.(held.flat.louse[0], held.flat.louse[1]) : null;
+      if (lp2) { fv.sparkle(lp2[0], lp2[1], 10, 8); void lousePhoto([lp2[0] - 4, lp2[1] - 4, lp2[0] + 4, lp2[1] + 4]); }
       const b2 = showBanner(louseIcon(32), 'Wait… I found a', 'Snout Louse', 'That’s snot what I expected!', '<span>A parasite, riding in its trunk</span><span class="bd new">PARASITE</span>');
       inp.clear();
       await waitBanner(b2);
       await b2.close();
     }
-    // settle: back to holding it at the chest
+    // settle: lower it to shoulder height, still in the one hand
     view.spring = 0;
     view.z = 1.6;
-    p.poseOverride = 'fishShow';
-    host.setHeld?.(heldSprite(fish, len, 0, !!louse), 'chest');
+    view.x = p.x; view.y = hy + 34;
+    p.poseOverride = 'fishHold';
+    p.poseFrame = null;
+    host.setHeld?.(held.flat, 'chest');
     keep = !!o.keepHeld && !cancelled;
     await sleep(0.25, tick);
     return result;

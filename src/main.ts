@@ -93,6 +93,15 @@ async function boot() {
       (window as unknown as { __fish?: unknown }).__fish = c ? { fish: c.fish.id, len: c.len, stars: c.stars, parasite: c.parasite ?? null } : null;
       return c;
     },
+    /** check the catch hold: Mori holds a fish up in one hand (mode 'overhead' = raised, 'chest' = shoulder height; null to put it down) */
+    hold: async (id: string | null = 'snoutbass', len = 47, mode: 'chest' | 'overhead' = 'chest', louse = false, atStern = false) => {
+      const s = game.scene as unknown as { player: { x: number; y: number; poseOverride: string | null }; setHeld?(spr: unknown, mode?: string): void; snapCamera?(): void };
+      const { FISH_BY_ID, holdSprite } = await import('./ui/v4/fishing');
+      if (atStern) { const { SPOTS } = await import('./art/ship5'); s.player.x = SPOTS.fishing[0] + 8; s.player.y = SPOTS.fishing[1]; s.snapCamera?.(); }
+      if (!id || !FISH_BY_ID[id]) { s.setHeld?.(null); s.player.poseOverride = null; return; }
+      s.player.poseOverride = mode === 'overhead' ? 'fishRaise' : 'fishHold';
+      s.setHeld?.(holdSprite(FISH_BY_ID[id], len, louse), mode);
+    },
     /** skip the cast: a fish of this species is already on the line, straight into the fight in the wide view */
     fishFight: async (id = 'snoutbass') => (window as unknown as { zl: { fish(o: object): Promise<unknown> } }).zl.fish({ fish: id, skipTo: 'fight' }),
     steady: async () => (await import('./ui/v6/camp')).holdSteady('Hold the tent pole steady', 'Press <span class="key">Space</span> as the pole comes upright. Three pegs!'),

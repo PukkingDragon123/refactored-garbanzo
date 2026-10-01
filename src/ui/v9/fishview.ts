@@ -1,9 +1,13 @@
 // V9 fishing, the wide view off the stern: everything the fishing minigame draws into the world
 // (on the ship's fishing layer, in front of the sea bands) and the life under the water.
 //
-//  - the sea in cross-section below the surface line: sunlit turquoise just under the surface
-//    deepening to navy, slanting light shafts, drifting motes, the Kittiwake's keel, rudder and
-//    propeller seen through the water, and a dim seabed of sand, rock and swaying kelp far below
+//  - the open ocean in cross-section below the surface line, no bottom in sight: sunlit turquoise
+//    just under the surface falling away into blue-black, god rays, plankton and marine snow drifting
+//    aft in three parallax depths, faint far-off life (a bait ball, jellyfish, now and then a big
+//    shape passing deep), the Kittiwake's keel, rudder and spinning propeller through the water
+//  - the boat is under way: the prop wash and a trail of bubbles stream aft from the propeller and
+//    along the keel, foam trails off the stern on the surface, crests break into whitecaps, spray
+//    and wind streaks blow aft (the gulls and shearwaters round the boat are the ship's own sea life)
 //  - fish shadows: dark translucent silhouettes of the actual species (a snout bass's trunk, a
 //    puffer's ball, a kahawai's sail) at their true size, cruising at their own depths. Bigger,
 //    rarer fish keep further out and deeper. They notice the bait, turn, approach, hover, peck at
@@ -21,7 +25,7 @@ import { local, A } from '../../game/assets';
 import { PixelBuffer } from '../../art/pixel';
 import { hex, rgba } from '../../art/color';
 import { fishShadow, fishSide } from '../../art/v9/fish';
-import { fbm1, hash2 } from '../../core/math';
+import { hash2 } from '../../core/math';
 import type { FishDef } from '../v4/fishing';
 import { PX_M } from '../v6/fishfight';
 
@@ -54,7 +58,18 @@ export interface ViewHost {
   hullLine?(): [number, number][];
   /** draw the hull below the waterline, tinted */
   drawHullUnder?(r: Renderer, color: number): void;
+  /** boat speed through the water, px/s (the water streams past toward -x) */
+  cruise?(): number;
+  /** the running gear in world space: propeller hub, where the stern meets the water, sample points along the keel */
+  gear?(): { prop: [number, number]; stern: [number, number]; keel: [number, number][] };
 }
+
+/** a bubble of the prop wash / keel trail */
+interface Wake { x: number; y: number; vx: number; vy: number; life: number; max: number; s: number }
+/** foam floating on the surface, drifting aft */
+interface Foam { x: number; life: number; max: number; w: number; seed: number }
+interface Streak { x: number; y: number; len: number; v: number; life: number; max: number }
+interface Jelly { x: number; y: number; s: number; ph: number; hue: number }
 
 interface Drop { x: number; y: number; vx: number; vy: number; life: number; c: number; s: number; g: number }
 interface Ring { x: number; r: number; life: number; max: number }
@@ -64,7 +79,9 @@ const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 const col = (h: number, a = 1) => packColor(((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255, a);
 
 // ------------------------------------------------------------------ baked textures
-const WATER_STOPS: [number, number][] = [[0, 0x6cc2de], [5, 0x4aa8d0], [18, 0x3590c2], [55, 0x2878b0], [110, 0x1f6298], [180, 0x19508a], [250, 0x144272], [330, 0x10365e], [480, 0x0b2748]];
+// open ocean: bright just under the surface, then down through blue into blue-black (no bottom)
+const WATER_STOPS: [number, number][] = [[0, 0x74cae2], [5, 0x4aaad2], [18, 0x3294c4], [50, 0x2478b0], [95, 0x1a5e96], [145, 0x124678], [190, 0x0b305a], [235, 0x07203f], [275, 0x04132a], [330, 0x030b1a], [480, 0x02070f]];
+const DEEP = 0x02070f;
 const WATER_H = 480;
 function waterColor(d: number): [number, number, number] {
   let i = 0;
@@ -151,7 +168,17 @@ export class FishView {
   private drops: Drop[] = [];
   private rings: Ring[] = [];
   private bubs: Bub[] = [];
+  /** drifting particles: z 0 far (tiny, slow) .. 1 near (big, fast, in front of the fish) */
   private motes: { x: number; y: number; z: number }[] = [];
+  private wake: Wake[] = [];
+  private foam: Foam[] = [];
+  private streaks: Streak[] = [];
+  private jellies: Jelly[] = [];
+  private school = { x: 0, y: 0, dir: -1 };
+  private bigOne: { x: number; y: number; v: number; t: number } | null = null;
+  private bigT = 18;
+  private gear: { prop: [number, number]; stern: [number, number]; keel: [number, number][] } | null = null;
+  private spawnAcc = { prop: 0, keel: 0, foam: 0, streak: 0, spray: 0 };
   private sparks: { x: number; y: number; t: number; life: number; s: number; vx: number; vy: number; c?: number; conf?: boolean; rot?: number }[] = [];
   private time = 0;
   private mask: { x: number[]; y: number[] } | null = null;
@@ -160,30 +187,15 @@ export class FishView {
 
   constructor(readonly host: ViewHost, level: number) {
     this.level = level;
-    for (let i = 0; i < 90; i++) this.motes.push({ x: Math.random(), y: Math.random(), z: Math.random() });
+    for (let i = 0; i < 150; i++) this.motes.push({ x: Math.random(), y: Math.random(), z: i < 90 ? Math.random() * 0.45 : i < 132 ? 0.45 + Math.random() * 0.4 : 0.88 + Math.random() * 0.12 });
+    for (let i = 0; i < 4; i++) this.jellies.push({ x: Math.random(), y: 50 + Math.random() * 170, s: 0.7 + Math.random() * 0.6, ph: Math.random() * 6, hue: Math.random() });
+    this.school = { x: Math.random(), y: level + 170 + Math.random() * 40, dir: -1 };
   }
 
   // ---------------------------------------------------------------- geometry
   surface(x: number) { return this.host.seaY(x); }
-  /** the seabed: sand in long dunes with rocky outcrops */
-  bed(x: number) { return this.level + 238 + (fbm1(x * 0.006, 3, 5) - 0.5) * 40 - this.rock(x); }
-  /** height of a rock outcrop at x (0 = open sand) */
-  rock(x: number) {
-    // reefs: patches of boulders, each a lumpy dome, big ones in the middle of a patch
-    const P = 260, c = Math.floor(x / P);
-    let h = 0;
-    for (let k = c - 1; k <= c + 1; k++) {
-      if (hash2(k, 3, 7) > 0.55) continue;
-      const pc = k * P + hash2(k, 4, 7) * 120, pw = 50 + hash2(k, 5, 7) * 70;
-      for (let j = 0; j < 5; j++) {
-        const cx = pc + (hash2(k, 10 + j, 7) - 0.5) * pw * 2, rw = 9 + hash2(k, 20 + j, 7) * 18;
-        const rh = (5 + hash2(k, 30 + j, 7) * 16) * (1 - Math.abs(cx - pc) / (pw * 1.4));
-        const d = (x - cx) / rw;
-        if (Math.abs(d) < 1 && rh > 0) h = Math.max(h, rh * Math.sqrt(1 - d * d) * (0.9 + (fbm1(x * 0.2, 2, 9 + j) - 0.5) * 0.3));
-      }
-    }
-    return Math.max(0, h);
-  }
+  /** how deep the fish go (there is no seabed in view, just the dark): an invisible floor */
+  bed(x: number) { void x; return this.level + 236; }
   private maskAt(x: number) {
     const m = this.mask;
     if (!m || x < m.x[0] || x > m.x[m.x.length - 1]) return -Infinity;
@@ -289,7 +301,72 @@ export class FishView {
     // the hooked fish breathes out a trail of bubbles when it fights
     const h = this.hooked;
     if (h && Math.random() < dt * (Math.hypot(h.vx, h.vy) > 30 ? 5 : 1.2)) this.bubble(h.x, h.y - h.px * 0.2, 1);
+    this.underway(dt);
   }
+
+  /** the boat is under way: prop wash, keel bubbles, foam off the stern, wind streaks, spray, far life */
+  private underway(dt: number) {
+    const flow = this.flow();
+    const g = this.gear = this.host.gear?.() ?? null;
+    const acc = this.spawnAcc;
+    if (g) {
+      // the propeller throws a jet of bubbles aft that slows to the water's speed and rises
+      acc.prop += dt * 100;
+      for (; acc.prop >= 1; acc.prop--) {
+        const a = (Math.random() - 0.5) * 0.9;
+        const v = 55 + Math.random() * 55;
+        this.wake.push({ x: g.prop[0] - 3, y: g.prop[1] + (Math.random() - 0.4) * 13, vx: -Math.cos(a) * v, vy: Math.sin(a) * v * 0.6, life: 0, max: 3 + Math.random() * 3, s: Math.random() < 0.32 ? 2 : 1 });
+      }
+      // a thin stream peeling off the keel and the turn of the bilge
+      acc.keel += dt * 9;
+      for (; acc.keel >= 1 && g.keel.length; acc.keel--) {
+        const [kx, ky] = g.keel[Math.floor(Math.random() * g.keel.length)];
+        this.wake.push({ x: kx, y: ky + 1, vx: -flow * (1.1 + Math.random() * 0.4), vy: -2 - Math.random() * 4, life: 0, max: 2 + Math.random() * 2, s: 1 });
+      }
+      // foam boiling up behind the stern, left on the surface to drift away aft
+      acc.foam += dt * 22;
+      for (; acc.foam >= 1; acc.foam--) this.foam.push({ x: g.stern[0] - Math.random() * 14, life: 0, max: 9 + Math.random() * 9, w: 2 + Math.random() * 5, seed: Math.random() * 1000 });
+      if (Math.random() < dt * 7) this.drops.push({ x: g.stern[0] - Math.random() * 10, y: this.surface(g.stern[0]) - 1, vx: -10 - Math.random() * 30, vy: -(14 + Math.random() * 26), life: 0.5 + Math.random() * 0.3, c: 0xf4fcff, s: 1, g: 160 });
+    }
+    for (let i = this.wake.length - 1; i >= 0; i--) {
+      const b = this.wake[i];
+      b.life += dt;
+      b.vx += (-flow - b.vx) * Math.min(1, dt * 1.7);
+      b.vy += (-3.5 - b.s * 2.5 - b.vy) * Math.min(1, dt * 1.1);
+      b.x += b.vx * dt + Math.sin(this.time * 6 + i * 1.7) * 6 * dt;
+      b.y += b.vy * dt;
+      if (b.life >= b.max || b.y < this.surface(b.x) + 1) {
+        if (b.life < b.max && Math.random() < 0.3) this.foam.push({ x: b.x, life: 0, max: 4 + Math.random() * 4, w: 1 + Math.random() * 2, seed: Math.random() * 1000 });
+        this.wake.splice(i, 1);
+      }
+    }
+    if (this.wake.length > 640) this.wake.splice(0, this.wake.length - 640);
+    for (let i = this.foam.length - 1; i >= 0; i--) {
+      const f = this.foam[i];
+      f.life += dt; f.x -= flow * dt; f.w += dt * 0.45;
+      if (f.life >= f.max || f.x < this.area.x0 - 120) this.foam.splice(i, 1);
+    }
+    // wind: streaks racing aft over the water, and spray torn off the crests
+    acc.streak += dt * 9;
+    for (; acc.streak >= 1; acc.streak--) {
+      const x = this.area.x0 - 60 + Math.random() * (this.area.x1 - this.area.x0 + 300);
+      this.streaks.push({ x, y: this.level - 6 - Math.pow(Math.random(), 1.6) * 150, len: 10 + Math.random() * 34, v: 120 + Math.random() * 110, life: 0, max: 0.5 + Math.random() * 0.7 });
+    }
+    for (let i = this.streaks.length - 1; i >= 0; i--) { const q = this.streaks[i]; q.life += dt; q.x -= q.v * dt; if (q.life >= q.max) this.streaks.splice(i, 1); }
+    acc.spray += dt * 2.2;
+    for (; acc.spray >= 1; acc.spray--) {
+      const x = this.area.x0 + Math.random() * (this.area.x1 - this.area.x0);
+      const y = this.surface(x);
+      if (y > this.surface(x - 4) || y > this.surface(x + 4)) continue;
+      for (let n = 0; n < 5; n++) this.drops.push({ x: x + (Math.random() - 0.5) * 5, y: y - 1, vx: -40 - Math.random() * 50, vy: -(12 + Math.random() * 30), life: 0.5 + Math.random() * 0.4, c: Math.random() < 0.6 ? 0xf4fcff : 0xd8f0f8, s: 1, g: 110 });
+    }
+    // far life drifts by (passive drifters go with the water, aft)
+    for (const j of this.jellies) { j.ph += dt * (1.3 + j.s * 0.3); j.y += Math.sin(j.ph) * dt * 1.5 - dt * 0.4; }
+    if (this.bigOne) { this.bigOne.x += this.bigOne.v * dt; this.bigOne.t += dt; if (this.bigOne.x < this.area.x0 - 400) this.bigOne = null; }
+    else if ((this.bigT -= dt) <= 0) { this.bigT = 30 + Math.random() * 30; this.bigOne = { x: this.area.x1 + 200, y: this.level + 200 + Math.random() * 50, v: -(16 + Math.random() * 10), t: 0 }; }
+  }
+  /** boat speed through the water (px/s, the water streams toward -x) */
+  private flow() { return Math.max(8, (this.host.cruise?.() ?? 18) * 1.6); }
 
   private think(s: Shade, dt: number, bait: FishView['bait'], busy: Shade | null) {
     const A = this.area;
@@ -436,14 +513,18 @@ export class FishView {
       this.sparks.push({ x, y, t: 0, life: 1.6 + Math.random() * 1.2, s: 1, vx: Math.cos(a) * v, vy: Math.sin(a) * v, c: C[i % C.length], conf: true, rot: Math.random() * 6 });
     }
   }
-  clearFx() { this.drops = []; this.rings = []; this.bubs = []; this.sparks = []; }
+  clearFx() { this.drops = []; this.rings = []; this.bubs = []; this.sparks = []; this.wake = []; this.foam = []; this.streaks = []; }
 
   // ---------------------------------------------------------------- drawing
   draw(r: Renderer) {
     const z = r.layerZoom, k = 1 / z;
-    const vx0 = r.visibleX0(4), vx1 = r.visibleX1(4), vy0 = r.wy(0) - 4, vy1 = r.wy(r.VH) + 4;
+    const vx0 = r.visibleX0(4), vx1 = r.visibleX1(4), vy1 = r.wy(r.VH) + 4;
     r.emissive(0.14);
-    if (this.under > 0.01) this.drawWater(r, vx0, vx1, vy0, vy1, k);
+    if (this.under > 0.01) {
+      this.drawWater(r, vx0, vx1, vy1, k);
+      this.drawSurface(r, vx0, vx1, k);
+      this.drawAir(r, k);
+    }
     if (this.aim) this.drawAim(r, k);
     this.drawLine(r, k);
     this.drawFx(r, k);
@@ -455,8 +536,8 @@ export class FishView {
     r.emissive();
   }
 
-  private drawWater(r: Renderer, vx0: number, vx1: number, vy0: number, vy1: number, k: number) {
-    const wf = waterFrame(), U = this.under, t = this.time;
+  private drawWater(r: Renderer, vx0: number, vx1: number, vy1: number, k: number) {
+    const wf = waterFrame(), U = this.under, t = this.time, flow = this.flow();
     const a = U >= 0.99 ? WHITE : packColor(1, 1, 1, U);
     const X0 = Math.floor(vx0 / 2) * 2;
     // the water column below the surface, anchored to the mean level so depth colour doesn't bob
@@ -467,30 +548,50 @@ export class FishView {
       const src = clamp(top - this.level, 0, WATER_H - 2);
       const h = Math.min(WATER_H - src, vy1 - top);
       r.drawSub(wf, 1, src, 1, h, X, top, 2, 1, a);
-      if (top + h < vy1) r.rect(X, top + h, 2, vy1 - top - h + 2, U >= 0.99 ? col(0x0b2748) : col(0x0b2748, U));
+      if (top + h < vy1) r.rect(X, top + h, 2, vy1 - top - h + 2, U >= 0.99 ? col(DEEP) : col(DEEP, U));
     }
-    // light shafts slanting down from the surface, slowly swaying
-    const sp = 150;
-    for (let i = Math.floor(vx0 / sp) - 1; i <= Math.ceil(vx1 / sp); i++) {
+    // god rays: broad slanting shafts fanning down from the surface, swaying and breathing
+    const sp = 96;
+    for (let i = Math.floor(vx0 / sp) - 2; i <= Math.ceil(vx1 / sp) + 1; i++) {
       const h1 = hash2(i, 1, 3), h2 = hash2(i, 2, 3);
-      if (h1 < 0.3) continue;
-      const x = i * sp + h2 * 80 + Math.sin(t * 0.21 + i) * 14;
-      const pulse = 0.6 + 0.4 * Math.sin(t * 0.37 + i * 1.7);
-      r.draw(A.shaft, x, this.surface(x) + 2, 1.4 + h1 * 1.6, 1.25, -0.32, packColor(0.75, 0.96, 1, 0.075 * pulse * U));
+      if (h1 < 0.22) continue;
+      const x = i * sp + h2 * 70 + Math.sin(t * 0.17 + i) * 16;
+      const pulse = 0.55 + 0.45 * Math.sin(t * (0.3 + h2 * 0.25) + i * 1.7);
+      const rot = -0.3 + (h2 - 0.5) * 0.12 + Math.sin(t * 0.13 + i) * 0.03;
+      r.fxDraw(A.shaft, x, this.surface(x) + 1, 0.9 + h1 * 2.2, 1.05 + h2 * 0.35, rot, packColor(0.6, 0.92, 1, 1), 0.13 * pulse * U);
     }
-    // motes drifting in the water (a box that follows the view)
-    const bw = vx1 - vx0, bh = vy1 - this.level;
-    for (const m of this.motes) {
-      const x = vx0 + ((m.x * bw + t * (2 + m.z * 3)) % bw + bw) % bw;
-      const y = this.level + 8 + ((m.y * bh + t * (1.2 + m.z * 2.5)) % bh);
-      if (y < this.surface(x) + 3 || y > this.bed(x)) continue;
-      const s = (m.z > 0.75 ? 1.5 : 1) * k;
-      r.rect(x, y, s, s, packColor(0.75, 0.92, 1, (0.18 + m.z * 0.3) * U));
-    }
-    // the seabed far below: sand dunes, rocks, kelp, lost in the blue
-    this.drawBed(r, vx0, vx1, vy1, k);
+    // far life, lost in the blue: a bait ball turning, jellyfish drifting past, now and then a big shape
+    this.drawFarLife(r, vx0, vx1, k, U);
+    // marine snow and plankton: far / mid layers drift aft behind the fish
+    this.drawMotes(r, vx0, vx1, vy1, k, U, false, flow);
     // the Kittiwake's keel, rudder and propeller through the water
-    this.host.drawHullUnder?.(r, packColor(0.5 * U + (1 - U), 0.68 * U + (1 - U), 0.8 * U + (1 - U), 1));
+    this.host.drawHullUnder?.(r, packColor(0.55 * U + (1 - U), 0.72 * U + (1 - U), 0.84 * U + (1 - U), 1));
+    if (this.gear) {
+      // the spinning prop: a blur of brass and a shimmer of cavitation round the tips
+      const [px, py] = this.gear.prop;
+      const ph = Math.floor(t * 30) % 3;
+      for (let j = -2; j <= 2; j++) r.rect(px - 1.5, py + j * 3 + (ph - 1), 4, 1, packColor(0.95, 0.85, 0.5, (0.22 + (j === 0 ? 0.2 : 0)) * U));
+      for (let n = 0; n < 4; n++) {
+        const an = t * 23 + n * 1.57;
+        r.rect(px - 2 + Math.cos(an) * 1.5, py + Math.sin(an) * 7, k * 2, k * 2, packColor(0.9, 0.98, 1, 0.5 * U));
+      }
+    }
+    // the wake: the prop wash streaming aft (a pale plume of churned water), bubbles rising and fading
+    if (this.gear) {
+      const [px, py] = this.gear.prop;
+      for (let i = 0; i < 6; i++) {
+        const d = i * 26 + ((t * flow * 0.8) % 26);
+        const al = (1 - d / 170) * (0.5 + 0.5 * Math.sin(t * 3 + i * 1.3));
+        r.fxDraw(A.glow, px - 10 - d, py - d * 0.12 + Math.sin(t * 2 + i) * 2, 0.35 + d * 0.006, 0.12 + d * 0.0015, 0, packColor(0.7, 0.95, 1, 1), 0.16 * al * U);
+      }
+    }
+    for (const b of this.wake) {
+      const u = b.life / b.max;
+      const al = (u < 0.08 ? u / 0.08 : 1 - (u - 0.08) / 0.92) * U;
+      const s = (b.s + u * 1.2) * k;
+      r.rect(b.x, b.y, s, s, packColor(0.8, 0.95, 1, 0.7 * al));
+      if (b.s > 1 || u < 0.35) r.rect(b.x, b.y, k, k, packColor(1, 1, 1, 0.9 * al));
+    }
     // fish shadows, deepest first
     const list = [...this.shades].sort((p, q) => q.y - p.y);
     for (const s of list) this.drawShade(r, s, U);
@@ -508,73 +609,129 @@ export class FishView {
       r.rect(b.x, b.y, s, s, packColor(0.85, 0.97, 1, 0.75 * U));
       if (b.s > 1) r.rect(b.x - k * 0.5, b.y - k * 0.5, k, k, packColor(1, 1, 1, 0.9 * U));
     }
+    // the near layer: big soft motes streaming past the camera, in front of everything
+    this.drawMotes(r, vx0, vx1, vy1, k, U, true, flow);
     // the underside of the surface: a bright meniscus line and a soft glow just below it
-    const X0b = Math.floor(vx0 / 2) * 2;
-    for (let X = X0b; X < vx1; X += 2) {
+    for (let X = X0; X < vx1; X += 2) {
       const ys = Math.round(this.surface(X + 1)) + 1;
       if (ys < this.maskAt(X + 1)) continue;
       r.rect(X, ys, 2, k, packColor(0.72, 0.93, 0.98, 0.7 * U));
       r.rect(X, ys + k, 2, 3 * k, packColor(0.6, 0.88, 0.96, 0.18 * U));
       // caustic flicker right under the surface
-      const c = Math.sin(X * 0.21 + t * 2.1) + Math.sin(X * 0.057 - t * 1.3);
+      const c = Math.sin((X + t * flow) * 0.21 + t * 1.2) + Math.sin((X + t * flow) * 0.057 - t * 0.7);
       if (c > 1.35) r.rect(X, ys + 5 * k + Math.sin(X * 0.4 + t) * 2, 2, k, packColor(0.8, 0.97, 1, 0.22 * U));
     }
   }
 
-  private drawBed(r: Renderer, vx0: number, vx1: number, vy1: number, k: number) {
-    const U = this.under, t = this.time;
-    const X0 = Math.floor(vx0 / 2) * 2;
-    // everything down here is seen through a lot of water: low contrast, pulled toward the deep blue
-    const fog = (cr: number, cg: number, cb: number, f: number, al = 1) => packColor(cr + (0.07 - cr) * f, cg + (0.2 - cg) * f, cb + (0.34 - cb) * f, al * U);
-    for (let X = X0; X < vx1; X += 2) {
-      const yb = this.bed(X + 1);
-      if (yb > vy1) continue;
-      const rk = this.rock(X + 1), top = Math.round(yb);
-      if (rk > 1) {
-        // a rock: lit top, darker flanks, a dark foot where it meets the sand
-        const slope = this.bed(X + 3) - this.bed(X - 1);
-        const litK = slope > 1.5 ? 0.35 : slope < -1.5 ? 0.75 : 0.55;
-        const body = Math.max(3, rk * 0.9);
-        r.rect(X, top, 2, 2, fog(0.4 * litK + 0.2, 0.46 * litK + 0.22, 0.44 * litK + 0.2, 0.5));
-        r.rect(X, top + 2, 2, body * 0.5, fog(0.3 * litK + 0.14, 0.36 * litK + 0.16, 0.36 * litK + 0.16, 0.55));
-        r.rect(X, top + 2 + body * 0.5, 2, body * 0.5, fog(0.2, 0.25, 0.27, 0.58));
-        r.rect(X, top + 2 + body, 2, vy1 - top, fog(0.3, 0.33, 0.32, 0.6));
-        if (hash2(X, 13, 2) < 0.08) r.rect(X, top + 3 + hash2(X, 14, 2) * rk * 0.5, 2, k, fog(0.6, 0.66, 0.6, 0.5));
+  private drawMotes(r: Renderer, vx0: number, vx1: number, vy1: number, k: number, U: number, near: boolean, flow: number) {
+    const t = this.time;
+    const bw = vx1 - vx0 + 40, bh = Math.max(40, vy1 - this.level);
+    for (const m of this.motes) {
+      if ((m.z >= 0.88) !== near) continue;
+      // nearer = faster past (parallax) and bigger; everything sinks a little
+      const v = flow * (0.35 + m.z * 2.4);
+      const x = vx0 - 20 + (((m.x * bw - t * v) % bw) + bw) % bw;
+      const y = this.level + 6 + (((m.y * bh + t * (0.8 + m.z * 1.6) + Math.sin(t * 0.7 + m.x * 40) * 3) % bh) + bh) % bh;
+      if (y < this.surface(x) + 3 || y < this.maskAt(x) + 2) continue;
+      const dep = clamp((y - this.level) / 260, 0, 1);
+      if (near) {
+        const s = (2.2 + (m.z - 0.88) * 14) * k;
+        r.rect(x - s, y - s * 0.5, s * 3, s * 2, packColor(0.7, 0.9, 1, 0.05 * U));
+        r.rect(x, y, s, s, packColor(0.8, 0.95, 1, (0.2 - dep * 0.08) * U));
+        // a streak trailing it: it is moving
+        r.rect(x + s, y + s * 0.3, s * 3, s * 0.4, packColor(0.8, 0.95, 1, 0.07 * U));
       } else {
-        // sand: a pale rim, faint ripples, darker below
-        r.rect(X, top, 2, 2, fog(0.62, 0.62, 0.52, 0.5));
-        r.rect(X, top + 2, 2, 5, fog(0.46, 0.48, 0.42, 0.55));
-        r.rect(X, top + 7, 2, vy1 - top, fog(0.3, 0.33, 0.32, 0.6));
-        if (Math.sin(X * 0.35 + fbm1(X * 0.02, 2, 3) * 6) > 0.85) r.rect(X, top + 3, 2, k, fog(0.6, 0.6, 0.5, 0.5));
-        if (hash2(X, 11, 2) < 0.05) r.rect(X, top + 2 + hash2(X, 12, 2) * 6, k * 2, k, fog(0.75, 0.72, 0.62, 0.45));
+        const s = (m.z > 0.6 ? 1.5 : 1) * k;
+        r.rect(x, y, s, s, packColor(0.7, 0.9, 1, (0.1 + m.z * 0.32) * (1 - dep * 0.55) * U));
       }
     }
-    // kelp: a stipe up from the rocks, long fronds streaming off it with the current
-    const cw = 52;
-    for (let i = Math.floor(vx0 / cw) - 2; i <= Math.ceil(vx1 / cw) + 1; i++) {
-      if (hash2(i, 21, 4) > 0.36) continue;
-      const bx = i * cw + hash2(i, 22, 4) * 40, yb = this.bed(bx) + 3;
-      if (yb - 190 > vy1) continue;
-      const H = 50 + hash2(i, 23, 4) * 130, ph = hash2(i, 24, 4) * 6;
-      const sh = 0.8 + hash2(i, 25, 4) * 0.35;
-      const cStem = fog(0.3 * sh, 0.36 * sh, 0.14 * sh, 0.42, 0.95);
-      const cLeaf = fog(0.36 * sh, 0.5 * sh, 0.18 * sh, 0.4, 0.9);
-      const cLit = fog(0.5 * sh, 0.64 * sh, 0.26 * sh, 0.4, 0.9);
-      const stipe = (u: number) => bx + Math.sin(u * 2.6 + t * 0.7 + ph) * 8 * u + Math.sin(t * 1.2 + ph + u * 4) * 2 * u + u * u * 10;
-      for (let s = 0; s < H; s += 1.5) {
-        const u = s / H;
-        r.rect(stipe(u) - 1, yb - s, 2.5, 2, cStem);
+  }
+
+  private drawFarLife(r: Renderer, vx0: number, vx1: number, k: number, U: number) {
+    const t = this.time, flow = this.flow();
+    const span = vx1 - vx0 + 160;
+    // a bait ball of little fish turning slowly, deep down, now and then flashing silver
+    const sc = this.school;
+    const cx = vx0 - 80 + (((sc.x * span - t * flow * 0.25) % span) + span) % span, cy = sc.y + Math.sin(t * 0.21) * 10;
+    for (let i = 0; i < 46; i++) {
+      const an = i * 2.39996 + t * (0.5 + (i % 3) * 0.08) * (i % 2 ? 1 : 0.9);
+      const rr = 5 + (i % 9) * 2.2 + Math.sin(t * 0.8 + i) * 1.5;
+      const x = cx + Math.cos(an) * rr * 1.6, y = cy + Math.sin(an) * rr * 0.75;
+      const flash = Math.sin(an * 2 + t * 3) > 0.93;
+      r.rect(x, y, 2 * k, k, flash ? packColor(0.75, 0.9, 1, 0.45 * U) : packColor(0.03, 0.1, 0.2, 0.5 * U));
+    }
+    // jellyfish: pale bells pulsing, trailing tentacles, carried aft past the boat
+    for (const j of this.jellies) {
+      const x = vx0 - 60 + (((j.x * span - t * flow * 0.8) % span) + span) % span;
+      const y = this.level + j.y;
+      const pul = Math.max(0, Math.sin(j.ph));
+      const w = (6 + pul * 1.6) * j.s, hgt = (4 - pul * 0.8) * j.s;
+      const depth = clamp(j.y / 240, 0, 1);
+      const al = (0.42 - depth * 0.2) * U;
+      const cr = 0.85 + j.hue * 0.1, cg = 0.7 + (1 - j.hue) * 0.2, cb = 1;
+      r.fxDraw(A.glow, x, y, 0.06 * j.s, 0.05 * j.s, 0, packColor(cr, cg, cb, 1), 0.25 * al);
+      for (let row = 0; row < hgt; row += k) {
+        const ww = w * Math.sqrt(Math.max(0, 1 - Math.pow(1 - row / hgt, 2)));
+        r.rect(x - ww / 2, y - hgt + row, ww, k, packColor(cr, cg, cb, al * (row < k * 1.5 ? 1.2 : 0.7)));
       }
-      for (let s = 8; s < H; s += 9 + hash2(i, 26, 4) * 4) {
-        const u = s / H, x = stipe(u), y = yb - s;
-        const side = hash2(i, Math.floor(s), 5) < 0.75 ? 1 : -1, bl = 12 + hash2(i, Math.floor(s), 6) * 14 * (1 - u * 0.5);
-        for (let j = 0; j < bl; j += 1.2) {
-          const v = j / bl;
-          const wv = Math.sin(t * 1.5 + j * 0.3 + ph + s * 0.2) * 2.4 * v;
-          const bw = 3.2 * Math.sin(Math.PI * Math.min(1, v * 1.1 + 0.08));
-          r.rect(x + side * j * 0.95, y - j * 0.42 + wv - bw * 0.5, 1.5, bw, v < 0.35 ? cLit : cLeaf);
+      for (let n = 0; n < 4; n++) {
+        const tx0 = x - w * 0.36 + n * w * 0.24;
+        for (let l = 0; l < 12 * j.s; l += 1.2) {
+          const sw = Math.sin(t * 1.6 + l * 0.35 + n + j.ph * 0.5) * l * 0.12;
+          r.rect(tx0 + sw + l * 0.18, y + l, k, k, packColor(cr, cg, cb, al * 0.5 * (1 - l / (13 * j.s))));
         }
       }
+    }
+    // something big, cruising past in the deep (and gone again)
+    const B = this.bigOne;
+    if (B) {
+      const fr = shadowsOf('spinnaker', 150);
+      const fade = clamp(B.t / 4, 0, 1);
+      r.draw(fr[[0, 1, 2, 3, 4, 3, 2, 1][Math.floor(B.t * 3) % 8]], B.x, B.y + Math.sin(B.t * 0.3) * 6, -1, 1, 0, packColor(0.01, 0.05, 0.12, 0.3 * fade * U));
+    }
+  }
+
+  /** the surface seen from the side: whitecaps on the crests, the foam of the wake trailing aft */
+  private drawSurface(r: Renderer, vx0: number, vx1: number, k: number) {
+    const U = this.under, t = this.time;
+    const X0 = Math.floor(vx0 / 2) * 2;
+    // whitecaps: foam riding on each crest, broken and flickering, a lick of spume down its back
+    for (let X = X0; X < vx1; X += 2) {
+      const y = this.surface(X + 1);
+      if (y < this.maskAt(X + 1)) continue;
+      const yl = this.surface(X - 7), yr = this.surface(X + 9);
+      if (!(y < yl - 0.25 && y < yr - 0.25)) continue;
+      const n = hash2(Math.floor((X + t * 7) / 4), Math.floor(t * 3), 9);
+      r.rect(X - 2, y - 1.4, 6, 1.6, packColor(1, 1, 1, (0.55 + n * 0.3) * U));
+      r.rect(X + 4, y - 0.6, 5, 1.1, packColor(0.92, 0.98, 1, 0.45 * U));
+      if (n > 0.5) r.rect(X - 6, y - 0.2, 4, 1, packColor(0.92, 0.98, 1, 0.35 * U));
+    }
+    // the wake's foam: lacy white patches on the surface, thinning out and breaking up behind the boat
+    for (const f of this.foam) {
+      const u = f.life / f.max;
+      const al = (u < 0.05 ? u / 0.05 : 1 - u) * U;
+      if (al <= 0.01) continue;
+      const y = this.surface(f.x);
+      if (y < this.maskAt(f.x)) continue;
+      const n = Math.max(2, Math.round(f.w));
+      for (let i = 0; i < n; i++) {
+        if (hash2(Math.floor(f.seed) + i, Math.floor(u * 6), 4) < 0.25 + u * 0.5) continue;
+        const dy = (hash2(Math.floor(f.seed), i, 5) - 0.7) * 2.4;
+        r.rect(f.x + i - n / 2, y + dy - 0.6, 1.2, 1.4, packColor(0.97, 1, 1, 0.9 * al));
+      }
+      // a little of it pulled under the surface
+      if (u < 0.5) r.rect(f.x - n / 2, y + 2, n, k, packColor(0.85, 0.97, 1, 0.25 * al));
+    }
+  }
+
+  /** above the water: wind streaks racing aft over the waves */
+  private drawAir(r: Renderer, k: number) {
+    const U = this.under;
+    for (const q of this.streaks) {
+      const u = q.life / q.max;
+      const al = Math.sin(u * Math.PI) * 0.4 * U;
+      r.rect(q.x, q.y, q.len, k, packColor(1, 1, 1, al));
+      r.rect(q.x + q.len * 0.2, q.y + k, q.len * 0.5, k, packColor(1, 1, 1, al * 0.4));
     }
   }
 
@@ -586,11 +743,14 @@ export class FishView {
     const surf = this.surface(s.x);
     const depth = clamp((s.y - surf) / Math.max(40, this.bed(s.x) - surf), 0, 1);
     const hooked = s === this.hooked;
-    // deeper shadows are fainter and bluer; the hooked fish is darker and sharper
-    const a = (hooked ? 0.9 : 0.66 - depth * 0.22) * s.alpha * U;
+    // dark silhouettes against the blue, a little softer deep down; the hooked fish darkest. A faint
+    // sky-lit rim along the back keeps the deep ones readable against the blue-black
+    const a = (hooked ? 0.92 : 0.74 - depth * 0.12) * s.alpha * U;
     const sx = Math.abs(s.face) < 0.16 ? 0.16 * Math.sign(s.face || 1) : s.face;
     const pitch = clamp(Math.atan2(s.vy, Math.abs(s.vx) + 6) * 0.55, -0.5, 0.5) * Math.sign(s.face || 1);
-    r.draw(fr[fi], s.x, s.y, sx, 1, pitch, packColor(0.02 + depth * 0.04, 0.07 + depth * 0.06, 0.16 + depth * 0.08, a));
+    const k = 1 / Math.max(0.2, r.layerZoom);
+    r.draw(fr[fi], s.x, s.y - k, sx, 1, pitch, packColor(0.45, 0.72, 0.9, (0.1 + depth * 0.22) * s.alpha * U));
+    r.draw(fr[fi], s.x, s.y, sx, 1, pitch, packColor(0.01 + depth * 0.01, 0.04 + depth * 0.02, 0.1 + depth * 0.02, a));
     // the lantern cod's lure shows through the water as a blue spark
     if (s.def.id === 'lanterncod') {
       const [mx, my] = this.mouth(s);
