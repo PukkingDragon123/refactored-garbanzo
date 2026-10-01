@@ -1,8 +1,8 @@
-// V4 island dressing: everything static along the shoreline. Offshore: sea stacks, the reef and the
-// bow of the Kittiwake stuck on it. Behind the beach: the western headland, the long cliff with the
-// sea cave, the forest walls of the bush track. On the sand: leaning palms, rocks, driftwood and
+// V4 island dressing: everything static along the shoreline. Offshore: sea stacks and the reef. Behind
+// the beach: the long cliff with the sea cave, the forest walls of the bush track. On the sand: leaning palms, rocks, driftwood and
 // wreckage. In front of the camera: dune grass, flax, logs, pōhutukawa branches, big ferns, and the
-// rock arch that frames the cave.
+// rock arch that frames the cave. The west half (the rocks, the wreck, the landing beach and the palm
+// grove) is dressed by v9/beach.ts, which prunes this file's props west of its WEST_END.
 
 import type { Frame } from '../../gfx/renderer';
 import { packColor } from '../../gfx/renderer';
@@ -20,7 +20,8 @@ import { foreground } from '../../art/jungle-fg';
 import type { PixelBuffer } from '../../art/pixel';
 import { Rng, clamp, smoothstep } from '../../core/math';
 import { ISL, SPOT, groundY, zoneAt } from '../../art/island4/layout';
-import { paintSeaStack, paintReef, paintBowWreck, paintCliff, paintDuneGrass } from '../../art/island4/scenery';
+import { paintSeaStack, paintReef, paintCliff, paintDuneGrass } from '../../art/island4/scenery';
+import { dressWest } from '../v9/beach';
 import type { IslandScene4 } from './island';
 import { layerY } from './island';
 import { dressEast } from '../v9/east';
@@ -51,8 +52,6 @@ export function dressIsland(s: IslandScene4, L: IsleLayers) {
       for (let i = 0; i < 6; i++) rr.fxDraw(A.dot2, lx + 4 + i * (b.w - 8) / 6, ry - 3 - k * 5 - (i % 3), 2, 1, 0, packColor(1, 1, 1, 1), (k - 0.3) * 1.6, false);
     }));
   }
-  const bow = bigFrame(r, paintBowWreck(), 59, 68);
-  L.mid.add(new Prop(bow, 1600 * pm, midY - 2, 2, { sx: 0.62, sy: 0.62 }));
 
   // ---------------------------------------------------------------- forest walls behind the bush track
   const forestL: [number, number, 1 | 2 | 3][] = [[0.35, 0.3, 1], [0.6, 0.16, 2], [0.82, 0.06, 3]];
@@ -80,9 +79,7 @@ export function dressIsland(s: IslandScene4, L: IsleLayers) {
   // ---------------------------------------------------------------- behind the beach (p .9)
   const pb = L.back.p;
   const backY = layerY(pb, 216);
-  const west = paintCliff(560, 250, 7, { right: 480 });
-  L.back.add(new Prop(bigFrame(r, west, 0, west.h), -60, backY + 4, 0));
-  // (the long cliff with the sea cave and the cove is painted by v9/east.ts)
+  // (the west headland is painted by v9/beach.ts, the long cliff with the sea cave and the cove by v9/east.ts)
   // boulders at the foot of the cliffs and around the west point
   for (const x of [120, 340, 520, 4620, 4760, 4880, 5580, 5700]) {
     const c = sprite(`boulder:${x % 3}`, () => deadwood('rock', 60 + (x % 3), 40 + (x % 3) * 12));
@@ -216,7 +213,8 @@ export function dressIsland(s: IslandScene4, L: IsleLayers) {
   }
   // (the sea cave's rock arch is v9/east.ts too)
   void clamp; void smoothstep;
-  // V9: the east half (x >= 3300) is hand-dressed in v9/east.ts
+  // V9: the east half (x >= 3300) is hand-dressed in v9/east.ts, the west half in v9/beach.ts
   dressEast(s, L);
+  dressWest(s, { mid: L.mid, back: L.back, main: L.main, front: L.front });
 }
 

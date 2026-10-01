@@ -1,7 +1,6 @@
 // V4 island scenery: sky gradients for every time of the day, the far archipelago, the sea bands,
-// the reef with the bow of the Kittiwake stuck on it, sea stacks, headland cliffs, the sea cave (back
-// wall and the rock arch in front of the camera), dappled leaf-shadow cookies and overhanging
-// pōhutukawa branches.
+// the reef, sea stacks, headland cliffs, the sea cave (back wall and the rock arch in front of the
+// camera), dappled leaf-shadow cookies and overhanging pōhutukawa branches.
 
 import { PixelBuffer } from '../pixel';
 import { hex, mix, shade, withAlpha, C } from '../color';
@@ -137,44 +136,6 @@ export function paintReef(w: number, h: number, seed: number): PixelBuffer {
       const d = y - top;
       b.data[y * w + x] = d < 1.5 ? hex('#8a8070') : d < 4 ? hex('#4e4640') : hex('#3a3430');
     }
-  }
-  return b;
-}
-
-/** the bow half of the Kittiwake, stuck nose-up on the reef */
-export function paintBowWreck(): PixelBuffer {
-  const W = 118, H = 70;
-  const b = new PixelBuffer(W, H);
-  const set = (x: number, y: number, c: C) => { x = Math.round(x); y = Math.round(y); if (x >= 0 && y >= 0 && x < W && y < H) b.data[y * W + x] = c; };
-  // hull: rising from a broken stern edge at the left to the bow high at the right
-  for (let i = 0; i < 96; i++) {
-    const x = 10 + i;
-    const deck = H - 26 - i * 0.34 - Math.max(0, i - 70) * 0.5;
-    const keel = H - 8 - i * 0.2 + Math.max(0, i - 74) * 0.6;
-    for (let y = Math.round(deck); y <= keel; y++) {
-      const d = y - deck, fb = keel - y;
-      let c = d < 1 ? hex('#8a847a') : hex('#e2dccc');
-      if (fb < 3) c = fb < 1.5 ? hex('#5a2620') : hex('#a8402e');
-      else if (fb < 4) c = hex('#2a3a5a');
-      if (i < 5 && (y * 7 + i) % 3 === 0) c = hex('#3a3430'); // torn edge
-      set(x, y, c);
-    }
-  }
-  // name, portholes
-  for (let k = 0; k < 12; k++) if (k % 3 !== 2) set(80 + k, H - 44 - k * 0.12, hex('#2e3c5c'));
-  for (const x of [34, 52]) { set(x, H - 30 - (x - 10) * 0.3, hex('#3a5a70')); set(x + 1, H - 30 - (x - 10) * 0.3, hex('#3a5a70')); }
-  // bridge deckhouse, leaning, windows dark
-  for (let y = 0; y < 18; y++) for (let x = 0; x < 26; x++) {
-    const X = 28 + x + y * 0.25, Y = H - 34 - (x + 18) * 0.34 - y;
-    set(X, Y, y > 15 ? hex('#8a847a') : y >= 6 && y <= 10 && x % 7 > 1 && x % 7 < 6 ? hex('#2a3a48') : hex('#d8d0be'));
-  }
-  // snapped mast and a dangling pennant
-  for (let k = 0; k < 20; k++) set(46 + k * 0.2, H - 52 - k, hex('#4a4440'));
-  for (let k = 0; k < 5; k++) set(50 + k, H - 70 + 1 + (k % 2), hex('#c8402e'));
-  // rocks it sits on
-  for (let x = 0; x < W; x++) {
-    const top = H - 6 - Math.max(0, fbm1(x / 12, 2, 8) - 0.3) * 10;
-    for (let y = Math.round(top); y < H; y++) set(x, y, y - top < 1.5 ? hex('#8a8070') : hex('#3e3834'));
   }
   return b;
 }
@@ -381,20 +342,25 @@ export function paintPohutukawa(seed: number, w = 260, h = 120): Sprite {
 
 /** marram / spinifex dune grass tuft with sand at its base (anchored bottom-centre) */
 export function paintDuneGrass(seed: number, w = 60, h = 44): Sprite {
-  const b = new PixelBuffer(w, h);
+  // drawn on a canvas with margins (leaning blades reach past w) and trimmed, so no blade is cut off
+  const M = Math.ceil(h * 0.5);
+  const W = w + M * 2;
+  const b = new PixelBuffer(W, h);
   const rng = new Rng(seed);
   for (let i = 0; i < 26; i++) {
-    const x0 = w / 2 + rng.range(-w * 0.3, w * 0.3), lean = rng.range(-0.8, 0.8), len = rng.range(h * 0.45, h * 0.98);
+    const x0 = M + w / 2 + rng.range(-w * 0.3, w * 0.3), lean = rng.range(-0.8, 0.8), len = rng.range(h * 0.45, h * 0.98);
     const c = rng.pick([hex('#9aa25a'), hex('#b8b86a'), hex('#7e8a46'), hex('#d0c880')]);
     for (let k = 0; k < len; k++) {
       const t = k / len;
       const x = Math.round(x0 + lean * t * t * len * 0.6), y = h - 1 - k;
-      if (x >= 0 && x < w && y >= 0) b.data[y * w + x] = t > 0.8 ? shade(c, 0.12) : c;
+      if (x >= 0 && x < W && y >= 0) b.data[y * W + x] = t > 0.8 ? shade(c, 0.12) : c;
     }
   }
+  // the little sand mound the tuft grows out of, tapering to nothing at both ends
   for (let x = 0; x < w; x++) {
     const hh = Math.max(0, Math.sin((x / w) * Math.PI) * 5 - 1);
-    for (let y = h - Math.round(hh); y < h; y++) b.data[y * w + x] = y === h - Math.round(hh) ? hex('#f0d8a2') : hex('#e0c088');
+    for (let y = h - Math.round(hh); y < h; y++) b.data[y * W + x + M] = y === h - Math.round(hh) ? hex('#f0d8a2') : hex('#e0c088');
   }
-  return { buf: b, ax: w / 2, ay: h - 1 };
+  const t = b.trim(0);
+  return { buf: t.buf, ax: M + w / 2 - t.ox, ay: h - 1 - t.oy };
 }

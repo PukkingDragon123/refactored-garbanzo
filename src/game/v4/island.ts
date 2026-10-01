@@ -21,6 +21,7 @@ import { paintWreck, WreckArt } from '../../art/island4/wreck';
 import { paintFarIslands } from '../../art/island4/scenery';
 import { DayClock, envAt, lightKAt, IsleSky, CloudDeck, SeaStrip, Breakers, Swash, LeafShadows, GodRays, MistBank, BlowingSand, Glowworms } from './islefx';
 import { ChunkBuddy } from './buddy';
+import { SandFX } from '../v9/sand';
 import { dressIsland } from './isleprops';
 
 export interface IsleHooks { enter(): Promise<void>; update(dt: number): void }
@@ -134,6 +135,7 @@ export class IslandScene4 extends FieldScene {
     this.addGround();
     this.addWreck();
     main.add(this.swash);
+    main.add(new SandFX(this));
     this.leaf = new LeafShadows(clock);
     main.add(this.leaf);
     main.add(new GodRays(clock, main, [[2700, 3240], [5960, 6900]]));
