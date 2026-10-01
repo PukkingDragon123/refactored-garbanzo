@@ -216,7 +216,7 @@ export class Hud2 {
       const pr = st?.progress?.();
       key = `${q.id}:${i}:${pr ? pr.join('/') : ''}`;
       if (key !== this.lastQuestKey || force) {
-        const flash = this.lastQuestKey !== '' && !this.lastQuestKey.startsWith(`${q.id}:${i}:`);
+        // a finished step or a new quest just updates the tracker quietly (no stamped banner, no flash)
         const esc = (t: string) => t.replace(/</g, '&lt;');
         const row = (k: number, cls: string, mark: string) => {
           const x = q.steps[k];
@@ -231,9 +231,6 @@ export class Hud2 {
           + (i > 0 ? row(i - 1, 'done', '✔') : '')
           + (st ? row(i, 'cur', '▶') : `<div class="st cur"><i>✔</i><span>Complete!</span><span></span></div>`)
           + row(i + 1, 'next', '○');
-        if (flash && this.lastQuestKey.startsWith(`${q.id}:`)) this.banner('OBJECTIVE COMPLETE', 'New objective added');
-        else if (flash) this.banner(q.main ? 'NEW STORY QUEST' : 'NEW QUEST', q.title);
-        if (flash) { this.quest.classList.remove('flash'); void this.quest.offsetWidth; this.quest.classList.add('flash'); }
       }
     }
     this.quest.style.display = q ? '' : 'none';
