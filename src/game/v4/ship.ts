@@ -18,7 +18,7 @@ import { paintShip4, S4, LAMPS, WINDOWS, SPOTS, LADDERS, roomAt, ShipSprite, Shi
 import { paintBoatParts } from '../../art/boat';
 import { PixelBuffer } from '../../art/pixel';
 import { hex } from '../../art/color';
-import { fishTank } from '../../art/v9/fish';
+import { fishTank, gripOf } from '../../art/v9/fish';
 import type { Actor } from '../../world/actor';
 import { ChunkBuddy } from './buddy';
 import type { Interactable } from '../../world/npc';
@@ -70,7 +70,7 @@ export class ShipScene4 extends FieldScene {
   /** fishing effects in world space (cast arc preview, ripples, splashes): packed ABGR pixels */
   fishFx: { x: number; y: number; c: number }[] | null = null;
   /** a caught fish held up in Mori's hands (ABGR sprite facing right): across the chest or over his head */
-  held: { w: number; h: number; px: Uint32Array } | null = null;
+  held: { w: number; h: number; px: Uint32Array; grip?: [number, number] } | null = null;
   heldMode: 'chest' | 'overhead' = 'chest';
   /** the fishing minigame draws its world (underwater view, shadows, line, float) through this */
   fishDraw: ((r: Renderer) => void) | null = null;
@@ -382,7 +382,7 @@ export class ShipScene4 extends FieldScene {
   setFx(px: { x: number; y: number; c: number }[] | null) {
     this.fishFx = px;
   }
-  setHeld(spr: { w: number; h: number; px: Uint32Array } | null, mode: 'chest' | 'overhead' = 'chest') {
+  setHeld(spr: { w: number; h: number; px: Uint32Array; grip?: [number, number] } | null, mode: 'chest' | 'overhead' = 'chest') {
     this.held = spr;
     this.heldMode = mode;
   }
@@ -402,6 +402,25 @@ export class ShipScene4 extends FieldScene {
     r.pushTransform(PIVOT[0], PIVOT[1], this.rot, 0, this.bob);
     r.drawSub(f, 0, y0, f.w, f.h - y0, a.x, a.y + y0, 1, 1, color);
     r.popTransform();
+  }
+  /** boat speed through the water (px/s), for the fishing view's wake */
+  cruise() { return this.weather.cruise; }
+  private keelPts: [number, number][] | null = null;
+  /** the running gear in world space: the propeller hub, where the stern meets the water, and points along the keel */
+  gear(): { prop: [number, number]; stern: [number, number]; keel: [number, number][] } {
+    if (!this.keelPts) {
+      // the hull's lowest painted pixel, every 12 px from the skeg forward
+      const a = this.art.hull, b = a.buf, pts: [number, number][] = [];
+      for (let x = 70; x < 520; x += 12) {
+        const bx = x - a.x;
+        if (bx < 0 || bx >= b.w) continue;
+        let y = -1;
+        for (let yy = b.h - 1; yy >= 0; yy--) if (b.get(bx, yy) >>> 24) { y = yy; break; }
+        if (y >= 0 && y + a.y > S4.WATER + 3) pts.push([x, y + a.y]);
+      }
+      this.keelPts = pts;
+    }
+    return { prop: this.shipToWorld(61, 216), stern: this.shipToWorld(50, S4.WATER), keel: this.keelPts.map(([x, y]) => this.shipToWorld(x, y)) };
   }
   private tankFrame(id: string): Frame {
     const k = 'tank:' + id;
@@ -429,24 +448,60 @@ export class ShipScene4 extends FieldScene {
     row(2, 2, 0.95, 0.95, 0.92);
     if (b.fly <= 0) r.rect(X - 1, sy, 5, 1, packColor(1, 1, 1, 0.55));
   }
-  /** the catch, held up in Mori's hands */
+  /** the catch, held up in ONE of Mori's hands by the tail (head down, belly toward where he faces).
+   *  The sprite is anchored at its grip point (the narrow wrist of the tail) and hung from the fist:
+   *  plumb, or tilted out when it is too long to clear the deck. 'overhead' goes with the raised
+   *  "I caught it!" arm (pose fishRaise), 'chest' with the shoulder-height show-off (pose fishHold). */
   private drawHeld(r: Renderer) {
     const h = this.held;
+    this.heldBox = null;
+    this.heldXf = null;
     if (!h) return;
     const p = this.player;
     const hand = p.body.handPos();
     if (!hand) return;
-    // held across the chest in both hands, head toward where he's facing; or held up high over his head
-    const f = p.facing;
-    let x0 = Math.round(hand[0] - f * 3 - h.w / 2), y0 = Math.round(hand[1] - h.h * 0.6);
-    if (this.heldMode === 'overhead') {
-      const [tx, ty] = p.body.headTop();
-      x0 = Math.round(tx - h.w / 2); y0 = Math.round(Math.min(ty - 2, hand[1]) - h.h * 0.55);
+    const fr = this.heldFrame(h);
+    const f = p.facing >= 0 ? 1 : -1;
+    // the fist sits just past the wrist along the raised forearm
+    const gx = Math.round(hand[0] + f * HELD_FIST[0]), gy = Math.round(hand[1] + HELD_FIST[1]);
+    // hang plumb; tilt the head out (forward) when the fish would touch the deck
+    const L = fr.w - fr.ax, avail = p.y - 3 - gy;
+    let a = Math.PI / 2;
+    if (L > avail) a = Math.asin(Math.max(0.35, Math.min(1, avail / L)));
+    a += Math.sin(this.time * 2.3) * 0.03;
+    const rot = f * a;
+    r.draw(fr, gx, gy, f, 1, rot);
+    this.heldXf = { gx, gy, f, rot, ax: fr.ax, ay: fr.ay };
+    // where it ended up (ship-local corners → world AABB), for the catch photo
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const [u, v] of [[0, 0], [fr.w, 0], [fr.w, fr.h], [0, fr.h]]) {
+      const [wx, wy] = this.heldPoint(u, v)!;
+      x0 = Math.min(x0, wx); y0 = Math.min(y0, wy); x1 = Math.max(x1, wx); y1 = Math.max(y1, wy);
     }
-    for (let y = 0; y < h.h; y++) for (let x = 0; x < h.w; x++) {
-      const c = h.px[y * h.w + (f > 0 ? x : h.w - 1 - x)];
-      if (c >>> 24) r.rect(x0 + x, y0 + y, 1, 1, c);
-    }
+    this.heldBox = [x0, y0, x1, y1];
+  }
+  /** world AABB of the held catch as last drawn */
+  heldBox: [number, number, number, number] | null = null;
+  private heldXf: { gx: number; gy: number; f: number; rot: number; ax: number; ay: number } | null = null;
+  /** a point of the held sprite (sprite pixels, facing right) in world space, as last drawn */
+  heldPoint(u: number, v: number): [number, number] | null {
+    const X = this.heldXf;
+    if (!X) return null;
+    const c = Math.cos(X.rot), sn = Math.sin(X.rot);
+    const lx = (u - X.ax) * X.f, ly = v - X.ay;
+    return this.shipToWorld(X.gx + lx * c - ly * sn, X.gy + lx * sn + ly * c);
+  }
+  private heldFrames = new WeakMap<object, Frame>();
+  private heldN = 0;
+  private heldFrame(h: { w: number; h: number; px: Uint32Array; grip?: [number, number] }): Frame {
+    let fr = this.heldFrames.get(h);
+    if (fr) return fr;
+    const b = new PixelBuffer(h.w, h.h);
+    b.data.set(h.px);
+    const [gx, gy] = h.grip ?? gripOf(h);
+    fr = local.add('s4:held:' + this.heldN++, b, gx + 0.5, gy + 0.5);
+    this.heldFrames.set(h, fr);
+    return fr;
   }
 
   /** a new resident for the lab tank */
@@ -555,4 +610,6 @@ export class ShipScene4 extends FieldScene {
   }
 }
 
+/** fist centre relative to the wrist (handPos), facing right */
+const HELD_FIST: [number, number] = [0.5, -1.5];
 export { SPOTS, S4 };
