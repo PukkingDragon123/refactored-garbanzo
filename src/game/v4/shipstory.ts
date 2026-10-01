@@ -333,7 +333,7 @@ export class ShipStory {
       ]);
       this.round('joshu');
     } else if (s.phase === 'deck') {
-      await this.say([{ who: 'joshu', text: rand.pick(['Catch anything yet? Remember: patience, and a bit of bread on the hook when nobody’s looking.', 'That albatross has been following us since dawn. Good luck, that is.']), expr: 'happy' }]);
+      await this.say([{ who: 'joshu', text: rand.pick(['Catch anything yet? Remember: patience, and a bit of bread on the hook when nobody’s looking.', 'That vanebill’s been following us since dawn. Hear it whistlin’? Good luck, that is.']), expr: 'happy' }]);
     } else {
       await this.say([{ who: 'joshu', text: rand.pick(['Sea’s like glass. Makes me nervous.', 'You want to steer? Ha! Maybe when you can tie a bowline without looking it up.', 'Jenna’s mum used to say the sea keeps secrets. She was usually right.']), expr: 'neutral' }]);
     }
