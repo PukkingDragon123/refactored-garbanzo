@@ -198,6 +198,16 @@ const ICON_DRAW: Record<string, (g: CanvasRenderingContext2D) => void> = {
     g.fillStyle = bands(g, 11, 22, GOLD); rrect(g, 4, 11, 16, 11, 2); g.fill();
     R(g, 11, 14, 2, 4, '#7a4a10'); gloss(g, 4, 11, 16, 4, 0.4);
   },
+  cam: g => {
+    g.fillStyle = bands(g, 4, 8, CHROME); rrect(g, 7, 4, 8, 4, 1); g.fill();
+    g.fillStyle = bands(g, 7, 21, ['#5a6c80', '#3a4a5e', '#26323f', '#1a2430', '#2e3c4c']); rrect(g, 2, 7, 20, 14, 3); g.fill();
+    g.fillStyle = bands(g, 7, 11, CHROME); rrect(g, 2, 7, 20, 4, 2); g.fill();
+    orb(g, 12, 14, 5.6, CHROME, 0.25);
+    orb(g, 12, 14, 4, ['#e8fdff', '#7ae6ff', '#22b4e2', '#0a6d98', '#063e5e', '#46cff5'], 0.55);
+    E(g, 12, 14, 1.6, 1.6, '#04263c'); R(g, 10, 12, 2, 1, '#fff');
+    E(g, 18.5, 9.2, 1.4, 1.2, '#ff5a3a'); R(g, 18, 8, 1, 1, '#ffd0c0');
+    R(g, 4, 9, 3, 1, '#fff');
+  },
   pug: g => {
     E(g, 12, 13, 8.5, 7.8, (nx, ny) => (nx + ny < -0.8 ? '#f6dca8' : ny > 0.55 ? '#c49058' : '#e4b87c'));
     E(g, 4.8, 7, 2.6, 3, '#3e2c2a'); E(g, 19.2, 7, 2.6, 3, '#3e2c2a');

@@ -5,13 +5,17 @@
 // a trackpad for the pug cursor (see ../v7/aeroCursor). Keyboard: Esc closes (menus first, then
 // the lid), Tab / arrows move a focus glow, Enter or Space clicks.
 // Apps: Spreadsheets (seabird survey + temperature chart), Reports (the morning report: read the
-// data and fill it in), Photos, Discoveries (species log), Files (with Jenna's locked folder),
-// Plankton Sort and Bubble Pop (quick minigames) and a tiny terminal Jenna installed "for emergencies".
+// data and fill it in), Camera (import the real photos off the camera), Photos, Research Log (one page
+// per species documented by an uploaded photo; see ./moriResearch), Files (with Jenna's locked
+// folder), Plankton Sort and Bubble Pop (quick minigames) and a tiny terminal Jenna installed "for
+// emergencies". Field mode (the salvaged laptop on the island): no reports, a battery that drains.
 
 import { game } from '../../game/game';
 import { el } from '../ui';
 import { guardInput } from '../../core/input';
-import { rawPhotos } from '../../game/photos';
+import { pendingCount, freshCount } from '../../game/v9/research9';
+import { researchApps, OSCtx } from './moriResearch';
+import { RESEARCH_CSS } from '../v7/aeroResearchCss';
 import bliss from '../../assets/bliss.jpg';
 import { AERO_CSS } from '../v7/aeroCss';
 import { Spring, Fx, sfx, canvas, R, E, icon, cloudSprite, clamp, bubSprite } from '../v7/aeroFx';
@@ -118,8 +122,13 @@ interface Win {
 interface Pop { el: HTMLElement; anchor?: Element; onClose?: () => void }
 type MenuItem = [string, string | null, () => void] | '-';
 
-export async function openMoriOS(o: { report: boolean }): Promise<void> {
-  if (!styled) { document.head.appendChild(el('style', '', AERO_CSS)); styled = true; }
+export async function openMoriOS(o: { report: boolean; field?: boolean }): Promise<void> {
+  if (!styled) { document.head.appendChild(el('style', '', AERO_CSS + RESEARCH_CSS)); styled = true; }
+  const field = !!o.field;
+  if (field) o = { ...o, report: false };
+  // the salvaged laptop's battery: a little lower every time it's opened
+  const opens = field ? (game.save.vars['v9:lapOpens'] = (game.save.vars['v9:lapOpens'] ?? 0) + 1) : 0;
+  const batt = field ? Math.max(6, 71 - opens * 3) : 87;
   const wrap = el('div', 'mos-wrap');
   wrap.innerHTML = `<div class="mos-lap"><div class="mos-scr">
       <div class="mos-bg"><img alt="" draggable="false"></div>
@@ -127,9 +136,10 @@ export async function openMoriOS(o: { report: boolean }): Promise<void> {
       <div class="mos-flare f2"></div><div class="mos-flare f0"></div><div class="mos-flare f1"></div><div class="mos-flare f3"></div>
       <div class="mos-icons"></div><div class="mos-gad"></div><div class="mos-wins"></div>
       <div class="mos-bar"><div class="mos-orb ctl" title="Start"></div><div class="mos-tabs"></div>
-        <div class="mos-tray"><span class="wf" title="No internet: middle of the ocean">✕ Wi-Fi</span><span class="bt">▮▮▮ 87%</span><span class="clk"></span></div><div class="mos-peek ctl" title="Show desktop"></div></div>
+        <div class="mos-tray"><span class="cm ctl" title="Camera connected"></span><span class="wf" title="${field ? 'No internet: shipwrecked' : 'No internet: middle of the ocean'}">✕ Wi-Fi</span><span class="bt${batt < 25 ? ' lo' : ''}" title="${field ? 'Charged off the wreck’s battery. Mostly.' : 'Battery'}">${batt > 60 ? '▮▮▮' : batt > 30 ? '▮▮▯' : '▮▯▯'} ${batt}%</span><span class="clk"></span></div><div class="mos-peek ctl" title="Show desktop"></div></div>
       <div class="mos-menus"></div><div class="mos-focus"></div>
     </div><div class="mos-brand"><i></i>MoriBook</div></div>`;
+  if (field) wrap.classList.add('field');
   const $ = <T extends HTMLElement = HTMLElement>(s: string) => wrap.querySelector(s) as T;
   const lap = $('.mos-lap'), scr = $('.mos-scr'), bgEl = $('.mos-bg'), wins = $('.mos-wins'), tabs = $('.mos-tabs'), bar = $('.mos-bar');
   const orb = $('.mos-orb'), peek = $('.mos-peek'), clk = $('.clk'), menus = $('.mos-menus'), ring = $('.mos-focus'), iconsEl = $('.mos-icons'), gad = $('.mos-gad');
@@ -194,7 +204,9 @@ export async function openMoriOS(o: { report: boolean }): Promise<void> {
   const flares = [...wrap.querySelectorAll<HTMLElement>('.mos-flare')].map((e, i) => ({ e, k: [0.55, 0.85, 1.15, 0.38][i], s: [110, 70, 26, 14][i] }));
 
   // ---- gadgets (clock + sea & sky), with a few water droplets on the glass
-  gad.innerHTML = `<div><canvas class="clockc" width="48" height="48"></canvas></div><div><h4>Sea & Sky</h4><p>Water 12.4°C <span class="dn">▼</span></p><p>Barometer <span class="dn">falling</span></p><p>Wi-Fi: 1,400 km away</p></div>`;
+  gad.innerHTML = field
+    ? `<div><canvas class="clockc" width="48" height="48"></canvas></div><div><h4>Island</h4><p>Signal: none</p><p>Battery <span class="dn">${batt}%</span></p><p>Sand in keyboard: yes</p></div>`
+    : `<div><canvas class="clockc" width="48" height="48"></canvas></div><div><h4>Sea & Sky</h4><p>Water 12.4°C <span class="dn">▼</span></p><p>Barometer <span class="dn">falling</span></p><p>Wi-Fi: 1,400 km away</p></div>`;
   const DROPS = [[8, 10], [84, 58], [44, 84], [20, 70], [90, 14], [62, 30]];
   gad.querySelectorAll(':scope > div').forEach((d, i) => { for (let k = 0; k < 3; k++) { const [x, y] = DROPS[(i * 3 + k) % DROPS.length]; const dr = el('i', 'mos-drop'); dr.style.cssText = `left:${x}%;top:${y}%`; d.appendChild(dr); } });
   const clockG = (gad.querySelector('.clockc') as HTMLCanvasElement).getContext('2d')!;
@@ -229,16 +241,16 @@ export async function openMoriOS(o: { report: boolean }): Promise<void> {
 
   // ---- balloons from the tray
   let bal: HTMLElement | null = null;
-  const balloon = (title: string, text: string, ms = 6500) => {
+  const balloon = (title: string, text: string, ms = 6500, bo: { icon?: string; onClick?: () => void } = {}) => {
     bal?.remove();
-    const b = el('div', 'mos-balloon', `<b></b><span>${text}</span>`);
+    const b = el('div', 'mos-balloon' + (bo.onClick ? ' ctl act' : ''), `<b></b><span>${text}</span>`);
     const bb = b.querySelector('b') as HTMLElement;
-    bb.appendChild(icon('pug', 1));
+    bb.appendChild(icon(bo.icon ?? 'pug', 1));
     bb.appendChild(document.createTextNode(title));
     scr.appendChild(b);
     bal = b;
     const kill = () => { if (!b.isConnected) return; b.classList.add('bye'); setTimeout(() => b.remove(), 320); if (bal === b) bal = null; };
-    b.addEventListener('click', kill);
+    b.addEventListener('click', () => { kill(); if (bo.onClick) { lastPress = center(b); bo.onClick(); } });
     setTimeout(kill, ms);
     sfx.pick();
   };
@@ -501,6 +513,39 @@ export async function openMoriOS(o: { report: boolean }): Promise<void> {
     return W;
   };
 
+  // ---- the research apps (camera import, research log, photos): see ./moriResearch
+  const os: OSCtx = {
+    field,
+    win: (id, title, ic, w, h, body) => win(id, title, ic, w, h, body),
+    find: id => open.find(x => x.id === id && !x.closing) ?? null,
+    closeWin: id => { const W = open.find(x => x.id === id && !x.closing); if (W) closeWin(W); },
+    fx, center, animate, retrigger, floatText, progress,
+    closed: () => closed,
+    from: e => { lastPress = center(e); },
+    badges: () => badges(),
+    oldPhotos: ([['albatross', 'Wandering albatross, day 20. 3.1 m wingspan!'], ['dolphins', 'Hector’s dolphins riding the bow wave'], ['sunset', 'The Kittiwake at sunset (Jenna took this one)'], ['jennaSleep', 'Jenna, asleep on her keyboard at 3 a.m. "zzzzzzzzzzzzzzzz" x 4000'], ['joshuFish', 'Joshu and The Fish That Was Bigger Last Time He Told It'], ['chunkBucket', 'Chunk in a bucket. He chose this.']] as [PhotoKind, string][])
+      .map(([k, cap]) => ({ key: k, cap, make: () => photo(k) })),
+  };
+  const RA = researchApps(os);
+  /** desktop & tray badges: photos waiting on the camera, unread research entries */
+  const trayCam = $('.mos-tray .cm');
+  trayCam.addEventListener('click', () => { lastPress = center(trayCam); apps.cam(); });
+  let lastPend = -1;
+  const badges = () => {
+    const n = pendingCount();
+    const ci = iconEls.cam;
+    if (ci) { ci.dataset.n = n ? String(n) : ''; ci.classList.toggle('cnt', n > 0); }
+    iconEls.disc?.classList.toggle('new', freshCount() > 0);
+    trayCam.style.display = n ? '' : 'none';
+    if (n !== lastPend) {
+      trayCam.innerHTML = '';
+      trayCam.appendChild(icon('cam', 0.75));
+      trayCam.appendChild(document.createTextNode(String(n)));
+      if (lastPend >= 0 && n > lastPend) retrigger(trayCam, 'pop');
+      lastPend = n;
+    }
+  };
+
   // ---- apps
   const apps: Record<string, () => void> = {
     sheet: () => {
@@ -569,6 +614,11 @@ export async function openMoriOS(o: { report: boolean }): Promise<void> {
     report: () => {
       const b = el('div', 'rp');
       const head = (s: string) => `<div class="head"><b>${s}</b></div>`;
+      if (field) {
+        b.innerHTML = head('Reports') + `<p>No reports due. The university thinks we’re three weeks from port.</p><p><i>(The last one is still in the outbox. So is the boat, technically.)</i></p>`;
+        win('report', 'reports', 'report', 450, 240, b);
+        return;
+      }
       if (game.save.flags['v4:report']) {
         b.innerHTML = head('Morning Report · Day 23') + `<div class="done-stamp"><b>✓ Submitted</b>It will upload to the university the moment we have signal. (In about three weeks.)</div>`;
         win('report', 'morning_report_day23.doc', 'report', 470, 250, b);
@@ -659,58 +709,9 @@ export async function openMoriOS(o: { report: boolean }): Promise<void> {
       });
       win('report', 'morning_report_day23.doc', 'report', 500, 480, b);
     },
-    photos: () => {
-      const b = el('div');
-      const gal = el('div', 'gal');
-      const list: [PhotoKind, string][] = [['albatross', 'Wandering albatross, day 20. 3.1 m wingspan!'], ['dolphins', 'Hector’s dolphins riding the bow wave'], ['sunset', 'The Kittiwake at sunset (Jenna took this one)'], ['jennaSleep', 'Jenna, asleep on her keyboard at 3 a.m. "zzzzzzzzzzzzzzzz" x 4000'], ['joshuFish', 'Joshu and The Fish That Was Bigger Last Time He Told It'], ['chunkBucket', 'Chunk in a bucket. He chose this.'], ['chunkFace', 'Chunk, 5 a.m., 2 cm from my face']];
-      for (const [k, c] of list) {
-        const f = el('figure', 'ctl');
-        f.appendChild(photo(k));
-        f.appendChild(el('figcaption', '', c));
-        f.addEventListener('click', () => {
-          const big = el('div', 'big');
-          big.appendChild(photo(k));
-          big.appendChild(el('p', '', c));
-          win('ph:' + k, k + '.png', 'photo', 460, 400, big);
-        });
-        gal.appendChild(f);
-      }
-      for (const p of rawPhotos().slice(-8)) {
-        const f = el('figure');
-        const img = el('img') as HTMLImageElement;
-        img.src = p.img;
-        img.draggable = false;
-        f.appendChild(img);
-        f.appendChild(el('figcaption', '', 'New today'));
-        gal.appendChild(f);
-      }
-      b.appendChild(gal);
-      win('photos', 'Photos', 'photo', 580, 450, b);
-    },
-    disc: () => {
-      const b = el('div');
-      const list: [string, string, string, boolean][] = [
-        ['Wandering Albatross', 'Diomedea exulans · Toroa', 'Biggest wingspan of any living bird. Can sleep while gliding. Showed off for us on day 20.', true],
-        ['Sooty Shearwater', 'Ardenna grisea · Tītī', 'Flies 64,000 km a year in a figure-eight around the Pacific. Most common bird this week.', true],
-        ['Hector’s Dolphin', 'Cephalorhynchus hectori · Upokohue', 'One of the smallest dolphins. Rounded dorsal fin like a Mickey Mouse ear.', true],
-        ['Blue Maomao', 'Scorpis violacea', 'Schooling reef fish, electric blue. Gerald (tank) is one.', true],
-        ['???', 'Not yet observed', 'Something big has been showing up on Jenna’s sonar at night. Probably a whale. Probably.', false],
-        ['???', 'Not yet observed', 'Keep your camera ready on deck.', false],
-      ];
-      for (const [n, sci, t, seen] of list) {
-        const d = el('div', 'disc' + (seen ? '' : ' lock'));
-        d.appendChild(canvas(24, 24, g => {
-          if (n.includes('Albatross')) { for (let i = -10; i <= 10; i++) R(g, 12 + i, 12 + Math.abs(i) * 0.2, 1, 2, Math.abs(i) > 6 ? '#2a2630' : '#f4efe4'); E(g, 12, 13, 3, 2, '#f4efe4'); }
-          else if (n.includes('Shearwater')) { for (let i = -9; i <= 9; i++) R(g, 12 + i, 12 - Math.abs(i) * 0.3, 1, 2, '#4a4452'); }
-          else if (n.includes('Dolphin')) { E(g, 12, 13, 9, 4, '#7a8a9a'); R(g, 10, 7, 3, 4, '#2a2630'); }
-          else if (n.includes('Maomao')) { E(g, 12, 12, 8, 5, '#3a78e0'); R(g, 3, 9, 3, 6, '#2a58c0'); R(g, 16, 11, 1, 1, '#1a1014'); }
-          else { E(g, 12, 12, 8, 8, '#8a8494'); R(g, 10, 7, 4, 7, '#f4efe4'); R(g, 10, 16, 4, 2, '#f4efe4'); }
-        }));
-        d.appendChild(el('div', '', `<b>${n}</b><br><i>${sci}</i><br>${t}`));
-        b.appendChild(d);
-      }
-      win('disc', 'Discoveries', 'disc', 490, 450, b);
-    },
+    photos: () => RA.photos(),
+    cam: () => RA.cam(),
+    disc: () => RA.disc(),
     files: () => {
       const b = el('div');
       b.innerHTML = `<div class="addr"><div class="gel glass sm">◀</div><span>Computer ▸ MoriBook ▸ Files</span></div>`;
@@ -943,8 +944,8 @@ export async function openMoriOS(o: { report: boolean }): Promise<void> {
 
   // ---- desktop icons
   const desk: [string, string, string, boolean?][] = [
-    ['report', 'Reports', 'report', o.report && !game.save.flags['v4:report']], ['sheet', 'Spread-sheets', 'sheet'], ['photos', 'Photos', 'photo'],
-    ['disc', 'Discoveries', 'disc'], ['files', 'Files', 'folder'], ['plankton', 'Plankton Sort', 'game'], ['bubbles', 'Bubble Pop', 'bubbles'], ['term', 'JennaShell', 'term'], ['bin', 'Recycle Bin', 'bin'],
+    ['report', 'Reports', 'report', o.report && !game.save.flags['v4:report']], ['sheet', 'Spread-sheets', 'sheet'], ['cam', 'Camera', 'cam'], ['photos', 'Photos', 'photo'],
+    ['disc', 'Research Log', 'disc'], ['files', 'Files', 'folder'], ['plankton', 'Plankton Sort', 'game'], ['bubbles', 'Bubble Pop', 'bubbles'], ['term', 'JennaShell', 'term'], ['bin', 'Recycle Bin', 'bin'],
   ];
   const launch = (id: string, from?: Element) => {
     if (from) {
@@ -987,7 +988,7 @@ export async function openMoriOS(o: { report: boolean }): Promise<void> {
     const av = el('div', 'av');
     av.appendChild(icon('pug', 2));
     r.append(av, el('div', 'nm', 'Mori'));
-    for (const [label, id] of [['Documents', 'files'], ['Pictures', 'photos'], ['Discoveries', 'disc'], ['Games', 'plankton'], ['Blow bubbles', '*b'], ['Pet Chunk', '*p']] as const) {
+    for (const [label, id] of [['Documents', 'files'], ['Pictures', 'photos'], ['Research Log', 'disc'], ['Games', 'plankton'], ['Blow bubbles', '*b'], ['Pet Chunk', '*p']] as const) {
       const mi = el('div', 'mi ctl', label);
       mi.addEventListener('click', () => { closePops(); if (id === '*b') blow(); else if (id === '*p') { const c = center(orb); pet(c.x + 20, c.y - 30); } else { lastPress = center(orb); apps[id](); } });
       r.appendChild(mi);
@@ -1232,9 +1233,27 @@ export async function openMoriOS(o: { report: boolean }): Promise<void> {
   requestAnimationFrame(frame);
 
   // open the report straight away when it is due
-  if (o.report && !game.save.flags['v4:report']) {
+  const reportDue = o.report && !game.save.flags['v4:report'];
+  if (reportDue) {
     setTimeout(() => { if (closed) return; lastPress = center(iconEls.sheet); apps.sheet(); }, 450);
     setTimeout(() => { if (closed) return; lastPress = center(iconEls.report); apps.report(); balloon('Morning report due', 'Fill it in from the survey spreadsheet, then send it.'); }, 650);
+  }
+  // the camera plugs in: its icon hops, the tray lights up and a balloon offers the import
+  badges();
+  const pend = pendingCount();
+  if (pend) {
+    setTimeout(() => {
+      if (closed) return;
+      const ci = iconEls.cam;
+      retrigger(ci, 'pop');
+      ci.classList.add('plug');
+      const c = center(ci);
+      fx.sparkle(c.x, c.y - 10, 14, 90); fx.bubbles(c.x, c.y, 8, 50); fx.ring(c.x, c.y - 8, 'rgba(160,255,200,0.95)', 60);
+      sfx.beep(); setTimeout(() => sfx.pick(), 160);
+      if (!(reportDue && bal)) balloon('Camera connected', `<b>${pend} new photo${pend === 1 ? '' : 's'}</b> on the ZX-7. Click here to upload ${pend === 1 ? 'it' : 'them'} to the Research Log.`, 9000, { icon: 'cam', onClick: () => apps.cam() });
+    }, reportDue ? 9000 : 800);
+  } else if (field && opens === 1) {
+    setTimeout(() => { if (!closed) balloon('It boots!', `Sand in the hinges, ${batt}% battery, and every file survived. The camera plugs in here when you have photos to upload.`, 8000); }, 900);
   }
   lid.addEventListener('click', () => finish());
 
