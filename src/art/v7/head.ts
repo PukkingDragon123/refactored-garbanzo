@@ -14,8 +14,21 @@ const R6 = (...h: string[]): Ramp6 => h.map(v => hex(v));
 export type Look = 'fwd' | 'up' | 'down' | 'back';
 export interface HeadOpts7 { expr: string; mouth: 0 | 1 | 2; blink: boolean; look: Look; hair?: number }
 
-interface Lock { a: V3; b: V3; r0: number; r1: number; sway?: number }
-interface HeadDef7 {
+export interface Lock { a: V3; b: V3; r0: number; r1: number; sway?: number }
+
+/**
+ * Outfit head wear (beanies, hoods, goggles, head lamps): drawn over the head, with the hair it
+ * covers tucked away (locks, the whole shell under a hood) and the character's own extras
+ * optionally hidden (Aroha's headband under a hood; Joshu's cap and beard stay).
+ */
+export interface HeadWear7 {
+  hideLock?(l: Lock, i: number): boolean;
+  hideShell?: boolean;
+  hideExtras?: boolean;
+  draw(s: Scene3D, W: (p: V3) => V3, o: HeadOpts7, d: HeadDef7): void;
+}
+
+export interface HeadDef7 {
   skin: Ramp6;
   hair: Ramp6;
   ink: C;
@@ -196,7 +209,7 @@ const JOSHU: HeadDef7 = {
   },
 };
 
-const HEADS7: Record<string, HeadDef7> = { mori: MORI, jenna: JENNA, aroha: AROHA, joshu: JOSHU };
+export const HEADS7: Record<string, HeadDef7> = { mori: MORI, jenna: JENNA, aroha: AROHA, joshu: JOSHU };
 
 /**
  * Joshu's eyes are always narrowed: a short dark slit sunk under a heavy brow ridge (a shadow row)
@@ -237,8 +250,9 @@ function slitEye(mark: (x: number, y: number, c: C) => void, x: number, y: numbe
 const cache = new Map<string, { buf: PixelBuffer; ax: number; ay: number }>();
 const HW = 48, HH = 56, HOX = 24, HOY = 40;
 
-export function renderHead7(id: string, o: HeadOpts7): { buf: PixelBuffer; ax: number; ay: number } {
-  const key = `${id}|${o.expr}|${o.mouth}|${o.blink ? 1 : 0}|${o.look}|${o.hair ?? 0}`;
+/** a head, optionally dressed in outfit head wear (`wk` names it for the cache) */
+export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = ''): { buf: PixelBuffer; ax: number; ay: number } {
+  const key = `${id}|${wk}|${o.expr}|${o.mouth}|${o.blink ? 1 : 0}|${o.look}|${o.hair ?? 0}`;
   const hit = cache.get(key);
   if (hit) return hit;
   const d = HEADS7[id] ?? MORI;
@@ -268,13 +282,15 @@ export function renderHead7(id: string, o: HeadOpts7): { buf: PixelBuffer; ax: n
     const band = h.n[1] > 0.35 && h.n[1] < 0.7 && h.l > 0.45;
     return band ? d.hair[4] : cel(d.hair, h.l, 0.05);
   };
-  s.ellipsoid(W(d.shell[0]), Wv([d.shell[1][0], 0, 0]), Wv([0, d.shell[1][1], 0]), Wv([0, 0, d.shell[1][2]]), 3, h => (d.cut(h.q) ? -1 : hairM(h)));
+  if (!wear?.hideShell) s.ellipsoid(W(d.shell[0]), Wv([d.shell[1][0], 0, 0]), Wv([0, d.shell[1][1], 0]), Wv([0, 0, d.shell[1][2]]), 3, h => (d.cut(h.q) ? -1 : hairM(h)));
   const sway = o.hair ?? 0;
-  for (const l of d.locks) {
+  d.locks.forEach((l, i) => {
+    if (wear?.hideLock?.(l, i)) return;
     const tip: V3 = vadd(l.b, [-(l.sway ?? 0) * sway * 1.2, (l.sway ?? 0) * sway * 0.3, 0]);
     s.limb(W(l.a), W(tip), l.r0, l.r1, 3, hairM);
-  }
-  d.extras?.(s, W, o);
+  });
+  if (!wear?.hideExtras) d.extras?.(s, W, o);
+  wear?.draw(s, W, o, d);
   // face details (dot eyes, brows, mouth, blush) projected onto the surface
   const px = (p: V3): [number, number, number] => { const w = W(p); return [HOX + w[0], HOY - w[1], w[2]]; };
   const marks: [number, number, C][] = [];
