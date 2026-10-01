@@ -115,7 +115,7 @@ export class Underway {
     for (; this.acc.foam >= 1; this.acc.foam--) this.foam.push({ x: this.sternX - 8 - rnd() * 22, life: 0, max: 6 + rnd() * 6, w: 5 + rnd() * 6, seed: (rnd() * 1e6) | 0 });
     for (let i = this.foam.length - 1; i >= 0; i--) {
       const f = this.foam[i];
-      f.life += dt; f.x -= cr * dt * (1 - 0.25 * Math.exp(-f.life * 1.5)); f.w += dt * 0.7;
+      f.life += dt; f.x -= cr * dt * (1 - 0.25 * Math.exp(-f.life * 1.5)); f.w += dt * 0.5;
       if (f.life >= f.max) this.foam.splice(i, 1);
     }
     // streaks peeling off the bow wave (and here and there along the hull) and sliding aft
@@ -123,14 +123,14 @@ export class Underway {
     for (; this.acc.streak >= 1; this.acc.streak--) {
       const fromBow = rnd() < 0.7;
       const x = fromBow ? this.stemX - 36 - rnd() * 50 : this.sternX + 30 + rnd() * (this.stemX - this.sternX - 100);
-      this.streaks.push({ x, life: 0, max: 7 + rnd() * 8, len: 2 + Math.round(rnd() * 6), v: 1.02 + rnd() * 0.16, dy: rnd() < 0.28 ? 2 + Math.round(rnd() * 4) : 0, seed: (rnd() * 1e6) | 0 });
+      this.streaks.push({ x, life: 0, max: 7 + rnd() * 8, len: 4 + Math.round(rnd() * 8), v: 1.02 + rnd() * 0.16, dy: rnd() < 0.25 ? 2 + Math.round(rnd() * 4) : 0, seed: (rnd() * 1e6) | 0 });
     }
     for (let i = this.streaks.length - 1; i >= 0; i--) {
       const q = this.streaks[i];
       q.life += dt; q.x -= cr * q.v * dt;
       if (q.life >= q.max || q.x < this.sternX - 6) this.streaks.splice(i, 1);
     }
-    if (this.foam.length > 220) this.foam.splice(0, this.foam.length - 220);
+    if (this.foam.length > 150) this.foam.splice(0, this.foam.length - 150);
     if (this.streaks.length > 120) this.streaks.splice(0, this.streaks.length - 120);
     this.updateWind(dt);
   }
@@ -196,17 +196,38 @@ export class Underway {
     return m - (2 + extra) * this.s.hullA;
   }
 
+  /** the near surface sampled once per frame across the view (every 2 px, interpolated) */
+  private hc = new Float32Array(0);
+  private hc0 = 0;
+  private cacheSurface(x0: number, x1: number) {
+    const oc = this.s.ocean;
+    const a = Math.floor(x0) - 4, n = Math.ceil(x1 - x0) + 12;
+    if (this.hc.length < n + 2) this.hc = new Float32Array(n + 66);
+    const H = this.hc;
+    for (let i = 0; i <= n + 1; i += 2) H[i] = oc.heightAt(a + i);
+    for (let i = 1; i <= n; i += 2) H[i] = (H[i - 1] + H[i + 1]) * 0.5;
+    this.hc0 = a;
+    this.hcN = n;
+  }
+  private hcN = 0;
+  /** surface y at world x (from the frame's cache inside the view) */
+  private surf(x: number) {
+    const i = Math.round(x) - this.hc0;
+    return i >= 0 && i <= this.hcN ? this.hc[i] : this.s.ocean.heightAt(x);
+  }
+
   /** on the near water (the boat plane): bow wave, waterline streaks, the stern's churn and wake */
   drawNear(r: Renderer) {
-    const s = this.s, oc = s.ocean, w = s.weather;
+    const s = this.s, w = s.weather;
     const storm = w.storm;
     const vx0 = r.visibleX0(8), vx1 = r.visibleX1(8);
+    this.cacheSurface(vx0 - 100, vx1 + 20);
     const light = 0.94 + w.lightning * 0.7;
     const tick = Math.floor(this.t * 12);
     // foam white, its shaded underside, and the darker dimple of water under the foam (for contrast
     // against the bright crest of the band)
     const W0 = (a: number) => packColor(light, light, light, a);
-    const W1 = (a: number) => packColor(light * 0.84, light * 0.93, light * 0.98, a);
+    const W1 = (a: number) => packColor(light * 0.7, light * 0.84, light * 0.9, a);
     const SH = (a: number) => packColor(0.08, 0.26, 0.34, a);
     const px = (x: number, y: number, c: number, clip: number) => { if (y >= clip) r.rect(x, y, 1, 1, c); };
     r.emissive(0.24);
@@ -219,7 +240,7 @@ export class Underway {
         const k = wake * (1 - u * 0.5);
         const clip = this.clipY(x);
         // the churned water heaps up right behind the transom
-        const top = Math.round(oc.heightAt(x)) - (u < 0.35 ? 2 : u < 0.7 ? 1 : 0);
+        const top = Math.round(this.surf(x)) - (u < 0.35 ? 2 : u < 0.7 ? 1 : 0);
         const rows = 2 + Math.round(k * (3 + storm * 1.5));
         for (let j = 0; j < rows; j++) {
           if (hash2(x * 5 + j, tick, 31) < 0.1 + u * 0.3 + j * 0.1) continue;
@@ -235,7 +256,7 @@ export class Underway {
         const x = Math.round(sx - 2 - d);
         const a = wake * 0.34 * (1 - d / 120);
         if (a < 0.02) continue;
-        const y = Math.round(oc.heightAt(x) + 3 + (i % 3) * 3 + Math.sin(this.t * 3 + i) * 1.2);
+        const y = Math.round(this.surf(x) + 3 + (i % 3) * 3 + Math.sin(this.t * 3 + i) * 1.2);
         r.rect(x, y, 6 + (i % 4) * 3, 1, packColor(0.82, 0.96, 1, a));
       }
     }
@@ -254,10 +275,11 @@ export class Underway {
         if (hash2(f.seed + i, gen, 5) < 0.08 + u * 0.55) continue;
         const x = x0 + i;
         const clip = this.clipY(x);
-        const y = Math.round(oc.heightAt(x)) - (hash2(f.seed, i, 7) > 0.7 ? 1 : 0);
-        px(x, y, W0(0.92 * a), clip);
-        if (rows > 1 && hash2(f.seed + i, 3, 9) < 0.8) px(x, y + 1, W1(0.82 * a), clip);
-        if (rows > 2 && hash2(f.seed + i, 6, 9) < 0.55) px(x, y + 2, W1(0.6 * a), clip);
+        // it rides on top of the surface line (the band's crest row is near-white itself)
+        const y = Math.round(this.surf(x)) - 1 - (rows > 2 && hash2(f.seed, i, 7) > 0.6 ? 1 : 0);
+        px(x, y, W0(0.94 * a), clip);
+        if (rows > 1 && hash2(f.seed + i, 3, 9) < 0.85) px(x, y + 1, W0(0.85 * a), clip);
+        if (hash2(f.seed + i, 6, 9) < (rows > 2 ? 0.8 : 0.45)) px(x, y + 2, W1(0.7 * a), clip);
         // a little pulled under the surface
         if (u < 0.5 && hash2(f.seed + i, 4, 9) < 0.3) px(x, y + 3, packColor(0.8, 0.95, 1, 0.3 * a), clip);
       }
@@ -271,12 +293,12 @@ export class Underway {
       if (a <= 0.02) continue;
       const x0 = Math.round(q.x);
       for (let j = 0; j < q.len; j++) {
-        if (j > 0 && hash2(q.seed + j, Math.floor(u * 9), 11) < 0.15) continue;
+        if (j > 0 && j < q.len - 1 ? hash2(q.seed + j, Math.floor(u * 9), 11) < 0.06 : hash2(q.seed + j, Math.floor(u * 9), 11) < 0.4) continue;
         const x = x0 + j;
         const clip = this.clipY(x);
-        const y = Math.round(Math.max(oc.heightAt(x), clip)) + q.dy;
+        const y = q.dy ? Math.round(Math.max(this.surf(x), clip)) + q.dy : Math.max(Math.round(this.surf(x)) - 1, Math.ceil(clip));
         px(x, y, W0(a), clip);
-        if (!q.dy && j > 0 && j < q.len - 1) px(x, y + 1, W1(a * 0.75), clip);
+        if (!q.dy && j > 0 && j < q.len - 1) px(x, y + 1, W1(a * 0.8), clip);
       }
     }
     // ---- the bow wave: a frothy white heap against the stem, its curl running aft along the hull
@@ -288,7 +310,7 @@ export class Underway {
         const I = u >= 0 ? 1 - u / 15 : Math.pow(1 + u / 90, 1.2);
         if (I <= 0.03) continue;
         const clip = this.clipY(x, 6 * smoothstep(-60, 0, u));
-        const top = Math.round(oc.heightAt(x) - I * A * 0.9);
+        const top = Math.round(this.surf(x) - I * A * 0.9);
         const th = 1 + Math.round(I * (2 + A * 0.7));
         for (let j = 0; j < th; j++) {
           // solid near the stem, lacier further aft and toward the bottom of the foam

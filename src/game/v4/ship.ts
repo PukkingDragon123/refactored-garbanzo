@@ -672,11 +672,13 @@ export class ShipScene4 extends FieldScene {
       }
     }
     super.update(dt);
-    // out on the open deck the camera sits lower, so the sea along the hull (the bow wave, the waterline
-    // foam, the wake) stays in the frame above the HUD; below deck and in the wheelhouse it's as before
-    const openDeck = this.level() === 'main' && p.state !== 'climb' && this.bridgeA > 0.5 && this.hullA > 0.5;
-    this.deckCam = damp(this.deckCam, openDeck ? 48 : 0, 2.5, dt);
-    if (!this.cam.active && !this.st.cam.locked) this.st.cam.ty += this.deckCam;
+    // up on deck (and through the wheelhouse) the camera sits lower, so the sea along the hull (the bow
+    // wave, the waterline foam, the wake) stays in the frame above the HUD; below deck it's as before
+    const onDeck = this.level() === 'main' && p.state !== 'climb';
+    this.deckCam = damp(this.deckCam, onDeck ? 72 : 0, 2.5, dt);
+    // (the field scene resets ty every frame unless the photo camera is up; a locked camera ignores
+    // it, and the fishing view eases back to it, so it lands on the deck framing)
+    if (!this.cam.active) this.st.cam.ty += this.deckCam;
     // the HUD's place line follows the story ("Day 1 · The storm")
     const ho = this.hudOpts();
     if (ho.sub !== this.placeSub && this.hud) { this.placeSub = ho.sub; this.hud.setPlace(ho.place, ho.sub); }
