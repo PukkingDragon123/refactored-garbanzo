@@ -1,8 +1,10 @@
 // MoriOS: Mori's field laptop, a glossy "aero" desktop. The pixel Bliss wallpaper sits under
 // drifting pixel clouds, sun rays and lens flares, with bubbles floating up off the grass (click
 // them). Windows open, close, minimise and maximise on springs; icons hop and squash; gel buttons
-// squish with soft pops; a pug cursor leaves a sparkle trail. On touch screens the whole laptop is
-// a trackpad for the pug cursor (see ../v7/aeroCursor). Keyboard: Esc closes (menus first, then
+// squish with soft pops; a pug cursor leaves a sparkle trail. On touch screens fingers work directly
+// (tap, drag title bars, swipe to scroll, pinch the spreadsheet, hold for a right-click menu), with
+// bigger hit targets and windows that open maximised on phone-sized screens; the tray toggle turns
+// the laptop into a trackpad for the pug cursor instead (see ../v7/aeroCursor). Keyboard: Esc closes (menus first, then
 // the lid), Tab / arrows move a focus glow, Enter or Space clicks.
 // Apps: Spreadsheets (seabird survey + temperature chart), Reports (the morning report: read the
 // data and fill it in), Camera (import the real photos off the camera), Photos, Research Log (one page
@@ -138,7 +140,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
       <div class="mos-flare f2"></div><div class="mos-flare f0"></div><div class="mos-flare f1"></div><div class="mos-flare f3"></div>
       <div class="mos-icons"></div><div class="mos-gad"></div><div class="mos-wins"></div>
       <div class="mos-bar"><div class="mos-orb ctl" title="Start"></div><div class="mos-tabs"></div>
-        <div class="mos-tray"><span class="cm ctl" title="Camera connected"></span><span class="wf" title="${field ? 'No internet: shipwrecked' : 'No internet: middle of the ocean'}">✕ Wi-Fi</span><span class="bt${batt < 25 ? ' lo' : ''}" title="${field ? 'Charged off the wreck’s battery. Mostly.' : 'Battery'}">${batt > 60 ? '▮▮▮' : batt > 30 ? '▮▮▯' : '▮▯▯'} ${batt}%</span><span class="clk"></span></div><div class="mos-peek ctl" title="Show desktop"></div></div>
+        <div class="mos-tray"><span class="tp ctl" data-direct="1" title="Touch mode"></span><span class="cm ctl" title="Camera connected"></span><span class="wf" title="${field ? 'No internet: shipwrecked' : 'No internet: middle of the ocean'}">✕ Wi-Fi</span><span class="bt${batt < 25 ? ' lo' : ''}" title="${field ? 'Charged off the wreck’s battery. Mostly.' : 'Battery'}">${batt > 60 ? '▮▮▮' : batt > 30 ? '▮▮▯' : '▮▯▯'} ${batt}%</span><span class="clk"></span></div><div class="mos-peek ctl" title="Show desktop"></div></div>
       <div class="mos-menus"></div><div class="mos-focus"></div>
     </div><div class="mos-brand"><i></i>MoriBook</div></div>`;
   if (field) wrap.classList.add('field');
@@ -180,6 +182,25 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
 
   // ---- the cursor (mouse rides it, touch drives it like a trackpad)
   const cur = new VCursor(wrap, () => scr.getBoundingClientRect(), t => !!t.closest('[data-direct]'));
+  // touch: direct by default; the tray toggle (remembered) switches to the trackpad
+  cur.direct = game.save.vars['v4:trackpad'] !== 1;
+  const coarse = () => { try { return matchMedia('(pointer: coarse)').matches; } catch { return false; } };
+  const bigUI = () => wrap.classList.add('big');
+  if (coarse() || ('ontouchstart' in window && navigator.maxTouchPoints > 0)) bigUI();
+  wrap.classList.toggle('direct', cur.direct);
+  const tpBtn = $('.mos-tray .tp');
+  const tpLabel = () => { tpBtn.textContent = cur.direct ? '☝ Touch' : '◎ Trackpad'; tpBtn.title = cur.direct ? 'Direct touch (tap to use the trackpad cursor instead)' : 'Trackpad cursor (tap for direct touch)'; };
+  tpLabel();
+  tpBtn.addEventListener('click', () => {
+    cur.setDirect(!cur.direct);
+    game.save.vars['v4:trackpad'] = cur.direct ? 0 : 1;
+    game.persist();
+    wrap.classList.toggle('direct', cur.direct);
+    tpLabel();
+    retrigger(tpBtn, 'pop');
+    sfx.pick();
+    touchHint(true);
+  });
   let trailAcc = 0;
   let ringOn = false;
   const par = { x: 0, y: 0, tx: 0, ty: 0 };
@@ -190,11 +211,24 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
     if (trailAcc > 13 && p.x > 0 && p.y > 0 && p.x < S.w && p.y < S.h) { trailAcc = 0; fx.trail(p.x + 4, p.y + 6); }
     ringOn = false; ring.classList.remove('on');
   };
-  cur.onFirstTouch = () => {
-    const h = el('div', 'mos-hint', `<b>Chunk is your trackpad</b>Drag anywhere to move the cursor · Tap to click<br>Hold (or two-finger tap) for more · Two fingers scroll<br>Tap, then drag, to move windows`);
+  let hintEl: HTMLElement | null = null;
+  const touchHint = (always = false) => {
+    if (!always && cur.direct && game.save.vars['v4:touchHint']) return;
+    if (cur.direct) { game.save.vars['v4:touchHint'] = 1; }
+    hintEl?.remove();
+    const h = el('div', 'mos-hint', cur.direct
+      ? `<b>Touch mode</b>Tap to click · Swipe to scroll · Pinch the spreadsheet<br>Drag a title bar to move a window · Hold for more<br>(Tray: ☝ Touch switches to the trackpad cursor)`
+      : `<b>Chunk is your trackpad</b>Drag anywhere to move the cursor · Tap to click<br>Hold (or two-finger tap) for more · Two fingers scroll<br>Tap, then drag, to move windows`);
     wrap.appendChild(h);
+    hintEl = h;
     setTimeout(() => { h.classList.add('bye'); setTimeout(() => h.remove(), 450); }, 5600);
   };
+  cur.onFirstTouch = () => { bigUI(); touchHint(); };
+  // the on-screen keyboard can cover a text field: keep the focused one in view
+  wrap.addEventListener('focusin', e => {
+    const t = e.target;
+    if (t instanceof HTMLInputElement && cur.isTouch) setTimeout(() => { if (t.isConnected) t.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, 350);
+  });
 
   // ---- wallpaper: drifting pixel clouds in the wallpaper's own pixel grid, sun rays, lens flares
   const clouds = Array.from({ length: 7 }, (_, i) => {
@@ -265,16 +299,17 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
     pops = [];
     orb.classList.remove('on');
   };
-  const openPop = (content: HTMLElement, x: number, y: number, opt: { anchor?: Element; bottom?: boolean; onClose?: () => void } = {}) => {
+  const openPop = (content: HTMLElement, x: number, y: number, opt: { anchor?: Element; bottom?: boolean; side?: boolean; onClose?: () => void } = {}) => {
     closePops();
     measure();
     const p = el('div', 'mos-pop');
     p.appendChild(content);
+    if (content.classList.contains('mos-menu')) content.style.maxHeight = Math.max(80, S.dh - 8) + 'px';
     menus.appendChild(p);
     const pw = p.offsetWidth, ph = p.offsetHeight;
     const px = clamp(x, 4, Math.max(4, S.w - pw - 4));
-    let py = opt.bottom ? S.dh - ph - 4 : y;
-    if (py + ph > S.dh - 4) py = Math.max(4, y - ph - (opt.anchor ? (opt.anchor as HTMLElement).offsetHeight + 6 : 0));
+    let py = opt.bottom ? S.dh - ph - 4 : opt.side ? clamp(y - ph / 2, 4, Math.max(4, S.dh - ph - 4)) : y;
+    if (!opt.side && py + ph > S.dh - 4) py = Math.max(4, y - ph - (opt.anchor ? (opt.anchor as HTMLElement).offsetHeight + 6 : 0));
     p.style.left = px + 'px'; p.style.top = py + 'px';
     p.style.transformOrigin = `${clamp(x - px, 0, pw)}px ${opt.bottom || py < y ? ph : 0}px`;
     pops.push({ el: p, anchor: opt.anchor, onClose: opt.onClose });
@@ -344,10 +379,12 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
         kp.appendChild(b);
       }
       const r = v.getBoundingClientRect();
-      const p = scrPt(r.left, r.bottom + 3);
+      // short screens: the pad opens beside the field so the number stays in view
+      const side = S.dh < 520;
+      const p = side ? scrPt(r.right + 10, r.top + r.height / 2) : scrPt(r.left, r.bottom + 3);
       v.classList.add('on');
       numActive = api;
-      openPop(kp, p.x, p.y, { anchor: v, onClose: () => { v.classList.remove('on'); if (numActive === api) numActive = null; } });
+      openPop(kp, p.x, p.y, { anchor: v, side, onClose: () => { v.classList.remove('on'); if (numActive === api) numActive = null; } });
     });
     return api;
   };
@@ -434,6 +471,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
     if (active === W) focus(topWin());
   };
   let lastPress = { x: 0, y: 0 };
+  const small = () => S.w < 700 || S.dh < 430;
   const win = (id: string, title: string, ic: string, w: number, h: number, body: HTMLElement | string, opt: { dark?: boolean; from?: { x: number; y: number } } = {}): Win | null => {
     const ex = open.find(x => x.id === id && !x.closing);
     if (ex) { if (ex.min || ex.minning) restore(ex); focus(ex); retrigger(ex.el, 'mos-wiggle'); sfx.click(); return null; }
@@ -460,6 +498,13 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
     const W: Win = { el: e, id, tab, bd, x, y, w: ww, h: hh, max: false, min: false, minning: false, closing: false, drag: false, anim: true, prev: null,
       sx: new Spring(0.3, 330, 16), sy: new Spring(0.2, 250, 14), tx: new Spring(0, 260, 20), ty: new Spring(0, 260, 20), rot: new Spring(0, 220, 14), a: 0, aT: 1, lastTb: 0 };
     W.sx.target = W.sy.target = 1;
+    // phone-sized screens: windows open maximised (restore / drag gives a window that fits)
+    if (small()) {
+      W.prev = { x: 4, y: 4, w: Math.min(ww, S.w - 8), h: Math.min(hh, S.dh - 8) };
+      Object.assign(W, { x: 0, y: 0, w: S.w, h: S.dh, max: true });
+      e.classList.add('max');
+      mx.style.setProperty('--gl', `url(${glyph('res', '#1a3a5a', 'rgba(255,255,255,0.9)')})`);
+    }
     place(W);
     const from = opt.from ?? lastPress;
     e.style.transformOrigin = `${clamp(from.x - x, -200, ww + 200)}px ${clamp(from.y - y, -200, hh + 200)}px`;
@@ -552,8 +597,19 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
   const apps: Record<string, () => void> = {
     sheet: () => {
       const b = el('div');
-      b.innerHTML = `<div class="ribbon"><span class="on">Home</span><span>Insert</span><span>Data</span><span>Chunk</span></div><div class="fx"><b class="ref">B2</b><i>fx</i><span class="val">3</span></div>`;
+      b.innerHTML = `<div class="ribbon"><span class="on">Home</span><span>Insert</span><span>Data</span><span>Chunk</span></div><div class="fx"><b class="ref">B2</b><i>fx</i><span class="val">3</span><div class="zm"><div class="gel sm glass ctl zo">−</div><em>100%</em><div class="gel sm glass ctl zi">+</div></div></div>`;
       const t = el('table', 'xl');
+      // zoom: the − / + buttons, or pinch with two fingers
+      let zoom = 1;
+      const zEl = b.querySelector('.zm em') as HTMLElement;
+      const setZoom = (z: number) => { zoom = clamp(Math.round(z * 20) / 20, 0.6, 1.8); t.style.zoom = String(zoom); zEl.textContent = Math.round(zoom * 100) + '%'; };
+      (b.querySelector('.zo') as HTMLElement).addEventListener('click', () => { setZoom(zoom - 0.1); sfx.tick(2); });
+      (b.querySelector('.zi') as HTMLElement).addEventListener('click', () => { setZoom(zoom + 0.1); sfx.tick(5); });
+      let pinch: { d: number; z: number } | null = null;
+      const tdist = (ev: TouchEvent) => Math.hypot(ev.touches[0].clientX - ev.touches[1].clientX, ev.touches[0].clientY - ev.touches[1].clientY);
+      b.addEventListener('touchstart', ev => { if (ev.touches.length === 2) pinch = { d: tdist(ev) || 1, z: zoom }; }, { passive: true });
+      b.addEventListener('touchmove', ev => { if (pinch && ev.touches.length === 2) { ev.preventDefault(); setZoom(pinch.z * tdist(ev) / pinch.d); } }, { passive: false });
+      b.addEventListener('touchend', ev => { if (ev.touches.length < 2) pinch = null; });
       t.innerHTML = `<tr><th></th>${BIRDS.map(x => `<th>${x}</th>`).join('')}<th>Water °C</th></tr>` +
         COUNTS.map((r, i) => `<tr><th>${DAYS[i]}</th>${r.map((v, j) => `<td class="hv" data-v="${v}" data-f="${v}" data-r="${String.fromCharCode(66 + j)}${i + 2}">${v}</td>`).join('')}<td class="hv" data-v="${TEMP[i]}" data-f="${TEMP[i]}" data-r="F${i + 2}">${TEMP[i].toFixed(1)}</td></tr>`).join('') +
         `<tr class="sum"><th>SUM</th>${BIRDS.map((_, j) => `<td class="ctl" data-v="?" data-f="=SUM(${String.fromCharCode(66 + j)}2:${String.fromCharCode(66 + j)}8)" data-r="${String.fromCharCode(66 + j)}9">?</td>`).join('')}<td class="ctl" data-f="(average)" data-v="?" data-r="F9">?</td></tr>`;
@@ -579,7 +635,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
       const cu = el('span', '', '°C'); cu.style.cssText = `position:absolute;left:4px;top:8px;font:16px/1 'Jersey 15','Pixelify Sans',monospace;color:#3a5a78`; cw.appendChild(cu);
       b.appendChild(cw);
       const ref = b.querySelector('.ref') as HTMLElement, val = b.querySelector('.val') as HTMLElement;
-      t.addEventListener('pointerdown', ev => {
+      t.addEventListener('click', ev => {
         const td = (ev.target as HTMLElement).closest('td') as HTMLElement | null;
         if (!td) return;
         t.querySelectorAll('td.sel').forEach(x => x.classList.remove('sel'));
@@ -631,12 +687,14 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
         win('report', 'morning_report_day23.doc', 'report', 470, 260, b);
         return;
       }
-      b.innerHTML = `<div class="head"><b>Morning Report · Day 23 · RV Kittiwake</b></div>
+      b.innerHTML = `<div class="head"><b>Morning Report · Day 23 · RV Kittiwake</b><div class="gel sm glass ctl opsheet">Survey sheet</div></div>
         <div class="q"><label>1. Most sighted seabird this week</label><div class="s1"></div><div class="tip t1"></div></div>
         <div class="q"><label>2. Total vanebill sightings this week</label><div class="s2"></div><div class="tip t2"></div></div>
         <div class="q"><label>3. Water temperature trend</label><div class="s3"></div><div class="tip t3"></div></div>
         <div class="q"><label>4. Photo of the day</label><div class="thumbs"></div><div class="tip t4"></div></div>
         <div class="act"><div class="gel green big go ctl">Send report ➤</div><div class="pw"></div></div><div class="out"></div>`;
+      const opSheet = b.querySelector('.opsheet') as HTMLElement;
+      opSheet.addEventListener('click', () => { lastPress = center(opSheet); apps.sheet(); });
       const q1 = dropdown(BIRDS), q2 = numField(), q3 = dropdown(['Rising', 'Falling', 'Steady']);
       (b.querySelector('.s1') as HTMLElement).appendChild(q1.el);
       (b.querySelector('.s2') as HTMLElement).appendChild(q2.el);
@@ -658,7 +716,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
         img.style.cssText = 'width:100%;height:100%;object-fit:cover;image-rendering:pixelated;display:block';
         f.title = sh.bird ? 'Seabird' : 'Photo';
         f.appendChild(img);
-        f.addEventListener('pointerdown', () => {
+        f.addEventListener('click', () => {
           pick = i;
           th.querySelectorAll('.th').forEach((x, j) => x.classList.toggle('on', j === i));
           th.classList.remove('ok', 'bad');
@@ -735,7 +793,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
           list.appendChild(row);
           if (locked) {
             const r2 = el('div', 'pwrow');
-            r2.innerHTML = `<span>Password:</span><input class="mos-in pw" style="width:130px" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="gel sm ctl">Unlock</div>`;
+            r2.innerHTML = `<span>Password:</span><input class="mos-in pw" style="width:130px" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go"><div class="gel sm ctl">Unlock</div>`;
             const pw = r2.querySelector('.pw') as HTMLInputElement;
             pw.classList.add('ctl');
             const tryIt = () => {
@@ -903,7 +961,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
       const b = el('div', 'term');
       const chips = el('div', 'chips');
       const out = el('div', '', 'JennaShell v0.3 (installed "for emergencies")\ntype "help"\n\n');
-      const ln = el('div', 'ln', '<span>&gt;</span><input spellcheck="false" autocomplete="off" autocapitalize="off">');
+      const ln = el('div', 'ln', '<span>&gt;</span><input spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" enterkeyhint="send" placeholder="tap here to type">');
       b.append(chips, out, ln);
       const inp = ln.querySelector('input') as HTMLInputElement;
       inp.classList.add('ctl');
@@ -932,6 +990,8 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
         chips.appendChild(ch);
       }
       if (!cur.isTouch) setTimeout(() => inp.focus(), 60);
+      // tapping the terminal (not a chip) puts the cursor in the prompt, which brings up the keyboard
+      b.addEventListener('click', ev => { if (!(ev.target as Element).closest('.chips') && document.activeElement !== inp) inp.focus(); });
       inp.addEventListener('keydown', e => {
         e.stopPropagation();
         if (e.key !== 'Enter') return;

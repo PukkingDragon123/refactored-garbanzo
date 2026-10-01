@@ -332,4 +332,36 @@ export const AERO_CSS = `
 .pk .bins .gel { flex: 1; max-width: 140px; }
 .pk .res { text-align: center; margin-top: 8px; }
 .bp canvas { width: 100%; image-rendering: pixelated; display: block; border-radius: 6px; box-shadow: 0 0 0 1px #6aaed4; }
+/* ---- touch: scrollable panes pan under the finger, hit targets grow, the trackpad toggle */
+.mos-win .bd, .mos-start .l, .mos-menu, .rl-list, .rl-page, .imp-main, .imp-q { touch-action: pan-x pan-y; }
+.mos-win .tb, .bp canvas, .pk canvas { touch-action: none; }
+.mos-menu { overflow-y: auto; overscroll-behavior: contain; }
+.mos-tray .tp { display: none; align-items: center; padding: 2px 8px 3px; border-radius: 9px; background: linear-gradient(180deg, rgba(255,255,255,0.32) 0 50%, rgba(255,255,255,0.1) 50%); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.5); }
+.mos-tray .tp.pop { animation: icSquash 0.55s cubic-bezier(.3,1.7,.5,1); }
+.mos-wrap.big .mos-tray .tp, .mos-wrap.touch .mos-tray .tp { display: inline-flex; }
+.fx .zm { display: flex; align-items: center; gap: 4px; flex: none; }
+.fx .zm em { font-style: normal; min-width: 44px; text-align: center; color: var(--ink2); }
+.fx .zm .gel { min-width: 30px; padding: 0 6px 1px; }
+.mos-wrap.big { --tb: 36px; }
+.mos-wrap.big .mos-win .ctrls b { width: 40px; height: 30px; background-size: 20px 20px, auto; }
+.mos-wrap.big .mos-win .ctrls b.x { width: 54px; }
+.mos-wrap.big .gel { min-height: 36px; }
+.mos-wrap.big .gel.sm { min-height: 32px; padding: 0 12px 1px; }
+.mos-wrap.big .mos-menu .mi { min-height: 42px; padding: 4px 16px 4px 10px; font-size: 21px; }
+.mos-wrap.big .mos-menu hr { margin: 6px; }
+.mos-wrap.big .mos-start .l .mi, .mos-wrap.big .mos-start .r .mi { padding: 8px 8px; }
+.mos-wrap.big .dd { height: 40px; min-width: 190px; font-size: 21px; }
+.mos-wrap.big .dd::after { width: 32px; background-position: 6px 10px, 0 0; }
+.mos-wrap.big .numf .v { height: 40px; min-width: 100px; font-size: 24px; }
+.mos-wrap.big .kp { grid-template-columns: repeat(3, 58px); gap: 6px; }
+.mos-wrap.big .kp .gel { min-height: 44px; font-size: 26px; }
+.mos-wrap.big .mos-in { height: 40px; font-size: 21px; }
+.mos-wrap.big .fl .row { min-height: 42px; }
+.mos-wrap.big .xl td, .mos-wrap.big .xl th { height: 34px; }
+.mos-wrap.big .term .ln { min-height: 40px; }
+.mos-wrap.big .term input { height: 36px; font-size: 20px; }
+.mos-wrap.big .mos-tab { min-width: 48px; }
+.mos-wrap.big .mos-lid { min-height: 32px; }
+.mos-wrap.big .rp .head .gel { flex: none; }
+@media (max-width: 480px) { .mos-tray .wf { display: none; } .mos-tray { gap: 6px; padding: 0 6px; } .rp .head { flex-wrap: wrap; } }
 `;

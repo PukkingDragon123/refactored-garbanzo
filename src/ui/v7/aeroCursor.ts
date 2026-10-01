@@ -1,5 +1,7 @@
 // The on-screen pug cursor. With a mouse it simply rides the real pointer (with a squash on click, a
-// little lean when flung and a sparkle trail). On touch screens the whole laptop turns into a
+// little lean when flung and a sparkle trail). On touch screens the default is direct touch: fingers
+// hit what they touch (native taps, scrolling and text fields; the cursor hides), with a long press
+// sent as a right-click. Optionally (direct = false) the whole laptop turns into a
 // trackpad: drag anywhere to move the cursor (with pointer acceleration), tap to click at the
 // cursor, hold (or two-finger tap) to right-click, two fingers to scroll whatever is under the
 // cursor (with momentum), and tap-then-drag to press and drag (move windows). Clicks are
@@ -27,6 +29,10 @@ export class VCursor {
   private link = false;
   private down = false;
   hoverDirty = true;
+  /** touch goes straight to what the finger hits (false: the laptop is a trackpad for the cursor) */
+  direct = true;
+  /** last direct long-press: the click that follows it is swallowed */
+  private suppressT = -1e9;
   /** called whenever the cursor moves (client coords + delta) */
   onMove: ((x: number, y: number, dx: number, dy: number) => void) | null = null;
   onFirstTouch: (() => void) | null = null;
@@ -62,7 +68,8 @@ export class VCursor {
     on(root, 'pointerup', (e: PointerEvent) => this.pup(e));
     on(root, 'pointercancel', (e: PointerEvent) => this.pup(e, true));
     on(root, 'pointerleave', (e: PointerEvent) => { if (e.isTrusted && e.target === root && e.pointerType === 'mouse') { this.shown = false; this.el.classList.add('off'); } });
-    const tblock = (e: TouchEvent) => { if (!(e.target instanceof Element && this.isDirect(e.target))) e.preventDefault(); };
+    const tblock = (e: TouchEvent) => { if (!this.direct && !(e.target instanceof Element && this.isDirect(e.target))) e.preventDefault(); };
+    on(root, 'click', (e: MouseEvent) => { if (performance.now() - this.suppressT < 700) { e.stopImmediatePropagation(); e.preventDefault(); } });
     on(root, 'touchstart', tblock, { capture: true, passive: false });
     on(root, 'touchmove', tblock, { capture: true, passive: false });
     on(root, 'touchend', tblock, { capture: true, passive: false });
@@ -94,7 +101,24 @@ export class VCursor {
   squash(k = 0.72) { this.sq.x = k; this.sq.v = 0; }
 
   // ---------------------------------------------------------------- synthetic input at the cursor
-  target(): Element | null { return document.elementFromPoint(this.x, this.y); }
+  target(): Element | null {
+    // direct touch: nothing is hovered once the finger lifts
+    if (this.direct && this.mode === 'touch' && this.fingers.size === 0) return null;
+    return document.elementFromPoint(this.x, this.y);
+  }
+  /** switch between direct touch and trackpad */
+  setDirect(v: boolean) {
+    this.direct = v;
+    this.fingers.clear();
+    this.g = null;
+    clearTimeout(this.holdTimer);
+    this.hold.classList.remove('on');
+    if (this.mode === 'touch') {
+      if (v) { this.shown = false; this.el.classList.add('off'); }
+      else { const r = this.area(); this.moveTo(r.left + r.width * 0.5, r.top + r.height * 0.45); this.show(); }
+    }
+    this.hoverDirty = true;
+  }
   private fire(type: string, t: Element, extra: Partial<PointerEventInit> = {}) {
     const init: PointerEventInit = { bubbles: true, cancelable: true, composed: true, clientX: this.x, clientY: this.y, screenX: this.x, screenY: this.y, view: window,
       pointerId: 77, pointerType: 'mouse', isPrimary: true, button: 0, buttons: 0, ...extra };
@@ -138,6 +162,7 @@ export class VCursor {
       this.squash(e.button === 2 ? 0.82 : 0.74);
       return;
     }
+    if (this.direct) { this.directDown(e); return; }
     if (e.target instanceof Element && this.isDirect(e.target)) return;
     e.stopImmediatePropagation();
     e.preventDefault();
@@ -183,6 +208,13 @@ export class VCursor {
     }
     const f = this.fingers.get(e.pointerId);
     if (!f) return;
+    if (this.direct) {
+      const d = Math.hypot(e.clientX - f.x, e.clientY - f.y);
+      f.x = e.clientX; f.y = e.clientY; f.t = performance.now();
+      if (this.g) { this.g.dist += d; if (this.g.dist > TAP_DIST) { clearTimeout(this.holdTimer); this.hold.classList.remove('on'); } }
+      this.moveTo(e.clientX, e.clientY);
+      return;
+    }
     if (!(e.target instanceof Element && this.isDirect(e.target))) { e.stopImmediatePropagation(); e.preventDefault(); }
     const now = performance.now();
     const dx = e.clientX - f.x, dy = e.clientY - f.y, dt = Math.max(1, now - f.t);
@@ -231,6 +263,11 @@ export class VCursor {
     if (!e.isTrusted) return;
     if (e.pointerType !== 'touch') { this.down = false; return; }
     if (!this.fingers.has(e.pointerId)) return;
+    if (this.direct) {
+      this.fingers.delete(e.pointerId);
+      if (!this.fingers.size) { clearTimeout(this.holdTimer); this.hold.classList.remove('on'); this.g = null; this.hoverDirty = true; }
+      return;
+    }
     if (!(e.target instanceof Element && this.isDirect(e.target))) { e.stopImmediatePropagation(); e.preventDefault(); }
     this.fingers.delete(e.pointerId);
     const g = this.g;
@@ -251,6 +288,33 @@ export class VCursor {
       this.lastTap = now;
       this.lastTapPos = { x: e.clientX, y: e.clientY };
     }
+  }
+
+  /** direct touch: the finger is the pointer; only a long press needs help (sent as a right-click) */
+  private directDown(e: PointerEvent) {
+    if (this.mode !== 'touch') { this.mode = 'touch'; this.root.classList.add('touch'); }
+    this.shown = false; this.el.classList.add('off');
+    if (!this.touchedOnce) { this.touchedOnce = true; this.onFirstTouch?.(); }
+    const now = performance.now();
+    this.fingers.set(e.pointerId, { x: e.clientX, y: e.clientY, t: now });
+    this.moveTo(e.clientX, e.clientY);
+    clearTimeout(this.holdTimer);
+    this.hold.classList.remove('on');
+    if (this.fingers.size !== 1) { this.g = null; return; }
+    this.g = { t0: now, dist: 0, two: false, twoT: 0, twoMoved: 0, long: false, dragCand: false, dragging: false, last: now };
+    const t0 = e.target instanceof Element ? e.target : null;
+    // no long-press menu inside text fields (the OS handles those)
+    if (t0?.closest('input, textarea')) return;
+    const g = this.g;
+    setTimeout(() => { if (this.g === g && g.dist < TAP_DIST && this.fingers.size === 1) this.hold.classList.add('on'); }, 150 + this.slack);
+    this.holdTimer = window.setTimeout(() => {
+      if (this.g !== g || g.dist > TAP_DIST || this.fingers.size !== 1) return;
+      g.long = true;
+      this.hold.classList.remove('on');
+      this.suppressT = performance.now() + this.slack;
+      try { navigator.vibrate?.(12); } catch { /* ignore */ }
+      this.rightClickAt();
+    }, HOLD_MS + this.slack);
   }
 
   // ---------------------------------------------------------------- scrolling
