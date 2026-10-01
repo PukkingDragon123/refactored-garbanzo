@@ -14,6 +14,8 @@ import { game } from '../../game/game';
 import { el } from '../ui';
 import { guardInput } from '../../core/input';
 import { pendingCount, freshCount } from '../../game/v9/research9';
+import { rawPhotos } from '../../game/photos';
+import { SPECIES_BY_ID } from '../../game/species';
 import { researchApps, OSCtx } from './moriResearch';
 import { RESEARCH_CSS } from '../v7/aeroResearchCss';
 import bliss from '../../assets/bliss.jpg';
@@ -646,12 +648,16 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
       const upd = () => { const n = [q1.value, q2.value, q3.value, pick >= 0 ? 'y' : ''].filter(Boolean).length; answered.set(n / 4, `${n}/4 answered`); };
       q1.onChange = q2.onChange = q3.onChange = upd;
       upd();
-      const kinds: PhotoKind[] = ['butt', 'albatross', 'blurry'];
-      kinds.forEach((k, i) => {
+      // photo of the day: the shots Mori actually took today (camera roll + uploaded), newest first
+      const shots = reportPhotos();
+      if (!shots.length) th.appendChild(el('div', 'tip', 'No photos from today yet. Go and take one!'));
+      shots.forEach((sh, i) => {
         const f = el('div', 'th ctl');
-        const c = photo(k);
-        f.title = ['Chunk’s behind', 'Vanebill in flight', 'Something blurry'][i];
-        f.appendChild(c);
+        const img = el('img') as HTMLImageElement;
+        img.src = sh.img; img.draggable = false;
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover;image-rendering:pixelated;display:block';
+        f.title = sh.bird ? 'Seabird' : 'Photo';
+        f.appendChild(img);
         f.addEventListener('pointerdown', () => {
           pick = i;
           th.querySelectorAll('.th').forEach((x, j) => x.classList.toggle('on', j === i));
@@ -664,13 +670,13 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
       });
       const go = b.querySelector('.go') as HTMLElement;
       go.addEventListener('click', () => {
-        const ok1 = q1.value === 'Scythewing', ok2 = +q2.value === sumCol(0), ok3 = q3.value === 'Falling', ok4 = pick === 1;
+        const ok1 = q1.value === 'Scythewing', ok2 = +q2.value === sumCol(0), ok3 = q3.value === 'Falling', ok4 = pick >= 0 && !!shots[pick]?.bird;
         const mark = (e: HTMLElement, ok: boolean) => { e.classList.remove('ok', 'bad'); e.classList.add(ok ? 'ok' : 'bad'); if (!ok) retrigger(e, 'mos-shake'); };
         mark(q1.el, ok1); mark(q2.v, ok2); mark(q3.el, ok3); mark(th, ok4);
         (b.querySelector('.t1') as HTMLElement).textContent = ok1 ? '' : 'Check the spreadsheet: click the SUM row to total each column.';
         (b.querySelector('.t2') as HTMLElement).textContent = ok2 ? '' : 'Add up the Vanebill column (or click its SUM cell).';
         (b.querySelector('.t3') as HTMLElement).textContent = ok3 ? '' : 'Look at the temperature chart in the spreadsheet.';
-        (b.querySelector('.t4') as HTMLElement).textContent = ok4 ? '' : pick === 0 ? 'The university will not accept Chunk’s behind. Again.' : 'Pick the one with an actual bird in it.';
+        (b.querySelector('.t4') as HTMLElement).textContent = ok4 ? '' : pick < 0 ? 'Pick a photo of the day.' : 'The university wants a seabird in focus. That one isn’t it.';
         if (!(ok1 && ok2 && ok3 && ok4)) { sfx.bad(); retrigger(go, 'mos-shake'); return; }
         // all correct: the report is done the moment it validates; the rest is the victory lap
         game.save.flags['v4:report'] = true;
@@ -695,7 +701,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
           sfx.win();
           if (b.isConnected) {
             act.innerHTML = '';
-            (b.querySelector('.out') as HTMLElement).innerHTML = `<div class="done-stamp"><b>✓ Report complete!</b>Scythewings lead the week, ${sumCol(0)} vanebills, and the water is cooling fast. Cooling fast... huh. Might mention that to Joshu.</div>`;
+            (b.querySelector('.out') as HTMLElement).innerHTML = `<div class="done-stamp">${shots[pick] ? `<img src="${shots[pick].img}" style="width:96px;float:right;margin-left:8px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4);transform:rotate(3deg)">` : ''}<b>✓ Report complete!</b>Scythewings lead the week, ${sumCol(0)} vanebills, and the water is cooling fast. Cooling fast... huh. Might mention that to Joshu.</div>`;
             const c = center(b);
             fx.confetti(c.x - b.offsetWidth * 0.3, c.y - b.offsetHeight / 2, 70, b.offsetWidth * 0.5); fx.confetti(c.x + b.offsetWidth * 0.3, c.y - b.offsetHeight / 2, 70, b.offsetWidth * 0.5);
             fx.bubbles(c.x, c.y, 16, b.offsetWidth * 0.6);
@@ -1271,4 +1277,19 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
   sfx.close();
   setTimeout(() => wrap.remove(), 300);
   guardInput(300);
+}
+
+/** today's real photos for the report: camera roll and uploads, newest first; bird = a usable seabird in it */
+function reportPhotos(): { img: string; bird: boolean }[] {
+  const bird = (sp: string) => SPECIES_BY_ID[sp]?.group === 'Bird';
+  const day = game.save.day;
+  const out: { img: string; bird: boolean; t: number }[] = [];
+  for (const p of rawPhotos()) if (p.day === day && !p.video) out.push({ img: p.img, t: p.id, bird: p.subjects.some(x => bird(x.species) && x.visible > 0.4 && x.inFrame > 0.4 && x.focus > 0.35) });
+  for (const u of game.save.uploads ?? []) if (u.day === day && !u.video) out.push({ img: u.img, t: u.id, bird: u.subjects.some(x => bird(x.species) && x.ok) });
+  out.sort((a, b) => b.t - a.t);
+  // keep at least one bird shot in the choice even if it's older
+  const pick = out.slice(0, 5);
+  const b = out.find(x => x.bird);
+  if (b && !pick.includes(b)) pick[pick.length - 1] = b;
+  return pick;
 }

@@ -25,6 +25,8 @@ import type { Interactable } from '../../world/npc';
 import type { Env } from '../../gfx/renderer';
 
 export const PIVOT: [number, number] = PIVOT5;
+/** the mess table's bounding box in ship pixels (see makeTableFront) */
+const TABLE_FRONT = { x: 288, y: 171, w: 44, h: 32 };
 
 export type ShipPhase = 'morning' | 'engine' | 'deck' | 'storm' | 'wave';
 
@@ -211,6 +213,34 @@ export class ShipScene4 extends FieldScene {
     const parts = paintBoatParts({});
     for (const k of ['wheel', 'radar', 'flag'] as const) this.partFr[k] = parts[k].map((sp, i) => local.add(`s5:${k}${i}`, sp.buf, sp.ax, sp.ay));
     this.makeSmallFrames();
+    this.makeTableFront();
+    // whoever sits down at the mess table sits BEHIND it: its cloth, pedestal and crockery drawn over them
+    main.add(new Custom(52, rr => {
+      const f = this.fr.tableFront;
+      if (!f || this.hullA > 0.98) return;
+      const seated = (a: { x: number; y: number; anim?: string } | undefined) => !!a && Math.abs(a.x - SPOTS.messSeat[0]) < 26 && a.y > S4.lower.ceil && /^(sit|eat)/.test(a.anim ?? '');
+      if (!seated(this.player as never) && !seated(this.jenna as never) && !seated(this.joshu as never)) return;
+      rr.draw(f, TABLE_FRONT.x, TABLE_FRONT.y, 1, 1, 0, this.hullA > 0.02 ? packColor(1, 1, 1, 1 - this.hullA) : 0xffffffff);
+    }));
+  }
+
+  /** the mess table's front (gingham cloth, pedestal, foot, the mug and teapot) cut from the painted interior */
+  private makeTableFront() {
+    const src = this.art.lower.buf, T = TABLE_FRONT;
+    const b = new PixelBuffer(T.w, T.h);
+    const inTable = (x: number, y: number) =>
+      (y >= 180 && y <= 186 && x >= 289 && x <= 330) || // cloth top and drape
+      (y >= 187 && y <= 199 && x >= 308 && x <= 311) || // pedestal
+      (y >= 199 && y <= 201 && x >= 302 && x <= 317) || // foot
+      (y >= 175 && y <= 179 && x >= 292 && x <= 297) || // mug
+      (y >= 172 && y <= 179 && x >= 323 && x <= 330); // teapot
+    for (let y = 0; y < T.h; y++) for (let x = 0; x < T.w; x++) {
+      const wx = T.x + x, wy = T.y + y;
+      if (!inTable(wx, wy)) continue;
+      const c = src.get(wx, wy);
+      if (c >>> 24) b.set(x, y, c);
+    }
+    this.fr.tableFront = local.add('s4:tableFront', b, 0, 0);
   }
 
   private makeSmallFrames() {

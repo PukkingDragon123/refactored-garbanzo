@@ -12,6 +12,8 @@ import type { BubbleLine } from '../../ui/bubbles';
 import { ChunkBuddy } from './buddy';
 import { rand } from '../../core/math';
 import { shipUploadDue } from '../v9/research9';
+import { SPECIES_BY_ID } from '../species';
+import type { RawPhoto } from '../photos';
 
 const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 const F = () => game.save.flags;
@@ -55,6 +57,8 @@ export class ShipStory {
     // Mori's bunk is a little platform so he can lie on it
     s.st.terrain.addPlatform([[348, 182], [398, 182]], 'bridge');
     s.buddy = new ChunkBuddy(s.chunk, { player: s.player, terrain: s.st.terrain, levelSpan: y => s.levelSpan(y) });
+    // the seabirds are out all day: the morning report needs a real photo of one
+    if (!this.flag('v4:stormStarted')) import('./seafauna').then(m => { m.startDeckLife(s); this.watchBirdPhotos(); });
     this.addInteractables();
     if (!this.flag('v4:woke')) {
       await this.wakeUp();
@@ -198,8 +202,10 @@ export class ShipStory {
     it({ x: SPOTS.fishing[0], y: SPOTS.fishing[1], w: 18, label: 'Fish off the stern', standX: SPOTS.fishing[0] + 8, quest: () => (V()['v4:fishCaught'] ?? 0) < 1 && !this.flag('v4:fishUsed'), enabled: () => s.phase === 'deck', action: () => this.fish() });
     it({ get x() { return s.jenna.x; }, get y() { return s.jenna.y; }, w: 14, label: 'Talk to Jenna', get standX() { return s.jenna.x + 22; }, quest: () => rounds() && !this.flag('v4:round:jenna'), enabled: () => calm() && s.phase !== 'engine', action: () => this.talkJenna() } as never);
     s.questPoints.push({ x: () => 150, y: () => L - 34, on: () => s.phase === 'engine' && !this.flag('v4:engineArrive') });
+    // once the rounds are done: up on deck for the photo of the day
+    s.questPoints.push({ x: () => 120, y: () => D - 46, on: () => (V()['v4:rounds'] ?? 0) >= 4 && !this.flag('v9:morningBird') && s.level() === 'lower' });
     // laptop
-    it({ x: SPOTS.moriDesk[0] - 4, y: L, label: 'Use your laptop', standX: SPOTS.moriDesk[0] + 8, quest: () => ((V()['v4:rounds'] ?? 0) >= 4 && !this.flag('v4:report')) || shipUploadDue(), enabled: calm, action: () => this.laptop() });
+    it({ x: SPOTS.moriDesk[0] - 4, y: L, label: 'Use your laptop', standX: SPOTS.moriDesk[0] + 8, quest: () => ((V()['v4:rounds'] ?? 0) >= 4 && this.flag('v9:morningBird') && !this.flag('v4:report')) || shipUploadDue(), enabled: calm, action: () => this.laptop() });
     // flavour: things to poke at around the boat
     const look = (x: number, y: number, label: string, lines: () => BubbleLine[], o: Partial<Interactable> = {}) => it({ x, y, label, standX: x, enabled: calm, action: () => this.say(lines()).then(() => {}), ...o });
     // (nothing to poke at on the mess table itself: it's where you sit down to eat)
@@ -284,6 +290,20 @@ export class ShipStory {
     this.set('v4:ate');
     s.cutscene = false;
     await this.say([{ who: 'mori', text: 'Right. Morning rounds: fish, engine, captain, Jenna. In order of how likely they are to bite me.', expr: 'determined' }]);
+  }
+
+  /** a sharp, visible seabird in a camera photo ticks the report's "photo of the day" step */
+  private watchBirdPhotos() {
+    const s = this.s;
+    const prev = s.cam.onShot;
+    s.cam.onShot = (ph: RawPhoto) => {
+      prev?.(ph);
+      if (this.flag('v9:morningBird') || !this.flag('v4:ate')) return;
+      if (!ph.subjects.some(isBirdShot)) return;
+      this.set('v9:morningBird');
+      game.ui.toast('Photo of the day: <b>got one!</b> Write it up on your laptop.', 'REPORT', 'teal', 3600);
+      s.bark('mori', 'Ooh. That one’s going in the report.', { expr: 'happy' });
+    };
   }
 
   // ---------------------------------------------------------------- rounds
@@ -373,12 +393,15 @@ export class ShipStory {
     this.p.facing = -1;
     this.pose('type');
     const { openMoriOS } = await import('../../ui/v4/moriOS');
-    const canReport = V()['v4:rounds'] >= 4 && this.flag('v4:ate');
+    const canReport = V()['v4:rounds'] >= 4 && this.flag('v4:ate') && this.flag('v9:morningBird');
     await openMoriOS({ report: canReport && !this.flag('v4:report') });
     this.pose(null);
     s.cutscene = false;
     if (!canReport && !this.flag('v4:report')) {
-      await this.say([{ who: 'mori', text: this.flag('v4:ate') ? 'I can’t write the morning report before the morning rounds. That’s just fiction.' : 'Breakfast first. I don’t write reports on an empty stomach.', expr: 'thinking' }]);
+      const why = !this.flag('v4:ate') ? 'Breakfast first. I don’t write reports on an empty stomach.'
+        : (V()['v4:rounds'] ?? 0) < 4 ? 'I can’t write the morning report before the morning rounds. That’s just fiction.'
+        : 'The report needs a photo of the day. A real one. Up on deck, find a seabird, camera out.';
+      await this.say([{ who: 'mori', text: why, expr: 'thinking' }]);
       return;
     }
     if (this.flag('v4:report') && !this.flag('v4:engineCall')) this.engineCall();
@@ -571,4 +594,9 @@ export class ShipStory {
     // Chunk shivers out on the open deck
     if (s.buddy) s.buddy.cold = s.level() !== 'lower' && s.inside < 0.5;
   }
+}
+
+/** a camera subject that counts as a usable seabird photo */
+export function isBirdShot(x: { species: string; visible: number; inFrame: number; focus: number }) {
+  return SPECIES_BY_ID[x.species]?.group === 'Bird' && x.visible > 0.4 && x.inFrame > 0.4 && x.focus > 0.35;
 }
