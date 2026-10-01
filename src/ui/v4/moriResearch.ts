@@ -196,7 +196,7 @@ export function researchApps(os: OSCtx) {
         for (const f of out.found) {
           const known2 = !!entry(f.species);
           const nm = f.ok || known2 ? f.sp?.name ?? 'Unknown animal' : 'Unidentified animal';
-          const bx = el('div', 'bx ' + (f.ok ? 'ok' : 'no'), `<span>${f.ok ? '✓' : '✕'} ${esc(nm)}${f.n > 1 ? ' ×' + f.n : ''}${f.ok ? '' : `<small>${esc(f.why ?? '')}</small>`}</span>`);
+          const bx = el('div', 'bx ' + (f.ok ? 'ok' : 'no'), f.ok || known2 ? `<span>${f.ok ? '✓' : '✕'} ${esc(nm)}${f.n > 1 ? ' ×' + f.n : ''}</span>` : '<span>✕ ?</span>');
           bx.setAttribute('style', boxStyle(f.bbox));
           if (f.bbox[1] < 0.18) bx.classList.add('lo');
           boxes.appendChild(bx);
@@ -241,7 +241,7 @@ export function researchApps(os: OSCtx) {
         <div class="rw"><i>${tot.beh}</i>${tot.beh === 1 ? 'behaviour' : 'behaviours'} recorded</div>
         ${tot.facts ? `<div class="rw"><i>${tot.facts}</i>new ${tot.facts === 1 ? 'finding' : 'findings'}</div>` : ''}
         ${tot.rp ? `<div class="rp">+${tot.rp} RP</div>` : ''}
-        <div class="bt"><div class="gel green ctl log">Open Research Log</div><div class="gel glass ctl more">${pendingCount() ? 'Back to the camera' : 'Done'}</div></div>`);
+        <div class="bt"><div class="gel sm green ctl log">Open Research Log</div><div class="gel sm glass ctl more">${pendingCount() ? 'Back to the camera' : 'Done'}</div></div>`);
       side.insertBefore(sum, side.firstChild);
       (sum.querySelector('.log') as HTMLElement).addEventListener('click', () => { os.from(sum); disc(tot.species[0]); });
       (sum.querySelector('.more') as HTMLElement).addEventListener('click', () => { if (pendingCount()) render(); else os.closeWin('cam'); });
@@ -478,7 +478,7 @@ export function researchApps(os: OSCtx) {
       u.subjects.forEach((s: UploadSubject) => {
         const sp = SPECIES_BY_ID[s.species] ?? null;
         const nm = s.ok || entry(s.species) ? sp?.name ?? s.species : 'Unidentified animal';
-        const x = el('div', 'bx ' + (s.ok ? 'ok' : 'no'), `<span>${s.ok ? '✓' : '✕'} ${esc(nm)}</span>`);
+        const x = el('div', 'bx ' + (s.ok ? 'ok' : 'no'), s.ok || entry(s.species) ? `<span>${s.ok ? '✓' : '✕'} ${esc(nm)}</span>` : '<span>✕ ?</span>');
         x.setAttribute('style', boxStyle(s.bbox));
         if (s.bbox[1] < 0.18) x.classList.add('lo');
         bx.appendChild(x);

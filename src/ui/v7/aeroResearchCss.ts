@@ -23,7 +23,7 @@ export const RESEARCH_CSS = `
 .bx { position: absolute; border-radius: 3px; animation: bxIn 0.42s cubic-bezier(.25,1.8,.45,1) both; }
 .bx.ok { box-shadow: 0 0 0 2px #7dff8a, 0 0 0 3px rgba(10,60,20,0.7), 0 0 12px rgba(120,255,140,0.7); }
 .bx.no { outline: 2px dashed #ff8a70; outline-offset: 0; box-shadow: 0 0 0 3px rgba(80,10,0,0.35); }
-.bx span { position: absolute; left: -2px; bottom: 100%; margin-bottom: 4px; white-space: nowrap; padding: 2px 7px 3px; border-radius: 4px; font: 16px/15px 'Jersey 15', 'Pixelify Sans', monospace; color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,0.6); }
+.bx span { position: absolute; left: -2px; bottom: 100%; margin-bottom: 4px; white-space: nowrap; max-width: 170px; overflow: hidden; text-overflow: ellipsis; padding: 2px 7px 3px; border-radius: 4px; font: 16px/15px 'Jersey 15', 'Pixelify Sans', monospace; color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,0.6); }
 .bx.lo span { bottom: auto; top: 100%; margin: 4px 0 0; }
 .bx.ok span { background: linear-gradient(180deg, #8ae86a 0 45%, #3a9a22 45%); box-shadow: 0 0 0 1px #1c5e0e; }
 .bx.no span { background: linear-gradient(180deg, #ff9a80 0 45%, #d8442c 45%); box-shadow: 0 0 0 1px #6e1406; }
