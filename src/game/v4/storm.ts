@@ -93,7 +93,8 @@ class GiantWave {
       const top = sea - h, d = x - cx;
       const front = d < 0;
       // the body: one stretched ramp column (bright near the crest, deep at the foot); the back is in shadow
-      r.draw(g, x, Math.round(top), 0.5, (h + 14) / 64, 0, front ? lit(1) : lit(0.62));
+      // 3 px wide on a 2 px step: the overlap closes sub-pixel gaps when the camera is zoomed out
+      r.draw(g, x, Math.round(top), 0.75, (h + 14) / 64, 0, front ? lit(1) : lit(0.62));
       if (front) {
         // foam lace sliding down the face
         for (let k = 0; k < 6; k++) {
