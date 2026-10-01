@@ -129,6 +129,12 @@ async function boot() {
     trycop: async () => { const w = await import('./game/v9/wildlife'); return (await import('./ui/v9/trycop')).examineTrycop(game.scene as never, w.W9.crabs.find(c => c.spec.parasite) ?? null); },
     /** V9: a jewel hornet ambush at the nearest nest bush (or where Mori stands); resolves 'escaped' | 'stung' */
     ambush: async () => (await import('./game/v9/hornets')).debugAmbush(game.scene as never),
+    /** ship scene: switch to the afternoon on deck and spawn the open-ocean wildlife */
+    deck: async () => {
+      const s = game.scene as unknown as { phase: string };
+      s.phase = 'deck';
+      return (await import('./game/v4/seafauna')).startDeckLife(game.scene as never);
+    },
   };
 }
 
