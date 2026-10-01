@@ -74,7 +74,9 @@ async function boot() {
     map: async () => (await import('./game/travel2')).openTravelMap(),
     quest: async (id: string) => (await import('./game/quests')).startQuest(id),
     flag: (k: string, v = true) => { game.save.flags[k] = v; },
-    moriOS: async (report = true) => (await import('./ui/v4/moriOS')).openMoriOS({ report }),
+    moriOS: async (report = true, field = false) => (await import('./ui/v4/moriOS')).openMoriOS({ report, field }),
+    /** the salvaged laptop on the island (needs flag v9:laptop for the HUD button / L key) */
+    fieldLaptop: async () => (await import('./game/v9/research9')).openFieldLaptop(game.scene as never),
     noodles: async () => (await import('./ui/v4/noodles')).runNoodleGame(),
     standoff: async () => { const a = await import('./game/v4/islearoha'); return (await import('./ui/v6/standoff')).runNegotiation(a.ROUNDS, a.EXTRA); },
     ramen: async () => (await import('./ui/v6/ramen')).runRamenPour(),

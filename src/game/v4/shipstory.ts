@@ -11,6 +11,7 @@ import type { Interactable } from '../../world/npc';
 import type { BubbleLine } from '../../ui/bubbles';
 import { ChunkBuddy } from './buddy';
 import { rand } from '../../core/math';
+import { shipUploadDue } from '../v9/research9';
 
 const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 const F = () => game.save.flags;
@@ -78,10 +79,12 @@ export class ShipStory {
     } else if (this.flag('v4:engineFixed')) {
       s.phase = 'deck';
       this.placeJenna('desk');
-      // the afternoon's wildlife (unless the storm is already on its way)
-      if (!this.flag('v4:fishUsed') || questStatus('v4deck') !== 'done') import('./seafauna').then(m => m.startDeckLife(s));
+      // the afternoon's wildlife comes back after a reload
+      if (!this.flag('v4:stormStarted')) void import('./seafauna').then(m => m.startDeckLife(s));
     }
-    if (this.flag('v4:fishUsed') && !this.flag('v4:bridge')) setTimeout(() => this.storm(), 1500);
+    // the storm waits while the afternoon quest still wants its photos uploaded
+    const deckOpen = questStatus('v4deck') === 'active' && !this.flag('v9:uploadShip');
+    if (this.flag('v4:fishUsed') && !this.flag('v4:bridge') && !deckOpen) { this.stormArmed = true; setTimeout(() => this.storm(), 1500); }
   }
 
   // ---------------------------------------------------------------- wake up
@@ -196,7 +199,7 @@ export class ShipStory {
     it({ get x() { return s.jenna.x; }, get y() { return s.jenna.y; }, w: 14, label: 'Talk to Jenna', get standX() { return s.jenna.x + 22; }, quest: () => rounds() && !this.flag('v4:round:jenna'), enabled: () => calm() && s.phase !== 'engine', action: () => this.talkJenna() } as never);
     s.questPoints.push({ x: () => 150, y: () => L - 34, on: () => s.phase === 'engine' && !this.flag('v4:engineArrive') });
     // laptop
-    it({ x: SPOTS.moriDesk[0] - 4, y: L, label: 'Use your laptop', standX: SPOTS.moriDesk[0] + 8, quest: () => (V()['v4:rounds'] ?? 0) >= 4 && !this.flag('v4:report'), enabled: calm, action: () => this.laptop() });
+    it({ x: SPOTS.moriDesk[0] - 4, y: L, label: 'Use your laptop', standX: SPOTS.moriDesk[0] + 8, quest: () => ((V()['v4:rounds'] ?? 0) >= 4 && !this.flag('v4:report')) || shipUploadDue(), enabled: calm, action: () => this.laptop() });
     // flavour: things to poke at around the boat
     const look = (x: number, y: number, label: string, lines: () => BubbleLine[], o: Partial<Interactable> = {}) => it({ x, y, label, standX: x, enabled: calm, action: () => this.say(lines()).then(() => {}), ...o });
     // (nothing to poke at on the mess table itself: it's where you sit down to eat)

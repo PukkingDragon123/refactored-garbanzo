@@ -33,6 +33,7 @@ export const V4_QUESTS: QuestDef[] = [
     desc: 'The engine is purring again. Joshu says take the afternoon: photograph whatever is out there and catch something for dinner.',
     steps: [
       { text: 'Photograph wildlife from the deck', done: () => v('v4:photoSpecies') >= 3, progress: n('v4:photoSpecies', 3), hint: 'Q raises the camera. Seabirds circle the mast; watch the water off the bow.' },
+      { text: 'Upload your photos to the laptop', done: f('v9:uploadShip'), hint: 'Your laptop is on your bunk, below deck. Plug the camera in and upload: sharp photos become research entries.' },
       { text: 'Catch a fish at the stern', done: () => v('v4:fishCaught') >= 1, hint: 'The rods are at the stern rail.' },
       { text: 'Study your catch in the hold tank, or give it to Joshu to cook', done: f('v4:fishUsed') },
     ],
