@@ -33,8 +33,8 @@ ISLAND.shell_sunwhorl = {
     });
     // the pearly aperture
     const [ax, ay] = f.at(-0.6, 2.6);
-    const ap = p.maskEllipse(ax, ay, 3.4, 4.2, 0.5);
-    p.fill(ap, (x, y) => { const d = Math.hypot(x + 0.5 - ax, y + 0.5 - ay); return d < 1.8 ? H('#6a3a1a') : d < 2.9 ? NACRE[4] : NACRE[3]; });
+    const ap = p.maskEllipse(ax, ay, 2.6, 3.4, 0.5);
+    p.fill(ap, (x, y) => { const dx = x + 0.5 - ax, dy = y + 0.5 - ay; const d = Math.hypot(dx, dy); if (d > 2 && dx + dy < 0) return NACRE[4]; return dx + dy < -0.5 ? RAMP.pink[4] : dx + dy < 1.4 ? RAMP.pink[2] : H('#4a1a1a'); });
     p.px(Math.floor(ax) - 1, Math.floor(ay) - 2, H('#ffffff'));
   },
   post: p => { sparkle(p, 20, 7, '#fff6cc'); },
@@ -432,21 +432,21 @@ ISLAND.bug_lanternmoth = {
         const u = (dx * ca + dy * sa) / rx, v = (-dx * sa + dy * ca) / ry;
         const d = Math.hypot(u, v);
         if (d > 0.86) return Pm[2];
-        if (spot) { const e = Math.hypot(u - 0.2, v); if (e < 0.22) return H('#ffffff'); if (e < 0.42) return H('#8ff8e8'); if (e < 0.5) return H('#2aa898'); }
+        if (spot) { const e = Math.hypot(u - 0.42, v) * 1.3; if (e < 0.22) return H('#ffffff'); if (e < 0.42) return H('#8ff8e8'); if (e < 0.5) return H('#2aa898'); }
         return Math.abs(v) < 0.08 && d > 0.3 ? Pm[2] : -1;
       });
     };
-    wing(7.8, 16, 4.6, 3.4, 0.75, false);
-    wing(16.2, 16, 4.6, 3.4, -0.75, false);
-    wing(6.6, 9, 6.2, 4.2, -0.45, true);
-    wing(17.4, 9, 6.2, 4.2, 0.45 + Math.PI, true);
-    p.tube([[12, 5.4], [12, 18.6]], t => (t < 0.3 ? 1.9 : 1.6 - (t - 0.3) * 0.9), Pm, { tex: (x, y) => (y % 2 ? -1 : 0), lift: -0.6 });
+    wing(8.4, 16.4, 4, 3, 0.85, false);
+    wing(15.6, 16.4, 4, 3, -0.85, false);
+    wing(6.4, 9.6, 6.4, 3.8, -0.62, true);
+    wing(17.6, 9.6, 6.4, 3.8, 0.62 + Math.PI, true);
+    p.tube([[12, 5.4], [12, 18.6]], t => (t < 0.3 ? 1.9 : 1.6 - (t - 0.3) * 0.9), rp('#1c140c', '#3a2a1a', '#5c4428', '#806038', '#a6844e', '#ccaa70'), { tex: (x, y) => (y % 2 ? -1 : 0) });
     p.line(11, 5, 8, 1, Pm[2]); p.line(12, 5, 15, 1, Pm[2]);
     p.pts([[8, 2], [9, 1], [15, 2], [14, 1]], Pm[3]);
   },
   post: p => {
-    halo(p, 5.4, 9, 4.6, '#80fff0', 130);
-    halo(p, 18.6, 9, 4.6, '#80fff0', 130);
+    halo(p, 4, 7.6, 4.2, '#80fff0', 140);
+    halo(p, 20, 7.6, 4.2, '#80fff0', 140);
   },
 };
 

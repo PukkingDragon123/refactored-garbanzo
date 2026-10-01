@@ -226,14 +226,14 @@ NATURE.bracket = {
   draw: p => {
     const barkR = rp('#140a06', '#28150c', '#3e2414', '#58361e', '#744a28', '#946434');
     p.slab(p.maskBox(1, 1, 5, 22, 1), barkR, 2, { tex: (x, y) => ((y + x * 3) % 4 === 0 ? -1 : hash(x, y, 3) > 0.8 ? 1 : 0) });
-    const Br = rp('#2a1408', '#522a10', '#80461a', '#ac6a28', '#d4983e', '#f2cc72');
+    const Br = rp('#2e1206', '#5e2a0c', '#904816', '#c27024', '#e8a03a', '#fcd070');
     const shelf = (cy: number, r: number, seed: number) => {
       // a woody half-disc seen from a little above: banded top, pale growing rim, dark underside
-      const top = p.maskFn((x, y) => { const dx = x + 0.5 - 5, dy = (y + 0.5 - cy) / (r * 0.5); return dx >= 0 && dx * dx / (r * r) + dy * dy <= 1 && y + 0.5 <= cy + 0.4; });
-      const rim = p.maskFn((x, y) => { const dx = x + 0.5 - 5, dy = (y + 0.5 - cy - 1.4) / (r * 0.5); return dx >= 0 && dx * dx / (r * r) + dy * dy <= 1 && y + 0.5 > cy - 0.2 && y + 0.5 <= cy + 1.9; });
+      const top = p.maskFn((x, y) => { const dx = x + 0.5 - 5, dy = (y + 0.5 - cy) / (r * 0.36); return dx >= 0 && dx * dx / (r * r) + dy * dy <= 1 && y + 0.5 <= cy + 0.4; });
+      const rim = p.maskFn((x, y) => { const dx = x + 0.5 - 5, dy = (y + 0.5 - cy - 1.4) / (r * 0.36); return dx >= 0 && dx * dx / (r * r) + dy * dy <= 1 && y + 0.5 > cy - 0.2 && y + 0.5 <= cy + 1.9; });
       p.fill(rim, (x, y) => (y + 0.5 > cy + 1.2 ? Br[1] : H('#efe0bc')));
       p.fill(top, (x, y) => {
-        const dx = x + 0.5 - 5, dy = (y + 0.5 - cy) / (r * 0.5);
+        const dx = x + 0.5 - 5, dy = (y + 0.5 - cy) / (r * 0.36);
         const d = Math.sqrt(dx * dx / (r * r) + dy * dy);
         if (d > 0.9) return H('#e6d2a4');
         const band = Math.floor(d * 5 + hash(Math.floor(dx / 2), seed, 1) * 0.35) % 2;
@@ -241,9 +241,9 @@ NATURE.bracket = {
       });
       p.drop(Pen.or(top, rim), -0.45, 0, 1);
     };
-    shelf(7, 11.6, 1);
-    shelf(12.4, 10.4, 2);
-    shelf(18.2, 8.4, 3);
+    shelf(5.6, 12, 1);
+    shelf(12.4, 10.6, 2);
+    shelf(19, 8.6, 3);
   },
 };
 
@@ -334,8 +334,8 @@ NATURE.weta = {
     p.seam(hd, Wt[1], 8);
     p.px(3, 15, H('#0c0604')); p.px(3, 14, H('#fff0d0'));
     // long pale antennae streaming back
-    for (const [x, y] of bez([4, 13], [4, 4], [15, 1.2], 26)) p.px(x, y, RAMP.cream[2]);
-    for (const [x, y] of bez([5.4, 13], [8, 6], [18, 4], 24)) p.px(x, y, RAMP.cream[3]);
+    for (const [x, y] of bez([3.6, 13], [0.6, 6], [5, 1.2], 20)) p.px(x, y, RAMP.cream[2]);
+    for (const [x, y] of bez([5.2, 12.6], [5, 5], [11, 2.4], 20)) p.px(x, y, RAMP.cream[3]);
   },
 };
 
@@ -465,34 +465,23 @@ NATURE.grub = {
 // ================================================================ animal samples
 NATURE.furtuft = {
   draw: p => {
-    // cool grey-brown burrower's fur (reads against the warm leather tiles)
-    const Fu = rp('#1e1812', '#3c3026', '#5e4c3c', '#86705a', '#b09a82', '#dccab0');
-    // a tuft snagged on a thorn and hanging down in a ragged tassel of wavy hairs
-    const top = 6.4;
-    const tuft = p.maskFn((x, y) => {
-      const t = (y + 0.5 - top) / 15.6;
-      if (t < 0 || t > 1) return false;
-      const cx = 11.4 + Math.sin(t * 3.2) * 1.4 + t * 1.6;
-      const w = 2.2 + t * 4.6 - (t > 0.8 ? (t - 0.8) * 8 : 0);
-      if (Math.abs(x + 0.5 - cx) > w) return false;
-      const strand = Math.floor((x + 0.5 - cx + 10) / 1.5);
-      const len = 0.82 + hash(strand, 3, 5) * 0.2;
-      return t <= len;
-    });
-    p.puff(tuft, Fu, { r: 3, lift: 0.3, spec: 1 });
-    p.fill(tuft, (x, y) => {
-      const t = (y + 0.5 - top) / 15.6;
-      const cx = 11.4 + Math.sin(t * 3.2) * 1.4 + t * 1.6;
-      const s = Math.floor((x + 0.5 - cx + 10) / 1.5);
-      return s % 3 === 0 ? tone(p.get(x, y), -0.28) : s % 3 === 1 && y % 4 === 0 ? tone(p.get(x, y), 0.15) : -1;
-    });
-    // a few loose hairs drifting off
-    for (const [x, y] of bez([16, 15], [19, 17], [21, 21], 8)) p.px(x, y, Fu[3]);
-    for (const [x, y] of bez([7, 13], [4, 15], [3, 19], 8)) p.px(x, y, Fu[4]);
-    // the thorny twig it hangs from
-    const tw = p.tube([[2.2, 7.6], [21.4, 4.4]], t => 1.45 - t * 0.5, RAMP.briar, { spec: 1 });
-    p.drop(tw, -0.35, 0, 1);
-    for (const [x, y, dx, dy] of [[5, 7, -1, -2], [16, 5, 1, -2], [20, 4, 1, 2]] as number[][]) { p.px(x + dx * 0.5, y + dy * 0.5, RAMP.briar[3]); p.px(x + dx, y + dy, RAMP.briar[4]); }
+    const Fu = rp('#221812', '#443428', '#6a5442', '#927c66', '#bca88e', '#e6d8c0');
+    // thorny twig
+    p.tube([[2.4, 19.8], [21.2, 16.6]], t => 1.4 - t * 0.55, RAMP.briar, { spec: 1 });
+    for (const [x, y, dx, dy] of [[4, 19, -1, 2], [17, 17, 1, 2], [20, 16, 1, -2]] as number[][]) { p.px(x + dx * 0.5, y + dy * 0.5, RAMP.briar[3]); p.px(x + dx, y + dy, RAMP.briar[4]); }
+    // locks of fur caught on a thorn, fanning out like brush strokes, combed into strands
+    const locks: [Pt, Pt, Pt, number, number][] = [
+      [[8.6, 17.6], [3.6, 11], [5, 2.6], 2.1, -0.2],
+      [[9.4, 17.6], [8.6, 9], [14.6, 3], 2.4, 0.5],
+      [[10.2, 17.4], [14, 12.6], [21, 9.4], 2, 0.1],
+    ];
+    for (const [a, c, b, w, lift] of locks) {
+      const cv = curve(bez(a, c, b, 24));
+      const m = p.maskFn((x, y) => { const { t, v } = cv.loc(x, y); if (t < 0 || t > 1) return false; const r = (t < 0.2 ? 0.7 + t / 0.2 * (w - 0.7) : w * (1 - (t - 0.2) / 0.8) ** 0.9) + 0.25; return Math.abs(v) <= r; });
+      p.puff(m, Fu, { r: 2, lift, spec: 1 });
+      p.fill(m, (x, y) => { const { t, v } = cv.loc(x, y); const s = Math.floor((v + 4) * 1.6) % 3; return s === 0 && t > 0.15 ? tone(p.get(x, y), -0.3) : s === 2 && v < 0 && t > 0.3 ? tone(p.get(x, y), 0.2) : -1; });
+      p.drop(m, -0.25);
+    }
   },
 };
 

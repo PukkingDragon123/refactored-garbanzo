@@ -9,7 +9,43 @@ import * as FA from '../art/fauna';
 import { SerpentPainter } from '../art/serpent';
 import { PixelBuffer } from '../art/pixel';
 
+/** ?gallery=icons: every item, skill and UI icon at 1x / 2x / 3x on the leather inventory tile. */
+async function iconGallery() {
+  const [{ installSkin }, I] = await Promise.all([import('../ui/skin'), import('../art/itemicons')]);
+  installSkin();
+  document.body.innerHTML = '';
+  document.body.style.cssText = 'margin:0;background:#2a1a10;font:11px monospace;color:#f2e4bc;display:flex;flex-wrap:wrap;gap:10px;padding:12px;align-items:flex-end';
+  const sets: [string, string[], (id: string) => PixelBuffer, (id: string, s: number) => string][] = [
+    ['item', I.ICON_IDS.items(), I.itemIcon, I.itemIconURL],
+    ['skill', I.ICON_IDS.skills(), I.skillIcon, I.skillIconURL],
+    ['ui', I.ICON_IDS.ui(), I.uiIcon, I.uiIconURL],
+  ];
+  for (const [kind, ids, buf, url] of sets)
+    for (const id of ids) {
+      const w = buf(id).w;
+      const card = document.createElement('div');
+      card.style.cssText = 'display:flex;flex-direction:column;gap:3px;align-items:flex-start';
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;gap:4px;align-items:center';
+      for (const k of [1, 2, 3]) {
+        const tile = document.createElement('div');
+        const px = w * k;
+        tile.style.cssText = `width:${Math.round(px * 1.42)}px;height:${Math.round(px * 1.42)}px;display:grid;place-items:center;background:var(--sk-slot) center/100% 100% no-repeat;image-rendering:pixelated`;
+        const img = document.createElement('img');
+        img.src = url(id, (k * w) / 16);
+        img.style.cssText = `width:${px}px;height:${px}px;image-rendering:pixelated`;
+        tile.appendChild(img);
+        row.appendChild(tile);
+      }
+      const l = document.createElement('div');
+      l.textContent = `${kind}:${id} ${w}px`;
+      card.append(row, l);
+      document.body.appendChild(card);
+    }
+}
+
 export function runGallery(name: string) {
+  if (name === 'icons') { void iconGallery(); return; }
   const items: GalleryItem[] = [];
   if (name === 'flora') {
     items.push({ name: 'treefern', buf: F.paintTreeFern(3, { height: 90 }).buf });

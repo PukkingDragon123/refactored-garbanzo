@@ -159,9 +159,9 @@ KIT.trap = {
     // lens, flash, IR sensor window, status LED
     ring(p, 12, 8.2, 2.8, 4.1, RAMP.iron, { lift: 1 });
     lens(p, 12, 8.2, 2.9);
-    p.slab(p.maskBox(8, 14, 8, 3, 1), rp('#140406', '#2a080c', '#4a1016', '#6e1a20', '#962830', '#c85058'), 2, { hi: 1, lo: -1 });
-    p.px(9, 14, H('#ff9aa0'));
-    p.slab(p.maskBox(9, 18, 6, 2), WHITE, 3);
+    ring(p, 12, 15.6, 1.4, 2.4, RAMP.iron, { lift: 1 });
+    p.fill(p.maskDisc(12, 15.6, 1.45), (x, y) => (x + y < 27 ? RAMP.red[4] : RAMP.red[2]));
+    p.slab(p.maskBox(9, 19, 6, 2), WHITE, 3);
     p.px(16, 4, RAMP.red[4]);
   },
 };
