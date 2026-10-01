@@ -71,7 +71,7 @@ MATERIALS.rope = {
       return p.tube(pts, r, Rr, { tex: (x, y) => ((x + y) % 3 === 0 ? -1 : (x - y + 30) % 6 === 0 ? 0.6 : 0) });
     };
     // coil seen from above: outer loop, middle, inner, with the hole in the centre
-    loop(11.5, 12, 9.4, 7.2, 1.75);
+    loop(11.5, 12, 8.7, 7, 1.75);
     const mid = loop(11.5, 11.4, 6.2, 4.6, 1.7);
     p.drop(mid, -0.3);
     const inn = loop(11.5, 10.9, 3.2, 2.3, 1.55);
@@ -93,7 +93,7 @@ MATERIALS.flax = {
       const t = i / 16 - 0.5;
       for (const dir of [-1, 1]) {
         const a = -0.8 + t * 0.9 * (dir > 0 ? 1 : 1.1);
-        const len = 10 + (i % 3) * 0.8 - Math.abs(t) * 2.5;
+        const len = 9.3 + (i % 3) * 0.8 - Math.abs(t) * 2.5;
         const pts: [number, number][] = [];
         for (let k = 0; k <= 8; k++) {
           const s = k / 8;

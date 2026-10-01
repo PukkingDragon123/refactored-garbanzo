@@ -249,7 +249,7 @@ TOOLS.translator = {
 
 TOOLS.ghillie = {
   draw: p => {
-    const cape = p.maskPoly([11.5, 0.5, 15, 2, 16.6, 5.5, 17.2, 9, 20.5, 14.5, 22.5, 21, 1, 21, 3, 14.5, 6.4, 9, 7, 5.5, 8.2, 2]);
+    const cape = p.maskPoly([11.5, 1.5, 15, 2.8, 16.6, 5.5, 17.2, 9, 20.5, 14.5, 22.5, 21, 1, 21, 3, 14.5, 6.4, 9, 7, 5.5, 8.2, 2]);
     p.puff(cape, RAMP.leaf, { r: 5, lift: -0.2 });
     // hanging fern and flax strands
     const cols = [RAMP.lime[3], RAMP.olive[3], RAMP.leaf[4], RAMP.leaf[2], RAMP.olive[4], RAMP.lime[2]];
@@ -262,7 +262,7 @@ TOOLS.ghillie = {
     }
     // ragged hem
     for (let x = 2; x <= 21; x++) {
-      const n = Math.floor(hash(x, 9, 3) * 3);
+      const n = Math.floor(hash(x, 9, 3) * 2);
       for (let k = 0; k < n; k++) p.px(x, 21 + k, k === n - 1 ? RAMP.olive[2] : RAMP.leaf[2]);
     }
     // the hood opening

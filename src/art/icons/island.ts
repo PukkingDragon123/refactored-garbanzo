@@ -49,8 +49,8 @@ ISLAND.shell_fan = {
       const dx = x + 0.5 - hx, dy = y + 0.5 - hy;
       const a = Math.atan2(dx, -dy);
       const r = Math.hypot(dx, dy);
-      if (Math.abs(a) > 1.18) return false;
-      const edge = 17.6 - Math.abs(Math.sin(a * 6)) * 1.1 - a * a * 2.2;
+      if (Math.abs(a) > 0.98) return false;
+      const edge = 15.6 - Math.abs(Math.sin(a * 6)) * 1.1 - a * a * 2.2;
       return r <= edge && r > 1;
     });
     p.fill(fan, (x, y) => {
@@ -87,7 +87,7 @@ ISLAND.shell_cone = {
       const [u, v] = f.loc(x, y);
       const band = Math.sin(u * 1.25 + Math.sin(v * 1.6) * 1.2);
       if (u < 3.4 && u > 2.4) return Cn[4];
-      if (band > 0.35 && u > 3.2) return Tg[Math.max(0, Math.min(5, Cn.indexOf(p.get(x, y)) + 1))] ?? Tg[3];
+      if (band > 0.2 && u > 3.2) return Tg[Math.max(0, Math.min(5, Cn.indexOf(p.get(x, y)) - 1))] ?? Tg[2];
       return -1;
     });
     const [sx, sy] = f.at(0.8, 0);
@@ -149,7 +149,11 @@ ISLAND.shell_trycop = {
       '...aaaa.................',
     ];
     const oy = 1;
-    const spot = (m: Uint8Array) => p.fill(m, (x, y) => { const n = hash(Math.floor(x / 3), Math.floor(y / 3), 6); const cx = Math.floor(x / 3) * 3 + 1 + Math.floor(n * 2), cy = Math.floor(y / 3) * 3 + 1; return n > 0.45 && x === cx && (y === cy || y === cy + 1) ? RAMP.cream[4] : -1; });
+    const spot = (m: Uint8Array) => {
+      for (const [sx, sy] of [[6, 9], [10, 8], [14, 10], [8, 13], [12, 13], [16, 13], [10, 16]] as Pt[]) {
+        for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) if (p.at(m, sx + dx, sy + dy)) p.px(sx + dx, sy + dy, dx + dy === 0 ? RAMP.cream[5] : RAMP.cream[3]);
+      }
+    };
     const d = p.maskMap(rows, 'd', 0, oy);
     p.puff(d, Tc, { r: 2, spec: 0.94, lift: 0.3 });
     const fx = p.maskMap(rows, 'f', 0, oy);
@@ -189,7 +193,7 @@ ISLAND.kelp = {
     p.puff(rib, Kp, { r: 2.2, spec: 0.96 });
     p.fill(rib, (x, y) => { const { t, v } = c.loc(x, y); return Math.abs(v) < 0.45 ? Kp[4] : Math.sin(t * 34) > 0.6 && Math.abs(v) > 1.4 ? tone(p.get(x, y), -0.3) : -1; });
     p.ball(3.8, 20, 2.6, 2.4, rp('#1e1a08', '#3e3612', '#645a22', '#8c8034', '#b8aa52', '#e4dc98'), { spec: 0.9, lift: 0.4 });
-    p.tube([[3, 21.8], [1.2, 23]], 0.6, Kp);
+    p.tube([[3, 21.4], [1.8, 22.2]], 0.6, Kp);
   },
 };
 

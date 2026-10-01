@@ -62,10 +62,10 @@ NATURE.flaxleaf = {
       });
       return m;
     };
-    blade(bez([11, 21.5], [4, 13], [2.2, 2.4], 20), 1.9);
+    blade(bez([11, 21.5], [4, 13], [2.2, 3.4], 20), 1.9);
     blade(bez([12, 21.5], [20.5, 14], [21.6, 3.6], 20), 1.9);
-    blade(bez([11.6, 21.5], [11, 10], [13.6, 0.8], 20), 2.1);
-    p.tube([[9.4, 21.4], [14.4, 21.4]], 1.3, RAMP.red, { cap: 'flat' });
+    blade(bez([11.6, 21], [11, 10], [13.6, 2.6], 20), 2.1);
+    p.tube([[9.4, 20.8], [14.4, 20.8]], 1.3, RAMP.red, { cap: 'flat' });
   },
 };
 
@@ -225,7 +225,7 @@ NATURE.glowcap = {
 NATURE.bracket = {
   draw: p => {
     const barkR = rp('#140a06', '#28150c', '#3e2414', '#58361e', '#744a28', '#946434');
-    p.slab(p.maskBox(1, 0, 5, 24, 1), barkR, 2, { tex: (x, y) => ((y + x * 3) % 4 === 0 ? -1 : hash(x, y, 3) > 0.8 ? 1 : 0) });
+    p.slab(p.maskBox(1, 1, 5, 22, 1), barkR, 2, { tex: (x, y) => ((y + x * 3) % 4 === 0 ? -1 : hash(x, y, 3) > 0.8 ? 1 : 0) });
     const Br = rp('#2a1408', '#522a10', '#80461a', '#ac6a28', '#d4983e', '#f2cc72');
     const shelf = (cy: number, r: number, seed: number) => {
       // a woody half-disc seen from a little above: banded top, pale growing rim, dark underside
@@ -241,9 +241,9 @@ NATURE.bracket = {
       });
       p.drop(Pen.or(top, rim), -0.45, 0, 1);
     };
-    shelf(4.2, 13, 1);
-    shelf(11.2, 11, 2);
-    shelf(17.6, 8.5, 3);
+    shelf(7, 11.6, 1);
+    shelf(12.4, 10.4, 2);
+    shelf(18.2, 8.4, 3);
   },
 };
 
@@ -318,7 +318,7 @@ NATURE.weta = {
       '...hhhh.pppp.aaaaaaa....',
     ];
     const oy = 4;
-    for (const pts of [[[5, 17], [3, 20], [1.6, 22.4]], [[9.5, 18], [8.6, 21], [6.4, 22.6]], [[13.5, 18], [14.4, 21], [16.6, 22.4]]] as Pt[][]) p.tube(pts, 0.6, Wt, { lift: 0.3 });
+    for (const pts of [[[5, 17], [3.6, 20], [2.8, 22.4]], [[9.5, 18], [8.6, 21], [6.4, 22.6]], [[13.5, 18], [14.4, 21], [16.6, 22.4]]] as Pt[][]) p.tube(pts, 0.6, Wt, { lift: 0.3 });
     p.puff(p.maskMap(rows, 'f', 0, oy), Wt, { r: 1.8, spec: 0.95, lift: 0.3 });
     p.tube([[21.4, 6], [22.4, 13], [21.4, 22.6]], 0.7, Wt, { lift: 0.5 });
     p.pts([[23, 9], [23, 13], [23, 17]], RAMP.cream[4]);
@@ -490,7 +490,7 @@ NATURE.furtuft = {
     for (const [x, y] of bez([16, 15], [19, 17], [21, 21], 8)) p.px(x, y, Fu[3]);
     for (const [x, y] of bez([7, 13], [4, 15], [3, 19], 8)) p.px(x, y, Fu[4]);
     // the thorny twig it hangs from
-    const tw = p.tube([[0.6, 7.6], [23, 4]], t => 1.45 - t * 0.5, RAMP.briar, { spec: 1 });
+    const tw = p.tube([[2.2, 7.6], [21.4, 4.4]], t => 1.45 - t * 0.5, RAMP.briar, { spec: 1 });
     p.drop(tw, -0.35, 0, 1);
     for (const [x, y, dx, dy] of [[5, 7, -1, -2], [16, 5, 1, -2], [20, 4, 1, 2]] as number[][]) { p.px(x + dx * 0.5, y + dy * 0.5, RAMP.briar[3]); p.px(x + dx, y + dy, RAMP.briar[4]); }
   },
