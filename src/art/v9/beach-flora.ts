@@ -229,11 +229,11 @@ export function toetoe(seed: number, size = 40, bed: Bed = 'dry', plumes = 3): S
     const top: P = [sx + lean * h, gy - h];
     for (let t = 0; t < 1; t += 0.01) buf.set(sx + lean * h * t * t, gy - h * t, t > 0.7 ? PLUME[1] : TOE[3]);
     // the plume: a feathery drooping panicle, lit on its upper side
-    const L = size * rng.range(0.45, 0.65);
+    const L = size * rng.range(0.32, 0.46);
     for (let s = 0; s < L; s++) {
       const u = s / L;
-      const px = top[0] + dir * s * 0.55, py = top[1] + s * 0.75 + u * u * L * 0.25;
-      const wdt = 1 + Math.sin(u * Math.PI) * 3.2;
+      const px = top[0] + dir * s * (0.7 - u * 0.4), py = top[1] + s * 0.55 + u * u * L * 0.5;
+      const wdt = 1.5 + Math.sin(Math.min(1, u * 1.4) * Math.PI * 0.8) * 4;
       for (let v = -wdt; v <= wdt; v += 0.5) {
         if (hash2(Math.round(px + v), Math.round(py), seed + k) < 0.25 && Math.abs(v) > wdt * 0.6) continue;
         buf.set(px + v * 0.8, py - v * 0.4, PLUME[clamp(Math.round(3 + (v < 0 ? 1.5 : -0.5) - u * 0.8 + (noise1(s / 2 + v, seed) - 0.5) * 2), 0, 5)]);
