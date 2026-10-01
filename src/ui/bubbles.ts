@@ -207,6 +207,12 @@ const CSS = `
 .bub.bark .box { font-size: 0.9em; }
 .bub.bark .nm { display: none; }
 .bub.edge .tail { display: none; }
+/* docked beside a close-up bust: the tail points left at the speaker, the bubble pops from that side */
+.bub.side { transform-origin: 0 50%; }
+.bub.side .box { font-size: 1.12em; }
+.bub.side .nm { display: none; }
+.bub.side .tail { bottom: auto; left: -14px; top: var(--ty, 50%); transform: translateY(-50%) rotate(90deg); }
+.bub.side .pp { transform-origin: 0 var(--ty, 50%); }
 .bub .pp { transform-origin: var(--tx, 50%) 100%; }
 .bub.pop .pp { animation: bubPop 0.3s cubic-bezier(.2,1.7,.4,1) both; }
 .bub.out .pp { animation: bubOut 0.14s steps(3) both; }
@@ -381,9 +387,19 @@ export class Bubbles {
     const sp = this.speakers.get(lv.who);
     const rootR = this.root.getBoundingClientRect();
     const W = rootR.width, H = rootR.height;
-    const a = lv.close && this.cu.active ? this.cu.anchor() : sp?.anchor() ?? null;
+    const side = !!lv.close && this.cu.active;
+    const a = side ? this.cu.anchor() : sp?.anchor() ?? null;
     const w = lv.el.offsetWidth || lv.w, h = lv.el.offsetHeight || lv.h;
     let x: number, y: number, edge = false;
+    lv.el.classList.toggle('side', side);
+    if (side && a) {
+      // docked beside the cut-in bust, tail pointing back at its mouth
+      const cx = Math.max(12, Math.min(W - w - 12, a[0] + 14));
+      const cy = Math.max(26, Math.min(H - h - 12, a[1] - h * 0.55));
+      lv.el.style.setProperty('--ty', `${Math.max(12, Math.min(h - 12, a[1] - cy))}px`);
+      if (!lv.el.classList.contains('out')) lv.el.style.transform = `translate(${Math.round(cx)}px, ${Math.round(cy)}px)`;
+      return;
+    }
     if (a) {
       x = a[0] - w / 2;
       y = a[1] - h - 22;
