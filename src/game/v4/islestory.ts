@@ -127,6 +127,12 @@ export class IsleStory implements IsleHooks {
     a.setAnim(anim);
   }
   hide(a: Actor) { a.stopWalk(); a.visible = false; a.x = -600; }
+  /** walk an actor somewhere and wait for it, but never longer than ms (then it's simply there) */
+  async walkA(a: Actor, x: number, speed: number, anim: string, ms: number) {
+    await Promise.race([a.walkTo(x, speed, anim), wait(ms)]);
+    if (a.walking) a.stopWalk();
+    a.x = x;
+  }
   async cut<T>(fn: () => Promise<T>): Promise<T> {
     const s = this.s;
     s.cutscene = true;
@@ -288,7 +294,7 @@ export class IsleStory implements IsleHooks {
     // the wreck: in and out through the breach
     const ld = { x: WRECK.climbX, y0: WRECK.floor, y1: groundY(WRECK.climbX) };
     this.it({ x: WRECK.climbX, y: ld.y1, w: 16, label: 'Climb in through the hole', standX: WRECK.climbX, quest: () => this.flag('v4:jennaAwake') && !this.flag('v4:chunkWreck'), enabled: () => !s.inWreck && s.player.state !== 'climb', action: () => this.climbIn(ld) });
-    this.it({ x: WRECK.climbX, y: ld.y0, w: 16, label: 'Climb out onto the sand', standX: WRECK.climbX, enabled: () => s.inWreck && Math.abs(this.p.x - WRECK.climbX) < 40, action: () => s.climbLadder(ld, 1) });
+    this.it({ x: WRECK.climbX, y: ld.y0, w: 16, label: 'Climb out onto the sand', standX: WRECK.climbX, enabled: () => s.inWreck && Math.abs(this.p.x - WRECK.climbX) < 22, action: () => s.climbLadder(ld, 1) });
     // Mori's bunk: the field kit and the laptop in its waterproof case
     this.it({ x: 774, y: WRECK.floor, w: 14, get label() { return kit() ? 'Mori’s bunk' : 'Search your bunk'; }, standX: 762, quest: () => !kit() && this.flag('v4:jennaAwake'), enabled: () => s.inWreck,
       action: () => kit() ? this.say([{ who: 'mori', text: 'My sample jars! ...Most of my sample jars. Somewhere out there is a very confused plankton colony.', expr: 'sad' }]).then(() => {}) : this.searchBunk() } as never);
@@ -549,9 +555,7 @@ export class IsleStory implements IsleHooks {
         { who: 'mori', text: 'Is someone in here?', expr: 'scared', react: 'tremble' },
       ]);
       audio.play('rustleBush', { vol: 0.7 });
-      c.walkTo(SPOT.chunkEat + 6, 90, 'run');
-      await wait(1000);
-      c.stopWalk();
+      await this.walkA(c, SPOT.chunkEat + 6, 90, 'run', 2500);
       c.facing = 1;
       c.setAnim('eat');
       audio.play('munch', { vol: 0.6, pitch: 0.7 });

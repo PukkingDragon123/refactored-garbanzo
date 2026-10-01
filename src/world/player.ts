@@ -142,7 +142,8 @@ export class Player implements Drawable {
     let ax = canControl ? inp.axisX() : 0;
     if (this.state === 'script' && this.scriptTarget !== null) {
       const d = this.scriptTarget - this.x;
-      if (Math.abs(d) < 2) {
+      // arrive when this frame's step would carry us past it (low frame rates would otherwise oscillate forever)
+      if (Math.abs(d) < Math.max(2, Math.abs(this.vx) * dt * 1.1)) {
         this.vx = 0;
         this.x = this.scriptTarget;
         this.finishScript();
