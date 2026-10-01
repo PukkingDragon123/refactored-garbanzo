@@ -73,7 +73,7 @@ export const EXTRA: NegRound[] = [
     say: 'What happened to your ship?', expr: 'thinking', time: 7,
     answers: [
       { t: 'Something huge hit the hull in the storm. Then one wave took the whole ship.', trust: 18, nerves: -8, reply: 'The storm was the worst I’ve ever seen. You’re lucky. All of you.', rexpr: 'worried' },
-      { t: 'We were chasing albatrosses. It got out of hand.', trust: 12, nerves: -4, reply: '...You’re very strange.', rexpr: 'teasing' },
+      { t: 'We were chasing vanebills. It got out of hand.', trust: 12, nerves: -4, reply: '...You’re very strange.', rexpr: 'teasing' },
       { t: 'Ask the reef.', trust: 2, nerves: 8, reply: 'Charming.', rexpr: 'grumpy' },
     ],
   },

@@ -20,8 +20,15 @@ import type { IsleStory } from './islestory';
 import { wait } from './islestory';
 import { runStandoff } from './islearoha';
 import { enableFieldLaptop, openFieldLaptop } from '../v9/research9';
+import { setOutfit } from '../../art/v7/wardrobe';
 
 /** camp layout on the landing beach */
+
+/** night at camp: everyone in the winter expedition gear from the Kittiwake's locker */
+function dressForNight() {
+  for (const id of ['mori', 'jenna', 'joshu', 'aroha']) setOutfit(id, 'winter');
+}
+
 export const CAMP = {
   salvage: 1470, storage: 1590, tent: 1720, research: 1850, bag: 1930, fire: 1990, bed: 2034, cook: 2090, rack: 2175, lean: 2280, elec: 1530,
   benchL: 1956, benchR: 2030, pole0: 1690, pole1: 1900, pole2: 2250, sticks: [1620, 2380, 2480] as number[],
@@ -204,6 +211,7 @@ export class IsleCamp {
       return runStandoff(st);
     }
     this.campMode();
+    if (F('v4:dinner')) dressForNight();
     if (F('v4:dinner') && !F('v4:day1')) { this.nightMode(); return; }
     if (F('v4:day1')) { this.nightMode(true); return; }
     if (this.jobs() >= 6 && !F('v4:dinner')) await this.dinner();
@@ -569,7 +577,10 @@ export class IsleCamp {
     await st.cut(async () => {
       s.hud?.show(false);
       await st.say([{ who: 'joshu', text: 'Grub’s up! Mussel and fish stew, pipi on the side, sand for seasoning.', expr: 'happy', style: 'shout' }]);
+      await st.say([{ who: 'aroha', text: 'It gets cold here at night. Proper cold. Whatever warm stuff you saved off that boat, put it on.', expr: 'serious' }]);
       await st.fadeOut(1);
+      // into the expedition gear salvaged from the wreck's locker
+      dressForNight();
       game.save.flags['v4:campDone'] = true;
       s.clock.set(3.72);
       s.clock.target = 3.9;
