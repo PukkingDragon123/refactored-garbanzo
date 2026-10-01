@@ -524,8 +524,8 @@ const REP_MAX = 3;
 function measure(id: string, cat: ItemCat, taonga: boolean): string[] {
   const h = hash(id);
   const code = `ZEA-${String(h % 9000 + 1000)}-${id.slice(0, 3).toUpperCase()}`;
-  const mass = cat === 'artifact' || cat === 'fossil' ? 40 + (h % 900) : 1 + ((h >> 4) % 60) / 4;
-  const len = 2 + ((h >> 9) % 200) / 10;
+  const mass = cat === 'artifact' || cat === 'fossil' ? 40 + (h % 900) : 1 + ((h >>> 4) % 60) / 4;
+  const len = 2 + ((h >>> 9) % 200) / 10;
   if (taonga) return [`Catalogue ${code}`, `Photographed from 12 angles · ${len.toFixed(1)} cm`, 'Not cleaned, not sampled, not altered'];
   if (cat === 'artifact') return [`Catalogue ${code}`, `${len.toFixed(1)} cm · ${mass} g`, 'Surface scan only: no samples taken'];
   if (cat === 'fossil') return [`Catalogue ${code}`, `${len.toFixed(1)} cm · ${mass} g`, `Matrix: ${pickBy(id + 'm', ['mudstone', 'sandstone', 'limestone', 'volcanic ash', 'siltstone'])}`];
@@ -659,9 +659,12 @@ export interface Session {
   facts: [string, Fact][];
   items: LabOutcome[];
   notes: { d: Discovery; rp: number }[];
+  /** all the RP the session paid (including the weekly bonus) */
   rp: number;
+  /** the weekly target bonus this session completed (0 if none) */
+  bonus: number;
 }
-export const newSession = (): Session => ({ day: today(), photos: 0, ok: 0, species: [], beh: [], facts: [], items: [], notes: [], rp: 0 });
+export const newSession = (): Session => ({ day: today(), photos: 0, ok: 0, species: [], beh: [], facts: [], items: [], notes: [], rp: 0, bonus: 0 });
 /** fold one photo upload into a session */
 export function addUpload(ses: Session, o: UploadOutcome) {
   ses.photos++;
@@ -671,9 +674,12 @@ export function addUpload(ses: Session, o: UploadOutcome) {
   ses.facts.push(...o.newFacts);
   ses.rp += o.rp;
 }
-/** a session is over: count it for the day */
+/** a session is over: count it for the day, and pay the weekly bonus if it completed the targets */
 export function endSession(ses: Session) {
   if (ses.photos || ses.items.length || ses.notes.length) daySum(ses.day).sessions++;
+  const bonus = claimWeek();
+  ses.bonus += bonus;
+  ses.rp += bonus;
   game.persist();
 }
 

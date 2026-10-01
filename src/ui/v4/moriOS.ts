@@ -7,19 +7,29 @@
 // the laptop into a trackpad for the pug cursor instead (see ../v7/aeroCursor). Keyboard: Esc closes (menus first, then
 // the lid), Tab / arrows move a focus glow, Enter or Space clicks.
 // Apps: Spreadsheets (seabird survey + temperature chart), Reports (the morning report: read the
-// data and fill it in), Camera (import the real photos off the camera), Photos, Research Log (one page
-// per species documented by an uploaded photo; see ./moriResearch), Files (with Jenna's locked
-// folder), Plankton Sort and Bubble Pop (quick minigames) and a tiny terminal Jenna installed "for
-// emergencies". Field mode (the salvaged laptop on the island): no reports, a battery that drains.
+// data and fill it in), Camera (import the real photos off the camera), Photos, Files (with Jenna's
+// locked folder), Plankton Sort and Bubble Pop (quick minigames) and a tiny terminal Jenna installed
+// "for emergencies". Field mode (the salvaged laptop on the island): no reports, a battery that drains.
+// V10 research loop (see ../v10): Upload Everything (photos, the backpack's specimens into the research
+// crate with a lab analysis each, field notes, then the day report), the Zealandia Encyclopedia
+// (replaces the Research Log), ZEA Mail (the agency that pays Research Points: targets, praise and
+// snark) and the Skill Tree (spend RP). The tray shows the RP balance and unread agency mail.
 
 import { game } from '../../game/game';
 import { el } from '../ui';
 import { guardInput } from '../../core/input';
-import { pendingCount, freshCount } from '../../game/v9/research9';
+import { pendingCount, uploadDueCount, unreadMail, atCamp, handInCount, pendingNotes } from '../../game/v9/research9';
 import { rawPhotos } from '../../game/photos';
 import { SPECIES_BY_ID } from '../../game/species';
-import { researchApps, OSCtx } from './moriResearch';
+import { researchApps, OSCtx, esc } from './moriResearch';
 import { RESEARCH_CSS } from '../v7/aeroResearchCss';
+import { CSS10 } from '../v10/css10';
+import { icon10 } from '../v10/icons10';
+import { encyclopediaApp } from '../v10/encyclopedia';
+import { uploadAllApp } from '../v10/uploadAll';
+import { agencyApp } from '../v10/agency';
+import { skillTreeApp } from '../v10/skilltree';
+import { freshTotal } from '../v10/encyData';
 import bliss from '../../assets/bliss.jpg';
 import { AERO_CSS } from '../v7/aeroCss';
 import { Spring, Fx, sfx, canvas, R, E, icon, cloudSprite, clamp, bubSprite } from '../v7/aeroFx';
@@ -126,8 +136,15 @@ interface Win {
 interface Pop { el: HTMLElement; anchor?: Element; onClose?: () => void }
 type MenuItem = [string, string | null, () => void] | '-';
 
-export async function openMoriOS(o: { report: boolean; field?: boolean }): Promise<void> {
-  if (!styled) { document.head.appendChild(el('style', '', AERO_CSS + RESEARCH_CSS)); styled = true; }
+/** a desktop icon: the aero set plus the V10 icons (upall, enc, mail, skills, the encyclopedia's) */
+const ico = (name: string, scale = 2) => icon10(name, scale) ?? icon(name, scale);
+
+/**
+ * Open the laptop. report: the ship's morning report is due; field: the salvaged laptop on the island
+ * (and at camp); app: launch an app straight away ('upall' for Upload Everything, 'enc', 'mail', 'skills').
+ */
+export async function openMoriOS(o: { report: boolean; field?: boolean; app?: string }): Promise<void> {
+  if (!styled) { document.head.appendChild(el('style', '', AERO_CSS + RESEARCH_CSS + CSS10)); styled = true; }
   const field = !!o.field;
   if (field) o = { ...o, report: false };
   // the salvaged laptop's battery: a little lower every time it's opened
@@ -140,7 +157,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
       <div class="mos-flare f2"></div><div class="mos-flare f0"></div><div class="mos-flare f1"></div><div class="mos-flare f3"></div>
       <div class="mos-icons"></div><div class="mos-gad"></div><div class="mos-wins"></div>
       <div class="mos-bar"><div class="mos-orb ctl" title="Start"></div><div class="mos-tabs"></div>
-        <div class="mos-tray"><span class="tp ctl" data-direct="1" title="Touch mode"></span><span class="cm ctl" title="Camera connected"></span><span class="wf" title="${field ? 'No internet: shipwrecked' : 'No internet: middle of the ocean'}">✕ Wi-Fi</span><span class="bt${batt < 25 ? ' lo' : ''}" title="${field ? 'Charged off the wreck’s battery. Mostly.' : 'Battery'}">${batt > 60 ? '▮▮▮' : batt > 30 ? '▮▮▯' : '▮▯▯'} ${batt}%</span><span class="clk"></span></div><div class="mos-peek ctl" title="Show desktop"></div></div>
+        <div class="mos-tray"><span class="tp ctl" data-direct="1" title="Touch mode"></span><span class="rpc ctl" title="Research Points (Skill Tree)"></span><span class="ml ctl" title="ZEA Mail"></span><span class="cm ctl" title="Camera connected"></span><span class="wf" title="${field ? 'No internet: shipwrecked' : 'No internet: middle of the ocean'}">✕ Wi-Fi</span><span class="bt${batt < 25 ? ' lo' : ''}" title="${field ? 'Charged off the wreck’s battery. Mostly.' : 'Battery'}">${batt > 60 ? '▮▮▮' : batt > 30 ? '▮▮▯' : '▮▯▯'} ${batt}%</span><span class="clk"></span></div><div class="mos-peek ctl" title="Show desktop"></div></div>
       <div class="mos-menus"></div><div class="mos-focus"></div>
     </div><div class="mos-brand"><i></i>MoriBook</div></div>`;
   if (field) wrap.classList.add('field');
@@ -281,7 +298,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
     bal?.remove();
     const b = el('div', 'mos-balloon' + (bo.onClick ? ' ctl act' : ''), `<b></b><span>${text}</span>`);
     const bb = b.querySelector('b') as HTMLElement;
-    bb.appendChild(icon(bo.icon ?? 'pug', 1));
+    bb.appendChild(ico(bo.icon ?? 'pug', 1));
     bb.appendChild(document.createTextNode(title));
     scr.appendChild(b);
     bal = b;
@@ -323,7 +340,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
       if (it === '-') { m.appendChild(el('hr')); continue; }
       const [label, ic, act] = it;
       const mi = el('div', 'mi ctl');
-      if (ic) mi.appendChild(icon(ic, 1));
+      if (ic) mi.appendChild(ico(ic, 1));
       mi.appendChild(el('span', '', label));
       mi.addEventListener('click', () => { closePops(); act(); });
       m.appendChild(mi);
@@ -482,7 +499,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
     const x = clamp(x0 + n * 28, 6, Math.max(6, S.w - ww - 6)), y = clamp(10 + n * 24, 4, Math.max(4, S.dh - hh - 4));
     const e = el('div', 'mos-win' + (opt.dark ? ' dark' : ''));
     e.innerHTML = `<div class="tb"><span class="ic"></span><span class="tt"></span><div class="ctrls"><b class="mn ctl" title="Minimise"></b><b class="mx ctl" title="Maximise"></b><b class="x ctl" title="Close"></b></div></div><div class="bd"></div>`;
-    (e.querySelector('.ic') as HTMLElement).appendChild(icon(ic, 1));
+    (e.querySelector('.ic') as HTMLElement).appendChild(ico(ic, 1));
     (e.querySelector('.tt') as HTMLElement).textContent = title;
     const [mn, mx, xx] = [...e.querySelectorAll<HTMLElement>('.ctrls b')];
     mn.style.setProperty('--gl', `url(${glyph('min', '#1a3a5a', 'rgba(255,255,255,0.9)')})`);
@@ -492,7 +509,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
     if (typeof body === 'string') bd.innerHTML = body; else bd.appendChild(body);
     wins.appendChild(e);
     const tab = el('div', 'mos-tab ctl');
-    tab.appendChild(icon(ic, 1));
+    tab.appendChild(ico(ic, 1));
     tab.appendChild(el('span', 'tt', title));
     tabs.appendChild(tab);
     const W: Win = { el: e, id, tab, bd, x, y, w: ww, h: hh, max: false, min: false, minning: false, closing: false, drag: false, anim: true, prev: null,
@@ -560,7 +577,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
     return W;
   };
 
-  // ---- the research apps (camera import, research log, photos): see ./moriResearch
+  // ---- the research apps (camera import, photos: ./moriResearch; the V10 loop: ../v10)
   const os: OSCtx = {
     field,
     win: (id, title, ic, w, h, body) => win(id, title, ic, w, h, body),
@@ -572,17 +589,37 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
     badges: () => badges(),
     oldPhotos: ([['albatross', 'Fluting vanebill, day 20. Whistled at me the whole time.'], ['dolphins', 'Moonfin porpoises riding the bow wave'], ['sunset', 'The Kittiwake at sunset (Jenna took this one)'], ['jennaSleep', 'Jenna, asleep on her keyboard at 3 a.m. "zzzzzzzzzzzzzzzz" x 4000'], ['joshuFish', 'Joshu and The Fish That Was Bigger Last Time He Told It'], ['chunkBucket', 'Chunk in a bucket. He chose this.']] as [PhotoKind, string][])
       .map(([k, cap]) => ({ key: k, cap, make: () => photo(k) })),
+    balloon: (title, text, ms, bo) => balloon(title, text, ms, bo),
+    open: (app, arg) => { closePops(); if (app === 'enc') ENC.open(arg); else if (app === 'mail') MAIL.open(arg); else if (app === 'skills') SK.open(arg); else if (app === 'upall') UP.open(); else apps[app]?.(); },
+    refresh: () => { RA.refresh(); ENC.refresh(); MAIL.refresh(); SK.refresh(); UP.refresh(); badges(); },
+    sessionDone: ses => {
+      const got = MAIL.react(ses);
+      MAIL.refresh();
+      badges();
+      const m = got.find(x => x.tag === 'upload') ?? got[0];
+      if (m) setTimeout(() => { if (!closed) balloon('New mail from ZEA', `<b>${esc(m.subj)}</b>${got.length > 1 ? ` (+${got.length - 1} more)` : ''}`, 7000, { icon: 'mail', onClick: () => MAIL.open(m.id) }); }, 900);
+    },
+    icon: (name, scale) => ico(name, scale),
   };
   const RA = researchApps(os);
-  /** desktop & tray badges: photos waiting on the camera, unread research entries */
-  const trayCam = $('.mos-tray .cm');
+  const ENC = encyclopediaApp(os, RA);
+  const MAIL = agencyApp(os);
+  const SK = skillTreeApp(os, MAIL);
+  const UP = uploadAllApp(os, RA);
+  /** desktop & tray badges: photos waiting on the camera, the haul to upload, new encyclopedia pages, unread mail, the RP balance */
+  const trayCam = $('.mos-tray .cm'), trayRp = $('.mos-tray .rpc'), trayMail = $('.mos-tray .ml');
   trayCam.addEventListener('click', () => { lastPress = center(trayCam); apps.cam(); });
-  let lastPend = -1;
+  trayRp.addEventListener('click', () => { lastPress = center(trayRp); SK.open(); });
+  trayMail.addEventListener('click', () => { lastPress = center(trayMail); MAIL.open(); });
+  let lastPend = -1, lastRp = -1, lastMail = -1;
+  const count = (k: string, n: number) => { const e = iconEls[k]; if (e) { e.dataset.n = n ? String(n) : ''; e.classList.toggle('cnt', n > 0); } };
   const badges = () => {
     const n = pendingCount();
-    const ci = iconEls.cam;
-    if (ci) { ci.dataset.n = n ? String(n) : ''; ci.classList.toggle('cnt', n > 0); }
-    iconEls.disc?.classList.toggle('new', freshCount() > 0);
+    count('cam', n);
+    count('upall', uploadDueCount());
+    count('mail', unreadMail());
+    iconEls.enc?.classList.toggle('new', freshTotal() > 0);
+    iconEls.skills?.classList.toggle('new', SK.buyable() > 0);
     trayCam.style.display = n ? '' : 'none';
     if (n !== lastPend) {
       trayCam.innerHTML = '';
@@ -590,6 +627,17 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
       trayCam.appendChild(document.createTextNode(String(n)));
       if (lastPend >= 0 && n > lastPend) retrigger(trayCam, 'pop');
       lastPend = n;
+    }
+    const rp = game.save.rp;
+    if (rp !== lastRp) { trayRp.textContent = `◆ ${rp} RP`; if (lastRp >= 0) retrigger(trayRp, 'pop'); lastRp = rp; }
+    const um = unreadMail();
+    trayMail.style.display = um ? '' : 'none';
+    if (um !== lastMail) {
+      trayMail.innerHTML = '';
+      trayMail.appendChild(ico('mail', 0.75));
+      trayMail.appendChild(document.createTextNode(String(um)));
+      if (lastMail >= 0 && um > lastMail) retrigger(trayMail, 'pop');
+      lastMail = um;
     }
   };
 
@@ -775,7 +823,11 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
     },
     photos: () => RA.photos(),
     cam: () => RA.cam(),
-    disc: () => RA.disc(),
+    disc: () => ENC.open(),
+    enc: () => ENC.open(),
+    upall: () => UP.open(),
+    mail: () => MAIL.open(),
+    skills: () => SK.open(),
     files: () => {
       const b = el('div');
       b.innerHTML = `<div class="addr"><div class="gel glass sm">◀</div><span>Computer ▸ MoriBook ▸ Files</span></div>`;
@@ -1009,9 +1061,13 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
   };
 
   // ---- desktop icons
-  const desk: [string, string, string, boolean?][] = [
+  const desk: [string, string, string, boolean?][] = field ? [
+    ['upall', 'Upload All', 'upall'], ['cam', 'Camera', 'cam'], ['enc', 'Encyclo-pedia', 'enc'], ['mail', 'ZEA Mail', 'mail'], ['skills', 'Skill Tree', 'skills'], ['photos', 'Photos', 'photo'],
+    ['report', 'Reports', 'report'], ['sheet', 'Spread-sheets', 'sheet'], ['files', 'Files', 'folder'], ['plankton', 'Plankton Sort', 'game'], ['bubbles', 'Bubble Pop', 'bubbles'], ['bin', 'Recycle Bin', 'bin'], ['term', 'Jenna-Shell', 'term'],
+  ] : [
     ['report', 'Reports', 'report', o.report && !game.save.flags['v4:report']], ['sheet', 'Spread-sheets', 'sheet'], ['cam', 'Camera', 'cam'], ['photos', 'Photos', 'photo'],
-    ['disc', 'Research Log', 'disc'], ['files', 'Files', 'folder'], ['plankton', 'Plankton Sort', 'game'], ['bubbles', 'Bubble Pop', 'bubbles'], ['term', 'JennaShell', 'term'], ['bin', 'Recycle Bin', 'bin'],
+    ['enc', 'Encyclo-pedia', 'enc'], ['mail', 'ZEA Mail', 'mail'], ['skills', 'Skill Tree', 'skills'], ['upall', 'Upload All', 'upall'],
+    ['files', 'Files', 'folder'], ['plankton', 'Plankton Sort', 'game'], ['bubbles', 'Bubble Pop', 'bubbles'], ['term', 'JennaShell', 'term'], ['bin', 'Recycle Bin', 'bin'],
   ];
   const launch = (id: string, from?: Element) => {
     if (from) {
@@ -1025,8 +1081,8 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
   };
   const iconEls: Record<string, HTMLElement> = {};
   for (const [id, name, ic, isNew] of desk) {
-    const d = el('div', 'mos-ic ctl' + (isNew ? ' new' : ''));
-    d.appendChild(icon(ic, 2));
+    const d = el('div', 'mos-ic ctl' + (isNew ? ' new' : '') + (id === 'upall' && field ? ' big0' : ''));
+    d.appendChild(ico(ic, 2));
     d.appendChild(el('span', '', name));
     d.addEventListener('click', () => launch(id, d));
     iconsEl.appendChild(d);
@@ -1046,15 +1102,15 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
     m.append(l, r);
     for (const [id, name, ic] of desk) {
       const mi = el('div', 'mi ctl');
-      mi.appendChild(icon(ic, 1));
-      mi.appendChild(el('span', '', name.replace('Spread-sheets', 'Spreadsheets')));
+      mi.appendChild(ico(ic, 1));
+      mi.appendChild(el('span', '', name.replace('Spread-sheets', 'Spreadsheets').replace('Encyclo-pedia', 'Encyclopedia').replace('Upload All', 'Upload Everything').replace('Jenna-Shell', 'JennaShell')));
       mi.addEventListener('click', () => { closePops(); lastPress = center(orb); apps[id](); });
       l.appendChild(mi);
     }
     const av = el('div', 'av');
     av.appendChild(icon('pug', 2));
     r.append(av, el('div', 'nm', 'Mori'));
-    for (const [label, id] of [['Documents', 'files'], ['Pictures', 'photos'], ['Research Log', 'disc'], ['Games', 'plankton'], ['Blow bubbles', '*b'], ['Pet Chunk', '*p']] as const) {
+    for (const [label, id] of [['Documents', 'files'], ['Pictures', 'photos'], ['Encyclopedia', 'enc'], ['ZEA Mail', 'mail'], ['Games', 'plankton'], ['Blow bubbles', '*b'], ['Pet Chunk', '*p']] as const) {
       const mi = el('div', 'mi ctl', label);
       mi.addEventListener('click', () => { closePops(); if (id === '*b') blow(); else if (id === '*p') { const c = center(orb); pet(c.x + 20, c.y - 30); } else { lastPress = center(orb); apps[id](); } });
       r.appendChild(mi);
@@ -1304,23 +1360,40 @@ export async function openMoriOS(o: { report: boolean; field?: boolean }): Promi
     setTimeout(() => { if (closed) return; lastPress = center(iconEls.sheet); apps.sheet(); }, 450);
     setTimeout(() => { if (closed) return; lastPress = center(iconEls.report); apps.report(); balloon('Morning report due', 'Fill it in from the survey spreadsheet, then send it.'); }, 650);
   }
-  // the camera plugs in: its icon hops, the tray lights up and a balloon offers the import
+  // the camera plugs in: its icon hops, the tray lights up and a balloon offers the import (at camp
+  // with specimens or field notes too: Upload Everything)
+  const welcomed = MAIL.welcome();
   badges();
   const pend = pendingCount();
-  if (pend) {
+  const nItems = atCamp() ? handInCount() : 0, nNotes = pendingNotes().length;
+  if (o.app && !reportDue) setTimeout(() => { if (!closed) { lastPress = center(iconEls[o.app!] ?? orb); os.open(o.app!); } }, 520);
+  if (pend || nItems || nNotes) {
     setTimeout(() => {
       if (closed) return;
-      const ci = iconEls.cam;
-      retrigger(ci, 'pop');
-      ci.classList.add('plug');
-      const c = center(ci);
-      fx.sparkle(c.x, c.y - 10, 14, 90); fx.bubbles(c.x, c.y, 8, 50); fx.ring(c.x, c.y - 8, 'rgba(160,255,200,0.95)', 60);
-      sfx.beep(); setTimeout(() => sfx.pick(), 160);
-      if (!(reportDue && bal)) balloon('Camera connected', `<b>${pend} new photo${pend === 1 ? '' : 's'}</b> on the ZX-7. Click here to upload ${pend === 1 ? 'it' : 'them'} to the Research Log.`, 9000, { icon: 'cam', onClick: () => apps.cam() });
+      if (pend) {
+        const ci = iconEls.cam;
+        retrigger(ci, 'pop');
+        ci.classList.add('plug');
+        const c = center(ci);
+        fx.sparkle(c.x, c.y - 10, 14, 90); fx.bubbles(c.x, c.y, 8, 50); fx.ring(c.x, c.y - 8, 'rgba(160,255,200,0.95)', 60);
+        sfx.beep(); setTimeout(() => sfx.pick(), 160);
+      }
+      if (nItems || nNotes) { const ui = iconEls.upall; if (ui) { retrigger(ui, 'pop'); const c = center(ui); fx.sparkle(c.x, c.y - 10, 12, 80); } }
+      if ((reportDue && bal) || o.app) return;
+      if (nItems || nNotes) {
+        const parts = [pend ? `${pend} photo${pend === 1 ? '' : 's'}` : '', nItems ? `${nItems} specimen${nItems === 1 ? '' : 's'}` : '', nNotes ? `${nNotes} field note${nNotes === 1 ? '' : 's'}` : ''].filter(Boolean);
+        balloon(atCamp() && field ? 'Back at camp' : 'Ready to upload', `<b>${parts.join(', ')}</b> to upload. Click here to upload everything in one go.`, 9000, { icon: 'upall', onClick: () => UP.open() });
+      } else balloon('Camera connected', `<b>${pend} new photo${pend === 1 ? '' : 's'}</b> on the ZX-7. Click here to upload ${pend === 1 ? 'it' : 'them'} to the Encyclopedia.`, 9000, { icon: 'cam', onClick: () => apps.cam() });
     }, reportDue ? 9000 : 800);
   } else if (field && opens === 1) {
     setTimeout(() => { if (!closed) balloon('It boots!', `Sand in the hinges, ${batt}% battery, and every file survived. The camera plugs in here when you have photos to upload.`, 8000); }, 900);
   }
+  // agency mail waiting
+  const um = unreadMail();
+  if (um && !o.app) setTimeout(() => {
+    if (closed || bal) return;
+    balloon('ZEA Mail', welcomed ? 'A message from the Zealandia Expedition Agency, the people who sent the expedition. (Tua says hi.)' : `<b>${um} unread message${um === 1 ? '' : 's'}</b> from the agency.`, 7000, { icon: 'mail', onClick: () => MAIL.open() });
+  }, reportDue ? 20000 : pend || nItems || nNotes ? 10500 : field && opens === 1 ? 9500 : 1600);
   lid.addEventListener('click', () => finish());
 
   await new Promise<void>(res => { finish = () => { finish = () => {}; res(); }; });
