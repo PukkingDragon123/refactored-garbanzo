@@ -251,15 +251,15 @@ function patchPixel(x: number, y: number, t: number, p: Patch, stage: number): C
 
 // ------------------------------------------------------------------ the outrigger
 /** the ama: a shaped driftwood float alongside on the near side, on two booms (iako) lashed across the gunwales */
-export const AMA = { x0: 14, x1: 100, cy: KWL + 1, r: 3.8 };
+export const AMA = { x0: 14, x1: 100, cy: KWL - 1.5, r: 3.8 };
 export function amaRig(): Spr {
   const b = mk();
   paintAma(b, AMA.cy);
   for (const bx of [24, 72]) {
     const y0 = sheerY(bx) - 1, y1 = AMA.cy - AMA.r + 0.5;
-    pole(b, bx, y0, bx - 3, y1, P.teak, 3);
+    pole(b, bx, y0, bx - 7, y1, P.teak, 3);
     // a curved crook where it meets the float, lashed on
-    for (let k = -2; k <= 1; k++) { put(b, bx - 3 + k, y1, P.rope[4]); put(b, bx - 3 + k, y1 + 1, P.rope[2]); }
+    for (let k = -2; k <= 1; k++) { put(b, bx - 7 + k, y1, P.rope[4]); put(b, bx - 7 + k, y1 + 1, P.rope[2]); }
     for (let k = -1; k <= 1; k++) { put(b, bx + k, y0 + 1, P.rope[4]); put(b, bx + k, y0 + 2, P.rope[2]); }
   }
   outlineAll(b);

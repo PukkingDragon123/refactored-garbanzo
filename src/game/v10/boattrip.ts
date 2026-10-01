@@ -45,12 +45,16 @@ const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
 /** mean sea level on the boat plane */
 export const WATER = 206;
+/** the boat is drawn a little larger than the cast's pixels (as on the camp's dry sand), so three
+ *  adults and a pug fit in her like they would in a real 3.4 m tender */
+const BS = 1.2;
 /** boat-local origin in world space */
-const BX = 440, BY = WATER - K.KWL;
-const PIV: [number, number] = [BX + K.KPIV[0], WATER];
-/** inside the boat: the floorboards Mori stands on, and how far he can shuffle */
-const FLOOR = BY + 24;
-const SEATS = { joshu: BX + 20, mori: BX + 54, jenna: BX + 36, aroha: BX + 92, chunk: BX + 106 };
+const BX = 430, BY = WATER - K.KWL * BS;
+const PIV: [number, number] = [BX + K.KPIV[0] * BS, WATER];
+const bx = (x: number) => BX + x * BS, by = (y: number) => BY + y * BS;
+/** inside the boat: the floorboards (below the waterline, as in any dinghy), and the seats */
+const FLOOR = by(30.5);
+const SEATS = { joshu: bx(20), mori: bx(54), jenna: bx(36), aroha: bx(91), chunk: bx(106) };
 const CRUISE = 30, FULL = 64, DRIFT = 5;
 
 interface Foam { x: number; life: number; max: number; w: number }
@@ -158,12 +162,13 @@ export class BoatTripScene extends FieldScene {
     // the sea in front of the hull; foam and the wake ride it; fishing draws over it
     st.addLayer('sea-near', BAND_P.near, 0, 0.6, 0, 1).add(this.ocean.band('near'));
     st.layer('sea-near').add(new Custom(40, rr => this.drawWake(rr)));
+    st.layer('sea-near').add(new Custom(41, rr => this.drawAma(rr)));
     st.addLayer('sea-front', BAND_P.front, 0, 0.5, 0, 1).add(this.ocean.band('front'));
     st.addLayer('sea-fish', 1, 0, 0, 0, 1).add(new Custom(0, rr => this.fishDraw?.(rr)));
     st.addLayer('wind', 1, 0, 0, 0.4, 1).add(new Custom(0, rr => this.drawWind(rr)));
     st.layer('sea-horizon').add(updater(dt => { this.weather.update(dt); this.ocean.update(dt); }));
     // the floorboards
-    st.terrain.addGround([[BX + 8, FLOOR], [BX + K.KL - 10, FLOOR]], 'bridge' as never);
+    st.terrain.addGround([[bx(8), FLOOR], [bx(K.KL - 10), FLOOR]], 'bridge' as never);
     // the crew
     const crew = (id: string, x: number, f = 1) => { const a = this.addActor(id, x, FLOOR, f, main); a.terrain = null; a.z = 40; a.idleAnim = 'sit'; a.setAnim('sit'); a.fidget = true; return a; };
     this.joshu = crew('joshu', SEATS.joshu);
@@ -188,7 +193,7 @@ export class BoatTripScene extends FieldScene {
   /** everything that needs the player and the camera (runs before the first frame) */
   private setup() {
     const p = this.player;
-    p.minX = BX + 34; p.maxX = BX + 78;
+    p.minX = bx(34); p.maxX = bx(78);
     p.noRun = true;
     p.ground = 'wood';
     p.speedK = 0.6;
@@ -239,8 +244,8 @@ export class BoatTripScene extends FieldScene {
       i.y = FLOOR; i.w = i.w ?? 14; i.h = i.h ?? 30;
       this.interact.push(i);
     };
-    it({ x: BX + 34, label: 'Fish off the stern', w: 40, enabled: () => this.phase === 'stop' && this.plan.stop === 'fish' && !this.fishing, action: () => this.fish() });
-    it({ x: BX + 70, label: 'Snorkel over the reef', w: 40, enabled: () => this.phase === 'stop' && this.plan.stop === 'reef', action: () => this.dive() });
+    it({ x: bx(34), label: 'Fish off the stern', w: 40, enabled: () => this.phase === 'stop' && this.plan.stop === 'fish' && !this.fishing, action: () => this.fish() });
+    it({ x: bx(70), label: 'Snorkel over the reef', w: 40, enabled: () => this.phase === 'stop' && this.plan.stop === 'reef', action: () => this.dive() });
     it({ x: SEATS.joshu + 6, label: 'Tell Joshu to head home', w: 16, enabled: () => this.phase === 'stop' && (this.plan.stop === 'fish' || this.plan.stop === 'reef'), action: () => this.headHome() });
     it({ x: SEATS.aroha, label: 'Talk to Aroha', w: 12, enabled: () => !this.fishing && !this.cutscene, action: () => this.chat('aroha') });
     it({ x: SEATS.chunk, label: 'Scratch Chunk’s ears', w: 10, enabled: () => !this.fishing && !this.cutscene, action: () => this.pet() });
@@ -267,8 +272,8 @@ export class BoatTripScene extends FieldScene {
       this.updateProgress();
     }
     // ride the swell: heave with the sea under the pivot, pitch with its slope across the hull
-    const hb = this.ocean.heightAt(BX + 6), hf = this.ocean.heightAt(BX + K.KL - 6), hm = this.ocean.heightAt(PIV[0]);
-    const targetRot = Math.atan2(hf - hb, K.KL - 12) * 0.85;
+    const hb = this.ocean.heightAt(bx(6)), hf = this.ocean.heightAt(bx(K.KL - 6)), hm = this.ocean.heightAt(PIV[0]);
+    const targetRot = Math.atan2(hf - hb, (K.KL - 12) * BS) * 0.85;
     for (let n = Math.max(1, Math.ceil(dt / 0.01)), h = dt / n, i = 0; i < n; i++) {
       this.rotV += ((targetRot - this.rot) * 30 - this.rotV * 7) * h;
       this.rot += this.rotV * h;
@@ -335,7 +340,7 @@ export class BoatTripScene extends FieldScene {
 
   // ---------------------------------------------------------------- boat space
   /** boat-local point -> world (the rocking transform) */
-  boatToWorld(x: number, y: number): [number, number] { return this.shipToWorld(BX + x, BY + y); }
+  boatToWorld(x: number, y: number): [number, number] { return this.shipToWorld(bx(x), by(y)); }
   /** boat plane (world, unrotated) -> world: the same transform the main layer draws with */
   shipToWorld(x: number, y: number): [number, number] {
     const c = Math.cos(this.rot), sn = Math.sin(this.rot);
@@ -375,7 +380,7 @@ export class BoatTripScene extends FieldScene {
     if (!f) return;
     r.pushTransform(PIV[0], PIV[1], this.rot, 0, this.bob);
     const y0 = f.ay + K.KWL + 1;
-    if (y0 < f.h) r.drawSub(f, 0, y0, f.w, f.h - y0, BX - f.ax, BY - f.ay + y0, 1, 1, color);
+    if (y0 < f.h) r.drawSub(f, 0, y0, f.w, f.h - y0, BX - f.ax * BS, BY + (y0 - f.ay) * BS, BS, BS, color);
     r.popTransform();
   }
   cruise() { return this.weather.cruise; }
@@ -388,26 +393,44 @@ export class BoatTripScene extends FieldScene {
 
   // ---------------------------------------------------------------- drawing
   private drawBoatBack(r: Renderer) {
-    r.draw(this.fr.back, BX, BY);
+    r.draw(this.fr.back, BX, BY, BS, BS);
   }
   private drawSail(r: Renderer, t: number) {
-    if (this.phase === 'stop') { r.draw(this.fr.furled, BX, BY); return; }
+    if (this.phase === 'stop') { r.draw(this.fr.furled, BX, BY, BS, BS); return; }
     const fill = this.speed > 22 ? 2 : this.speed > 9 ? 1 : 0;
     const k = Math.floor(t * (fill === 2 ? 5 : 9)) % 4;
-    r.draw(this.sailFr[fill][k], BX, BY);
+    r.draw(this.sailFr[fill][k], BX, BY, BS, BS);
   }
   private drawBoatFront(r: Renderer, t: number) {
-    r.draw(this.fr.front, BX, BY);
+    r.draw(this.fr.front, BX, BY, BS, BS);
     const mf = this.motor ? Math.floor(t * 24) % 3 : 0;
-    r.draw(this.motorFr[mf], BX, BY);
+    r.draw(this.motorFr[mf], BX, BY, BS, BS);
     // the tiller: from the outboard's grip to Joshu's hand
     const jh = this.joshu.handPos();
     if (jh && this.joshu.anim === 'sit') {
-      const gx = BX + 16, gy = BY + K.sheerY(0) - 8;
+      const gx = bx(16), gy = by(K.sheerY(0) - 8);
       const n = Math.ceil(Math.hypot(jh[0] - gx, jh[1] - gy));
       for (let i = 0; i <= n; i++) { const u = i / n; r.rect(Math.round(gx + (jh[0] - gx) * u), Math.round(gy + (jh[1] - gy) * u), 1, 1, packColor(0.15, 0.13, 0.17, 1)); }
     }
-    r.draw(this.fr.ama, BX, BY);
+  }
+  /** the ama rides in the water alongside: drawn over the near sea band, its wet half showing
+   *  through the surface as a dark shape, the dry top in full colour */
+  private drawAma(r: Renderer) {
+    const f = this.fr.ama;
+    r.pushTransform(PIV[0], PIV[1], this.rot, 0, this.bob);
+    // rows of the sprite above the waterline at the float (boat-local y = cut)
+    const [ax, ay] = this.boatToWorld((K.AMA.x0 + K.AMA.x1) / 2, K.AMA.cy);
+    const surf = this.seaY(ax);
+    const cut = clamp(K.AMA.cy + (surf - ay) / BS, K.AMA.cy - K.AMA.r - 1, K.AMA.cy + K.AMA.r + 1);
+    const row = Math.round(f.ay + cut);
+    r.draw(f, BX, BY, BS, BS, 0, packColor(0.42, 0.62, 0.66, 0.62));
+    if (row > 0) r.drawSub(f, 0, 0, f.w, Math.min(f.h, row), BX - f.ax * BS, BY - f.ay * BS, BS, BS);
+    r.popTransform();
+    // a lick of foam where it cuts the surface
+    if (this.speed > 4) for (let i = 0; i < 8; i++) {
+      const [fx] = this.boatToWorld(K.AMA.x1 - 2 - i * 2, K.AMA.cy);
+      r.rect(Math.round(fx), Math.round(this.seaY(fx) - 1), 2, 1, packColor(1, 1, 1, 0.75 - i * 0.08));
+    }
   }
   /** foam on the water: the wake astern and the bow wave */
   private drawWake(r: Renderer) {
@@ -451,8 +474,8 @@ export class BoatTripScene extends FieldScene {
       r.draw(H.home, x, hy, 0.8, 0.8);
     }
     if (H.ahead) {
-      const k = lerp(0.3, 1, smoothstep(0.2, 1, f));
-      const x = cx + half * lerp(0.95, 0.42, smoothstep(0, 1, f));
+      const k = lerp(0.32, 1.35, smoothstep(0.15, 1, f));
+      const x = cx + half * lerp(0.92, 0.16, smoothstep(0, 1, f));
       r.draw(H.ahead, x, hy, k, k);
       if (H.glow) { r.emissive(0.8); r.draw(H.glow, x, hy, k, k); r.emissive(); }
       // Motu Ahi breathes: a plume off the crater, birds wheeling over the cliffs
@@ -556,8 +579,15 @@ export class BoatTripScene extends FieldScene {
     await wait(1200);
     if (game.ui.bubbles.active) return;
     this.bark('aroha', rand.pick(['Off the bow. Something big is coming up. Slow, Joshu, slow...', 'Tohorā... no. Bigger. Look at its back. There is a reef growing on it!']), { expr: 'shocked' } as never);
-    setTimeout(() => this.bark('mori', 'A REEFBACK. Right next to us. Camera up. Breathe, Mori. Breathe.', { expr: 'excited' } as never), 3200);
+    setTimeout(() => this.bark('mori', 'A REEFBACK. Right next to us. Camera up. Breathe, Mori. Breathe.', { expr: 'excited' } as never), 4200);
     if (!game.save.flags['v10:reefbackClose']) { game.save.flags['v10:reefbackClose'] = true; discover({ id: 'landmark:reefback:' + this.plan.id, kind: 'landmark', name: 'A Reefback surfacing beside the Kitten', loc: this.plan.id }); }
+  }
+  private lastBark = -99;
+  /** one ambient line at a time (two barks at once pile their bubbles on top of each other) */
+  bark(who: string, text: string, o: { expr?: string; emote?: string } = {}) {
+    if (this.time - this.lastBark < 3.2) return;
+    this.lastBark = this.time;
+    super.bark(who, text, o);
   }
   private ambientBark() {
     const pool: [string, string, string][] = [
@@ -624,7 +654,7 @@ export class BoatTripScene extends FieldScene {
       // swap seats: Joshu forward, Mori to the stern
       jo.x = SEATS.mori + 8; jo.facing = -1;
       p.poseOverride = null;
-      p.x = BX + 26; p.facing = -1;
+      p.x = bx(26); p.facing = -1;
       this.cutscene = true;
       const { goFishing } = await import('../../ui/v4/fishing');
       spend(3, 'fishing');
@@ -689,7 +719,7 @@ export class BoatTripScene extends FieldScene {
     const el = document.createElement('div');
     el.className = 'bt-route';
     el.innerHTML = `<style>
-      .bt-route { position: absolute; left: 50%; top: max(10px, 2.2vh); transform: translateX(-50%); width: min(46vw, 420px); height: 22px; pointer-events: none; z-index: 6;
+      .bt-route { position: absolute; left: 50%; top: max(44px, 7.5vh); transform: translateX(-50%); width: min(46vw, 420px); height: 22px; pointer-events: none; z-index: 6;
         font-family: 'Jersey 15', 'Pixelify Sans', monospace; color: #fff; text-shadow: 0 1px 0 #000; font-size: 13px; }
       .bt-route .ln { position: absolute; left: 6%; right: 6%; top: 10px; height: 0; border-top: 2px dashed rgba(255,255,255,0.7); }
       .bt-route .a, .bt-route .b { position: absolute; top: 2px; } .bt-route .a { left: 0; } .bt-route .b { right: 0; }

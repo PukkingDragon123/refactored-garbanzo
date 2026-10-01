@@ -68,7 +68,8 @@ function islet(): { spr: HSpr; crater: [number, number] } {
     // the scorched upper cone, lava ribs, green lower slopes, white guano on the sea cliffs
     const u = x / w;
     if (y > h - 24 && fbm2(x / 10, y / 8, 2, 4) > 0.45) c = tone(GREEN, 1 + lit * 2, x, y);
-    if (y > h - 16 && (Math.sin(x * 0.5 + noise1(x / 9, 2) * 4) > 0.75 || fbm2(x / 3, y / 9, 2, 6) > 0.7) && u > 0.15 && u < 0.85) c = mix(hex('#e8eae4'), HAZE, 0.2);
+    // guano: irregular pale streaks running down the sea cliffs under the ledges
+    if (y > h - 18 && u > 0.18 && u < 0.82 && fbm2(x / 3.5, y / 16, 2, 6) > 0.6 && noise1(x / 11, 2) > 0.35) c = mix(hex('#e8eae4'), HAZE, 0.25);
     if (Math.sin(x * 0.9 + y * 0.2) > 0.96 && y < h - 20) c = LAND[0];
     return mix(c, HAZE, 0.12);
   });
