@@ -15,9 +15,9 @@ export const ramp = (...h: string[]): Ramp => h.map(x => hex(x));
 export type Bed = 'wet' | 'damp' | 'dry' | 'none';
 const BEDS: Record<Exclude<Bed, 'none'>, C[]> = {
   // shadow, body, lit, crest
-  wet: ramp('#5a5244', '#6e6452', '#857860', '#9c8c6e'),
-  damp: ramp('#9a8462', '#b0986e', '#c4aa7e', '#d4bc8e'),
-  dry: ramp('#c4a06a', '#dcbe88', '#ecd29e', '#f6e2b2'),
+  wet: ramp('#5e5646', '#6c6250', '#7c705a', '#8c7e64'),
+  damp: ramp('#a48c66', '#b49c72', '#c0a87c', '#ccb486'),
+  dry: ramp('#d4b47e', '#e2c48e', '#eacf9a', '#f0d8a4'),
 };
 export const bedTone = (bed: Exclude<Bed, 'none'>, i: number) => BEDS[bed][clamp(i, 0, 3)];
 
@@ -42,12 +42,12 @@ export function sandLip(buf: PixelBuffer, x0: number, x1: number, gy: number, h:
   for (let x = Math.floor(x0); x <= Math.ceil(x1); x++) {
     const u = (x - x0) / w;
     if (u < 0 || u > 1) continue;
-    const hh = h * Math.pow(Math.sin(u * Math.PI), 0.6) * (0.75 + noise1(x / 5, seed) * 0.5 * rough);
+    const hh = h * Math.pow(Math.sin(u * Math.PI), 1.1) * (0.75 + noise1(x / 5, seed) * 0.5 * rough);
     if (hh < 0.5) continue;
     const top = gy - hh;
     for (let y = Math.floor(top); y <= gy; y++) {
       const d = y - top;
-      let c = d < 1 ? bedTone(bed, 3) : d < 2 ? bedTone(bed, 2) : bedTone(bed, 1);
+      let c = d < 1 && hash2(x, 0, seed) < 0.7 ? bedTone(bed, 3) : d < 2.5 ? bedTone(bed, 2) : bedTone(bed, 1);
       if (hash2(x, y, seed + 3) < 0.08) c = shade(c, -0.08);
       if (u < 0.12 || u > 0.88) c = mix(c, bedTone(bed, 0), 0.25);
       buf.set(x, y, c);

@@ -41,8 +41,9 @@ export function kelpHeap(seed: number, w = 44, bed: Bed = 'damp'): Sprite {
   // the broad straps (blades), lying in overlapping folds
   for (let k = 0; k < Math.round(w / 5); k++) {
     const x = x0 + rng.range(0, w), y = gy - rng.range(0, H * 0.7);
-    const a = (rng.chance(0.5) ? 0 : Math.PI) + rng.range(-0.5, 0.5);
-    blade(buf, { x, y, ang: a, len: rng.range(8, w * 0.45), droop: rng.range(0.2, 0.9), w0: rng.range(3, 5.5), ramp: KELP, base: rng.int(3, 5) });
+    // straps lie nearly flat, slumped over each other, so they read as a mat rather than tentacles
+    const a = (rng.chance(0.5) ? 0 : Math.PI) + rng.range(-0.22, 0.22);
+    blade(buf, { x, y, ang: a, len: rng.range(8, w * 0.42), droop: rng.range(0.02, 0.16), w0: rng.range(3.5, 6), ramp: KELP, base: rng.int(3, 5) });
   }
   // honeycomb texture and wet glints on the straps
   for (let y = 0; y < buf.h; y++) for (let x = 0; x < buf.w; x++) {

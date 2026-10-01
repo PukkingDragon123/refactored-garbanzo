@@ -422,7 +422,7 @@ export function lifeRing(bed: Bed = 'dry'): Sprite {
       buf.set(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr, t % 0.1 < 0.05 ? ROPE[2] : ROPE[4]);
     }
   }
-  const gy = cy + R * 0.45;
+  const gy = cy + R * 0.72;
   // the lower part is buried: cut it off and drift sand over the line
   for (let y = Math.ceil(gy) + 1; y < buf.h; y++) for (let x = 0; x < buf.w; x++) buf.set(x, y, 0);
   sandLip(buf, cx - R - 5, cx + R + 5, gy + 1, 4.5, bed, 31);

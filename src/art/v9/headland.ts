@@ -190,12 +190,11 @@ export function paintHeadland(w: number, h: number, seed = 7, tail = 0.8): Headl
   // ---- surf washing the base: foam heaped where the swell hits, thin lace between
   for (let x = 0; x < w; x++) {
     if (crest[x] < 2) continue;
-    const f = noise1(x / 13, seed + 30), heap = Math.max(0, noise1(x / 40, seed + 31) - 0.5) * 16;
+    const f = noise1(x / 13, seed + 30), heap = Math.max(0, noise1(x / 40, seed + 31) - 0.55) * 12;
     const y0 = h - 2 - Math.round(f * 2 + heap);
     for (let y = y0; y < h; y++) {
       if (!b.opaque(x, y)) continue;
-      const k = (y - y0) / Math.max(1, h - y0);
-      if (hash2(x, y, seed + 32) < 0.75 - k * 0.3) b.set(x, y, mix(b.get(x, y), hex('#f2fbfb'), y === y0 ? 0.9 : 0.55 + (1 - k) * 0.2));
+      b.set(x, y, mix(b.get(x, y), hex('#e8f2f2'), y === y0 ? 0.85 : 0.45));
     }
     if (heap > 4 && hash2(x, 1, seed) < 0.35) b.set(x, y0 - 1 - Math.round(hash2(x, 2, seed) * 3), mix(b.get(x, y0 - 2), hex('#ffffff'), 0.6));
   }
