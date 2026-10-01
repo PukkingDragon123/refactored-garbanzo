@@ -41,7 +41,8 @@ export abstract class WorldScene implements Scene {
   camY = 180;
   clickToWalk = true;
   pausable = true;
-  private busyAction = false;
+  /** an interaction (E) is running */
+  busyAction = false;
   hovered: Interactable | null = null;
   /** nearest interactable in reach this frame (touch controls label the Use button with it) */
   nearIt: Interactable | null = null;

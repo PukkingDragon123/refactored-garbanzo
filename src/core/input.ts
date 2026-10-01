@@ -31,11 +31,14 @@ const BINDINGS: Record<Action, string[]> = {
 };
 
 let guardUntil = 0;
+/** frames still guarded (on a slow machine one frame can outlast the whole time guard) */
+let guardFrames = 0;
 /** Ignore gameplay key/click edges for a moment (after a dialogue or menu closes). */
 export function guardInput(ms = 250) {
   guardUntil = Math.max(guardUntil, performance.now() + ms);
+  guardFrames = 2;
 }
-const guarded = () => performance.now() < guardUntil;
+const guarded = () => guardFrames > 0 || performance.now() < guardUntil;
 
 const PREVENT = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab']);
 
@@ -149,6 +152,7 @@ export class Input {
     this.mousePressed[b] = false;
   }
   endFrame() {
+    if (guardFrames > 0) guardFrames--;
     this.shutter = false;
     this.pressedKeys.clear();
     this.releasedKeys.clear();

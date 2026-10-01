@@ -81,7 +81,7 @@ function setupSpots() {
     // bunk room
     moriDesk: [350, L], moriBed: [372, L], chunkBed: [404, L], jennaBunk: [390, L],
     // hold (lab)
-    tank: [444, HOLD_FLOOR], microscope: [484, HOLD_FLOOR], labPC: [470, HOLD_FLOOR], holdHide: [488, HOLD_FLOOR], dogFood: [476, HOLD_FLOOR], forepeak: [492, HOLD_FLOOR],
+    tank: [444, HOLD_FLOOR], microscope: [484, HOLD_FLOOR], labPC: [470, HOLD_FLOOR], dogFood: [476, HOLD_FLOOR], forepeak: [492, HOLD_FLOOR],
     // wheelhouse
     helm: [290, WH_FLOOR], radio: [250, WH_FLOOR], charts: [266, WH_FLOOR], captainBunk: [234, WH_FLOOR], modelShip: [244, WH_FLOOR], photosJ: [318, WH_FLOOR],
     // decks

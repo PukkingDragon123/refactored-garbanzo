@@ -23,7 +23,7 @@ import { startWildlife9 } from '../v9/wildlife';
 import { ISL, SPOT, WRECK, groundY } from '../../art/island4/layout';
 import * as CA from '../../art/island4/camp';
 import { clamp, rand, smoothstep } from '../../core/math';
-import { IsleCamp } from './islecamp';
+import { IsleCamp, CAMP } from './islecamp';
 import { startForage, Forage } from '../v9/forage';
 import { IsleTools } from '../v9/isletools';
 
@@ -193,7 +193,7 @@ export class IsleStory implements IsleHooks {
     s.aroha = s.addActor('aroha', -600, ISL.GY, 1);
     for (const a of [s.chunk, s.jenna, s.joshu, s.aroha]) { a.visible = false; a.z = 44; }
     s.chunk.z = 46;
-    s.buddy = new ChunkBuddy(s.chunk, { player: s.player, terrain: s.st.terrain });
+    s.buddy = new ChunkBuddy(s.chunk, { player: s.player, terrain: s.st.terrain, busy: () => s.cutscene });
     s.buddy.mode = 'script';
     s.buddy.cold = false;
     this.jennaF = new Follower(s.jenna, s, 30, 52, 112);
@@ -392,8 +392,18 @@ export class IsleStory implements IsleHooks {
     this.shadowK = 0;
     this.canT = 0;
     if (!s.chunk.visible || Math.abs(s.chunk.x - s.player.x) > 300) this.place(s.chunk, s.player.x - 30, 1);
-    s.buddy.mode = 'follow';
-    s.buddy.reset();
+    // on the walks he leads the way at Mori's heels; back at camp he potters about on his own
+    const b = s.buddy, camp = this.flag('v4:back');
+    b.free = camp ? 'wander' : 'follow';
+    b.wanderSpan = camp ? () => [CAMP.salvage + 10, CAMP.lean + 50] : null;
+    b.haunts = camp ? () => [
+      ...(this.camp.job('bed') ? [{ x: CAMP.bed, y: groundY(CAMP.bed), anim: 'sleep', dur: [14, 24] as [number, number], expr: 'sleep', w: 1.5 }] : []),
+      ...(this.flag('v4:arohaJoined') ? [{ x: CAMP.fire - 20, y: groundY(CAMP.fire - 20), anim: 'lie', dur: [8, 14] as [number, number], face: 1 as const, w: 1 }] : []),
+      ...(this.camp.job('firewood') ? [{ x: CAMP.cook - 14, y: groundY(CAMP.cook - 14), anim: 'beg', dur: [2, 4] as [number, number], face: 1 as const, w: 0.7 }] : []),
+      { x: CAMP.storage + 16, y: groundY(CAMP.storage + 16), anim: 'sniff', dur: [2, 4], w: 0.6 },
+    ] : null;
+    b.hop = null;
+    b.release();
   }
   jennaAtWreck() {
     this.jennaF.on = false;

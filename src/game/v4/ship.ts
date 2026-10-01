@@ -27,10 +27,14 @@ import type { Env } from '../../gfx/renderer';
 export const PIVOT: [number, number] = PIVOT5;
 /** the mess table's bounding box in ship pixels (see makeTableFront) */
 const TABLE_FRONT = { x: 288, y: 171, w: 44, h: 32 };
+/** the hanging tablecloth flap during the storm (left of the pedestal and the chair) */
+export const CLOTH = { x0: 289, x1: 306, top: 187, bottom: 199 };
+/** where Chunk curls up under the mess table */
+export const UNDER_TABLE: [number, number] = [298, 202];
 
 export type ShipPhase = 'morning' | 'engine' | 'deck' | 'storm' | 'wave';
 
-interface Slider { fr: Frame; x: number; y: number; v: number; x0: number; x1: number; rot: number; hitT: number }
+interface Slider { fr: Frame; x: number; y: number; v: number; x0: number; x1: number; rot: number; hitT: number; dy: number; probe: number }
 
 export class ShipScene4 extends FieldScene {
   phase: ShipPhase = 'morning';
@@ -76,6 +80,8 @@ export class ShipScene4 extends FieldScene {
   fishDraw: ((r: Renderer) => void) | null = null;
   /** Mori is carrying Chunk in his arms */
   carrying = false;
+  /** the storm: Chunk is hiding under the mess table behind the hanging cloth (shake rustles it, lift raises it) */
+  underTable: { shake: number; lift: number } | null = null;
   /** called every frame by the story module */
   story: { update(dt: number): void; enter(): Promise<void> } | null = null;
 
@@ -219,9 +225,40 @@ export class ShipScene4 extends FieldScene {
       const f = this.fr.tableFront;
       if (!f || this.hullA > 0.98) return;
       const seated = (a: { x: number; y: number; anim?: string } | undefined) => !!a && Math.abs(a.x - SPOTS.messSeat[0]) < 26 && a.y > S4.lower.ceil && /^(sit|eat)/.test(a.anim ?? '');
-      if (!seated(this.player as never) && !seated(this.jenna as never) && !seated(this.joshu as never)) return;
+      if (!this.underTable && !seated(this.player as never) && !seated(this.jenna as never) && !seated(this.joshu as never)) return;
       rr.draw(f, TABLE_FRONT.x, TABLE_FRONT.y, 1, 1, 0, this.hullA > 0.02 ? packColor(1, 1, 1, 1 - this.hullA) : 0xffffffff);
     }));
+    // the storm: the tablecloth slid half off the mess table and hangs to the floor, with Chunk behind it
+    main.add(new Custom(53, (rr, s) => this.drawCloth(rr, s.time)));
+  }
+
+  /** the gingham flap hanging off the mess table (Chunk hides behind it): rows and colours from the painted drape */
+  private drawCloth(r: Renderer, t: number) {
+    const u = this.underTable;
+    if (!u || this.hullA > 0.98) return;
+    const src = this.art.lower.buf, a = 1 - this.hullA;
+    const X0 = CLOTH.x0, X1 = CLOTH.x1, top = CLOTH.top;
+    // hangs to just above the floor; lifting folds it up under the table edge
+    const full = CLOTH.bottom - top;
+    const len = Math.max(0, Math.round(full * (1 - u.lift)));
+    const col = (x: number, y: number, k = 1) => {
+      const c = src.get(x, y) >>> 0;
+      return packColor(((c & 255) / 255) * k, (((c >> 8) & 255) / 255) * k, (((c >> 16) & 255) / 255) * k, a);
+    };
+    for (let x = X0; x <= X1; x++) {
+      // a ragged hem that twitches when something behind it moves
+      const hem = len + (len > 2 && u.shake > 0.05 && Math.sin(x * 1.7 + t * 23) * u.shake > 0.45 ? -1 : 0);
+      for (let j = 0; j < hem; j++) {
+        const deep = j / Math.max(1, full);
+        const dx = u.shake > 0.01 ? Math.round(Math.sin(t * 26 + j * 0.8 + x * 0.15) * u.shake * deep * 1.6) : 0;
+        // gingham rows repeat the drape's four check rows; the last two rows are the shaded hem
+        const row = j >= hem - 2 ? 185 + (j - (hem - 2)) : 181 + (j % 4);
+        const sx = Math.max(X0, Math.min(X1, x - dx));
+        r.rect(x, top + j, 1, 1, col(sx, row, 0.82 - deep * 0.2));
+      }
+      // folded up: the doubled-over hem shows as a dark roll under the table edge
+      if (u.lift > 0.5) r.rect(x, top, 1, 1, col(x, 186, 0.75));
+    }
   }
 
   /** the mess table's front (gingham cloth, pedestal, foot, the mug and teapot) cut from the painted interior */
@@ -357,7 +394,9 @@ export class ShipScene4 extends FieldScene {
   /** add a loose object that slides around when the deck tilts (storm) */
   addSlider(buf: PixelBuffer, name: string, x: number, y: number, x0: number, x1: number) {
     const fr = local.add('s4sl:' + name, buf, buf.w / 2, buf.h - 1);
-    this.sliders.push({ fr, x, y, v: 0, x0, x1, rot: 0, hitT: 0 });
+    // it rides the floor it was put on (the main deck has sheer: a fixed height would float or sink)
+    const probe = y - 14, sf = this.st.terrain.surfaceBelow(x, probe, 0);
+    this.sliders.push({ fr, x, y: sf ? sf.y : y, v: 0, x0, x1, rot: 0, hitT: 0, dy: 0, probe });
   }
 
   /** ship-local point → world (applies the rocking transform) */
@@ -512,11 +551,16 @@ export class ShipScene4 extends FieldScene {
     this.tankFish.push({ x: (TANK.x0 + TANK.x1) / 2, y: TANK.y0 + 4, vx: 5, k: id, t: 0 });
   }
 
+  private placeSub = 'Day 1 at sea';
+  /** where Mori's carrying hand sits relative to his feet (facing right) */
+  private carryOff: [number, number] = [5, -24];
   /** keep Chunk in Mori's arms */
   private holdChunk() {
     const p = this.player, c = this.chunk;
-    const h = p.body.handPos();
-    if (!h) return;
+    // on a ladder the hand is up on the rungs: he stays tucked under the other arm, where he was
+    let h = p.state === 'climb' || p.body.anim === 'carryPupClimb' ? null : p.body.handPos();
+    if (h) this.carryOff = [(h[0] - p.x) * p.facing, h[1] - p.y];
+    else h = [p.x + this.carryOff[0] * p.facing, p.y + this.carryOff[1]];
     c.terrain = null;
     c.x = h[0] - p.facing * 2;
     c.y = h[1] + 9;
@@ -542,16 +586,24 @@ export class ShipScene4 extends FieldScene {
     // rolling: gentle swell at sea, violent in the storm, plus scripted jolts
     const storm = this.weather.storm;
     const t = this.time;
-    this.joltV += (-this.jolt * 26 - this.joltV * 5) * dt;
-    this.jolt += this.joltV * dt;
+    // the jolt spring, sub-stepped (one big step on a slow frame would overshoot and fling the boat about)
+    for (let n = Math.max(1, Math.ceil(dt / 0.008)), h = dt / n, i = 0; i < n; i++) {
+      this.joltV += (-this.jolt * 26 - this.joltV * 5) * h;
+      this.jolt += this.joltV * h;
+    }
     this.rot = Math.sin(t * 0.55) * (0.006 + storm * 0.07) + Math.sin(t * 1.3 + 1) * (0.002 + storm * 0.03) + this.jolt;
     this.bob = this.ocean ? (this.ocean.heightAt(PIVOT[0]) - S4.WATER) * 0.35 : 0;
     if (!Number.isFinite(this.bob)) this.bob = 0;
     if (!Number.isFinite(this.rot)) { this.rot = 0; this.jolt = 0; this.joltV = 0; }
+    // never roll her past ~20 degrees: further and the cutaway turns into a spinning top
+    this.jolt = clamp(this.jolt, -0.25, 0.25);
+    this.rot = clamp(this.rot, -0.36, 0.36);
     this.bob = clamp(this.bob, -30, 30);
     if (this.main.xf) { this.main.xf[2] = this.rot; this.main.xf[4] = this.bob; }
     this.ocean?.setMask(CUTLINE.map(([x, y]) => this.shipToWorld(x, y)));
-    p.tilt = this.rot * (storm > 0.2 ? 1.6 : 1);
+    // the deck only slides you about while you're in control (not through dialogue and cutscenes)
+    const held = this.cutscene || this.busyAction || p.state === 'script' || p.state === 'work';
+    p.tilt = held ? 0 : this.rot * (storm > 0.2 ? 1.6 : 1);
     // cutaways
     const inLower = p.y > S4.lower.ceil + 2;
     const inHouse = p.y <= S4.house.floor + 2 && p.y > S4.house.ceil && p.x > S4.house.x0 - 2 && p.x < S4.house.x1 + 2;
@@ -596,6 +648,8 @@ export class ShipScene4 extends FieldScene {
       s.x += s.v * dt;
       s.rot = this.rot * 0.6;
       s.hitT -= dt;
+      const sf = this.st.terrain.surfaceBelow(clamp(s.x, s.x0, s.x1), s.probe, 0);
+      if (sf && Math.abs(sf.y + s.dy - s.y) < 14) s.y = sf.y + s.dy;
       if (s.x < s.x0 || s.x > s.x1) {
         s.x = clamp(s.x, s.x0, s.x1);
         if (Math.abs(s.v) > 30 && s.hitT <= 0) { s.hitT = 0.4; if (this.hullA < 0.5 || this.houseA < 0.5 || Math.abs(s.y - p.y) < 20) audio.play('woodCreak', { vol: 0.3 }); }
@@ -603,6 +657,9 @@ export class ShipScene4 extends FieldScene {
       }
     }
     super.update(dt);
+    // the HUD's place line follows the story ("Day 1 · The storm")
+    const ho = this.hudOpts();
+    if (ho.sub !== this.placeSub && this.hud) { this.placeSub = ho.sub; this.hud.setPlace(ho.place, ho.sub); }
     if (this.carrying) this.holdChunk();
     else this.buddy?.update(dt);
     this.story?.update(dt);

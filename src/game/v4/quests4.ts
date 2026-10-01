@@ -42,10 +42,11 @@ export const V4_QUESTS: QuestDef[] = [
   },
   {
     id: 'v4storm', title: 'Something Big', giver: 'story', main: true, chapter: 1,
-    desc: 'Something massive hit the hull. The sky went black in minutes. And Chunk is nowhere to be seen.',
+    desc: 'Something massive hit the hull. The sky went black in minutes. Joshu wants everyone in foul-weather gear, and Chunk is nowhere to be seen.',
     steps: [
-      { text: 'Find Chunk!', done: f('v4:chunkFound'), hint: 'He hates thunder. He hides somewhere small and dark.' },
-      { text: 'Get Chunk up to the wheelhouse', done: f('v4:bridge') },
+      { text: 'Get your foul-weather gear from Joshu', done: () => !!game.save.flags['v4:raincoat'] || !!game.save.flags['v4:chunkFound'], hint: 'Joshu is handing out the oilskins by the locker in the bunk room, below deck.' },
+      { text: 'Find Chunk!', done: f('v4:chunkFound'), hint: 'He hates thunder and hides somewhere small and dark. Try the galley: listen.' },
+      { text: 'Carry Chunk up to the wheelhouse', done: f('v4:bridge'), hint: 'Up the companionway ladder in the galley.' },
     ],
   },
   {

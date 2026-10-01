@@ -15,6 +15,7 @@ import { shipUploadDue } from '../v9/research9';
 import { SPECIES_BY_ID } from '../species';
 import type { RawPhoto } from '../photos';
 import { startCrewLife, CrewLife } from '../v9/crewlife';
+import { LADDERS } from '../../art/ship5';
 
 const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 const F = () => game.save.flags;
@@ -57,7 +58,8 @@ export class ShipStory {
     s.st.cam.tzoom = s.st.cam.zoom = 1.12;
     // Mori's bunk is a little platform so he can lie on it
     s.st.terrain.addPlatform([[348, 182], [398, 182]], 'bridge');
-    s.buddy = new ChunkBuddy(s.chunk, { player: s.player, terrain: s.st.terrain, levelSpan: y => s.levelSpan(y) });
+    s.buddy = new ChunkBuddy(s.chunk, { player: s.player, terrain: s.st.terrain, levelSpan: y => s.levelSpan(y), busy: () => s.cutscene });
+    this.chunkRoams();
     // the seabirds are out all day: the morning report needs a real photo of one
     if (!this.flag('v4:stormStarted')) import('./seafauna').then(m => { m.startDeckLife(s); this.watchBirdPhotos(); });
     this.addInteractables();
@@ -90,13 +92,54 @@ export class ShipStory {
     }
     // the storm waits while the afternoon quest still wants its photos uploaded
     const deckOpen = questStatus('v4deck') === 'active' && !this.flag('v9:uploadShip');
-    if (this.flag('v4:fishUsed') && !this.flag('v4:bridge') && !deckOpen) { this.stormArmed = true; setTimeout(() => this.storm(), 1500); }
+    if (this.flag('v4:bridge')) {
+      // reloaded during the rogue wave: it hits again (the beach is next)
+      if (!this.flag('v4:beachWoke')) { this.stormArmed = true; void import('./storm').then(m => m.resumeWave(s)); }
+    } else if (this.flag('v4:stormStarted')) {
+      // reloaded mid-storm: straight back into it
+      this.stormArmed = true;
+      void this.storm();
+    } else if (this.flag('v4:fishUsed') && !deckOpen) { this.stormArmed = true; this.stormIn = 1.5; }
+  }
+
+  /** Chunk lives his own life aboard: wanders, naps, visits his bowl and bed, drops by to see Mori */
+  private chunkRoams() {
+    const b = this.s.buddy, s = this.s;
+    b.free = 'wander';
+    b.mode = 'wander';
+    const L = S4.lower.floor, H = SPOTS.tank[1];
+    const deck = (x: number) => s.st.terrain.surfaceBelow(x, S4.main.y - 30, 2)?.y ?? S4.main.y;
+    b.haunts = () => [
+      { x: SPOTS.bowls[0] + 4, y: L, anim: 'eat', dur: [4, 7], expr: 'eat', face: -1, w: 1 },
+      { x: SPOTS.chunkBed[0], y: L, anim: 'sleep', dur: [14, 26], expr: 'sleep', w: 1.4 },
+      { x: SPOTS.moriDesk[0] - 6, y: L, anim: 'lie', dur: [6, 10], w: 0.8 },
+      { x: SPOTS.jennaDesk[0] + 16, y: L, anim: 'sit', dur: [5, 8], face: -1, w: 0.6 },
+      { x: SPOTS.tank[0] + 8, y: H, anim: 'tilt', dur: [3, 5], face: -1, w: 0.7 },
+      { x: SPOTS.dogFood[0], y: H, anim: 'sniff', dur: [2, 4], w: 0.5 },
+      { x: SPOTS.herbs[0] + 6, y: deck(SPOTS.herbs[0] + 6), anim: 'sniff', dur: [2, 4], w: 0.6 },
+      { x: SPOTS.roofChair[0], y: deck(SPOTS.roofChair[0]), anim: 'lie', dur: [8, 14], w: 0.8 },
+      { x: SPOTS.bow[0] - 30, y: deck(SPOTS.bow[0] - 30), anim: 'sit', dur: [5, 9], face: 1, w: 0.6 },
+    ];
+    // he changes deck only on a calm sea, while nobody needs him, and never in the storm
+    b.hop = a => {
+      if ((s.phase !== 'morning' && s.phase !== 'deck') || s.cutscene || s.carrying || this.s.weather.storm > 0.15) return null;
+      const lower = a.y > S4.lower.ceil;
+      // up on deck is a treat: less likely to go up than to come back down
+      if (lower && rand.next() < 0.5) return null;
+      const lads = [...LADDERS].sort((p, q) => Math.abs(p.x - a.x) - Math.abs(q.x - a.x));
+      const L0 = lads[0];
+      if (Math.abs(L0.x - a.x) > 200) return null;
+      const side = rand.pick([-1, 1]);
+      return lower ? { x: L0.x, to: [L0.x + side * 10, s.st.terrain.surfaceBelow(L0.x + side * 10, L0.top - 12, 2)?.y ?? L0.top] }
+        : { x: L0.x, to: [L0.x + side * 10, s.st.terrain.surfaceBelow(L0.x + side * 10, L0.bottom - 12, 2)?.y ?? L0.bottom] };
+    };
   }
 
   // ---------------------------------------------------------------- wake up
   private async wakeUp() {
     const s = this.s, p = this.p;
     s.cutscene = true;
+    s.buddy.mode = 'script';
     s.hud?.show(false);
     // Mori asleep in his bunk, Chunk curled up on his chest
     p.x = 374;
@@ -171,6 +214,7 @@ export class ShipStory {
     ]);
     s.st.cam.locked = false;
     s.cutscene = false;
+    s.buddy.release();
     s.hud?.show(true);
     this.set('v4:woke');
     startQuest('v4morning');
@@ -236,7 +280,10 @@ export class ShipStory {
       under: { who: 'mori', text: 'Little crunchy. Crunchy is a texture.', expr: 'thinking' },
     };
     await this.say([line[res] ?? line.perfect]);
-    s.buddy.mode = 'stay';
+    // he heard the kettle: over he comes
+    await Promise.race([s.buddy.come(this.p.x + 18, 80), wait(2500)]);
+    s.chunk.stopWalk();
+    s.chunk.alpha = 1;
     s.chunk.faceTo(this.p.x);
     s.chunk.idleAnim = 'beg';
     s.chunk.setAnim('beg');
@@ -246,8 +293,7 @@ export class ShipStory {
       { who: 'chunk', text: '*very quiet whine*', expr: 'sad', close: false },
     ]);
     s.chunk.idleAnim = 'idle';
-    s.buddy.mode = 'follow';
-    s.buddy.reset();
+    s.buddy.release();
     this.set('v4:noodles');
     s.cutscene = false;
     s.bark('mori', 'Three minutes. I’ll eat at the mess table.', { expr: 'happy' });
@@ -264,9 +310,9 @@ export class ShipStory {
     await this.say([
       { who: 'mori', text: 'Mmm. Chicken flavour. Which chicken? Nobody knows. Science can’t answer everything.', expr: 'eat' },
     ]);
-    s.buddy.mode = 'stay';
-    s.chunk.walkTo(this.p.x + 20, 50);
-    await wait(800);
+    await Promise.race([s.buddy.come(this.p.x + 20, 80), wait(2500)]);
+    s.chunk.stopWalk();
+    s.chunk.alpha = 1;
     s.chunk.faceTo(this.p.x);
     s.chunk.idleAnim = 'beg';
     s.chunk.setAnim('beg');
@@ -284,8 +330,7 @@ export class ShipStory {
     await wait(600);
     s.chunk.setExpr('happy', 2);
     s.chunk.idleAnim = 'idle';
-    s.buddy.mode = 'follow';
-    s.buddy.reset();
+    s.buddy.release();
     this.pose('standUp');
     await wait(260);
     this.pose(null);
@@ -582,6 +627,8 @@ export class ShipStory {
 
   /** the storm (see storm.ts) */
   private stormArmed = false;
+  /** seconds until the storm breaks (0: not counting down) */
+  private stormIn = 0;
 
   // ---------------------------------------------------------------- per frame
   /** the crew's daily routines (v9/crewlife.ts) */
@@ -593,7 +640,13 @@ export class ShipStory {
     // the afternoon ends: once the deck quest wraps up, the storm arrives
     if (s.phase === 'deck' && !this.stormArmed && questStatus('v4deck') === 'done' && !s.cutscene) {
       this.stormArmed = true;
-      setTimeout(() => this.storm(), 6000);
+      this.stormIn = 6;
+    }
+    // it only breaks while Mori is free (not mid-dialogue, at the laptop, fishing or on a ladder)
+    if (this.stormIn > 0) {
+      const free = !s.cutscene && !s.busyAction && !game.ui.blocking && !game.ui.bubbles.active && p.state === 'normal' && p.onGround && !s.cam.active;
+      if (free || this.stormIn > 1) this.stormIn -= dt;
+      if (this.stormIn <= 0) { this.stormIn = 0; void this.storm(); }
     }
     // Chunk shivers out on the open deck
     if (s.buddy) s.buddy.cold = s.level() !== 'lower' && s.inside < 0.5;

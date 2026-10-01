@@ -383,17 +383,24 @@ class JennaBrain extends Brain {
   }
 
   private async petChunk() {
-    const a = this.a, c = this.s.chunk;
+    const a = this.a, c = this.s.chunk, b = this.s.buddy;
     const side = a.x < c.x ? -1 : 1;
     await this.walk(c.x + side * 13, 40);
-    a.faceTo(c.x);
-    this.pose('pet');
-    a.setExpr('happy');
-    this.bark(rand.pick(['Hi, potato! Who’s a good potato?', 'Chunky! Scritches!', 'You’re SO soft. How are you so soft.']), { expr: 'happy' });
-    c.showEmote('heart', 1.6);
-    await this.wait(4);
-    this.pose('idle');
-    a.setExpr('neutral');
+    // he holds still for a scratch (if he's off on his own errands, not if the story has him)
+    const held = b?.mode === 'wander' && Math.abs(c.x - a.x) < 20 && Math.abs(c.y - a.y) < 8;
+    if (held) { b.mode = 'stay'; c.stopWalk(); c.faceTo(a.x); c.idleAnim = 'sit'; c.setAnim('sit'); }
+    try {
+      a.faceTo(c.x);
+      this.pose('pet');
+      a.setExpr('happy');
+      this.bark(rand.pick(['Hi, potato! Who’s a good potato?', 'Chunky! Scritches!', 'You’re SO soft. How are you so soft.']), { expr: 'happy' });
+      c.showEmote('heart', 1.6);
+      await this.wait(4);
+      this.pose('idle');
+      a.setExpr('neutral');
+    } finally {
+      if (held && b.mode === 'stay') b.release();
+    }
     await this.wait(0.6);
   }
 }
