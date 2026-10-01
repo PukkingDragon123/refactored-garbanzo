@@ -383,6 +383,8 @@ class Sackjaw extends Critter {
         this.noticed = true;
         this.callT -= dt;
         if (this.callT <= 0) { this.callT = rand.range(1.6, 3.5); this.sfx('callScreech', 0.32, rand.range(1.3, 1.6)); }
+        // a line in the water is better than begging: one gull at a time goes for the bait
+        if (bob && this.stealCd <= 0 && !GULLS.some(g => g.mode === 'steal' || g.mode === 'carry')) { this.stealCd = rand.range(25, 45); this.go('steal'); break; }
         if (!atStern || this.mt > 14) { this.noticed = false; this.go('hover'); this.next = rand.range(4, 8); }
         break;
       }
