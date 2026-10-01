@@ -13,7 +13,7 @@ import { el } from '../../ui/ui';
 import { SPOT, groundY } from '../../art/island4/layout';
 import { rand } from '../../core/math';
 
-const TRAIL: [number, string][] = [[3470, 'trg:tracks'], [4140, 'trg:seal1'], [5640, 'v4:shoes'], [5995, 'v9:scrap1'], [6130, 'v9:scrap2'], [SPOT.joshu, 'v4:joshuFound']];
+const TRAIL: [number, string][] = [[3470, 'trg:tracks'], [4140, 'trg:seal1'], [4450, 'trg:seal2'], [5640, 'v4:shoes'], [5995, 'v9:scrap1'], [6130, 'v9:scrap2'], [SPOT.joshu, 'v4:joshuFound']];
 
 export class IsleTools {
   private idleT = 0;
@@ -58,8 +58,6 @@ export class IsleTools {
       enabled: () => F('v4:sealDone') && !F('v4:joshuFound') && !F('v9:sawCap') && this.has('binoculars'), action: () => this.spotCap() });
     // a marker over the next stretch of the trail (the boots, scraps and Joshu have their own)
     s.questPoints.push({ x: () => this.frontier() ?? 0, y: () => groundY(this.frontier() ?? 0) - 26, on: () => { const f = this.frontier(); return f !== null && f < 5000 && F('v4:split') && !F('v4:sealDone') && Math.abs(f - s.player.x) > 60; } });
-    // once the cap's been spotted: a marker on Joshu himself
-    s.questPoints.push({ x: () => s.joshu.x, y: () => s.joshu.y - 26, on: () => F('v9:sawCap') && !F('v4:joshuFound') && Math.abs(s.player.x - s.joshu.x) > 110 });
   }
 
   /** x of the next clue on Joshu's trail (null once he's found) */

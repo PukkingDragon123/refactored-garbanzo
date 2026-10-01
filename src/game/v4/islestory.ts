@@ -320,7 +320,7 @@ export class IsleStory implements IsleHooks {
       { who: 'chunk', text: '*sniff sniff sniff* BOOF.', expr: 'serious' },
     ]);
     // Joshu (a fallback in case the walk-up trigger was missed)
-    this.it({ get x() { return s.joshu.x; }, get y() { return s.joshu.y; }, w: 26, label: 'Joshu!', get standX() { return s.joshu.x - 30; }, quest: () => true, enabled: () => this.flag('v4:sealDone') && !this.flag('v4:joshuFound') && !this.busy, action: () => { this.set('trg:joshu'); return this.findJoshu(); } } as never);
+    this.it({ get x() { return s.joshu.x; }, get y() { return s.joshu.y; }, w: 26, label: 'Joshu!', get standX() { return s.joshu.x - 30; }, quest: () => this.flag('v9:sawCap') || this.flag('v9:scrap2'), enabled: () => this.flag('v4:sealDone') && !this.flag('v4:joshuFound') && !this.busy, action: () => { this.set('trg:joshu'); return this.findJoshu(); } } as never);
     this.it({ get x() { return s.joshu.x; }, get y() { return s.joshu.y; }, w: 26, get label() { return self.joshuLabel(); }, get standX() { return s.joshu.x - 30; }, quest: () => true, enabled: () => this.flag('v4:joshuFound') && !this.flag('v4:joshuAwake'), action: () => this.helpJoshu() } as never);
     this.it({ x: SPOT.creek, y: groundY(SPOT.creek), w: 18, label: 'Scoop up creek water in your hat', standX: SPOT.creek - 14, quest: () => true, enabled: () => this.flag('v4:joshuChecked') && !this.flag('v4:water') && !this.flag('v4:joshuAwake'), action: () => this.fetchWater() });
   }
