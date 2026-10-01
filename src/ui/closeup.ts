@@ -66,7 +66,7 @@ const CSS = `
 .cu .bf { position: absolute; left: 0; top: 0; font-family: 'Jersey 10', 'Pixelify Sans', monospace; font-size: var(--nps, 18px); line-height: 1; color: #2a2420; background: #fffdf6;
   padding: 0.2em 0.5em 0.15em; box-shadow: 0 0 0 2px #2a2420; opacity: 0; white-space: nowrap; }
 .cu .bf.on { opacity: 1; }
-@media (prefers-reduced-motion: reduce) { .cu .np div { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .cu .np div, .cu.anime .np div { animation: none; } }
 `;
 
 /** Jenna's kawaii palettes per mood: [light, mid, dark, accent] */
