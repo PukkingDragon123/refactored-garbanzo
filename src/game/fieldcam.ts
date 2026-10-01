@@ -5,6 +5,11 @@
 // - the shutter records every animal in frame with occlusion (foreground alpha masks), focus,
 //   motion blur (relative to your panning), shake, size, composition and behaviour
 // - motion/shake blur is baked into the stored image; photos are stored raw for review later
+// - V10 (everywhere but aboard the ship): a research photo needs the camera held steady on target for
+//   fx10.captureHold() s: a steadiness ring round the focus box fills while the view is still (panning
+//   or walking drains it) and the shutter fires by itself when it is full on a focused animal (or on a
+//   press, with nothing in the box). The print then develops for fx10.developTime() s (shaking it helps
+//   a little), it keeps developing in your pocket with the camera down, and no new photo until it's dry.
 
 import { game } from './game';
 import type { Stage } from '../world/stage';
@@ -14,6 +19,7 @@ import type { WildHost } from './wild/world';
 import { addRawPhoto, PhotoSubject, RawPhoto, rawPhotos } from './photos';
 import { SPECIES_BY_ID } from './species';
 import { perks } from './skills';
+import { fx10 } from './v10/skills10';
 import { audio } from '../core/audio';
 import { clamp, damp } from '../core/math';
 
@@ -85,28 +91,43 @@ export class FieldCamera {
   /** extra light at the player (headlamp) for exposure */
   lamp = 0;
   onShot: ((p: RawPhoto) => void) | null = null;
+  /** V10 rules (hold to capture, long developing); aboard the ship the old quick camera stays */
+  readonly v10: boolean;
+  /** V10: the steadiness ring, 0..1 */
+  hold = 0;
+  holdState: 'idle' | 'filling' | 'ready' | 'shaky' | 'leaf' | 'develop' | 'film' = 'idle';
+  private holdOn: Animal | null = null;
+  private holdLost = 0;
+  private holdNag = 0;
+  private holdQ = 0;
+  private uiT = 0;
 
   constructor(readonly host: WildHost, readonly site: RawPhoto['site']) {
-    this.shots = perks.shots() + (game.save.buff === 'energy' ? 4 : 0);
+    this.v10 = site !== 'sea';
+    this.shots = perks.shots() + fx10.film() + (game.save.buff === 'energy' ? 4 : 0);
     this.vf = game.ui.vf;
     this.vf.innerHTML = `<div class="frame"><div class="grid"></div><div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div></div>
-      <div class="focus"></div><div class="subject"></div>
+      <div class="focus"></div><div class="hold"></div><div class="holdlab"></div><div class="subject"></div>
       <div class="top"><span class="mode">PHOTO</span><span class="rec">● REC <span class="rt">0.0</span>s</span><span class="shots"></span></div>
       <div class="info"><span class="zoom"></span><span class="af">AF</span><span class="stab"></span><span class="light"></span></div>
       <div class="breathbar"><i></i></div><div class="lcd"></div>`;
-    for (const k of ['focus', 'subject', 'mode', 'shots', 'zoom', 'af', 'rt', 'stab', 'light', 'breathbar', 'lcd']) this.els[k] = this.vf.querySelector('.' + k) as HTMLElement;
+    for (const k of ['focus', 'hold', 'holdlab', 'subject', 'mode', 'shots', 'zoom', 'af', 'rt', 'stab', 'light', 'breathbar', 'lcd']) this.els[k] = this.vf.querySelector('.' + k) as HTMLElement;
     injectCss();
     this.els.lcd.addEventListener('pointerdown', e => { e.stopPropagation(); this.shakePrint(); });
   }
 
   get zoomMax() {
-    return perks.zoomMax();
+    return fx10.zoomMax();
   }
 
   raise(on: boolean) {
     if (this.active === on) return;
     this.active = on;
+    this.hold = 0;
+    this.holdOn = null;
+    this.holdLost = 0;
     this.vf.classList.toggle('on', on);
+    this.vf.classList.toggle('pocket', !on && this.develop < 1);
     if (!on && this.recording) this.stopRecording();
     if (on) audio.play('zoom', { vol: 0.3 });
     const r = game.r;
@@ -133,13 +154,19 @@ export class FieldCamera {
     const r = game.r;
     this.cooldown -= dt;
     this.breathless = Math.max(0, this.breathless - dt * 0.18);
-    if (!this.active) { this.breath = Math.min(1, this.breath + dt * 0.3); return; }
+    // the print keeps developing with the camera lowered (it shows in the corner meanwhile)
+    this.updateDevelop(dt);
+    if (!this.active) {
+      this.breath = Math.min(1, this.breath + dt * 0.3);
+      this.vf.classList.toggle('pocket', this.develop < 1 || this.els.lcd.classList.contains('on'));
+      return;
+    }
     // zoom
     if (inp.wheel) { this.zoom = clamp(this.zoom - inp.wheel * 0.2, 1.1, this.zoomMax); audio.play('zoom', { vol: 0.25, pitch: 1 + this.zoom * 0.1 }); }
     if (inp.down('zoomIn')) this.zoom = clamp(this.zoom + dt * 1.3, 1.1, this.zoomMax);
     if (inp.down('zoomOut')) this.zoom = clamp(this.zoom - dt * 1.3, 1.1, this.zoomMax);
     if (inp.hit('mode')) {
-      if (perks.video()) {
+      if (fx10.video()) {
         if (this.recording) this.stopRecording();
         this.mode = this.mode === 'photo' ? 'video' : 'photo';
         audio.play('ui');
@@ -154,7 +181,7 @@ export class FieldCamera {
     this.my = damp(this.my, clamp(inp.my / r.VH), 9, dt);
     // handheld motion: slow sway + fast tremor
     this.swayT += dt;
-    const steady = perks.shake() * (brace ? 0.55 : 1) * (this.holding ? 0.3 : 1) * (1 + this.breathless * 2.5) * (this.host.tod === 'night' ? 1.25 : 1);
+    const steady = perks.shake() * fx10.shake() * (brace ? 0.55 : 1) * (this.holding ? 0.3 : 1) * (1 + this.breathless * 2.5) * (this.host.tod === 'night' ? 1.25 : 1);
     const a = this.zoom * steady * 1.35;
     const s = this.swayT;
     // random hand jolts (less when holding your breath or bracing), and recoil after each shot
@@ -187,21 +214,72 @@ export class FieldCamera {
     r.post.focus = this.focus;
     r.post.dofStrength = 2 + this.zoom * 1.5;
     r.post.ca = 0.0022;
-    this.updateDevelop(dt);
+    this.updateHold(dt, brace, animals);
     const fire = inp.shutter || (inp.click(0) && inp.lastDevice !== 'touch');
     if (fire && this.cooldown <= 0 && !game.ui.blocking) {
-      if (this.mode === 'photo' && this.develop < 1) {
+      if ((this.mode === 'photo' || (this.v10 && !this.recording)) && this.develop < 1) {
         this.cooldown = 0.35;
         this.shakeK = Math.min(1, this.shakeK + 0.35);
         audio.play('wrong', { vol: 0.35 });
         this.els.lcd.classList.add('nag');
         setTimeout(() => this.els.lcd.classList.remove('nag'), 400);
-      } else if (this.mode === 'photo') this.shoot(animals);
+      } else if (this.mode === 'photo' && this.v10 && this.hold < 1) {
+        // V10: no snapping; the shot only goes once the ring is full
+        this.cooldown = 0.3;
+        this.holdNag = 1.2;
+        audio.play('wrong', { vol: 0.2, pitch: 1.3 });
+      } else if (this.mode === 'photo') { this.shoot(animals); this.hold = 0; }
       else if (this.recording) this.stopRecording();
       else this.startRecording();
     }
     if (this.recording) this.updateRecording(dt, animals);
     this.updateUI();
+  }
+
+  // ---------------------------------------------------------------- V10: hold steady to capture
+  /**
+   * The steadiness ring: fills over fx10.captureHold() s while the view is still (panning with the
+   * mouse or walking drains it; the stabiliser lets slow tracking count), faster when braced or holding
+   * your breath and slower with the hands shaking; a new subject in the focus box starts it again.
+   * Full on an animal the focus has locked: the shutter fires by itself. Full with nothing in the box:
+   * ready, a press takes the shot.
+   */
+  private updateHold(dt: number, brace: boolean, animals: Animal[]) {
+    this.holdNag = Math.max(0, this.holdNag - dt);
+    if (!this.v10 || this.mode !== 'photo' || this.recording) { this.hold = 0; this.holdState = 'idle'; return; }
+    if (this.develop < 1) { this.hold = 0; this.holdState = 'develop'; return; }
+    if (this.shots <= 0) { this.hold = 0; this.holdState = 'film'; return; }
+    if (this.afForeground) { this.hold = Math.max(0, this.hold - dt * 0.8); this.holdState = 'leaf'; return; }
+    const cur = this.afTarget && !this.afTarget.dead && !this.afTarget.gone ? this.afTarget : null;
+    this.holdLost = cur ? 0 : this.holdLost + dt;
+    const prev = this.holdOn && !this.holdOn.dead && !this.holdOn.gone ? this.holdOn : null;
+    // a moment out of the focus box keeps the ring (no filling meanwhile); another one of the same
+    // species in the same spot (a herd) counts as the same subject; anything else starts over
+    if (!cur && prev && this.holdLost < 0.5) { this.holdState = 'filling'; return; }
+    if (cur !== this.holdOn) {
+      const same = !!cur && !!prev && cur.species === prev.species && Math.abs(cur.x - prev.x) < 80;
+      if (!same) { this.hold = 0; this.holdQ = 0; }
+      this.holdOn = cur;
+    }
+    const tgt = cur;
+    // how still the view is (screen px per second of panning) and how much the hands shake
+    const pan = Math.hypot(this.camVX, this.camVY) * this.zoom;
+    const tol = fx10.tracking() ? 30 : 12;
+    const still = pan <= tol ? 1 : pan >= tol * 3 ? 0 : 1 - (pan - tol) / (tol * 2);
+    const stab = clamp(1 - (Math.hypot(this.swayVX, this.swayVY) * this.shutterTime()) / 5);
+    if (still < 0.35) { this.hold = Math.max(0, this.hold - dt * 0.7); this.holdQ = Math.floor(this.hold * 4); this.holdState = 'shaky'; return; }
+    const af = !tgt || this.afState === 'locked' ? 1 : 0.5;
+    const rate = (still * (0.6 + 0.4 * stab) * (this.holding ? 1.2 : 1) * (brace ? 1.1 : 1) * af) / Math.max(0.2, fx10.captureHold());
+    this.hold = Math.min(1, this.hold + rate * dt);
+    this.holdState = this.hold >= 1 ? 'ready' : 'filling';
+    // a soft tick each quarter of the ring
+    const q = Math.floor(this.hold * 4);
+    if (q > this.holdQ) { this.holdQ = q; if (q < 4) audio.play('focus', { vol: 0.12, pitch: 0.8 + q * 0.12 }); }
+    if (this.hold >= 1 && tgt && this.afState === 'locked' && this.cooldown <= 0 && !game.ui.blocking) {
+      this.shoot(animals);
+      this.hold = 0;
+      this.holdQ = 0;
+    }
   }
 
   // ---------------------------------------------------------------- occlusion
@@ -418,7 +496,7 @@ export class FieldCamera {
   /** The instant print slides out of the camera and slowly develops; shake it (R, mouse wiggle, click) to speed it up. */
   private lcd(img: string) {
     const l = this.els.lcd;
-    l.innerHTML = `<div class="pic"><img src="${img}" alt=""></div><span class="cap">DEVELOPING… shake it! <b>R</b></span><span class="n">${rawPhotos().length} to upload</span>`;
+    l.innerHTML = `<div class="pic"><img src="${img}" alt=""></div><span class="cap">DEVELOPING…${this.v10 ? ' <em class="cd"></em>' : ''} shake it! <b>R</b></span><span class="n">${rawPhotos().length} to upload</span>`;
     l.classList.remove('on', 'dry');
     void l.offsetWidth;
     l.classList.add('on');
@@ -429,24 +507,41 @@ export class FieldCamera {
     clearTimeout((l as unknown as { _t: number })._t);
   }
 
+  /** develop speed per second right now (V10: fx10.developTime(); shaking helps a little) */
+  private developRate() {
+    const night = this.host.tod === 'night';
+    if (!this.v10) return (1 / 4.2) * (1 + this.shakeK * 3.5) * (night ? 0.8 : 1);
+    return (1 / Math.max(0.5, fx10.developTime())) * (1 + this.shakeK * 0.6) * (night ? 0.85 : 1);
+  }
+  /** seconds until the print is dry, at the current rate */
+  developLeft() {
+    return this.develop >= 1 ? 0 : (1 - this.develop) / Math.max(1e-3, this.developRate());
+  }
+  private updatePrintCap() {
+    const cd = this.els.lcd.querySelector('.cd') as HTMLElement | null;
+    const t = `${Math.ceil(this.developLeft())}s`;
+    if (cd && cd.textContent !== t) cd.textContent = t;
+  }
+
   private updateDevelop(dt: number) {
     if (this.develop >= 1) return;
     const inp = game.input;
     const l = this.els.lcd;
-    // shaking: R held, fast mouse wiggles, or a tap on the print
+    // shaking: R held, fast mouse wiggles (camera up), or a tap on the print
     const mv = Math.hypot(inp.mx - this.lastMx, inp.my - this.lastMy) / Math.max(dt, 1e-3);
     this.lastMx = inp.mx; this.lastMy = inp.my;
-    if (inp.keyDown?.('KeyR') || mv > 2400) this.shakeK = Math.min(1, this.shakeK + dt * 4);
+    if ((inp.keyDown?.('KeyR') && !game.ui.blocking) || (mv > 2400 && this.active)) this.shakeK = Math.min(1, this.shakeK + dt * 4);
     this.shakeK = Math.max(0, this.shakeK - dt * 1.6);
-    const rate = (1 / 4.2) * (1 + this.shakeK * 3.5) * (this.host.tod === 'night' ? 0.8 : 1);
-    this.develop = Math.min(1, this.develop + rate * dt);
+    this.develop = Math.min(1, this.develop + this.developRate() * dt);
+    this.updatePrintCap();
     l.style.setProperty('--d', this.develop.toFixed(3));
     l.style.setProperty('--sh', this.shakeK.toFixed(2));
     if (this.shakeK > 0.2 && Math.random() < dt * 8) audio.play('rustle' as never, { vol: 0.12, pitch: 1.6 });
     if (this.develop >= 1) {
       l.classList.add('dry');
       audio.play('collectPop' as never, { vol: 0.35 });
-      (l as unknown as { _t: number })._t = window.setTimeout(() => l.classList.remove('on'), 1600);
+      (l as unknown as { _t: number })._t = window.setTimeout(() => { l.classList.remove('on'); if (!this.active) this.vf.classList.remove('pocket'); }, 1600);
+      if (this.v10 && !this.active) game.ui.toast('The print is dry. Camera ready for the next research photo.', 'CAMERA', 'teal', 2200);
     }
   }
 
@@ -530,12 +625,36 @@ export class FieldCamera {
     } else e.subject.classList.remove('on');
     this.vf.classList.toggle('recording', this.recording);
     if (this.recording) e.rt.textContent = this.recT.toFixed(1);
+    this.updateHoldUI();
+  }
+
+  /** V10: the ring round the focus box and the line under it */
+  private updateHoldUI() {
+    const e = this.els, st = this.holdState;
+    const on = this.v10 && st !== 'idle';
+    e.hold.className = `hold ${on ? 'on ' + st : ''}`;
+    e.hold.style.setProperty('--p', (st === 'develop' ? this.develop : this.hold).toFixed(3));
+    const nag = this.holdNag > 0 && (st === 'filling' || st === 'shaky');
+    e.holdlab.className = `holdlab${on ? ' on' : ''}${nag ? ' nag' : ''} ${st}`;
+    if (!on) return;
+    this.uiT -= 1;
+    if (this.uiT > 0 && !nag) return;
+    this.uiT = 6;
+    const left = Math.max(0.1, (1 - this.hold) * fx10.captureHold());
+    const auto = !!this.holdOn;
+    e.holdlab.innerHTML = nag ? 'HOLD STILL… the shutter goes when the ring is full'
+      : st === 'filling' ? `HOLD STEADY <b>${left.toFixed(1)}s</b>${auto ? '' : ' · nothing in focus'}`
+      : st === 'ready' ? (auto ? 'STEADY!' : 'READY · <b>click</b> to shoot')
+      : st === 'shaky' ? 'TOO MUCH MOVEMENT · keep the view still'
+      : st === 'leaf' ? 'FOCUS ON FOLIAGE · aim past the leaves'
+      : st === 'develop' ? `DEVELOPING <b>${Math.ceil(this.developLeft())}s</b> · next photo when it’s dry`
+      : 'OUT OF FILM';
   }
 
   destroy() {
     game.r.post.dof = false;
     game.r.post.ca = 0;
-    this.vf.classList.remove('on');
+    this.vf.classList.remove('on', 'pocket');
     this.vf.innerHTML = '';
   }
 }
@@ -567,6 +686,31 @@ function injectCss() {
 .vf .lcd .n { position: absolute; right: 0.6em; bottom: 0.55em; opacity: 0.7; }
 .vf .lcd.nag { box-shadow: 0 0 0 3px #d0301e, 0 8px 0 rgba(0,0,0,0.4); }
 .vf::after { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0.06; background: repeating-linear-gradient(0deg, #000 0 1px, transparent 1px 3px); }
+.vf .lcd .cap .cd { font-style: normal; color: #b0301e; }
+/* V10: the steadiness ring round the focus box, and the line under it */
+.vf .hold { position: absolute; left: 50%; top: 50%; width: 134px; height: 134px; margin: -67px 0 0 -67px; border-radius: 50%; opacity: 0; transition: opacity 0.2s; --p: 0; --c: var(--amber2);
+  background: conic-gradient(var(--c) calc(var(--p) * 360deg), rgba(255, 255, 255, 0.16) 0);
+  -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 7px), #000 calc(100% - 6px)), repeating-conic-gradient(#000 0 12.5deg, transparent 12.5deg 15deg);
+  -webkit-mask-composite: source-in; mask: radial-gradient(closest-side, transparent calc(100% - 7px), #000 calc(100% - 6px)), repeating-conic-gradient(#000 0 12.5deg, transparent 12.5deg 15deg); mask-composite: intersect; }
+.vf .hold.on { opacity: 1; }
+.vf .hold.ready { --c: var(--moss); filter: drop-shadow(0 0 6px rgba(141, 179, 74, 0.9)); }
+.vf .hold.shaky { --c: #ff9a7a; }
+.vf .hold.develop { --c: rgba(255, 246, 220, 0.6); opacity: 0.7; }
+.vf .hold.leaf, .vf .hold.film { --c: rgba(255, 255, 255, 0.3); opacity: 0.6; }
+.vf .holdlab { position: absolute; left: 50%; top: calc(50% + 74px); transform: translateX(-50%); font-family: var(--pix); font-size: 0.86em; letter-spacing: 0.06em; padding: 0.15em 0.65em;
+  background: rgba(0, 0, 0, 0.5); white-space: nowrap; opacity: 0; transition: opacity 0.2s; text-shadow: 0 1px 2px #000; }
+.vf .holdlab.on { opacity: 1; }
+.vf .holdlab b { color: var(--amber2); font-weight: 400; }
+.vf .holdlab.ready { color: #cff59a; }
+.vf .holdlab.shaky, .vf .holdlab.leaf, .vf .holdlab.film { color: #ffc0a8; }
+.vf .holdlab.nag { color: #ffb3a4; animation: holdNag 0.12s steps(2) 4; }
+@keyframes holdNag { 50% { margin-left: 5px; } }
+/* the print stays in view with the camera lowered while it develops */
+.vf.pocket { opacity: 1; }
+.vf.pocket > :not(.lcd) { visibility: hidden; }
+.vf.pocket::after { opacity: 0; }
+.vf.pocket .lcd.on { left: auto; right: 1.4em; bottom: 4.4em; transform: rotate(3deg) scale(0.6); transform-origin: 100% 100%; }
+.vf.pocket .lcd .n { display: none; }
 `;
   document.head.appendChild(s);
 }

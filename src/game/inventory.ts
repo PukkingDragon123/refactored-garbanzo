@@ -3,11 +3,13 @@
 import { game } from './game';
 import { ITEMS, isTool } from './items';
 import { hasSkill } from './skills';
+import { fx10 } from './v10/skills10';
 
 export interface Stack { id: string; n: number }
 
 export function capacity() {
-  return 12 + (hasSkill('pack1') ? 6 : 0) + (hasSkill('pack2') ? 6 : 0);
+  // (V10 Field Skills add pockets too; the backpack has room for 24)
+  return Math.min(24, 12 + (hasSkill('pack1') ? 6 : 0) + (hasSkill('pack2') ? 6 : 0) + fx10.packSlots());
 }
 
 export function stacks(): Stack[] {

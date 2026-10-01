@@ -34,6 +34,8 @@ export type Sfx =
   | 'reelClick' | 'reelDrag' | 'catchJingle'
   // water on the island: wading steps, cave drips, the babble of running water
   | 'stepWater' | 'drip' | 'trickle'
+  // V10: the expedition body: heavy breathing when worn out, a gurgling stomach after bad forage
+  | 'breath' | 'tummy'
   // animal vocalizations: the pitch param sets the caller's size/voice (<1 bigger & slower, >1 smaller & quicker)
   | 'callChirp' | 'callTrill' | 'callHoot' | 'callScreech' | 'callHiss' | 'callRattle' | 'callGrunt'
   | 'callBark' | 'callSqueak' | 'callGrowl' | 'callHonk' | 'callCroak' | 'callClick' | 'callWhale' | 'callPurr';
@@ -3098,6 +3100,28 @@ export class AudioEngine {
         this.tone(v, { f: 260 * p, f2: 120 * p, glide: 0.07, t, a: 0.006, d: 0.09, vol: 0.8 });
         this.burst(v, { noise: 'pink', t, a: 0.006, d: 0.08, vol: 0.5, ft: 'bandpass', f: 420 * p, Q: 2.5 });
         this.tone(v, { f: 180 * p, f2: 300 * p, glide: 0.05, t: t + 0.13, a: 0.004, d: 0.06, vol: 0.35 });
+        break;
+      }
+      case 'breath': {
+        // one heavy breath: a rasping inhale through the mouth, then a longer, lower exhale
+        const v = V(0.42, 1.5, 0.05);
+        this.burst(v, { noise: 'pink', t, a: 0.2, hold: 0.06, d: 0.16, vol: 0.55, ft: 'bandpass', f: 900 * p, f2: 1500 * p, Q: 1.1 });
+        const t1 = t + rand(0.5, 0.6);
+        this.burst(v, { noise: 'pink', t: t1, a: 0.05, hold: 0.12, d: 0.42, vol: 0.8, ft: 'bandpass', f: 1200 * p, f2: 520 * p, Q: 0.9 });
+        this.burst(v, { noise: 'brown', t: t1, a: 0.05, hold: 0.1, d: 0.35, vol: 0.45, ft: 'lowpass', f: 700 * p, Q: 0.7 });
+        this.tone(v, { type: 'triangle', f: 132 * p, f2: 96 * p, t: t1, a: 0.04, hold: 0.08, d: 0.3, vol: 0.05 });
+        break;
+      }
+      case 'tummy': {
+        // a stomach complaining: a run of low, wobbling gurgles
+        const v = V(0.5, 1.8, 0.04);
+        const n = randi(3, 5);
+        for (let i = 0; i < n; i++) {
+          const s1 = t + i * rand(0.11, 0.22);
+          const f = rand(70, 115) * p;
+          this.tone(v, { f, pts: [[0.05, f * 1.7], [0.12, f * 0.85], [0.16, f * 1.2]], t: s1, a: 0.02, d: 0.15, vol: 0.55 });
+          this.burst(v, { noise: 'brown', t: s1, a: 0.02, d: 0.13, vol: 0.4, ft: 'bandpass', f: rand(160, 260) * p, Q: 5 });
+        }
         break;
       }
       case 'craft': {

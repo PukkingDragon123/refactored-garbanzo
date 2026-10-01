@@ -8,6 +8,7 @@ import { audio } from '../core/audio';
 import { trackedQuest, currentStepIndex } from '../game/quests';
 import { capacity } from '../game/inventory';
 import { itemIconURL, uiIconURL } from '../art/itemicons';
+import { mountBodyHud, BodyHud } from './v10/bodyhud';
 
 const CSS = `
 .h2 { position: absolute; inset: 0; pointer-events: none; transition: opacity 0.3s; }
@@ -155,6 +156,8 @@ export class Hud2 {
   private shownRp = -1;
   private lastQuestKey = '';
   private t = 0;
+  /** V10: energy, pack weight and ailments on expeditions */
+  private body: BodyHud | null = null;
 
   constructor(parent: HTMLElement, o: HudOpts) {
     if (!styled) { document.head.appendChild(el('style', '', CSS)); styled = true; }
@@ -164,6 +167,7 @@ export class Hud2 {
     this.quest.addEventListener('click', () => { this.questMin = !this.questMin; this.quest.classList.toggle('min', this.questMin); });
     const bar = this.root.appendChild(el('div', 'bar'));
     this.who = bar.appendChild(el('div', 'who', `<div class="med"><img alt=""></div><div class="bars"><small>PACK</small><i class="a"></i><small>FILM</small><i class="b"></i></div>`));
+    this.body = mountBodyHud(this.root, this.who);
     this.belt = bar.appendChild(el('div', 'belt'));
     this.lapEl = bar.appendChild(el('div', 'lapb interactive', `<span><img src="${laptopIconURL()}" alt=""></span><i class="k">L</i><b class="n"></b>`));
     this.lapEl.title = 'Laptop (L)';
@@ -243,7 +247,7 @@ export class Hud2 {
     // portrait, pack meter, film (field camera) and tool belt
     const img = this.who.querySelector('img') as HTMLImageElement;
     if (!img.src) { const u = game.ui.portraitURL('rowan', 'happy'); if (u) img.src = u; }
-    (this.who.querySelector('i.a') as HTMLElement).style.setProperty('--v', `${Math.round((s.inv.length / Math.max(1, capacity())) * 100)}%`);
+    if (!this.body?.ownsPack()) (this.who.querySelector('i.a') as HTMLElement).style.setProperty('--v', `${Math.round((s.inv.length / Math.max(1, capacity())) * 100)}%`);
     const cam = (game.scene as { cam?: { shots: number } } | null)?.cam;
     const film = this.who.querySelector('i.b') as HTMLElement;
     film.style.display = cam ? '' : 'none';
@@ -281,6 +285,7 @@ export class Hud2 {
       this.t = 0;
       this.refresh();
     }
+    this.body?.update(dt);
   }
 
   /** icon flies from a screen point into the backpack button, with a floating "+2 Flax" label */
@@ -307,6 +312,7 @@ export class Hud2 {
   }
 
   destroy() {
+    this.body?.destroy();
     this.root.remove();
   }
 }
