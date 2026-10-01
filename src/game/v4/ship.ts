@@ -557,8 +557,8 @@ export class ShipScene4 extends FieldScene {
   /** keep Chunk in Mori's arms */
   private holdChunk() {
     const p = this.player, c = this.chunk;
-    // on a ladder the hand is up on the rungs: he stays tucked under the other arm, where he was
-    let h = p.state === 'climb' || p.body.anim === 'carryPupClimb' ? null : p.body.handPos();
+    // on a ladder he is tucked under the near arm (the far hand climbs), which is the hand handPos gives
+    let h = p.state === 'climb' && p.body.anim !== 'carryPupClimb' ? null : p.body.handPos();
     if (h) this.carryOff = [(h[0] - p.x) * p.facing, h[1] - p.y];
     else h = [p.x + this.carryOff[0] * p.facing, p.y + this.carryOff[1]];
     c.terrain = null;

@@ -11,6 +11,7 @@ import { game } from '../game/game';
 import { audio } from '../core/audio';
 import { approach, clamp } from '../core/math';
 import { perks } from '../game/skills';
+import { climbFrame } from '../art/ladder';
 
 export type PState = 'normal' | 'climb' | 'hide' | 'swim' | 'script' | 'stunned' | 'work';
 
@@ -197,12 +198,27 @@ export class Player implements Drawable {
           return;
         }
       }
-      this.y = clamp(this.y + ay * (this.autoClimb ? 70 : 44) * dt, c.y0, c.y1);
-      this.x = approach(this.x, c.x, 80 * dt);
-      this.anim = ay ? 'climb' : 'climbIdle';
+      // turning to face the ladder first (a short clip): then the hands are on the rails
+      if (this.body.inTransition && this.body.anim === 'climbOn') ay = 0;
+      // the climb clip's frame is the place on the ladder, so this speed is how fast the limbs work:
+      // two rungs per hand per 12 px
+      this.y = clamp(this.y + ay * (this.autoClimb ? 50 : 40) * dt, c.y0, c.y1);
+      this.x = approach(this.x, c.x, 120 * dt);
+      this.anim = 'climb';
       if (ay) {
         this.stepT += dt;
-        if (this.stepT > 0.28) { this.stepT = 0; audio.play((c.kind === 'ladder' ? 'stepWood' : 'rustle') as 'rustle', { vol: 0.25 }); }
+        if (this.stepT > 0.15) { this.stepT = 0; audio.play((c.kind === 'ladder' ? 'stepWood' : 'rustle') as 'rustle', { vol: 0.22 }); }
+      }
+      // off the top when climbing on up past it, off the bottom when climbing on down, a jump, or a step
+      // sideways at the top
+      if (canControl && !this.autoClimb && ay < 0 && this.y <= c.y0) {
+        this.state = 'normal';
+        this.climb = null;
+        this.onGround = true;
+        const s = this.terrain.surfaceBelow(this.x, this.y - 4, 0);
+        if (s && Math.abs(s.y - this.y) < 6) { this.y = s.y; this.surface = s.s; } else this.onGround = false;
+        this.syncBody(dt);
+        return;
       }
       if (canControl && (inp.hit('jump') || (ax !== 0 && this.y <= c.y0 + 1) || (ay > 0 && this.y >= c.y1))) {
         this.state = 'normal';
@@ -229,6 +245,8 @@ export class Player implements Drawable {
       return;
     }
 
+    // stepping off a ladder turns on the spot before walking away
+    if (this.body.inTransition && this.body.anim === 'climbOff') ax = 0;
     // crouch / hide
     this.crouch = canControl && inp.down('down') && this.onGround;
     if (canControl && inp.hit('down') && this.onGround) {
@@ -264,7 +282,8 @@ export class Player implements Drawable {
     // climbing grab
     if (canControl && inp.down('up') && !this.camera) {
       const c = this.terrain.climbAt(this.x, this.y - 4);
-      if (c) {
+      // (not at the top: having just climbed out, holding Up would grab the ladder again)
+      if (c && this.y > c.y0 + 3) {
         this.state = 'climb';
         this.climb = c;
         this.vx = this.vy = 0;
@@ -329,7 +348,8 @@ export class Player implements Drawable {
     // brief drops over small ledges don't flash the fall pose
     if (!this.onGround && (this.airT > 0.1 || this.vy < -30)) this.anim = this.vy < 0 ? 'jump' : 'fall';
     else if (!this.onGround) { /* keep the grounded pose for a moment */ }
-    else if (this.camera) this.anim = this.crouch ? 'cameraCrouch' : 'camera';
+    // camera up: creeping along with it held at the eye (the steps are distance-driven, no skating)
+    else if (this.camera) this.anim = this.crouch ? (moving ? 'cameraCrouchWalk' : 'cameraCrouch') : moving ? 'cameraWalk' : 'camera';
     else if (steep && Math.abs(this.vx) > 30 && Math.sign(this.vx) === Math.sign(this.tilt) && ax === 0) this.anim = 'slip';
     else if (steep && !moving) this.anim = 'brace';
     else if (this.crouch) this.anim = moving ? 'crouchWalk' : 'crouch';
@@ -378,15 +398,17 @@ export class Player implements Drawable {
     b.x = this.x;
     b.y = this.y;
     b.facing = this.facing;
-    let a = this.anim;
-    if (!this.poseOverride && this.animMap) {
-      const m = this.animMap[a] ?? (a === 'climbIdle' ? this.animMap.climb : undefined);
-      if (m) { b.holdFrame = a === 'climbIdle' ? (b.anim === m ? b.currentFrame() : 0) : null; a = m; }
-    }
-    // resting on a ladder holds the current climb frame (hands stay on their rungs)
-    if (a === 'climbIdle') { a = 'climb'; if (b.holdFrame === null) b.holdFrame = b.anim === 'climb' ? b.currentFrame() : 3; }
-    else if (b.holdFrame !== null && (a === 'climb' || !this.animMap)) b.holdFrame = null;
+    let a = this.anim === 'climbIdle' ? 'climb' : this.anim;
+    if (!this.poseOverride && this.animMap) a = this.animMap[a] ?? a;
     if (b.anim !== a && !b.walking) b.setAnim(a);
+    const c = this.climb;
+    if (this.state === 'climb' && c && !this.poseOverride) {
+      // on a ladder the frame is the place on it (hands and feet on its rungs, still when he stops),
+      // drawn on whole pixels from the top so the grips stay on the same rung rows
+      const d = Math.round(this.y - c.y0);
+      b.y = c.y0 + d;
+      if (b.anim === a) b.holdFrame = climbFrame(d, c.y1 - c.y0);
+    } else if (b.anim === a && b.holdFrame !== null && !this.poseOverride && (a === 'climb' || a === 'carryPupClimb')) b.holdFrame = null;
     if (this.poseOverride && this.poseFrame !== null) b.holdFrame = this.poseFrame;
     b.alpha = (this.state === 'hide' ? 0.6 : 1) * this.alpha * (this.hurtT > 0 && Math.floor(this.hurtT * 12) % 2 === 0 ? 0.35 : 1);
     b.shadow = !this.underwater && this.onGround;

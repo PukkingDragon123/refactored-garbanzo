@@ -23,6 +23,7 @@ import { SPOTS, S4 } from '../v4/ship';
 import { LADDERS } from '../../art/ship5';
 import type { Actor } from '../../world/actor';
 import { rand } from '../../core/math';
+import { climbFrame } from '../../art/ladder';
 import { questStatus } from '../quests';
 
 const F = () => game.save.flags;
@@ -32,7 +33,7 @@ const levelOf = (y: number): Lv => (y > S4.lower.ceil ? 'lower' : 'deck');
 
 class Abort extends Error {}
 interface Waiter { done: () => boolean; res: () => void; rej: (e: unknown) => void }
-interface Climb { x: number; from: number; to: number; speed: number; res: () => void }
+interface Climb { x: number; from: number; to: number; speed: number; res: () => void; /** the climber's exact height (drawn on whole pixels) */ fy?: number }
 
 type Mode = 'off' | 'free' | 'home';
 
@@ -161,15 +162,21 @@ abstract class Brain {
     // a climb always runs to the end of the ladder (nobody hangs mid-air through a cutscene)
     const c = this.climbing;
     if (c) {
-      const d = c.to - a.y, step = c.speed * dt;
+      // (turning to face the ladder first; then hands and feet on its rungs: the frame is the place on it)
+      const y = c.fy ?? a.y, d = c.to - y, step = a.inTransition ? 0 : c.speed * dt;
       a.x = c.x;
-      if (Math.abs(d) <= step) {
+      if (!a.inTransition && Math.abs(d) <= step) {
         a.y = c.to;
         a.terrain = this.s.st.terrain;
         this.climbing = null;
         a.setAnim(a.idleAnim === 'climb' ? 'idle' : a.idleAnim);
         c.res();
-      } else a.y += Math.sign(d) * step;
+      } else {
+        c.fy = y + Math.sign(d) * step;
+        const top = Math.min(c.from, c.to), dd = Math.round(c.fy - top);
+        a.y = top + dd;
+        if (!a.inTransition) a.holdFrame = climbFrame(dd, Math.abs(c.to - c.from));
+      }
     }
     const mode = this.mode();
     // the story has them now: stop once, then stand by until the phase lets them go again
@@ -215,6 +222,7 @@ abstract class Brain {
       this.climbing = null;
       this.a.y = Math.abs(this.a.y - c.from) < Math.abs(this.a.y - c.to) ? c.from : c.to;
       this.a.terrain = this.s.st.terrain;
+      if (this.a.anim === 'climb') this.a.setAnim(this.a.idleAnim === 'climb' ? 'idle' : this.a.idleAnim);
       c.res();
     }
     this.cleanup();
