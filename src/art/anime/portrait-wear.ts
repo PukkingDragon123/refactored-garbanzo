@@ -227,7 +227,117 @@ const JENNA_W = { shell: '#c04478', panel: '#5e4a82', trim: '#40304e' };
 const JOSHU_W = { shell: '#22252c', panel: '#643a24', trim: '#121418' };
 const AROHA_W = { shell: '#924028', panel: '#48291a', trim: '#1c1f25' };
 
+// ------------------------------------------------------------------ ship clothes (outfits-ship.ts)
+
+/** Jenna's cat-ear headphones round her neck: the band across the collar, a cup either side */
+const neckPhonesF = (p: Pic, m: WearMats) => {
+  void m;
+  const mn = T('#72c2a8', { sh: 0.2, hi: 0.2 }), pk = T('#e86a98'), pm = p.m(14, true, 0.5);
+  p.stroke([[CX - 11, 46.4], [CX - 6, 49.4], [CX, 50.2], [CX + 6, 49.4], [CX + 11, 46.4]], 1.6, 1.6, mn[2], pm);
+  for (const s of [-1, 1]) {
+    p.ell(CX + s * 12, 48.6, 3.4, 2.8, s < 0 ? mn[3] : mn[1], pm);
+    p.ell(CX + s * 12, 48.2, 1.7, 1.2, pk[2], pm);
+  }
+  p.where([pm], (u, v) => v > 50.6 && Math.abs(Math.abs(u - CX) - 12) < 3, mn[0]);
+};
+/** the same headphones on: a band over the crown with two cat ears, the big cups over the ears */
+const headPhonesF = (p: Pic, m: WearMats) => {
+  void m;
+  const mn = T('#72c2a8', { sh: 0.2, hi: 0.2 }), pk = T('#e86a98', { hi: 0.18 }), pm = p.m(14, true, 0.5);
+  // cat ears standing up off the band
+  for (const s of [-1, 1]) {
+    p.fill([[CX + s * 5, 4.4], [CX + s * 12.6, -1.8], [CX + s * 13.4, 7.6]], s < 0 ? mn[2] : mn[1], pm, { sharp: true });
+    p.fill([[CX + s * 7.4, 4.6], [CX + s * 12, 0.8], [CX + s * 12.4, 6.4]], pk[2], pm, { sharp: true });
+  }
+  const arc: Pt[] = [];
+  for (let i = 0; i <= 16; i++) { const a = Math.PI * (1 + i / 16); arc.push([CX + Math.cos(a) * 17.4, 25 + Math.sin(a) * 21.4]); }
+  p.stroke(arc, 2.6, 2.6, mn[2], pm);
+  p.where([pm], (u, v) => v < 8 && u < CX, mn[3]);
+  for (const s of [-1, 1]) {
+    p.ell(CX + s * 17.6, 27.4, 3.8, 5.6, s < 0 ? mn[2] : mn[1], pm);
+    p.ell(CX + s * 18.6, 27.4, 1.6, 2.6, s < 0 ? mn[3] : mn[2], pm);
+    p.dot(CX + s * 18.6, 27, col('#fff2fa'));
+  }
+};
+const jennaHoodie = (phones: boolean) => (p: Pic, m: WearMats) => {
+  const h = T('#a898cc', { sh: 0.16, hi: 0.14 }), cr = T('#e0d2bc');
+  // the hood bunched behind the neck, then the roomy shoulders
+  p.fill([[CX - 16, 47.4], [CX - 13, 42.6], [CX - 6, 45], [CX + 6, 45], [CX + 13, 42.6], [CX + 16, 47.4]], h[1], m.cloth2);
+  p.fill([[1, 60], [4, 51], [13, 46.2], [CX, 45.4], [PW - 13, 46.2], [PW - 4, 51], [PW - 1, 60]], h[2], m.cloth);
+  p.where([m.cloth], (u, v) => u > PW - 14 || v > 58.6, h[1]);
+  p.where([m.cloth], (u, v) => Math.abs(u - 8 - (v - 50) * 0.3) < 0.5 && v > 51, h[1]);
+  // the neckline, cream drawstrings with mint tips
+  p.fill([[CX - 6, 45], [CX, 48.6], [CX + 6, 45], [CX + 6, 46.6], [CX, 50], [CX - 6, 46.6]], h[1], m.cloth2);
+  p.stroke([[CX - 3.2, 48.6], [CX - 3.6, 56]], 0.9, 0.9, cr[2], m.acc);
+  p.stroke([[CX + 3.2, 48.6], [CX + 3.6, 56]], 0.9, 0.9, cr[1], m.acc);
+  p.ell(CX - 3.6, 56.6, 0.8, 1, col('#72c2a8'), m.acc);
+  p.ell(CX + 3.6, 56.6, 0.8, 1, col('#4a9a84'), m.acc);
+  // a white paw print on the chest
+  for (const [u, v, r] of [[CX + 10, 55.6, 1.6], [CX + 8, 53, 0.7], [CX + 10, 52.4, 0.7], [CX + 12, 53, 0.7]] as [number, number, number][]) p.ell(u, v, r, r * 0.9, col('#f4f0fa'), m.acc);
+  if (!phones) neckPhonesF(p, m);
+};
+
+const moriShipBust = (p: Pic, m: WearMats) => {
+  const vest = T('#526232', { sh: 0.18 }), oat = T('#b8a890', { sh: 0.16 }), red = T('#b82c22');
+  // broad shoulders in the olive vest over an oatmeal henley
+  p.fill([[-3, 60], [-1.4, 52.6], [3, 49], [11, 47], [CX - 8.4, 45.8], [CX, 45.6], [CX + 8.4, 45.8], [PW - 11, 47], [PW - 3, 49], [PW + 1.4, 52.6], [PW + 3, 60]], vest[2], m.cloth);
+  p.where([m.cloth], (u, v) => u > PW - 15 || v > 57.4, vest[1]);
+  // the henley at the arms (the vest is sleeveless) and down the open front
+  p.where([m.cloth], (u, v) => (u < 6.4 - (v - 49.4) * 0.2 || u > PW - 6.4 + (v - 49.4) * 0.2) && v > 49.8, oat[2]);
+  p.where([m.cloth], (u, v) => u > PW - 6.4 + (v - 49.4) * 0.2 && v > 49.8, oat[1]);
+  p.fill([[CX - 7.4, 45.4], [CX + 7.4, 45.4], [CX + 6, 60], [CX - 6, 60]], oat[2], m.cloth2, { sharp: true });
+  p.where([m.cloth2], (u, v) => u > CX + 2, oat[1]);
+  // the henley's round neck and its three-button placket
+  p.fill([[CX - 6.4, 45.2], [CX, 48.4], [CX + 6.4, 45.2], [CX + 6.4, 46.4], [CX, 49.6], [CX - 6.4, 46.4]], oat[0], m.cloth2);
+  p.stroke([[CX + 0.6, 49.6], [CX + 0.6, 56]], 0.7, 0.7, oat[0], m.cloth2);
+  for (const v of [51, 53.2, 55.4]) p.dot(CX + 1.6, v, col('#f0e6d4'));
+  // the vest's panels: edges, chest pockets with flaps
+  p.where([m.cloth], (u, v) => Math.abs(Math.abs(u - CX) - 7.6) < 0.5 && v > 46, vest[0]);
+  for (const s of [-1, 1]) {
+    p.fill([[CX + s * 9, 51], [CX + s * 15, 51], [CX + s * 15, 56.6], [CX + s * 9, 56.6]], s < 0 ? vest[3] : vest[2], m.acc, { sharp: true });
+    p.fill([[CX + s * 8.6, 50], [CX + s * 15.4, 50], [CX + s * 15.4, 52.4], [CX + s * 8.6, 52.4]], vest[1], m.acc, { sharp: true });
+  }
+  // the red lanyard down to his research ID
+  p.stroke([[CX - 6, 46], [CX - 2.4, 52], [CX - 1.2, 57]], 0.8, 0.8, red[2], m.beard);
+  p.stroke([[CX + 6, 46], [CX + 2.4, 52], [CX + 1.2, 57]], 0.8, 0.8, red[1], m.beard);
+  p.fill([[CX - 3, 56.6], [CX + 3, 56.6], [CX + 3, 61], [CX - 3, 61]], col('#f4f0e6'), m.beard, { sharp: true });
+  p.where([m.beard], (u, v) => v > 56.8 && v < 58 && Math.abs(u - CX) < 2.6, col('#3a6a9a'));
+};
+
+const joshuShipBust = (p: Pic, m: WearMats) => {
+  const k = T('#1c443e', { sh: 0.16 });
+  // the deep-teal fisherman's knit on those shoulders: vertical ribs, a ribbed yoke, a thick roll collar
+  p.fill([[-3, 60], [-1, 47.6], [8, 42], [CX, 40.6], [PW - 8, 42], [PW + 1, 47.6], [PW + 3, 60]], k[2], m.cloth);
+  p.where([m.cloth], (u, v) => u > PW - 12 || v > 58.4, k[1]);
+  p.where([m.cloth], (u, v) => v > 47 && ((u + 40) % 2.6) < 0.7, k[1]);
+  p.where([m.cloth], (u, v) => Math.abs(v - 50) < 1.2 && ((u + 40) % 1.6) < 0.6, k[3]);
+  p.fill([[CX - 14, 41.4], [CX, 39.6], [CX + 14, 41.4], [CX + 14, 44.4], [CX, 42.6], [CX - 14, 44.4]], k[1], m.cloth2);
+  p.where([m.cloth2], (u, v) => v < 42, k[3]);
+};
+
+const arohaShipBust = (p: Pic, m: WearMats) => {
+  const top = T('#1e5058', { sh: 0.14 }), skin = T('#c8885e', { sh: 0.12 }), cr = col('#f0e6d4');
+  // a deep-teal sleeveless top, bare shoulders, a cream koru printed on the chest
+  p.fill([[2, 60], [4, 51], [10, 47.4], [CX - 7, 46], [CX, 49], [CX + 7, 46], [PW - 10, 47.4], [PW - 4, 51], [PW - 2, 60]], skin[2], m.neck);
+  p.where([m.neck], (u, v) => u > PW - 12, skin[1]);
+  p.fill([[8, 60], [9.6, 51.4], [13, 47.6], [CX - 5.6, 46.4], [CX, 50.4], [CX + 5.6, 46.4], [PW - 13, 47.6], [PW - 9.6, 51.4], [PW - 8, 60]], top[2], m.cloth);
+  p.where([m.cloth], (u, v) => u > PW - 16 || v > 58.4, top[1]);
+  const kx = CX + 8, ky = 55;
+  p.where([m.cloth], (u, v) => {
+    const x = u - kx, y = v - ky, r = Math.hypot(x, y);
+    if (r > 3.8) return false;
+    const a = Math.atan2(y, x);
+    return Math.abs((((r - a * 0.62) / 1.9) % 1 + 1) % 1 - 0.5) < 0.16;
+  }, cr);
+  // pounamu on its cord
+  p.stroke([[CX - 5, 45], [CX - 2.4, 49], [CX, 50.4]], 0.9, 0.9, col('#3a2418'), m.acc);
+  p.stroke([[CX + 5, 45], [CX + 2.4, 49], [CX, 50.4]], 0.9, 0.9, col('#3a2418'), m.acc);
+  p.fill([[CX - 1.6, 50], [CX + 1.6, 50], [CX + 2, 53.4], [CX, 55.2], [CX - 2, 53.4]], col('#3a9a6a'), m.acc);
+  p.where([m.acc], (u, v) => u < CX && v > 50.6 && v < 53, col('#7ad0a0'));
+};
+
 export const PORTRAIT_WEAR: Record<string, Record<string, PortraitWear>> = {
+  // (the ship clothes are merged in below)
   mori: {
     winter: { body: bust({ ...MORI_W, fur: '#cdc2b2', collar: 'hood', strips: true, straps: '#2c2f36', gear: moriGear }), front: beanieF('#a84a26', { lamp: true }) },
     winterHood: (() => { const h = hoodF('#4c6432', { fur: '#cdc2b2', goggles: '#e8761e' }); return { hideBack: true, back: h.back, body: bust({ ...MORI_W, collar: 'high', strips: true, straps: '#2c2f36', gear: moriGear }), front: h.front }; })(),
@@ -249,3 +359,9 @@ export const PORTRAIT_WEAR: Record<string, Record<string, PortraitWear>> = {
     storm: (() => { const h = hoodF('#243226', { gloss: true }); return { hideBack: true, back: h.back, body: bust({ shell: '#243226', panel: '#243226', trim: '#121418', gloss: true, collar: 'high', gear: arohaGear }), front: h.front }; })(),
   },
 };
+
+PORTRAIT_WEAR.jenna.ship = { body: jennaHoodie(false) };
+PORTRAIT_WEAR.jenna.shipPhones = { body: jennaHoodie(true), front: headPhonesF };
+PORTRAIT_WEAR.mori.ship = { body: moriShipBust };
+PORTRAIT_WEAR.joshu.ship = { body: joshuShipBust };
+PORTRAIT_WEAR.aroha.ship = { body: arohaShipBust };

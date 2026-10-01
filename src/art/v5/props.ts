@@ -259,5 +259,23 @@ export function drawProp5(x: Ctx, p: PropP) {
       merge();
       break;
     }
+    case 'mug': {
+      // an enamel tin mug: cream with a dark rim, the handle out the back, tea showing at the top
+      box(-1.7, 1.7, 0, 3.4, (u, v) => (v > 2.9 ? (Math.abs(u) < 1.2 && v > 3.1 ? hex('#7a4a22') : P.dark[2]) : P.white[u > 0.9 ? 1 : u < -0.9 ? 3 : 2]));
+      stick(dir(1.8, a + Math.PI / 2, dir(-2.2)), dir(0.6, a + Math.PI / 2, dir(-2.4)), 0.45, 0.45, P.dark);
+      merge();
+      break;
+    }
+    case 'sandwich': {
+      // a thick sandwich, a bite out of one corner: crusts, white bread, a frill of lettuce and tomato
+      box(-2.2, 2.2, -1.4, 1.4, (u, v) => {
+        if (u > 1.4 && v > 0.5) return -1;
+        if (Math.abs(v) < 0.3) return u > 0 ? hex('#6ab040') : hex('#d8483a');
+        if (Math.abs(v) > 1.05 || u < -1.8) return P.noodle[1];
+        return P.white[u > 1 ? 2 : 3];
+      });
+      merge();
+      break;
+    }
   }
 }
