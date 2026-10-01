@@ -4,7 +4,9 @@
 // that drums into a rippling heightfield surface (shaded from its normals: window glints, a bright
 // meniscus at the wall, churning foam where the stream lands). The noodle puck sits dry with its
 // toppings, then drowns, floats up and loosens; the flakes drift off on the ripples, the powder
-// clouds the water into golden broth, steam curls up, and Chunk watches every drop.
+// clouds the water into golden broth and steam curls up. No words on screen: a pulsing keycap (or a
+// touch ring) shows how to pour, marching arrows mark the fill line, and the line glows gold while
+// the water is in the sweet spot.
 
 import { openCloseup, CW, CH, rgb, hx, mixc, put, blend, ramp, dith, hash, R, G, B } from './closeup';
 import { Hold, loop } from '../v4/mini';
@@ -23,8 +25,6 @@ const NOODLE = ['#8a6428', '#b48c3c', '#d4aa56', '#e8c472', '#f6dc9c'].map(hx);
 const STEEL = ['#23272d', '#3c4249', '#5c646c', '#86909a', '#b4bcc4', '#e4eaee', '#ffffff'].map(hx);
 const SKIN = ['#8c392f', '#ba805d', '#d49672', '#f3a572', '#f8c090'].map(hx);
 const SLEEVE = ['#2a2426', '#3e3638', '#555052', '#6c6668', '#858082'].map(hx);
-const FUR = ['#6a4a2a', '#9a7040', '#c8984e', '#e4b87c', '#f4d4a0'].map(hx);
-const MASK = ['#140c0a', '#2a1c16', '#3e2c2a', '#5a4238'].map(hx);
 const INK = hx('#1a1014');
 
 // ------------------------------------------------------------------ cup geometry (seen from above)
@@ -214,44 +214,6 @@ function paintKettle(): Uint32Array {
   return k;
 }
 
-// ------------------------------------------------------------------ Chunk peeking in (bottom left)
-function paintChunk(buf: Uint32Array, t: number, lookX: number, lookY: number, lick: number, joy: number) {
-  const cx = 30, cy = 170 + Math.sin(t * 2.2) * 1.5 - joy * 4;
-  for (const [ex, dir] of [[-26, -1], [22, 1]] as const) for (let y = -32; y < -8; y++) for (let x = 0; x < 16; x++) {
-    const X = cx + ex + dir * x * 0.8, Y = cy + y + x * 0.5;
-    if (x > 14 - (y + 32) * 0.4) continue;
-    put(buf, X, Y, ramp(MASK, 0.3 + x / 30, X | 0, Y | 0));
-  }
-  for (let y = -40; y < 16; y++) for (let x = -40; x < 40; x++) {
-    const d = (x / 38) ** 2 + ((y + 10) / 30) ** 2;
-    if (d > 1) continue;
-    const X = cx + x, Y = cy + y;
-    let c = ramp(FUR, 0.62 - x / 90 - (y + 10) / 80 + (d > 0.86 ? -0.25 : 0), X, Y | 0);
-    if (y < -18 && y > -30 && Math.abs(Math.sin(x * 0.28) * 4 + y + 24) < 0.8) c = FUR[1];
-    const md = (x / 20) ** 2 + ((y + 1) / 13) ** 2;
-    if (md < 1) c = ramp(MASK, 0.45 - (y + 1) / 30 - x / 70, X, Y | 0);
-    if (d > 0.965) c = INK;
-    put(buf, X, Y, c);
-  }
-  for (const ex of [-17, 15]) {
-    const ox = Math.max(-3, Math.min(3, (lookX - (cx + ex)) / 30)), oy = Math.max(-2, Math.min(1, (lookY - (cy - 16)) / 40));
-    for (let y = -7; y <= 7; y++) for (let x = -7; x <= 7; x++) {
-      if (x * x + y * y > 42) continue;
-      const X = cx + ex + x, Y = cy - 16 + y;
-      put(buf, X, Y, x * x + y * y > 34 ? MASK[0] : hx('#1a1210'));
-      const px = x - ox, py = y - oy;
-      if (px * px + py * py < 18) put(buf, X, Y, hx('#3a2418'));
-    }
-    put(buf, cx + ex - 2 + ox, cy - 19 + oy, hx('#ffffff')); put(buf, cx + ex - 1 + ox, cy - 19 + oy, hx('#ffffff')); put(buf, cx + ex - 2 + ox, cy - 18 + oy, hx('#ffffff'));
-    put(buf, cx + ex + 3 + ox, cy - 13 + oy, hx('#e8e0f0'));
-  }
-  for (let y = -6; y < -1; y++) for (let x = -5; x <= 5; x++) if (x * x / 30 + (y + 4) ** 2 / 6 < 1) put(buf, cx + x, cy + y, y < -4 ? hx('#3a3034') : hx('#0c0808'));
-  const tl = 3 + lick * 8;
-  for (let y = 4; y < 4 + tl; y++) for (let x = -4; x <= 4; x++) if (x * x / 16 + ((y - 4) / tl) ** 2 * 0.6 < 1) put(buf, cx + x + 2, cy + y, x < -1 ? hx('#e86a78') : hx('#c84858'));
-  // a drool drop when the broth smells good
-  if (lick > 0.6) { put(buf, cx + 8, cy + 8 + lick * 3, hx('#d8f0ff')); put(buf, cx + 8, cy + 9 + lick * 3, hx('#a8d0e8')); }
-}
-
 // ------------------------------------------------------------------ noodle strand textures (puck-local)
 // 0 gap, 1 strand edge, 2 strand body, 3 highlight. Dry: a tight crinkled block; soaked: loose waves.
 const TW = 80, TH = 48;
@@ -284,6 +246,73 @@ const texAt = (u: number, v: number, soak: number, x: number, y: number) => {
 // ------------------------------------------------------------------ toppings that float off the puck
 interface Flake { u: number; v: number; vu: number; vv: number; kind: number; rot: number }
 const FLAKE_COL = [['#e8742a', '#b84a18'], ['#6ab04a', '#3a7a2a'], ['#fbeef0', '#e87a98'], ['#c8a060', '#8a6030']].map(p => p.map(hx));
+
+// ------------------------------------------------------------------ wordless guides
+/** a small arrowhead at (x, y) pointing along dir, outlined in ink */
+function tri(buf: Uint32Array, x: number, y: number, dir: 1 | -1, fill: number) {
+  for (let i = 0; i <= 6; i++) {
+    const h = 4 - Math.round(i * 0.7);
+    for (let j = -h - 1; j <= h + 1; j++) {
+      const edge = Math.abs(j) > h || i === 6;
+      put(buf, x + i * dir, y + j, edge ? INK : Math.abs(j) === h ? mixc(fill, INK, 0.3) : fill);
+    }
+  }
+}
+
+/** marching arrows at the fill line, and a keycap (or touch ring) that shows how to pour */
+function paintGuide(buf: Uint32Array, t: number, L: number, down: boolean, a: number, touch: boolean) {
+  const F = surf(LINE);
+  const zone = L >= LINE_LO && L <= LINE_HI;
+  const bob = Math.round(Math.sin(t * 6) * 1.5);
+  const col = zone ? hx('#ffe45a') : hx('#f05a3a');
+  // arrows just outside the rim, pointing in at the line's two ends
+  tri(buf, CX - RIM_RX - 12 + bob, Math.round(F.cy), 1, col);
+  tri(buf, CX + RIM_RX + 12 - bob, Math.round(F.cy), -1, col);
+  if (a <= 0.01) return;
+  // the cue sits on the counter at the lower right; while idle it taps itself (press, release)
+  const x0 = 250, y0 = 138; // kept inside the area every screen aspect shows
+  const press = down || t % 0.9 < 0.4;
+  if (touch) {
+    // a fingertip ring that closes in and holds
+    const cx = x0 + 18, cy = y0 + 6;
+    const r = press ? 5 : 9 - ((t * 6) % 4);
+    for (let k = 0; k < 64; k++) {
+      const ang = k / 64 * Math.PI * 2;
+      blend(buf, cx + Math.cos(ang) * r, cy + Math.sin(ang) * r * 0.8, hx('#fff6e0'), a * 0.9);
+    }
+    for (let j = -3; j <= 3; j++) for (let i = -3; i <= 3; i++) if (i * i + j * j <= 9) blend(buf, cx + i, cy + j, press ? hx('#ffe45a') : hx('#fff6e0'), a * (press ? 0.95 : 0.5));
+    return;
+  }
+  // a blank spacebar keycap: cream top, shaded front, ink outline; it sinks while pressed
+  const W = 38, TOP = 7, FRONT = press ? 2 : 4, dy = press ? 2 : 0, KH2 = TOP + FRONT;
+  for (let x = 1; x < W + 1; x++) for (let y = 0; y < 2; y++) blend(buf, x0 + x, y0 + 6 + 4 + 1 + y, hx('#1a0e08'), a * 0.4);
+  for (let y = 0; y < KH2; y++) for (let x = 0; x < W; x++) {
+    const corner = (x === 0 || x === W - 1) && (y === 0 || y === KH2 - 1);
+    if (corner) continue;
+    let c: number;
+    if (x === 0 || x === W - 1 || y === 0 || y === KH2 - 1) c = INK;
+    else if (y < TOP) c = y === 1 ? hx('#fffaf0') : x < 3 || y > TOP - 2 ? hx('#d8ccb4') : hx('#f2ead8');
+    else c = y === TOP ? hx('#8a7c66') : hx('#a89a82');
+    blend(buf, x0 + x, y0 + y + dy, c, a);
+  }
+  // little impact ticks around the key on each press
+  if (press && !down) for (const [ox, oy, sx] of [[-3, -1, -1], [W / 2, -4, 0], [W + 2, -1, 1]] as const) {
+    for (let k = 0; k < 3; k++) blend(buf, x0 + ox + sx * k, y0 + oy - (sx === 0 ? k : 0), hx('#fff6e0'), a);
+  }
+}
+
+/** sparkles around the rim after a perfect pour */
+function paintTwinkles(buf: Uint32Array, tt: number) {
+  for (let k = 0; k < 12; k++) {
+    const ph = tt * 1.6 - hash(k, 3) * 0.8;
+    if (ph < 0 || ph > 1) continue;
+    const ang = hash(k, 5) * Math.PI * 2, rr = 1.05 + ph * 0.35;
+    const x = Math.round(CX + Math.cos(ang) * RIM_RX * rr), y = Math.round(RIM_Y + Math.sin(ang) * RIM_RY * rr - ph * 6);
+    const n = Math.round(Math.sin(ph * Math.PI) * 3);
+    const c = k % 3 ? hx('#fff6c0') : hx('#ffffff');
+    for (let d = -n; d <= n; d++) { put(buf, x + d, y, c); put(buf, x, y + d, c); }
+  }
+}
 
 // ------------------------------------------------------------------ the game
 
@@ -336,7 +365,8 @@ export async function runRamenPour(): Promise<Outcome> {
     const a = hash(i, 7) * Math.PI * 2, r = Math.sqrt(hash(i, 9)) * 0.5;
     flakes.push({ u: Math.cos(a) * r, v: Math.sin(a) * r, vu: 0, vv: 0, kind: i < 5 ? 0 : i < 10 ? 1 : i < 12 ? 2 : 3, rot: hash(i, 11) });
   }
-  cu.hint('Hold <span class="key">Space</span> to pour · stop on the dotted line', 4200);
+  const touch = matchMedia?.('(pointer: coarse)').matches ?? false;
+  let iconA = 0, outT = 0;
   audio.play('uiOpen', { vol: 0.3 });
 
   const rot = (lx: number, ly: number, a: number, px0: number, py0: number): [number, number] => {
@@ -350,6 +380,7 @@ export async function runRamenPour(): Promise<Outcome> {
       if (cu.closed) { done(outcome ?? 'under'); return false; }
       // ---------------------------------------------------------- input and physics
       if (!outcome) {
+        iconA = started ? Math.max(0, iconA - dt * 1.6) : t > 0.3 ? Math.min(1, iconA + dt * 2.5) : 0;
         const want = hold.down && t > 0.7 ? TMAX : TREST;
         tilt += (want - tilt) * Math.min(1, dt * (want > tilt ? 3.2 : 4.6));
         if (hold.down) { started = true; released = -1; } else if (started && released < 0) released = t;
@@ -359,7 +390,9 @@ export async function runRamenPour(): Promise<Outcome> {
         if (outcome) {
           audio.play(outcome === 'perfect' ? 'star' : 'wrong', { vol: 0.5 });
           if (outcome === 'perfect') { joy = 1; cu.flash(); }
-          cu.result(outcome === 'perfect' ? 'PERFECT!' : outcome === 'over' ? 'SOUP?!' : 'CRUNCHY...', outcome === 'perfect' ? 'right on the line' : outcome === 'over' ? 'way past the line' : 'not enough water', outcome !== 'perfect').then(() => cu.close().then(() => done(outcome!)));
+          outT = t;
+          // no words: just the burst (warm for a perfect pour, cold otherwise)
+          cu.result('', undefined, outcome !== 'perfect').then(() => cu.close().then(() => done(outcome!)));
         }
       } else {
         tilt += (0 - tilt) * Math.min(1, dt * 4);
@@ -431,6 +464,9 @@ export async function runRamenPour(): Promise<Outcome> {
         const d = ((x - 160) / (78 * spill + 10)) ** 2 + ((y - 168) / (6 + 6 * spill)) ** 2 + (hash(x >> 2, y >> 1) - 0.5) * 0.3;
         if (d < 1) blend(buf, x, y, d > 0.8 ? hx('#f0d090') : hx('#c89a4a'), 0.6);
       }
+      // the fill line pulses until you pour, and glows gold while the water is in the sweet spot
+      const inZone = L >= LINE_LO && L <= LINE_HI && !outcome;
+      const lineCol = inZone ? (Math.floor(t * 8) % 2 ? hx('#ffe45a') : hx('#fff6c0')) : outcome === 'perfect' ? hx('#ffe45a') : mixc(hx('#b8341e'), hx('#ff6a3c'), outcome ? 0 : 0.5 + 0.5 * Math.sin(t * 6));
       // inside the cup
       const Pk = surf(PUCK_TOP);
       const puckLevel = floating ? Math.max(PUCK_TOP, L - 0.02 - (1 - soak) * 0.08) : PUCK_TOP;
@@ -510,7 +546,7 @@ export async function runRamenPour(): Promise<Outcome> {
           const fu = (x + 0.5 - CX) / F.rx;
           if (Math.abs(fu) < 0.98) {
             const fy = F.cy - F.ry * Math.sqrt(1 - fu * fu);
-            if (Math.abs(y + 0.5 - fy) < 0.6 && (x >> 1) % 2 === 0) c = hx('#b8341e');
+            if (Math.abs(y + 0.5 - fy) < 0.6 && (x >> 1) % 2 === 0) c = lineCol;
             if (Math.abs(y + 0.5 - (fy - 1)) < 0.6 && (x >> 1) % 2 === 0) c = mixc(c, hx('#ffffff'), 0.25);
           }
         }
@@ -600,8 +636,10 @@ export async function runRamenPour(): Promise<Outcome> {
           put(buf, x, y, c);
         }
       }
-      // Chunk, drooling at the steam
-      paintChunk(buf, t, hitX >= 0 ? hitX : CX, S.cy, Math.max(0, Math.sin(t * 5)) * (broth > 0.3 ? 1 : 0.3), joy);
+      // wordless controls: arrows at the fill line and the keycap / touch ring
+      if (!outcome) paintGuide(buf, t, L, hold.down, iconA, touch);
+      // a perfect pour: twinkles burst around the rim
+      if (outcome === 'perfect') paintTwinkles(buf, t - outT);
       // warm vignette
       for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) {
         const d = ((x - CW / 2) / (CW * 0.62)) ** 2 + ((y - CH / 2) / (CH * 0.7)) ** 2;

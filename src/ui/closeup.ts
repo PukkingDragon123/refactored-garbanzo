@@ -425,9 +425,9 @@ export class CloseUps {
         const dx = x - fx, dy = (y - fy) * 1.6, r = Math.hypot(dx, dy);
         const a = (Math.atan2(dy, dx) / (Math.PI * 2) + 0.5) * N;
         const k = Math.floor(a), fr = a - k;
-        const w = 0.18 + hash(k, 5, tk) * 0.32;
+        const w = 0.1 + hash(k, 5, tk) * 0.3;
         const inner = 34 + hash(k, 6, tk) * 60;
-        if (r > inner && Math.abs(fr - 0.5) < w * Math.min(1, (r - inner) / 40)) {
+        if (r > inner && Math.abs(fr - 0.5) < w * Math.min(1, (r - inner) / 60)) {
           const i = y * cw + x;
           buf[i] = hash(k, 7, tk) < 0.3 ? accent : mix(buf[i], light, 0.75);
         }
@@ -474,7 +474,7 @@ export class CloseUps {
         const d = Math.hypot((x - fx) / (cw * 0.55), (y - fy) / (half * 1.4));
         const i = y * cw + x;
         if (d > 0.75 && dith(x, y) < (d - 0.75) * 1.3) buf[i] = mix(buf[i], hx('#04040c'), 0.7);
-        else if ((x + Math.round(Math.sin(y * 0.2 + t * 4) * 1.5)) % 7 === 0 && d > 0.35) buf[i] = mix(buf[i], accent, 0.18);
+        else if ((x + Math.round(Math.sin(y * 0.2 + t * 4) * 1.5)) % 11 === 0 && d > 0.4) buf[i] = mix(buf[i], accent, 0.12);
       }
     } else {
       // speed lines streaming left past the bust (fast and bright for determined lines)
@@ -487,13 +487,13 @@ export class CloseUps {
         const span = cw + len * 2;
         const X0 = Math.round(cw + len - ((t * sp + hash(k, 44) * span) % span));
         for (let j = 0; j < len; j++) {
-          const X = X0 + j, Y = Y0 - Math.round((X - cw * 0.3) * slant) + Math.round((Y0 - mid) * 0) ;
+          const X = X0 + j, Y = Y0 - Math.round((X - cw * 0.3) * slant);
           if (X < 0 || Y < 0 || X >= cw || Y >= ch || !inBand(X, Y)) continue;
           const i = Y * cw + X;
           buf[i] = mix(buf[i], j < 2 ? hx('#ffffff') : light, (fast ? 0.7 : 0.4) * (1 - j / len));
         }
       }
     }
-    void sx;
+
   }
 }
