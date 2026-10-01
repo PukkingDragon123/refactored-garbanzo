@@ -185,8 +185,8 @@ export class BoatTripScene extends FieldScene {
     this.sailFr = fills.map((f, fi) => [0, 1, 2, 3].map(k => { const s = K.sailRig('set', f, k); return local.add(`v10t:sail${fi}:${k}`, s.buf, s.ax, s.ay); }));
   }
 
-  async enter() {
-    await super.enter();
+  /** everything that needs the player and the camera (runs before the first frame) */
+  private setup() {
     const p = this.player;
     p.minX = BX + 34; p.maxX = BX + 78;
     p.noRun = true;
@@ -220,8 +220,9 @@ export class BoatTripScene extends FieldScene {
     this.addInteractables();
     if (this.phase === 'stop') this.atStop();
   }
-  /** the departure lines once the scene is up */
+  /** the scene is built: set up, then the departure lines */
   private async onEnter() {
+    this.setup();
     if (this.phase === 'stop') return;
     spend(4, 'boat trip');
     await wait(900);
@@ -257,7 +258,7 @@ export class BoatTripScene extends FieldScene {
     this.easeT = Math.max(0, this.easeT - dt);
     this.weather.cruise = Math.max(DRIFT * (this.phase === 'stop' ? 0.4 : 1), this.speed);
     if (this.motor) audio.setEngine(0.18 + clamp(this.speed / FULL) * 0.5);
-    if (this.phase === 'sail') {
+    if (this.phase === 'sail' && this.life) {
       this.dist += this.speed * dt;
       // the plan's moments
       const f = this.dist / this.len;
