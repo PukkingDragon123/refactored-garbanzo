@@ -133,7 +133,6 @@ def({ id: 'driftglass', name: 'Sea glass', kind: 'material', stack: 20, desc: 'B
 def({ id: 'kelp', name: 'Kelp ribbon', kind: 'material', stack: 20, desc: 'A leathery ribbon of kelp. Dries into cord.', where: 'Wrack line' });
 def({ id: 'flint', name: 'Flint nodule', kind: 'material', stack: 10, desc: 'Strikes a fat spark off the back of a knife.', where: 'Stream bed' });
 def({ id: 'clay', name: 'River clay', kind: 'material', stack: 10, desc: 'Grey, cold and slick. Good for sealing things.', where: 'Stream banks (trowel)' });
-def({ id: 'feather', name: 'Seabird feather', kind: 'material', stack: 20, desc: 'A long flight feather washed up on the sand.', where: 'Beach' });
 def({ id: 'plant_seaholly', name: 'Sea holly', kind: 'plant', stack: 10, desc: 'A spiky blue-silver coastal herb that smells of pepper and salt.', where: 'Dunes (knife)',
   lab: { rp: 5, time: 2, text: 'Waxy, salt-proof leaves; the spines are hollow and full of bitter sap that keeps grazers off.' } });
 def({ id: 'plant_saltfern', name: 'Salt fern', kind: 'plant', stack: 10, desc: 'A fern that grows in the spray zone. Its fronds are crusted with salt crystals.', where: 'Cliffs and rocks (knife)',
