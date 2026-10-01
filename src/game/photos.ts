@@ -55,10 +55,15 @@ export interface RawPhoto {
   notes: string[];
 }
 
+/** what stopped an identification (see judgeSubject) */
+export type IdProblem = 'frame' | 'hidden' | 'small' | 'dark' | 'leaf' | 'focus' | 'motion' | 'shake';
+
 export interface Judgement {
   identified: boolean;
   /** why identification failed */
   reason?: string;
+  /** the same, as a code */
+  code?: IdProblem;
   score: number;
   stars: number;
   sharp: number;
@@ -129,14 +134,14 @@ export function sharpness(s: PhotoSubject) {
 /** Decide whether an animal in a photo can be identified, and how good the shot of it is. */
 export function judgeSubject(s: PhotoSubject, p: RawPhoto): Judgement {
   const sharp = sharpness(s);
-  const fail = (reason: string): Judgement => ({ identified: false, reason, score: 0, stars: 0, sharp });
-  if (s.inFrame < 0.35) return fail('Mostly out of frame');
-  if (s.visible < perks.idVisible()) return fail(`Hidden behind cover (${Math.round(s.visible * 100)}% visible)`);
-  if (s.size < 0.045) return fail('Too far away to identify');
-  if (p.light < 0.25 && !perks.nightClean()) return fail('Too dark to make out');
+  const fail = (reason: string, code: IdProblem): Judgement => ({ identified: false, reason, code, score: 0, stars: 0, sharp });
+  if (s.inFrame < 0.35) return fail('Mostly out of frame', 'frame');
+  if (s.visible < perks.idVisible()) return fail(`Hidden behind cover (${Math.round(s.visible * 100)}% visible)`, 'hidden');
+  if (s.size < 0.045) return fail('Too far away to identify', 'small');
+  if (p.light < 0.25 && !perks.nightClean()) return fail('Too dark to make out', 'dark');
   if (sharp < perks.idSharp()) {
     const worst = Math.min(s.focus, s.motion, s.shake);
-    return fail(worst === s.focus ? (p.af === 'foreground' ? 'The focus grabbed a leaf in front' : 'Out of focus') : worst === s.motion ? 'Motion blur, it moved too fast' : 'Camera shake');
+    return worst === s.focus ? (p.af === 'foreground' ? fail('The focus grabbed a leaf in front', 'leaf') : fail('Out of focus', 'focus')) : worst === s.motion ? fail('Motion blur, it moved too fast', 'motion') : fail('Camera shake', 'shake');
   }
   // size: ideal is roughly a quarter to two-thirds of the frame height
   const sizeK = s.size < 0.25 ? s.size / 0.25 : s.size > 0.85 ? Math.max(0.5, 1 - (s.size - 0.85) * 2) : 1;
@@ -212,6 +217,27 @@ export function reviewPhoto(id: number, tags: [number, number][], keep: boolean)
   }
   game.persist();
   return { photo: p, hits, misses, missed, stars: best, rp, kept: keep };
+}
+
+/** the bit of an animal that pokes into the frame when the rest of it is cropped off */
+const CROP_PART: Record<string, string> = {
+  Bird: 'a wingtip', Fish: 'a tail', Mammal: 'a tail', Reptile: 'a tail', Amphibian: 'a tail', Serpent: 'a tail',
+  Crustacean: 'a leg', Insect: 'a leg', Arachnid: 'a leg', Mollusc: 'a tentacle', Cnidarian: 'a tentacle', Worm: 'a wriggly end', Parasite: 'a speck',
+};
+
+/** V9 laptop upload: a failed identification in plain words ('Too blurry to identify', 'Only a tail in frame') */
+export function idProblem(j: Judgement, s: PhotoSubject): string {
+  switch (j.code) {
+    case 'frame': return `Only ${CROP_PART[SPECIES_BY_ID[s.species]?.group ?? ''] ?? 'a sliver'} in frame`;
+    case 'hidden': return `Hidden behind something (${Math.round(s.visible * 100)}% visible)`;
+    case 'small': return 'Too small to identify: just a speck';
+    case 'dark': return 'Too dark to make out';
+    case 'leaf': return 'Out of focus: the focus grabbed the foreground';
+    case 'focus': return 'Out of focus';
+    case 'motion': return 'Too blurry to identify: it moved';
+    case 'shake': return 'Too blurry to identify: camera shake';
+  }
+  return j.reason ?? 'Not identifiable';
 }
 
 /** Best-case preview used by the camera HUD right after a shot ("looks sharp" / "blurry"). */

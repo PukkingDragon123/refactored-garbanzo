@@ -1,5 +1,6 @@
 // V2 HUD: location + day, tracked quest, backpack button with slot count, RP counter, key hints,
-// and little item icons that fly into the backpack when you collect something.
+// and little item icons that fly into the backpack when you collect something. On the island, once
+// Mori has salvaged his laptop, a laptop button sits on the belt (L) with a badge of photos to upload.
 
 import { el } from './ui';
 import { game } from '../game/game';
@@ -65,12 +66,60 @@ const CSS = `
 .h2 .belt span { width: 3.1em; height: 3.1em; background: var(--sk-slot) center / 100% 100%; image-rendering: pixelated; display: grid; place-items: center; transition: transform 0.12s cubic-bezier(.2,1.8,.4,1); }
 .h2 .belt span:hover { transform: translateY(-3px) scale(1.06); }
 .h2 .belt span img { width: 2.1em; height: 2.1em; image-rendering: pixelated; filter: drop-shadow(0 2px 0 rgba(0,0,0,0.45)); }
+.h2 .lapb { position: relative; pointer-events: auto; cursor: pointer; padding: 5px; background: linear-gradient(#6a3e1c, #4a2a12); box-shadow: 0 0 0 2px #1a0e06, 0 0 0 4px #e0a818, 0 0 0 6px #1a0e06, 0 6px 0 6px rgba(0,0,0,0.3); margin-left: 6px; }
+.h2 .lapb > span { width: 3.1em; height: 3.1em; background: var(--sk-slot) center / 100% 100%; image-rendering: pixelated; display: grid; place-items: center; transition: transform 0.12s cubic-bezier(.2,1.8,.4,1); }
+.h2 .lapb:hover > span { transform: translateY(-3px) scale(1.06); }
+.h2 .lapb img { width: 2.3em; height: 2.3em; image-rendering: pixelated; filter: drop-shadow(0 2px 0 rgba(0,0,0,0.45)); }
+.h2 .lapb .k { position: absolute; left: 3px; top: 1px; font-family: var(--head); font-size: 0.72em; color: #ffe9a8; text-shadow: 0 2px 0 #1a0e06, 1px 0 0 #1a0e06, -1px 0 0 #1a0e06; }
+.h2 .lapb .n { position: absolute; right: -9px; top: -11px; min-width: 1.5em; height: 1.5em; padding: 0 0.3em; border-radius: 0.75em; display: grid; place-items: center; font-family: var(--head); font-size: 0.78em; color: #fff;
+  background: radial-gradient(circle at 40% 35%, #ff8a6a, #c8341e 70%); box-shadow: 0 0 0 2px #1a0e06, 0 0 0 3px #ffd84a; animation: lapBadge 1.2s cubic-bezier(.3,1.8,.5,1) infinite; }
+.h2 .lapb .n:empty { display: none; }
+@keyframes lapBadge { 0%, 60%, 100% { transform: scale(1); } 20% { transform: scale(1.25, 0.85); } 40% { transform: scale(0.92, 1.12) translateY(-3px); } }
 .flyitem { position: absolute; width: 36px; height: 36px; image-rendering: pixelated; pointer-events: none; z-index: 9; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.5)); }
 .pickup { position: absolute; transform: translate(-50%, -100%); font-family: var(--pix); font-size: 0.95em; color: #fff4c4; text-shadow: 0 2px 0 #1b1a1f, 0 0 6px rgba(0,0,0,0.6); pointer-events: none; animation: pickupRise 1.3s ease-out forwards; white-space: nowrap; }
 @keyframes pickupRise { 0% { opacity: 0; transform: translate(-50%, -80%) scale(0.7); } 15% { opacity: 1; transform: translate(-50%, -110%) scale(1.1); } 100% { opacity: 0; transform: translate(-50%, -260%) scale(1); } }
 `;
 
 let styled = false;
+
+/** the island's field laptop on the belt (see game/v9/research9.ts) */
+export interface HudLaptop {
+  shown: () => boolean;
+  /** photos waiting on the camera */
+  badge: () => number;
+  open: () => void;
+}
+
+/** 16x16 pixel laptop (lid up, aqua screen) drawn at 3x */
+let lapIcon = '';
+function laptopIconURL(): string {
+  if (lapIcon) return lapIcon;
+  const rows = [
+    '................',
+    '................',
+    '..kkkkkkkkkkkk..',
+    '..kTTTTTTTTTTk..',
+    '..kTjCCCCCCcTk..',
+    '..kTCjCCCCCcTk..',
+    '..kTCCCCCCccTk..',
+    '..kTCCGGCcccTk..',
+    '..kTGGGGGGGGTk..',
+    '..kTTTTTTTTTTk..',
+    '.kkkkkkkkkkkkkk.',
+    'kqqqqqqqqqqqqqqk',
+    'kTqTqTqTqTqTqTqk',
+    'kTTTTTTKKTTTTTTk',
+    '.kkkkkkkkkkkkkk.',
+    '................',
+  ];
+  const col: Record<string, string> = { k: '#0b0f12', T: '#7a8189', q: '#b9c0c4', K: '#454b53', C: '#3fd1c1', c: '#138a86', j: '#eafffb', G: '#6fb150' };
+  const c = document.createElement('canvas');
+  c.width = c.height = 48;
+  const g = c.getContext('2d')!;
+  rows.forEach((r, y) => { for (let x = 0; x < 16; x++) { const v = col[r[x]]; if (v) { g.fillStyle = v; g.fillRect(x * 3, y * 3, 3, 3); } } });
+  lapIcon = c.toDataURL();
+  return lapIcon;
+}
 
 export interface HudOpts {
   place: string;
@@ -101,6 +150,8 @@ export class Hud2 {
   private who!: HTMLElement;
   private belt!: HTMLElement;
   private beltKey = '';
+  private lap: HudLaptop | null = null;
+  private lapEl: HTMLElement | null = null;
   private shownRp = -1;
   private lastQuestKey = '';
   private t = 0;
@@ -114,6 +165,10 @@ export class Hud2 {
     const bar = this.root.appendChild(el('div', 'bar'));
     this.who = bar.appendChild(el('div', 'who', `<div class="med"><img alt=""></div><div class="bars"><small>PACK</small><i class="a"></i><small>FILM</small><i class="b"></i></div>`));
     this.belt = bar.appendChild(el('div', 'belt'));
+    this.lapEl = bar.appendChild(el('div', 'lapb interactive', `<span><img src="${laptopIconURL()}" alt=""></span><i class="k">L</i><b class="n"></b>`));
+    this.lapEl.title = 'Laptop (L)';
+    this.lapEl.style.display = 'none';
+    this.lapEl.addEventListener('pointerdown', e => { e.stopPropagation(); this.lap?.open(); });
     this.pack = bar.appendChild(el('div', 'btn2 panel interactive', `<span class="k">I</span><img src="${uiIconURL('pack', 3)}" alt=""><span class="n"></span>`));
     this.pack.addEventListener('pointerdown', e => { e.stopPropagation(); o.onBackpack?.(); });
     this.rpEl = this.root.appendChild(el('div', 'rp panel', `<img src="${uiIconURL('rp', 3)}" alt=""><b>0</b><span style="opacity:0.7">RP</span>`));
@@ -128,6 +183,11 @@ export class Hud2 {
   }
   setKeys(html: string) {
     this.keys.innerHTML = html;
+  }
+  /** put the field laptop on the belt (null removes it); L opens it too */
+  setLaptop(l: HudLaptop | null) {
+    this.lap = l;
+    this.refresh();
   }
   show(on: boolean) {
     this.root.classList.toggle('off', !on);
@@ -194,6 +254,15 @@ export class Hud2 {
       this.beltKey = bk;
       this.belt.innerHTML = s.tools.slice(0, 8).map(t => `<span title="${t}"><img src="${itemIconURL(t, 3)}" alt=""></span>`).join('') + '<span></span>'.repeat(Math.max(0, 6 - s.tools.length));
     }
+    // field laptop
+    if (this.lapEl) {
+      const on = !!this.lap?.shown();
+      this.lapEl.style.display = on ? '' : 'none';
+      const n = on ? this.lap!.badge() : 0;
+      const nb = this.lapEl.querySelector('.n') as HTMLElement;
+      const txt = n > 0 ? String(n) : '';
+      if (nb.textContent !== txt) nb.textContent = txt;
+    }
     // rp count-up
     if (this.shownRp < 0 || force) this.shownRp = s.rp;
   }
@@ -207,6 +276,7 @@ export class Hud2 {
       if (Math.abs(s.rp - this.shownRp) < 1) this.shownRp = s.rp;
     }
     (this.rpEl.querySelector('b') as HTMLElement).textContent = String(Math.round(this.shownRp));
+    if (this.lap && game.input.keyHit('KeyL') && !game.ui.blocking && this.lap.shown()) this.lap.open();
     if (this.t > 0.25) {
       this.t = 0;
       this.refresh();
