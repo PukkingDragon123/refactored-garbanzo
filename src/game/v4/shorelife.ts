@@ -139,6 +139,8 @@ export abstract class ShoreBeast implements Drawable {
     return { x0, y0, x1: x0 + f.w, y1: Math.min(y0 + f.h, this.water ? Infinity : this.surface) };
   }
   pts(): [number, number][] {
+    // nothing to photograph while fully hidden (at sea, in the burrow)
+    if (this.hidden >= 0.99) return [];
     const f = this.frame();
     const out: [number, number][] = [];
     for (const [px, py] of f.pts) {
@@ -146,7 +148,7 @@ export abstract class ShoreBeast implements Drawable {
       if (!this.water && wy > this.surface) continue;
       out.push([this.x + px * this.facing, wy]);
     }
-    return out.length ? out : [[this.x, this.y - 2]];
+    return out;
   }
   photoInfo() {
     return { species: this.species, behavior: this.behavior, box: this.box(), pts: this.pts(), speed: this.speed, facing: this.facing, noticed: this.noticed, juvenile: this.juvenile, p: this.p, hidden: this.hidden };

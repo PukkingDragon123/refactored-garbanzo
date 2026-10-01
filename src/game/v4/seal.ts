@@ -271,7 +271,7 @@ class CrownLeechCluster {
   get y() { return this.seal.crease()[1]; }
   body = {
     bounds: () => { const [x, y] = this.seal.crease(); return { x0: x - 6, y0: y - 12, x1: x + 6, y1: y + 12 }; },
-    points: (): [number, number][] => { const [x, y] = this.seal.crease(); return [[x, y - 8], [x - 1, y - 3], [x + 1, y + 2], [x, y + 7]]; },
+    points: (): [number, number][] => { if (this.hidden >= 1) return []; const [x, y] = this.seal.crease(); return [[x, y - 8], [x - 1, y - 3], [x + 1, y + 2], [x, y + 7]]; },
   };
   constructor(readonly seal: CorvexSeal) {}
   get behavior() { return this.seal.state === 'sleep' || this.seal.state === 'asleep' ? 'crowning' : 'clinging'; }
