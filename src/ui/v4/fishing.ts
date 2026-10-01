@@ -27,12 +27,11 @@ import { el } from '../ui';
 import { audio } from '../../core/audio';
 import { guardInput } from '../../core/input';
 import type { Renderer } from '../../gfx/renderer';
-import { FightSim, PX_M, LINE_MAX, REEL_M } from '../v6/fishfight';
-import { FishView, Shade, sideFrame, resetViewFrames } from '../v9/fishview';
+import { FightSim, PX_M, REEL_M } from '../v6/fishfight';
+import { FishView, Shade, resetViewFrames } from '../v9/fishview';
 import { Reel, FishInput } from '../v9/reel';
 import { showBanner, catchPhotos } from '../v9/catchshow';
 import { fishIcon, fishSide, louseIcon, louseSide, sidePoint, canvasOf } from '../../art/v9/fish';
-import { PixelBuffer } from '../../art/pixel';
 
 export type Temper = 'smooth' | 'dart' | 'sinker' | 'floater' | 'mixed';
 export interface FishDef {
@@ -599,6 +598,5 @@ export async function goFishing(host: FishingHost, o: FishOpts = {}): Promise<Fi
     st.minX = cam0.minX; st.maxX = cam0.maxX; st.minY = cam0.minY; st.maxY = cam0.maxY;
     game.ui.modalOpen = Math.max(0, game.ui.modalOpen - 1);
     guardInput(300);
-    void LINE_MAX; void PixelBuffer; void sideFrame;
   }
 }
