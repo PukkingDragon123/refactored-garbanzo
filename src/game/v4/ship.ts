@@ -395,12 +395,15 @@ export class ShipScene4 extends FieldScene {
   }
   /** the hull below the waterline (keel, rudder, propeller), tinted, for the fishing view's underwater cross-section */
   drawHullUnder(r: Renderer, color: number) {
-    const f = this.fr.hull, a = this.art.hull;
-    if (!f || !a) return;
-    const y0 = S4.WATER + 1 - a.y;
-    if (y0 >= f.h || y0 < 0) return;
     r.pushTransform(PIVOT[0], PIVOT[1], this.rot, 0, this.bob);
-    r.drawSub(f, 0, y0, f.w, f.h - y0, a.x, a.y + y0, 1, 1, color);
+    // the hull side, and the near-side layer that carries the skeg, rudder and propeller aft
+    for (const k of ['hull', 'deckFront'] as const) {
+      const f = this.fr[k], a = this.art[k];
+      if (!f || !a) continue;
+      const y0 = S4.WATER + 1 - a.y;
+      if (y0 >= f.h || y0 < 0) continue;
+      r.drawSub(f, 0, y0, f.w, f.h - y0, a.x, a.y + y0, 1, 1, color);
+    }
     r.popTransform();
   }
   /** boat speed through the water (px/s), for the fishing view's wake */

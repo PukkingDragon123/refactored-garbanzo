@@ -311,11 +311,11 @@ export class FishView {
     const acc = this.spawnAcc;
     if (g) {
       // the propeller throws a jet of bubbles aft that slows to the water's speed and rises
-      acc.prop += dt * 80;
+      acc.prop += dt * 100;
       for (; acc.prop >= 1; acc.prop--) {
         const a = (Math.random() - 0.5) * 0.9;
         const v = 55 + Math.random() * 55;
-        this.wake.push({ x: g.prop[0] - 3, y: g.prop[1] + (Math.random() - 0.5) * 9, vx: -Math.cos(a) * v, vy: Math.sin(a) * v * 0.6, life: 0, max: 2.6 + Math.random() * 2.6, s: Math.random() < 0.22 ? 2 : 1 });
+        this.wake.push({ x: g.prop[0] - 3, y: g.prop[1] + (Math.random() - 0.4) * 13, vx: -Math.cos(a) * v, vy: Math.sin(a) * v * 0.6, life: 0, max: 3 + Math.random() * 3, s: Math.random() < 0.32 ? 2 : 1 });
       }
       // a thin stream peeling off the keel and the turn of the bilge
       acc.keel += dt * 9;
@@ -332,7 +332,7 @@ export class FishView {
       const b = this.wake[i];
       b.life += dt;
       b.vx += (-flow - b.vx) * Math.min(1, dt * 1.7);
-      b.vy += (-9 - b.s * 3 - b.vy) * Math.min(1, dt * 1.1);
+      b.vy += (-3.5 - b.s * 2.5 - b.vy) * Math.min(1, dt * 1.1);
       b.x += b.vx * dt + Math.sin(this.time * 6 + i * 1.7) * 6 * dt;
       b.y += b.vy * dt;
       if (b.life >= b.max || b.y < this.surface(b.x) + 1) {
@@ -340,7 +340,7 @@ export class FishView {
         this.wake.splice(i, 1);
       }
     }
-    if (this.wake.length > 520) this.wake.splice(0, this.wake.length - 520);
+    if (this.wake.length > 640) this.wake.splice(0, this.wake.length - 640);
     for (let i = this.foam.length - 1; i >= 0; i--) {
       const f = this.foam[i];
       f.life += dt; f.x -= flow * dt; f.w += dt * 0.45;
