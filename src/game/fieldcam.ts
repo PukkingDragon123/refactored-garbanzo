@@ -98,6 +98,8 @@ export class FieldCamera {
   holdState: 'idle' | 'filling' | 'ready' | 'shaky' | 'leaf' | 'develop' | 'film' = 'idle';
   private holdOn: Animal | null = null;
   private holdLost = 0;
+  /** seconds since the camera came up (the view glides to the aim point first) */
+  private upT = 0;
   private holdNag = 0;
   private holdQ = 0;
   private uiT = 0;
@@ -126,6 +128,7 @@ export class FieldCamera {
     this.hold = 0;
     this.holdOn = null;
     this.holdLost = 0;
+    this.upT = 0;
     this.vf.classList.toggle('on', on);
     this.vf.classList.toggle('pocket', !on && this.develop < 1);
     if (!on && this.recording) this.stopRecording();
@@ -247,9 +250,11 @@ export class FieldCamera {
    */
   private updateHold(dt: number, brace: boolean, animals: Animal[]) {
     this.holdNag = Math.max(0, this.holdNag - dt);
+    this.upT += dt;
     if (!this.v10 || this.mode !== 'photo' || this.recording) { this.hold = 0; this.holdState = 'idle'; return; }
     if (this.develop < 1) { this.hold = 0; this.holdState = 'develop'; return; }
     if (this.shots <= 0) { this.hold = 0; this.holdState = 'film'; return; }
+    if (this.upT < 0.6) { this.hold = 0; this.holdState = 'filling'; return; }
     if (this.afForeground) { this.hold = Math.max(0, this.hold - dt * 0.8); this.holdState = 'leaf'; return; }
     const cur = this.afTarget && !this.afTarget.dead && !this.afTarget.gone ? this.afTarget : null;
     this.holdLost = cur ? 0 : this.holdLost + dt;
@@ -710,7 +715,7 @@ function injectCss() {
 .vf.pocket { opacity: 1; }
 .vf.pocket > :not(.lcd) { visibility: hidden; }
 .vf.pocket::after { opacity: 0; }
-.vf.pocket .lcd.on { left: auto; right: 1.4em; bottom: 4.4em; transform: rotate(3deg) scale(0.6); transform-origin: 100% 100%; }
+.vf.pocket .lcd.on { left: auto; right: 1.6em; bottom: 9em; transform: rotate(3deg) scale(0.68); transform-origin: 100% 100%; }
 .vf.pocket .lcd .n { display: none; }
 `;
   document.head.appendChild(s);
