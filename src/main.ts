@@ -105,6 +105,12 @@ async function boot() {
     },
     steady: async () => (await import('./ui/v6/camp')).holdSteady('Hold the tent pole steady', 'Press <span class="key">Space</span> as the pole comes upright. Three pegs!'),
     knot: async () => (await import('./ui/v6/camp')).lashingKnot(),
+    /** ship scene: switch to the afternoon on deck and spawn the open-ocean wildlife */
+    deck: async () => {
+      const s = game.scene as unknown as { phase: string };
+      s.phase = 'deck';
+      return (await import('./game/v4/seafauna')).startDeckLife(game.scene as never);
+    },
   };
 }
 
