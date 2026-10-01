@@ -451,7 +451,8 @@ function pitcher(seed: number, size: number, full = true): Sprite {
 function mossMat(seed: number, size: number): Sprite {
   const rng = new Rng(seed * 103 + 53);
   const W = size * 1.6, H = size * 0.45;
-  const buf = canvas(W + 8, H + 8);
+  // headroom for the sporophyte stalks (the sprite is trimmed afterwards)
+  const buf = canvas(W + 8, H + 16);
   const x = buf.w / 2, y = buf.h - 2;
   // cushion body
   buf.ellipseFn(x, y, W / 2, H, (_px, _py, nx, ny) => (ny > 0 ? -1 : rc(JP.moss, 3 + (ny < -0.6 ? 1 : 0) - (nx > 0.6 ? 1 : 0))));
@@ -1058,17 +1059,18 @@ function fallenBranch(seed: number, size: number): Sprite {
 function litter(seed: number, size: number): Sprite {
   const rng = new Rng(seed * 199 + 149);
   const W = size * 3, H = size * 0.35;
-  const buf = canvas(W + 8, H + 8);
+  // margins so no leaf is sliced off by the buffer edge (the sprite is trimmed afterwards)
+  const buf = canvas(W + 16, H + 8);
   const gy = buf.h - 2;
   const n = Math.round(W * H * 0.28);
   for (let i = 0; i < n; i++) {
-    const x = 4 + rng.range(0, W), y = gy - rng.range(0, H) * (1 - Math.abs((x - buf.w / 2) / (W / 2)) * 0.6);
+    const x = 8 + rng.range(0, W), y = gy - rng.range(0, H) * (1 - Math.abs((x - buf.w / 2) / (W / 2)) * 0.6);
     const pal = rng.chance(0.2) ? JP.moss : JP.litter;
     const st = leafStamp(rng.chance(0.5) ? 'oval' : 'point', rng.range(3, 5.5), rng.range(2, 3), rng.range(-0.5, 0.5) + (rng.chance(0.5) ? Math.PI : 0));
     drawStamp(buf, st, x, y, pal, rng.int(2, pal.length - 2));
   }
   for (let i = 0; i < W / 8; i++) {
-    const x = rng.range(4, W), y = gy - rng.range(0, H * 0.5);
+    const x = rng.range(8, W + 4), y = gy - rng.range(0, H * 0.5);
     buf.line(x, y, x + rng.range(-5, 5), y - rng.range(0, 1.5), rc(JP.bark, 5));
   }
   return done(buf, buf.w / 2, gy + 1, 0);
