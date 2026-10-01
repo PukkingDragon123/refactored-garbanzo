@@ -30,6 +30,8 @@ export type Sfx =
   // world
   | 'jumpscare' | 'rustleBush' | 'waveCrash' | 'woodCreak' | 'thunderClose' | 'gust' | 'splashBig'
   | 'stepSand' | 'stepWood' | 'stepLeaves' | 'shipCrash'
+  // fishing: the reel's ratchet, line tearing off the drag, the catch fanfare
+  | 'reelClick' | 'reelDrag' | 'catchJingle'
   // animal vocalizations: the pitch param sets the caller's size/voice (<1 bigger & slower, >1 smaller & quicker)
   | 'callChirp' | 'callTrill' | 'callHoot' | 'callScreech' | 'callHiss' | 'callRattle' | 'callGrunt'
   | 'callBark' | 'callSqueak' | 'callGrowl' | 'callHonk' | 'callCroak' | 'callClick' | 'callWhale' | 'callPurr';
@@ -482,6 +484,7 @@ const UI_SFX: ReadonlySet<Sfx> = new Set<Sfx>([
   // v2: overlays, feedback and the player's own devices stay clear of setMuffle / underwater
   'bubblePop', 'emoteSurprise', 'emoteQuestion', 'emoteLaugh', 'emoteAngry', 'emoteHeart', 'emoteSweat',
   'collectPop', 'skillUnlock', 'craft', 'typing', 'scanBeep', 'jumpscare',
+  'reelClick', 'reelDrag', 'catchJingle',
 ]);
 
 /** Minimum seconds between repeats of the same sfx (per pitch bucket for animal calls). */
@@ -492,6 +495,7 @@ const THROTTLE: Partial<Record<Sfx, number>> = {
   lanternOn: 0.2, fireLight: 0.3, emoteSurprise: 0.08, emoteQuestion: 0.08, emoteLaugh: 0.1,
   emoteAngry: 0.1, emoteHeart: 0.1, emoteSweat: 0.08, jumpscare: 0.8, rustleBush: 0.08,
   waveCrash: 0.15, woodCreak: 0.12, thunderClose: 0.3, gust: 0.15, splashBig: 0.1, shipCrash: 1,
+  reelClick: 0.018, reelDrag: 0.06, catchJingle: 1,
 };
 const CALL_THROTTLE = 0.05;
 /** Loud one-shots never get pushed past these per-play volumes (keeps them out of clipping). */
@@ -2915,6 +2919,42 @@ export class AudioEngine {
         this.lastBlip = now;
         const v = V(0.07, 0.15, 0);
         this.tone(v, { f: 600 * p, t, a: 0.002, d: 0.035, vol: 1 });
+        break;
+      }
+      case 'reelClick': {
+        // one pawl click of the reel's ratchet: a hard metallic tick with a tiny ring
+        const v = V(0.22, 0.12, 0.03);
+        this.burst(v, { t, a: 0.0004, d: 0.016, vol: 0.9, ft: 'bandpass', f: 3400 * p, Q: 5 });
+        this.tone(v, { type: 'triangle', f: 2100 * p, f2: 1500 * p, t, a: 0.0005, d: 0.022, vol: 0.2 });
+        break;
+      }
+      case 'reelDrag': {
+        // line tearing off the drag: a fast buzzing ratchet
+        const v = V(0.2, 0.22, 0.04);
+        const end = t + 0.14;
+        const src = this.noiseSrc(v, 'white', t, end);
+        const bp = this.filt(v, 'bandpass', 2800 * p, 3);
+        const teeth = this.gain(v, 0.5);
+        this.lfo(v, t, end, 62 * p, 0.5, teeth.gain, 'square');
+        const e = this.env(v, t, 0.004, 1, 0.12);
+        src.connect(bp);
+        bp.connect(teeth);
+        teeth.connect(e);
+        e.connect(v.out);
+        this.tone(v, { type: 'sawtooth', f: 180 * p, t, a: 0.004, d: 0.1, vol: 0.05 });
+        break;
+      }
+      case 'catchJingle': {
+        // the catch fanfare: a bright little arpeggio up, a leap to the top and a held chord that sparkles
+        const v = V(0.3, 3.4, 0.3, true);
+        const lead: [number, number, number][] = [[79, 0, 0.06], [84, 0.11, 0.06], [88, 0.22, 0.06], [91, 0.33, 0.12], [88, 0.52, 0.05], [91, 0.62, 0.05], [96, 0.74, 0.55]];
+        for (const [m, dt, hold] of lead) {
+          this.tone(v, { type: 'square', f: mtof(m) * p, t: t + dt, a: 0.004, hold, d: hold > 0.3 ? 0.7 : 0.07, vol: 0.13 });
+          this.bellNote(v, mtof(m) * p, t + dt, 0.42, hold > 0.3 ? 1.4 : 0.45);
+        }
+        for (const m of [72, 76, 79, 84]) this.tone(v, { type: 'triangle', f: mtof(m) * p, t: t + 0.74, a: 0.01, hold: 0.45, d: 0.9, vol: 0.16 });
+        this.tone(v, { f: mtof(48) * p, t: t + 0.74, a: 0.01, hold: 0.3, d: 0.8, vol: 0.28 });
+        for (let i = 0; i < 7; i++) this.bellNote(v, mtof(98 + [0, 4, 7][i % 3] + (i > 3 ? 12 : 0)) * p, t + 1.0 + i * 0.055, 0.13, 0.5);
         break;
       }
       case 'whoosh': {
