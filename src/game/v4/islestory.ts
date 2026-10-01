@@ -24,6 +24,8 @@ import { ISL, SPOT, WRECK, groundY } from '../../art/island4/layout';
 import * as CA from '../../art/island4/camp';
 import { clamp, rand, smoothstep } from '../../core/math';
 import { IsleCamp } from './islecamp';
+import { startForage, Forage } from '../v9/forage';
+import { IsleTools } from '../v9/isletools';
 
 export const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 const F = () => game.save.flags;
@@ -61,6 +63,8 @@ export class Follower {
       if (!a.walking || Math.abs(d) > 40) a.walkTo(want, run ? this.run : this.walk, run && this.walkAnim === 'walk' ? 'run' : this.walkAnim);
     } else if (!a.walking) a.faceTo(p.x);
     if (Math.abs(a.y - p.y) > 16 && p.state !== 'climb') { a.x = p.x - p.facing * this.gap; a.y = p.y; }
+    // never stranded far behind (the player sprinted off, or a cutscene moved them)
+    else if (Math.abs(d) > 460) { a.stopWalk(); a.x = p.x - Math.sign(p.x - a.x) * 200; a.y = groundY(a.x); a.walkTo(want, this.run, this.walkAnim === 'walk' ? 'run' : this.walkAnim); }
   }
 }
 
@@ -76,16 +80,34 @@ export class IsleStory implements IsleHooks {
   private camTw: { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number; t: number; dur: number; res: () => void } | null = null;
   private props: StoryProp[] = [];
   private chaseStartX = SPOT.sealRock;
+  forage!: Forage;
+  tools: IsleTools;
+  /** says run one after another (two overlapping conversations would strand the first one) */
+  private sayQ: Promise<unknown> = Promise.resolve();
+  private cutDepth = 0;
+  /** Chunk before the reveal: 1 = a black shape with glinting eyes, 0 = himself */
+  private shadowK = 1;
+  /** the can of Chunky Chow stuck on his face (seconds left) */
+  private canT = 0;
+  /** headlamp beam on Chunk after the reveal (seconds) */
+  private spotT = 0;
+  private pxT = 0;
+  private munchT = 1;
 
   constructor(readonly s: IslandScene4) {
     this.camp = new IsleCamp(this);
+    this.tools = new IsleTools(this);
   }
 
   // ---------------------------------------------------------------- helpers
   flag(k: string) { return !!F()[k]; }
   set(k: string, v = true) { F()[k] = v; game.persist(); this.s.hud?.refresh(true); }
   inc(k: string, n = 1) { V()[k] = (V()[k] ?? 0) + n; game.persist(); this.s.hud?.refresh(true); }
-  say(lines: BubbleLine[]) { return this.s.say(lines); }
+  say(lines: BubbleLine[]): Promise<number> {
+    const p = this.sayQ.then(() => this.s.say(lines));
+    this.sayQ = p.catch(() => {});
+    return p;
+  }
   get p() { return this.s.player; }
   pose(anim: string | null) { this.p.poseOverride = anim; }
   async once(anim: string, a?: Actor) {
@@ -109,13 +131,24 @@ export class IsleStory implements IsleHooks {
     const s = this.s;
     s.cutscene = true;
     this.busy = true;
-    try { return await fn(); } finally { s.cutscene = false; this.busy = false; this.pose(null); }
+    this.cutDepth++;
+    try { return await fn(); } finally {
+      this.cutDepth = Math.max(0, this.cutDepth - 1);
+      s.cutscene = false; this.busy = false; this.pose(null);
+      // the outermost cutscene always hands the camera back
+      if (this.cutDepth === 0 && !this.flag('v4:day1')) {
+        if (this.camTw) { const r = this.camTw.res; this.camTw = null; r(); }
+        s.st.cam.locked = false;
+        s.hud?.show(true);
+      }
+    }
   }
   /** glide the locked camera to a point (null = back to the player) */
   pan(x: number | null, y: number | null, zoom = this.s.zoomBase, dur = 1.2): Promise<void> {
     const c = this.s.st.cam;
-    if (x === null) { c.locked = false; c.tzoom = zoom; return wait(dur * 600); }
+    if (x === null) { if (this.camTw) { const r = this.camTw.res; this.camTw = null; r(); } c.locked = false; c.tzoom = zoom; return wait(dur * 600); }
     c.locked = true;
+    if (this.camTw) { const r = this.camTw.res; this.camTw = null; r(); }
     return new Promise(res => { this.camTw = { x0: c.x, y0: c.y, z0: c.zoom, x1: x, y1: y ?? c.y, z1: zoom, t: 0, dur, res }; });
   }
   async fadeOut(speed = 1.6) { await game.fadeTo(1, speed); }
@@ -173,66 +206,115 @@ export class IsleStory implements IsleHooks {
     startWildlife9(s);
     s.onNewSpecies = sp => this.newSpecies(sp);
     this.camp.setup();
+    this.forage = startForage(s);
+    this.forage.onHaul = (cat, kind) => this.camp.gatheredCat(cat, kind);
+    this.tools.setup();
+    this.addShadowFx();
+    this.migrate();
     await this.restore();
   }
 
   private buildProps() {
-    const fl = (k: string) => () => this.flag(k);
     const notF = (k: string) => () => !this.flag(k);
-    // in the wreck: the burst crate of Chunky Chow
-    this.prop('chow', CA.chunkyChow(), SPOT.chunkEat + 14, WRECK.floor - 5, () => true, -5.2);
-    // Joshu's boots in the cove, his jacket on a twig up the track
+    // in the wreck: the burst crate of Chunky Chow (inside the hull: never drawn over it from the beach)
+    this.prop('chow', CA.chunkyChow(), SPOT.chunkEat + 14, WRECK.floor - 5, () => this.s.inside > 0.5, -5.2);
+    // Joshu's boots in the cove, strips of his jacket on twigs up the track
     this.prop('boots', CA.boots(), SPOT.boots, groundY(SPOT.boots) + 6, notF('v4:joshuAwake'), -2);
+    this.prop('scrap1', CA.jacketScrap(), 5995, groundY(5995) - 14, () => true, -2);
     this.prop('scrap', CA.jacketScrap(), 6130, groundY(6130) - 18, () => true, -2);
-    // footprints: Joshu's boot prints along the beach (limping), then bare feet up the track
-    const prints: [number, number, boolean][] = [];
-    for (let x = 3440; x < 4960; x += 15) prints.push([x, groundY(x) + 30 + Math.sin(x * 0.05) * 3 + ((x / 15) % 2 ? 3 : 0), true]);
-    for (let x = SPOT.boots + 20; x < SPOT.joshu - 30; x += 13) prints.push([x, groundY(x) + 6 + ((x / 13) % 2 ? 3 : 0), false]);
+    // footprints: Joshu's big boot prints along the wet sand (the left one drags), then bare feet up the track
+    const prints: [number, number, number, boolean][] = [];
+    for (let x = 3440, i = 0; x < 4960; x += 15, i++) prints.push([x, groundY(x) + 7 + (i % 2 ? 3 : 0) + Math.sin(x * 0.05) * 1.5, i % 2, true]);
+    for (let x = SPOT.boots + 20, i = 0; x < SPOT.joshu - 30; x += 13, i++) prints.push([x, groundY(x) + 6 + (i % 2 ? 3 : 0), i % 2, false]);
     this.s.main.add(new Custom(-9.5, rr => {
       const x0 = rr.visibleX0(10), x1 = rr.visibleX1(10);
       rr.beginShadows();
-      for (const [x, y, boot] of prints) {
+      for (const [x, y, left, boot] of prints) {
         if (x < x0 || x > x1) continue;
         if (!boot && !this.flag('v4:shoes')) continue;
-        rr.draw(A.shadow, x, y, boot ? 0.2 : 0.14, 0.09, 0, packColor(0, 0, 0, boot ? 0.4 : 0.32));
+        if (boot) {
+          rr.draw(A.shadow, x, y, 0.3, 0.13, 0, packColor(0, 0, 0, 0.55));
+          rr.draw(A.shadow, x + 3, y, 0.12, 0.1, 0, packColor(0, 0, 0, 0.45));
+          // the dragging left foot leaves a scuff behind each print
+          if (left) rr.draw(A.shadow, x - 8, y + 0.5, 0.42, 0.05, 0, packColor(0, 0, 0, 0.32));
+        } else {
+          rr.draw(A.shadow, x, y, 0.16, 0.09, 0, packColor(0, 0, 0, 0.42));
+          for (let t = 0; t < 4; t++) rr.draw(A.shadow, x + 3 + t * 0.9, y - 1.6 + t * 0.4, 0.03, 0.03, 0, packColor(0, 0, 0, 0.4));
+        }
       }
       rr.endShadows();
     }));
-    void fl;
+  }
+
+  /** Chunk before the reveal: a black shape, two eye-glints, and the odd can of dog food */
+  private addShadowFx() {
+    const s = this.s;
+    let blink = 0, blinkT = 2;
+    s.main.add(new Custom(47, rr => {
+      const c = s.chunk;
+      if (!c.visible) return;
+      const [hx, hy] = c.headTop();
+      if (this.shadowK > 0.5 && blink <= 0) {
+        const f = c.facing, k = this.shadowK;
+        for (const dx of [1.5, 4.5]) {
+          rr.fxDraw(A.dot, hx + f * dx, hy + 5, 1.6, 1.4, 0, packColor(1, 0.95, 0.6, 1), 3.2 * k);
+          rr.fxDraw(A.glow, hx + f * dx, hy + 5, 0.07, 0.07, 0, packColor(1, 0.85, 0.4, 1), 0.9 * k);
+        }
+      }
+      if (this.spotT > 0) rr.light(c.x, c.y - 10, 46, 1, 0.95, 0.82, 1.6 * Math.min(1, this.spotT), 0.3);
+      if (this.canT > 0) {
+        // the can, right over his face
+        const f = c.facing, x = hx + f * 4, y = hy + 4;
+        rr.rect(x - 3, y - 3, 6, 7, packColor(0.88, 0.66, 0.19, 1));
+        rr.rect(x - 3, y - 3, 6, 1, packColor(0.6, 0.62, 0.66, 1));
+        rr.rect(x - 3, y + 3, 6, 1, packColor(0.5, 0.52, 0.56, 1));
+        rr.rect(x - 1, y, 2, 2, packColor(0.42, 0.24, 0.12, 1));
+      }
+    }, dt => {
+      blinkT -= dt;
+      if (blinkT <= 0) { blink = 0.15; blinkT = 1.5 + Math.random() * 3; }
+      blink -= dt;
+      if (this.canT < 90) this.canT = Math.max(0, this.canT - dt);
+      this.spotT = Math.max(0, this.spotT - dt);
+    }));
   }
 
   private addInteractables() {
     const s = this.s;
     const self = this;
+    const kit = () => this.flag('v9:kit');
     // wake Jenna
     this.it({ get x() { return s.jenna.x; }, get y() { return s.jenna.y; }, w: 20, label: 'Wake Jenna', get standX() { return s.jenna.x - 22; }, quest: () => true, enabled: () => this.flag('v4:isleWoke') && !this.flag('v4:jennaAwake'), action: () => this.wakeJenna() } as never);
     // the wreck: in and out through the breach
     const ld = { x: WRECK.climbX, y0: WRECK.floor, y1: groundY(WRECK.climbX) };
-    this.it({ x: WRECK.climbX, y: ld.y1, w: 16, label: 'Climb in through the hole', standX: WRECK.climbX, quest: () => this.flag('v4:jennaAwake') && !this.flag('v4:chunkWreck'), enabled: () => !s.inWreck, action: () => this.climbIn(ld) });
+    this.it({ x: WRECK.climbX, y: ld.y1, w: 16, label: 'Climb in through the hole', standX: WRECK.climbX, quest: () => this.flag('v4:jennaAwake') && !this.flag('v4:chunkWreck'), enabled: () => !s.inWreck && s.player.state !== 'climb', action: () => this.climbIn(ld) });
     this.it({ x: WRECK.climbX, y: ld.y0, w: 16, label: 'Climb out onto the sand', standX: WRECK.climbX, enabled: () => s.inWreck && Math.abs(this.p.x - WRECK.climbX) < 40, action: () => s.climbLadder(ld, 1) });
-    // Chunk, eating
-    this.it({ get x() { return s.chunk.x; }, get y() { return s.chunk.y; }, w: 18, label: 'Chunk!', get standX() { return s.chunk.x - 26; }, quest: () => true, enabled: () => s.inWreck && this.flag('v4:jennaAwake') && !this.flag('v4:chunkWreck'), action: () => this.foundChunk() } as never);
-    // Chunk found before Jenna is awake
-    this.it({ get x() { return s.chunk.x; }, get y() { return s.chunk.y; }, w: 18, label: 'Chunk!', get standX() { return s.chunk.x - 26; }, enabled: () => s.inWreck && !this.flag('v4:jennaAwake'), action: () => this.say([
-      { who: 'mori', text: 'Chunk! You’re okay! ...And you’re eating. Of course you are.', expr: 'surprised' },
-      { who: 'chunk', text: '*crunch crunch crunch*', expr: 'eat', close: false },
-      { who: 'mori', text: 'Stay right there, buddy. I have to find Jenna.', expr: 'determined' },
-    ]).then(() => {}) } as never);
+    // Mori's bunk: the field kit and the laptop in its waterproof case
+    this.it({ x: 774, y: WRECK.floor, w: 14, get label() { return kit() ? 'Mori’s bunk' : 'Search your bunk'; }, standX: 762, quest: () => !kit() && this.flag('v4:jennaAwake'), enabled: () => s.inWreck,
+      action: () => kit() ? this.say([{ who: 'mori', text: 'My sample jars! ...Most of my sample jars. Somewhere out there is a very confused plankton colony.', expr: 'sad' }]).then(() => {}) : this.searchBunk() } as never);
+    // the thing crunching in the dark behind the crates
+    this.it({ get x() { return SPOT.chunkEat + 6; }, y: WRECK.floor - 6, w: 16, get label() { return self.flag('v9:shadow') ? 'Shine your headlamp behind the crate' : 'Something is crunching back there...'; }, standX: SPOT.chunkEat - 28,
+      quest: () => this.flag('v4:jennaAwake') && kit(), enabled: () => s.inWreck && kit() && !this.flag('v4:chunkWreck'), action: () => this.crateAction() } as never);
     // looks around the wreck
     const look = (x: number, y: number, label: string, lines: () => BubbleLine[], en: () => boolean = () => true) => this.it({ x, y, label, standX: x, enabled: en, action: () => this.say(lines()).then(() => {}) });
     look(SPOT.tank, WRECK.floor, 'The fish tank', () => [
       { who: 'mori', text: 'The tank held. Cracked, half empty... and Gerald is still doing laps.', expr: 'surprised' },
       { who: 'mori', text: 'Gerald, you absolute legend.', expr: 'happy' },
-    ], () => s.inWreck);
+    ], () => s.inWreck && (this.flag('v4:chunkWreck') || !kit()));
     look(SPOT.engine, WRECK.floor, 'The engine', () => [{ who: 'mori', text: 'Full of sand and seawater. Jenna is going to cry. Then she is going to fix it. Then she is going to cry again.', expr: 'worried' }], () => s.inWreck);
-    look(774, WRECK.floor, 'Mori’s bunk', () => [{ who: 'mori', text: 'My sample jars! ...Most of my sample jars. Somewhere out there is a very confused plankton colony.', expr: 'sad' }], () => s.inWreck);
     // Joshu's boots and the trail
     this.it({ x: SPOT.boots, y: groundY(SPOT.boots), w: 18, label: 'Boots in the sand', standX: SPOT.boots - 16, quest: () => true, enabled: () => this.flag('v4:sealDone') && !this.flag('v4:shoes'), action: () => this.boots() });
-    this.it({ x: 6130, y: groundY(6130), w: 16, label: 'A scrap of navy cloth', standX: 6118, quest: () => true, enabled: () => this.flag('v4:shoes') && !this.flag('v4:joshuFound'), action: () => this.say([
-      { who: 'mori', text: 'Navy wool, snagged on the twig. That’s from his jacket. He came this way, and not long ago.', expr: 'determined' },
+    const scrap = (x: number, k: string, prev: string | null, lines: BubbleLine[]) => this.it({ x, y: groundY(x), w: 16, label: 'A scrap of navy cloth', standX: x - 12, quest: () => !prev || this.flag(prev), enabled: () => this.flag('v4:shoes') && !this.flag(k) && !this.flag('v4:joshuFound'), action: () => this.say(lines).then(() => this.set(k)) });
+    scrap(5995, 'v9:scrap1', null, [
+      { who: 'mori', text: 'A strip of navy wool on the brambles. That’s his jacket. He came up this way.', expr: 'determined' },
+      { who: 'chunk', text: '*sniff sniff* ...BOOF! *trots on up the track*', expr: 'serious' },
+    ]);
+    scrap(6130, 'v9:scrap2', 'v9:scrap1', [
+      { who: 'mori', text: 'Another one, higher up. He was leaning on the branches. He’s hurt, Chunk. Come on.', expr: 'worried' },
       { who: 'chunk', text: '*sniff sniff sniff* BOOF.', expr: 'serious' },
-    ]).then(() => {}) });
-    // Joshu
+    ]);
+    // Joshu (a fallback in case the walk-up trigger was missed)
+    this.it({ get x() { return s.joshu.x; }, get y() { return s.joshu.y; }, w: 26, label: 'Joshu!', get standX() { return s.joshu.x - 30; }, quest: () => true, enabled: () => this.flag('v4:sealDone') && !this.flag('v4:joshuFound') && !this.busy, action: () => { this.set('trg:joshu'); return this.findJoshu(); } } as never);
     this.it({ get x() { return s.joshu.x; }, get y() { return s.joshu.y; }, w: 26, get label() { return self.joshuLabel(); }, get standX() { return s.joshu.x - 30; }, quest: () => true, enabled: () => this.flag('v4:joshuFound') && !this.flag('v4:joshuAwake'), action: () => this.helpJoshu() } as never);
     this.it({ x: SPOT.creek, y: groundY(SPOT.creek), w: 18, label: 'Scoop up creek water in your hat', standX: SPOT.creek - 14, quest: () => true, enabled: () => this.flag('v4:joshuChecked') && !this.flag('v4:water') && !this.flag('v4:joshuAwake'), action: () => this.fetchWater() });
   }
@@ -244,15 +326,34 @@ export class IsleStory implements IsleHooks {
   }
 
   // ---------------------------------------------------------------- restore
+  /** older saves and reloads mid-beat: hand over whatever the beat would have given or set */
+  private migrate() {
+    const f = F(), tools = game.save.tools;
+    const give = (t: string) => { if (!tools.includes(t)) tools.push(t); };
+    if (f['v4:chunkWreck'] && !f['v9:kit']) { f['v9:kit'] = true; f['v9:shadow'] = true; f['v9:laptop'] = true; }
+    if (f['v9:kit']) { give('headlamp'); give('trowel'); give('net'); }
+    if (f['v4:split']) give('binoculars');
+    if (f['trg:joshu'] && f['v4:sealDone'] && !f['v4:joshuFound']) f['v4:joshuFound'] = true;
+    if (f['v4:joshuFound'] && !f['v4:shoes']) f['v4:shoes'] = true;
+    if (f['v4:splashed'] && !f['v4:water']) f['v4:water'] = true;
+    game.persist();
+  }
+
   private async restore() {
     const s = this.s, f = F();
+    // the wreck: the first time you're inside (however you climbed in)
+    this.trigger('wreckIn', () => s.inWreck && this.p.state !== 'climb' && this.flag('v4:isleWoke') && !this.flag('v4:chunkWreck'), () => this.wreckIn());
     if (!f['v4:isleWoke']) return this.wakeOnSand();
     if (questStatus('v4shore') === 'hidden') startQuest('v4shore', true);
+    // pick up where you were standing (on the sand)
+    const px = V()['v9:px'];
+    if (px && px > 20 && px < ISL.W - 20) { this.p.x = px; this.p.y = groundY(px); s.snapCamera(); }
     // the seal (a reload mid-chase counts as having outrun it)
     if (f['trg:seal2'] && !f['v4:sealDone']) this.set('v4:sealDone');
     if (f['v4:sealDone']) { this.seal.x = SPOT.sealTired + 10; this.seal.set('asleep'); }
     // Joshu out cold until found and woken
     if (!f['v4:joshuAwake']) this.place(s.joshu, SPOT.joshu, -1, 'unconscious');
+    if (f['v4:chunkWreck']) this.shadowK = 0;
     if (f['v4:joshuAwake']) return this.camp.restore();
     if (!f['v4:jennaAwake']) {
       this.place(s.jenna, SPOT.jenna, 1, 'unconscious');
@@ -275,12 +376,15 @@ export class IsleStory implements IsleHooks {
 
   chunkInWreck() {
     const c = this.s.chunk;
-    this.place(c, SPOT.chunkEat, 1, 'eat', WRECK.floor - 6);
+    this.place(c, this.flag('v9:shadow') ? SPOT.chunkEat + 6 : SPOT.chunkEat, 1, 'eat', WRECK.floor - 6);
     c.setExpr('eat');
     this.s.buddy.mode = 'script';
+    this.shadowK = 1;
   }
   chunkFollow() {
     const s = this.s;
+    this.shadowK = 0;
+    this.canT = 0;
     if (!s.chunk.visible || Math.abs(s.chunk.x - s.player.x) > 300) this.place(s.chunk, s.player.x - 30, 1);
     s.buddy.mode = 'follow';
     s.buddy.reset();
@@ -375,30 +479,146 @@ export class IsleStory implements IsleHooks {
 
   private async climbIn(ld: { x: number; y0: number; y1: number }) {
     const s = this.s;
+    // Jenna keeps watch at the breach ("bravely")
+    if (this.flag('v4:jennaAwake') && !this.flag('v4:chunkWreck')) { this.jennaF.on = false; this.place(s.jenna, WRECK.climbX - 34, 1); }
     await s.climbLadder(ld, -1);
-    if (!this.flag('v4:jennaAwake') || this.flag('trg:wreckIn')) return;
-    this.set('trg:wreckIn');
-    // crunch... crunch... slurp
-    audio.play('munch', { vol: 0.6, pitch: 0.8 });
-    setTimeout(() => audio.play('munch', { vol: 0.5, pitch: 0.9 }), 500);
-    await this.say([
-      { who: 'mori', text: 'It’s dark in here... and it smells like wet carpet and diesel.', expr: 'worried' },
-      { who: 'mori', text: 'Shh. Hear that? Crunching.', expr: 'thinking', emote: 'question' },
-      { who: 'chunk', text: '*crunch crunch crunch slurp crunch*', expr: 'eat', close: false },
-    ]);
   }
 
-  private async foundChunk() {
+  /** first time inside the dark wreck */
+  private async wreckIn() {
+    const jenna = this.flag('v4:jennaAwake'), kit = this.flag('v9:kit');
+    audio.play('munch', { vol: 0.6, pitch: 0.8 });
+    setTimeout(() => audio.play('munch', { vol: 0.5, pitch: 0.9 }), 500);
+    const lines: BubbleLine[] = [
+      { who: 'mori', text: 'It’s dark in here... and it smells like wet carpet and diesel.', expr: 'worried' },
+      { who: 'mori', text: 'Shh. Hear that? Crunching. Somewhere back in the dark.', expr: 'thinking', emote: 'question' },
+    ];
+    if (jenna) lines.push({ who: 'jenna', text: '<i>(from outside)</i> I’ll, um, guard the entrance! From out here! Bravely!', expr: 'scared' });
+    if (!kit) lines.push({ who: 'mori', text: 'I can’t see a thing. My headlamp should be in my bunk, with the rest of my field kit.', expr: 'thinking' });
+    await this.say(lines);
+  }
+
+  /** Mori's bunk: the field kit (headlamp, trowel, bug net) and the laptop in its waterproof case */
+  private async searchBunk() {
+    const s = this.s;
+    await this.cut(async () => {
+      this.p.facing = 1;
+      this.pose('kneel');
+      audio.play('rustle', { vol: 0.5 });
+      await wait(600);
+      await this.say([{ who: 'mori', text: 'My bunk. The kit should be wedged under here... come on, come on...', expr: 'thinking' }]);
+      audio.play('zipper', { vol: 0.6 });
+      for (const t of ['headlamp', 'trowel', 'net']) if (!game.save.tools.includes(t)) game.save.tools.push(t);
+      this.set('v9:kit');
+      await wait(400);
+      await this.say([
+        { who: 'mori', text: 'Headlamp! Trowel! Bug net! My whole field kit, still zipped in its dry bag!', expr: 'excited', react: 'bounce' },
+        { who: 'mori', text: 'And... my LAPTOP. In its waterproof case. The case says “shockproof, waterproof, Mori-proof”.', expr: 'surprised', emote: 'sparkle', onShow: () => { this.set('v9:laptop'); } },
+        { who: 'mori', text: 'Two out of three. Historically.', expr: 'teasing' },
+      ]);
+      this.pose(null);
+    });
+    game.ui.toast('Recovered your <b>headlamp</b>, <b>trowel</b>, <b>bug net</b> and your <b>laptop</b>. Photograph what you find and upload it to the laptop to research it.', 'FIELD KIT', 'teal', 6000);
+    if (questStatus('v9notes') === 'hidden') startQuest('v9notes');
+    if (this.flag('v4:jennaAwake')) await this.shadowGlimpse();
+    else {
+      audio.play('munch', { vol: 0.6, pitch: 0.75 });
+      await this.say([
+        { who: 'mori', text: '...Crunching. In the dark. Behind the crates.', expr: 'scared' },
+        { who: 'mori', text: 'Nope. Nope nope nope. I am getting Jenna first.', expr: 'scared', react: 'tremble' },
+      ]);
+    }
+  }
+
+  /** a shape in the hold doorway, two eyes in the dark... and it slips away deeper */
+  private async shadowGlimpse() {
+    if (this.flag('v9:shadow')) return;
+    const s = this.s, c = s.chunk;
+    audio.setMusic('spooky');
+    await this.cut(async () => {
+      this.p.facing = 1;
+      audio.play('munch', { vol: 0.5, pitch: 0.75 });
+      await wait(500);
+      this.place(c, 832, -1, 'idle', WRECK.floor - 6);
+      c.setExpr('neutral');
+      this.shadowK = 1;
+      await this.pan(842, WRECK.floor - 26, 1.85, 1.1);
+      await wait(800);
+      await this.say([
+        { who: 'mori', text: '...hello?', expr: 'scared', style: 'whisper', close: false, auto: 1200 },
+        { who: 'mori', text: 'Is someone in here?', expr: 'scared', react: 'tremble' },
+      ]);
+      audio.play('rustleBush', { vol: 0.7 });
+      c.walkTo(SPOT.chunkEat + 6, 90, 'run');
+      await wait(1000);
+      c.stopWalk();
+      c.facing = 1;
+      c.setAnim('eat');
+      audio.play('munch', { vol: 0.6, pitch: 0.7 });
+      await this.say([
+        { who: 'chunk', text: '*rustle rustle* ...*CRUNCH*', expr: 'eat', close: false },
+        { who: 'mori', text: 'It went behind the crates. And now it’s... eating something. Loudly.', expr: 'worried' },
+        { who: 'mori', text: 'Please be Chunk. Please don’t be a sea monster that eats pugs. Or naturalists.', expr: 'scared' },
+      ]);
+      this.set('v9:shadow');
+      await this.pan(null, null);
+    });
+    game.ui.toast('Something is crunching behind the crates in the hold. Creep closer and press <b>E</b>.', 'TIP', 'teal', 4500);
+  }
+
+  private async crateAction() {
+    if (!this.flag('v4:jennaAwake')) {
+      await this.say([{ who: 'mori', text: 'I am NOT going back there alone. Jenna first. Jenna is braver than me. Jenna is braver than everyone.', expr: 'scared' }]);
+      return;
+    }
+    if (!this.flag('v9:shadow')) await this.shadowGlimpse();
+    else await this.reveal();
+  }
+
+  /** the proper reveal: light falls on him, and it's very much Chunk */
+  private async reveal() {
     const s = this.s, c = s.chunk, j = s.jenna;
     await this.cut(async () => {
       this.p.facing = 1;
-      await this.pan(c.x - 10, c.y - 30, 1.7, 1);
+      c.stopWalk();
+      this.place(c, SPOT.chunkEat + 6, 1, 'eat', WRECK.floor - 6);
+      this.shadowK = 1;
+      this.pose('crouch');
+      await this.pan(c.x - 8, c.y - 24, 1.95, 1);
       await this.say([
-        { who: 'mori', text: 'Chunk...?', expr: 'surprised' },
-        { who: 'chunk', text: '*CRUNCH*', expr: 'eat', close: false },
+        { who: 'mori', text: '<i>(whispering)</i> Okay. Headlamp. On three. One...', expr: 'scared', style: 'whisper' },
+        { who: 'mori', text: '<i>(whispering)</i> ...two...', expr: 'scared', style: 'whisper', close: false, auto: 900 },
+      ]);
+      audio.play('munch', { vol: 0.9, pitch: 0.55 });
+      s.st.shake(1.5, 0.3);
+      await this.say([{ who: 'chunk', text: '*CRUNCH*', expr: 'eat', style: 'shout', close: false, auto: 700 }]);
+      this.pose(null);
+      await this.say([{ who: 'mori', text: 'THREE!', expr: 'shocked', style: 'shout', react: 'jump' }]);
+      // the light falls on him
+      game.r.post.flash = 0.3;
+      audio.play('lanternOn', { vol: 0.7 });
+      this.spotT = 6;
+      for (let i = 0; i <= 12; i++) { this.shadowK = 1 - i / 12; await wait(45); }
+      this.shadowK = 0;
+      audio.setMusic('none' as never);
+      await this.say([
+        { who: 'chunk', text: '*face-deep in a burst crate of Chunky Chow*', expr: 'eat', close: false },
+        { who: 'mori', text: '...Chunk?', expr: 'surprised' },
       ]);
       c.setAnim('idle');
-      c.faceTo(this.p.x);
+      c.facing = -1;
+      this.canT = 999;
+      await this.say([
+        { who: 'chunk', text: '*slowly turns around. There is a can of Chunky Chow stuck on his face.*', expr: 'derp', close: false },
+        { who: 'mori', text: 'Are you... WEARING your breakfast?', expr: 'shocked' },
+        { who: 'chunk', text: '*hnnf* ...*hnnnf*', expr: 'derp', close: false, auto: 900 },
+      ]);
+      c.play('shake', 'idle').catch(() => {});
+      await wait(450);
+      this.canT = 0;
+      audio.play('jarClink', { vol: 0.7, pitch: 0.6 });
+      const [hx, hy] = c.headTop();
+      for (let i = 0; i < 10; i++) s.main.particles.spawn({ frame: A.dot2, x: hx - 4, y: hy + 4, vx: rand.range(-70, -20), vy: rand.range(-90, -40), ay: 260, life: 0.8, color: i < 3 ? [0.88, 0.66, 0.2] : [0.45, 0.3, 0.18], alpha: 1, alpha1: 0, floorY: c.y + 1 });
       c.setExpr('happy', 3);
       c.play('wiggle', 'idle').catch(() => {});
       await this.say([
@@ -416,7 +636,7 @@ export class IsleStory implements IsleHooks {
       await wait(300);
       j.walkTo(c.x - 44, 110, 'run');
       await this.say([
-        { who: 'jenna', text: 'CHUNK!!! You absolute POTATO!', expr: 'excited', style: 'shout', react: 'jump' },
+        { who: 'jenna', text: 'I heard SCREAMING! Is it a monster? Is it... CHUNK!!! You absolute POTATO!', expr: 'excited', style: 'shout', react: 'jump' },
         { who: 'jenna', text: 'He’s eating. He’s literally just eating. He opened a CAN. How did he open a can?!', expr: 'shocked' },
         { who: 'mori', text: 'Honestly? Not the weirdest thing he’s done this week.', expr: 'laugh' },
       ]);
@@ -448,10 +668,12 @@ export class IsleStory implements IsleHooks {
         { who: 'jenna', text: 'Yeah. Yeah! He once punched a shark. Allegedly. He tells it differently every time.', expr: 'determined' },
         { who: 'mori', text: 'Then let’s split up. You search the wreck and the rocks back west. Chunk and I take the shoreline east.', expr: 'thinking' },
         { who: 'jenna', text: 'Deal. Take this. The emergency walkie-talkie from the hold. Channel three.', expr: 'happy' },
-        { who: 'mori', text: 'You found it in the dark in ten seconds?', expr: 'surprised' },
-        { who: 'jenna', text: 'I labelled every drawer on this boat. Colour-coded. You’re welcome.', expr: 'smug' },
+        { who: 'jenna', text: 'And Dad’s binoculars. They were in the fish tank. Do NOT ask.', expr: 'grumpy' },
+        { who: 'mori', text: 'Gerald was using them, wasn’t he.', expr: 'teasing' },
+        { who: 'jenna', text: 'I labelled every drawer on this boat. Colour-coded. Gerald does not have a drawer. Gerald is a problem.', expr: 'smug' },
         { who: 'jenna', text: 'Mori... find him. Please.', expr: 'worried' },
       ]);
+      if (!game.save.tools.includes('binoculars')) game.save.tools.push('binoculars');
       this.set('v4:split');
       this.jennaAtWreck();
       if (s.inWreck) {
@@ -462,7 +684,7 @@ export class IsleStory implements IsleHooks {
       this.shoreTriggers();
       s.clock.target = 1.2;
       s.clock.rate = 0.0045;
-      game.ui.toast('Follow the shore east. Keep your camera handy: this island is full of wildlife nobody has catalogued.', 'TIP', 'teal', 6000);
+      game.ui.toast('Follow the shore east. Keep your camera handy, and look for high spots: the <b>binoculars</b> see a long way.', 'TIP', 'teal', 6000);
     });
   }
 
@@ -475,7 +697,10 @@ export class IsleStory implements IsleHooks {
         this.radio('Mori? Mori, come in. Over.'),
         { who: 'mori', text: 'I’m here. No sign of him yet. Over.', expr: 'neutral' },
         this.radio('I found the first-aid kit, two tarps, and Dad’s secret stash of chocolate biscuits. He is SO busted. Over.', 'teasing'),
+        this.radio('Oh, and Mori? If you see anything weird and alive, TAKE A PICTURE. I want to see a glass crab. And whatever’s snoring down the beach. Over.', 'excited'),
+        { who: 'mori', text: 'Snoring? ...Copy that. Over.', expr: 'thinking' },
       ]);
+      if (questStatus('v9jenna') === 'hidden') startQuest('v9jenna');
     });
     this.trigger('tracks', () => st() && px() > 3470, async () => {
       await this.cut(async () => {
@@ -522,7 +747,7 @@ export class IsleStory implements IsleHooks {
         { who: 'mori', text: 'Joshu... you walked through this and didn’t even stop to look, did you.', expr: 'teasing' },
       ]);
     });
-    this.trigger('joshu', () => st() && this.flag('v4:shoes') && px() > SPOT.joshu - 110, () => this.findJoshu());
+    this.trigger('joshu', () => st() && this.flag('v4:sealDone') && px() > SPOT.joshu - 110, () => this.findJoshu());
   }
 
   private async sealWakes() {
@@ -570,7 +795,8 @@ export class IsleStory implements IsleHooks {
         { who: 'mori', text: 'It’s... lying... on me... it’s so warm... and it smells like a thousand fish...', expr: 'injured' },
       ]);
       await this.fadeOut(1.8);
-      this.seal.x = Math.max(this.chaseStartX - 60, this.p.x - 140);
+      this.seal.x = Math.max(this.chaseStartX - 60, this.p.x - 180);
+      this.seal.chaseT += 3;
       this.p.y = groundY(this.p.x);
       this.pose(null);
       this.seal.set('roar');
@@ -578,6 +804,7 @@ export class IsleStory implements IsleHooks {
       await this.fadeIn(1.8);
       s.bark('mori', 'Nope. Nope nope nope. RUNNING NOW.', { expr: 'scared' });
     });
+    game.ui.toast('It let you go. Run east, hold <b>Shift</b>: it can’t keep this up for long.', 'RUN', 'coral', 3200);
   }
 
   private async sealTired() {
@@ -635,9 +862,10 @@ export class IsleStory implements IsleHooks {
       await this.say([
         { who: 'mori', text: 'JOSHU!', expr: 'shocked', style: 'shout', react: 'jump' },
       ]);
-      this.p.walkTo(jo.x - 34, 110);
+      this.p.walkTo(jo.x - 34, 70);
       await wait(900);
       await this.pan(null, null);
+      if (!this.flag('v4:shoes')) this.set('v4:shoes');
       this.set('v4:joshuFound');
     });
   }
@@ -657,7 +885,7 @@ export class IsleStory implements IsleHooks {
       });
       return;
     }
-    if (this.flag('v4:water') && !this.flag('v4:splashed')) {
+    if (this.flag('v4:water')) {
       await this.cut(async () => {
         this.p.animMap = null;
         this.pose('kneel');
@@ -772,6 +1000,28 @@ export class IsleStory implements IsleHooks {
       }
     }
     this.camp.update(dt);
-    void rand;
+    this.forage.update(dt);
+    this.tools.update(dt);
+    const s = this.s, ch = s.chunk, p = this.p;
+    if (!this.flag('v4:chunkWreck')) {
+      // Chunk before the reveal: never seen from the beach, only ever a shape in the dark wreck
+      ch.visible = s.inside > 0.6 || (this.busy && s.inWreck);
+      this.munchT -= dt;
+      if (s.inside > 0.5 && this.munchT <= 0) {
+        this.munchT = rand.range(2.2, 4.5);
+        s.sfx(rand.chance(0.75) ? 'munch' : 'rustleBush', ch.x, 0.35, rand.range(0.7, 0.9));
+      }
+      // Jenna keeps watch at the breach while Mori is inside
+      if (this.flag('v4:jennaAwake') && !this.busy) {
+        const inside = s.inWreck || (p.state === 'climb' && Math.abs(p.x - WRECK.climbX) < 6);
+        this.jennaF.on = !inside;
+        const j = s.jenna, post = WRECK.climbX - 34;
+        if (inside && !j.walking && Math.abs(j.x - post) > 6 && Math.abs(j.y - groundY(post)) < 12) j.walkTo(post, 70);
+      }
+    }
+    if (this.shadowK > 0) { const k = 0.03 + (1 - this.shadowK) * 0.97; ch.tint = packColor(k, k, Math.min(1, k * 1.15), 1); }
+    // where you were standing on the sand (a reload picks up from there)
+    this.pxT -= dt;
+    if (this.pxT <= 0 && !this.busy && !s.cutscene && !s.inWreck && p.onGround && p.state === 'normal') { this.pxT = 2; V()['v9:px'] = Math.round(p.x); }
   }
 }

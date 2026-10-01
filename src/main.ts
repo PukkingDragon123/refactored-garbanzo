@@ -105,7 +105,10 @@ async function boot() {
     },
     steady: async () => (await import('./ui/v6/camp')).holdSteady('Hold the tent pole steady', 'Press <span class="key">Space</span> as the pole comes upright. Three pegs!'),
     knot: async () => (await import('./ui/v6/camp')).lashingKnot(),
+    /** island story helpers (state, interactables, markers, teleport): see src/game/v9/islezl.ts */
+    isle: null as unknown,
   };
+  void import('./game/v9/islezl').then(m => { (window as unknown as { zl: { isle: unknown } }).zl.isle = m.ISLE; });
 }
 
 boot();

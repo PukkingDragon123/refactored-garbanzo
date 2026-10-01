@@ -10,7 +10,6 @@ import { audio } from '../../core/audio';
 import type { Renderer, Frame } from '../../gfx/renderer';
 import { packColor } from '../../gfx/renderer';
 import { Custom } from '../../world/props';
-import { ResourceNode, NodeArt } from '../../world/resources';
 import { local, A } from '../assets';
 import { sprite, jcall } from '../sites2/common';
 import type { Sprite } from '../../art/jungle-core';
@@ -26,14 +25,6 @@ export const CAMP = {
   salvage: 1470, storage: 1590, tent: 1720, research: 1850, bag: 1930, fire: 1990, bed: 2034, cook: 2090, rack: 2175, lean: 2280, elec: 1530,
   benchL: 1956, benchR: 2030, pole0: 1690, pole1: 1900, pole2: 2250, sticks: [1620, 2380, 2480] as number[],
 };
-
-class IsleNode extends ResourceNode {
-  verb: string | null = null;
-  cat: 'wood' | 'plants' | 'food' | 'minerals' = 'wood';
-  shown: () => boolean = () => true;
-  label() { return this.verb ?? super.label(); }
-  draw(r: Renderer) { if (this.shown()) super.draw(r); }
-}
 
 const JOBS = ['firewood', 'supplies', 'tent', 'research', 'rack', 'bed'] as const;
 type Job = typeof JOBS[number];
@@ -54,8 +45,8 @@ export class IsleCamp {
   sticks = 0;
   carrying: 'sticks' | 'crate' | null = null;
   private crates = 0;
-  private nodes: IsleNode[] = [];
   private lessons = new Set<string>();
+  private doneBark = false;
   private chunkGagT = 0;
   private nagT = 0;
   private stickTaken = [false, false, false];
@@ -80,42 +71,7 @@ export class IsleCamp {
   setup() {
     const s = this.s, st = this.st;
     const F = (k: string) => !!game.save.flags[k];
-    // ---- gathering nodes for the walk back (visible from the start, usable once Joshu is teaching)
-    const res = (kind: string, seed: number): Sprite | null => jcall<Sprite>('resourceSprite', kind, false, seed);
-    const resD = (kind: string, seed: number): Sprite | null => jcall<Sprite>('resourceSprite', kind, true, seed);
-    const node = (key: string, kind: string, x: number, cat: IsleNode['cat'], verb: string | null = null) => {
-      const n = new IsleNode('isle:' + key, kind, x, groundY(x) + 3, {
-        normal: sprite(`rn:${kind}:${x % 3}`, () => res(kind, x % 3))?.f ?? A.blob,
-        depleted: sprite(`rnd:${kind}:${x % 3}`, () => resD(kind, x % 3))?.f ?? null,
-        glow: null,
-      } as NodeArt);
-      n.verb = verb;
-      n.cat = cat;
-      n.shown = () => F('v4:joshuAwake') || kind === 'driftwood';
-      s.addNode(n);
-      const it = s.interact[s.interact.length - 1] as { enabled?: () => boolean };
-      const was = it.enabled;
-      it.enabled = () => F('v4:joshuAwake') && !F('v4:back') && (was ? was() : true);
-      this.nodes.push(n);
-      return n;
-    };
-    for (const x of [3890, 3580, 3200, 2870, 2580]) node('drift' + x, 'driftwood', x, 'wood');
-    node('flax1', 'flax', 3700, 'plants', 'Cut harakeke (flax)');
-    node('flax2', 'flax', 3870, 'plants', 'Cut harakeke (flax)');
-    node('kawa1', 'kawakawa', 3420, 'plants', 'Pick kawakawa leaves');
-    node('kawa2', 'kawakawa', 2990, 'plants', 'Pick kawakawa leaves');
-    node('mussel1', 'shells', 3080, 'food', 'Pick mussels off the rocks');
-    node('pipi1', 'shells', 3320, 'food', 'Dig for pipi in the wet sand');
-    node('mussel2', 'shells', 2660, 'food', 'Pick mussels off the rocks');
-    node('obsidian', 'stones', 3770, 'minerals', 'Collect obsidian from the stream bed');
-    node('ember', 'stones', 2770, 'minerals', 'Pick up the odd warm stone');
-    const base = s.collect.bind(s);
-    s.collect = async n => {
-      const was = n.depleted;
-      await base(n);
-      if (!was && n.depleted && n instanceof IsleNode) this.gathered(n);
-    };
-
+    // (the walk-back haul is picked up from the shore by the forage module: src/game/v9/forage.ts)
     // ---- the camp, built up as the jobs get done
     const show = (j: Job) => () => this.job(j);
     st.prop('woodpile', CA.woodPile(3), CAMP.fire - 34, groundY(CAMP.fire - 34) + 4, () => this.job('firewood') && !F('v4:dinnerOver'), -2);
@@ -241,6 +197,7 @@ export class IsleCamp {
     if (!F('v4:arohaJoined')) {
       s.player.x = 2300; s.player.y = groundY(2300); s.snapCamera();
       st.place(s.joshu, 2340, -1, 'injured');
+      st.place(s.chunk, 2270, 1, 'idle');
       return runStandoff(st);
     }
     this.campMode();
@@ -299,9 +256,9 @@ export class IsleCamp {
       await st.say(lines.map(([t, e]) => ({ who: 'joshu', text: t, expr: e })));
     });
     lesson('flax', 3730, [['See that? Harakeke. Flax. Cut the outer leaves low, never the middle shoot.', 'neutral'], ['Split the leaf with your thumbnail and there’s fibre inside. Strong as rope once it’s twisted.', 'happy']]);
-    lesson('obsidian', 3775, [['Black glass in the stream bed. Obsidian. Volcanic.', 'surprised'], ['Sharper than any knife when it breaks. Handle it like it wants to bite you.', 'serious']]);
+    lesson('flint', 3775, [['Flint, in the stream bed. See the dark ones? Fish one out.', 'surprised'], ['Strike it on the back of my knife and you’ve got a spark. That’s a fire you didn’t have to rub for.', 'serious']]);
     lesson('kawakawa', 3440, [['Heart-shaped leaves with holes in them. Kawakawa. My old bosun swore by it.', 'happy'], ['Tea for your belly, a poultice for cuts. The holey leaves are the best ones.', 'neutral']]);
-    lesson('pipi', 3330, [['Little bubbles in the wet sand... pipi. Dig with your fingers where the water’s just gone out.', 'excited']]);
+    lesson('pipi', 3330, [['See the little breathing holes in the wet sand? Pipi. Get your trowel in under them, where the water’s just gone out.', 'excited']]);
     lesson('mussels', 3090, [['Green-lipped mussels on the rocks, below the tide line. Pick the big ones, leave the babies.', 'happy']]);
     lesson('ember', 2790, [['What in the... that stone’s warm. And it’s glowing. Look at it.', 'surprised'], ['Never seen the like. Pick it up careful, and keep it away from the fire until we know what it is.', 'serious']]);
   }
@@ -321,18 +278,20 @@ export class IsleCamp {
     return m.length > 1 ? m.slice(0, -1).join(', ') + ' and ' + m[m.length - 1] : m[0] ?? 'nothing';
   }
 
-  private gathered(n: IsleNode) {
-    const key = { wood: 'v4:wood', plants: 'v4:plants', food: 'v4:food', minerals: 'v4:minerals' }[n.cat];
-    this.st.inc(key);
-    const praise: Record<IsleNode['cat'], string[]> = {
+  /** a survival find from the shore counted for the walk back (forage.ts) */
+  gatheredCat(cat: 'wood' | 'plants' | 'food' | 'minerals', kind: string) {
+    const F = game.save.flags;
+    this.s.hud?.refresh(true);
+    if (!F['v4:joshuAwake'] || F['v4:back']) return;
+    const praise: Record<string, string[]> = {
       wood: ['Good and dry. That’ll burn.', 'Bleached white. Been above the tide a good long while.', 'Driftwood. The sea delivers.'],
       plants: ['That’s it, low and clean.', 'Good. Aroha’s mum would... ah, never mind, you don’t know her. Good work.', 'Perfect.'],
       food: ['Dinner!', 'Look at the size of that. We eat tonight.', 'Leave the little ones. Good lad.'],
       minerals: ['Keep that one safe.', 'Handy. Very handy.'],
     };
-    if (!this.lessons.has(n.cat)) { this.lessons.add(n.cat); this.s.bark('joshu', rand.pick(praise[n.cat]), { expr: 'happy' }); }
-    if (n.key === 'isle:ember') this.s.bark('mori', 'It’s warm... and it fizzes a little when I squeeze it. Pocket. Very gently.', { expr: 'surprised' });
-    if (this.gatherDone()) setTimeout(() => this.s.bark('joshu', 'That’ll do. Back to the wreck, then, before the light goes.', { expr: 'happy' }), 1500);
+    if (!this.lessons.has(cat)) { this.lessons.add(cat); setTimeout(() => this.s.bark('joshu', rand.pick(praise[cat]), { expr: 'happy' }), 1200); }
+    void kind;
+    if (this.gatherDone() && !this.doneBark) { this.doneBark = true; setTimeout(() => this.s.bark('joshu', 'That’ll do. Back to the wreck, then, before the light goes.', { expr: 'happy' }), 2600); }
   }
 
   // ---------------------------------------------------------------- camp
@@ -475,7 +434,7 @@ export class IsleCamp {
       await st.say([
         { who: 'mori', text: 'Microscope: sandy but alive. Sample jars: sorted. Field notebook: damp, but legible. Laptop...', expr: 'thinking' },
         { who: 'mori', text: '...boots up! Eleven percent battery and a wallpaper full of sand. Best day ever.', expr: 'excited', react: 'bounce' },
-        { who: 'mori', text: 'Specimen station for the kawakawa and the obsidian. And the warm stone goes in its own jar. Far away from the fire.', expr: 'serious' },
+        { who: 'mori', text: 'Specimen station for the kawakawa and the flint. And the warm stone goes in its own jar. Far away from the fire.', expr: 'serious' },
       ]);
     });
     this.afterJob();
