@@ -13,3 +13,6 @@ export const SEA_BEASTS = { vanebill: VANEBILL, sackjaw: SACKJAW, scythewing: SC
 for (const [id, def] of Object.entries(SEA_BEASTS)) registerBeast(id, def);
 
 export { VANEBILL_BANK, vanebillBankAngle } from './vanebill';
+export { SCYTHE_BANK } from './scythewing';
+export { MOONFIN_LEAP, MOONFIN_GLOW } from './moonfin';
+export { reefbackSpots, REEFBACK_K } from './reefback';
