@@ -93,7 +93,7 @@ export class IsleCamp {
     s.main.add(new Custom(-2.9, rr => { if (this.job('research') && this.laptopOn && baseGlow) { rr.emissive(0.75); rr.draw(baseGlow, rt.x, rt.y, 1, 1, 0, packColor(0.7, 0.8, 0.9, 1)); rr.emissive(); rr.light(rt.x + 2, rt.y - 18, 34, 0.6, 0.85, 1, 0.3); } }));
     st.prop('rack', CA.dryingRack(), CAMP.rack, groundY(CAMP.rack) + 2, show('rack'), -3);
     st.prop('bed', CA.chunkBed(), CAMP.bed, groundY(CAMP.bed) + 4, show('bed'), -2);
-    st.prop('bedroll', CA.bedroll(), CAMP.bag, groundY(CAMP.bag) + 4, () => this.job('research') && !this.inBag, -2.2);
+    st.prop('bedroll', CA.bedroll(), CAMP.bag, groundY(CAMP.bag) + 4, () => this.job('research') && !this.inBag && !F('v4:day1'), -2.2);
     st.prop('cook', CA.cookBench(), CAMP.cook, groundY(CAMP.cook) + 2, () => this.job('firewood'), -3);
     st.prop('lean', CA.leanTo(), CAMP.lean, groundY(CAMP.lean) + 2, () => this.jobs() >= 4, -3);
     st.prop('elec', CA.electronics(), CAMP.elec, groundY(CAMP.elec) + 2, () => F('v4:arohaJoined'), -3);
@@ -213,7 +213,8 @@ export class IsleCamp {
     this.campMode();
     if (F('v4:dinner')) dressForNight();
     if (F('v4:dinner') && !F('v4:day1')) { this.nightMode(); return; }
-    if (F('v4:day1')) { this.nightMode(true); return; }
+    // Day 2 on: the camp day loop takes over (src/game/v10/campday.ts)
+    if (F('v4:day1')) { const { startCampDay } = await import('../v10/campday'); await startCampDay(st); return; }
     if (this.jobs() >= 6 && !F('v4:dinner')) await this.dinner();
   }
 
@@ -743,6 +744,7 @@ export class IsleCamp {
         { who: 'chunk', text: 'Hnnnnk... shnrrrk... hnnnnk...', expr: 'sleep', close: false, auto: 2600 },
       ]);
       p.body.setExpr('sleep');
+      st.holdCam = true;
       st.set('v4:day1');
       for (let i = 0; i < 60; i++) { cam.zoom += 0.004; cam.y -= 0.3; await wait(40); }
       await game.fadeTo(1, 0.25);
@@ -796,13 +798,23 @@ async function showDayComplete() {
     <div class="t">Day 1 Complete</div>
     <div class="s">Four castaways, one pug, one camp on the edge of a very big island.</div>
     <div class="st"><div><b>${photos}</b>species photographed</div><div><b>${v('v4:fishCaught')}</b>fish caught</div><div><b>${v('v4:campJobs')}</b>camp jobs done</div><div><b>1</b>seal outrun (eventually)</div></div>
-    <button class="btn">Back to the title</button>`);
+    <div><button class="btn next">Continue to Day 2</button> <button class="btn ghost title">Back to the title</button></div>`);
   game.ui.modalLayer.appendChild(card);
   game.ui.modalOpen++;
   game.persist();
-  await new Promise<void>(res => card.querySelector('button')!.addEventListener('click', () => res(), { once: true }));
+  const next = await new Promise<boolean>(res => {
+    card.querySelector('.next')!.addEventListener('click', () => res(true), { once: true });
+    card.querySelector('.title')!.addEventListener('click', () => res(false), { once: true });
+  });
   game.ui.modalOpen = Math.max(0, game.ui.modalOpen - 1);
   card.remove();
+  if (next) {
+    // on to the camp day loop: Day 2 morning (src/game/v10/day.ts)
+    await (await import('../v10/day')).startNextDay();
+    const { goIsland } = await import('./islandflow');
+    void goIsland();
+    return;
+  }
   const { goTitle } = await import('../scenes/flow');
   goTitle();
 }
