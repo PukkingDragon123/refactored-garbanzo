@@ -13,6 +13,7 @@ import { C, hex, mix, shade } from '../../art/color';
 import { A } from '../assets';
 import { Rng, bayer, clamp, rand, fbm2, smoothstep } from '../../core/math';
 import { sprite } from '../sites2/common';
+import { paintRock } from '../../art/flora';
 import type { Env, Frame } from '../../gfx/renderer';
 import { bigFrame } from '../../gfx/atlas';
 import { game } from '../game';
@@ -41,6 +42,8 @@ export interface Point10 {
   look?: { verb: string; lines: () => BubbleLine[] };
   /** only there when this says so */
   when?: () => boolean;
+  /** after it has been looked at / collected (a rumour, a flag, a map note) */
+  after?: () => void;
 }
 /** a stretch of deep water: the walk line there is the swimmer's line (surface + SWIM_DEPTH) */
 export interface Swim10 { x0: number; x1: number; top: number; bottom: number; cold?: boolean; col?: [number, number, number] }
@@ -51,8 +54,10 @@ export interface Extras10 {
   points?: Point10[];
   swims?: Swim10[];
   hazards?: Hazard10[];
-  /** climbs (by x) that are hard going: energy per second while on them */
+  /** climbs (by x) that are hard going: extra energy per second while climbing them */
   hardClimbs?: { x: number; rate: number }[];
+  /** a dark place: a soft light travels with Mori (0..1 strength) */
+  dark?: number;
 }
 /** a V10 site: a FieldSite with its own location id and the extras above */
 export type Site10 = Omit<FieldSite, 'id'> & { id: string; loc: string; v10?: Extras10 };
@@ -93,23 +98,30 @@ export function markerSprite(col = '#c8402e'): Sprite {
   return { buf: b, ax: 8, ay: 33 } as Sprite;
 }
 
-/** a weathered rock face / boulder in a ramp, with optional strata stripes */
+/** a shaded boulder (the V2 rock painter), optionally striped with strata */
 export function boulder(seed: number, w: number, h: number, ramp: C[], o: { strata?: C[]; moss?: number } = {}): Sprite {
-  const b = new PixelBuffer(w, h);
-  const rng = new Rng(seed);
-  const cx = w / 2;
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const nx = (x - cx) / (w / 2), ny = (h - y) / h;
-    const edge = 1 - nx * nx - Math.pow(1 - ny, 2) * 0.6 + (rng.next() - 0.5) * 0.04;
-    if (edge < 0.08 && y < h - 2) continue;
-    if (Math.abs(nx) > 0.98) continue;
-    const lit = clamp(0.55 - nx * 0.35 + (1 - ny) * -0.25 + ny * 0.2);
-    let c = ramp[Math.min(ramp.length - 1, Math.floor(lit * (ramp.length - 1) + bayer(x, y) * 0.9))];
-    if (o.strata) { const band = Math.floor((y + Math.sin(x * 0.07 + seed) * 3) / 6) % o.strata.length; c = mix(c, o.strata[band], 0.45); }
-    if (o.moss && y < h * 0.35 && rng.next() < o.moss) c = mix(c, hex('#5c7c25'), 0.6);
-    b.set(x, y, c);
+  const r = paintRock(seed, w, h, ramp, o.moss ?? 0.25);
+  if (o.strata) {
+    const st = o.strata;
+    r.buf.map((c, x, y) => ((c >>> 24) > 0 ? mix(c, st[Math.floor((y + Math.sin(x * 0.08 + seed) * 2) / 5) % st.length], 0.35) : c));
   }
-  b.outline(hex('#120e0c'));
+  return { buf: r.buf, ax: Math.round(r.ax), ay: r.ay - 1 } as Sprite;
+}
+
+/** a cave column / stalagmite: a tapered, lumpy pillar lit from the left */
+export function pillar(seed: number, w: number, h: number, ramp: C[], o: { top?: boolean } = {}): Sprite {
+  const b = new PixelBuffer(w, h);
+  for (let y = 0; y < h; y++) {
+    const t = y / h;
+    const half = (w / 2) * (o.top ? 0.55 + 0.45 * Math.abs(t - 0.5) * 2 : 0.25 + 0.75 * t) * (0.85 + 0.15 * Math.sin(y * 0.11 + seed)) + (fbm2(y * 0.08, seed, 2, seed) - 0.5) * 3;
+    for (let x = 0; x < w; x++) {
+      const dx = (x - w / 2) / Math.max(1, half);
+      if (Math.abs(dx) > 1) continue;
+      const l = -dx * 0.55 + (fbm2(x * 0.15, y * 0.06, 3, seed) - 0.5) * 0.8 + (bayer(x, y) - 0.5) * 0.3 + (Math.sin(y * 0.6) > 0.85 ? 0.25 : 0);
+      b.set(x, y, ramp[clamp(Math.round((l * 0.5 + 0.5) * (ramp.length - 1)), 0, ramp.length - 1)]);
+    }
+  }
+  b.outline(hex('#0c0a0a'));
   return { buf: b, ax: Math.floor(w / 2), ay: h - 1 } as Sprite;
 }
 

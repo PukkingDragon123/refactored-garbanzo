@@ -27,7 +27,7 @@ import {
 import type { LocationDef, DiscoveryKind } from './regions';
 import type { RouteDef } from './atlas';
 import {
-  arrivedAt, currentExpedition, goExpedition, returnToCamp, isIslandScene, isFieldScene, sceneTag, passTime, expeditionHour, clockText, CAMP_X, endTrip,
+  arrivedAt, currentExpedition, goExpedition, returnToCamp, isIslandScene, isFieldScene, sceneTag, passTime, expeditionHour, clockText, CAMP_X, endTrip, effortSpend,
 } from './expedition';
 import { energy, spend } from './energy';
 import { installTranslator, tr } from './translator';
@@ -214,9 +214,11 @@ export abstract class TripRun {
   private async look(pt: Point10) {
     const f = this.f;
     f.player.facing = pt.x >= f.player.x ? 1 : -1;
-    const lines = pt.look!.lines();
+    // (Aroha only speaks when she came along)
+    const lines = pt.look!.lines().filter(l => l.who !== 'aroha' || !!this.guide);
     if (lines.length) await f.say(lines);
     if (discover({ id: pt.id, kind: pt.kind, name: pt.name, loc: this.locAtX(pt.x), x: Math.round(pt.x), note: pt.note })) f.player.body.showEmote('idea', 1.2);
+    pt.after?.();
   }
 
   private async take(pt: Point10) {
@@ -246,6 +248,7 @@ export abstract class TripRun {
     game.persist();
     f.hud?.refresh();
     if (lines.length) await f.say(lines as never);
+    pt.after?.();
   }
 
   // ---------------------------------------------------------------- the ways deeper
@@ -273,6 +276,7 @@ export abstract class TripRun {
     if (f.cutscene) return;
     const shut = this.blocked.get(to.id);
     if (shut) { f.bark('mori', `No way through: ${shut}.`, { expr: 'worried' }); return; }
+    if (r.flag && !game.save.flags[r.flag.id]) { audio.play('wrong', { vol: 0.5 }); await f.say([{ who: 'mori', text: r.flag.why, expr: 'thinking' }]); return; }
     if (r.needs && count(r.needs.item) < r.needs.n) { audio.play('wrong', { vol: 0.5 }); await f.say([{ who: 'mori', text: r.needs.why, expr: 'thinking' }]); return; }
     const tired = energy() <= r.energy + 2;
     const lines = [{ who: 'mori', text: r.say ?? 'Onward. Deeper.', expr: 'determined' as string, choices: [`Go on (−${r.energy} energy, ${fmtH(r.hours)})`, 'Not yet'] }];
@@ -286,7 +290,7 @@ export abstract class TripRun {
       const dir = r.at > f.player.x ? 1 : -1;
       await Promise.race([f.player.walkTo(clamp(r.at + dir * 30, f.player.minX, f.player.maxX), 60), sleep(1500)]);
       if (r.needs) remove(r.needs.item, r.needs.n);
-      spend(r.energy, 'route');
+      effortSpend(r.energy, 'route');
       if (energy() <= 0) return; // the blackout takes it from here
       await goExpedition(to.id, { route: r, from: this.loc });
     } finally {
@@ -303,6 +307,8 @@ class SiteRun extends TripRun {
   private hard: { x: number; rate: number }[] = [];
   private swimming = false;
   private drainT = 0;
+  private lastY = 0;
+  private dark = 0;
   constructor(f: FieldScene, readonly locId: string) { super(f); }
   get loc() { return this.locId; }
   get L() { return location(this.locId)!; }
@@ -322,6 +328,7 @@ class SiteRun extends TripRun {
     this.swims = ex?.swims ?? [];
     this.hazards = (ex?.hazards ?? []).map(h => ({ ...h, t: rand.range(0, h.period ?? 4), hit: 0, warned: false }));
     this.hard = ex?.hardClimbs ?? [];
+    this.dark = ex?.dark ?? 0;
     this.hookCamera(() => this.pts);
     this.addMapButton();
     this.installFrame();
@@ -338,6 +345,16 @@ class SiteRun extends TripRun {
     Object.defineProperty(it, 'label', { configurable: true, get: () => { const h = homeCost(loc, f.player.x); return `Head back to camp <span style="opacity:.75">· ${fmtH(h.hours)} walk · −${h.energy} energy</span>`; } });
   }
 
+  protected draw(rr: import('../../gfx/renderer').Renderer) {
+    super.draw(rr);
+    // in the dark, a soft glow travels with Mori (his headlamp on low, the camera's screen)
+    if (this.dark > 0) {
+      const p = this.p, lamp = game.save.tools.includes('headlamp') ? 1 : 0.6;
+      rr.light(p.x + p.facing * 6, p.y - 34, 120, 1, 0.92, 0.78, 0.7 * this.dark * lamp, 0.12);
+      if (this.f.guide) rr.light(this.f.guide.a.x, this.f.guide.a.y - 30, 70, 1, 0.85, 0.7, 0.3 * this.dark, 0.1);
+    }
+  }
+
   protected update(dt: number) {
     super.update(dt);
     const f = this.f, p = this.p;
@@ -352,11 +369,12 @@ class SiteRun extends TripRun {
     if (f.cutscene || game.ui.blocking) return;
     this.updateSwim(dt);
     this.updateHazards(dt);
-    // hard climbs: arms and legs burn
-    if (p.state === 'climb' && p.climb) {
+    // hard climbs (on top of the energy module's climbing cost): arms and legs burn
+    if (p.state === 'climb' && p.climb && Math.abs(p.vy) + Math.abs(p.y - this.lastY) > 0.01) {
       const h = this.hard.find(c => Math.abs(c.x - p.climb!.x) < 3);
-      if (h) this.drain(h.rate * dt, 'climb');
+      if (h) this.drain(h.rate * dt, 'hard climb');
     }
+    this.lastY = p.y;
   }
 
   private drain(n: number, why: string) {
@@ -378,7 +396,7 @@ class SiteRun extends TripRun {
       if (f.cam?.active) { f.cam.raise(false); f.bark('mori', 'Not while I’m swimming!', { expr: 'worried' }); }
       p.poseOverride = 'swim';
       p.wadeK = 0.55;
-      this.drain(dt * (sw.cold ? 1.6 : 1.1), 'swim');
+      if (sw.cold) this.drain(dt * 0.5, 'cold water');
       if (rand.chance(dt * (Math.abs(p.vx) > 5 ? 6 : 1.5))) f.main.particles.spawn({ frame: A.dot2, x: p.x + rand.range(-8, 8), y: sw.top, vx: rand.range(-20, 20), vy: rand.range(-30, -10), ay: 160, life: 0.5, color: [0.85, 0.95, 1], alpha: 0.8, alpha1: 0, floorY: sw.top + 1 });
     } else if (this.swimming) {
       this.swimming = false;
@@ -483,7 +501,7 @@ class IslandRun extends TripRun {
     this.hookCamera(() => this.pts);
     if (v10Active()) {
       for (const to of LOCATIONS) for (const r of to.routes ?? []) { const from = location(r.from); if (from && isIsland(from)) this.addRoute(to, r); }
-      this.addTrailhead();
+      if (TRAILHEAD.on) this.addTrailhead();
       this.addMapButton();
     }
     this.installFrame();
@@ -535,7 +553,7 @@ class IslandRun extends TripRun {
       this.tripT += dt;
       if (!f.cutscene && !game.ui.blocking) passTime(dt / 180);
       if (z !== cur && z !== 'camp') arrivedAt(z);
-      if (p.x > 1520 && p.x < 2300 && !f.cutscene && !game.ui.blocking && p.state === 'normal') {
+      if (ISLAND_TRIPS.end && p.x > 1520 && p.x < 2300 && !f.cutscene && !game.ui.blocking && p.state === 'normal') {
         if (this.tripT > 20) void returnToCamp('walk');
         else endTrip();
       }
@@ -543,10 +561,11 @@ class IslandRun extends TripRun {
   }
 }
 
-/** where the camp's trailhead signpost stands; the camp module can move it or switch it off */
-export const TRAILHEAD = { x: 2420, on: true };
-/** walking out of camp along the shore starts a short trip (and walking back ends it) */
-export const ISLAND_TRIPS = { auto: true };
+/** a trailhead signpost of this module's own (off: the camp module's trail sign opens the map) */
+export const TRAILHEAD = { x: 2420, on: false };
+/** walking out of camp along the shore starts a short trip (the camp module ends it when Mori walks
+ *  back into camp; `end` lets this module end it too) */
+export const ISLAND_TRIPS = { auto: true, end: false };
 
 /** leave camp for a location picked on the map (fast travel along the known trail) */
 export async function departFromCamp(to: string) {

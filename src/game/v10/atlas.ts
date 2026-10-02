@@ -29,6 +29,8 @@ export interface RouteDef {
   kind: 'walk' | 'climb' | 'swim' | 'wade' | 'dive' | 'tunnel';
   /** an item the way needs (e.g. rope to get down a collapsed stair) */
   needs?: { item: string; n: number; why: string };
+  /** a story flag the way needs (e.g. Koro's blessing for the old track) */
+  flag?: { id: string; why: string };
   /** a line Mori or Aroha says on the way */
   say?: string;
 }
@@ -170,7 +172,10 @@ export const ATLAS: AtlasLoc[] = [
     id: 'ruins', name: 'The Old Pā', sub: 'Te Pā Tawhito', region: 'interior', kind: 'ruin', pos: P(316, 306),
     scene: { type: 'site', site: 'ruins' }, difficulty: 4, xr: [0, 2300],
     path: PATH([322, 262], [312, 292], [318, 322], [332, 350]),
-    routes: [{ from: 'canopy', at: 2350, label: 'Cross the vine bridge to the stone terraces', hours: 1.5, energy: 18, kind: 'climb', say: 'Those are walls. Somebody built walls up here.' }],
+    routes: [
+      { from: 'canopy', at: 2350, label: 'Cross the vine bridge to the stone terraces', hours: 1.5, energy: 18, kind: 'climb', say: 'Those are walls. Somebody built walls up here.' },
+      { from: 'village', at: 2120, enter: 2150, label: 'Take the old track up to the pā', hours: 1, energy: 12, kind: 'walk', flag: { id: 'v10:koroBlessing', why: 'Aroha shakes her head: not without Koro’s blessing.' }, say: 'With Koro’s blessing, then.' },
+    ],
     desc: 'Overgrown stone terraces of an ancient pā, abandoned long ago. Its carvers knew the serpents well.', terrain: 'Terraces, crumbling stairs',
   },
   {

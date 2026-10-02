@@ -13,9 +13,21 @@ import { location, tripCost, homeCost, findLocation } from './regions';
 import type { LocationDef } from './regions';
 import type { RouteDef } from './atlas';
 import { arriveAtCamp, dayNumber } from './day';
-import { energy, spend, onBlackout } from './energy';
+import * as Energy from './energy';
+import { energy, spend } from './energy';
+import { fx10 } from './skills10';
 
 export type ReturnHow = 'walk' | 'blackout' | 'boat';
+
+/**
+ * Physical effort (a route, a long walk): the energy module's effort() scales it by Field Skills, the
+ * pack's weight and the place's difficulty; with an older energy module, just the skill multiplier.
+ */
+export function effortSpend(n: number, why: string) {
+  if (!(n > 0)) return;
+  const ef = (Energy as unknown as { effort?: (n: number, why: string) => void }).effort;
+  if (ef) ef(n, why); else spend(n * fx10.energyMult(), why);
+}
 
 interface TripLog { day: number; locs: string[]; how: ReturnHow; back: number }
 interface ExpState {
@@ -169,7 +181,7 @@ export async function goExpedition(locId: string, o: { route?: RouteDef; from?: 
       const t = tripCost(locId);
       if (t) {
         s.hour += t.hours;
-        if (t.energy > 0) spend(t.energy, 'travel');
+        if (t.energy > 0) effortSpend(t.energy, 'travel');
       }
       s.pend = null;
     }
@@ -222,7 +234,7 @@ export async function returnToCamp(how: ReturnHow): Promise<void> {
         if (energy() - hc.energy <= 0.5) {
           pendingHow = 'blackout';
           if (isFieldScene(sc)) await collapse(sc, true);
-        } else spend(hc.energy, 'walk home');
+        } else effortSpend(hc.energy, 'walk home');
       }
       s.hour += pendingHow === 'blackout' ? hc.hours * 1.4 : hc.hours;
       s.trips.push({ day: s.day || dayNumber(), locs: [...s.trail], how: pendingHow, back: s.hour });
@@ -248,21 +260,8 @@ export async function returnToCamp(how: ReturnHow): Promise<void> {
 }
 
 // ------------------------------------------------------------------ the blackout
-let blackingOut = false;
-/** energy ran out on an expedition: Mori collapses, Aroha gets him home */
-async function blackout() {
-  if (!E().cur || blackingOut) return;
-  if (returning) { pendingHow = 'blackout'; return; }
-  blackingOut = true;
-  try {
-    const sc = game.scene;
-    if (isFieldScene(sc)) await collapse(sc, false);
-    await returnToCamp('blackout');
-  } finally {
-    blackingOut = false;
-  }
-}
-onBlackout(() => { void blackout(); });
+// (The camp module's day.ts owns the blackout listener: it plays the collapse, calls
+// returnToCamp('blackout') and the carry-home arrival. Here only the walk home can end in a collapse.)
 
 /** Mori folds up on the trail; Aroha (when she's along) runs to him; fade to black */
 async function collapse(f: FieldScene, onTheWayHome: boolean) {

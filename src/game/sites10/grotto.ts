@@ -6,7 +6,7 @@
 
 import type { FieldScene } from '../scenes/field';
 import type { Site10, Swim10 } from './kit';
-import { swimWater, SWIM_DEPTH, dim, climbSpot, ledge, glowField, arrive10, boulder, propAt, bump, sprite, Rng, hex, mix, PAL, bayer, fbm2, game, layerSpan, bigFrame, clamp } from './kit';
+import { swimWater, SWIM_DEPTH, dim, climbSpot, ledge, glowField, arrive10, boulder, pillar, propAt, bump, sprite, Rng, hex, mix, PAL, bayer, fbm2, game, layerSpan, bigFrame, clamp } from './kit';
 import { groundStrip, mainLayer, shafts, hideBush } from '../sites2/common';
 import { Custom, Prop } from '../../world/props';
 import { packColor } from '../../gfx/renderer';
@@ -18,8 +18,8 @@ import { rand } from '../../core/math';
 import { A } from '../assets';
 
 const W = 2400, G = 290;
-const LAKE: Swim10 = { x0: 724, x1: 1004, top: G + 6, bottom: G + 90, cold: true, col: [0.04, 0.12, 0.16] };
-const TIDE: Swim10 = { x0: 1844, x1: 2104, top: G + 4, bottom: G + 70, col: [0.05, 0.16, 0.2] };
+const LAKE: Swim10 = { x0: 724, x1: 1004, top: G + 6, bottom: G + 90, cold: true, col: [0.06, 0.2, 0.26] };
+const TIDE: Swim10 = { x0: 1844, x1: 2104, top: G + 4, bottom: G + 70, col: [0.07, 0.22, 0.28] };
 const GALLERY = G - 108;
 /** a slope down into deep water: the walk line meets the swimmer's line */
 const dip = (x: number, s: Swim10, y: number) => {
@@ -74,14 +74,15 @@ export const GROTTO: Site10 = {
   ambience: 'coast', music: 'wonder', ground: 'grass',
   build(f) {
     const st = f.st, r = game.r, G0 = { y: grottoGround };
-    dim(f, 0.62, [0.55, 0.78, 1], { bloom: 0.5, vignette: 0.5, fog: [0.03, 0.06, 0.09] });
+    dim(f, 0.4, [0.72, 0.88, 1], { bloom: 0.45, vignette: 0.4, fog: [0.06, 0.1, 0.14] });
     // the far cave: a dark wall all the way up
     const far = st.addLayer('far', 0.25, 0.55, 0.2, 0);
     const span = layerSpan(st, 0.25, 60);
     const wall = new PixelBuffer(Math.min(1024, span.w), 480);
     for (let y = 0; y < 480; y++) for (let x = 0; x < wall.w; x++) {
       const n = fbm2(x * 0.02, y * 0.03, 4, 5);
-      wall.set(x, y, mix(hex('#0c141a'), hex('#1c2a32'), clamp(n * 1.2 - 0.2 + (bayer(x, y) - 0.5) * 0.15)));
+      const crack = Math.abs(fbm2(x * 0.012, y * 0.02, 3, 8) - 0.5) < 0.006 && fbm2(x * 0.004, y * 0.004, 2, 3) > 0.45;
+      wall.set(x, y, crack ? hex('#0a1014') : mix(hex('#16222a'), hex('#34464e'), clamp(n * 1.3 - 0.25 + (bayer(x, y) - 0.5) * 0.18)));
     }
     for (let x = 0; x < span.w; x += wall.w) far.add(new Prop({ ...bigFrame(r, wall), ax: 0, ay: 0 }, span.x0 + x, -120, 0));
     // the roof and the rubble at two depths
@@ -118,10 +119,16 @@ export const GROTTO: Site10 = {
     // boulders and columns (some are trunks for the climbers)
     const rng = new Rng(77);
     for (const [x, w, h] of [[200, 60, 36], [560, 44, 28], [690, 70, 30], [1060, 50, 40], [1530, 80, 44], [1790, 60, 34], [2160, 70, 40]] as const) {
-      propAt(f, `gr:b:${x}`, () => boulder(x, w, h, ROCKW, { moss: 0.05 }), x, grottoGround(x) + 4, -4, { tint: packColor(0.7, 0.74, 0.8, 1) });
+      propAt(f, `gr:b:${x}`, () => boulder(x, w, h, ROCKW, { moss: 0.15 }), x, grottoGround(x) + 5, -4, { tint: packColor(0.8, 0.84, 0.9, 1) });
+    }
+    // stalagmites in the mid ground
+    const midL = st.addLayer('pillars', 0.82, 0.1, 0.5, 0);
+    for (let x = 60, i = 0; x < W * 0.82 + 200; x += rng.range(120, 220), i++) {
+      const c = sprite(`gr:stg:${i % 5}`, () => pillar(300 + i, 26 + (i % 3) * 8, 60 + (i % 4) * 26, ROCK));
+      if (c) midL.add(new Prop(c.f, x, grottoGround(x / 0.82) + 2, 0, { tint: packColor(0.55, 0.62, 0.7, 1) }));
     }
     for (const x of [380, 1260, 1960]) {
-      propAt(f, `gr:col:${x}`, () => boulder(x + 3, 30, 230, ROCK, {}), x, grottoGround(x) + 6, -7, { tint: packColor(0.52, 0.58, 0.66, 1) });
+      propAt(f, `gr:col:${x}`, () => pillar(x + 3, 34, 330, ROCK, { top: true }), x, grottoGround(x) + 6, -7, { tint: packColor(0.66, 0.72, 0.8, 1) });
       f.pois.push({ kind: 'trunk', x, y: grottoGround(x), y1: grottoGround(x) - 200 });
       f.pois.push({ kind: 'branch', x: x + 12, y: grottoGround(x) - 120 });
     }
@@ -130,9 +137,16 @@ export const GROTTO: Site10 = {
     climbSpot(f, 1150, GALLERY, grottoGround(1150), 'rope', 'Climb the rope up the chimney', 'Climb back down');
     climbSpot(f, 1488, GALLERY, grottoGround(1488), 'rope', 'Climb the rope up to the gallery', 'Climb down the rope');
     // glowworms: the vault's roof, and threads hanging under the gallery
-    glowField(f, 160, 700, -10, 70, 260, [0.45, 1, 0.85], 61, { lights: 6, size: 0.8, z: -11, radius: 110 });
-    glowField(f, 1140, 1500, GALLERY + 16, GALLERY + 40, 50, [0.45, 1, 0.85], 62, { lights: 2, size: 0.7 });
-    glowField(f, 1850, 2150, -6, 50, 90, [0.45, 1, 0.85], 63, { lights: 3, size: 0.8, z: -11 });
+    glowField(f, 160, 700, 40, 118, 320, [0.45, 1, 0.85], 61, { lights: 8, size: 1, z: -11, radius: 130 });
+    glowField(f, 1140, 1500, GALLERY + 14, GALLERY + 44, 60, [0.45, 1, 0.85], 62, { lights: 3, size: 0.8 });
+    glowField(f, 1850, 2150, 44, 100, 110, [0.45, 1, 0.85], 63, { lights: 4, size: 0.9, z: -11 });
+    // the glowworms' sticky fishing lines, hanging in the light
+    main.add(new Custom(-10.5, (rr, s2) => {
+      for (let i = 0; i < 70; i++) {
+        const x = 170 + ((i * 53.3) % 520), y = 44 + ((i * 29.1) % 64), len = 8 + (i % 5) * 4;
+        for (let k = 0; k < len; k += 2) rr.fxDraw(A.dot, x + Math.sin(s2.time * 0.7 + i) * k * 0.05, y + k, 0.35, 0.35, 0, packColor(0.5, 1, 0.9, 1), 0.35);
+      }
+    }));
     // the skylight in the twilight hall
     shafts(f, main, [{ x: 1640, w: 46, a: 0.08 }], [0.85, 0.95, 1], -40, 330, 1.2);
     // hide in the rocks
@@ -163,8 +177,9 @@ export const GROTTO: Site10 = {
     audio.play('splashBig' as never, { vol: 0.4 });
   },
   v10: {
+    dark: 0.9,
     swims: [LAKE, TIDE],
-    hardClimbs: [{ x: 1150, rate: 2.5 }, { x: 1488, rate: 2.5 }],
+    hardClimbs: [{ x: 1150, rate: 1 }, { x: 1488, rate: 1 }],
     hazards: [{ x0: 640, x1: 724, kind: 'slip', dmg: 3, warn: 'Wet rock by the water. Walk, don’t run.' }],
     points: [
       { id: 'eco:gr:vault', kind: 'ecosystem', name: 'The glowworm vault', x: 430, y: 60, photo: { w: 420, h: 80 }, note: 'A roof of glowworms like a night sky. They fish with sticky threads for midges.' },
