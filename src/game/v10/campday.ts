@@ -10,6 +10,7 @@ import { game } from '../game';
 import { audio } from '../../core/audio';
 import { packColor } from '../../gfx/renderer';
 import { Custom } from '../../world/props';
+import { local, A } from '../assets';
 import { Actor } from '../../world/actor';
 import { groundY } from '../../art/island4/layout';
 import * as CA from '../../art/island4/camp';
@@ -190,7 +191,25 @@ export class CampDay implements CrewHost {
   // ---------------------------------------------------------------- props
   private props() {
     const st = this.st, s = this.s;
-    st.prop('v10tent', ART.tarpTent(), C10.tent, groundY(C10.tent) + 2, () => true, -3.1);
+    const tent = st.prop('v10tent', ART.tarpTent(), C10.tent, groundY(C10.tent) + 2, () => true, -3.1);
+    // the hurricane lantern hung from the ridge line in the tent's open end, swinging in the wind; lit
+    // after dark it throws warm light over the sailcloth and the sand
+    const HL = ART.hangingLantern();
+    const hlF = local.add('v10:hlan', HL.buf, HL.ax, HL.ay), hlG = local.add('v10:hlanG', HL.glow, HL.ax, HL.ay);
+    s.main.add(new Custom(-3.05, (rr, stg) => {
+      const hx = tent.x + 31, hy = tent.y - 39;
+      const W = stg.wind, a = (Math.sin(stg.time * 1.7) * 0.6 + Math.sin(stg.time * 3.1 + 1) * 0.25) * 0.08 * (0.4 + W) + W * 0.05;
+      rr.draw(hlF, hx, hy, 1, 1, -a);
+      if (!this.camp.lanternOn || this.inTent) return;
+      const fl = 0.9 + 0.1 * Math.sin(stg.time * 13) * Math.sin(stg.time * 5.3);
+      rr.emissive(1);
+      rr.draw(hlG, hx, hy, 1, 1, -a, packColor(1, 1, 1, fl));
+      rr.emissive();
+      const night = this.s.clock.night * 0.8 + this.s.clock.dusk * 0.4;
+      const lx = hx + Math.sin(a) * 14, ly = hy + 14;
+      rr.light(lx, ly, 62, 1, 0.78, 0.45, (0.25 + night * 0.6) * fl, 0.12);
+      rr.fxDraw(A.glow, lx, ly, 0.14, 0.14, 0, packColor(1, 0.8, 0.5, 1), (0.3 + night * 0.4) * fl);
+    }));
     st.prop('v10bag', CA.bedroll(), C10.tent + 2, groundY(C10.tent) + 3, () => !this.inTent, -2.9);
     const bench = st.prop('v10bench', ART.techBench(), C10.bench, groundY(C10.bench) + 2, () => true, -3);
     const glow = bench.glow;
@@ -210,12 +229,7 @@ export class CampDay implements CrewHost {
     st.prop('v10rod', ART.rodInRock(), C10.rock + 12, groundY(C10.rock) - 2, () => !this.fishing && !this.joshuFishing(), -2.7);
     st.prop('v10pot', ART.pot(), C10.fire + 2, groundY(C10.fire) - 1, () => this.potOn, -1.4);
     // Aroha's slingshot target: a driftwood post with a shell on top
-    s.main.add(new Custom(-3, rr => {
-      const x = C10.target, y = groundY(x);
-      rr.rect(x - 1, y - 24, 3, 24, packColor(0.66, 0.58, 0.47, 1));
-      rr.rect(x, y - 24, 1, 24, packColor(0.5, 0.43, 0.34, 1));
-      rr.rect(x - 2, y - 27, 5, 3, packColor(0.94, 0.8, 0.7, 1));
-    }));
+    st.prop('v10target', ART.target(), C10.target, groundY(C10.target) + 1, () => true, -3);
   }
   private joshuFishing() { const j = this.s.joshu; return j.visible && Math.abs(j.x - (C10.rock + 6)) < 4 && (j.anim === 'fishWait' || j.anim === 'fishReel'); }
 

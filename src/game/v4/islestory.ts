@@ -13,7 +13,10 @@ import type { Actor } from '../../world/actor';
 import type { Interactable } from '../../world/npc';
 import type { BubbleLine } from '../../ui/bubbles';
 import { Custom } from '../../world/props';
-import { packColor } from '../../gfx/renderer';
+import { packColor, WHITE } from '../../gfx/renderer';
+import type { Renderer } from '../../gfx/renderer';
+import type { PixelBuffer } from '../../art/pixel';
+import { sunAt } from './islefx';
 import { local, A } from '../assets';
 import type { Frame } from '../../gfx/renderer';
 import { ChunkBuddy } from './buddy';
@@ -70,7 +73,11 @@ export class Follower {
   }
 }
 
-interface StoryProp { id: string; f: Frame; x: number; y: number; z: number; show: () => boolean; glow?: Frame }
+interface StoryProp {
+  id: string; f: Frame; x: number; y: number; z: number; show: () => boolean; glow?: Frame;
+  /** the west-lit twin, wind cycles (calm / gusting) for both, the contact shadow, the wind clock */
+  alt?: Frame; wind?: Frame[]; gust?: Frame[]; altWind?: Frame[]; altGust?: Frame[]; shadow?: CA.CampSprite['shadow']; t: number;
+}
 
 export class IsleStory implements IsleHooks {
   seal!: CorvexSeal;
@@ -168,16 +175,44 @@ export class IsleStory implements IsleHooks {
     this.triggers.push({ id, when, run });
   }
   prop(id: string, sp: CA.CampSprite, x: number, y: number, show: () => boolean, z = -2) {
-    const f = local.add('isp:' + id, sp.buf, sp.ax, sp.ay);
-    const glow = sp.glow ? local.add('ispg:' + id, sp.glow, sp.ax, sp.ay) : undefined;
-    const P: StoryProp = { id, f, x, y, z, show, glow };
+    const add = (n: string, b: PixelBuffer) => local.add(n, b, sp.ax, sp.ay);
+    const set = (n: string, bs?: PixelBuffer[]) => bs?.map((b, i) => add(`isp:${id}:${n}${i}`, b));
+    const P: StoryProp = {
+      id, f: add('isp:' + id, sp.buf), x, y, z, show, glow: sp.glow ? add('ispg:' + id, sp.glow) : undefined,
+      alt: sp.alt ? add('ispa:' + id, sp.alt.buf) : undefined, wind: set('w', sp.wind), gust: set('g', sp.gust),
+      altWind: set('aw', sp.alt?.wind), altGust: set('ag', sp.alt?.gust), shadow: sp.shadow, t: rand.next() * 10,
+    };
     this.props.push(P);
-    this.s.main.add(new Custom(z, rr => {
+    this.s.main.add(new Custom(z, (rr, stg) => {
       if (!P.show()) return;
-      rr.draw(P.f, P.x, P.y);
-      if (P.glow) { rr.emissive(1); rr.draw(P.glow, P.x, P.y); rr.emissive(); }
-    }));
+      this.drawProp(rr, P, stg.wind);
+    }, (dt, stg) => { if (P.wind) P.t += dt * (0.55 + stg.wind * 1.35); }));
     return P;
+  }
+  /** where the sun is for the camp props' lighting: 0 in the east (morning, and the moon at night) .. 1 west */
+  sunSide() {
+    const t = this.s.clock.t;
+    if (t > 3.4) return 1 - smoothstep(3.4, 3.75, t);
+    return smoothstep(0.42, 0.62, sunAt(t).x);
+  }
+  /** a camp prop: its contact shadow (thrown away from the sun), the east- and west-lit paintings
+   *  cross-faded by the time of day, on the wind frame for the moment (gust frames when it blows) */
+  drawProp(rr: Renderer, P: StoryProp, wind: number) {
+    const k = P.alt ? this.sunSide() : 0;
+    if (P.shadow) {
+      const sh = P.shadow;
+      rr.beginShadows();
+      rr.draw(A.shadow, P.x + (sh.dx ?? 0) + (1 - 2 * k) * sh.w * 0.05, P.y + 0.5, sh.w / 30, sh.h ?? 1, 0, packColor(0, 0, 0, sh.a ?? 0.35));
+      rr.endShadows();
+    }
+    const gusty = wind > 0.85;
+    const pick = (base: Frame, calm?: Frame[], gust?: Frame[]) => {
+      const fs = gusty && gust ? gust : calm;
+      return fs?.length ? fs[Math.floor(P.t * fs.length) % fs.length] : base;
+    };
+    if (k < 0.995) rr.draw(pick(P.f, P.wind, P.gust), P.x, P.y);
+    if (k > 0.005 && P.alt) rr.draw(pick(P.alt, P.altWind, P.altGust), P.x, P.y, 1, 1, 0, k >= 0.995 ? WHITE : packColor(1, 1, 1, k));
+    if (P.glow) { rr.emissive(1); rr.draw(P.glow, P.x, P.y); rr.emissive(); }
   }
   it(o: Partial<Interactable> & { x: number; y: number; label: string; action: () => void | Promise<void> }) {
     // keep getters live (x/y/label can follow a moving actor): no object spread

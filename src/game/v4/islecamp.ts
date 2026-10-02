@@ -8,13 +8,14 @@ import { game } from '../game';
 import { startQuest, questStatus } from '../quests';
 import { audio } from '../../core/audio';
 import type { Renderer, Frame } from '../../gfx/renderer';
-import { packColor } from '../../gfx/renderer';
+import { packColor, WHITE } from '../../gfx/renderer';
 import { Custom } from '../../world/props';
 import { local, A } from '../assets';
 import { sprite, jcall } from '../sites2/common';
 import type { Sprite } from '../../art/jungle-core';
 import { ISL, SPOT, groundY } from '../../art/island4/layout';
 import * as CA from '../../art/island4/camp';
+import * as CF from '../v10/campart';
 import { clamp, rand } from '../../core/math';
 import type { IsleStory } from './islestory';
 import { wait } from './islestory';
@@ -83,9 +84,12 @@ export class IsleCamp {
     // ---- the camp, built up as the jobs get done
     const show = (j: Job) => () => this.job(j);
     st.prop('woodpile', CA.woodPile(3), CAMP.fire - 34, groundY(CAMP.fire - 34) + 4, () => this.job('firewood') && !F('v4:dinnerOver'), -2);
-    st.prop('pit', CA.firePit(false), CAMP.fire, groundY(CAMP.fire) + 5, () => F('v4:arohaJoined'), -2);
+    const pit = st.prop('pit', CA.firePit(false), CAMP.fire, groundY(CAMP.fire) + 5, () => F('v4:arohaJoined'), -2);
+    // the coals glow with the fire (drawn by the fire below)
+    const pitGlow = pit.glow;
+    pit.glow = undefined;
     st.prop('storage', CA.storage(), CAMP.storage, groundY(CAMP.storage) + 2, () => this.crates >= 1 || this.job('supplies'), -3);
-    st.prop('salvage', CA.storage(), CAMP.salvage, groundY(CAMP.salvage) + 2, () => F('v4:split'), -3);
+    st.prop('salvage', CA.storage(1), CAMP.salvage, groundY(CAMP.salvage) + 2, () => F('v4:split'), -3);
     st.prop('tent', CA.domeTent(), CAMP.tent, groundY(CAMP.tent) + 2, show('tent'), -3);
     const rt = st.prop('research', CA.researchTable(), CAMP.research, groundY(CAMP.research) + 2, show('research'), -3);
     const baseGlow = rt.glow;
@@ -120,19 +124,44 @@ export class IsleCamp {
         this.bulbs.push({ x, y: ay + (by - ay) * t + Math.sin(t * Math.PI) * 16, on: false, c: cols[this.bulbs.length % cols.length] });
       }
     }
+    // the wire sways in the wind (its sag breathes with the gusts); the bulbs and flags ride on it
+    const sagAt = (x: number, time: number, wind: number) => {
+      const seg = x < pts[1][0] ? 0 : 1;
+      const [ax, ay] = pts[seg], [bx, by] = pts[seg + 1];
+      const t = clamp((x - ax) / (bx - ax)), arc = Math.sin(t * Math.PI);
+      const sw = arc * (0.5 + wind * 1.7) * Math.sin(time * 1.15 + seg * 2.1 + Math.sin(time * 0.37 + seg) * 1.4);
+      return ay + (by - ay) * t + arc * 16 + sw;
+    };
+    // the Kittiwake's code flags strung between the bulbs
+    const SF = CF.signalFlags();
+    const flagF = SF.frames.map((fs, d) => fs.map((b, i) => local.add(`camp:flag${d}:${i}`, b, SF.ax, SF.ay)));
+    const flags: { x: number; d: number }[] = [];
+    for (let i = 0; i + 1 < this.bulbs.length; i++) {
+      const a = this.bulbs[i].x, b = this.bulbs[i + 1].x;
+      if (b - a < 20) flags.push({ x: Math.round((a + b) / 2), d: flags.length % flagF.length });
+    }
     s.main.add(new Custom(-1, (rr, stg) => {
       if (this.jobs() < 3 && !F('v4:dinner')) return;
+      const T = stg.time, W = stg.wind;
+      const x0 = rr.visibleX0(20), x1 = rr.visibleX1(20);
       // the wire
       for (let seg = 0; seg < 2; seg++) {
-        const [ax, ay] = pts[seg], [bx, by] = pts[seg + 1];
-        for (let x = ax; x < bx; x += 2) { const t = (x - ax) / (bx - ax); rr.rect(x, ay + (by - ay) * t + Math.sin(t * Math.PI) * 16 - 1, 2, 1, packColor(0.15, 0.13, 0.12, 1)); }
+        const [ax] = pts[seg], [bx] = pts[seg + 1];
+        for (let x = ax; x < bx; x += 2) if (x > x0 && x < x1) rr.rect(x, sagAt(x, T, W) - 1, 2, 1, packColor(0.15, 0.13, 0.12, 1));
+      }
+      for (const [i, f] of flags.entries()) {
+        if (f.x < x0 || f.x > x1) continue;
+        const fs = flagF[f.d];
+        const fr = fs[Math.floor(T * (2.2 + W * 4) + i * 1.3) % fs.length];
+        rr.drawSway(fr, f.x, sagAt(f.x, T, W), 1, 1, -(W * 1.4 + Math.sin(T * 2.3 + i * 1.7) * 0.7 * W), WHITE);
       }
       const night = this.s.clock.night * 0.7 + this.s.clock.dusk * 0.4;
       for (const b of this.bulbs) {
-        rr.rect(b.x - 1, b.y, 2, 3, b.on ? packColor(b.c[0], b.c[1], b.c[2], 1) : packColor(0.35, 0.33, 0.3, 1));
+        const by = sagAt(b.x, T, W);
+        rr.rect(b.x - 1, by, 2, 3, b.on ? packColor(b.c[0], b.c[1], b.c[2], 1) : packColor(0.35, 0.33, 0.3, 1));
         if (!b.on) continue;
-        const tw = 0.9 + 0.1 * Math.sin(stg.time * 3 + b.x);
-        rr.fxDraw(A.glow, b.x, b.y + 2, 0.12, 0.12, 0, packColor(b.c[0], b.c[1], b.c[2], 1), (0.35 + night * 0.5) * tw);
+        const tw = 0.9 + 0.1 * Math.sin(T * 3 + b.x);
+        rr.fxDraw(A.glow, b.x, by + 2, 0.12, 0.12, 0, packColor(b.c[0], b.c[1], b.c[2], 1), (0.35 + night * 0.5) * tw);
       }
       // a few real lights so the camp is lit (not one per bulb)
       if (this.bulbs.some(b => b.on)) {
@@ -148,6 +177,13 @@ export class IsleCamp {
       const night = 0.45 + this.s.clock.night * 0.4;
       rr.light(x, y - 12, 70 + 100 * this.fire, 1, 0.6, 0.3, 0.8 * k * night, 0.15);
       rr.fxDraw(A.glow, x, y - 8, 0.45 * this.fire, 0.4 * this.fire, 0, packColor(1, 0.55, 0.2, 1), 0.7 * k);
+      // the coals in the pit, breathing
+      if (pitGlow && pit.show()) {
+        rr.emissive(1);
+        rr.draw(pitGlow, pit.x, pit.y, 1, 1, 0, packColor(1, 1, 1, clamp(0.3 + this.fire * 0.75) * (0.8 + 0.2 * Math.sin(stg.time * 5.3) * Math.sin(stg.time * 1.7))));
+        rr.emissive();
+        rr.light(x, y - 3, 30, 1, 0.45, 0.15, 0.35 * clamp(0.3 + this.fire) * night, 0.2);
+      }
     }, (dt, stg) => {
       if (this.fire <= 0.01) return;
       this.fireT -= dt;

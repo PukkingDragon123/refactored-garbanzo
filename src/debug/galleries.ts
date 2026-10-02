@@ -9,6 +9,27 @@ import * as FA from '../art/fauna';
 import { SerpentPainter } from '../art/serpent';
 import { PixelBuffer } from '../art/pixel';
 
+/** ?gallery=camp4: the island camp props (east-lit, west-lit, and a calm and a gusting wind frame) on sand. */
+async function camp4Gallery() {
+  const [CA, CV] = await Promise.all([import('../art/island4/camp'), import('../game/v10/campart')]);
+  const items: GalleryItem[] = [];
+  const add = (n: string, s: import('../art/island4/campkit').CampSprite) => {
+    items.push({ name: n, buf: s.buf });
+    if (s.alt) items.push({ name: n + ' W', buf: s.alt.buf });
+    if (s.wind) items.push({ name: n + ' w3', buf: s.wind[3] });
+    if (s.gust) items.push({ name: n + ' g2', buf: s.gust[2] });
+  };
+  add('tarpTent', CV.tarpTent()); add('dome', CA.domeTent()); add('leanTo', CA.leanTo()); add('fire', CA.firePit(false));
+  add('cook', CA.cookBench()); add('rack', CA.dryingRack()); add('research', CA.researchTable()); add('storage', CA.storage());
+  add('salvage', CA.storage(1)); add('chunkBed', CA.chunkBed()); add('elec', CA.electronics()); add('log', CA.logBench(40));
+  add('wood', CA.woodPile(3)); add('lantern', CA.lantern()); add('pole', CA.pole(52)); add('bedroll', CA.bedroll());
+  add('tech', CV.techBench()); add('board', CV.campBoard()); add('sign', CV.trailSign()); add('rock', CV.fishRock());
+  add('rod', CV.rodInRock()); add('pot', CV.pot()); add('target', CV.target());
+  items.push({ name: 'hanglantern', buf: CV.hangingLantern().buf });
+  CV.signalFlags().frames.forEach((f, i) => items.push({ name: 'flag' + i, buf: f[1] }));
+  showGallery(items, 3, '#cdb98e');
+}
+
 /** ?gallery=icons: every item, skill and UI icon at 1x / 2x / 3x on the leather inventory tile. */
 async function iconGallery() {
   const [{ installSkin }, I] = await Promise.all([import('../ui/skin'), import('../art/itemicons')]);
@@ -46,6 +67,7 @@ async function iconGallery() {
 
 export function runGallery(name: string) {
   if (name === 'icons') { void iconGallery(); return; }
+  if (name === 'camp4') { void camp4Gallery(); return; }
   const items: GalleryItem[] = [];
   if (name === 'flora') {
     items.push({ name: 'treefern', buf: F.paintTreeFern(3, { height: 90 }).buf });
