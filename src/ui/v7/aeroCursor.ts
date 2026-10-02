@@ -88,8 +88,11 @@ export class VCursor {
 
   /** move the cursor (client coords), e.g. from keyboard navigation */
   private rr = { left: 0, top: 0 };
+  private rrOk = false;
+  /** the wrap's rect changed (window resize) */
+  invalidate() { this.rrOk = false; }
   moveTo(x: number, y: number) {
-    this.rr = this.root.getBoundingClientRect();
+    if (!this.rrOk) { this.rr = this.root.getBoundingClientRect(); this.rrOk = true; }
     const dx = x - this.x, dy = y - this.y;
     this.x = x; this.y = y;
     this.hoverDirty = true;
@@ -350,7 +353,13 @@ export class VCursor {
     if (st !== this.state) { this.state = st; this.el.style.backgroundImage = `url(${this.img[st]})`; }
     const x = this.x - this.rr.left, y = this.y - this.rr.top;
     const s = this.sq.x;
-    this.el.style.transform = `translate(${x - 2}px,${y - 2}px) rotate(${this.tilt.x.toFixed(2)}deg) scale(${(1 + (1 - s) * 0.7).toFixed(3)},${s.toFixed(3)})`;
-    this.hold.style.transform = `translate(${x - 26}px,${y - 26}px)`;
+    // only touch the DOM when the cursor actually moved or squashed (an idle cursor costs nothing)
+    const tf = `translate(${x - 2}px,${y - 2}px) rotate(${this.tilt.x.toFixed(2)}deg) scale(${(1 + (1 - s) * 0.7).toFixed(3)},${s.toFixed(3)})`;
+    if (tf !== this.lastTf) {
+      this.lastTf = tf;
+      this.el.style.transform = tf;
+      this.hold.style.transform = `translate(${x - 26}px,${y - 26}px)`;
+    }
   }
+  private lastTf = '';
 }

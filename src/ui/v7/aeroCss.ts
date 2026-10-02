@@ -32,13 +32,13 @@ export const AERO_CSS = `
 .mos-bg img { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; display: block; }
 .mos-cloud { position: absolute; left: 0; top: 0; image-rendering: pixelated; will-change: transform; transform-origin: 0 0; }
 .mos-sun { position: absolute; left: -170px; top: -190px; width: 360px; height: 340px; z-index: 1; pointer-events: none; border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(255,255,240,0.9) 0 14%, rgba(255,252,210,0.45) 14% 26%, rgba(255,250,210,0.16) 26% 46%, transparent 72%); mix-blend-mode: screen; }
-.mos-rays { position: absolute; left: -40%; top: -60%; width: 150%; height: 190%; z-index: 1; pointer-events: none; transform-origin: 10% 12%; mix-blend-mode: soft-light;
-  background: repeating-conic-gradient(from 88deg at 10% 12%, rgba(255,255,255,0.55) 0deg 3deg, transparent 3deg 8deg, rgba(255,255,255,0.3) 8deg 9.5deg, transparent 9.5deg 15deg);
+  background: radial-gradient(closest-side, rgba(255,255,240,0.9) 0 14%, rgba(255,252,210,0.45) 14% 26%, rgba(255,250,210,0.16) 26% 46%, transparent 72%); }
+.mos-rays { position: absolute; left: -40%; top: -60%; width: 150%; height: 190%; z-index: 1; pointer-events: none; transform-origin: 10% 12%; will-change: transform;
+  background: repeating-conic-gradient(from 88deg at 10% 12%, rgba(255,255,250,0.2) 0deg 3deg, transparent 3deg 8deg, rgba(255,255,250,0.11) 8deg 9.5deg, transparent 9.5deg 15deg);
   -webkit-mask: radial-gradient(circle at 10% 12%, #000 0 22%, rgba(0,0,0,0.5) 38%, transparent 62%); mask: radial-gradient(circle at 10% 12%, #000 0 22%, rgba(0,0,0,0.5) 38%, transparent 62%);
   animation: mosRays 14s ease-in-out infinite alternate; }
 @keyframes mosRays { from { transform: rotate(-2.5deg); } to { transform: rotate(3deg); } }
-.mos-flare { position: absolute; left: 0; top: 0; z-index: 1; pointer-events: none; border-radius: 50%; mix-blend-mode: screen; will-change: transform; }
+.mos-flare { position: absolute; left: 0; top: 0; z-index: 1; pointer-events: none; border-radius: 50%; will-change: transform, opacity; }
 .mos-flare.f0 { width: 70px; height: 70px; background: radial-gradient(closest-side, transparent 0 60%, rgba(180,255,230,0.35) 61% 74%, transparent 75%); }
 .mos-flare.f1 { width: 26px; height: 26px; background: radial-gradient(closest-side, rgba(255,250,200,0.45) 0 70%, transparent 71%); }
 .mos-flare.f2 { width: 110px; height: 110px; background: radial-gradient(closest-side, rgba(150,220,255,0.12) 0 76%, rgba(200,240,255,0.3) 77% 84%, transparent 85%); }
@@ -63,7 +63,7 @@ export const AERO_CSS = `
 /* ---- gadgets */
 .mos-gad { position: absolute; right: 10px; top: 10px; z-index: 3; display: flex; flex-direction: column; gap: 10px; width: 150px; }
 .mos-gad > div { position: relative; border-radius: 10px; padding: 8px 10px; color: #fff; text-shadow: 0 1px 0 rgba(6,40,70,0.9);
-  background: linear-gradient(180deg, rgba(220,245,255,0.48) 0 44%, rgba(80,170,230,0.36) 44%); backdrop-filter: blur(4px) saturate(1.3); -webkit-backdrop-filter: blur(4px) saturate(1.3);
+  background: linear-gradient(180deg, rgba(170,220,248,0.72) 0 44%, rgba(50,140,210,0.66) 44%);
   box-shadow: 0 0 0 1px rgba(10,50,90,0.55), inset 0 0 0 1px rgba(255,255,255,0.6), 0 6px 14px rgba(0,40,70,0.25); }
 .mos-gad .clockc { display: block; margin: 0 auto; width: 96px; height: 96px; image-rendering: pixelated; }
 .mos-gad h4 { margin: 0; font: 20px/18px 'Jersey 10', 'Pixelify Sans', monospace; letter-spacing: 0.04em; }
@@ -75,8 +75,7 @@ export const AERO_CSS = `
 
 /* ---- taskbar */
 .mos-bar { position: absolute; left: 0; right: 0; bottom: 0; height: var(--bar); z-index: 50; display: flex; align-items: center; gap: 5px; padding-left: 60px;
-  background: linear-gradient(180deg, rgba(214,242,255,0.62) 0, rgba(160,216,248,0.44) 46%, rgba(26,96,156,0.66) 47%, rgba(14,70,124,0.76) 100%);
-  backdrop-filter: blur(7px) saturate(1.5); -webkit-backdrop-filter: blur(7px) saturate(1.5);
+  background: linear-gradient(180deg, rgba(200,236,255,0.9) 0, rgba(140,206,246,0.86) 46%, rgba(26,96,156,0.92) 47%, rgba(14,70,124,0.95) 100%);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.95), inset 0 2px 0 rgba(255,255,255,0.35), 0 -1px 0 rgba(6,36,64,0.6); }
 .mos-orb { position: absolute; left: 6px; top: 50%; width: 46px; height: 46px; margin-top: -24px; border-radius: 50%; z-index: 2; display: flex; align-items: center; justify-content: center;
   background: linear-gradient(180deg, #eafcff 0 12%, #9ae8ff 12% 46%, #20a8dc 46% 70%, #0c78b4 70% 86%, #5ee0ff 86%);
@@ -127,14 +126,13 @@ export const AERO_CSS = `
 /* ---- windows */
 .mos-wins { position: absolute; inset: 0 0 var(--bar) 0; z-index: 10; pointer-events: none; }
 .mos-win { position: absolute; display: flex; flex-direction: column; padding: 0 6px 6px; border-radius: 9px 9px 6px 6px; pointer-events: auto;
-  background: linear-gradient(180deg, rgba(196,232,255,0.74) 0, rgba(150,208,248,0.62) var(--tb), rgba(120,190,240,0.6) 100%);
-  backdrop-filter: blur(6px) saturate(1.35); -webkit-backdrop-filter: blur(6px) saturate(1.35);
+  background: linear-gradient(180deg, rgba(190,230,255,0.95) 0, rgba(146,206,248,0.93) var(--tb), rgba(118,188,240,0.92) 100%);
   box-shadow: 0 0 0 1px rgba(6,32,60,0.82), inset 0 0 0 1px rgba(255,255,255,0.72), 0 14px 30px rgba(0,30,60,0.36); }
 .mos-win::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
   background: linear-gradient(102deg, transparent 0 12%, rgba(255,255,255,0.3) 12% 20%, transparent 20% 56%, rgba(255,255,255,0.2) 56% 59%, transparent 59% 66%, rgba(255,255,255,0.12) 66% 67%, transparent 67%); }
 .mos-win::after { content: ''; position: absolute; left: 1px; right: 1px; top: 1px; height: 13px; border-radius: 8px 8px 0 0; pointer-events: none; background: linear-gradient(180deg, rgba(255,255,255,0.72), rgba(255,255,255,0.28)); }
 .mos-win.act { box-shadow: 0 0 0 1px rgba(6,32,60,0.9), inset 0 0 0 1px rgba(255,255,255,0.85), 0 16px 34px rgba(0,30,60,0.42), 0 0 22px rgba(90,210,255,0.4); }
-.mos-win:not(.act) { background: linear-gradient(180deg, rgba(222,238,250,0.72), rgba(196,220,240,0.66)); }
+.mos-win:not(.act) { background: linear-gradient(180deg, rgba(218,236,250,0.95), rgba(192,218,240,0.93)); }
 .mos-win:not(.act) .tb { color: #5a7690; }
 .mos-win.max { border-radius: 0; padding: 0 3px 3px; }
 .mos-win .tb { position: relative; z-index: 1; display: flex; align-items: center; gap: 7px; height: var(--tb); flex: none; padding-left: 2px;
@@ -177,7 +175,7 @@ export const AERO_CSS = `
 .mos-menu .mi.dim { color: #8aa0b4; }
 .mos-menu hr { border: 0; height: 1px; margin: 4px 6px; background: #c8dce8; box-shadow: 0 1px 0 #fff; }
 .mos-start { display: flex; gap: 6px; width: min(470px, calc(100% - 12px)); height: min(430px, calc(100% - var(--bar) - 12px)); border-radius: 9px 9px 6px 6px; padding: 6px; transform-origin: 20px 100%;
-  background: linear-gradient(180deg, rgba(120,190,240,0.8) 0, rgba(30,100,170,0.84) 40%, rgba(10,56,110,0.9) 100%); backdrop-filter: blur(8px) saturate(1.4); -webkit-backdrop-filter: blur(8px) saturate(1.4);
+  background: linear-gradient(180deg, rgba(110,184,238,0.97) 0, rgba(28,98,168,0.97) 40%, rgba(10,56,110,0.98) 100%);
   box-shadow: 0 0 0 1px rgba(6,32,60,0.85), inset 0 0 0 1px rgba(255,255,255,0.6), 0 14px 34px rgba(0,30,60,0.45), 0 0 24px rgba(90,210,255,0.35); }
 .mos-start .l { flex: 1.25; min-width: 0; overflow: auto; background: linear-gradient(180deg, #ffffff, #f0f8fd); border-radius: 4px; padding: 4px; box-shadow: 0 0 0 1px rgba(20,60,100,0.6); }
 .mos-start .l .mi { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 4px; font: 19px/1 'Jersey 15', 'Pixelify Sans', monospace; color: var(--ink); transition: transform 0.35s cubic-bezier(.25,1.9,.45,1); }
@@ -272,8 +270,8 @@ export const AERO_CSS = `
 .prog { position: relative; height: 18px; flex: 1; min-width: 90px; border-radius: 9px; overflow: hidden; background: linear-gradient(180deg, #c8d8e4 0 50%, #e4eef4 50%); box-shadow: 0 0 0 1px #5a7a96, inset 0 2px 3px rgba(0,30,60,0.3); }
 .prog i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 9px; overflow: hidden;
   background: linear-gradient(180deg, #eaffd8 0 16%, #aef27a 16% 48%, #4cbc2a 48% 80%, #86e858 80%); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.5), 1px 0 0 #2a7a14; }
-.prog i::after { content: ''; position: absolute; top: 0; bottom: 0; width: 40px; left: -40px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.75), transparent); animation: mosShine 1.4s linear infinite; }
-@keyframes mosShine { to { left: 110%; } }
+.prog i::after { content: ''; position: absolute; top: 0; bottom: 0; width: 40px; left: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.75), transparent); animation: mosShine 1.4s linear infinite; will-change: transform; }
+@keyframes mosShine { from { transform: translateX(-40px); } to { transform: translateX(var(--shw, 600px)); } }
 .prog.aq i { background: linear-gradient(180deg, #e8fdff 0 16%, #9aeeff 16% 48%, #22b4e2 48% 80%, #6fe6ff 80%); }
 .prog.warn i { background: linear-gradient(180deg, #fff8d0 0 16%, #ffe07a 16% 48%, #f0a822 48% 80%, #ffd65a 80%); }
 .prog.hot i { background: linear-gradient(180deg, #ffe8e0 0 16%, #ffae98 16% 48%, #e8442c 48% 80%, #ff8a66 80%); }
