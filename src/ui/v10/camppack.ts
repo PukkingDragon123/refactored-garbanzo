@@ -108,7 +108,13 @@ async function setOff(cd: CampDay) {
   if (load) { try { m = (await load()) as MapMod; } catch (e) { console.warn('[camppack] region map', e); } }
   if (m?.openRegionMap) {
     const scene = cd.s;
-    await Promise.resolve(m.openRegionMap());
+    game.paused = true;
+    let to: unknown = null;
+    try { to = await Promise.resolve(m.openRegionMap({ here: { loc: 'camp', x: cd.s.player.x } })); } finally { game.paused = false; }
+    if (typeof to === 'string' && to && to !== 'camp') {
+      const { departFromCamp } = await import('../../game/v10/field10');
+      await departFromCamp(to);
+    }
     // it counts as leaving once an expedition is under way (or the camp scene is gone)
     for (let i = 0; i < 30; i++) {
       if (currentExpedition() || game.scene !== scene) { leaveCamp(currentExpedition()); return; }

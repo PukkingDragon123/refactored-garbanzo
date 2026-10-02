@@ -567,7 +567,7 @@ class IslandRun extends TripRun {
 export const TRAILHEAD = { x: 2420, on: false };
 /** walking out of camp along the shore starts a short trip (the camp module ends it when Mori walks
  *  back into camp; `end` lets this module end it too) */
-export const ISLAND_TRIPS = { auto: true, end: false };
+export const ISLAND_TRIPS = { auto: true, end: true };
 
 /** leave camp for a location picked on the map (fast travel along the known trail) */
 export async function departFromCamp(to: string) {
