@@ -36,13 +36,15 @@ const CAT_WORD: Record<string, string> = { flora: 'Plant', sample: 'Sample', art
 export function uploadAllApp(os: OSCtx, ra: ResearchApps): UploadApp {
   let b: HTMLElement | null = null;
   let busy = false;
+  /** what the window shows: the haul, the run, or the day report (only the haul redraws on refresh) */
+  let phase: 'pre' | 'run' | 'report' = 'pre';
   /** the run's speed (the Faster button) */
   let fastK = 1;
   /** the player's choice per backpack item (how many go to the crate) */
   const take = new Map<string, number>();
 
   const open = () => {
-    if (os.find('upall') && b?.isConnected) { if (!busy) render(); os.win('upall', '', 'upall', 0, 0, el('div')); return; }
+    if (os.find('upall') && b?.isConnected) { if (phase === 'pre') render(); os.win('upall', '', 'upall', 0, 0, el('div')); return; }
     b = el('div', 'up');
     b.dataset.direct = '1';
     const W = os.win('upall', 'Upload Everything', 'upall', 820, 580, b);
@@ -59,6 +61,7 @@ export function uploadAllApp(os: OSCtx, ra: ResearchApps): UploadApp {
   };
   const render = () => {
     if (!b || busy) return;
+    phase = 'pre';
     const roll = cameraRoll();
     const camp = atCamp();
     const items = plan();
@@ -135,6 +138,7 @@ export function uploadAllApp(os: OSCtx, ra: ResearchApps): UploadApp {
   const run = async (items: HandIn[]) => {
     if (!b) return;
     busy = true;
+    phase = 'run';
     const ses = newSession();
     const photos = cameraRoll().slice();
     const notes = pendingNotes();
@@ -159,6 +163,7 @@ export function uploadAllApp(os: OSCtx, ra: ResearchApps): UploadApp {
       if (notes.length && !gone()) { step(2); await filing(stage, notes, ses); }
     } finally {
       busy = false;
+      phase = 'report';
       endSession(ses);
       if (ses.photos || ses.items.length || ses.notes.length) os.sessionDone(ses);
       os.refresh();
@@ -355,5 +360,5 @@ export function uploadAllApp(os: OSCtx, ra: ResearchApps): UploadApp {
     });
   };
 
-  return { open, refresh: () => { if (!busy && b?.isConnected && os.find('upall')) render(); } };
+  return { open, refresh: () => { if (phase === 'pre' && !busy && b?.isConnected && os.find('upall')) render(); } };
 }

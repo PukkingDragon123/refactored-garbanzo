@@ -86,17 +86,17 @@ export function skillTreeApp(os: OSCtx, agency: AgencyApp): SkillApp {
   const render = () => {
     if (!w) return;
     const tree = SKILL_TREE10;
-    w.innerHTML = `<div class="sk-top"><span class="ic"></span><b>Skill Tree</b><span class="tip">Research Points come from the agency for every upload</span><span class="rp"><em>${shownRp}</em> RP</span></div>
-      <div class="sk-tabs">${BRANCHES10.map(b => `<span class="ctl${b.id === tab ? ' on' : ''}" data-b="${b.id}" style="--bc:${b.color}"><img src="${skillIconURL(b.icon, 1)}" alt="">${esc(b.name)}</span>`).join('')}</div>
-      <div class="sk-body"><div class="sk-tree"></div><div class="sk-info"></div></div>`;
-    (w.querySelector('.sk-top .ic') as HTMLElement).appendChild(os.icon('skills', 1.2));
-    w.querySelectorAll<HTMLElement>('.sk-tabs span').forEach(t => t.addEventListener('click', () => { tab = t.dataset.b as Branch10; sfx.pick(); render(); }));
-    const T = w.querySelector('.sk-tree') as HTMLElement;
+    w.innerHTML = `<div class="skt-top"><span class="ic"></span><b>Skill Tree</b><span class="tip">Research Points come from the agency for every upload</span><span class="rp"><em>${shownRp}</em> RP</span></div>
+      <div class="skt-tabs">${BRANCHES10.map(b => `<span class="ctl${b.id === tab ? ' on' : ''}" data-b="${b.id}" style="--bc:${b.color}"><img src="${skillIconURL(b.icon, 1)}" alt="">${esc(b.name)}</span>`).join('')}</div>
+      <div class="skt-body"><div class="skt-tree"></div><div class="skt-info"></div></div>`;
+    (w.querySelector('.skt-top .ic') as HTMLElement).appendChild(os.icon('skills', 1.2));
+    w.querySelectorAll<HTMLElement>('.skt-tabs span').forEach(t => t.addEventListener('click', () => { tab = t.dataset.b as Branch10; sfx.pick(); render(); }));
+    const T = w.querySelector('.skt-tree') as HTMLElement;
     w.classList.toggle('empty', !tree.length);
     if (!tree.length) { emptyTree(T); info(); return; }
     for (const br of BRANCHES10) {
       const skills = tree.filter(s => s.branch === br.id);
-      const col = el('div', 'sk-col' + (br.id === tab ? ' on' : ''));
+      const col = el('div', 'skt-col' + (br.id === tab ? ' on' : ''));
       col.style.setProperty('--bc', br.color);
       const own = skills.filter(s => owned10(s.id)).length;
       col.innerHTML = `<div class="hd"><img src="${skillIconURL(br.icon, 1)}" alt=""><b>${esc(br.name)}</b><span>${own}/${skills.length}</span></div><div class="nodes"></div>`;
@@ -108,7 +108,7 @@ export function skillTreeApp(os: OSCtx, agency: AgencyApp): SkillApp {
 
   /** rows by tier; in each row, nodes ordered by where their requirements sit (fewer crossings) */
   const layout = (box: HTMLElement, skills: Skill10[]) => {
-    if (!skills.length) { box.innerHTML = '<div class="sk-none">No skills in this branch yet.</div>'; return; }
+    if (!skills.length) { box.innerHTML = '<div class="skt-none">No skills in this branch yet.</div>'; return; }
     const tiers = [...new Set(skills.map(s => s.tier))].sort((a, b) => a - b);
     const lane = new Map<string, number>();
     const rows: Skill10[][] = [];
@@ -144,37 +144,37 @@ export function skillTreeApp(os: OSCtx, agency: AgencyApp): SkillApp {
       const p = pos.get(s.id)!;
       const st = stateOf(s);
       const ext = s.req.filter(r => !skills.some(x => x.id === r));
-      const n = el('div', `sk-n ctl ${st}${sel === s.id ? ' on' : ''}${fresh.has(s.id) ? ' newly' : ''}`, `<span class="o"><img src="${skillIconURL(skillIcon(s), 2)}" alt="" draggable="false">${st === 'owned' ? '<i class="ck">✓</i>' : st === 'locked' ? '<i class="lk"></i>' : ''}</span><b>${esc(s.name)}</b><em>${st === 'owned' ? 'owned' : `${s.cost} RP`}</em>${ext.length ? `<small>needs ${ext.map(r => esc(SKILL_TREE10.find(x => x.id === r)?.name ?? r)).join(', ')}</small>` : ''}`);
+      const n = el('div', `skt-n ctl ${st}${sel === s.id ? ' on' : ''}${fresh.has(s.id) ? ' newly' : ''}`, `<span class="o"><img src="${skillIconURL(skillIcon(s), 2)}" alt="" draggable="false">${st === 'owned' ? '<i class="ck">✓</i>' : st === 'locked' ? '<i class="lk"></i>' : ''}</span><b>${esc(s.name)}</b><em>${st === 'owned' ? 'owned' : `${s.cost} RP`}</em>${ext.length ? `<small>needs ${ext.map(r => esc(SKILL_TREE10.find(x => x.id === r)?.name ?? r)).join(', ')}</small>` : ''}`);
       n.style.left = p.x + '%';
       n.style.top = p.y - 26 + 'px';
       n.dataset.id = s.id;
-      n.addEventListener('click', () => { sel = s.id; sfx.pick(); w?.querySelectorAll('.sk-n.on').forEach(x => x.classList.remove('on')); n.classList.add('on'); info(); });
+      n.addEventListener('click', () => { sel = s.id; sfx.pick(); w?.querySelectorAll('.skt-n.on').forEach(x => x.classList.remove('on')); n.classList.add('on'); info(); });
       n.addEventListener('dblclick', () => { sel = s.id; buy(); });
       box.appendChild(n);
     }
   };
 
   const emptyTree = (T: HTMLElement) => {
-    T.innerHTML = `<div class="sk-empty"><span class="ms"></span><div><b>The skill programme is still being drawn up.</b><p>The agency’s training department is finalising the four branches. Your Research Points are safe in the meantime: you have <b>${game.save.rp} RP</b> to spend when it opens.</p></div></div><div class="sk-brs">${BRANCHES10.map(b => `<div class="sk-br" style="--bc:${b.color}"><img src="${skillIconURL(b.icon, 2)}" alt=""><b>${esc(b.name)}</b><p>${esc(b.blurb)}</p></div>`).join('')}</div>`;
+    T.innerHTML = `<div class="skt-empty"><span class="ms"></span><div><b>The skill programme is still being drawn up.</b><p>The agency’s training department is finalising the four branches. Your Research Points are safe in the meantime: you have <b>${game.save.rp} RP</b> to spend when it opens.</p></div></div><div class="skt-brs">${BRANCHES10.map(b => `<div class="skt-br" style="--bc:${b.color}"><img src="${skillIconURL(b.icon, 2)}" alt=""><b>${esc(b.name)}</b><p>${esc(b.blurb)}</p></div>`).join('')}</div>`;
     (T.querySelector('.ms') as HTMLElement).appendChild(mascot('wink', 1.6));
   };
 
   /** the selected skill's card and the expedition kit */
   const info = () => {
     if (!w) return;
-    const I = w.querySelector('.sk-info') as HTMLElement;
+    const I = w.querySelector('.skt-info') as HTMLElement;
     const s = SKILL_TREE10.find(x => x.id === sel) ?? null;
     const kit = kitNow();
-    const kitHtml = `<div class="sk-kit"><h5>Expedition kit</h5>${KIT.map(x => `<div class="kv${flash.has(x.k) ? ' flash' : ''}"><span>${esc(x.label)}</span><b>${esc(kit[x.k])}</b></div>`).join('')}</div>`;
+    const kitHtml = `<div class="skt-kit"><h5>Expedition kit</h5>${KIT.map(x => `<div class="kv${flash.has(x.k) ? ' flash' : ''}"><span>${esc(x.label)}</span><b>${esc(kit[x.k])}</b></div>`).join('')}</div>`;
     if (!s) {
-      I.innerHTML = `<div class="sk-card none"><b>${SKILL_TREE10.length ? 'Pick a skill' : 'Skills'}</b><p>${SKILL_TREE10.length ? 'Tap a skill to see what it does. Gold ones are yours; glowing ones you can afford now.' : 'Spend Research Points on better analysis, a better camera, better lab work and tougher field skills.'}</p></div>` + kitHtml;
+      I.innerHTML = `<div class="skt-card none"><b>${SKILL_TREE10.length ? 'Pick a skill' : 'Skills'}</b><p>${SKILL_TREE10.length ? 'Tap a skill to see what it does. Gold ones are yours; glowing ones you can afford now.' : 'Spend Research Points on better analysis, a better camera, better lab work and tougher field skills.'}</p></div>` + kitHtml;
       flash = new Set();
       return;
     }
     const br = BR(s.branch);
     const st = stateOf(s);
     const why = canBuy10(s.id).reason ?? '';
-    I.innerHTML = `<div class="sk-card ${st}" style="--bc:${br.color}"><div class="h"><img src="${skillIconURL(skillIcon(s), 2)}" alt=""><div><b>${esc(s.name)}</b><span>${esc(br.name)} · tier ${s.tier}</span></div></div>
+    I.innerHTML = `<div class="skt-card ${st}" style="--bc:${br.color}"><div class="h"><img src="${skillIconURL(skillIcon(s), 2)}" alt=""><div><b>${esc(s.name)}</b><span>${esc(br.name)} · tier ${s.tier}</span></div></div>
       <p class="efx">${esc(s.effect)}</p><p>${esc(s.desc)}</p>
       ${s.req.length ? `<div class="rq">${s.req.map(r => `<span class="${owned10(r) ? 'ok' : ''}">${owned10(r) ? '✓' : '✕'} ${esc(SKILL_TREE10.find(x => x.id === r)?.name ?? r)}</span>`).join('')}</div>` : ''}
       <div class="buy">${st === 'owned' ? '<div class="own">✓ Unlocked</div>' : `<div class="gel ${st === 'ready' ? 'green' : 'glass'} big ctl go">${st === 'locked' ? 'Locked' : `Unlock · ${s.cost} RP`}</div>`}<div class="why">${st === 'poor' ? (game.save.rp < s.cost ? `You need ${s.cost - game.save.rp} more RP. Upload some research!` : esc(why)) : st === 'locked' ? `${esc(why)} first.` : ''}</div></div></div>` + kitHtml;
@@ -185,8 +185,8 @@ export function skillTreeApp(os: OSCtx, agency: AgencyApp): SkillApp {
   const buy = () => {
     const s = SKILL_TREE10.find(x => x.id === sel);
     if (!s || !w) return;
-    const node = w.querySelector<HTMLElement>(`.sk-n[data-id="${CSS.escape(s.id)}"]`);
-    const go = w.querySelector('.sk-info .go') as HTMLElement | null;
+    const node = w.querySelector<HTMLElement>(`.skt-n[data-id="${CSS.escape(s.id)}"]`);
+    const go = w.querySelector('.skt-info .go') as HTMLElement | null;
     const st = stateOf(s);
     const nope = (msg: string) => { sfx.bad(); if (go) os.retrigger(go, 'mos-shake'); if (node) os.retrigger(node, 'mos-shake'); const c = os.center(go ?? node ?? w!); os.floatText(c.x, c.y - 24, msg, '#ffd0c8'); };
     if (st === 'owned') return;
@@ -223,7 +223,7 @@ export function skillTreeApp(os: OSCtx, agency: AgencyApp): SkillApp {
       t += dt;
       const f = Math.min(1, t / 0.8);
       shownRp = Math.round(rp0 + (rp1 - rp0) * (1 - Math.pow(1 - f, 3)));
-      const e = w?.querySelector('.sk-top .rp em');
+      const e = w?.querySelector('.skt-top .rp em');
       if (e) e.textContent = String(shownRp);
       return f < 1 && live();
     });
@@ -232,7 +232,7 @@ export function skillTreeApp(os: OSCtx, agency: AgencyApp): SkillApp {
       if (!live()) return;
       shownRp = game.save.rp;
       render();
-      const nn = w!.querySelector<HTMLElement>(`.sk-n[data-id="${CSS.escape(s.id)}"]`);
+      const nn = w!.querySelector<HTMLElement>(`.skt-n[data-id="${CSS.escape(s.id)}"]`);
       if (nn) os.retrigger(nn, 'got');
       setTimeout(() => { fresh = new Set(); }, 50);
       os.badges();

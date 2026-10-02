@@ -74,7 +74,7 @@ export function encyclopediaApp(os: OSCtx, ra: ResearchApps): EncApp {
     if (os.find('enc') && live()) { render(); os.win('enc', '', 'enc', 0, 0, el('div')); return; }
     b = el('div', 'enc');
     b.dataset.direct = '1';
-    const W = os.win('enc', 'Zealandia Encyclopedia', 'enc', 900, 590, b);
+    const W = os.win('enc', 'Encyclopedia', 'enc', 900, 590, b);
     if (!W) return;
     render();
   };
