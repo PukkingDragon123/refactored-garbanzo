@@ -207,7 +207,7 @@ export class CampDay implements CrewHost {
       rr.emissive();
       const night = this.s.clock.night * 0.8 + this.s.clock.dusk * 0.4;
       const lx = hx + Math.sin(a) * 14, ly = hy + 14;
-      rr.light(lx, ly, 62, 1, 0.78, 0.45, (0.25 + night * 0.6) * fl, 0.12);
+      rr.light(lx, ly, 58, 1, 0.78, 0.45, (0.18 + night * 0.4) * fl, 0.1);
       rr.fxDraw(A.glow, lx, ly, 0.14, 0.14, 0, packColor(1, 0.8, 0.5, 1), (0.3 + night * 0.4) * fl);
     }));
     st.prop('v10bag', CA.bedroll(), C10.tent + 2, groundY(C10.tent) + 3, () => !this.inTent, -2.9);
