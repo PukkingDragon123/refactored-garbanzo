@@ -140,6 +140,15 @@ async function boot() {
     },
     /** island story helpers (state, interactables, markers, teleport): see src/game/v9/islezl.ts */
     isle: null as unknown,
+    /** V11 carrying (src/game/v11/carry.ts): zl.carry('water'), zl.carry('planks', 'joshu', { count: 2 }), zl.carry(null) */
+    carry: async (kind: string | null = 'water', who = 'player', o: Record<string, unknown> = {}) => {
+      const { setCarry } = await import('./game/v11/carry');
+      const s = game.scene as unknown as { player?: { body: unknown }; actor?(id: string): unknown };
+      const a = who === 'player' ? s.player?.body : s.actor?.(who);
+      if (!a) return 'no actor';
+      setCarry(a as never, kind, o);
+      return kind;
+    },
   };
   void import('./game/v9/islezl').then(m => { (window as unknown as { zl: { isle: unknown } }).zl.isle = m.ISLE; });
   // developer panel toggles left on (noclip, overlay...): only then is the dev module loaded

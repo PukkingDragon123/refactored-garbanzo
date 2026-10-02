@@ -22,6 +22,7 @@ import { wait } from './islestory';
 import { runStandoff } from './islearoha';
 import { enableFieldLaptop, openFieldLaptop } from '../v9/research9';
 import { setOutfit } from '../../art/v7/wardrobe';
+import { setCarry } from '../v11/carry';
 
 /** camp layout on the landing beach */
 
@@ -371,14 +372,15 @@ export class IsleCamp {
     s.player.poseOverride = null;
     this.sticks++;
     this.carrying = 'sticks';
-    s.player.animMap = { idle: 'carryIdle', walk: 'carry', run: 'carry' };
+    // an armful of driftwood that grows with every stick
+    setCarry(s.player.body, 'firewood', { count: this.sticks + 1 });
     if (this.sticks === 1) s.bark('aroha', 'Dry wood from above the tide line. You learn fast.', { expr: 'happy' });
     if (this.sticks === 2) this.chunkGag('stick');
   }
   private async dropWood() {
     const s = this.s, st = this.st;
     await st.cut(async () => {
-      s.player.animMap = null;
+      setCarry(s.player.body, null);
       this.carrying = null;
       st.pose('kneel');
       audio.play('woodCreak', { vol: 0.5 });
@@ -417,14 +419,13 @@ export class IsleCamp {
     await wait(500);
     s.player.poseOverride = null;
     this.carrying = 'crate';
-    s.player.animMap = { idle: 'carryHeavy', walk: 'carryHeavy', run: 'carryHeavy' };
-    s.player.speedK = 0.6;
+    // a crate of salvage in both arms: heavy, so he walks it slow (v11/carry.ts)
+    setCarry(s.player.body, 'crate');
     if (this.crates === 0) s.bark('jenna', 'That one’s the good stuff! Tarps, rope, first aid, and Dad’s biscuits. Handle with love!', { expr: 'excited' });
   }
   private async dropCrate() {
     const s = this.s, st = this.st;
-    s.player.animMap = null;
-    s.player.speedK = 0.9;
+    setCarry(s.player.body, null);
     this.carrying = null;
     st.pose('kneel');
     audio.play('woodCreak', { vol: 0.6, pitch: 0.8 });
@@ -805,8 +806,9 @@ export class IsleCamp {
       const a = s.aroha;
       if (a.visible && !a.walking && rand.chance(0.6)) {
         const to = rand.chance(0.5) ? CAMP.rack + 30 : CAMP.lean - 10;
-        a.walkAnim = 'carry';
-        a.walkTo(to, 44, 'carry').then(() => { a.walkAnim = 'walk'; a.setAnim(to === CAMP.lean - 10 ? 'pick' : 'build'); });
+        // fish for the drying rack, an armful of flax for the lean-to
+        setCarry(a, to === CAMP.lean - 10 ? 'flax' : 'fish');
+        a.walkTo(to, 44).then(() => { setCarry(a, null); a.setAnim(to === CAMP.lean - 10 ? 'pick' : 'build'); });
       }
       if (s.jenna.visible && !s.jenna.walking && rand.chance(0.4)) s.jenna.play(rand.pick(['typeFast', 'fingerGuns', 'hype']), 'wrench').catch(() => {});
     }

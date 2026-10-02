@@ -26,6 +26,8 @@ import { CAMP } from '../v4/islecamp';
 import type { IslandScene4 } from '../v4/island';
 import { dayNumber, dayState } from './day';
 import type { Crew } from './day';
+import { setCarry, carryOf } from '../v11/carry';
+import type { CarryKind, CarryOpts } from '../v11/carry';
 
 /** where things are at camp (the Day 1 layout plus the V10 props) */
 export const C10 = {
@@ -122,6 +124,11 @@ abstract class Brain {
     await this.until(() => this.walkX === null || (Math.abs(this.a.x - x) < 1.5 && !this.a.walking));
     this.walkX = null;
   }
+  /** walk somewhere carrying something real (v11/carry.ts), and put it down there */
+  protected async carryTo(kind: CarryKind, x: number, o?: CarryOpts) {
+    setCarry(this.a, kind, o);
+    try { await this.walk(x); } finally { if (carryOf(this.a) === kind) setCarry(this.a, null); }
+  }
   protected bark(text: string, o: { expr?: string; emote?: string } = {}) {
     if (!this.nearPlayer(200) || game.ui.bubbles.active) return;
     this.s.bark(this.id, text, o);
@@ -170,7 +177,7 @@ abstract class Brain {
     if (!this.paused && block) {
       this.paused = true;
       this.snap = { x: a.x, idle: a.idleAnim };
-      if (this.walkX !== null || a.walking) { a.stopWalk(); if (a.anim === 'walk' || a.anim === 'limp') a.setAnim('idle'); }
+      if (this.walkX !== null || a.walking) { a.stopWalk(); if (a.anim === 'walk' || a.anim === 'limp' || a.anim === a.mapped('walk')) a.setAnim('idle'); }
     }
     if (this.paused && !block) {
       const sn = this.snap!;
@@ -194,6 +201,7 @@ abstract class Brain {
     const ws = this.waiters;
     this.waiters = [];
     this.walkX = null;
+    if (carryOf(this.a)) setCarry(this.a, null);
     this.cleanup();
     for (const w of ws) w.rej(new Abort());
   }
@@ -240,7 +248,8 @@ class JennaBrain extends Brain {
   private async bench(short = false) {
     const a = this.a;
     this.doing = 'tinkering at her bench';
-    await this.walk(C10.bench + 22);
+    if (!short && rand.next() < 0.3) await this.carryTo('crate', C10.bench + 22);
+    else await this.walk(C10.bench + 22);
     a.facing = -1;
     const n = short ? 1 : 2 + Math.floor(rand.next() * 2);
     for (let i = 0; i < n; i++) {
@@ -344,7 +353,13 @@ class JoshuBrain extends Brain {
   private async cook(dinner = false) {
     const a = this.a;
     this.doing = dinner ? 'cooking dinner' : 'cooking';
-    await this.walk(C10.cook - 22);
+    if (dinner && rand.next() < 0.5) {
+      // the pot off the fire, carried over by its handles
+      await this.walk(C10.fire + 16);
+      a.facing = -1;
+      await this.once('pick');
+      await this.carryTo('pot', C10.cook - 22, { level: 1 });
+    } else await this.walk(C10.cook - 22);
     a.facing = 1;
     this.pose('cook');
     for (let i = 0; i < 3; i++) {
@@ -360,7 +375,19 @@ class JoshuBrain extends Brain {
     a.facing = -1;
     this.pose('fishWait');
     await this.wait(14 + rand.next() * 10);
-    if (rand.next() < 0.35) { await this.once('fishReel'); this.bark(rand.pick(['Got one! ...Got a sock.', 'Ha! Tiddler. Back you go.', 'Nibbles. All nibbles, no bites.']), { expr: 'teasing' }); }
+    if (rand.next() < 0.35) {
+      await this.once('fishReel');
+      if (rand.next() < 0.45) {
+        // a keeper: held up by the gills all the way to the smoker
+        this.bark(rand.pick(['Ha! Now THAT is a fish.', 'Dinner, says hello.', 'Look at the size of him!']), { expr: 'happy' });
+        await this.carryTo('fish', C10.rack - 30);
+        this.a.facing = 1;
+        this.pose('build');
+        await this.wait(4);
+        return;
+      }
+      this.bark(rand.pick(['Got one! ...Got a sock.', 'Ha! Tiddler. Back you go.', 'Nibbles. All nibbles, no bites.']), { expr: 'teasing' });
+    }
     if (this.h.fishing) return;
     await this.wait(6);
   }
@@ -375,7 +402,7 @@ class JoshuBrain extends Brain {
   }
   private async smoker() {
     this.doing = 'tending the smoker';
-    await this.walk(C10.rack - 30);
+    await this.carryTo('firewood', C10.rack - 30, { count: 3 });
     this.a.facing = 1;
     this.pose('build');
     await this.wait(8 + rand.next() * 5);
@@ -410,7 +437,7 @@ class ArohaBrain extends Brain {
   }
   private async weave() {
     this.doing = 'weaving flax';
-    await this.walk(C10.lean - 14);
+    await this.carryTo('flax', C10.lean - 14);
     this.a.facing = 1;
     this.pose('sitGround');
     await this.wait(5);
@@ -461,7 +488,7 @@ class ArohaBrain extends Brain {
   }
   private async rack() {
     this.doing = 'turning the fish on the rack';
-    await this.walk(C10.rack + 28);
+    await this.carryTo('fish', C10.rack + 28);
     this.a.facing = -1;
     this.pose('build');
     await this.wait(8 + rand.next() * 4);
@@ -473,6 +500,10 @@ class ArohaBrain extends Brain {
     this.a.facing = rand.next() < 0.5 ? 1 : -1;
     await this.once('pick');
     await this.wait(3);
+    await this.once('pick');
+    // the bucket of pipi, sloshing, back to Joshu's bench
+    await this.carryTo('bucket', C10.cook + 14, { level: 1 });
+    this.a.facing = -1;
     await this.once('pick');
   }
 }

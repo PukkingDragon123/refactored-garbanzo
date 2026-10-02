@@ -48,6 +48,7 @@ export const HP = {
   stew: R6('#2a1006', '#5a2a10', '#8a4a1e', '#b0702e', '#cc9046', '#e8b468'),
   cloth: R6('#1e1a12', '#4a4232', '#746a52', '#9c9072', '#bcb090', '#dad0b2'),
   cowl: R6('#2a2c30', '#5e6268', '#9298a0', '#c4c8cc', '#e2e4e6', '#ffffff'),
+  stripe: R6('#2a0e04', '#6a2a0a', '#a04414', '#c05a1c', '#e8782e', '#ffa860'),
   red: R6('#2a0606', '#5e0e0c', '#8e1c16', '#b82c22', '#d8483a', '#f07060'),
   shell: R6('#3a2a24', '#8a6a5a', '#c09a86', '#e8c8b2', '#f6e2d2', '#fff6ee'),
   fruit: R6('#2a0a04', '#6a1c08', '#a8360e', '#d8581c', '#f08432', '#ffc070'),
@@ -393,16 +394,22 @@ HELD7.planks = (s, J, P, ch, hN, hF, pts) => HELD7.plank(s, J, { ...P, held: { k
 HELD7.outboard = (s, J, _P, _ch, hN, hF, pts) => {
   const m = vlerp(palmOf(hN, J.wrN), palmOf(hF, J.wrF), 0.5);
   const c = add3(m, vsc(UP, 2.4), vsc(J.fwd, 0.8));
-  s.ellipsoid(c, vsc(J.fwd, 4.3), vsc(UP, 4.6), vsc(J.lat, 3.9), GH.obj, h => (Math.abs(h.q[1] + 0.2) < 0.11 ? cel(HP.red, h.l, 0.1, true) : h.q[1] > 0.5 && h.q[0] < 0.1 ? cel(HP.cowl, h.l, -0.18) : cel(HP.cowl, h.l, 0.02, true)));
+  s.ellipsoid(c, vsc(J.fwd, 4.3), vsc(UP, 4.6), vsc(J.lat, 3.9), GH.obj, h => {
+    if (Math.abs(h.q[1] + 0.2) < 0.11) return cel(HP.stripe, h.l, 0.1, true);
+    if (h.q[2] > 0.55 && Math.abs(h.q[1] - 0.25) < 0.16 && Math.abs(h.q[0]) < 0.2) return hex('#e876a8');
+    return h.q[1] > 0.5 && h.q[0] < 0.1 ? cel(HP.cowl, h.l, -0.18) : cel(HP.cowl, h.l, 0.02, true);
+  });
   // the pull-cord handle and the tiller
   s.limb(add3(c, vsc(J.fwd, 3.8), vsc(UP, 1.4)), add3(c, vsc(J.fwd, 5.2), vsc(UP, 1.7)), 0.55, 0.55, GH.obj2, plain(HP.black, 0.2));
   const legTop = add3(c, vsc(UP, -4), vsc(J.fwd, 1.4));
   const legBot = add3(legTop, vsc(UP, -13), vsc(J.fwd, 1.6));
-  s.limb(legTop, legBot, 1.25, 1.05, GH.obj2, h => cel(HP.cowl, h.l, -0.12, true));
-  s.ellipsoid(vadd(legBot, vsc(J.fwd, 0.4)), vsc(J.fwd, 2.4), vsc(UP, 1.1), vsc(J.lat, 1.1), GH.obj2, plain(HP.cowl, -0.1, true));
+  s.limb(legTop, legBot, 1.15, 1, GH.obj2, h => cel(HP.steel, h.l, 0, true));
+  // the anti-cavitation plate and the gearcase
+  s.solid('box', add3(legBot, vsc(UP, 3.4), vsc(J.fwd, 0.4)), vsc(J.fwd, 2.6), vsc(UP, 0.3), vsc(J.lat, 1.5), GH.obj2, plain(HP.steel, 0.15, true));
+  s.ellipsoid(vadd(legBot, vsc(J.fwd, 0.4)), vsc(J.fwd, 2.4), vsc(UP, 1.1), vsc(J.lat, 1.1), GH.obj2, plain(HP.steel, -0.05, true));
   // two-bladed prop at the back of the gearcase
   const hub = vadd(legBot, vsc(J.fwd, -1.8));
-  s.limb(add3(hub, vsc(UP, 1.6), vsc(J.lat, 0.3)), add3(hub, vsc(UP, -1.6), vsc(J.lat, -0.3)), 0.6, 0.6, GH.obj3, plain(HP.black, 0.25, true));
+  s.limb(add3(hub, vsc(UP, 1.7), vsc(J.lat, 0.3)), add3(hub, vsc(UP, -1.7), vsc(J.lat, -0.3)), 0.62, 0.62, GH.obj3, plain(HP.brass, 0.15, true));
   s.limb(vadd(legBot, vsc(J.fwd, 0.6)), add3(legBot, vsc(J.fwd, 0.6), vsc(UP, -1.6)), 0.5, 0.25, GH.obj2, plain(HP.cowl, -0.1));
   pts.load = c;
 };

@@ -22,6 +22,7 @@ import { A } from '../assets';
 import { GiantWave } from './giantwave';
 import { HMAX } from '../../art/giantwave';
 import { climbFrame } from '../../art/ladder';
+import { setCarry } from '../v11/carry';
 
 const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 const F = () => game.save.flags;
@@ -105,6 +106,7 @@ function put(s: ShipScene4, a: Actor, x: number, y: number, facing: 1 | -1, anim
 function hideChunk(s: ShipScene4) {
   const c = s.chunk;
   s.carrying = false;
+  setCarry(s.player.body, null);
   s.buddy.mode = 'script';
   s.buddy.reset();
   c.stopWalk();
@@ -123,6 +125,8 @@ function carryChunk(s: ShipScene4) {
   s.chunk.alpha = 1;
   s.underTable = null;
   s.carrying = true;
+  // Chunk rides in Mori's arms: v11/carry.ts keeps him there and draws him under the near arm
+  setCarry(p.body, 'chunk', { rider: s.chunk });
   s.chunk.setExpr('sad');
   p.animMap = { idle: 'carryPupIdle', walk: 'carryPup', run: 'carryPupRun', climb: 'carryPupClimb', crouch: 'carryPupIdle', crouchWalk: 'carryPup', brace: 'carryPupIdle', slip: 'carryPup', jump: 'carryPupIdle', fall: 'carryPupIdle' };
 }

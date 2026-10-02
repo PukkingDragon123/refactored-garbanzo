@@ -25,6 +25,7 @@ import { Underway } from './underway';
 import type { GiantWave } from './giantwave';
 import type { Interactable } from '../../world/npc';
 import type { Env } from '../../gfx/renderer';
+import { carryOf } from '../v11/carry';
 
 export const PIVOT: [number, number] = PIVOT5;
 /** the mess table's bounding box in ship pixels (see makeTableFront) */
@@ -575,6 +576,8 @@ export class ShipScene4 extends FieldScene {
   /** keep Chunk in Mori's arms */
   private holdChunk() {
     const p = this.player, c = this.chunk;
+    // in his arms (v11/carry.ts places him on the arm's seat every frame and draws him under the near arm)
+    if (carryOf(p.body) === 'chunk' && c.carrier === p.body) { c.terrain = null; c.z = 55; if (c.anim !== 'carried') c.setAnim('carried'); return; }
     // on a ladder he is tucked under the near arm (the far hand climbs), which is the hand handPos gives
     let h = p.state === 'climb' && p.body.anim !== 'carryPupClimb' ? null : p.body.handPos();
     if (h) this.carryOff = [(h[0] - p.x) * p.facing, h[1] - p.y];

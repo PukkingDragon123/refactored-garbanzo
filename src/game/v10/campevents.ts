@@ -37,6 +37,7 @@ import type { Slot, CampEvent } from './day';
 import type { CampDay } from './campday';
 import { C10 } from './campcrew';
 import { REQUESTS, reqState, acceptReq, pendingThanks, markThanked } from './campquests';
+import { setCarry } from '../v11/carry';
 
 const F = (k: string) => !!game.save.flags[k];
 const setF = (k: string) => { game.save.flags[k] = true; game.persist(); };
@@ -331,13 +332,14 @@ addCampEvent({
       ]);
       await st.fadeOut(1);
       await wait(600);
-      st.place(a, 2620, -1, 'carry');
-      a.walkAnim = 'carry';
+      st.place(a, 2620, -1, 'idle');
+      // Koro's kai, bundled up and slung over her shoulder
+      setCarry(a, 'bundle');
       p.x = C10.board + 40; p.y = groundY(p.x); p.facing = 1;
       cd.frame(2480, groundY(2480) - 40, 1.35);
       await st.fadeIn(1);
-      await Promise.race([a.walkTo(p.x + 30, 50, 'carry'), wait(6000)]);
-      a.walkAnim = 'walk';
+      await Promise.race([a.walkTo(p.x + 30, 50), wait(6000)]);
+      setCarry(a, null);
       a.faceTo(p.x);
       a.setAnim('idle');
       await st.say([

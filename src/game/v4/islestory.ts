@@ -32,6 +32,7 @@ import { startForage, Forage } from '../v9/forage';
 import { IsleTools } from '../v9/isletools';
 import { campDayTime } from '../v10/day';
 import { attachBoatyard } from '../v10/boatyard';
+import { setCarry, carryOf, carryLevel } from '../v11/carry';
 
 export const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 const F = () => game.save.flags;
@@ -365,12 +366,12 @@ export class IsleStory implements IsleHooks {
     // Joshu (a fallback in case the walk-up trigger was missed)
     this.it({ get x() { return s.joshu.x; }, get y() { return s.joshu.y; }, w: 26, label: 'Joshu!', get standX() { return s.joshu.x - 30; }, quest: () => this.flag('v9:sawCap') || this.flag('v9:scrap2'), enabled: () => this.flag('v4:sealDone') && !this.flag('v4:joshuFound') && !this.busy, action: () => { this.set('trg:joshu'); return this.findJoshu(); } } as never);
     this.it({ get x() { return s.joshu.x; }, get y() { return s.joshu.y; }, w: 26, get label() { return self.joshuLabel(); }, get standX() { return s.joshu.x - 30; }, quest: () => true, enabled: () => this.flag('v4:joshuFound') && !this.flag('v4:joshuAwake'), action: () => this.helpJoshu() } as never);
-    this.it({ x: SPOT.creek, y: groundY(SPOT.creek), w: 18, label: 'Scoop up creek water in your hat', standX: SPOT.creek - 14, quest: () => true, enabled: () => this.flag('v4:joshuChecked') && !this.flag('v4:water') && !this.flag('v4:joshuAwake'), action: () => this.fetchWater() });
+    this.it({ x: SPOT.creek, y: groundY(SPOT.creek), w: 18, label: 'Scoop up creek water in your hands', standX: SPOT.creek - 14, quest: () => true, enabled: () => this.flag('v4:joshuChecked') && !this.flag('v4:splashed') && carryOf(this.p.body) !== 'water' && !this.flag('v4:joshuAwake'), action: () => this.fetchWater() });
   }
 
   private joshuLabel() {
     if (!this.flag('v4:joshuChecked')) return 'Check on Joshu';
-    if (this.flag('v4:water') && !this.flag('v4:splashed')) return 'Splash water on his face';
+    if (carryOf(this.p.body) === 'water' && !this.flag('v4:splashed')) return 'Splash water on his face';
     return 'Try to wake Joshu';
   }
 
@@ -942,9 +943,13 @@ export class IsleStory implements IsleHooks {
       });
       return;
     }
-    if (this.flag('v4:water')) {
+    if (carryOf(this.p.body) === 'water') {
       await this.cut(async () => {
-        this.p.animMap = null;
+        // whatever's left in his hands, over Joshu's face
+        const cup = this.p.body.point('cup') ?? [this.p.x + this.p.facing * 8, this.p.y - 30];
+        const left = 0.4 + 0.6 * carryLevel(this.p.body);
+        setCarry(this.p.body, null);
+        for (let i = 0; i < Math.round(16 * left); i++) s.main.particles.spawn({ frame: A.dot, x: cup[0], y: cup[1], vx: this.p.facing * rand.range(30, 70), vy: rand.range(-60, -20), ay: 300, life: 0.9, color: [0.68, 0.88, 1], alpha: 0.95, alpha1: 0.4, floorY: groundY(cup[0] + this.p.facing * 30) + 1 });
         this.pose('kneel');
         audio.play('splash', { vol: 0.6 });
         s.joshu.react('shake');
@@ -959,18 +964,23 @@ export class IsleStory implements IsleHooks {
       });
       return;
     }
+    if (this.flag('v4:water')) { await this.say([{ who: 'mori', text: 'And it all ran out between my fingers. Back to the creek. Quicker this time.', expr: 'grumpy' }]); return; }
     await this.say([{ who: 'mori', text: 'He’s out cold. Cold water from the creek might help.', expr: 'thinking' }]);
   }
 
   private async fetchWater() {
     await this.cut(async () => {
-      this.pose('kneel');
+      // crouch at the creek, both hands in, cupped, and up out of it dripping (anims-hands.ts cupWater)
+      this.p.facing = 1;
+      this.pose('cupWater');
+      await wait(600);
       audio.play('splash', { vol: 0.4, pitch: 1.3 });
-      await wait(900);
+      await wait(950);
       this.pose(null);
       this.set('v4:water');
-      this.p.animMap = { idle: 'carryIdle', walk: 'carry', run: 'carry' };
-      this.s.bark('mori', 'A hat full of freezing creek water. Joshu is going to love this.', { expr: 'teasing' });
+      setCarry(this.p.body, 'water', { leak: 0.55 });
+      this.s.bark('mori', this.flag('v4:waterTry') ? 'Cupped tight this time. Quick, quick, quick...' : 'Two handfuls of freezing creek water. Joshu is going to love this.', { expr: 'teasing' });
+      this.set('v4:waterTry');
     });
   }
 

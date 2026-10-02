@@ -34,6 +34,7 @@ import { plant, fungus, deadwood } from '../../art/jungle-plants';
 import { foreground } from '../../art/jungle-fg';
 import { wreckPoint, deckY, BOAT_LAYOUT } from '../../art/boat';
 import { pxIcon } from '../../ui/pxicons';
+import { setCarry } from '../v11/carry';
 
 // ------------------------------------------------------------------ art adapter (src/art/castaway.ts, src/art/jungle.ts, src/art/boat.ts)
 type AnyFn = (...a: unknown[]) => unknown;
@@ -568,8 +569,8 @@ export class CampScene extends FieldScene {
     // the crew staggers ashore
     crowe.visible = true;
     crowe.y = campGround(160) + 14;
-    crowe.walkAnim = 'carry';
-    crowe.walkTo(360, 30, 'carry');
+    setCarry(crowe, 'crate');
+    crowe.walkTo(360, 30);
     audio.play('splashBig' as 'ui', { vol: 0.5 });
     this.st.cam.tx = 420;
     await wait(1800);
@@ -582,6 +583,7 @@ export class CampScene extends FieldScene {
     await wait(1500);
     crowe.faceTo(p.x);
     await this.say(script.CREW_ASHORE);
+    setCarry(crowe, null);
     crowe.setAnim('idle');
     this.st.cam.tzoom = 1;
     // everyone to their jobs

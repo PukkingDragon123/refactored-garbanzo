@@ -37,6 +37,7 @@ import { tree } from '../../art/jungle-trees';
 import { sprite } from '../sites2/common';
 import { hex, mix, shade } from '../../art/color';
 import '../sites10/ocean';
+import { setCarry } from '../v11/carry';
 
 const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 const F = (k: string) => !!game.save.flags[k];
@@ -70,6 +71,8 @@ export function startBoatQuest() {
 interface SprF { f: Frame; s: K.Spr }
 
 export class Boatyard {
+  /** the outboard is in Mori's arms (the sawhorse is bare) */
+  motorInHands = false;
   /** 0..1: the boat sliding down the beach into the water (launch / trip start), or up it (landing) */
   slide = 0;
   /** the boat bobbing as it floats */
@@ -218,7 +221,7 @@ export class Boatyard {
       const e = this.frame('amalog', K.amaLog);
       r.draw(e.f, YARD.x - (K.KL / 2 + 6) * k, y + 12, k, k);
     }
-    if (stage === 3 && bs.found['outboard']) prop('sawhorse', K.sawhorseMotor, 86, -2, 26);
+    if (stage === 3 && bs.found['outboard']) prop(this.motorInHands ? 'sawhorse0' : 'sawhorse', () => K.sawhorseMotor(!this.motorInHands), 86, -2, 26);
     if (stage === 4 && B.sailWeaving() && !B.sailReady()) prop('weave', () => K.weaveMat(clamp((bs.playT - bs.sailT) / B.CURE_FALLBACK, 0.15, 0.9)), 96, 18, 44);
   }
 
@@ -681,10 +684,20 @@ export class Boatyard {
     const s = this.s, st = this.st, p = s.player;
     await this.cut(async () => {
       const back = this.borrow(['jenna']);
-      p.x = YARD.x - 60; p.y = groundY(p.x); p.facing = 1;
       this.stand(s.jenna, YARD.x - 90, 1, 'wrench');
+      // he lifts her off the sawhorse, hugs her to his chest and staggers her over to the transom
+      p.x = YARD.x + 72; p.y = groundY(p.x); p.facing = -1;
+      this.motorInHands = true;
+      setCarry(p.body, 'outboard');
+      audio.play('woodCreak', { vol: 0.4, pitch: 0.8 });
+      await wait(700);
+      await Promise.race([p.walkTo(YARD.x + 26, 22), wait(4500)]);
+      setCarry(p.body, null);
+      p.facing = -1;
       st.pose('grab');
-      await this.fade(() => { B.setBoatStage(4); audio.play('hammer', { vol: 0.4, pitch: 1.3 }); }, 600);
+      try {
+        await this.fade(() => { this.motorInHands = false; B.setBoatStage(4); audio.play('hammer', { vol: 0.4, pitch: 1.3 }); }, 600);
+      } finally { this.motorInHands = false; }
       st.pose(null);
       await st.say([
         { who: 'jenna', text: 'Clamps tight, tiller on, fuel line in. Tilted up for the beach. Look at her. LOOK at her.', expr: 'excited' },

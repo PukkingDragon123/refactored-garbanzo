@@ -509,14 +509,15 @@ export function amaLog(): Spr {
   return spr(b);
 }
 /** the outboard clamped on a driftwood sawhorse while Jenna works on it */
-export function sawhorseMotor(): Spr {
+export function sawhorseMotor(motor = true): Spr {
   const W = 44, H = 56;
   const b = new PixelBuffer(W, H);
   for (const [x0, x1] of [[8, 14], [32, 26]] as const) for (let y = 20; y < 54; y++) { const x = Math.round(x0 + (x1 - x0) * ((y - 20) / 34)); b.set(x, y, P.teak[4]); b.set(x + 1, y, P.teak[2]); }
   for (let x = 6; x < 36; x++) { b.set(x, 19, P.teak[5]); b.set(x, 20, P.teak[3]); b.set(x, 21, P.teak[2]); }
   const m = outboard('down', 0).buf;
   const top = Math.round(sheerY(0));
-  for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) {
+  // (bare while someone carries the motor over to the transom)
+  if (motor) for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) {
     const c = m.data[y * m.w + x];
     if (!(c >>> 24)) continue;
     const X = x - MX + 24, Y = y - (MT + top) + 20;

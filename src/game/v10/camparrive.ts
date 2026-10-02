@@ -30,6 +30,7 @@ import { C10 } from './campcrew';
 import { runSlot } from './campevents';
 import { location, discoveries } from './regions';
 import { SPECIES_BY_ID } from '../species';
+import { setCarry } from '../v11/carry';
 
 /** day.ts entry: make sure the camp is up, then play the arrival */
 export async function playArrival(how: ArriveHow) {
@@ -196,8 +197,9 @@ async function arriveBlackout(cd: CampDay) {
     m!.x = a.x - a.facing * 3;
     m!.y = a.y - 37 + (a.walking ? Math.abs(Math.sin(a.x * 0.12)) * 1.5 : 0);
   }));
-  st.place(a, C10.sign + 120, -1, 'carryHeavy');
-  a.walkAnim = 'carryHeavy';
+  st.place(a, C10.sign + 120, -1, 'idle');
+  // a fireman's carry: hands up holding him across her shoulders, knees bent, short heavy steps
+  setCarry(a, 'shoulders', { heft: false });
   cd.frame(C10.fire + 160, groundY(C10.fire) - 40, 1.25);
   await wait(400);
   void st.fadeIn(0.7);
@@ -206,7 +208,7 @@ async function arriveBlackout(cd: CampDay) {
   const stops = [C10.lean + 40, C10.rack + 10, C10.cook + 30];
   void st.pan(C10.fire + 60, groundY(C10.fire) - 40, 1.3, 4);
   for (let i = 0; i < stops.length; i++) {
-    await Promise.race([a.walkTo(stops[i], 24, 'carryHeavy'), wait(9000)]);
+    await Promise.race([a.walkTo(stops[i], 24), wait(9000)]);
     a.showEmote('sweat', 1.4);
     if (i === 0) await st.say([{ who: 'aroha', text: 'Hhh... hhh... hhh...', expr: 'tired', close: false, auto: 1100 }]);
     if (i === 1) {
@@ -219,7 +221,7 @@ async function arriveBlackout(cd: CampDay) {
     }
     await wait(350);
   }
-  await Promise.race([a.walkTo(C10.fire + 26, 22, 'carryHeavy'), wait(5000)]);
+  await Promise.race([a.walkTo(C10.fire + 26, 22), wait(5000)]);
   a.faceTo(C10.fire);
   await st.say([
     { who: 'jenna', text: 'Is he DEAD?! Aroha, is he DEAD?!', expr: 'scared', style: 'shout', react: 'jump' },
@@ -227,6 +229,7 @@ async function arriveBlackout(cd: CampDay) {
     { who: 'aroha', text: first ? 'He lay down. On the track. Said “just five minutes”. And started snoring.' : 'AGAIN. He did it AGAIN. On a hill. With his mouth open.', expr: 'angry' },
   ]);
   // the drop
+  setCarry(a, null);
   ride = false;
   (rider as { dead?: boolean }).dead = true;
   m.x = C10.fire - 22; m.y = groundY(m.x); m.facing = 1;
