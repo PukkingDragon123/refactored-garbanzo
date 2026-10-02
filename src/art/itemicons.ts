@@ -13,11 +13,14 @@ import { NATURE } from './icons/nature';
 import { KIT } from './icons/kit';
 import { ISLAND } from './icons/island';
 import { SKILLS, UI } from './icons/glyphs';
+import { FINDS10 } from './icons/finds10';
 
 /** Canvas size of item and skill icons (the PixelBuffers itemIcon / skillIcon return). */
 export const ICON_PX = 24;
 
 const ICON: IconSet = { ...TOOLS, ...MATERIALS, ...NATURE, ...KIT, ...ISLAND };
+// V10 expedition finds (taonga, fossils, samples, gifts)
+Object.assign(ICON, FINDS10);
 const SKILL: IconSet = { ...SKILLS };
 // icons shared with items
 for (const k of ['ghillie', 'caller', 'trap', 'net']) SKILL[k] = ICON[k];

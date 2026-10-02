@@ -88,7 +88,11 @@ export abstract class TripRun {
   /** ways deeper an event has closed for this visit: to-location -> reason */
   blocked = new Map<string, string>();
   protected btn: HTMLElement | null = null;
+  /** finds placed in this scene (and their ground y) */
+  protected pts: { pt: Point10; x: number; y: number }[] = [];
   constructor(readonly f: FieldScene) {}
+  /** place a find now (events use this for things that turn up) */
+  addFind(pt: Point10) { this.addPoint(pt, this.pts); }
   abstract get loc(): string;
   get p() { return this.f.player; }
   get guide() { return this.f.guide?.a ?? null; }
@@ -301,7 +305,6 @@ export abstract class TripRun {
 
 // ================================================================== a site (V2 or V10)
 class SiteRun extends TripRun {
-  private pts: { pt: Point10; x: number; y: number }[] = [];
   private swims: Swim10[] = [];
   private hazards: (Hazard10 & { t: number; hit: number; warned: boolean })[] = [];
   private hard: { x: number; rate: number }[] = [];
@@ -483,7 +486,6 @@ class SiteRun extends TripRun {
 // ================================================================== the home island (camp + the shore)
 class IslandRun extends TripRun {
   private zone = 'camp';
-  private pts: { pt: Point10; x: number; y: number }[] = [];
   private tripT = 0;
   private zoneT = 0;
   get loc() { return this.zone; }
