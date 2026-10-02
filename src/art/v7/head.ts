@@ -9,6 +9,7 @@ import { C, hex, mix } from '../color';
 import { Scene3D, V3, Hit, cel, Ramp6, vadd } from './raster';
 import { YAW, BACK_YAW } from './body';
 import { trimPair } from '../people-rig';
+import { AROHA_HEAD } from './aroha7';
 
 const R6 = (...h: string[]): Ramp6 => h.map(v => hex(v));
 export type Look = 'fwd' | 'up' | 'down' | 'back';
@@ -55,10 +56,16 @@ export interface HeadDef7 {
   browHidden?: boolean;
   /** 'slit': always narrowed eyes, short dark slits sunk under a heavy brow ridge (Joshu) */
   eyeStyle?: 'dot' | 'slit';
+  /** a character's own eye + brow painter (replaces the dot eyes; `inner` is the screen direction to the nose, `far` the far eye) */
+  eyePaint?(mark: FaceMark, x: number, y: number, inner: 1 | -1, far: boolean, eye: HeadExpr7['eye'], ex: HeadExpr7, d: HeadDef7): void;
+  /** a character's own mouth painter (mouth: the expression's shape, or the talking flap) */
+  mouthPaint?(mark: FaceMark, x: number, y: number, mouth: HeadExpr7['mouth'], ex: HeadExpr7, d: HeadDef7): void;
 }
+export type FaceMark = (x: number, y: number, c: C) => void;
 
 // ------------------------------------------------------------------ expressions
 
+export type HeadExpr7 = Ex;
 interface Ex { eye: 'dot' | 'closed' | 'happy' | 'wide' | 'half' | 'sad' | 'angry'; brow: number; browTilt: number; mouth: 'none' | 'smile' | 'open' | 'o' | 'frown' | 'grit' | 'shout'; blush?: boolean; sweat?: boolean }
 const EXPR: Record<string, Ex> = {
   neutral: { eye: 'dot', brow: 0, browTilt: 0, mouth: 'none' },
@@ -90,7 +97,6 @@ export const HEAD_EXPRS7 = Object.keys(EXPR);
 
 const BOY_SKIN = R6('#3a1810', '#9a4a36', '#c8805e', '#f0a878', '#f8c090', '#ffe0b8');
 const GIRL_SKIN = R6('#3a1c1c', '#b86a60', '#d8907e', '#f6b8a4', '#fad0bc', '#ffe8dc');
-const DARK_SKIN = R6('#2a1610', '#5e3624', '#80502e', '#a06a46', '#bc855e', '#d49c74');
 const JOSHU_SKIN = R6('#3a1810', '#a04a3a', '#d08064', '#f2aa86', '#f8c49c', '#ffe0c4');
 
 const MORI: HeadDef7 = {
@@ -147,38 +153,6 @@ const JENNA: HeadDef7 = {
   browHidden: true,
 };
 
-const AROHA: HeadDef7 = {
-  skin: DARK_SKIN,
-  hair: R6('#060304', '#140c0a', '#221410', '#321e18', '#4a2e24', '#6a4434'),
-  ink: hex('#140a08'),
-  skull: [[0.1, 7.9, 0], [4.7, 5.3, 4.2]],
-  jaw: [[1.5, 4.4, 0], [3.3, 3.0, 2.9]],
-  chin: [[3.5, 2.5, 0], [1.3, 1.2, 1.3]],
-  nose: [[4.8, 5.8, 0], [0.8, 0.8, 0.6]],
-  ear: [[-0.4, 6.2, 4.2], [0.9, 1.3, 0.6]],
-  eye: [4.0, 6.9, 2.3],
-  mouth: [4.3, 4.0, 0.3],
-  eyeCol: '#140a08', brow: '#140c0a', blush: '#d87060',
-  shell: [[-0.5, 8.9, 0], [5.4, 5.9, 5.0]],
-  cut: q => q[0] > 0.34 && q[1] < 0.42,
-  locks: [
-    // centre-parted hair swept back from the face, falling long down the back
-    { a: [3, 12.4, 1.6], b: [3.6, 9.6, 4.6], r0: 1.6, r1: 0.6 }, { a: [3, 12.4, -1.6], b: [3.6, 9.6, -4.6], r0: 1.6, r1: 0.6 },
-    { a: [0.2, 10, 4.5], b: [-1.2, 0, 4.8], r0: 1.9, r1: 1.0, sway: 0.6 }, { a: [0.2, 10, -4.5], b: [-1.2, 0, -4.8], r0: 1.9, r1: 1.0, sway: 0.6 },
-    { a: [-3, 10, 2.6], b: [-5.6, -3, 3], r0: 2.4, r1: 1.2, sway: 1 }, { a: [-3, 10, -2.6], b: [-5.6, -3, -3], r0: 2.4, r1: 1.2, sway: 1 },
-    { a: [-4, 10, 0], b: [-6.8, -4, 0], r0: 2.4, r1: 1.2, sway: 1 },
-  ],
-  extras(s, W) {
-    // woven red headband with a dark pattern
-    const band = R6('#2a0806', '#5a1410', '#8a2218', '#a8342c', '#c84a3a', '#e06a50');
-    for (let i = 0; i <= 16; i++) {
-      const a = -Math.PI + (i / 16) * Math.PI * 2;
-      const p: V3 = [0.2 + Math.cos(a) * 5.35, 11.2 - Math.cos(a) * 0.5, Math.sin(a) * 5.05];
-      s.ellipsoid(W(p), W([0.9, 0, 0]) as V3, [0, 0.8, 0], W([0, 0, 0.9]) as V3, 9, h => ((i % 3) === 0 ? band[1] : cel(band, h.l, 0.05)));
-    }
-  },
-};
-
 const JOSHU: HeadDef7 = {
   skin: JOSHU_SKIN,
   hair: R6('#5a5452', '#8a8480', '#b8b2ac', '#dcd6ce', '#f0ebe4', '#ffffff'),
@@ -211,7 +185,7 @@ const JOSHU: HeadDef7 = {
   },
 };
 
-export const HEADS7: Record<string, HeadDef7> = { mori: MORI, jenna: JENNA, aroha: AROHA, joshu: JOSHU };
+export const HEADS7: Record<string, HeadDef7> = { mori: MORI, jenna: JENNA, aroha: AROHA_HEAD, joshu: JOSHU };
 
 /**
  * Joshu's eyes are always narrowed: a short dark slit sunk under a heavy brow ridge (a shadow row)
@@ -313,6 +287,7 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '')
     if (!visible(e)) continue;
     const [x, y] = px(e);
     if (d.eyeStyle === 'slit') { slitEye(mark, x, y, e[2] > 0 ? 1 : -1, eye, ex, d, eyeC, browC); continue; }
+    if (d.eyePaint) { d.eyePaint(mark, x, y, e[2] > 0 ? 1 : -1, e[2] < 0, eye, ex, d); continue; }
     if (eye === 'dot' || eye === 'angry' || eye === 'sad' || eye === 'half') mark(x, y, eyeC);
     else if (eye === 'wide') { mark(x, y, eyeC); mark(x, y - 1, eyeC); }
     else if (eye === 'closed') { mark(x, y, eyeC); mark(x - 1, y, eyeC); }
@@ -332,7 +307,8 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '')
   const [mx, my] = px(d.mouth);
   const lip = mix(d.skin[1], hex('#6a2020'), 0.4), dark = hex('#4a1418');
   const mouth = o.mouth === 2 ? 'shout' : o.mouth === 1 ? (ex.mouth === 'none' || ex.mouth === 'smile' || ex.mouth === 'frown' ? 'open' : ex.mouth) : ex.mouth;
-  if (mouth === 'smile') { mark(mx, my, lip); mark(mx - 1, my - 1, lip); }
+  if (d.mouthPaint) d.mouthPaint(mark, mx, my, mouth, ex, d);
+  else if (mouth === 'smile') { mark(mx, my, lip); mark(mx - 1, my - 1, lip); }
   else if (mouth === 'frown') { mark(mx, my, lip); mark(mx - 1, my + 1, lip); }
   else if (mouth === 'open' || mouth === 'o') mark(mx, my, dark);
   else if (mouth === 'grit') { mark(mx, my, dark); mark(mx - 1, my, dark); }

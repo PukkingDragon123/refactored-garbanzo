@@ -14,6 +14,7 @@ import type { Char7, Part, J3 } from './body';
 import type { HeadDef7, HeadWear7 } from './head';
 import { CAST7 } from './cast';
 import { R6, lb, knit, plain, tEll, tLimb, collar, GG, wear } from './gear';
+import { arohaDayBody } from './aroha7';
 
 const L = (p: Part) => p.hit.l;
 const frac = (v: number) => v - Math.floor(v);
@@ -227,31 +228,8 @@ const joshuShip = (b: Char7): Char7 => ({
 });
 
 // ------------------------------------------------------------------ Aroha
-
-const koru = (z: number, hh: number): boolean => {
-  // a cream koru (an unfurling fern frond spiral) printed on the chest
-  const x = z + 0.4, y = (hh - 0.58) * 18;
-  const r = Math.hypot(x, y), a = Math.atan2(y, x);
-  if (r > 2.2) return false;
-  return Math.abs(frac((r - a * 0.35) / 1.1) - 0.5) < 0.17;
-};
-const arohaShip = (b: Char7): Char7 => ({
-  ...b,
-  torso(p) {
-    const l = L(p);
-    if (p.hh > 0.86 && Math.abs(p.z) > 2.6) return cel(b.skin, l);
-    if (p.hh > 0.9 && p.f > 1.2) return cel(b.skin, l, -0.1);
-    // pounamu on its cord
-    if (p.f > 2.8 && p.hh > 0.74 && p.hh < 0.82 && Math.abs(p.z) < 0.7) return hex('#3aa06c');
-    // the woven flax belt
-    if (p.hh < 0.16 && p.hh > 0.05) return cel(S.flax, l, (p.hit.x + p.hit.y) % 2 ? 0.12 : -0.12);
-    if (p.hh <= 0.05) return cel(S.khaki, l, 0);
-    if (p.f > 1.4 && koru(p.z, p.hh)) return cel(S.cream, l, 0.1);
-    return cel(S.ateal, l, 0);
-  },
-  thigh(p) { return p.t < 0.42 ? (p.t > 0.36 ? cel(S.khaki, L(p), lb(p) - 0.3) : cel(S.khaki, L(p), lb(p))) : cel(b.skin, L(p), lb(p)); },
-  skirt: undefined,
-});
+// her everyday clothes from Day 2 on: a deep teal tank with a koru, the same kit (aroha7.ts)
+const arohaShip = arohaDayBody;
 
 export const SHIP_OUTFITS: Record<string, Record<string, { body(base: Char7): Char7; head?: HeadWear7 }>> = {
   jenna: { ship: { body: jennaShip(false) }, shipPhones: { body: jennaShip(true), head: PHONES_HEAD } },

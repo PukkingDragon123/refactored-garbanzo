@@ -22,6 +22,7 @@ import { CAST7 } from './cast';
 import { SHIP_OUTFITS } from './outfits-ship';
 import type { HeadWear7, Lock } from './head';
 import { R6, PAL, GG, lb, quilt, tape, gloss, furMat, knit, plain, backpack, pouch, radio, ropeCoil, carabiner, knife, collar, onStraps, onSash, tEll, tLimb, beanie, hood, goggles, headlamp, wear, hash2, ropeMat } from './gear';
+import { arohaGear } from './aroha7';
 
 export const OUTFIT_NAMES = ['casual', 'ship', 'shipPhones', 'winter', 'winterHood', 'storm'] as const;
 export interface Outfit7 { body(base: Char7): Char7; head?: HeadWear7 }
@@ -284,18 +285,8 @@ const joshuStorm: Outfit7['body'] = b => parka(b, {
 
 // ------------------------------------------------------------------ Aroha
 
-const arohaKit = (s: Scene3D, J: J3, c: Char7) => {
-  const T = c.build.torso;
-  // her woven flax kete on the near hip
-  tEll(s, J, [T * 0.02, 0.9, c.hipW + 2.0], [1.3, 2.6, 2.8], GG.bag, h => {
-    const w = (Math.floor(h.x / 1) + Math.floor(h.y / 1)) % 2 === 0;
-    return h.q[1] > 0.7 ? cel(PAL.flax, h.l, -0.25) : cel(PAL.flax, h.l, w ? 0.12 : -0.12);
-  });
-  // the slingshot tucked in the back of her belt: handle and fork
-  const base: [number, number, number] = [T * 0.12, -c.waist[0] - 0.6, -0.6];
-  tLimb(s, J, [base[0] - 2.4, base[1], base[2]], base, 0.42, 0.42, GG.tool, plain(PAL.wood, 0.05));
-  for (const z of [-1, 1]) tLimb(s, J, base, [base[0] + 2, base[1] - 0.4, base[2] + z * 1.2], 0.36, 0.3, GG.tool, plain(PAL.wood, 0.1));
-};
+// her kete, the slingshot tucked in at the back (aroha7.ts), over the parka and the oilskins
+const arohaKit = (s: Scene3D, J: J3, P: Pose, c: Char7) => arohaGear(s, J, P, c);
 const arohaWinter = (hoodUp: boolean): Outfit7['body'] => b => parka(b, {
   shell: P.ochre, panel: P.darkLeather, trim: PAL.black, quilt: 4,
   pants: P.olive, boot: P.bootBrown, gaiter: P.darkLeather, lace: hex('#d8b070'), glove: P.darkLeather,
@@ -309,12 +300,12 @@ const arohaWinter = (hoodUp: boolean): Outfit7['body'] => b => parka(b, {
   },
   hemDeco: p => (p.t > 0.66 && p.t < 0.86 ? taniko((p.t - 0.66) / 0.2, Math.atan2(p.z, p.f) * 6 + 20) : undefined),
   cuffDeco: p => (p.t > 0.8 && p.t < 0.95 ? taniko((p.t - 0.8) / 0.15, p.hit.q[1] * 2 + 20) : undefined),
-  extras: (s, J, _P, c) => arohaKit(s, J, c),
+  extras: (s, J, P, c) => arohaKit(s, J, P, c),
 });
 const arohaStorm: Outfit7['body'] = b => parka(b, {
   shell: P.oilGreen, panel: P.oilGreen, trim: PAL.black, gloss: true, patches: true, hoodUp: true,
   pants: P.olive, boot: PAL.rubber, tallBoot: true, glove: P.darkLeather, hem: 7.4,
-  extras: (s, J, _P, c) => arohaKit(s, J, c),
+  extras: (s, J, P, c) => arohaKit(s, J, P, c),
 });
 
 // ------------------------------------------------------------------ head wear

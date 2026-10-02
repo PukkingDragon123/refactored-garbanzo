@@ -10,7 +10,10 @@ import { PixelBuffer } from '../pixel';
 import { renderBody7, Frame7 } from './body';
 import { renderHead7, HeadOpts7 } from './head';
 import { CAST7, INFO7 } from './cast';
-import { ANIMS7, pose7, animInfo7 } from './anims7';
+import { ANIMS7, pose7, animInfo7, framesOf7 } from './anims7';
+// Aroha's own body, head and moves, and the cast's combat set (both register into the rig on import)
+import './aroha7';
+import './combat7';
 import { dress, OUTFIT_NAMES } from './outfits';
 import { outfitOf, setOutfit, splitOutfit, wardrobeVersion } from './wardrobe';
 import { ANIME_COMMON, TRANSITIONS, AnimInfo } from '../anime/anims';
@@ -58,6 +61,8 @@ tr(['idle', 'walk', 'run', 'brace', 'slip'], ['camera', 'cameraWalk'], 'cameraUp
 tr(['crouch', 'crouchWalk'], ['cameraCrouch', 'cameraCrouchWalk'], 'cameraUpC');
 tr(['camera', 'cameraWalk'], ['idle', 'walk', 'run', 'brace', 'slip'], 'cameraDown');
 tr(['cameraCrouch', 'cameraCrouchWalk'], ['crouch', 'crouchWalk', 'idle', 'walk'], 'cameraDownC');
+// the slingshot: drawing it from the ready stance (or straight from standing) up to the held aim
+tr(['idle', 'walk', 'run', 'slingReady', 'crouch'], ['slingAim'], 'slingDraw');
 export function transitionFor(id: string, from: string, to: string): string | null {
   if (parse(id)[0] === 'chunk') return CHUNK_TRANS[from]?.[to] ?? null;
   return TRANS7[from]?.[to] ?? TRANSITIONS[from]?.[to] ?? null;
@@ -71,7 +76,7 @@ export function renderBody(id: string, anim: string, frame: number): Frame7 {
     return renderChunkBody(a, frame % CHUNK_ANIMS[a].frames) as unknown as Frame7;
   }
   const a = ANIMS7[anim] ? anim : 'idle';
-  const n = Math.max(1, ANIMS7[a].frames);
+  const n = framesOf7(cid, a);
   const fi = ((frame % n) + n) % n;
   const key = `${cid}@${outfit}|${a}|${fi}`;
   const hit = cache.get(key);
@@ -80,7 +85,8 @@ export function renderBody(id: string, anim: string, frame: number): Frame7 {
   const pose = pose7(cid, a, ch.build, fi);
   const out = renderBody7(ch, pose);
   // hair trails while moving fast
-  out.hair = a === 'run' || a === 'carryPupRun' ? ((pose.sway ?? 0) > 0.4 ? 2 : 1) : (pose.sway ?? 0) > 0.75 ? 1 : 0;
+  // (a pose may say how hard: flags.hair 0..2, e.g. the combat moves)
+  out.hair = pose.flags?.hair !== undefined ? pose.flags.hair : a === 'run' || a === 'carryPupRun' ? ((pose.sway ?? 0) > 0.4 ? 2 : 1) : (pose.sway ?? 0) > 0.75 ? 1 : 0;
   if (cache.size > 2500) cache.clear();
   cache.set(key, out);
   return out;

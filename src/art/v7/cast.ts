@@ -1,12 +1,15 @@
 // V7 cast bodies: builds (longer, stylish anime proportions), volumes and outfit materials.
 //  Mori  - grey field tunic with a belt and a cross strap, dark shorts, tall brown boots, gloves
 //  Jenna - mauve sweater with a cream collar, pleated navy skirt, dark tights, brown shoes
-//  Aroha - ochre woven top with a taniko band, olive skirt, bare legs, flax sandals
+//  Aroha - bush-green tank with a tāniko band, flax belt and kete, a bush shirt knotted at the waist,
+//          canvas shorts, paraerae (aroha7.ts)
 //  Joshu - navy cable-knit gansey over a big belly, dark trousers, black sea boots; tall and broad
 
 import { hex, C } from '../color';
 import { cel, Ramp6 } from './raster';
 import type { Char7, Part } from './body';
+import { AROHA7 } from './aroha7';
+export { AROHA7 };
 
 const R6 = (...h: string[]): Ramp6 => h.map(v => hex(v));
 const L = (p: Part) => p.hit.l;
@@ -15,7 +18,6 @@ const lb = (p: Part) => (p.near ? 0 : -0.28);
 
 const BOY_SKIN = R6('#3a1810', '#9a4a36', '#c8805e', '#f0a878', '#f8c090', '#ffe0b8');
 const GIRL_SKIN = R6('#3a1c1c', '#b86a60', '#d8907e', '#f6b8a4', '#fad0bc', '#ffe8dc');
-const DARK_SKIN = R6('#2a1610', '#5e3624', '#80502e', '#a06a46', '#bc855e', '#d49c74');
 const JOSHU_SKIN = R6('#3a1810', '#a04a3a', '#d08064', '#f2aa86', '#f8c49c', '#ffe0c4');
 
 // ------------------------------------------------------------------ Mori
@@ -89,39 +91,7 @@ export const JENNA7: Char7 = {
 };
 
 // ------------------------------------------------------------------ Aroha
-const A = {
-  top: R6('#2a2014', '#4a3820', '#6e5434', '#9c7a4c', '#b8945e', '#d0ae78'),
-  skirt: R6('#141408', '#262618', '#3a3a24', '#4c4c30', '#60603e', '#76764e'),
-  sandal: R6('#1a0e08', '#3a2414', '#50321c', '#6a4428', '#845a38', '#a0744a'),
-};
-export const AROHA7: Char7 = {
-  id: 'aroha',
-  build: { hipH: 26.4, thigh: 12.4, shin: 12.2, ankleH: 2.1, torso: 17.8, neck: 1.3, shY: 2.2, shF: 0, shB: 0, upArm: 9, foreArm: 8.2, legF: 0, legB: 0 },
-  shW: 4.6, hipW: 2.8, chest: [3.3, 4.1], waist: [2.5, 3.1], pelvis: [3.0, 3.7],
-  armR: [1.75, 1.5, 1.25], legR: [2.2, 1.65, 1.3], neckR: 1.3, hand: 1.0,
-  skin: DARK_SKIN, ink: hex('#140a08'),
-  torso(p) {
-    const l = L(p);
-    // sleeveless: shoulders bare; a taniko band (red, black, white zigzag) across the chest
-    if (p.hh > 0.86 && Math.abs(p.z) > 2.6) return cel(DARK_SKIN, l);
-    if (p.hh > 0.9 && p.f > 1.2) return cel(DARK_SKIN, l, -0.1);
-    if (p.hh > 0.62 && p.hh < 0.74) {
-      const k = Math.floor((p.z + 20) * 1.2);
-      const zig = Math.abs(((p.hh - 0.62) / 0.12) * 4 - ((k % 4) < 2 ? k % 2 : 1 - (k % 2)) * 4) < 1.4;
-      return zig ? hex('#1e1418') : (p.hh < 0.64 || p.hh > 0.72) ? hex('#f0e2c8') : hex('#b8342a');
-    }
-    // pounamu on its cord
-    if (p.f > 2.8 && p.hh > 0.74 && p.hh < 0.82 && Math.abs(p.z) < 0.7) return hex('#3aa06c');
-    return cel(A.top, l);
-  },
-  upperArm(p) { return cel(DARK_SKIN, L(p), lb(p)); },
-  foreArm(p) { return p.t > 0.84 ? cel(A.skirt, L(p), lb(p)) : cel(DARK_SKIN, L(p), lb(p)); },
-  hands(p) { return cel(DARK_SKIN, L(p), lb(p) + 0.1); },
-  thigh(p) { return cel(DARK_SKIN, L(p), lb(p)); },
-  shin(p) { return p.t > 0.9 ? cel(A.sandal, L(p), lb(p)) : cel(DARK_SKIN, L(p), lb(p)); },
-  shoe(p) { return p.hit.q[1] < -0.35 ? cel(A.sandal, L(p), lb(p)) : Math.abs(p.hit.q[0]) < 0.25 ? cel(A.sandal, L(p), lb(p) + 0.2) : cel(DARK_SKIN, L(p), lb(p)); },
-  skirt: { len: 8, flare: 2.6, top: 3.4, mat: p => (p.t > 0.88 ? hex('#8a2e22') : Math.sin(Math.atan2(p.z, p.f) * 4 + p.t * 3) > 0.8 ? cel(A.skirt, L(p), -0.3) : cel(A.skirt, L(p))) },
-};
+// (her body, kit and moves live in aroha7.ts)
 
 // ------------------------------------------------------------------ Joshu
 const Jo = {
@@ -172,6 +142,6 @@ export const INFO7: Record<string, { name: string; short: string; voice: number;
   mori: { name: 'Mori', short: 'Mori', voice: 1, height: 62 },
   jenna: { name: 'Jenna', short: 'Jenna', voice: 1.5, height: 57 },
   joshu: { name: 'Joshu', short: 'Joshu', voice: 0.62, height: 72 },
-  aroha: { name: 'Aroha', short: 'Aroha', voice: 1.12, height: 59 },
+  aroha: { name: 'Aroha', short: 'Aroha', voice: 1.12, height: 61 },
   chunk: { name: 'Chunk', short: 'Chunk', voice: 1.3, height: 16 },
 };
