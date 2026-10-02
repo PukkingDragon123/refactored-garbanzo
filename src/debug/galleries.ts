@@ -72,6 +72,8 @@ async function iconGallery() {
 
 export function runGallery(name: string) {
   if (name === 'icons') { void iconGallery(); return; }
+  // V11 illustrated item art on its Backpack footprints (src/debug/items11.ts)
+  if (name === 'items11') { void import('./items11').then(m => m.items11Gallery(new URLSearchParams(location.search))); return; }
   if (name === 'camp4') { void camp4Gallery(); return; }
   const items: GalleryItem[] = [];
   if (name === 'flora') {
