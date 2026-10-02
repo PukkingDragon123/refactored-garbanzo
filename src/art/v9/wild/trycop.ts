@@ -323,7 +323,7 @@ function mats(sk: Sk, hue: number, detail: number, small = false): Mats {
     claw: sk.m(rmp(c('claw'), { n, dark: 0.66, light: 0.5, cool: 0.45 }), { edge: 2 }),
     crushTip: sk.m(rmp(c('crushTip'), { n: 4, dark: 0.4, light: 0.32 }), { edge: 1 }),
     tooth: sk.m(rmp(c('tooth'), { n: 5, dark: 0.55, light: 0.3, warm: 0.2 }), { edge: 1 }),
-    eye: sk.m(rmp(c('eye'), { n: 4, dark: 0.4, light: 1.2 }), { edge: 0, k: 1.3 }),
+    eye: sk.m(rmp(c('eye'), { n: 4, dark: 0.4, light: detail > 1 ? 0.5 : 1.2 }), { edge: 0, k: detail > 1 ? 1 : 1.3 }),
     stalk: sk.m(rmp(c('stalk'), { n: 5, dark: 0.6, light: 0.45 }), { edge: 1 }),
     mouth: sk.m(rmp(c('mouth'), { n: 5, dark: 0.6, light: 0.5 }), { edge: 1 }),
     fork: sk.m(rmp(c('fork'), { n: 5, dark: 0.6, light: 0.5 }), { edge: 1 }),
@@ -340,7 +340,7 @@ function mats(sk: Sk, hue: number, detail: number, small = false): Mats {
     seta: sk.m(rmp('#f2e4cc', { n: 3, dark: 0.3, light: 0.2 }), { edge: 0, noRim: true }),
     froth: sk.m(rmp('#dcecf0', { n: 4, dark: 0.3, light: 0.5 }), { edge: 1, noRim: true }),
     antenna: sk.m(rmp('#6a2a24', { n: 4, dark: 0.5, light: 0.6 }), { edge: 0, noRim: true }),
-    stalkHi: sk.m(rmp('#eea878', { n: 6, dark: 0.6, light: 0.4, warm: 0.2 }), { edge: 1 }),
+    stalkHi: sk.m(rmp('#e8905a', { n: 6, dark: 0.6, light: 0.4, warm: 0.2 }), { edge: 1 }),
   };
 }
 
@@ -486,7 +486,7 @@ export function drawTrycop(sk: Sk, P: TrycopPose, o: TrycopOpts): TrycopOut {
         (a, b, p) => { p.l += 0.08 - Math.abs(a - 0.5) * 0.2 - (Math.abs(b - 0.48) < 0.05 ? 0.12 : 0); return a < 0.14 && detail > 1 && ((b * 11) % 1) < 0.5 ? M.maxiEdge : M.maxi2; });
     }
     // the third maxillipeds: the doors. Hinged on the outer edge, the inner edge swings toward us.
-    const ang = gap * 0.86 + Math.sin(t * 7.3) * 0.03 * gap;
+    const ang = gap * 0.7 + Math.sin(t * 7.3) * 0.03 * gap;
     const wp = hw * 0.97, yI = yB + (yT - yB) * 0.56;
     const outs: { s: number; tip: V3; ear: V3; exo: V3; fr: V3 }[] = [];
     for (const s of [-1, 1]) {
@@ -503,7 +503,7 @@ export function drawTrycop(sk: Sk, P: TrycopPose, o: TrycopOpts): TrycopOut {
           p.l += 0.1 - Math.abs(u - 0.55) * 0.34 - (v < 0.1 ? 0.1 : 0) - (v > 0.9 ? 0.16 : 0);
           if (Math.abs(u - 0.44 - v * 0.06) < 0.055) p.l -= 0.14; // the ischial sulcus
           else if (Math.abs(u - 0.53 - v * 0.06) < 0.04) p.l += 0.07;
-          if (u > 0.88) return ((v * (detail > 1 ? 8 : 5)) % 1) < 0.48 ? M.maxiEdge : M.maxi; // crista dentata
+          if (u > 0.9) p.l += ((v * (detail > 1 ? 8 : 5)) % 1) < 0.45 ? 0.06 : -0.12; // the crista dentata: a row of tiny blunt knobs
           if (u < 0.06) p.l -= 0.06;
           if (detail > 1 && hh(u * 14, v * 9, 31) < 0.08) p.l += 0.08;
           return M.maxi;
@@ -518,7 +518,8 @@ export function drawTrycop(sk: Sk, P: TrycopPose, o: TrycopOpts): TrycopOut {
           p.l += 0.16 - Math.abs(u - 0.4) * 0.3 - Math.abs(v - 0.55) * 0.2;
           if (u > 0.7 && v > 0.62) p.l -= 0.12; // the notch the palp sits in
           if (detail > 1 && hh(u * 12, v * 8, 37) < 0.08) p.l += 0.08;
-          return u < -0.04 || v > 0.9 ? M.maxiEdge : M.maxi;
+          if (u < -0.04 || v > 0.9) p.l += 0.1;
+          return M.maxi;
         }, 0.25);
       const pAt = (O: V3, Uv: V3, Vv: V3, u: number, v: number): V3 => vadd(O, vadd(vmul(Uv, u), vmul(Vv, v)));
       // a fringe of stiff setae along the lower margin of the ischium
@@ -560,9 +561,11 @@ export function drawTrycop(sk: Sk, P: TrycopPose, o: TrycopOpts): TrycopOut {
       const rr = (0.22 + hh(i, 5, 41) * 0.36) * Math.sqrt(Math.sin(life * Math.PI)) * k;
       if (rr < 0.6) continue;
       const c = pr(X.pt(zc(bx, by, 1.6 + gap * 1.2)));
+      // a clear film: only the rim and a glint show, the mouthparts read through the middle
       sk.np(true);
-      sk.ell(c[0], c[1], rr, rr, M.froth, { z: c[2] + k, rz: rr * 0.6 });
-      if (rr > 1.2) sk.over(Math.floor(c[0] - rr * 0.4), Math.floor(c[1] - rr * 0.45), hex('#ffffff'));
+      if (rr < 1.3) sk.dot(c[0], c[1], M.froth, 0.8, c[2] + k);
+      else sk.ell(c[0], c[1], rr, rr, (p) => (p.u * p.u + p.v * p.v > 0.42 ? M.froth : 0), { z: c[2] + k, rz: rr * 0.6 });
+      if (rr > 1.6) sk.over(Math.floor(c[0] - rr * 0.4), Math.floor(c[1] - rr * 0.45), hex('#ffffff'));
     }
   }
   // ---- eye stalks
@@ -583,7 +586,6 @@ export function drawTrycop(sk: Sk, P: TrycopPose, o: TrycopOpts): TrycopOut {
     // (up close the stalk is a pale, jointed peduncle so it reads as a stalk against the red shell)
     sk.tube([[b2[0], b2[1]], [t2[0], t2[1]]], t => (small ? 0.72 - t * 0.12 : 0.86 - t * 0.26) * k, (p) => {
       if (detail > 0 && Math.abs(p.t - 0.45) < 0.06) return M.shellDark;
-      if (detail > 1 && p.t > 0.86) return M.maxiEdge;
       return detail > 1 ? M.stalkHi : M.stalk;
     }, { z: t => b2[2] + (t2[2] - b2[2]) * t });
     // the cornea: a dark kidney bulb at the tip with a wet glint

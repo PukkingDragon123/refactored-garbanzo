@@ -26,7 +26,7 @@ export const POV_W = 1000, POV_H = 800, POV_PAD = 48, POV_HORIZON = 452, POV_SHO
 /** the low morning sun, just above the horizon */
 export const POV_SUN = { x: 600, y: 404 };
 /** where Mori's right hand rests on the sand (the fingertips) */
-export const POV_HAND = { x: 668, y: 702 };
+export const POV_HAND = { x: 668, y: 694 };
 const W = POV_W, H = POV_H, PAD = POV_PAD, HORIZON = POV_HORIZON, SHORE = POV_SHORE;
 const SUNX = POV_SUN.x, SUNY = POV_SUN.y;
 /** the shoreline curves away up the beach toward the headland on the left */
@@ -421,23 +421,28 @@ export function paintPOV(): PixelBuffer {
     }
     // the cuff, then the boot: padded collar, laced vamp, the toe cap at the far end, the sole's rim
     for (let x = bx - 21; x <= bx + 21; x++) for (let y = 702 + LY; y < 712 + LY; y++) set(x, y, TR[(y + x) % 4 === 0 ? 1 : 2]);
-    disc(bx, 686 + LY, 25, 21, (nx, ny, x, y) => {
-      const d = Math.hypot(nx, ny);
+    // feet up, toes to the sky: the sole's dark rim stands out past the toe, the laced vamp runs down
+    // to the ankle, the toe cap's seam curves across the top, the sun rims the sole's edge
+    const by = 678 + LY;
+    disc(bx, by - 2, 21, 28, (nx, ny) => (ny > 0.5 ? -1 : ny < -0.7 ? hex('#2a1a10') : hex('#140c08')));
+    for (let x = bx - 12; x <= bx + 12; x++) { const y = by - 2 - Math.sqrt(Math.max(0, 1 - ((x - bx) / 21) ** 2)) * 28; blend(x, y, hex('#f0c88c'), 0.75); blend(x, y + 1, hex('#a07850'), 0.5); }
+    disc(bx, by + 1, 18, 24, (nx, ny, x, y) => {
       if (ny > 0.62) return -1;
-      if (d > 0.86) return hex('#1a120c'); // the sole sticking out round the upper
-      const l = 0.6 - nx * 0.1 - ny * 0.3 + (noise2(x / 3, y / 3, 97) - 0.5) * 0.18;
+      const l = 0.58 - nx * 0.22 - ny * 0.12 + Math.sqrt(Math.max(0, 1 - nx * nx)) * 0.1 + (noise2(x / 3, y / 3, 97) - 0.5) * 0.16;
       let c = LEA[clamp(Math.round(l * 6 + (bayer(x, y) - 0.5) * 0.6), 0, 6)];
-      if (ny < -0.45 && d < 0.6) c = LEA[clamp(Math.round(l * 6) + 1, 0, 6)]; // the scuffed toe cap
+      const seam = -0.32 + nx * nx * 0.35;
+      if (Math.abs(ny - seam) < 0.05) c = LEA[1]; // the toe cap's stitched seam
+      else if (ny < seam && ny > seam - 0.08 && (x % 2 === 0)) c = LEA[5];
+      if (ny < seam - 0.3 && nx < -0.1 && nx > -0.5) c = LEA[clamp(Math.round(l * 6) + 1, 0, 6)]; // scuffed shine
       return c;
     });
-    for (let y = 682 + LY; y < 708 + LY; y++) for (let x = bx - 9; x <= bx + 9; x++) if (y > 690 + LY || Math.abs(x - bx) < 6) set(x, y, LEA[y > 700 + LY ? 1 : 2]); // tongue and collar
-    for (let k = 0; k < 4; k++) {
-      const y = 688 + LY + k * 4;
-      for (let x = bx - 8; x <= bx + 8; x++) if ((x + y) % 2 === 0) set(x, y, hex('#d8c8a8'));
-      set(bx - 9, y, hex('#c8c0b0')); set(bx + 9, y, hex('#c8c0b0'));
+    // the tongue and the laces criss-crossing down it
+    for (let y = by - 4; y < 708 + LY; y++) for (let x = bx - 6; x <= bx + 6; x++) set(x, y, LEA[(y > 700 + LY ? 1 : 2) + (Math.abs(x - bx) < 3 ? 1 : 0)]);
+    for (let k = 0; k < 6; k++) {
+      const y = by - 2 + k * 4;
+      for (let x = bx - 6; x <= bx + 6; x++) if ((x + y) % 2 === 0) set(x, y + Math.round((x - bx) * 0.15 * (k % 2 ? 1 : -1)), hex('#d8c8a8'));
+      set(bx - 7, y, hex('#e8dcc0')); set(bx + 7, y, hex('#e8dcc0'));
     }
-    // the sun rims the toe caps
-    for (let x = bx - 14; x <= bx + 14; x++) { const y = 686 + LY - Math.sqrt(Math.max(0, 1 - ((x - bx) / 21.5) ** 2)) * 21 * 0.86 + 1; blend(x, y, hex('#e8b880'), 0.6); }
     for (let k = 0; k < 12; k++) set(bx + rng.range(-18, 18), 666 + LY + rng.range(0, 24), hex('#e2c48c'));
   }
   return b;
