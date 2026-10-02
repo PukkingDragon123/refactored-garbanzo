@@ -6,7 +6,7 @@
 // walking legs on an alternating tetrapod gait (IK from coxa to dactyl tip), both chelae (raise,
 // open, strike), the fork, swivelling eye stalks, parting maxillipeds and flicking antennules, and
 // the whole body bobbing, rolling and rearing. The same rig paints the 36 px crab in the world
-// (k = 1) and the full-screen close-up (k ~ 4.5, detail 2: granules, setae, teeth, wet speculars and
+// (k = 1) and the full-screen close-up (k ~ 4.5, detail 2: granules, setae, the full set of mouthparts, claw denticles, wet speculars and
 // the root-barnacle parasite under the abdomen).
 //
 // Body space: x lateral (screen right), y up, z toward the camera; the origin is the ground under
@@ -54,6 +54,8 @@ export interface TrycopPose {
   mouth: number;
   /** antennule flick phase (radians) */
   flick: number;
+  /** 0..1 extra froth bubbling at the mouth (close-up only) */
+  froth?: number;
   /** extra lift per walking leg [L0..L3, R0..R3] for idle shuffles */
   shuffle: number[];
   /** 0..1 sunk into a crevice (legs tucked, clipped below the rock lip by the caller) */
@@ -292,7 +294,7 @@ function cloudFor(k: number, detail: number, parasite: boolean): Cloud {
 interface Pal { shell: string; shellDark: string; spotC: string; spotR: string; spotRim: string; leg: string; band: string; tip: string; claw: string; crushTip: string; tooth: string; eye: string; stalk: string; mouth: string; fork: string; belly: string; abdo: string; sac: string }
 const PAL_A: Pal = {
   shell: '#bc2e2a', shellDark: '#6e1c2c', spotC: '#f8e6b0', spotR: '#ee9038', spotRim: '#4e121c',
-  leg: '#e47a44', band: '#f6e0b4', tip: '#3a1a2a', claw: '#b02e28', crushTip: '#1c1418', tooth: '#fff2d8',
+  leg: '#e47a44', band: '#f6e0b4', tip: '#3a1a2a', claw: '#b02e28', crushTip: '#1c1418', tooth: '#e2cca4',
   eye: '#161622', stalk: '#e0864a', mouth: '#6a4c96', fork: '#8e76c8', belly: '#f2e2c8', abdo: '#e8c6a0', sac: '#f2a228',
 };
 const PAL_B: Pal = { ...PAL_A, shell: '#8c2438', shellDark: '#4e1428', leg: '#a03040', claw: '#8a2436', spotR: '#e0703a' };
@@ -320,8 +322,8 @@ function mats(sk: Sk, hue: number, detail: number, small = false): Mats {
     tip: sk.m(rmp(c('tip'), { n: 4, dark: 0.5, light: 0.5 }), { edge: 1 }),
     claw: sk.m(rmp(c('claw'), { n, dark: 0.66, light: 0.5, cool: 0.45 }), { edge: 2 }),
     crushTip: sk.m(rmp(c('crushTip'), { n: 4, dark: 0.4, light: 0.32 }), { edge: 1 }),
-    tooth: sk.m(rmp(c('tooth'), { n: 4, dark: 0.35, light: 0.4 }), { edge: 1, noRim: true }),
-    eye: sk.m(rmp(c('eye'), { n: 4, dark: 0.4, light: 1.2 }), { edge: 0, k: 1.3 }),
+    tooth: sk.m(rmp(c('tooth'), { n: 5, dark: 0.55, light: 0.3, warm: 0.2 }), { edge: 1 }),
+    eye: sk.m(rmp(c('eye'), { n: 4, dark: 0.4, light: detail > 1 ? 0.5 : 1.2 }), { edge: 0, k: detail > 1 ? 1 : 1.3 }),
     stalk: sk.m(rmp(c('stalk'), { n: 5, dark: 0.6, light: 0.45 }), { edge: 1 }),
     mouth: sk.m(rmp(c('mouth'), { n: 5, dark: 0.6, light: 0.5 }), { edge: 1 }),
     fork: sk.m(rmp(c('fork'), { n: 5, dark: 0.6, light: 0.5 }), { edge: 1 }),
@@ -330,7 +332,15 @@ function mats(sk: Sk, hue: number, detail: number, small = false): Mats {
     sac: sk.m(rmp(c('sac'), { n: 5, dark: 0.5, light: 0.55, warm: 0.4 }), { edge: 1, noRim: true }),
     sacDark: sk.m(rmp('#b8641c', { n: 4, dark: 0.5, light: 0.4 }), { edge: 1, noRim: true }),
     maw: sk.m(rmp('#2a1020', { n: 3, dark: 0.4, light: 0.3 }), { edge: 0, noRim: true }),
-    mand: sk.m(rmp('#d89a4a', { n: 4, dark: 0.5 }), { edge: 1 }),
+    mand: sk.m(rmp('#d89a4a', { n: 5, dark: 0.55, light: 0.35, warm: 0.3 }), { edge: 1 }),
+    mandTip: sk.m(rmp('#3a2014', { n: 4, dark: 0.5, light: 0.45 }), { edge: 1 }),
+    maxi: sk.m(rmp('#b0646e', { n: detail > 1 ? 7 : 6, dark: 0.62, light: 0.42, cool: 0.3 }), { edge: 1 }),
+    maxi2: sk.m(rmp('#c89aa8', { n: 5, dark: 0.6, light: 0.4 }), { edge: 1 }),
+    maxiEdge: sk.m(rmp('#eadcc4', { n: 5, dark: 0.5, light: 0.35, warm: 0.2 }), { edge: 1 }),
+    seta: sk.m(rmp('#f2e4cc', { n: 3, dark: 0.3, light: 0.2 }), { edge: 0, noRim: true }),
+    froth: sk.m(rmp('#dcecf0', { n: 4, dark: 0.3, light: 0.5 }), { edge: 1, noRim: true }),
+    antenna: sk.m(rmp('#6a2a24', { n: 4, dark: 0.5, light: 0.6 }), { edge: 0, noRim: true }),
+    stalkHi: sk.m(rmp('#e8905a', { n: 6, dark: 0.6, light: 0.4, warm: 0.2 }), { edge: 1 }),
   };
 }
 
@@ -394,21 +404,168 @@ export function drawTrycop(sk: Sk, P: TrycopPose, o: TrycopOpts): TrycopOut {
       const q = pr(X.pt([xx, yy, zz]));
       sk.dot(q[0], q[1], Math.abs(xx) > 3 ? M.rim : small ? M.shell : M.shellDark, light(nn, small ? -0.12 : -0.06), q[2]);
     }
-  // ---- mouthparts: the third maxillipeds part like doors over the mandibles
+  // ---- mouthparts. The world sprite keeps a simple pair of plates; up close it is a real crab mouth:
+  // a dark buccal frame under the epistome, closed by the two third maxillipeds, broad hinged plates
+  // (a grooved, inner-toothed ischium under an eared merus, the little palp folded over the inner
+  // corner, the slim exopod along the outside) that swing open like double doors on their outer
+  // hinges. Behind them the setose second maxillipeds beat, and at the top the hard amber mandibles
+  // with dark incisor edges grind side to side under their palps. Froth beads along the seams.
   const mouthC = X.pt([0, -H * 0.66, D * 0.99]);
   const mc = s2(mouthC);
-  {
+  if (small) {
     const gap = P.mouth;
     sk.np(true);
     const g = s2(X.pt([0, -H * 0.66, D * 0.98]));
-    if (!small || gap > 0.5) sk.ell(g[0], g[1], (0.6 + gap * 0.9) * k, (small ? 1 : 1.5) * k, M.maw, { z: pr(mouthC)[2] - 0.2 * k, rz: 0.2 * k });
-    if (gap > 0.3 && !small) { sk.np(); sk.ell(g[0], g[1] + 0.2 * k, 0.55 * k * gap, 0.7 * k, M.mand, { z: pr(mouthC)[2] - 0.1 * k }); }
+    if (gap > 0.5) sk.ell(g[0], g[1], (0.6 + gap * 0.9) * k, k, M.maw, { z: pr(mouthC)[2] - 0.2 * k, rz: 0.2 * k });
     for (const s of [-1, 1]) {
       sk.np();
       const c = s2(X.pt([s * (1.05 + gap * 0.75), -H * 0.66, D * 1.0]));
       const zc = pr(X.pt([s * 1.2, -H * 0.66, D * 1.02]))[2];
-      sk.ell(c[0], c[1], (small ? 0.85 : 0.95) * k, (small ? 1.3 : 1.4) * k, (p) => (small ? M.rim : detail > 0 && Math.abs(p.u * s + 0.7) < 0.22 ? M.fork : M.mouth), { z: zc, rz: 0.5 * k, rot: s * 0.2 });
-      if (detail > 1) for (let j = 0; j < 5; j++) sk.over(c[0] + s * (1.1 * k) + Math.sin(P.t * 9 + j) * 0.5, c[1] - 1.2 * k + j * 0.6 * k, hex('#e8d8f8', 170));
+      sk.ell(c[0], c[1], 0.85 * k, 1.3 * k, M.rim, { z: zc, rz: 0.5 * k, rot: s * 0.2 });
+    }
+  } else {
+    const gap = clamp(P.mouth), t = P.t;
+    const fz = (x: number, y: number) => D * 0.93 - (y + H * 0.28) * 0.25 - x * x * 0.04;
+    const yT = -H * 0.4, yB = -H * 0.98, hw = 2.9;
+    // screen-space normal of a body-space direction (for flat plates)
+    const scrN = (n: V3): V3 => { const d = X.dir(vnorm(n)); return [d[0], -(d[1] * cph - d[2] * sph), d[2] * cph + d[1] * sph]; };
+    /** a flat plate: body-space origin O and edges U, V; `shape` is a polygon in (a, b) plate coords;
+     *  the fill gets (a, b) back through the inverse of the (affine) projection */
+    const plate = (O: V3, U: V3, V: V3, shape: [number, number][], n: V3, fill: (a: number, b: number, p: { l: number }) => number, dz = 0) => {
+      const o2 = pr(X.pt(O)), u2 = vsub(pr(X.pt(vadd(O, U))), o2), w2 = vsub(pr(X.pt(vadd(O, V))), o2);
+      const det = u2[0] * w2[1] - u2[1] * w2[0];
+      if (Math.abs(det) < 0.25) return;
+      const pts: number[] = [];
+      for (const [a, b] of shape) pts.push(o2[0] + u2[0] * a + w2[0] * b, o2[1] + u2[1] * a + w2[1] * b);
+      const ab = (x: number, y: number): [number, number] => {
+        const dx = x - o2[0], dy = y - o2[1];
+        return [(dx * w2[1] - dy * w2[0]) / det, (u2[0] * dy - u2[1] * dx) / det];
+      };
+      sk.poly(pts, (p) => { const [a, b] = ab(p.x, p.y); return fill(a, b, p); }, {
+        n: scrN(n), z: (x, y) => { const [a, b] = ab(x, y); return o2[2] + u2[2] * a + w2[2] * b + dz * k; },
+      });
+    };
+    const zc = (x: number, y: number, off: number): V3 => [x, y, fz(x, y) + off];
+    const VV = (y0: number, y1: number): V3 => [0, y1 - y0, fz(0, y1) - fz(0, y0)];
+    // the buccal frame: a dark recess, deepest at the top under the mandibles
+    sk.np(true);
+    plate(zc(-hw, yB, 0.1), [hw * 2, 0, 0], VV(yB, yT),
+      [[0.14, 0], [0.86, 0], [0.95, 0.12], [1, 0.86], [0.94, 1], [0.06, 1], [0, 0.86], [0.05, 0.12]], [0, 0, 1],
+      (a, b, p) => { p.l = 0.3 - b * 0.18 - Math.abs(a - 0.5) * 0.2; return M.maw; });
+    // the epistome's rim over the frame: a lip with a few small teeth
+    sk.np();
+    {
+      const L = pr(X.pt(zc(-hw * 1.02, yT + 0.1, 0.35))), R = pr(X.pt(zc(hw * 1.02, yT + 0.1, 0.35))), Mi = pr(X.pt(zc(0, yT + 0.32, 0.4)));
+      sk.tube([[L[0], L[1]], [Mi[0], Mi[1]], [R[0], R[1]]], 0.36 * k, (p) => {
+        if (detail > 1 && p.v < -0.3 && Math.abs(((p.t * 7) % 1) - 0.5) < 0.18) p.l += 0.12;
+        return M.shellDark;
+      }, { z: (q) => L[2] + (R[2] - L[2]) * q + 0.25 * k });
+    }
+    // mandibles: hard amber jaws, dark incisor edges meeting at the midline, grinding side to side
+    const grind = Math.sin(t * 13) * 0.18 * (0.3 + gap);
+    for (const s of [-1, 1]) {
+      const mx = s * (0.8 + gap * 0.5) + grind, my = yT - 1.0;
+      const c = pr(X.pt(zc(mx, my, 0.3)));
+      sk.np();
+      sk.ell(c[0], c[1], 1.0 * k, 0.74 * k, (p) => {
+        if (p.u * s < -0.42) { p.l -= 0.05 + (detail > 1 && Math.abs(((p.v + 1) * 2.5) % 1 - 0.5) < 0.2 ? 0.1 : 0); return M.mandTip; }
+        return M.mand;
+      }, { z: c[2], rz: 0.3 * k, rot: s * 0.32 });
+      // the mandibular palp arching over it
+      const a0 = pr(X.pt(zc(s * 1.6, yT - 0.4, 0.3))), a1 = pr(X.pt(zc(s * 1.05, yT - 0.25, 0.4))), a2 = pr(X.pt(zc(s * 0.55 + grind * 0.5, yT - 0.6, 0.42)));
+      sk.np();
+      sk.tube([[a0[0], a0[1]], [a1[0], a1[1]], [a2[0], a2[1]]], (q) => (0.24 - q * 0.08) * k, (p) => (Math.abs(p.t - 0.5) < 0.07 ? M.maxiEdge : M.maxi2), { z: (q) => a0[2] + (a2[2] - a0[2]) * q + 0.1 * k });
+    }
+    // second maxillipeds: narrow fringed blades that beat to drive water through the gills
+    for (const s of [-1, 1]) {
+      const beat = Math.sin(t * 21 + s * 1.3) * 0.07 * (0.4 + gap);
+      const x0 = s * (0.32 + gap * 0.75 + beat);
+      sk.np();
+      plate(zc(x0, yB + 0.25, 0.45), [s * 1.0, 0, 0.05], [s * 0.14, yT - yB - 1.6, fz(0, yT - 1.35) - fz(0, yB + 0.25)],
+        [[0, 0.05], [0.7, 0], [1, 0.3], [1, 0.85], [0.6, 1], [0.1, 0.95]], [0, 0.1, 1],
+        (a, b, p) => { p.l += 0.08 - Math.abs(a - 0.5) * 0.2 - (Math.abs(b - 0.48) < 0.05 ? 0.12 : 0); return a < 0.14 && detail > 1 && ((b * 11) % 1) < 0.5 ? M.maxiEdge : M.maxi2; });
+    }
+    // the third maxillipeds: the doors. Hinged on the outer edge, the inner edge swings toward us.
+    const ang = gap * 0.7 + Math.sin(t * 7.3) * 0.03 * gap;
+    const wp = hw * 0.97, yI = yB + (yT - yB) * 0.56;
+    const outs: { s: number; tip: V3; ear: V3; exo: V3; fr: V3 }[] = [];
+    for (const s of [-1, 1]) {
+      const a = ang * (s < 0 ? 1 : 0.94);
+      const U: V3 = [-s * wp * Math.cos(a), 0, wp * Math.sin(a)];
+      const nrm: V3 = [s * Math.sin(a), 0.12, Math.cos(a)];
+      const Vi = VV(yB, yI), Vm = VV(yI, yT + 0.15);
+      // ischium: the big lower plate, a groove along it, the toothed inner margin
+      sk.np();
+      const O1 = zc(s * hw * 0.99, yB - 0.05, 0.7);
+      plate(O1, U, Vi,
+        [[-0.02, 0.1], [0.1, 0], [0.5, -0.03], [0.9, 0], [1, 0.07], [1, 1], [0.02, 1], [-0.05, 0.6]], nrm,
+        (u, v, p) => {
+          p.l += 0.1 - Math.abs(u - 0.55) * 0.34 - (v < 0.1 ? 0.1 : 0) - (v > 0.9 ? 0.16 : 0);
+          if (Math.abs(u - 0.44 - v * 0.06) < 0.055) p.l -= 0.14; // the ischial sulcus
+          else if (Math.abs(u - 0.53 - v * 0.06) < 0.04) p.l += 0.07;
+          if (u > 0.9) p.l += ((v * (detail > 1 ? 8 : 5)) % 1) < 0.45 ? 0.06 : -0.12; // the crista dentata: a row of tiny blunt knobs
+          if (u < 0.06) p.l -= 0.06;
+          if (detail > 1 && hh(u * 14, v * 9, 31) < 0.08) p.l += 0.08;
+          return M.maxi;
+        }, 0.2);
+      // merus: the squarish upper plate with its outer "ear"
+      sk.np();
+      const O2 = zc(s * hw * 0.99, yI, 0.72);
+      const U2: V3 = vmul(U, 0.9);
+      plate(O2, U2, Vm,
+        [[0, 0], [0.86, 0], [0.92, 0.5], [0.8, 0.94], [0.46, 1], [0.06, 0.97], [-0.13, 0.78], [-0.12, 0.32]], nrm,
+        (u, v, p) => {
+          p.l += 0.16 - Math.abs(u - 0.4) * 0.3 - Math.abs(v - 0.55) * 0.2;
+          if (u > 0.7 && v > 0.62) p.l -= 0.12; // the notch the palp sits in
+          if (detail > 1 && hh(u * 12, v * 8, 37) < 0.08) p.l += 0.08;
+          if (u < -0.04 || v > 0.9) p.l += 0.1;
+          return M.maxi;
+        }, 0.25);
+      const pAt = (O: V3, Uv: V3, Vv: V3, u: number, v: number): V3 => vadd(O, vadd(vmul(Uv, u), vmul(Vv, v)));
+      // a fringe of stiff setae along the lower margin of the ischium
+      if (detail > 1) for (let j = 0; j < 9; j++) {
+        const q0 = pr(X.pt(pAt(O1, U, Vi, 0.1 + j * 0.1, 0.02)));
+        const sw = Math.sin(t * 5 + j * 0.9) * 0.15;
+        sk.line(q0[0], q0[1], q0[0] + sw * k, q0[1] + (0.5 + (j % 3) * 0.12) * k, M.seta, 0.65, q0[2] + 0.4 * k);
+      }
+      outs.push({ s, tip: pAt(O2, U2, Vm, 0.78, 0.86), ear: pAt(O2, U2, Vm, -0.1, 0.9), exo: pAt(O1, U, Vi, -0.04, 0.05), fr: vnorm(nrm) });
+    }
+    // palps (carpus, propodus, dactylus) folded over the inner corners; exopods up the outer edges
+    for (const o2 of outs) {
+      const s = o2.s, wig = Math.sin(t * 11 + s) * 0.12 * gap;
+      const p0 = vadd(o2.tip, vmul(o2.fr, 0.35));
+      const p1 = vadd(p0, [-s * (0.42 + wig), -0.3, 0.25]);
+      const p2 = vadd(p1, [-s * (0.12 - wig), -0.6, 0.12]);
+      const p3 = vadd(p2, [s * 0.08, -0.5, 0.05]);
+      const q = [p0, p1, p2, p3].map(v => pr(X.pt(v)));
+      sk.np();
+      sk.tube(q.map(v => [v[0], v[1]] as V2), (u) => (0.3 - u * 0.12) * k, (p) => (Math.abs(p.t - 0.36) < 0.05 || Math.abs(p.t - 0.68) < 0.05 ? M.maxiEdge : M.maxi), { z: (u) => q[0][2] + (q[3][2] - q[0][2]) * u + 0.55 * k });
+      if (detail > 1) for (let j = 0; j < 4; j++) {
+        const e = q[3], ag = Math.PI / 2 + (j - 1.5) * 0.35 + Math.sin(t * 6 + j) * 0.1;
+        sk.line(e[0], e[1], e[0] + Math.cos(ag) * 0.7 * k, e[1] + Math.sin(ag) * 0.7 * k, M.seta, 0.7, e[2] + 0.6 * k);
+      }
+      // the exopod: a slim rod up the outside of the plate ending in a little curled flagellum
+      const e0 = vadd(o2.exo, vmul(o2.fr, 0.3)), e1 = vadd(o2.ear, vadd(vmul(o2.fr, 0.35), [s * 0.1, -0.15, 0]));
+      const e2: V3 = vadd(e1, [-s * 0.55, 0.32, 0.1]), e3: V3 = vadd(e2, [-s * 0.3, -0.18 + Math.sin(t * 9 + s) * 0.1, 0.05]);
+      const r = [e0, e1, e2, e3].map(v => pr(X.pt(v)));
+      sk.np();
+      sk.tube(r.map(v => [v[0], v[1]] as V2), (u) => (u < 0.62 ? 0.24 : 0.14) * k, (p) => (p.t > 0.62 ? M.maxiEdge : M.maxi), { z: (u) => r[0][2] + (r[3][2] - r[0][2]) * u + 0.45 * k });
+    }
+    // froth: little bubbles that bead along the seams and the lower lip, swell and pop
+    const nb = 4 + Math.round(gap * 6 + (P.froth ?? 0) * 8);
+    for (let i = 0; i < nb; i++) {
+      const life = ((t * (0.45 + hh(i, 3, 41) * 0.5)) + hh(i, 4, 41)) % 1;
+      const top = i % 4 === 3;
+      const bx = top ? (i % 8 < 4 ? -1 : 1) * (hw * 0.85 + hh(i, 1, 41) * 0.4) : (hh(i, 1, 41) - 0.5) * 1.8 * (0.6 + gap);
+      const by = top ? yT - 0.1 + hh(i, 2, 41) * 0.4 : yB + 0.2 + hh(i, 2, 41) * 0.55 - life * 0.35;
+      const rr = (0.22 + hh(i, 5, 41) * 0.36) * Math.sqrt(Math.sin(life * Math.PI)) * k;
+      if (rr < 0.6) continue;
+      const c = pr(X.pt(zc(bx, by, 1.6 + gap * 1.2)));
+      // a clear film: only the rim and a glint show, the mouthparts read through the middle
+      sk.np(true);
+      if (rr < 1.3) sk.dot(c[0], c[1], M.froth, 0.8, c[2] + k);
+      else sk.ell(c[0], c[1], rr, rr, (p) => (p.u * p.u + p.v * p.v > 0.42 ? M.froth : 0), { z: c[2] + k, rz: rr * 0.6 });
+      if (rr > 1.6) sk.over(Math.floor(c[0] - rr * 0.4), Math.floor(c[1] - rr * 0.45), hex('#ffffff'));
     }
   }
   // ---- eye stalks
@@ -418,24 +575,38 @@ export function drawTrycop(sk: Sk, P: TrycopPose, o: TrycopOpts): TrycopOut {
     const e = P.eyes[side];
     // (the small sprite cheats like a pixel artist would: the stalks rise from the top of the dome and
     // lean back, so the eyes break the silhouette instead of sitting on the shell like a face)
-    const base = X.pt(small ? [s * 2.4, H * 0.62, D * 0.56] : [s * 2.2, H * 0.28, D * 0.86]);
-    const up = vnorm([s * 0.16 + e.sw * 0.55, 1, (small ? -0.5 : 0.3) - Math.abs(e.sw) * 0.1]);
+    const base = X.pt(small ? [s * 2.4, H * 0.62, D * 0.56] : [s * 3.3, H * 0.12, D * 0.88]);
+    const up = vnorm([s * (small ? 0.16 : 0.3) + e.sw * 0.55, 1, (small ? -0.5 : 0.3) - Math.abs(e.sw) * 0.1]);
     const down = vnorm([s * 1, 0.12, 0.4]);
     const dir = X.dir(vnorm(vlerp(up, down, sm(e.fold))));
     const L = (small ? 4.2 : 4.3) * (1 - e.fold * 0.35);
     const tip = vadd(base, vmul(dir, L));
     sk.np();
     const b2 = pr(base), t2 = pr(tip);
-    sk.tube([[b2[0], b2[1]], [t2[0], t2[1]]], t => (0.72 - t * 0.12) * k, (p) => (detail > 0 && Math.abs(p.t - 0.55) < 0.06 ? M.shellDark : M.stalk), { z: t => b2[2] + (t2[2] - b2[2]) * t });
+    // (up close the stalk is a pale, jointed peduncle so it reads as a stalk against the red shell)
+    sk.tube([[b2[0], b2[1]], [t2[0], t2[1]]], t => (small ? 0.72 - t * 0.12 : 0.86 - t * 0.26) * k, (p) => {
+      if (detail > 0 && Math.abs(p.t - 0.45) < 0.06) return M.shellDark;
+      return detail > 1 ? M.stalkHi : M.stalk;
+    }, { z: t => b2[2] + (t2[2] - b2[2]) * t });
     // the cornea: a dark kidney bulb at the tip with a wet glint
     sk.np();
     const ec = vadd(tip, vmul(dir, 0.55));
     const e2 = pr(ec);
     const er = (small ? 1.05 : 1.08) * k;
-    sk.ell(e2[0], e2[1], er * 1.05, er, M.eye, { z: e2[2] + 0.5 * k, rz: er });
+    // up close the cornea reads as a compound eye: a faint lattice of facets under the glint
+    sk.ell(e2[0], e2[1], er * 1.05, er, (p) => {
+      if (detail > 1 && p.u * p.u + p.v * p.v < 0.75 && ((Math.floor(p.x) + Math.floor(p.y)) & 1)) p.l += 0.07;
+      return M.eye;
+    }, { z: e2[2] + 0.5 * k, rz: er });
     const hx = Math.floor(e2[0] - er * 0.35), hy = Math.floor(e2[1] - er * 0.45);
-    sk.over(hx, hy, hex('#ffffff'));
-    if (k > 2) { sk.over(hx + 1, hy, hex('#ffffff')); sk.over(hx, hy + 1, hex('#d8e8ff')); sk.over(Math.floor(e2[0] + er * 0.3), Math.floor(e2[1] + er * 0.35), hex('#6a7ab0')); }
+    if (detail > 1) {
+      // a wet sheen across the facets rather than a cartoon catch-light
+      sk.over(hx, hy, hex('#e8f0ff')); sk.over(hx + 1, hy, hex('#a8b8d8', 200)); sk.over(hx, hy + 1, hex('#8090b8', 180));
+      sk.over(Math.floor(e2[0] + er * 0.3), Math.floor(e2[1] + er * 0.35), hex('#4a5a80'));
+    } else {
+      sk.over(hx, hy, hex('#ffffff'));
+      if (k > 2) { sk.over(hx + 1, hy, hex('#ffffff')); sk.over(hx, hy + 1, hex('#d8e8ff')); sk.over(Math.floor(e2[0] + er * 0.3), Math.floor(e2[1] + er * 0.35), hex('#6a7ab0')); }
+    }
     eyeOut.push([e2[0], e2[1]]);
   }
   // antennules: two short feathered whips between the eyes
@@ -448,6 +619,23 @@ export function drawTrycop(sk: Sk, P: TrycopPose, o: TrycopOpts): TrycopOut {
       sk.np(true);
       const a = pr(b), c = pr(t), d = pr(t2);
       sk.tube([[a[0], a[1]], [c[0], c[1]], [d[0], d[1]]], t => (0.36 - t * 0.2) * k, M.fork, { z: t => a[2] + (d[2] - a[2]) * t + 0.4 * k });
+    }
+    // the antennae proper: long, fine whips from the inner corners of the orbits, sweeping out
+    // beside the eye stalks and twitching as the crab tastes the water
+    for (const s of [-1, 1]) {
+      let p: V3 = X.pt([s * 1.55, H * 0.02, D * 0.97]);
+      let a = pr(p);
+      const n = 9;
+      for (let j = 0; j < n; j++) {
+        const u = j / (n - 1);
+        const tw = Math.sin(P.flick * 0.7 + s * 2 + u * 3) * 0.25 * u;
+        const d = X.dir(vnorm([s * (0.22 + u * 0.5) + tw, 0.95 - u * 0.35, 0.55 - u * 0.25]));
+        p = vadd(p, vmul(d, 0.72));
+        const b = pr(p);
+        sk.line(a[0], a[1], b[0], b[1], M.antenna, 0.62 - u * 0.15, Math.max(a[2], b[2]) + 0.3 * k);
+        if (j < 2 && k > 3) sk.line(a[0] + 1, a[1], b[0] + 1, b[1], M.antenna, 0.5, Math.max(a[2], b[2]) + 0.3 * k);
+        a = b;
+      }
     }
   }
   // ---- walking legs
@@ -602,11 +790,23 @@ export function drawTrycop(sk: Sk, P: TrycopPose, o: TrycopOpts): TrycopOut {
     const fingerFill = (dac: boolean) => (p: { t: number; v: number; l: number }) => {
       if (crusher && p.t > 0.58) return M.crushTip;
       if (!crusher && p.t > 0.84) return M.tip;
-      // teeth on the biting edge: molar knobs on the crusher, a saw edge on the cutter
+      // denticles on the biting edge, calcified and worn like the fingers themselves: one big rounded
+      // molar near the crusher's base and smaller blunt tubercles toward its tip; an uneven saw of
+      // small teeth on the cutter, each a slightly different size
       const biting = dac ? p.v < -0.35 : p.v > 0.35;
       if (biting && p.t > 0.08) {
-        if (crusher && Math.abs(((p.t * 3) % 1) - 0.5) < 0.28 && p.t < 0.56) return M.tooth;
-        if (!crusher && ((p.t * (detail > 1 ? 9 : 5)) % 1) < 0.5 && p.t < 0.84) return M.tooth;
+        const av = Math.abs(p.v);
+        if (crusher && p.t < 0.56) {
+          const seg = (p.t - 0.08) * 6.2, i = Math.floor(seg), f = seg - i;
+          const sz = i === 0 ? 0.44 : 0.3 - i * 0.03 + hh(i, dac ? 3 : 4, 51) * 0.08;
+          const hgt = i === 0 ? 0.3 : 0.5;
+          if (Math.abs(f - 0.5) < sz && av > hgt + Math.abs(f - 0.5) * 0.5) { p.l += av > 0.8 ? -0.08 : 0.04; return M.tooth; }
+        }
+        if (!crusher && p.t < 0.84) {
+          const n = detail > 1 ? 11 : 6, seg = p.t * n, i = Math.floor(seg), f = seg - i;
+          if (f < 0.32 + hh(i, dac ? 1 : 2, 52) * 0.3 && av > 0.5 + f * 0.3) { p.l -= f * 0.12; return M.tooth; }
+        }
+        if (av > 0.7) p.l -= 0.05;
       }
       if (p.v * (dac ? 1 : -1) > 0.6) p.l += 0.07;
       return M.claw;
