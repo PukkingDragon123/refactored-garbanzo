@@ -27,6 +27,7 @@ import { add, fits } from '../inventory';
 import { itemIconURL } from '../../art/itemicons';
 import { groundY, WRECK } from '../../art/island4/layout';
 import { questStatus, startQuest } from '../quests';
+import * as Day from './day';
 import { dayNumber } from './day';
 import { spend } from './energy';
 import * as B from './boat';
@@ -39,13 +40,13 @@ const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 const F = (k: string) => !!game.save.flags[k];
 
 /** where the Kitten sits: x on the walk line, d px toward the camera on the dry sand */
-export const YARD = { x: 1330, d: 44 };
+export const YARD = { x: 1190, d: 44 };
 /** the tender as found, east of the wreck's torn bow */
 export const BURIED = { x: 1078, d: 36 };
 const PLANKS = [
   { id: 'galley', x: 628, inside: true, n: 2, label: 'Pry planks off the smashed galley cupboards' },
   { id: 'bow', x: 903, inside: false, n: 2, label: 'Pry splintered planking off the torn bow' },
-  { id: 'sand', x: 1262, inside: false, n: 1, label: 'Pull a washed-up plank out of the sand' },
+  { id: 'sand', x: 960, inside: false, n: 1, label: 'Pull a washed-up plank out of the sand' },
 ];
 const GUM = [{ id: 'gum1', x: 6248 }, { id: 'gum2', x: 6612 }];
 const FLAX = { id: 'flax', x: 3652, n: 3 };
@@ -155,6 +156,8 @@ export class Boatyard {
     if (!s.cutscene && !game.ui.blocking) bs.playT += dt;
     this.bob += dt;
     this.sparkT -= dt;
+    // the camp day loop's Joshu talk (flag v10:boatTalk) already told the story: just start the quest
+    if (questStatus('v10kitten') === 'hidden' && F('v10:boatTalk')) { bs.seen['intro'] = true; startQuest('v10kitten'); }
     // the repair talk: Day 2 or later, daylight, at camp, a quiet moment
     if (questStatus('v10kitten') === 'hidden' && !bs.seen['intro'] && F('v4:day1') && this.daylight() && !s.cutscene && !game.ui.blocking && !s.busyAction && s.player.x > 1300 && s.player.x < 2600 && !s.inWreck) {
       this.introT += dt;
@@ -849,7 +852,17 @@ export function attachBoatyard(st: IsleStory): Boatyard {
   const y = new Boatyard(st);
   y.setup();
   current = y;
+  hookArrive();
   return y;
+}
+// the camp day loop's arrival cutscene: home by boat, the Kitten slides up the beach (day.ts onArrive,
+// looked up loosely so this file also builds against the day module's contract stub)
+let arriveHooked = false;
+function hookArrive() {
+  if (arriveHooked) return;
+  arriveHooked = true;
+  const on = (Day as unknown as { onArrive?: (fn: (how: string) => void | Promise<void>) => void }).onArrive;
+  on?.(how => (how === 'boat' ? playBoatLanding() : undefined));
 }
 /** hooks for the camp module's arrival / departure cutscenes */
 export const playBoatLanding = () => current?.landing() ?? Promise.resolve();

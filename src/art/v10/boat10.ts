@@ -424,6 +424,10 @@ export function kittenCamp(stage: number): Spr {
   if (stage >= 4) parts.push(outboard('up'));
   return stack(parts);
 }
+/** run up a beach at the far end of a trip: rig furled, the outboard tilted up out of the sand */
+export function kittenBeached(): Spr {
+  return stack([sailRig('furled'), kittenHull(6, 'all'), outboard('up')]);
+}
 /** driftwood chocks under the keel and the float */
 function chocks(): Spr {
   const b = mk();
