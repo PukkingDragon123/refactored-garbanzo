@@ -2,11 +2,10 @@
 // - Camera: the import window. The camera roll's real JPEGs as tiles (tap to toggle, all / none),
 //   then Upload: each photo slides onto the stage, transfers, gets scanned, and the laptop's verdict
 //   pops up as boxes over the animals (green with the name, red with the reason it can't be
-//   identified). New species, behaviours and findings are celebrated as they land.
-// - Research Log (replaces the old hardcoded Discoveries): one page per documented species, built
-//   around the uploaded photo that documented it (subject highlighted; pick a better cover later),
-//   the field-guide data, the research sheet, behaviours ticked off by photos, findings unlocked by
-//   their evidence photos. Undiscovered species only appear as a "?" count.
+//   identified). New species, behaviours and findings are celebrated as they land. (The upload stage
+//   is shared with V10's Upload Everything, see ../v10/uploadAll.)
+// - Research Log: now the Fauna pages of the Zealandia Encyclopedia (../v10/encyclopedia); disc()
+//   opens it on a species.
 // - Photos: the uploaded photos (plus a few of Mori's old ones) and a big viewer with the analysis.
 
 import { game } from '../../game/game';
@@ -17,8 +16,9 @@ import type { Species } from '../../game/species';
 import { SPECIES_BY_ID } from '../../game/species';
 import type { UploadRecord, UploadSubject } from '../../game/save';
 import {
-  cameraRoll, pendingCount, uploadPhoto, UploadOutcome, documented, speciesTotal, entry, coverOf, photosOf, setCover, markSeen, upload,
+  cameraRoll, pendingCount, uploadPhoto, UploadOutcome, entry, setCover, upload, newSession, addUpload, endSession,
 } from '../../game/v9/research9';
+import type { Session } from '../../game/v9/research9';
 import { Fx, sfx, icon, clamp } from '../v7/aeroFx';
 
 export interface OSWin { el: HTMLElement; bd: HTMLElement; id: string; closing: boolean }
@@ -43,20 +43,33 @@ export interface OSCtx {
   badges(): void;
   /** Mori's old pixel photos for the Photos app */
   oldPhotos: { key: string; cap: string; make: () => HTMLCanvasElement }[];
+  /** V10: a tray balloon */
+  balloon(title: string, text: string, ms?: number, o?: { icon?: string; onClick?: () => void }): void;
+  /** V10: launch a desktop app by id, with an optional argument (an encyclopedia entry key, a mail id) */
+  open(app: string, arg?: string): void;
+  /** V10: re-render every open research window (encyclopedia, photos, mail, skills) and the badges */
+  refresh(): void;
+  /** V10: an upload session finished (the agency answers it) */
+  sessionDone(s: Session): void;
+  /** V10: a desktop icon by name (the aero set plus the V10 icons) */
+  icon(name: string, scale?: number): HTMLCanvasElement;
 }
 
-const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+export const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const TOD: Record<string, string> = { dawn: 'Dawn', day: 'Daytime', dusk: 'Dusk', night: 'Night' };
-const SITE: Record<string, string> = { sea: 'Aboard the Kittiwake', coast: 'The island', camp: 'Camp' };
-const when = (p: { day: number; time: string }) => `Day ${p.day} · ${TOD[p.time] ?? p.time}`;
-const stars = (n: number) => '★'.repeat(n) + '☆'.repeat(Math.max(0, 5 - n));
-const STATUS = ['', 'Common', 'Uncommon', 'Scarce', 'Rare', 'Legendary'];
-const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
-const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
-const behLabel = (sp: Species | null, b: string) => sp?.behaviors[b] ?? b;
+export const SITE: Record<string, string> = { sea: 'Aboard the Kittiwake', coast: 'The island', camp: 'Camp' };
+export const when = (p: { day: number; time: string }) => `Day ${p.day} · ${TOD[p.time] ?? p.time}`;
+export const stars = (n: number) => '★'.repeat(n) + '☆'.repeat(Math.max(0, 5 - n));
+export const STATUS = ['', 'Common', 'Uncommon', 'Scarce', 'Rare', 'Legendary'];
+export const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+export const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+export const behLabel = (sp: Species | null, b: string) => sp?.behaviors[b] ?? b;
+
+/** what one run of the photo upload stage did */
+export interface PhotoTotals { photos: number; species: string[]; beh: number; facts: number; rp: number; none: number; ses: Session }
 
 /** CSS background crop of a photo around a box (normalised coords) for a thumb of the given aspect */
-function cropBg(img: string, bbox: [number, number, number, number], aspect: number, pad = 2.2): string {
+export function cropBg(img: string, bbox: [number, number, number, number], aspect: number, pad = 2.2): string {
   const [x0, y0, x1, y1] = bbox;
   const A = 16 / 9;
   let rh = clamp(Math.max((y1 - y0) * pad, ((x1 - x0) * pad * A) / aspect), 0.3, 1);
@@ -68,16 +81,21 @@ function cropBg(img: string, bbox: [number, number, number, number], aspect: num
   return `background-image:url(${img});background-size:${(100 / rw).toFixed(2)}% ${(100 / rh).toFixed(2)}%;background-position:${px.toFixed(2)}% ${py.toFixed(2)}%`;
 }
 
-const boxStyle = (b: [number, number, number, number]) => {
+export const boxStyle = (b: [number, number, number, number]) => {
   const [x0, y0, x1, y1] = b;
   return `left:${(x0 * 100).toFixed(2)}%;top:${(y0 * 100).toFixed(2)}%;width:${((x1 - x0) * 100).toFixed(2)}%;height:${((y1 - y0) * 100).toFixed(2)}%`;
+};
+/** a subject box with a little breathing room (for the highlight over a hero photo) */
+export const padBox = (bb: [number, number, number, number]): [number, number, number, number] => {
+  const w = bb[2] - bb[0], h = bb[3] - bb[1];
+  return [clamp(bb[0] - w * 0.12 - 0.01, 0, 1), clamp(bb[1] - h * 0.12 - 0.015, 0, 1), clamp(bb[2] + w * 0.12 + 0.01, 0, 1), clamp(bb[3] + h * 0.12 + 0.015, 0, 1)];
 };
 
 export function researchApps(os: OSCtx) {
   const where = os.field ? 'field' : 'ship';
   /** re-render hooks of the open research windows */
-  const live: { cam?: () => void; disc?: (focus?: string) => void; photos?: () => void } = {};
-  const refreshAll = () => { live.disc?.(); live.photos?.(); os.badges(); };
+  const live: { cam?: () => void; photos?: () => void } = {};
+  const refreshAll = () => os.refresh();
 
   /** a tween on the desktop's frame loop; resolves when done (or at once if the laptop closed) */
   const tween = (sec: number, f: (k: number) => void) => new Promise<void>(res => {
@@ -152,86 +170,11 @@ export function researchApps(os: OSCtx) {
 
     const run = async (list: RawPhoto[]) => {
       busy = true;
-      const N = list.length;
-      const k = clamp(5 / N, 0.38, 1);
       b.classList.add('up');
-      b.innerHTML = `<div class="imp-q"></div><div class="imp-main"><div class="imp-stage"><div class="ph"><img alt="" draggable="false"><div class="boxes"></div><div class="scan"></div><div class="stamp"></div></div></div>
-        <div class="imp-side"><div class="imp-bar"></div><div class="imp-feed"></div></div></div>`;
-      const q = b.querySelector('.imp-q') as HTMLElement, ph = b.querySelector('.ph') as HTMLElement, img = ph.querySelector('img') as HTMLImageElement;
-      const boxes = ph.querySelector('.boxes') as HTMLElement, scan = ph.querySelector('.scan') as HTMLElement, stamp = ph.querySelector('.stamp') as HTMLElement;
-      const feed = b.querySelector('.imp-feed') as HTMLElement;
-      const bar = os.progress('aq');
-      (b.querySelector('.imp-bar') as HTMLElement).appendChild(bar.el);
-      bar.set(0, `Uploading 1 of ${N}`, true);
-      const qs = list.map(p => { const e = el('div', 'qt', '<img alt="" draggable="false"><i></i>'); (e.querySelector('img') as HTMLImageElement).src = p.img; q.appendChild(e); return e; });
-      const tot = { photos: 0, species: [] as string[], beh: 0, facts: 0, rp: 0, none: 0 };
-      for (let i = 0; i < N; i++) {
-        if (gone()) break;
-        const p = list[i];
-        qs[i].classList.add('on');
-        qs[i].scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
-        img.src = p.img;
-        boxes.innerHTML = ''; stamp.className = 'stamp'; stamp.textContent = '';
-        os.retrigger(ph, 'in');
-        const job = uploadPhoto(p, where);
-        let lastQ = -1;
-        await tween(0.8 * k, f => {
-          bar.set((i + f * 0.7) / N, `Uploading ${i + 1} of ${N} · ${Math.round(f * 100)}%`);
-          const qq = Math.floor(f * 6);
-          if (qq !== lastQ) { lastQ = qq; sfx.tick(qq); if (!gone()) { const e = bar.edge(); os.fx.sparkle(e.x, e.y, 2, 30); os.fx.bubbles(e.x, e.y, 1, 6); } }
-        });
-        const out = await job;
-        tot.photos++;
-        os.badges();
-        if (gone()) break;
-        // the scan
-        bar.set((i + 0.85) / N, `Analysing photo ${i + 1}…`);
-        scan.style.animationDuration = 700 * k + 'ms';
-        os.retrigger(scan, 'go');
-        sfx.beep();
-        await wait(700 * k);
-        if (gone()) break;
-        // the verdicts
-        let j = 0;
-        for (const f of out.found) {
-          const known2 = !!entry(f.species);
-          const nm = f.ok || known2 ? f.sp?.name ?? 'Unknown animal' : 'Unidentified animal';
-          const bx = el('div', 'bx ' + (f.ok ? 'ok' : 'no'), f.ok || known2 ? `<span>${f.ok ? '✓' : '✕'} ${esc(nm)}${f.n > 1 ? ' ×' + f.n : ''}</span>` : '<span>✕ ?</span>');
-          bx.setAttribute('style', boxStyle(f.bbox));
-          if (f.bbox[1] < 0.18) bx.classList.add('lo');
-          boxes.appendChild(bx);
-          if (f.ok) sfx.pop(j++); else sfx.press();
-          await wait(260 * k);
-        }
-        if (!out.found.length) { stamp.className = 'stamp none'; stamp.textContent = p.af === 'foreground' ? 'Just leaves' : 'No animals'; tot.none++; }
-        feedLines(feed, p, out);
-        bar.set((i + 1) / N, `${i + 1} of ${N} uploaded`);
-        // celebrate
-        const c = os.center(ph);
-        if (out.newSpecies.length) {
-          stamp.className = 'stamp new';
-          stamp.innerHTML = `New species!<small>${esc(out.newSpecies.map(s => SPECIES_BY_ID[s]?.name ?? s).join(', '))}</small>`;
-          audio.play('discover', { vol: 0.6 });
-          os.fx.confetti(c.x, c.y - ph.offsetHeight / 2, 60, ph.offsetWidth * 0.8);
-          os.fx.sparkle(c.x, c.y, 16, 140);
-          await wait(1100 * k);
-        } else if (out.newFacts.length) {
-          audio.play('fact', { vol: 0.55 });
-          stamp.className = 'stamp fact'; stamp.innerHTML = `New finding!<small>${esc(out.newFacts[0][1].cat)}</small>`;
-          os.fx.sparkle(c.x, c.y, 14, 120);
-          await wait(800 * k);
-        } else if (out.newBeh.length) {
-          sfx.star();
-          os.floatText(c.x, c.y - 20, '+ behaviour', '#c8ff9a');
-          await wait(450 * k);
-        } else await wait(250 * k);
-        if (out.rp) { const cc = os.center(qs[i]); os.floatText(cc.x, cc.y, `+${out.rp} RP`, '#ffe27a'); }
-        qs[i].classList.remove('on'); qs[i].classList.add('done', out.found.some(f => f.ok) ? 'hit' : 'miss');
-        tot.species.push(...out.newSpecies); tot.beh += out.newBeh.length; tot.facts += out.newFacts.length; tot.rp += out.rp;
-        refreshAll();
-      }
+      const tot = await photoStage(b, list, gone);
       busy = false;
       refreshAll();
+      if (tot.photos) { endSession(tot.ses); os.sessionDone(tot.ses); }
       if (gone()) return;
       // the summary
       const side = b.querySelector('.imp-side') as HTMLElement;
@@ -241,7 +184,7 @@ export function researchApps(os: OSCtx) {
         <div class="rw"><i>${tot.beh}</i>${tot.beh === 1 ? 'behaviour' : 'behaviours'} recorded</div>
         ${tot.facts ? `<div class="rw"><i>${tot.facts}</i>new ${tot.facts === 1 ? 'finding' : 'findings'}</div>` : ''}
         ${tot.rp ? `<div class="rp">+${tot.rp} RP</div>` : ''}
-        <div class="bt"><div class="gel sm green ctl log">Open Research Log</div><div class="gel sm glass ctl more">${pendingCount() ? 'Back to the camera' : 'Done'}</div></div>`);
+        <div class="bt"><div class="gel sm green ctl log">Open Encyclopedia</div><div class="gel sm glass ctl more">${pendingCount() ? 'Back to the camera' : 'Done'}</div></div>`);
       side.insertBefore(sum, side.firstChild);
       (sum.querySelector('.log') as HTMLElement).addEventListener('click', () => { os.from(sum); disc(tot.species[0]); });
       (sum.querySelector('.more') as HTMLElement).addEventListener('click', () => { if (pendingCount()) render(); else os.closeWin('cam'); });
@@ -249,9 +192,97 @@ export function researchApps(os: OSCtx) {
       const c = os.center(b);
       os.fx.confetti(c.x, c.y - b.offsetHeight / 2, 50, b.offsetWidth * 0.6);
       os.fx.bubbles(c.x, c.y, 12, b.offsetWidth * 0.5);
-      // new species: the research log opens on the first one
+      // new species: the encyclopedia opens on the first one
       if (tot.species.length) setTimeout(() => { if (!os.closed() && b.isConnected) { os.from(sum); disc(tot.species[0]); } }, 1500);
     };
+  };
+
+  /**
+   * The upload stage (Camera import and Upload Everything): builds the queue, the photo stage and
+   * the verdict feed in `b`, then uploads the photos one by one with the scan and the verdict boxes.
+   * speed < 1 runs it faster (a function is read before every photo). Stops early if gone() turns true.
+   */
+  const photoStage = async (b: HTMLElement, list: RawPhoto[], gone: () => boolean, speed: number | (() => number) = 1): Promise<PhotoTotals> => {
+    const N = list.length;
+    const k0 = clamp(5 / Math.max(1, N), 0.38, 1);
+    b.innerHTML = `<div class="imp-q"></div><div class="imp-main"><div class="imp-stage"><div class="ph"><img alt="" draggable="false"><div class="boxes"></div><div class="scan"></div><div class="stamp"></div></div></div>
+      <div class="imp-side"><div class="imp-bar"></div><div class="imp-feed"></div></div></div>`;
+    const q = b.querySelector('.imp-q') as HTMLElement, ph = b.querySelector('.ph') as HTMLElement, img = ph.querySelector('img') as HTMLImageElement;
+    const boxes = ph.querySelector('.boxes') as HTMLElement, scan = ph.querySelector('.scan') as HTMLElement, stamp = ph.querySelector('.stamp') as HTMLElement;
+    const feed = b.querySelector('.imp-feed') as HTMLElement;
+    const bar = os.progress('aq');
+    (b.querySelector('.imp-bar') as HTMLElement).appendChild(bar.el);
+    bar.set(0, `Uploading 1 of ${N}`, true);
+    const qs = list.map(p => { const e = el('div', 'qt', '<img alt="" draggable="false"><i></i>'); (e.querySelector('img') as HTMLImageElement).src = p.img; q.appendChild(e); return e; });
+    const tot: PhotoTotals = { photos: 0, species: [], beh: 0, facts: 0, rp: 0, none: 0, ses: newSession() };
+    for (let i = 0; i < N; i++) {
+      if (gone()) break;
+      const k = k0 * (typeof speed === 'function' ? speed() : speed);
+      const p = list[i];
+      qs[i].classList.add('on');
+      qs[i].scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+      img.src = p.img;
+      boxes.innerHTML = ''; stamp.className = 'stamp'; stamp.textContent = '';
+      os.retrigger(ph, 'in');
+      const job = uploadPhoto(p, where);
+      let lastQ = -1;
+      await tween(0.8 * k, f => {
+        bar.set((i + f * 0.7) / N, `Uploading ${i + 1} of ${N} · ${Math.round(f * 100)}%`);
+        const qq = Math.floor(f * 6);
+        if (qq !== lastQ) { lastQ = qq; sfx.tick(qq); if (!gone()) { const e = bar.edge(); os.fx.sparkle(e.x, e.y, 2, 30); os.fx.bubbles(e.x, e.y, 1, 6); } }
+      });
+      const out = await job;
+      tot.photos++;
+      addUpload(tot.ses, out);
+      os.badges();
+      if (gone()) break;
+      // the scan
+      bar.set((i + 0.85) / N, `Analysing photo ${i + 1}…`);
+      scan.style.animationDuration = 700 * k + 'ms';
+      os.retrigger(scan, 'go');
+      sfx.beep();
+      await wait(700 * k);
+      if (gone()) break;
+      // the verdicts
+      let j = 0;
+      for (const f of out.found) {
+        const known2 = !!entry(f.species);
+        const nm = f.ok || known2 ? f.sp?.name ?? 'Unknown animal' : 'Unidentified animal';
+        const bx = el('div', 'bx ' + (f.ok ? 'ok' : 'no'), f.ok || known2 ? `<span>${f.ok ? '✓' : '✕'} ${esc(nm)}${f.n > 1 ? ' ×' + f.n : ''}</span>` : '<span>✕ ?</span>');
+        bx.setAttribute('style', boxStyle(f.bbox));
+        if (f.bbox[1] < 0.18) bx.classList.add('lo');
+        boxes.appendChild(bx);
+        if (f.ok) sfx.pop(j++); else sfx.press();
+        await wait(260 * k);
+      }
+      if (!out.found.length) { stamp.className = 'stamp none'; stamp.textContent = p.af === 'foreground' ? 'Just leaves' : 'No animals'; tot.none++; }
+      feedLines(feed, p, out);
+      bar.set((i + 1) / N, `${i + 1} of ${N} uploaded`);
+      // celebrate
+      const c = os.center(ph);
+      if (out.newSpecies.length) {
+        stamp.className = 'stamp new';
+        stamp.innerHTML = `New species!<small>${esc(out.newSpecies.map(s => SPECIES_BY_ID[s]?.name ?? s).join(', '))}</small>`;
+        audio.play('discover', { vol: 0.6 });
+        os.fx.confetti(c.x, c.y - ph.offsetHeight / 2, 60, ph.offsetWidth * 0.8);
+        os.fx.sparkle(c.x, c.y, 16, 140);
+        await wait(1100 * k);
+      } else if (out.newFacts.length) {
+        audio.play('fact', { vol: 0.55 });
+        stamp.className = 'stamp fact'; stamp.innerHTML = `New finding!<small>${esc(out.newFacts[0][1].cat)}</small>`;
+        os.fx.sparkle(c.x, c.y, 14, 120);
+        await wait(800 * k);
+      } else if (out.newBeh.length) {
+        sfx.star();
+        os.floatText(c.x, c.y - 20, '+ behaviour', '#c8ff9a');
+        await wait(450 * k);
+      } else await wait(250 * k);
+      if (out.rp) { const cc = os.center(qs[i]); os.floatText(cc.x, cc.y, `+${out.rp} RP`, '#ffe27a'); }
+      qs[i].classList.remove('on'); qs[i].classList.add('done', out.found.some(f => f.ok) ? 'hit' : 'miss');
+      tot.species.push(...out.newSpecies); tot.beh += out.newBeh.length; tot.facts += out.newFacts.length; tot.rp += out.rp;
+      refreshAll();
+    }
+    return tot;
   };
 
   /** the verdict lines for one uploaded photo */
@@ -267,7 +298,7 @@ export function researchApps(os: OSCtx) {
       if (f.ok) {
         const isNew = out.newSpecies.includes(f.species);
         const bh = f.beh.map(x => `${out.newBeh.some(([s, b]) => s === f.species && b === x) ? '<em>+</em>' : ''}${esc(behLabel(f.sp, x))}`).join(', ');
-        ls.appendChild(el('div', 'ln ok', `<b>✓ ${esc(f.sp?.name ?? f.species)}</b>${f.n > 1 ? ` ×${f.n}` : ''}${isNew ? ' <span class="tag">NEW SPECIES</span>' : ''}<small>${bh ? bh + ' · ' : ''}<span class="st">${stars(f.stars)}</span></small>`));
+        ls.appendChild(el('div', 'ln ok', `<b>✓ ${esc(f.sp?.name ?? f.species)}</b>${f.n > 1 ? ` ×${f.n}` : ''}${isNew ? ' <span class="tag">NEW SPECIES</span>' : ''}<small>${f.auto ? 'Auto-tagged from a poor photo · ' : ''}${bh ? bh + ' · ' : ''}<span class="st">${stars(f.stars)}</span></small>`));
       } else {
         const nm = entry(f.species) ? f.sp?.name ?? f.species : 'Unidentified animal';
         ls.appendChild(el('div', 'ln no', `<b>✕ ${esc(nm)}</b><small>${esc(f.why ?? 'Not identifiable')}</small>`));
@@ -280,139 +311,8 @@ export function researchApps(os: OSCtx) {
   };
 
   // ================================================================ Research Log
-  const shownCards = new Set<string>();
-  const disc = (focus?: string) => {
-    if (os.find('disc')) { live.disc?.(focus); os.win('disc', '', 'disc', 0, 0, el('div')); return; }
-    const b = el('div', 'rl');
-    let cur: string | null = focus ?? null;
-    let picking = false;
-    const render = (f?: string) => {
-      if (f) { cur = f; picking = false; }
-      const docs = documented();
-      if (!cur || !entry(cur)) cur = docs.find(d => d.e.fresh)?.id ?? docs[docs.length - 1]?.id ?? null;
-      const total = Math.max(speciesTotal(), docs.length);
-      b.innerHTML = `<div class="rl-top"><b>Research Log</b><span class="ct">${docs.length} of ${total} species documented</span><div class="pw"></div></div><div class="rl-body"><div class="rl-list"></div><div class="rl-page"></div></div>`;
-      const pr = os.progress();
-      (b.querySelector('.pw') as HTMLElement).replaceWith(pr.el);
-      pr.set(docs.length / Math.max(1, total), `${Math.round((docs.length / Math.max(1, total)) * 100)}%`, true);
-      const list = b.querySelector('.rl-list') as HTMLElement, pg = b.querySelector('.rl-page') as HTMLElement;
-      if (!docs.length) {
-        b.classList.add('empty');
-        pg.innerHTML = `<div class="rl-empty"><b>Nothing documented yet.</b><span>A species gets its page here once a photo of it is uploaded from the camera. It has to be a good photo: sharp, close enough, and more of the animal than a tail.</span></div>`;
-        if (pendingCount()) { const go = el('div', 'gel green ctl', `Import ${plural(pendingCount(), 'photo')} from the camera`); go.addEventListener('click', () => { os.from(go); cam(); }); (pg.firstElementChild as HTMLElement).appendChild(go); }
-        list.appendChild(el('div', 'rl-q', `<i>?</i><span>${total} species out there</span>`));
-        return;
-      }
-      b.classList.remove('empty');
-      let popI = 0;
-      for (const d of docs) {
-        const cov = coverOf(d.id);
-        const sub = cov?.subjects.find(s => s.species === d.id);
-        const nb = Object.keys(d.sp.behaviors).length;
-        const card = el('div', 'rl-card ctl' + (d.id === cur ? ' on' : '') + (d.e.fresh ? ' fresh' : ''), `<div class="th"></div><div class="tx"><b>${esc(d.sp.name)}</b><i>${esc(d.sp.group)}</i><span>Behaviours ${d.e.beh.length}/${nb}</span></div>`);
-        if (cov) (card.querySelector('.th') as HTMLElement).setAttribute('style', cropBg(cov.img, sub?.bbox ?? [0.3, 0.3, 0.7, 0.7], 4 / 3));
-        if (!shownCards.has(d.id)) { card.classList.add('pop'); card.style.animationDelay = popI++ * 90 + 'ms'; shownCards.add(d.id); }
-        card.addEventListener('click', () => { if (cur === d.id) return; cur = d.id; picking = false; sfx.pick(); render(); });
-        list.appendChild(card);
-      }
-      const left = total - docs.length;
-      if (left > 0) list.appendChild(el('div', 'rl-q', `<i>?</i><span>${left} more ${left === 1 ? 'species' : 'species'} out there</span>`));
-      if (cur) page(pg, cur);
-      list.querySelector('.on')?.scrollIntoView?.({ block: 'nearest' });
-    };
-
-    const page = (pg: HTMLElement, id: string) => {
-      const sp = SPECIES_BY_ID[id], e = entry(id)!;
-      const cov = coverOf(id);
-      const sub = cov?.subjects.find(s => s.species === id);
-      const R = sp.research;
-      const fresh = !!e.fresh;
-      const behs = Object.entries(sp.behaviors);
-      const firstRec = upload(e.first);
-      const status = R?.status ?? STATUS[clamp(sp.rarity, 1, 5)];
-      pg.innerHTML = `<div class="rl-hero${fresh ? ' fresh' : ''}"><div class="ph">${cov ? '<img alt="" draggable="false"><div class="hl"></div>' : '<div class="gone">photo no longer stored</div>'}${fresh ? '<div class="nw">NEW!</div>' : ''}</div>
-          <div class="cap"><span>${e.cover === e.first ? 'First documented' : 'Cover photo'} · ${cov ? when(cov) : when({ day: e.day, time: 'day' })}${firstRec && e.cover !== e.first ? ` <i>(first documented ${when(firstRec)})</i>` : ''}</span>${photosOf(id).length > 1 ? '<div class="gel sm glass ctl pick">Change cover</div>' : ''}</div><div class="picker"></div></div>
-        <div class="rl-title"><h2>${esc(sp.name)}</h2><i>${esc(sp.sci)}</i><div class="chips"><span>${esc(sp.group)}</span><span>${esc(sp.size)}</span><span class="st">${esc(status)}</span>${sp.danger >= 2 ? '<span class="dg">Keep your distance</span>' : ''}</div></div>
-        <p class="blurb">${esc(sp.blurb)}</p>
-        <div class="rl-sec beh"><h4>Behaviours <b>${e.beh.filter(x => x in sp.behaviors).length}/${behs.length}</b></h4><ul>${behs.map(([k, v]) => e.beh.includes(k) ? `<li class="ok"><i>✓</i>${esc(v)}${e.vid.includes(k) ? ' <small>on video</small>' : ''}</li>` : `<li><i>○</i>${esc(v)} <small>not photographed yet</small></li>`).join('')}</ul></div>
-        <div class="rl-sheet"></div>
-        <div class="rl-sec facts"></div>
-        <div class="rl-sec pics"><h4>Photos <b>${photosOf(id).length}</b></h4><div class="strip"></div></div>`;
-      if (cov) {
-        (pg.querySelector('.rl-hero img') as HTMLImageElement).src = cov.img;
-        const hl = pg.querySelector('.rl-hero .hl') as HTMLElement;
-        if (sub) hl.setAttribute('style', boxStyle(pad(sub.bbox))); else hl.remove();
-      }
-      // research sheet
-      const sh = pg.querySelector('.rl-sheet') as HTMLElement;
-      if (R) {
-        const secs: [string, string, string][] = [['hab', 'Habitat', R.habitat], ['diet', 'Diet', R.diet], ['ana', 'Anatomy', R.anatomy], ['eco', 'Ecology', R.ecology], ['bhv', 'Behaviour', R.behaviour]];
-        sh.innerHTML = secs.filter(([, , t]) => !!t).map(([c, h, t]) => `<div class="sec ${c}"><h5>${h}</h5><p>${esc(t)}</p></div>`).join('')
-          + (R.notes?.length ? `<div class="sec notes"><h5>Mori’s field notes</h5><ul>${R.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul></div>` : '');
-      } else sh.innerHTML = `<div class="sec pending"><h5>Research sheet</h5><p>Not written up yet. Mori has the photo; the notes are still in the soggy field notebook.</p></div>`;
-      // findings
-      const fs = pg.querySelector('.rl-sec.facts') as HTMLElement;
-      if (sp.facts.length) {
-        fs.innerHTML = `<h4>Findings <b>${e.facts.length}/${sp.facts.length}</b></h4><ul>${sp.facts.map(f => e.facts.includes(f.id)
-          ? `<li class="ok"><i>✦</i><span><b>${esc(f.cat)}</b> ${esc(f.text)}</span></li>`
-          : `<li class="lock"><i>?</i><span><b>${esc(f.q)}</b><small>${esc(f.hint)}</small></span></li>`).join('')}</ul>`;
-      } else fs.remove();
-      // photos
-      const strip = pg.querySelector('.pics .strip') as HTMLElement;
-      for (const u of photosOf(id).slice().reverse()) {
-        const s2 = u.subjects.find(x => x.species === id);
-        const t = el('div', 'pt ctl' + (u.id === e.cover ? ' on' : ''));
-        t.setAttribute('style', cropBg(u.img, s2?.bbox ?? [0.3, 0.3, 0.7, 0.7], 16 / 10, 3));
-        t.title = when(u);
-        t.addEventListener('click', () => { os.from(t); viewer(u.id); });
-        strip.appendChild(t);
-      }
-      // cover picker
-      const pk = pg.querySelector('.pick') as HTMLElement | null, picker = pg.querySelector('.picker') as HTMLElement;
-      const fill = () => {
-        picker.innerHTML = '<span>Pick a cover photo:</span>';
-        for (const u of photosOf(id).slice().reverse()) {
-          const s2 = u.subjects.find(x => x.species === id);
-          const t = el('div', 'pt ctl' + (u.id === e.cover ? ' on' : ''), u.id === e.first ? '<i>1st</i>' : '');
-          t.setAttribute('style', cropBg(u.img, s2?.bbox ?? [0.3, 0.3, 0.7, 0.7], 16 / 10, 3));
-          t.addEventListener('click', () => {
-            setCover(id, u.id);
-            picking = false;
-            sfx.pick();
-            render();
-            const h = b.querySelector('.rl-hero .ph');
-            if (h) { os.retrigger(h, 'flip'); const c = os.center(h); os.fx.sparkle(c.x, c.y, 12, 110); }
-            live.photos?.();
-          });
-          picker.appendChild(t);
-        }
-      };
-      if (pk) pk.addEventListener('click', () => { picking = !picking; picker.classList.toggle('on', picking); if (picking) fill(); sfx.menu(); });
-      if (picking) { picker.classList.add('on'); fill(); }
-      // a fresh entry pops in
-      if (fresh) {
-        markSeen(id);
-        os.badges();
-        setTimeout(() => {
-          if (!pg.isConnected) return;
-          const h = pg.querySelector('.rl-hero') as HTMLElement;
-          const c = os.center(h);
-          os.fx.confetti(c.x, c.y - h.offsetHeight / 2, 46, h.offsetWidth * 0.8);
-          os.fx.sparkle(c.x, c.y, 14, 120);
-          sfx.win();
-        }, 260);
-      }
-      pg.scrollTop = 0;
-    };
-    const W = os.win('disc', 'Research Log', 'disc', 800, 560, b);
-    if (!W) return;
-    live.disc = render;
-    render();
-  };
-  const pad = (bb: [number, number, number, number]): [number, number, number, number] => {
-    const w = bb[2] - bb[0], h = bb[3] - bb[1];
-    return [clamp(bb[0] - w * 0.12 - 0.01, 0, 1), clamp(bb[1] - h * 0.12 - 0.015, 0, 1), clamp(bb[2] + w * 0.12 + 0.01, 0, 1), clamp(bb[3] + h * 0.12 + 0.015, 0, 1)];
-  };
+  // (the Fauna pages of the Zealandia Encyclopedia, see ../v10/encyclopedia)
+  const disc = (focus?: string) => os.open('enc', focus ? 'sp:' + focus : undefined);
 
   // ================================================================ Photos
   const photos = () => {
@@ -497,7 +397,7 @@ export function researchApps(os: OSCtx) {
               setCover(s.species, u.id);
               sfx.pick();
               const c = os.center(cv); os.fx.sparkle(c.x, c.y, 10, 80); os.floatText(c.x, c.y - 16, 'Cover set!');
-              live.disc?.(); draw();
+              os.refresh(); draw();
             });
             row.appendChild(cv);
           }
@@ -512,5 +412,9 @@ export function researchApps(os: OSCtx) {
     os.win('pv:' + id, `photo_${String(id).padStart(4, '0')}.jpg`, 'photo', 640, 520, b);
   };
 
-  return { cam, disc, photos, viewer };
+  /** re-render the open Photos window (called by the desktop's refresh) */
+  const refresh = () => { live.photos?.(); };
+
+  return { cam, disc, photos, viewer, photoStage, refresh };
 }
+export type ResearchApps = ReturnType<typeof researchApps>;
