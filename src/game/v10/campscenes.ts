@@ -125,8 +125,9 @@ export async function wakeUp(cd: CampDay) {
 async function wakeChunk(cd: CampDay) {
   const st = cd.st, s = cd.s, p = cd.p, c = s.chunk;
   // he's asleep ON Mori's face
+  // (his rear end over Mori's face, which is a little past the head anchor of the lying pose)
   const [hx] = p.body.headTop();
-  st.place(c, hx + 1, -1, 'sleep', groundY(hx) - 4);
+  st.place(c, hx + 6 * p.facing, -1, 'sleep', groundY(hx) - 3);
   c.z = 53; s.main.markDirty();
   c.setExpr('sleep');
   await wait(500);

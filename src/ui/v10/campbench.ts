@@ -78,8 +78,9 @@ async function upgradeScene(cd: CampDay, step: GearStep) {
     j.faceTo(p.x);
     sfx('skillUnlock');
     await st.say([
-      { who: 'jenna', text: `Done! ${step.name}.`, expr: 'excited', react: 'bounce' },
-      { who: 'jenna', text: step.jenna, expr: 'smug' },
+      // (the speech bubbles want HTML: a bare & would never end)
+      { who: 'jenna', text: `Done! ${esc(step.name)}.`, expr: 'excited', react: 'bounce' },
+      { who: 'jenna', text: esc(step.jenna), expr: 'smug' },
     ]);
     addBond('jenna', 3);
   });
