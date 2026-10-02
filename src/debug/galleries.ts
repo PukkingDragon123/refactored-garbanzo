@@ -71,6 +71,7 @@ async function iconGallery() {
 }
 
 export function runGallery(name: string) {
+  if (name === 'hands3d') { void import('./hands3dGallery').then(m => m.hands3dGallery()); return; }
   if (name === 'icons') { void iconGallery(); return; }
   if (name === 'camp4') { void camp4Gallery(); return; }
   const items: GalleryItem[] = [];
