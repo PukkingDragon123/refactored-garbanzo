@@ -3,6 +3,7 @@ import { game } from './game/game';
 import { bakeAssets } from './game/assets';
 import { bindAllArt } from './game/bindart';
 import { installSkin } from './ui/skin';
+import { installPaper } from './ui/v11/paper/css';
 import { loadSave, newSave } from './game/save';
 import { audio } from './core/audio';
 import { el } from './ui/ui';
@@ -20,6 +21,7 @@ async function boot() {
     return;
   }
   installSkin();
+  installPaper();
   const canvas = document.getElementById('gl') as HTMLCanvasElement;
   const ui = document.getElementById('ui') as HTMLElement;
   try {
@@ -140,6 +142,8 @@ async function boot() {
     },
     /** island story helpers (state, interactables, markers, teleport): see src/game/v9/islezl.ts */
     isle: null as unknown,
+    /** V11 physical UI kit sampler book (see src/ui/v11/paper/index.ts) */
+    paper: async () => (await import('./ui/v11/paper/demo')).paperDemo(),
   };
   void import('./game/v9/islezl').then(m => { (window as unknown as { zl: { isle: unknown } }).zl.isle = m.ISLE; });
   // developer panel toggles left on (noclip, overlay...): only then is the dev module loaded
