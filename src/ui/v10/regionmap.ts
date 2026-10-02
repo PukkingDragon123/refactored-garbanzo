@@ -24,6 +24,7 @@ import { energy, maxEnergy } from '../../game/v10/energy';
 import { dayNumber } from '../../game/v10/day';
 import { speciesSprite } from '../icons';
 import { SPECIES_BY_ID } from '../../game/species';
+import { pxIcon } from '../pxicons';
 
 export interface RegionMapOpts {
   /** no travelling (during an expedition) */
@@ -301,7 +302,7 @@ export function openRegionMap(o: RegionMapOpts = {}): Promise<string | null> {
   root.innerHTML = `<div class="vp"><canvas></canvas><div class="ov"></div></div>
     <div class="top"><span class="pz-tab">Region Map</span><span class="st"></span></div>
     <button class="pz-x x" title="Close (Esc)"></button>
-    <div class="tools"><button class="btn ghost zi" title="Zoom in">+</button><button class="btn ghost zo" title="Zoom out">−</button><button class="btn ghost zc" title="Centre">◎</button></div>
+    <div class="tools"><button class="btn ghost zi" title="Zoom in">+</button><button class="btn ghost zo" title="Zoom out">−</button><button class="btn ghost zc" title="Centre">${pxIcon('target')}</button></div>
     <div class="legend"></div>
     <div class="card panel"></div>
     <div class="hint">Drag to pan · wheel or pinch to zoom · tap a pin</div>`;

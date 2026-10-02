@@ -31,7 +31,7 @@ export function objective(): { t: string; text: string } {
       : { t: 'First Contact', text: `Photograph 3 different species in Fernwood (${seenCount()}/3). Bolt’s jeep is by the gate.` };
     case 2: return factCount() >= 3 && s.seen.skyribbon
       ? { t: 'Up in the Trees', text: 'Report back to Dr. Vance.' }
-      : { t: 'Up in the Trees', text: `Photograph a Skyribbon in the Emerald Canopy${s.seen.skyribbon ? ' ✓' : ''} and solve 3 facts in the Field Guide (${Math.min(3, factCount())}/3).` };
+      : { t: 'Up in the Trees', text: `Photograph a Skyribbon in the Emerald Canopy${s.seen.skyribbon ? ' (done)' : ''} and solve 3 facts in the Field Guide (${Math.min(3, factCount())}/3).` };
     case 3: return s.clues['giant-skin']
       ? { t: 'Thunder Falls', text: 'Show Dr. Vance what you found.' }
       : { t: 'Thunder Falls', text: 'Explore Thunder Falls. Something big has been through there.' };

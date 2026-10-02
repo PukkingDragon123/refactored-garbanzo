@@ -33,6 +33,7 @@ import { FishView, Shade, resetViewFrames } from '../v9/fishview';
 import { Reel, FishInput } from '../v9/reel';
 import { showBanner, catchPhoto, lousePhoto } from '../v9/catchshow';
 import { fishIcon, fishSide, louseIcon, louseSide, sidePoint, canvasOf, gripOf } from '../../art/v9/fish';
+import { pxIcon, pxRating } from '../pxicons';
 
 export type Temper = 'smooth' | 'dart' | 'sinker' | 'floater' | 'mixed';
 export interface FishDef {
@@ -428,7 +429,7 @@ export async function goFishing(host: FishingHost, o: FishOpts = {}): Promise<Fi
     inp.keyCrank = true;
     inp.clear();
     reel.gauge = true;
-    reel.tip(touch ? '↻ SPIN THE REEL!' : '↻ SPIN THE REEL! (or hold Space)');
+    reel.tip(`${pxIcon('spin')} ${touch ? 'SPIN THE REEL!' : 'SPIN THE REEL! (or hold Space)'}`);
     say(`Hooked! <b>Spin the reel</b> to wind it in · <b>ease off</b> when it runs!`, 4500);
     let ft = 0;
     await loop(dt => {
@@ -578,7 +579,7 @@ export async function goFishing(host: FishingHost, o: FishOpts = {}): Promise<Fi
       if (showT > 1 && !photo && flop <= 0) void snapPhoto();
     };
     await sleep(0.35, show);
-    const meta = `<span>${len} cm</span><span class="st">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</span>${isNew ? '<span class="bd new">NEW!</span>' : ''}${fish.rare ? '<span class="bd rare">RARE</span>' : ''}`;
+    const meta = `<span>${len} cm</span><span class="st">${pxRating(stars, 3)}</span>${isNew ? '<span class="bd new">NEW!</span>' : ''}${fish.rare ? '<span class="bd rare">RARE</span>' : ''}`;
     const banner = showBanner(fishIcon(fish.id), 'I caught a', fish.name, fish.pun, meta);
     inp.clear();
     const waitBanner = (b: ReturnType<typeof showBanner>) => loop(dt => {

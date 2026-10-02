@@ -22,6 +22,7 @@ import { MAP_W, MAP_H } from '../v10/atlas';
 import { BOAT_FLAG, boatReady, boatSave, setBoatAway } from '../v10/boat';
 import { el } from '../../ui/ui';
 import { audio } from '../../core/audio';
+import { pxRating } from '../../ui/pxicons';
 
 export type TripStop = 'fish' | 'reef' | 'land' | 'maiden';
 export type Horizon = 'islet' | 'coast' | 'reef' | 'open' | 'home';
@@ -183,7 +184,7 @@ export async function openBoatTrips(yard?: { launchOut(): Promise<void> } | null
     for (const id of BOAT_LOCATIONS) {
       const l = locDef(id);
       if (!l) continue;
-      const b = el('button', 'dest', `<i>${TAG[id] ?? 'SEA'}</i><div><b>${l.name} <span class="dif" style="display:inline">${'●'.repeat(l.difficulty)}${'○'.repeat(5 - l.difficulty)}</span></b><span>${l.desc}</span></div>`);
+      const b = el('button', 'dest', `<i>${TAG[id] ?? 'SEA'}</i><div><b>${l.name} <span class="dif" style="display:inline">${pxRating(l.difficulty, 5, 'pip', 'pip0')}</span></b><span>${l.desc}</span></div>`);
       b.addEventListener('click', () => { audio.play('ui', { vol: 0.5 }); res(id); });
       box.appendChild(b);
     }

@@ -375,8 +375,12 @@ function installCss() {
   if (styled || typeof document === 'undefined') return;
   styled = true;
   const s = document.createElement('style');
-  s.textContent = `.px-ic { display: inline-block; vertical-align: middle; position: relative; top: -0.08em; image-rendering: pixelated; image-rendering: crisp-edges; pointer-events: none; flex: none; }
-.px-ic + .px-ic { margin-left: 1px; }`;
+  // !important: icons land inside cards and buttons whose own `img` rules (thumbnails, portraits) must not apply
+  s.textContent = `img.px-ic { display: inline-block !important; vertical-align: middle; position: relative !important; top: -0.08em; inset: auto;
+  margin: 0 !important; padding: 0 !important; border: 0 !important; box-shadow: none !important; background: none !important; border-radius: 0 !important;
+  object-fit: fill !important; max-width: none !important; max-height: none !important; aspect-ratio: auto !important; transform: none;
+  image-rendering: crisp-edges; image-rendering: pixelated; pointer-events: none; flex: none !important; }
+img.px-ic + img.px-ic { margin-left: 1px !important; }`;
   document.head.appendChild(s);
 }
 
@@ -385,7 +389,7 @@ export function pxIcon(name: string, o: { scale?: number; alt?: string; cls?: st
   installCss();
   const sc = Math.max(1, Math.round(o.scale ?? 2));
   const [w, h] = pxIconSize(name, sc);
-  return `<img class="px-ic${o.cls ? ' ' + o.cls : ''}" src="${pxIconURL(name, sc)}" width="${w}" height="${h}" style="width:${w}px;height:${h}px" alt="${o.alt ?? ''}"${o.title ? ` title="${o.title}"` : ''} draggable="false">`;
+  return `<img class="px-ic${o.cls ? ' ' + o.cls : ''}" src="${pxIconURL(name, sc)}" width="${w}" height="${h}" style="width:${w}px !important;height:${h}px !important" alt="${o.alt ?? ''}"${o.title ? ` title="${o.title}"` : ''} draggable="false">`;
 }
 
 /** `n` filled then `max - n` empty icons in a row (star ratings, difficulty pips). */
@@ -408,4 +412,12 @@ const SWAP_RE = /(<[^>]*>)|[♪♫♥★☆✓✔✕✗▶◀▼]/g;
 export function iconize(html: string, scale = 2): string {
   if (!GLYPH_RE.test(html)) return html;
   return html.replace(SWAP_RE, (m, tag) => tag ?? pxIcon(GLYPH[m], { scale }));
+}
+
+const lastHtml = new WeakMap<Element, string>();
+/** Set innerHTML only when it changed (for HUD readouts with icons that refresh every frame). */
+export function setHtml(e: Element, html: string) {
+  if (lastHtml.get(e) === html) return;
+  lastHtml.set(e, html);
+  e.innerHTML = html;
 }

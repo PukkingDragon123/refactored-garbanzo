@@ -619,7 +619,7 @@ export function handIn(id: string, take: number): LabOutcome | null {
   if (risky) {
     const fi = foodInfo(id);
     out.edible = fi.tox === 0 ? 'safe' : fi.tox === 1 ? 'mild' : 'poison';
-    if (first) out.lines = [...out.lines, out.edible === 'safe' ? 'Edibility: safe to eat ✓' : out.edible === 'mild' ? 'Edibility: mildly poisonous ✕' : 'Edibility: POISONOUS ✕'];
+    if (first) out.lines = [...out.lines, out.edible === 'safe' ? 'Edibility: safe to eat' : out.edible === 'mild' ? 'Edibility: mildly poisonous' : 'Edibility: POISONOUS'];
     if (rec0 === undefined) r.lab[id].lines = out.lines.slice();
   }
   if (first && def.lab?.clue) { const isNew = addClue(def.lab.clue); out.clue = { id: def.lab.clue, name: CLUE_BY_ID[def.lab.clue]?.name ?? def.lab.clue, isNew }; }

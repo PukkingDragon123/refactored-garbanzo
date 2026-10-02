@@ -12,6 +12,7 @@ import { el } from '../ui/ui';
 import { PixelBuffer } from '../art/pixel';
 import { speciesSprite } from '../ui/icons';
 import { perks } from './skills';
+import { pxIcon, setHtml } from '../ui/pxicons';
 
 export interface Shot {
   species: string | null;
@@ -64,7 +65,7 @@ export class CameraSystem {
     this.vf = game.ui.vf;
     this.vf.innerHTML = `<div class="frame"><div class="grid"></div><div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div></div>
       <div class="focus"></div><div class="subject"></div>
-      <div class="top"><span class="mode">PHOTO</span><span><span class="rec">● REC <span class="rt">0.0</span>s</span></span><span class="shots"></span></div>
+      <div class="top"><span class="mode">PHOTO</span><span><span class="rec">${pxIcon('rec')} REC <span class="rt">0.0</span>s</span></span><span class="shots"></span></div>
       <div class="info"><span class="zoom"></span><span class="af">AF</span><span class="hint2"><span class="key">V</span> mode &nbsp;<span class="key">RMB</span> lower</span></div>`;
     for (const k of ['focus', 'subject', 'mode', 'shots', 'zoom', 'af', 'rt']) this.els[k] = this.vf.querySelector('.' + k) as HTMLElement;
   }
@@ -169,10 +170,10 @@ export class CameraSystem {
     f.style.left = '50%';
     f.style.top = '50%';
     this.els.mode.textContent = this.mode === 'photo' ? 'PHOTO' : 'VIDEO';
-    this.els.shots.textContent = `▣ ${this.film}`;
+    setHtml(this.els.shots, `${pxIcon('film')} ${this.film}`);
     const steps = Math.round(((this.zoom - 1.1) / (this.zoomMax - 1.1)) * 8);
     this.els.zoom.innerHTML = `${this.zoom.toFixed(1)}x ` + Array.from({ length: 8 }, (_, i) => `<b class="${i < steps ? 'on' : ''}"></b>`).join('');
-    this.els.af.textContent = this.focusState === 'locked' ? 'AF ● LOCK' : this.focusState === 'hunting' ? 'AF ○ ...' : 'AF';
+    setHtml(this.els.af, this.focusState === 'locked' ? `AF ${pxIcon('focus')} LOCK` : this.focusState === 'hunting' ? `AF ${pxIcon('pip0')} ...` : 'AF');
     const subj = this.els.subject;
     const t = this.focusTarget;
     if (t) {
@@ -287,7 +288,7 @@ export class CameraSystem {
   }
 
   private flashCard(s: Shot) {
-    const d = el('div', 'panel', `<img src="${s.thumb}" style="width:100%;display:block" alt=""><div style="display:flex;justify-content:space-between;padding:4px 2px 0;font-family:var(--pix);font-size:0.85em"><span>${s.species ? (game.save.seen[s.species] ? SPECIES_BY_ID[s.species].name : 'Unknown!') : 'Scenery'}</span><span style="color:var(--amber2)">${'★'.repeat(s.stars)}</span></div>`);
+    const d = el('div', 'panel', `<img src="${s.thumb}" style="width:100%;display:block" alt=""><div style="display:flex;justify-content:space-between;padding:4px 2px 0;font-family:var(--pix);font-size:0.85em"><span>${s.species ? (game.save.seen[s.species] ? SPECIES_BY_ID[s.species].name : 'Unknown!') : 'Scenery'}</span><span style="color:var(--amber2)">${pxIcon('star').repeat(s.stars)}</span></div>`);
     d.style.cssText = 'position:absolute;left:18px;bottom:90px;width:190px;padding:6px;transform:rotate(-3deg);animation:toastIn 0.3s ease-out;pointer-events:none';
     game.ui.sceneLayer.appendChild(d);
     setTimeout(() => { d.style.transition = 'opacity 0.5s, transform 0.5s'; d.style.opacity = '0'; d.style.transform = 'rotate(-3deg) translateY(20px)'; }, 1600);

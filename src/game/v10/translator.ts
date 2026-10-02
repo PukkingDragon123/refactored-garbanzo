@@ -68,7 +68,7 @@ function garble(text: string): string | null {
   if (k < 0.3) return `[translating... 63%] ...*bzzt* ${text}`;
   if (k < 0.55) return `${first.toUpperCase()} *bzzt* (volume: normal) ${text}`;
   if (k < 0.8 && text.length < 90) return `${text.replace(/[.!?]+$/, '')} full stop. *bzzt* ...${text}`;
-  return `(◕‿◕) *bzzt* sorry. ${text}`;
+  return `(^-^) *bzzt* sorry. ${text}`;
 }
 
 /**

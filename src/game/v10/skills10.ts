@@ -58,7 +58,7 @@ export const SKILL_TREE10: Skill10[] = [
     desc: 'Who eats whom, who pollinates what, who lives in whose burrow. Uploads draw the links between species.' },
   { id: 'data_grant', branch: 'data', tier: 2, lane: 1, cost: 90, req: ['data_notes'], icon: 'grant', name: 'Grant Writing', effect: '+15% RP from the agency',
     desc: 'Same data, better story. The agency pays more for research that reads well.' },
-  { id: 'data_ethology', branch: 'data', tier: 3, lane: -1, cost: 150, req: ['data_web'], icon: 'eye', name: 'Behaviour Statistics', effect: 'Sheets: 4 sections · behaviour shots +1★',
+  { id: 'data_ethology', branch: 'data', tier: 3, lane: -1, cost: 150, req: ['data_web'], icon: 'eye', name: 'Behaviour Statistics', effect: 'Sheets: 4 sections · behaviour shots +1 star',
     desc: 'Count it, time it, chart it. Behaviour photos are worth a star more and sheets open further.' },
   { id: 'data_survey', branch: 'data', tier: 3, lane: 1, cost: 140, req: ['data_grant'], icon: 'eye2', name: 'Survey Methods', effect: 'Discoveries +50% RP',
     desc: 'Transects, grid references, proper site records. Places, ruins, fossils and samples are worth half as much again.' },

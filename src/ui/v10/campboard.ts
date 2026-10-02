@@ -9,6 +9,7 @@ import { campPanel, itemChips, esc } from './campkit';
 import { REQUESTS, reqState, acceptReq, handIn } from '../../game/v10/campquests';
 import type { Req } from '../../game/v10/campquests';
 import { bucket } from '../../game/v10/store';
+import { pxIcon } from '../pxicons';
 
 const seenB = () => bucket<{ seen: string[] }>('board', () => ({ seen: [] }));
 
@@ -56,9 +57,9 @@ export async function openBoard() {
     const steps = s === 'open' ? '' : r.steps.map(st => {
       const pr = st.progress?.();
       const ok = st.done();
-      return `<p style="font-size:0.85em;${ok ? 'color:var(--teal2)' : ''}">${ok ? '✔' : '○'} ${esc(st.text)}${pr && !ok ? ` <b style="font-family:var(--pix)">${pr[0]}/${pr[1]}</b>` : ''}</p>`;
+      return `<p style="font-size:0.85em;${ok ? 'color:var(--teal2)' : ''}">${ok ? pxIcon('check') : pxIcon('pip0')} ${esc(st.text)}${pr && !ok ? ` <b style="font-family:var(--pix)">${pr[0]}/${pr[1]}</b>` : ''}</p>`;
     }).join('');
-    const rw = [r.reward.rp ? `<span class="cp-chip ok"><img src="${uiIconURL('rp', 2)}" alt="">+${r.reward.rp} RP</span>` : '', ...(r.reward.items ?? []).map(([id, n]) => `<span class="cp-chip ok"><img src="${itemIconURL(id, 2)}" alt="">${n}× ${esc(ITEMS[id]?.name ?? id)}</span>`), r.giver !== 'agency' && r.reward.bond ? `<span class="cp-chip ok">♥ ${GIVER[r.giver]}</span>` : ''].join('');
+    const rw = [r.reward.rp ? `<span class="cp-chip ok"><img src="${uiIconURL('rp', 2)}" alt="">+${r.reward.rp} RP</span>` : '', ...(r.reward.items ?? []).map(([id, n]) => `<span class="cp-chip ok"><img src="${itemIconURL(id, 2)}" alt="">${n}× ${esc(ITEMS[id]?.name ?? id)}</span>`), r.giver !== 'agency' && r.reward.bond ? `<span class="cp-chip ok">${pxIcon('heart')} ${GIVER[r.giver]}</span>` : ''].join('');
     c.innerHTML = `<div style="display:flex;gap:0.6em;align-items:flex-start">
       ${face ? `<img src="${face}" alt="" style="width:2.4em;height:2.4em;image-rendering:pixelated;flex:none;box-shadow:0 0 0 2px rgba(0,0,0,0.4)">` : ''}
       <div style="flex:1;min-width:0">

@@ -14,6 +14,7 @@
 import { openCloseup, CW, CH, rgb, hx as hx0, mixc, put, blend, add, ramp, dith, hash, R, G, B } from './closeup';
 import { Hold, loop } from '../v4/mini';
 import { audio } from '../../core/audio';
+import { pxIcon } from '../pxicons';
 
 // ------------------------------------------------------------------ shared palettes & helpers
 const HXC = new Map<string, number>();
@@ -897,10 +898,10 @@ export async function holdSteady(title: string, hint: string): Promise<boolean> 
 // ================================================================== LASHING KNOT: Aroha's drying rack
 
 const KNOT: { key: string; code: string[]; name: string }[] = [
-  { key: '↑', code: ['ArrowUp', 'KeyW'], name: 'over' },
-  { key: '↓', code: ['ArrowDown', 'KeyS'], name: 'under' },
-  { key: '←', code: ['ArrowLeft', 'KeyA'], name: 'around' },
-  { key: '→', code: ['ArrowRight', 'KeyD'], name: 'pull tight' },
+  { key: 'key_up', code: ['ArrowUp', 'KeyW'], name: 'over' },
+  { key: 'key_down', code: ['ArrowDown', 'KeyS'], name: 'under' },
+  { key: 'key_left', code: ['ArrowLeft', 'KeyA'], name: 'around' },
+  { key: 'key_right', code: ['ArrowRight', 'KeyD'], name: 'pull tight' },
 ];
 
 const KJX = 160, KJY = 94;
@@ -1306,7 +1307,7 @@ export async function lashingKnot(): Promise<boolean> {
 
   const sleep = (s: number) => new Promise<void>(res => { const t0 = clock; const chk = () => (cu.closed || clock - t0 >= s ? res() : requestAnimationFrame(chk)); chk(); });
   audio.play('uiOpen', { vol: 0.3 });
-  cu.hint('Watch Aroha’s hands, then do the same: <span class="key">↑</span> over <span class="key">↓</span> under <span class="key">←</span> around <span class="key">→</span> pull', 6000);
+  cu.hint(`Watch Aroha’s hands, then do the same: ${['over', 'under', 'around', 'pull'].map((w, i) => `<span class="key">${pxIcon(KNOT[i].key)}</span> ${w}`).join(' ')}`, 6000);
   let mistakes = 0;
   const SLIP = ['Ah, it slipped. Back one.', 'Keep the tension on it!', 'Other way. Again.'];
   let slips = 0;

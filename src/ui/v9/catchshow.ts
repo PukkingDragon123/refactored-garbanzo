@@ -15,6 +15,7 @@ import { addRawPhoto, type PhotoSubject } from '../../game/photos';
 import { PixelBuffer } from '../../art/pixel';
 import { fishIcon, canvasOf } from '../../art/v9/fish';
 import type { FishDef } from '../v4/fishing';
+import { pxIcon } from '../pxicons';
 
 const CSS = `
 .fcs { position: absolute; left: 50%; bottom: max(14px, 4vh); z-index: 28; width: min(600px, 94vw); transform: translateX(-50%); pointer-events: none;
@@ -78,7 +79,7 @@ export function showBanner(icon: PixelBuffer, head: string, name: string, pun: s
   l1.appendChild(document.createTextNode('!'));
   const pe = el('div', 'pun', pun);
   const row = el('div', 'row', meta);
-  const go = el('div', 'go', '▶ CONTINUE');
+  const go = el('div', 'go', `${pxIcon('play')} CONTINUE`);
   tx.append(l1, pe, row);
   b.append(ic, tx, go);
   game.ui.modalLayer.appendChild(b);

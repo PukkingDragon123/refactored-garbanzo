@@ -33,6 +33,7 @@ import { tree, canopyClump } from '../../art/jungle-trees';
 import { plant, fungus, deadwood } from '../../art/jungle-plants';
 import { foreground } from '../../art/jungle-fg';
 import { wreckPoint, deckY, BOAT_LAYOUT } from '../../art/boat';
+import { pxIcon } from '../../ui/pxicons';
 
 // ------------------------------------------------------------------ art adapter (src/art/castaway.ts, src/art/jungle.ts, src/art/boat.ts)
 type AnyFn = (...a: unknown[]) => unknown;
@@ -472,7 +473,7 @@ export class CampScene extends FieldScene {
     this.player.body.react('bounce');
     this.player.body.showEmote('sparkle', 1.2);
     for (let i = 0; i < 16; i++) this.main.particles.spawn({ frame: A.dot2, x: this.builds[id].x + rand.range(-20, 20), y: campGround(this.builds[id].x) - rand.range(0, 30), vx: rand.range(-40, 40), vy: rand.range(-60, -10), ay: 200, life: 0.8, color: [0.85, 0.78, 0.6], alpha: 1, alpha1: 0, floorY: campGround(this.builds[id].x) + 1 });
-    game.ui.toast(`${def.name}: <b>${st.label}</b> ✓`, 'BUILD', 'teal', 2200);
+    game.ui.toast(`${def.name}: <b>${st.label}</b> ${pxIcon('check')}`, 'BUILD', 'teal', 2200);
     if (buildDone(id)) this.onBuilt(id);
     game.persist();
     this.hud?.refresh(true);

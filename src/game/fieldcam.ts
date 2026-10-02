@@ -29,6 +29,7 @@ const holdSecs10 = (): number => Math.max(0.6, fx10.captureHold() - (gearMod?.ge
 const devSecs10 = (): number => fx10.developTime() * (gearMod?.gearFx.developMult() ?? 1);
 import { audio } from '../core/audio';
 import { clamp, damp } from '../core/math';
+import { pxIcon, setHtml } from '../ui/pxicons';
 
 /** A foreground prop that can block the shot. The mask is the sprite's own pixels. */
 export interface Occluder {
@@ -117,7 +118,7 @@ export class FieldCamera {
     this.vf = game.ui.vf;
     this.vf.innerHTML = `<div class="frame"><div class="grid"></div><div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div></div>
       <div class="focus"></div><div class="hold"></div><div class="holdlab"></div><div class="subject"></div>
-      <div class="top"><span class="mode">PHOTO</span><span class="rec">● REC <span class="rt">0.0</span>s</span><span class="shots"></span></div>
+      <div class="top"><span class="mode">PHOTO</span><span class="rec">${pxIcon('rec')} REC <span class="rt">0.0</span>s</span><span class="shots"></span></div>
       <div class="info"><span class="zoom"></span><span class="af">AF</span><span class="stab"></span><span class="light"></span></div>
       <div class="breathbar"><i></i></div><div class="lcd"></div>`;
     for (const k of ['focus', 'hold', 'holdlab', 'subject', 'mode', 'shots', 'zoom', 'af', 'rt', 'stab', 'light', 'breathbar', 'lcd']) this.els[k] = this.vf.querySelector('.' + k) as HTMLElement;
@@ -618,15 +619,15 @@ export class FieldCamera {
     f.style.left = '50%';
     f.style.top = '50%';
     e.mode.textContent = this.mode === 'photo' ? 'PHOTO' : 'VIDEO';
-    e.shots.textContent = `▣ ${this.shots}`;
+    setHtml(e.shots, `${pxIcon('film')} ${this.shots}`);
     const steps = Math.round(((this.zoom - 1.1) / Math.max(0.1, this.zoomMax - 1.1)) * 8);
     e.zoom.innerHTML = `${this.zoom.toFixed(1)}x ` + Array.from({ length: 8 }, (_, i) => `<b class="${i < steps ? 'on' : ''}"></b>`).join('');
-    e.af.innerHTML = this.afForeground ? '<span style="color:#ffb35a">AF ● FOLIAGE</span>' : this.afState === 'locked' ? 'AF ● LOCK' : this.afState === 'hunting' ? 'AF ○ …' : 'AF';
+    setHtml(e.af, this.afForeground ? `<span style="color:#ffb35a">AF ${pxIcon('pip')} FOLIAGE</span>` : this.afState === 'locked' ? `AF ${pxIcon('focus')} LOCK` : this.afState === 'hunting' ? `AF ${pxIcon('pip0')} …` : 'AF');
     const shakePx = Math.hypot(this.swayVX, this.swayVY) * this.shutterTime();
     const stab = Math.round(clamp(1 - shakePx / 5) * 5);
     e.stab.innerHTML = `STEADY ` + Array.from({ length: 5 }, (_, i) => `<b class="${i < stab ? 'on' : ''}"></b>`).join('');
     const L = this.light();
-    e.light.innerHTML = `☀ ` + Array.from({ length: 4 }, (_, i) => `<b class="${i < Math.round(L * 4) ? 'on' : ''}"></b>`).join('');
+    setHtml(e.light, `${pxIcon('sun')} ` + Array.from({ length: 4 }, (_, i) => `<b class="${i < Math.round(L * 4) ? 'on' : ''}"></b>`).join(''));
     e.breathbar.classList.toggle('on', this.holding || this.breath < 0.98);
     (e.breathbar.firstElementChild as HTMLElement).style.width = `${Math.round(this.breath * 100)}%`;
     const t = this.afTarget;

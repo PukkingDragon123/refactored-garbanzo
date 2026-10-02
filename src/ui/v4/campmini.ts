@@ -5,6 +5,7 @@
 import { openMini, pixelCanvas, Hold, loop, wait, px } from './mini';
 import { el } from '../ui';
 import { audio } from '../../core/audio';
+import { pxIcon } from '../pxicons';
 
 /** three pegs: press when the swinging marker is in the green. Resolves true with no misses. */
 export async function holdSteady(title: string, hint: string): Promise<boolean> {
@@ -56,11 +57,12 @@ export async function holdSteady(title: string, hint: string): Promise<boolean> 
   return misses === 0 && tries >= 3;
 }
 
+/** key = painted arrow icon (src/ui/pxicons.ts) */
 const KNOT: { key: string; code: string[]; name: string }[] = [
-  { key: '↑', code: ['ArrowUp', 'KeyW'], name: 'over' },
-  { key: '↓', code: ['ArrowDown', 'KeyS'], name: 'under' },
-  { key: '←', code: ['ArrowLeft', 'KeyA'], name: 'around' },
-  { key: '→', code: ['ArrowRight', 'KeyD'], name: 'pull tight' },
+  { key: 'key_up', code: ['ArrowUp', 'KeyW'], name: 'over' },
+  { key: 'key_down', code: ['ArrowDown', 'KeyS'], name: 'under' },
+  { key: 'key_left', code: ['ArrowLeft', 'KeyA'], name: 'around' },
+  { key: 'key_right', code: ['ArrowRight', 'KeyD'], name: 'pull tight' },
 ];
 
 /** Aroha's lashing: repeat her sequence (4 then 5 moves) before the flax slips. */
@@ -68,22 +70,22 @@ export async function lashingKnot(): Promise<boolean> {
   const m = openMini('knot', `<h3>Lash the frame</h3><div class="say"><div class="t">Watch Aroha’s hands, then do the same: <b>over, under, around, pull tight</b>.</div></div><div class="seq" style="display:flex;gap:6px;justify-content:center;font-family:Silkscreen,monospace;font-size:22px;min-height:1.6em"></div><div class="res"></div><div class="hint">Arrow keys or <span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span>. Tap the arrows on touch screens.</div><div class="row pads"></div>`);
   const seqEl = m.box.querySelector('.seq') as HTMLElement, res = m.box.querySelector('.res') as HTMLElement, pads = m.box.querySelector('.pads') as HTMLElement;
   let press: ((i: number) => void) | null = null;
-  KNOT.forEach((k, i) => { const b = el('button', 'btn', k.key); b.addEventListener('click', () => press?.(i)); pads.appendChild(b); });
+  KNOT.forEach((k, i) => { const b = el('button', 'btn', pxIcon(k.key, { scale: 3 })); b.addEventListener('click', () => press?.(i)); pads.appendChild(b); });
   const kd = (e: KeyboardEvent) => { const i = KNOT.findIndex(k => k.code.includes(e.code)); if (i >= 0) { e.preventDefault(); e.stopPropagation(); press?.(i); } };
   window.addEventListener('keydown', kd, true);
   let mistakes = 0;
   for (const len of [4, 5]) {
     const seq = Array.from({ length: len }, (_, i) => (i < 4 && len === 4 ? i : Math.floor(Math.random() * 4)));
     // show the sequence
-    seqEl.innerHTML = seq.map(i => `<span style="opacity:0.35">${KNOT[i].key}</span>`).join('');
+    seqEl.innerHTML = seq.map(i => `<span style="opacity:0.35">${pxIcon(KNOT[i].key, { scale: 4 })}</span>`).join('');
     const spans = [...seqEl.querySelectorAll('span')] as HTMLElement[];
-    for (let i = 0; i < seq.length; i++) { spans[i].style.opacity = '1'; spans[i].style.color = '#b04a8a'; audio.play('rope' as never, { vol: 0.3 }); await wait(420); spans[i].style.color = ''; spans[i].style.opacity = '0.35'; }
+    for (let i = 0; i < seq.length; i++) { spans[i].style.opacity = '1'; spans[i].style.filter = 'drop-shadow(0 3px 0 #b04a8a)'; audio.play('rope' as never, { vol: 0.3 }); await wait(420); spans[i].style.filter = ''; spans[i].style.opacity = '0.35'; }
     res.className = 'res'; res.textContent = 'Your turn!';
     let at = 0;
     const ok = await new Promise<boolean>(done => {
       const stop = loop((dt, t) => { if (t > 3.4 + len * 0.6) { stop(); done(false); return false; } });
       press = i => {
-        if (i === seq[at]) { spans[at].style.opacity = '1'; spans[at].style.color = '#2f6b2a'; audio.play('rope' as never, { vol: 0.4, pitch: 1.1 + at * 0.05 }); at++; if (at >= seq.length) { stop(); done(true); } }
+        if (i === seq[at]) { spans[at].style.opacity = '1'; spans[at].style.filter = 'drop-shadow(0 3px 0 #2f6b2a)'; audio.play('rope' as never, { vol: 0.4, pitch: 1.1 + at * 0.05 }); at++; if (at >= seq.length) { stop(); done(true); } }
         else { stop(); done(false); }
       };
     });
