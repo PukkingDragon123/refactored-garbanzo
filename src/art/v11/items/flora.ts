@@ -119,28 +119,30 @@ art('ratabloom', fp(1, 1), p => {
   p.spark(6, 13, '#fff6d0');
 });
 
-// ------------------------------------------------------------------ pitcher plant (1x2): ribbed lip, lid, drowned wētā legs
+// ------------------------------------------------------------------ pitcher plant (1x2): a speckled urn, a ribbed rim round its mouth, the lid raised
 art('pitcher', fp(1, 2), p => {
   const G = rp('#12301a', '#1f5024', '#357a2a', '#58a232', '#8ccc48', '#d4f08a');
-  // the pitcher: a narrow neck swelling to a round belly, a little mouth on top
-  const prof = (y: number) => (y < 16 ? 0 : y < 20 ? 5.4 : y < 26 ? 4.6 + (y - 20) * 0.05 : 4.9 + Math.sin(((y - 26) / 18) * Math.PI) * 3.4);
-  const body = p.maskFn((x, y) => y >= 17 && y <= 44 && Math.abs(x + 0.5 - (12 + (y - 17) * 0.04)) <= prof(y) - (y > 42 ? (y - 42) * 1.6 : 0));
-  p.relief(body, G, (x, y) => { if (!p.at(body, x, y)) return 0; const cx = 12 + (y - 17) * 0.04; const w = Math.max(1, prof(y)); const k = (x + 0.5 - cx) / w; return Math.sqrt(Math.max(0, 1 - k * k)) * 4 + (y > 26 ? 0 : -1); }, { spec: 0.95, lift: 0.3 });
-  // red veins and blotches
-  p.fill(body, (x, y) => { const n = noise2(x * 0.9, y * 0.18, 4); return Math.abs(n - 0.5) < 0.05 && y > 20 ? RP.red[x < 12 ? 3 : 2] : fbm2(x * 0.5, y * 0.4, 2, 7) > 0.66 && y > 30 ? RP.red[2] : -1; });
-  // the ribbed peristome lip, and the dark mouth with a drowned leg poking out
-  const lip = p.maskEllipse(12, 17.4, 6.2, 2.5);
-  p.fill(lip, (x, y) => { const ny = (y + 0.5 - 17.4) / 2.5; return RP.red[clamp(Math.round(3.4 - ny * 1.6 - (x - 12) * 0.08), 1, 5)]; });
-  p.fill(p.maskEllipse(12, 16.9, 4.4, 1.2), (x) => (x < 11 ? H('#1a0a08') : H('#2e1612')));
-  p.line(13, 17, 15, 15, RP.wood[2]); p.px(15, 14, RP.wood[1]);
-  // the lid, tilted up on its spur
-  p.tube([[15.5, 16.4], [16.5, 11.5]], 0.9, G, { lift: 0.2 });
-  const lid = p.maskEllipse(12, 9.8, 5.6, 2.6, -0.22);
-  p.relief(lid, G, p.dome(lid, 2), { spec: 0.96, lift: 0.6 });
-  p.fill(lid, (x, y) => (Math.abs((x - 12) * 0.25 - (y - 9.8)) < 0.4 ? RP.red[3] : -1));
-  // curling tendril
+  const Rd = rp('#2e0a0c', '#5a1216', '#8e1e1e', '#c03a2a', '#e8664a', '#ffb090');
+  // the urn: a narrow neck under the rim swelling to a round belly; two fringed wings down the front
+  const prof = (y: number) => (y < 17 ? 0 : y < 23 ? 4.6 - (y - 17) * 0.12 : 3.9 + Math.sin(Math.min(1, (y - 23) / 19) * Math.PI) * 4.4);
+  const cxAt = (y: number) => 12 + (y - 17) * 0.03;
+  const body = p.maskFn((x, y) => y >= 17 && y <= 44 && Math.abs(x + 0.5 - cxAt(y)) <= prof(y) - (y > 42 ? (y - 42) * 1.8 : 0));
+  p.relief(body, G, (x, y) => { if (!p.at(body, x, y)) return 0; const k = (x + 0.5 - cxAt(y)) / Math.max(1, prof(y)); return Math.sqrt(Math.max(0, 1 - k * k)) * 4; }, { spec: 0.95, lift: 0.3 });
+  // red speckles, sparse near the rim, dense toward the belly
+  p.fill(body, (x, y) => (hash(x, y, 4) < (y - 18) / 40 * 0.55 && hash(x >> 1, y >> 1, 5) > 0.3 ? Rd[x < 12 ? 3 : 2] : -1));
+  for (const wx of [10, 14]) for (let y = 25; y < 41; y++) { p.px(wx, y, G[4]); if (y % 2 === 0) p.px(wx + (wx < 12 ? -1 : 1), y, G[3]); }
+  // the mouth seen a little from above: dark throat at the back, the ribbed peristome ring round it
+  const ringM = Pen.sub(p.maskEllipse(12, 16.2, 6.4, 2.9), p.maskEllipse(12, 15.7, 4.2, 1.6));
+  p.fill(ringM, (x, y) => { const a = Math.atan2((y + 0.5 - 16.2) / 2.9, (x + 0.5 - 12) / 6.4); const rib = Math.abs(Math.sin(a * 9)) > 0.6; const front = y + 0.5 > 16.2; return Rd[clamp((front ? 3 : 2) + (rib ? 1 : 0) - (x > 14 ? 1 : 0), 0, 5)]; });
+  p.fill(p.maskEllipse(12, 15.7, 4.2, 1.6), (x, y) => (y + 0.5 > 16 ? H('#3a1410') : H('#140806')));
+  // the lid raised on its spur at the back, its paler underside toward us
+  p.tube([[12.5, 13.8], [13, 9]], 0.9, G, { lift: 0.2 });
+  const lid = p.maskEllipse(12.4, 7.2, 5.6, 2.8, -0.12);
+  p.relief(lid, G, p.dome(lid, 2), { spec: 0.96, lift: 0.5 });
+  p.fill(lid, (x, y) => (y > 7.6 ? (hash(x, y, 7) > 0.7 ? Rd[4] : G[4]) : -1));
+  // a curling tendril and a drop of nectar
   p.tube([[8, 42], [4.6, 44.5], [3, 41], [5, 39]], 0.6, G, { spec: 1 });
-  p.droplet(15, 30, true);
+  p.droplet(16, 30, true);
 });
 
 // ------------------------------------------------------------------ moonfruit (1x1): pale fruit that glows a little at night

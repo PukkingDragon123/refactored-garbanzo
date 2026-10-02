@@ -358,36 +358,39 @@ art('ghillie', fp(2, 2), p => {
 
 // ------------------------------------------------------------------ binoculars (2x2): Crowe's old brass Porro pair, seen from above
 art('binoculars', fp(2, 2), p => {
-  const Lt = rp('#140a06', '#24140c', '#3a2214', '#54341e', '#70482a', '#9a6a42');
+  const Lt = rp('#140a06', '#24140c', '#3a2214', '#56361e', '#74502c', '#a07448');
   const Br = RP.brass, Rb = RP.rubber;
-  const pebble = (x: number, y: number) => (hash(x >> 1, y >> 1, 12) > 0.78 ? -0.08 : 0);
+  // pebbled leather: small raised grains, lighter on their lit side
+  const pebble = (x: number, y: number) => { const h = hash(x >> 1, y >> 1, 12); return h > 0.7 ? ((x & 1) === 0 && (y & 1) === 0 ? 0.14 : -0.06) : h < 0.15 ? -0.12 : 0; };
   for (const s of [-1, 1]) {
-    const ex = 24 + s * 7.5, ox = 24 + s * 12.5;
-    // objective barrel (outer, near end at the bottom) with its brass rim and the lens facing us
-    const ob = p.maskFn((x, y) => Math.abs(x + 0.5 - ox) <= 7 && y >= 26 && y <= 41);
-    lit(p, ob, Lt, (x, y) => p.lum((x + 0.5 - ox) / 7, 0, 0.8) + pebble(x, y), 0.5);
-    const rimM = p.maskEllipse(ox, 41.5, 7.2, 3.6);
-    p.fill(rimM, (x, y) => p.tn(Br, p.lum((x + 0.5 - ox) / 7.2, (y + 0.5 - 41.5) / 3.6, 0.6) + 0.1, x, y, 0.4));
-    const g = p.maskEllipse(ox, 41.8, 5.4, 2.6);
-    p.fill(g, (x, y) => { const d = Math.hypot((x + 0.5 - ox) / 5.4, (y + 0.5 - 41.8) / 2.6); const dx = x + 0.5 - ox; return d < 0.45 ? H('#0a0e26') : dx < -1 && y < 42 ? H('#5a7ac8') : d < 0.8 ? H('#18244e') : H('#2c3c7a'); });
+    const ex = 24 + s * 7.5, ox = 24 + s * 12.5, hx = 24 + s * 11;
+    // objective barrel (outer, the near end at the bottom) with its brass rim and the lens facing us
+    const ob = p.maskFn((x, y) => Math.abs(x + 0.5 - ox) <= 7 && y >= 27 && y <= 41);
+    p.lit(ob, Lt, (x, y) => p.cylV((x + 0.5 - ox) / 7) + pebble(x, y), 0.5);
+    const rimM = p.maskEllipse(ox, 41.5, 7.3, 3.7);
+    p.lit(rimM, Br, (x, y) => p.lum((x + 0.5 - ox) / 7.3, (y + 0.5 - 41.5) / 3.7, 0.6) + 0.1, 0.4);
+    p.fill(p.maskEllipse(ox, 41.8, 5.4, 2.6), (x, y) => { const d = Math.hypot((x + 0.5 - ox) / 5.4, (y + 0.5 - 41.8) / 2.6); const dx = x + 0.5 - ox; return d < 0.45 ? H('#0a0e26') : dx < -1 && y < 42 ? H('#5a7ac8') : d < 0.8 ? H('#18244e') : H('#2c3c7a'); });
     p.px(Math.round(ox - 2.5), 41, H('#ffffff'));
-    // prism housing: a leather-covered block with brass caps
-    const hb = p.maskBox(Math.round(24 + s * 11 - 8), 11, 16, 18, 3);
-    p.relief(hb, Lt, p.dome(hb, 3), { lift: 0.5, tex: pebble });
-    p.fill(hb, (x, y) => (y === 11 || y === 12 ? Br[y === 11 ? 4 : 3] : y === 28 ? Br[1] : -1));
-    // eyepiece: a rubber cup with the little dark glass
+    // the prism housing: a rounded, leather-covered hump with brass end plates
+    const hb = p.maskBox(Math.round(hx - 8), 11, 16, 18, 4);
+    p.relief(hb, Lt, p.dome(hb, 4), { lift: 0.55, tex: pebble });
+    p.fill(hb, (x, y) => (y <= 12 ? Br[y === 11 ? 4 : 3] : y >= 27 ? Br[y === 27 ? 2 : 1] : -1));
+    p.fill(hb, (x, y) => ((x === Math.round(hx - 8) + 1 || x === Math.round(hx + 6)) && y > 13 && y < 26 && y % 2 === 0 ? Lt[1] : -1));
+    // eyepiece: a rubber cup with the little dark glass, a knurled diopter ring on the right one
     const ep = p.maskFn((x, y) => Math.abs(x + 0.5 - ex) <= 4 && y >= 4 && y <= 11);
-    lit(p, ep, Rb, (x) => p.lum((x + 0.5 - ex) / 4, 0, 0.8) + 0.1, 0.4);
+    p.lit(ep, Rb, (x) => p.cylV((x + 0.5 - ex) / 4) + 0.1, 0.4);
+    if (s > 0) p.fill(ep, (x, y) => (y === 9 || y === 10 ? Br[x % 2 ? 2 : 3] : -1));
     p.fill(p.maskEllipse(ex, 4.5, 4, 2), (x, y) => p.tn(Rb, 0.85 - (y - 3) * 0.1, x, y, 0.3));
     p.fill(p.maskEllipse(ex, 4.6, 2.2, 1.1), H('#101838'));
     p.px(Math.round(ex - 1), 4, H('#8ab0f0'));
   }
-  // hinge bridge and the knurled focus wheel between the eyepieces
-  const hinge = p.maskBox(18, 14, 12, 10, 2);
-  p.relief(hinge, Br, p.dome(hinge, 2), { spec: 0.94, lift: 0.3 });
+  // the hinge bridge and the knurled focus wheel between the eyepieces
+  const hinge = p.maskBox(18, 13, 12, 11, 3);
+  p.relief(hinge, Br, p.dome(hinge, 2.5), { spec: 0.94, lift: 0.3 });
   const wheel = p.maskBox(20, 6, 8, 6, 1);
   p.fill(wheel, (x, y) => (y === 6 ? Br[4] : y === 11 ? Br[1] : Br[(x % 2 ? 2 : 3) + (x < 23 ? 1 : 0)]));
-  p.ball(24, 19, 2, 2, Br, { spec: 0.9, lift: 0.8 });
-  // strap rings on the outer sides
+  p.ball(24, 18.5, 2, 2, Br, { spec: 0.9, lift: 0.8 });
+  // strap rings and a stub of the old leather strap
   ring(p, 3.5, 15, 0.6, 1.8, Br); ring(p, 44.5, 15, 0.6, 1.8, Br);
+  p.tube([[3, 16.5], [1.6, 22]], 1, Lt, { lift: 0.3, cap: 'flat' });
 });

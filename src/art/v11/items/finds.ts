@@ -395,25 +395,29 @@ art('smp_scree', fp(1, 1), p => {
   p.fill(m, (x, y) => (Math.abs(x - 6 - (y - 4) * 0.4) < 0.5 && y > 8 && y < 18 ? tone(p.get(x, y), -0.3) : -1));
 });
 
-// ------------------------------------------------------------------ woven flax bag (2x2): a kete with a black dyed band and a shoulder strap
+// ------------------------------------------------------------------ woven flax bag (2x2): a kete plaited on the diagonal, a band of dyed black diamonds, a plaited strap
 art('gift_kete', fp(2, 2), p => {
-  const Fx = RP.flaxDry, Bk = rp('#0e0a08', '#1c1612', '#2c241c', '#3e342a', '#544838', '#7a6a54');
-  // the strap looping up from both sides
-  const strap = bez([9, 21], [24, -6], [39, 21], 30);
-  rope(p, strap, 1.8, Fx, { period: 3, lift: -0.2 });
-  // the bag body: a soft trapezoid, plaited on the diagonal
-  const body = p.maskPoly([6, 18, 42, 18, 44.5, 38, 39, 45, 9, 45, 3.5, 38]);
-  const tw = (x: number, y: number) => { const a = ((x + y) >> 1) & 1, b = ((x - y + 64) >> 1) & 1; return a ^ b ? 0.12 : -0.12; };
-  p.relief(body, Fx, p.dome(body, 5), { tex: tw, lift: 0.1, dither: 0.3 });
-  // the black (paru-dyed) band of diamonds across the middle, and a dark rim
+  const Fx = rp('#3a2c10', '#5e4a1c', '#86702c', '#ae9440', '#d6bc62', '#f4e0a0');
+  const Bk = rp('#100c08', '#1e1812', '#2e261c', '#40362a', '#5a4e3e', '#806e58');
+  // the strap: a plaited cord looping up from both top corners
+  rope(p, bez([9, 21], [24, -7], [39, 21], 30), 1.8, Fx, { period: 3, lift: -0.1 });
+  // the body: a soft trapezoid, plaited from strips running both diagonals, over and under
+  const body = p.maskPoly([6, 18.6, 42, 18.6, 44.6, 38, 40, 45, 8, 45, 3.4, 38]);
+  const dome = p.dome(body, 6);
   p.fill(body, (x, y) => {
-    if (y < 27 || y > 33) return -1;
-    const d = Math.abs(((x + 64) % 8) - 4) + Math.abs(y - 30);
-    return d < 3 ? Bk[tw(x, y) > 0 ? 4 : 2] : -1;
+    const a = Math.floor((x + y) / 3), b = Math.floor((x - y + 99) / 3);
+    const over = (a + b) & 1;
+    const across = over ? (x + y) % 3 : (x - y + 99) % 3;
+    let l = 0.52 + (over ? 0.07 : -0.05) + (across === 0 ? -0.2 : across === 1 ? 0.1 : 0.03);
+    const gx = (dome(x + 1, y) - dome(x - 1, y)) / 2, gy = (dome(x, y + 1) - dome(x, y - 1)) / 2;
+    l += (p.lum(-gx, -gy, 1) - 0.62) * 0.9;
+    // the paru-dyed strips: a band of black diamonds across the middle
+    const dyed = y >= 26 && y <= 35 && Math.abs(((x + 999) % 10) - 5) + Math.abs(y - 30.5) < 5 && Math.abs(((x + 999) % 10) - 5) + Math.abs(y - 30.5) > 2;
+    return p.tn(dyed ? Bk : Fx, l, x, y, 0.25);
   });
-  p.fill(body, (x, y) => (y === 18 || y === 19 ? Fx[y === 18 ? 4 : 1] : -1));
-  // tassels on the corners
-  for (const [x, y] of [[4, 38], [44, 38]] as Pt[]) for (let k = 0; k < 4; k++) p.px(x + (x < 24 ? -1 : 1) * (k > 1 ? 1 : 0), y + k + 1, Fx[3 - (k >> 1)]);
+  // the rolled rim along the top, and little tassels at the bottom corners
+  rope(p, [[5.5, 19.4], [42.5, 19.4]], 1.5, Fx, { period: 2.6, lift: 0.2 });
+  for (const [x, y, d] of [[5, 38, -1], [43, 38, 1]] as number[][]) for (let k = 0; k < 6; k++) p.px(x + d * (k > 2 ? 1 : 0), y + k + 1, Fx[k < 3 ? 3 : 2]);
 });
 
 // ------------------------------------------------------------------ Joshu's brass compass (1x1): open, the needle swinging, a photo in the lid
