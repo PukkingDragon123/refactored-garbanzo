@@ -123,6 +123,80 @@ export class Scene3D {
     }
   }
 
+  /**
+   * Oriented box (crates, planks, a camera body) or flat-capped cylinder (logs, pots, buckets): centre
+   * c, half-extent axes a0 a1 a2 (world vectors; for a cylinder a0 and a1 are the radii and a2 the half
+   * length along its axis). The material sees q as the local point in [-1, 1]^3 and h.t as the face:
+   * box 0..2 (the axis whose face was hit), cylinder 0 = side, 2 = a cap.
+   */
+  solid(kind: 'box' | 'cyl', c: V3, a0: V3, a1: V3, a2: V3, g: number, mat: Mat) {
+    const m = [a0[0], a1[0], a2[0], a0[1], a1[1], a2[1], a0[2], a1[2], a2[2]];
+    const det = m[0] * (m[4] * m[8] - m[5] * m[7]) - m[1] * (m[3] * m[8] - m[5] * m[6]) + m[2] * (m[3] * m[7] - m[4] * m[6]);
+    if (Math.abs(det) < 1e-6) return;
+    const id = 1 / det;
+    const inv = [
+      (m[4] * m[8] - m[5] * m[7]) * id, (m[2] * m[7] - m[1] * m[8]) * id, (m[1] * m[5] - m[2] * m[4]) * id,
+      (m[5] * m[6] - m[3] * m[8]) * id, (m[0] * m[8] - m[2] * m[6]) * id, (m[2] * m[3] - m[0] * m[5]) * id,
+      (m[3] * m[7] - m[4] * m[6]) * id, (m[1] * m[6] - m[0] * m[7]) * id, (m[0] * m[4] - m[1] * m[3]) * id,
+    ];
+    const ex = Math.abs(a0[0]) + Math.abs(a1[0]) + Math.abs(a2[0]), ey = Math.abs(a0[1]) + Math.abs(a1[1]) + Math.abs(a2[1]);
+    const x0 = Math.max(0, Math.floor(this.ox + c[0] - ex - 1)), x1 = Math.min(this.w - 1, Math.ceil(this.ox + c[0] + ex + 1));
+    const y0 = Math.max(0, Math.floor(this.oy - c[1] - ey - 1)), y1 = Math.min(this.h - 1, Math.ceil(this.oy - c[1] + ey + 1));
+    const v = [inv[2], inv[5], inv[8]];
+    const H: Hit = { n: [0, 0, 1], p: [0, 0, 0], q: [0, 0, 0], t: 0, l: 0, x: 0, y: 0 };
+    // the front (largest zz) of the interval where -1 <= u + v zz <= 1 along one local axis
+    const slab = (u: number, vi: number, iv: [number, number]) => {
+      if (Math.abs(vi) < 1e-9) { if (u < -1 || u > 1) { iv[0] = 1; iv[1] = -1; } return; }
+      let a = (-1 - u) / vi, b = (1 - u) / vi;
+      if (a > b) { const t = a; a = b; b = t; }
+      if (a > iv[0]) iv[0] = a;
+      if (b < iv[1]) iv[1] = b;
+    };
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const wx = x + 0.5 - this.ox - c[0], wy = this.oy - (y + 0.5) - c[1];
+      const u = [inv[0] * wx + inv[1] * wy, inv[3] * wx + inv[4] * wy, inv[6] * wx + inv[7] * wy];
+      let zz = -1e9, face = 0;
+      if (kind === 'box') {
+        let best = 1e9, bi = 0, lo = -1e9;
+        for (let i = 0; i < 3; i++) {
+          if (Math.abs(v[i]) < 1e-9) { if (u[i] < -1 || u[i] > 1) { lo = 1e9; break; } continue; }
+          let a = (-1 - u[i]) / v[i], b = (1 - u[i]) / v[i];
+          if (a > b) { const t = a; a = b; b = t; }
+          if (a > lo) lo = a;
+          if (b < best) { best = b; bi = i; }
+        }
+        if (lo > best) continue;
+        zz = best; face = bi;
+      } else {
+        // side: (u0 + v0 zz)^2 + (u1 + v1 zz)^2 <= 1, caps: |u2 + v2 zz| <= 1
+        const A = v[0] * v[0] + v[1] * v[1], B = 2 * (u[0] * v[0] + u[1] * v[1]), C = u[0] * u[0] + u[1] * u[1] - 1;
+        const iv: [number, number] = [-1e9, 1e9];
+        if (A < 1e-9) { if (C > 0) continue; } else {
+          const D = B * B - 4 * A * C;
+          if (D < 0) continue;
+          const sq = Math.sqrt(D);
+          iv[0] = (-B - sq) / (2 * A); iv[1] = (-B + sq) / (2 * A);
+        }
+        const side = iv[1];
+        slab(u[2], v[2], iv);
+        if (iv[0] > iv[1]) continue;
+        zz = iv[1]; face = Math.abs(iv[1] - side) < 1e-6 ? 0 : 2;
+      }
+      const i = y * this.w + x;
+      const zw = c[2] + zz;
+      if (zw <= this.z[i]) continue;
+      const q: V3 = [u[0] + v[0] * zz, u[1] + v[1] * zz, u[2] + v[2] * zz];
+      // local normal → world (inverse transpose)
+      let ln: V3;
+      if (kind === 'box') { ln = [0, 0, 0]; ln[face] = Math.sign(q[face]) || 1; } else ln = face === 0 ? [q[0], q[1], 0] : [0, 0, Math.sign(q[2]) || 1];
+      const n = vnorm([inv[0] * ln[0] + inv[3] * ln[1] + inv[6] * ln[2], inv[1] * ln[0] + inv[4] * ln[1] + inv[7] * ln[2], inv[2] * ln[0] + inv[5] * ln[1] + inv[8] * ln[2]]);
+      H.n = n; H.p = [c[0] + wx, c[1] + wy, zw]; H.q = q; H.t = face; H.l = vdot(n, LIGHT7); H.x = x; H.y = y;
+      const col = mat(H);
+      if (col === -1) continue;
+      this.write(i, zw, col, g, x, y);
+    }
+  }
+
   /** tapered limb from a (radius ra) to b (radius rb): a sweep of spheres */
   limb(a: V3, b: V3, ra: number, rb: number, g: number, mat: Mat) {
     const d = vsub(b, a), L = vlen(d);

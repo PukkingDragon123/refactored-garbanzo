@@ -679,7 +679,22 @@ const POSES7: Record<string, (b: Build, t: number, id: string) => Pose> = {
   pet: (b, t) => pet(b, t),
 };
 
+/** clip variants: 'carryWalk~plank' is the carryWalk clip carrying a plank (the pose function gets 'plank') */
+export const POSES7V: Record<string, (b: Build, t: number, id: string, v: string) => Pose> = {};
+/** screen px per cycle for distance-driven clips beyond walk / run (a variant's stride may differ) */
+export const DIST7: Record<string, (b: Build, id: string, v: string) => number> = {};
+const splitV = (anim: string): [string, string] => { const i = anim.indexOf('~'); return i < 0 ? [anim, ''] : [anim.slice(0, i), anim.slice(i + 1)]; };
+/** a clip's info, variants included */
+export const clip7 = (anim: string): AnimInfo7 | undefined => ANIMS7[anim] ?? ANIMS7[splitV(anim)[0]];
+
 export function pose7(id: string, anim: string, b: Build, frame: number): Pose {
+  const [base, v] = splitV(anim);
+  const fv = POSES7V[base];
+  if (fv) {
+    const info = clip7(anim)!;
+    const t = info.frames <= 1 ? 0 : info.loop ? frame / info.frames : frame / (info.frames - 1);
+    return fv(b, t, id, v);
+  }
   const fn = POSES7[anim];
   if (!fn) return animePose(id, anim, b, frame);
   if (anim === 'climb' || anim === 'climbIdle' || anim === 'carryPupClimb') return climbPose(b, frame, anim === 'carryPupClimb');
@@ -691,11 +706,17 @@ export function pose7(id: string, anim: string, b: Build, frame: number): Pose {
 
 /** per-character clip info: distance-driven locomotion needs the character's own stride */
 export function animInfo7(b: Build, anim: string, id = 'mori'): AnimInfo7 | null {
-  const info = ANIMS7[anim];
+  const info = clip7(anim);
   if (!info) return null;
+  const [base, v] = splitV(anim);
+  if (DIST7[base]) return { ...info, dist: DIST7[base](b, id, v) };
   if (anim === 'walk') return { ...info, dist: gaitDist(WALK(b, id)) };
   if (anim === 'run') return { ...info, dist: gaitDist(RUN(b, id)) };
   if (anim === 'cameraWalk') return { ...info, dist: gaitDist(CAM_GAIT(b, false)) };
   if (anim === 'cameraCrouchWalk') return { ...info, dist: gaitDist(CAM_GAIT(b, true)) };
   return info;
 }
+
+// building blocks for the clips registered from other files (anims-life.ts, anims-hands.ts)
+export { POSES7, gait, gaitOf, shoulder, wHead, wHang, hang, bump, smooth, lerp2, add2, pulse, ease, frac, K };
+export type { Gait };

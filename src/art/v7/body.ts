@@ -12,7 +12,7 @@ import { finish5 } from '../v5/body';
 import type { Ctx, CharDef } from '../people-parts';
 import type { C } from '../color';
 import { Scene3D, V3, Hit, Mat, vadd, vsub, vsc, vnorm, vdot, vlerp, vlen, vcross, cel, Ramp6 } from './raster';
-import { drawHand7, HandFrame } from './hands';
+import { drawHand7, HandFrame, handScale } from './hands';
 import { drawHeld7 } from './held';
 
 export const YAW = 0.95; // radians: how far the cast turns toward the camera
@@ -74,6 +74,8 @@ export interface J3 {
   yaw: number;
   /** the legs' forward direction (world) */
   legFwd: V3;
+  /** the pose's flags (gear can read them: noPack while a backpack is being taken off) */
+  flags?: Record<string, number>;
 }
 
 const G = { torso: 1, armN: 2, armF: 3, legN: 4, legF: 5, skirt: 6, extra: 7, handN: 40, handF: 41 };
@@ -154,7 +156,7 @@ export function lift(ch: Char7, pose: Pose, yaw0 = YAW): J3 {
     if (!a.ik || !(near ? fl.wN : fl.wF)) return;
     const sh3 = near ? shN2 : shF2, root = near ? J.shF : J.shB, side = near ? 1 : -1, ao = near ? aoN : aoF;
     const zs = near ? zN : zF;
-    const lz = zs !== undefined ? zs : sh3[2] + side * (out + ao), F = 2.3 * ch.hand, goal = a.ik;
+    const lz = zs !== undefined ? zs : sh3[2] + side * (out + ao), F = 2.6 * handScale(ch.hand), goal = a.ik;
     let tx = goal[0], ty = goal[1], el: P2 = root, wr: P2 = root;
     for (let it = 0; it < 3; it++) {
       [el, wr] = ik2(root, [root[0] + (tx + lz * sa) / ca - sh3[0], root[1] + ty - sh3[1]], b.upArm, b.foreArm, a.flip ? 1 : -1);
@@ -174,7 +176,7 @@ export function lift(ch: Char7, pose: Pose, yaw0 = YAW): J3 {
     elN: armPt(shN2, J.shF, J.elF, 1, aoN, ikN, 0.6), elF: armPt(shF2, J.shB, J.elB, -1, aoF, ikF, 0.6),
     wrN: armPt(shN2, J.shF, J.wrF, 1, aoN, ikN, 1), wrF: armPt(shF2, J.shB, J.wrB, -1, aoF, ikF, 1),
     hpN: W(hpN), hpF: W(hpF), knN: legW(hpN, J.hipF, J.knF, 0.5), knF: legW(hpF, J.hipB, J.knB, 0.5), anN: legW(hpN, J.hipF, J.anF), anF: legW(hpF, J.hipB, J.anB),
-    up: W(upS), fwd: W(twist(fwS, tw * 0.5)), lat: W(twist(latS, tw * 0.5)), yaw, legFwd: Wl([1, 0, 0]),
+    up: W(upS), fwd: W(twist(fwS, tw * 0.5)), lat: W(twist(latS, tw * 0.5)), yaw, legFwd: Wl([1, 0, 0]), flags: pose.flags,
   } as J3;
   const T0 = W(hip);
   j.T = (h, f, z) => vadd(T0, vadd(vsc(j.up, h), vadd(vsc(j.fwd, f), vsc(j.lat, z))));

@@ -16,7 +16,7 @@ import { approach, clamp, rand } from '../core/math';
 // ------------------------------------------------------------------ art binding (src/art/people.ts, src/art/emotes.ts)
 
 export type Look = 'fwd' | 'up' | 'down' | 'back';
-export interface BodyFrameArt { back: PixelBuffer; front: PixelBuffer | null; ax: number; ay: number; hx: number; hy: number; look?: Look; hand?: [number, number]; headBehind?: boolean; hrot?: number; hflip?: boolean; hair?: number }
+export interface BodyFrameArt { back: PixelBuffer; front: PixelBuffer | null; ax: number; ay: number; hx: number; hy: number; look?: Look; hand?: [number, number]; headBehind?: boolean; hrot?: number; hflip?: boolean; hair?: number; pts?: Record<string, [number, number]> }
 export interface PeopleArt {
   ANIMS: Record<string, { frames: number; fps: number; loop: boolean; dist?: number; talk?: string }>;
   CHAR_ANIMS: Record<string, string[]>;
@@ -46,7 +46,7 @@ export function bindActorArt(p: PeopleArt | null, e: EmoteArt | null) {
 }
 export const peopleArt = () => people;
 
-interface BodyCache { back: Frame; front: Frame | null; ax: number; ay: number; hx: number; hy: number; look: Look; hand: [number, number] | null; headBehind: boolean; hrot: number; hflip: boolean; hair: number }
+interface BodyCache { back: Frame; front: Frame | null; ax: number; ay: number; hx: number; hy: number; look: Look; hand: [number, number] | null; headBehind: boolean; hrot: number; hflip: boolean; hair: number; pts: Record<string, [number, number]> | null }
 const bodyCache = new Map<string, BodyCache>();
 const headCache = new Map<string, Frame>();
 const emoteCache = new Map<string, Frame[]>();
@@ -82,6 +82,7 @@ function bodyFrame(id: string, anim: string, frame: number): BodyCache | null {
       back: atlas.add('pb:' + key, art.back, art.ax, art.ay),
       front: art.front ? atlas.add('pf:' + key, art.front, art.ax, art.ay) : null,
       ax: art.ax, ay: art.ay, hx: art.hx, hy: art.hy, look: art.look ?? 'fwd', hand: art.hand ?? null, headBehind: !!art.headBehind, hrot: art.hrot ?? 0, hflip: !!art.hflip, hair: art.hair ?? 0,
+      pts: art.pts && Object.keys(art.pts).length ? art.pts : null,
     };
     bodyCache.set(key, b);
   }
@@ -140,6 +141,24 @@ export const CHAR_NAMES: Record<string, string> = {
 export const CHAR_VOICE: Record<string, number> = { mori: 1, jenna: 1.5, joshu: 0.62, aroha: 1.12, chunk: 1.9, rowan: 1, crowe: 0.62, lou: 0.62, pip: 1.5, phone: 1.6 };
 
 export type ReactKind = 'jump' | 'shake' | 'shrink' | 'nod' | 'bounce' | 'recoil' | 'tremble' | 'stretch' | 'land';
+
+/**
+ * Optional actor extensions, installed by modules that need them (src/game/v11/carry.ts: carrying real
+ * objects). All of them are no-ops until installed.
+ */
+export interface ActorExt {
+  /** the clip to really play for a requested one (carrying a plank: walk → carryWalk~plank) */
+  mapAnim?(a: Actor, anim: string): string;
+  /** per-frame upkeep (water dripping out of cupped hands) */
+  update?(a: Actor, dt: number): void;
+  /** drawn between the head and the front layer: things hugged in front of the chest, under the near arm */
+  drawHeld?(a: Actor, r: Renderer, x: number, y: number): void;
+  /** drawn after the body (drips, splashes, a lantern's glow) */
+  drawOver?(a: Actor, r: Renderer): void;
+}
+export const actorExt: ActorExt = {};
+/** clip variants share a base name ('carryWalk~plank', 'carryWalk~log'): switching between them keeps the phase */
+const clipBase = (a: string) => { const i = a.indexOf('~'); return i < 0 ? a : a.slice(0, i); };
 
 export class Actor implements Drawable {
   z = 40;
@@ -229,8 +248,12 @@ export class Actor implements Drawable {
   /** insert posture transitions (sit down / stand up / lie down / get up) automatically */
   transitions = true;
 
+  /** the clip actually played for a requested one (see ActorExt.mapAnim) */
+  mapped(anim: string) { return actorExt.mapAnim ? actorExt.mapAnim(this, anim) : anim; }
+
   /** Loop an animation (no-op if already playing). */
   setAnim(anim: string) {
+    anim = this.mapped(anim);
     if (this.anim === anim && !this.once && !this.trans) return;
     if (this.trans?.to === anim) return;
     // the clip already playing also leads to the new target (raising the camera, then starting to
@@ -240,9 +263,11 @@ export class Actor implements Drawable {
     const from = this.trans ? this.trans.to : this.anim;
     this.trans = null;
     const clip = this.transitions ? people?.transitionFor?.(this.id, from, anim) : null;
+    const prev = this.anim;
     this.anim = clip ?? anim;
     if (clip) this.trans = { to: anim, from };
-    this.animT = 0;
+    // a variant of the same clip (the water level dropping in cupped hands) carries on in step
+    if (clip || clipBase(prev) !== clipBase(this.anim) || prev === this.anim) this.animT = 0;
     this.holdFrame = null;
   }
 
@@ -350,7 +375,7 @@ export class Actor implements Drawable {
         if (!animInfo(o.anim, this.id).loop) {
           this.holdFrame = null;
         }
-        this.anim = o.then;
+        this.anim = this.mapped(o.then);
         this.animT = 0;
         o.res();
       }
@@ -362,13 +387,14 @@ export class Actor implements Drawable {
       if (Math.abs(d) < 1.2) {
         this.x = this.walkX;
         this.stopWalk();
-        if (this.anim === this.walkAnim) this.setAnim(this.idleAnim);
+        if (this.anim === this.mapped(this.walkAnim)) this.setAnim(this.idleAnim);
       } else {
         this.facing = Math.sign(d);
         this.vx = Math.sign(d) * this.walkSpeed;
         this.x += this.vx * dt;
         if (Math.sign(this.walkX - this.x) !== Math.sign(d)) this.x = this.walkX;
-        if (!this.once && this.anim !== this.walkAnim && this.trans?.to !== this.walkAnim) this.setAnim(this.walkAnim);
+        const wa = this.mapped(this.walkAnim);
+        if (!this.once && this.anim !== wa && this.trans?.to !== wa) this.setAnim(this.walkAnim);
       }
     }
     if (this.terrain) {
@@ -417,6 +443,7 @@ export class Actor implements Drawable {
       this.emote.t += dt;
       if (this.emote.t >= this.emote.dur) this.emote = null;
     }
+    actorExt.update?.(this, dt);
     // idle fidgets: glance around
     if (this.fidget && !this.talking && this.walkX === null && this.anim === this.idleAnim) {
       this.fidgetT -= dt;
@@ -487,8 +514,21 @@ export class Actor implements Drawable {
     };
   }
 
+  /** carried by another actor (Chunk in Mori's arms): drawn by the carrier, between its body and its near arm */
+  carrier: Actor | null = null;
+  private asRider = false;
+  /** draw this actor as the carrier's rider (no shadow, the carrier's layer order) */
+  drawRider(r: Renderer) {
+    if (!this.visible || this.alpha <= 0) return;
+    const sh = this.shadow;
+    this.asRider = true; this.shadow = false;
+    this.draw(r);
+    this.asRider = false; this.shadow = sh;
+  }
+
   draw(r: Renderer, st?: Stage) {
     if (!this.visible || this.alpha <= 0) return;
+    if (this.carrier && !this.asRider && this.carrier.visible) return;
     void st;
     const fi = this.frameIndex();
     const art = this.artId;
@@ -521,7 +561,9 @@ export class Actor implements Drawable {
     if (b.headBehind && head) r.draw(head, hx, hy, sx, hsy, hr, col);
     r.draw(b.back, x, y, sx, sy, 0, col);
     if (!b.headBehind && head) r.draw(head, hx, hy, sx, hsy, hr, col);
+    actorExt.drawHeld?.(this, r, x, y);
     if (b.front) r.draw(b.front, x, y, sx, sy, 0, col);
+    actorExt.drawOver?.(this, r);
     // sleeping: Z's drifting up from the head, swaying, growing and fading out
     if (SLEEP.has(this.anim)) {
       const zs = zGlyphs(), t = this.animT;
@@ -548,6 +590,14 @@ export class Actor implements Drawable {
         r.emissive();
       }
     }
+  }
+
+  /** A named point on the current frame ('handN', 'handF', a held object's 'cup', 'drip0'...) in world space. */
+  point(name: string): [number, number] | null {
+    const b = bodyFrame(this.artId, this.anim, this.frameIndex());
+    const p = b?.pts?.[name];
+    if (!b || !p) return null;
+    return [this.x + this.ox + this.facing * (p[0] - b.ax) * this.sqx, this.y + this.oy + this.hop + (p[1] - b.ay) * this.sqy];
   }
 
   /** Hand position in world space (for held props & particles). */

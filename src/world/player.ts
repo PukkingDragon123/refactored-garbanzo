@@ -12,6 +12,7 @@ import { audio } from '../core/audio';
 import { approach, clamp } from '../core/math';
 import { perks } from '../game/skills';
 import { climbFrame } from '../art/ladder';
+import { carrySpeedK } from '../game/v11/carry';
 
 export type PState = 'normal' | 'climb' | 'hide' | 'swim' | 'script' | 'stunned' | 'work';
 
@@ -267,7 +268,7 @@ export class Player implements Drawable {
     }
     this.running = canControl && !this.noRun && !this.noSprint && inp.down('run') && !this.crouch && !this.camera;
     if (this.running && Math.abs(this.vx) > 80 * this.speedK * this.loadK) this.sinceRun = 0;
-    const speed = (this.state === 'script' ? this.scriptSpeed : this.camera ? 28 : this.crouch ? 26 : this.running ? 118 : 60) * this.speedK * this.wadeK * (this.state === 'script' ? 1 : this.loadK);
+    const speed = (this.state === 'script' ? this.scriptSpeed : this.camera ? 28 : this.crouch ? 26 : this.running ? 118 : 60) * this.speedK * this.wadeK * (this.state === 'script' ? 1 : this.loadK * carrySpeedK(this.body));
     let target = ax * speed;
     // dizzy: he veers, stalls and staggers a step on his own (facing still follows the keys)
     if (this.dizzy > 0 && canControl) {

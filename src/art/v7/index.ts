@@ -10,7 +10,10 @@ import { PixelBuffer } from '../pixel';
 import { renderBody7, Frame7 } from './body';
 import { renderHead7, HeadOpts7 } from './head';
 import { CAST7, INFO7 } from './cast';
-import { ANIMS7, pose7, animInfo7 } from './anims7';
+import { ANIMS7, pose7, animInfo7, clip7 } from './anims7';
+// clips registered beside the core set: secondary motion for the everyday clips, hands and carrying
+import './anims-life';
+import './anims-hands';
 import { dress, OUTFIT_NAMES } from './outfits';
 import { outfitOf, setOutfit, splitOutfit, wardrobeVersion } from './wardrobe';
 import { ANIME_COMMON, TRANSITIONS, AnimInfo } from '../anime/anims';
@@ -70,8 +73,8 @@ export function renderBody(id: string, anim: string, frame: number): Frame7 {
     const a = CHUNK_ANIMS[anim] ? anim : 'idle';
     return renderChunkBody(a, frame % CHUNK_ANIMS[a].frames) as unknown as Frame7;
   }
-  const a = ANIMS7[anim] ? anim : 'idle';
-  const n = Math.max(1, ANIMS7[a].frames);
+  const a = clip7(anim) ? anim : 'idle';
+  const n = Math.max(1, clip7(a)!.frames);
   const fi = ((frame % n) + n) % n;
   const key = `${cid}@${outfit}|${a}|${fi}`;
   const hit = cache.get(key);

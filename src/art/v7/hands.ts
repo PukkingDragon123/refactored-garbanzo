@@ -15,7 +15,7 @@ import type { ArmP } from '../people-rig';
 import type { J3 } from './body';
 import { Scene3D, V3, Mat, vadd, vsub, vsc, vdot, vnorm, vcross, vlen } from './raster';
 
-export type PalmDir = 'in' | 'out' | 'up' | 'down' | 'fwd' | 'back' | 'cam';
+export type PalmDir = 'in' | 'out' | 'up' | 'down' | 'fwd' | 'back' | 'cam' | 'upcam';
 
 /** one finger: knuckle bend, the bend of the two outer joints together, and splay (radians) */
 type Fing = [number, number];
@@ -93,6 +93,8 @@ function palmTarget(J: J3, near: boolean, dir: PalmDir): V3 {
     case 'fwd': return J.fwd;
     case 'back': return vsc(J.fwd, -1);
     case 'cam': return [0, 0, 1];
+    // up, and tipped toward the viewer (cupped hands showing what they hold)
+    case 'upcam': return vnorm([0, 1, 0.75]);
     default: return vsc(J.lat, -side);
   }
 }

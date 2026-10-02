@@ -54,7 +54,7 @@ export interface ArmP {
   /** hand angle override (ground space radians, 0 = pointing forward, + = up) */
   ha?: number;
   /** V7 hands (src/art/v7/hands.ts): where the palm faces ('in' toward the body by default) */
-  palm?: 'in' | 'out' | 'up' | 'down' | 'fwd' | 'back' | 'cam';
+  palm?: 'in' | 'out' | 'up' | 'down' | 'fwd' | 'back' | 'cam' | 'upcam';
   /** V7 hands: wrist flex in radians (+ tips the hand toward the palm, - bends it back) */
   flex?: number;
   /** V7 hands: wrist tilt toward the thumb (radians) */

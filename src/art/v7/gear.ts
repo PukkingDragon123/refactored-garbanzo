@@ -103,6 +103,8 @@ export interface PackOpts {
 }
 /** an expedition pack on the back, with whatever's strapped to it */
 export function backpack(s: Scene3D, J: J3, ch: Char7, o: PackOpts) {
+  // being taken off (held.ts draws it in the hands)
+  if (J.flags?.noPack) return;
   const T = ch.build.torso;
   const back = -(ch.chest[0] + o.d * 0.55 + 0.4), hc = T * o.top - o.h * 0.5, hw = o.w * 0.5;
   const lid = o.lid ?? o.col, z0 = o.z ?? 0;
