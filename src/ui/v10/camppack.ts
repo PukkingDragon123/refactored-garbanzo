@@ -62,7 +62,7 @@ export async function openPackPrep(cd: CampDay) {
       <div class="cp-card">
         <h3>Food</h3>
         ${foods.length ? `<div>${foods.map(s => `<span class="cp-chip"><img src="${itemIconURL(s.id, 2)}" alt="">${s.n}× ${esc(ITEMS[s.id]?.name ?? s.id)}</span>`).join('')}</div>` : '<p style="color:#ffb3a4">Nothing to eat in your pack.</p>'}
-        <p style="opacity:0.8;font-size:0.85em">${foodN ? `${foodN} thing${foodN > 1 ? 's' : ''} to eat${kcal ? ` (about ${Math.round(kcal)} energy)` : ''}.` : 'Take something: berries, pipi, a ship biscuit.'} Eat from the pack (Tab) when you flag.</p>
+        <p style="opacity:0.8;font-size:0.85em">${foodN ? `${foodN} thing${foodN > 1 ? 's' : ''} to eat${kcal ? ` (about ${Math.round(kcal)} energy)` : ''}.` : 'Take something: berries, pipi, a ship biscuit.'} Quick-eat with <span class="key">H</span> when you flag, or from the pack (Tab).</p>
         ${lunch ? '<p style="color:var(--teal2);font-size:0.85em">Joshu packed you lunch.</p>' : '<button class="btn teal lunch" style="margin-top:0.4em">Take a packed lunch from Joshu’s stores</button>'}
       </div>
       <div class="cp-card">
