@@ -206,6 +206,8 @@ export class BoatTripScene extends FieldScene {
     else this.motor = false;
     this.life = startBoatLife(this);
     this.life.reefback.onSurface = close => { if (close) void this.reefbackMoment(); };
+    // photos are filed as taken aboard the Kitten (the research pages show the site name as is)
+    (this.cam as unknown as { site: string }).site = this.plan.stop === 'reef' ? 'Glass Reef' : 'Aboard the Kitten';
     // photos: each sea species once, and the discovery for the map
     const prev = this.cam.onShot;
     this.cam.onShot = ph => {

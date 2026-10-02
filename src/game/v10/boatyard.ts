@@ -110,7 +110,7 @@ export class Boatyard {
     st.it({ x: YARD.x, y: groundY(YARD.x), w: 30, get label() { return self.boatLabel(); }, standX: YARD.x - 24,
       quest: () => this.boatQuest(), enabled: () => B.boatStage() >= 1 && !B.boatIsAway() && this.slide === 0 && !s.inWreck, action: () => this.boatAction() } as never);
     // the outboard on its sawhorse, waiting for Jenna
-    st.it({ x: YARD.x - 76, y: groundY(YARD.x - 76), w: 14, label: 'Fix the outboard with Jenna', standX: YARD.x - 96, quest: () => true,
+    st.it({ x: YARD.x + 86, y: groundY(YARD.x + 86), w: 14, label: 'Fix the outboard with Jenna', standX: YARD.x + 66, quest: () => true,
       enabled: () => B.boatStage() === 3 && B.found('outboard') && B.found('fuel') && !B.boatSave().motorFixed, action: () => this.fixMotor() } as never);
     // ---- salvage: planks in and around the wreck
     for (const p of PLANKS) {
@@ -200,7 +200,7 @@ export class Boatyard {
       if (sh) { r.beginShadows(); r.draw(A.shadow, YARD.x + dx * k, yy + 0.5, sh * kk / 32, 0.5 * kk, 0, packColor(0, 0, 0, 0.3)); r.endShadows(); }
       r.draw(e.f, YARD.x + dx * k, yy, kk, kk);
     };
-    prop('sign', K.yardSign, -112, -6, 10);
+    prop('sign', K.yardSign, -124, -6, 10);
     // materials handed in but not yet used
     const pl = (stage === 1 ? B.given('patch', 'plank') : 0) + (stage === 4 ? B.given('rig', 'plank') : 0);
     if (pl > 0) prop('planks' + pl, () => K.plankStack(pl), 88, 4, 40);
@@ -213,7 +213,7 @@ export class Boatyard {
       const e = this.frame('amalog', K.amaLog);
       r.draw(e.f, YARD.x - (K.KL / 2 + 6) * k, y + 12, k, k);
     }
-    if (stage === 3 && bs.found['outboard']) prop('sawhorse', K.sawhorseMotor, -76, -2, 26);
+    if (stage === 3 && bs.found['outboard']) prop('sawhorse', K.sawhorseMotor, 86, -2, 26);
     if (stage === 4 && B.sailWeaving() && !B.sailReady()) prop('weave', () => K.weaveMat(clamp((bs.playT - bs.sailT) / B.CURE_FALLBACK, 0.15, 0.9)), 96, 18, 44);
   }
 
@@ -646,8 +646,8 @@ export class Boatyard {
     const s = this.s, st = this.st, p = s.player;
     await this.cut(async () => {
       const back = this.borrow(['jenna']);
-      p.x = YARD.x - 96; p.y = groundY(p.x); p.facing = 1;
-      await this.walkIn(s.jenna, YARD.x + 60, YARD.x - 58, -1, 'wrench');
+      p.x = YARD.x + 66; p.y = groundY(p.x); p.facing = 1;
+      await this.walkIn(s.jenna, YARD.x + 170, YARD.x + 104, -1, 'wrench');
       await st.say([
         { who: 'jenna', text: 'Okay, patient. You’ve been underwater, you’ve been in a shipwreck, you’ve been in the dark for days. Nurse Jenna is here.', expr: 'serious' },
         { who: 'jenna', text: 'Mori, you’re my hands. I talk, you do. GO.', expr: 'determined' },
