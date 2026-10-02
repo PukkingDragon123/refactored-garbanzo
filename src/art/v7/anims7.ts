@@ -131,16 +131,20 @@ function gait(b: Build, t: number, g: Gait): Pose {
   const bob = g.flight > 0
     ? -g.drop - g.bob * c + g.flight * (1 - c)
     : -g.drop - g.bob * (0.5 + 0.5 * Math.cos(TAU * 2 * t));
-  // arms from the shoulder, opposite the legs; the forearm trails a beat behind
+  // arms from the shoulder, opposite the legs; the forearm trails a beat behind, and the hand a beat
+  // behind that: dragged back through the swing, flicking through at the end of it (follow-through)
+  const stiff = g.hand === 'fist' || g.hand === 'grip' ? 0.45 : 1;
   const arm = (ph: number): ArmP => {
     const sw = -Math.cos(TAU * ph);
     const lag = -Math.cos(TAU * (ph - 0.1));
-    return { a: 0.04 + g.swing * sw, e: g.elbow + g.elbowSwing * (0.5 + 0.5 * lag), hand: g.hand };
+    const drag = Math.sin(TAU * (ph - 0.07));
+    return { a: 0.04 + g.swing * sw, e: g.elbow + g.elbowSwing * (0.5 + 0.5 * lag), hand: g.hand, dev: -0.4 * stiff * drag * Math.min(1, g.swing * 1.8), flex: 0.08 + 0.14 * stiff * Math.max(0, -sw) * Math.min(1, g.swing * 2) };
   };
   const p: Pose = {
     hip: [0.15 * k * Math.sin(TAU * 2 * t), b.hipH + bob],
     lean: g.lean + 0.03 * Math.cos(TAU * 2 * t) * (g.flight > 0 ? 1 : 0.4),
-    sq: 1 - c * (g.flight > 0 ? 0.035 : 0.012),
+    // squash as the weight lands on the leg, a stretch off the toes in the run's flight
+    sq: 1 - c * (g.flight > 0 ? 0.04 : 0.022) + (g.flight > 0 ? (1 - c) * 0.018 : 0),
     // the head stays level: it rides a little against the bob
     hd: [0.25 * k + g.lean * 1.6 * k, -bob * 0.25],
     fa: arm(t + 0.5), ba: arm(t),

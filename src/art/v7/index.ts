@@ -61,6 +61,10 @@ tr(['idle', 'walk', 'run', 'brace', 'slip'], ['camera', 'cameraWalk'], 'cameraUp
 tr(['crouch', 'crouchWalk'], ['cameraCrouch', 'cameraCrouchWalk'], 'cameraUpC');
 tr(['camera', 'cameraWalk'], ['idle', 'walk', 'run', 'brace', 'slip'], 'cameraDown');
 tr(['cameraCrouch', 'cameraCrouchWalk'], ['crouch', 'crouchWalk', 'idle', 'walk'], 'cameraDownC');
+// secondary motion (anims-life.ts): a stop carries on past the rest pose and settles; a landing squashes
+tr(['walk'], ['idle'], 'walkStop');
+tr(['run'], ['idle'], 'runStop');
+tr(['fall', 'jump'], ['idle'], 'land');
 export function transitionFor(id: string, from: string, to: string): string | null {
   if (parse(id)[0] === 'chunk') return CHUNK_TRANS[from]?.[to] ?? null;
   return TRANS7[from]?.[to] ?? TRANSITIONS[from]?.[to] ?? null;

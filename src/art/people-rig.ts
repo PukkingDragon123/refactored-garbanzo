@@ -234,9 +234,11 @@ function lerpP(a: P2 | undefined, b: P2 | undefined, t: number): P2 | undefined 
 }
 function lerpArm(a: ArmP, b: ArmP, t: number): ArmP {
   const hand = t < 0.5 ? a.hand : b.hand;
-  if (a.ik && b.ik) return { ik: lerpP(a.ik, b.ik, t), flip: t < 0.5 ? a.flip : b.flip, hand, ha: a.ha !== undefined || b.ha !== undefined ? lerpN(a.ha, b.ha, t, a.ha ?? b.ha) : undefined };
+  // V7 hand shaping rides along (palm side picked, wrist angles blended)
+  const hs = { palm: t < 0.5 ? a.palm ?? b.palm : b.palm ?? a.palm, flex: a.flex !== undefined || b.flex !== undefined ? lerpN(a.flex, b.flex, t) : undefined, dev: a.dev !== undefined || b.dev !== undefined ? lerpN(a.dev, b.dev, t) : undefined, spread: a.spread !== undefined || b.spread !== undefined ? lerpN(a.spread, b.spread, t, 1) : undefined };
+  if (a.ik && b.ik) return { ik: lerpP(a.ik, b.ik, t), flip: t < 0.5 ? a.flip : b.flip, hand, ha: a.ha !== undefined || b.ha !== undefined ? lerpN(a.ha, b.ha, t, a.ha ?? b.ha) : undefined, ...hs };
   if (a.ik || b.ik) return t < 0.5 ? a : b;
-  return { a: lerpN(a.a, b.a, t), e: lerpN(a.e, b.e, t), hand, ha: a.ha !== undefined || b.ha !== undefined ? lerpN(a.ha, b.ha, t, a.ha ?? b.ha) : undefined };
+  return { a: lerpN(a.a, b.a, t), e: lerpN(a.e, b.e, t), hand, ha: a.ha !== undefined || b.ha !== undefined ? lerpN(a.ha, b.ha, t, a.ha ?? b.ha) : undefined, ...hs };
 }
 function lerpLeg(a: LegP, b: LegP, t: number): LegP {
   return { f: lerpP(a.f, b.f, t)!, fa: lerpN(a.fa, b.fa, t), kb: t < 0.5 ? a.kb : b.kb };
@@ -270,6 +272,7 @@ export function lerpPose(a: Pose, b: Pose, t: number): Pose {
     bounce: lerpN(a.bounce, b.bounce, t),
     headBehind: pick(a.headBehind, b.headBehind),
     flags: pick(a.flags, b.flags),
+    held: pick(a.held, b.held),
   };
 }
 
