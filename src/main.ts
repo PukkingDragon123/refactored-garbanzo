@@ -38,6 +38,11 @@ async function boot() {
   audio.masterVolume = 0.8;
   audio.musicVolume = game.save.settings.music;
   audio.sfxVolume = game.save.settings.sfx;
+  // the render resolution picked in Settings; ?gfx=low|medium|high tries a graphics preset (not kept)
+  const res = game.save.settings.quality;
+  if (res > 0 && res < 1) { game.r.quality = Math.max(0.35, res); window.dispatchEvent(new Event('resize')); }
+  const gfx = params.get('gfx');
+  if (gfx === 'low' || gfx === 'medium' || gfx === 'high') game.r.setGfx(gfx);
   const unlock = () => audio.unlock();
   window.addEventListener('pointerdown', unlock);
   window.addEventListener('keydown', unlock);
@@ -140,6 +145,8 @@ async function boot() {
     },
     /** island story helpers (state, interactables, markers, teleport): see src/game/v9/islezl.ts */
     isle: null as unknown,
+    /** the cinematic camera and post FX (cineTo, cinePunch, cineLook...): (await zl.cine()).cinePunch() */
+    cine: () => import('./game/v11/cine'),
   };
   void import('./game/v9/islezl').then(m => { (window as unknown as { zl: { isle: unknown } }).zl.isle = m.ISLE; });
   // developer panel toggles left on (noclip, overlay...): only then is the dev module loaded

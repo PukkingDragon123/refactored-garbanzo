@@ -1,6 +1,7 @@
 // Game: owns the renderer, input, save data and the active scene; drives the main loop.
 
 import { Renderer } from '../gfx/renderer';
+import { applyGfxPrefs } from '../gfx/quality';
 import { Input } from '../core/input';
 import { SaveData, newSave, writeSave } from './save';
 import { UI } from '../ui/ui';
@@ -28,6 +29,10 @@ class Game {
   private busy = false;
   paused = false;
   slowmo = 1;
+  /** real seconds since the last frame (0 while paused): cinematic camera moves run on it */
+  rdt = 0;
+  /** run once per rendered frame before the scene updates, with the real dt (cinematic FX easing) */
+  readonly frameHooks: ((rdt: number) => void)[] = [];
   /** full-screen UI covering the world (MoriOS): while > 0 the world is frozen, neither updated nor
    *  re-rendered (the canvas keeps its last frame behind the laptop), so the laptop gets the GPU */
   covered = 0;
@@ -36,6 +41,7 @@ class Game {
 
   init(canvas: HTMLCanvasElement, uiRoot: HTMLElement) {
     this.r = new Renderer(canvas);
+    applyGfxPrefs(this.r);
     this.input = new Input(canvas, () => ({ w: this.r.VW, h: this.r.VH }));
     this.ui = new UI(uiRoot);
     const fit = () => {
@@ -122,9 +128,13 @@ class Game {
       if (!frozen || this.coverDirty) {
         if (frozen) dt = 0;
         this.coverDirty = false;
+        this.rdt = this.paused || frozen ? 0 : rdt;
+        for (const h of this.frameHooks) {
+          try { h(this.rdt); } catch (e) { console.error(e); }
+        }
         // textures are (re)uploaded right before each GPU flush, so lazily generated frames never draw blank
         this.r.beforeFlush = () => { atlas?.upload(); local?.upload(); };
-        this.r.begin(dt);
+        this.r.begin(dt, this.rdt);
         if (this.scene) {
           try {
             this.scene.update(dt);
