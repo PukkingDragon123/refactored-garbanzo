@@ -44,7 +44,7 @@ interface Design {
   weathered?: boolean;
   /** added to every expression's inner-brow tilt (negative: a permanent scowl) */
   browBias?: number;
-  eyes: 'young' | 'girl' | 'old' | 'pug' | 'man' | 'fierce';
+  eyes: 'young' | 'girl' | 'old' | 'pug' | 'man' | 'fierce' | 'almond';
   iris: [string, string, string];
   lash: string;
   brow: string;
@@ -213,6 +213,21 @@ const EYES: Record<string, Record<string, string[]>> = {
     wink: ['......', '.kkkk.', 'k....k'],
     sparkle: ['.kkkkk', 'kkGIGk', '..sss.'],
     pain: ['......', 'k....k', '.kkkk.'],
+  },
+  // almond: a narrower eye than the girl's, the outer corner lifted into a sharp lash flick (Aroha)
+  almond: {
+    open: ['.....kk', '..kkkk.', '.kIIIGk', '.wiiijw', '..sss..'],
+    wide: ['....kk.', '.kkkkk.', 'kwIIIGk', '.wiiijw', '..kkk..'],
+    half: ['.......', '.....kk', '.kkkkkk', '.wiiijw', '..sss..'],
+    closed: ['.......', '.......', '.....kk', 'kkkkkk.', '.......'],
+    happy: ['.......', '.....k.', '..kkk.k', '.k.....', 'k......'],
+    sad: ['.......', '....kkk', '.kkIIGk', '.wiiijw', '..sss..'],
+    tiny: ['....kk.', '.kkkkk.', 'wwwIwww', '.wwwww.', '..kkk..'],
+    angry: ['kk.....', '.kkkkkk', '.kIIIGk', '.wiiijw', '..sss..'],
+    side: ['.....kk', '..kkkk.', '.kwIIGk', '.wwiijw', '..sss..'],
+    wink: ['.......', '.....k.', '..kkk.k', '.k.....', 'k......'],
+    sparkle: ['.....kk', '..kkkk.', '.kGIIGk', '.wiGijw', '..sss..'],
+    pain: ['.......', 'k.....k', '.k...k.', '..kkk..', '.......'],
   },
   old: {
     open: ['......', '.kkkk.', 'kwIGwk', '..ss..'],
@@ -562,47 +577,98 @@ const JOSHU: Design = {
   },
 };
 
+// Aroha: 22, a ranger of the island's iwi. A strong, expressive face that reads apart from Jenna's
+// soft round one: high cheekbones and a defined jaw tapering to a firm chin, a broader nose, full lips,
+// almond eyes lifted at the outer corner under strong dark brows. Thick dark wavy hair swept back off
+// her face into a big high bun with a flax tie, loose waves escaping at the temples. Bare athletic
+// shoulders, a bush-green tank with a tāniko band, a pounamu hei matau on a flax cord.
 const AROHA: Design = {
-  skin: T('#c8885e', { sh: 0.12, deep: 0.28, hi: 0.08 }),
-  eyes: 'girl', iris: ['#1a0c08', '#5a3420', '#8a5a34'], lash: '#1e1210', brow: '#241410', browH: 1, blush: '#d87060',
-  faceW: 0.98, chin: 0.2, eyeX: 17, eyeY: 25,
+  skin: T('#b07450', { sh: 0.12, deep: 0.28, hi: 0.08 }),
+  eyes: 'almond', iris: ['#160a06', '#4a2816', '#8c5a30'], lash: '#140a08', brow: '#1a0e0a', browH: 2, browArch: 1.1, browDrop: 0.2, browBias: -0.4,
+  blush: '#c4604c', blushK: 0.75, lip: '#7e3a2c',
+  jaw: [[CX, 11], [CX + 11.2, 12.6], [CX + 13.3, 18], [CX + 13.9, 24.6], [CX + 13.6, 28.6], [CX + 12.4, 32.8], [CX + 10.3, 36.3], [CX + 7.1, 39.4], [CX + 3.5, 41.3], [CX, 41.7]],
+  neck: [5.4, 6.4],
+  cheek: [CX - 9.4, 28.2, 3.2, 1.5],
+  eyeX: 16, eyeY: 25, mouthY: 37,
   back(p, m) {
-    const [hd, hs, hb] = T('#2e1a14', { sh: 0.18, deep: 0.34 });
-    // long wavy hair falling behind the shoulders
-    p.fill([[CX - 16.6, 20], [CX - 15, 8], [CX, 4.4], [CX + 15, 8], [CX + 16.6, 20], [CX + 19.6, 40], [CX + 20.4, 60], [CX - 20.4, 60], [CX - 19.6, 40]], hb, m.hairB);
-    p.where([m.hairB], (u, v) => v > 30 && ((u + Math.sin(v * 0.3) * 2 + 40) % 6.4) < 1, hs);
-    p.where([m.hairB], (u, v) => u > CX + 14, hs);
+    const [hd, hs, hb, hl] = T('#2a1812', { sh: 0.18, deep: 0.34, hi: 0.22 });
+    // the bun: big and round, high on the crown, the waves wound round it
+    const bx = CX + 1.6, by = 4.7;
+    p.ell(bx, by, 7.6, 4.4, hb, m.hairB);
+    p.where([m.hairB], (u, v) => v < 9.4 && Math.abs(((Math.atan2(v - by, (u - bx) * 0.6) * 1.7 + Math.hypot((u - bx) * 0.7, v - by) * 0.7) % 1.7 + 1.7) % 1.7 - 0.85) < 0.17, hs);
+    p.where([m.hairB], (u, v) => v < 9.4 && u > bx + 4.4, hs);
+    p.where([m.hairB], (u, v) => (u - bx + 2.4) ** 2 / 10 + (v - by + 1.8) ** 2 / 2.2 < 1, hl);
+    // a couple of short waves loose at the nape, peeking out behind the jaw
+    p.stroke([[CX - 11.8, 31], [CX - 13.2, 35.4], [CX - 12.0, 39.4]], 1.8, 0.6, hb, m.hairB);
+    p.stroke([[CX + 11.8, 31.6], [CX + 12.8, 35.2], [CX + 11.6, 38.2]], 1.6, 0.6, hs, m.hairB);
     void hd;
   },
   body(p, m) {
-    const top = T('#b08c5c', { sh: 0.12 });
-    // woven top with short sleeves; a taniko band (red / black / white) across the chest
-    p.fill([[2, 60], [4, 51], [12, 46.4], [CX, 45.4], [PW - 12, 46.4], [PW - 4, 51], [PW - 2, 60]], top[2], m.cloth);
-    p.fill([[CX - 6.4, 45], [CX, 49.6], [CX + 6.4, 45]], this.skin[2], m.neck);
-    p.where([m.cloth], (u, v) => u > PW - 13 || v > 58.4, top[1]);
-    p.where([m.cloth], (u, v) => v > 52 && v < 55.6, col('#c8342a'));
-    p.where([m.cloth], (u, v) => v > 52 && v < 55.6 && (Math.floor((u + 40) / 2.4) % 2 === 0) && (v - 52) > ((u + 40) % 2.4) * 1.4, col('#1e1418'));
-    p.where([m.cloth], (u, v) => Math.abs(v - 52.4) < 0.5 || Math.abs(v - 55.2) < 0.5, col('#f6ecd8'));
-    // cord and pounamu
-    p.stroke([[CX - 5, 45], [CX - 2.4, 49], [CX, 50.4]], 0.9, 0.9, col('#3a2418'), m.acc);
-    p.stroke([[CX + 5, 45], [CX + 2.4, 49], [CX, 50.4]], 0.9, 0.9, col('#3a2418'), m.acc);
-    p.fill([[CX - 1.6, 50], [CX + 1.6, 50], [CX + 2, 53.4], [CX, 55.2], [CX - 2, 53.4]], col('#3a9a6a'), m.acc);
-    p.where([m.acc], (u, v) => u < CX && v > 50.6 && v < 53, col('#7ad0a0'));
+    const top = T('#2a4434', { sh: 0.14 }), sk = this.skin;
+    // bare athletic shoulders (broader than Jenna's), the tank's straps over them
+    p.fill([[0, 60], [1.6, 52.6], [7, 48.2], [CX - 7, 46.4], [CX, 47.4], [CX + 7, 46.4], [PW - 7, 48.2], [PW - 1.6, 52.6], [PW, 60]], sk[2], m.neck);
+    p.where([m.neck], (u, v) => u > PW - 9 || (v > 49 && u > PW - 15), sk[1]);
+    p.where([m.neck], (u, v) => (u - 9) ** 2 / 14 + (v - 51) ** 2 / 3.4 < 1, sk[3]);
+    // the tank: a scoop neck, straps, the tāniko band across the chest
+    p.fill([[5.2, 60], [7, 53], [10.4, 49.4], [CX - 8.6, 48.4], [CX - 6, 52.8], [CX, 54.4], [CX + 6, 52.8], [CX + 8.6, 48.4], [PW - 10.4, 49.4], [PW - 7, 53], [PW - 5.2, 60]], top[2], m.cloth);
+    p.fill([[CX - 11.6, 46.6], [CX - 8.8, 46.4], [CX - 7.4, 50.4], [CX - 10.4, 50.4]], top[2], m.cloth, { sharp: true });
+    p.fill([[CX + 11.6, 46.6], [CX + 8.8, 46.4], [CX + 7.4, 50.4], [CX + 10.4, 50.4]], top[1], m.cloth, { sharp: true });
+    p.where([m.cloth], (u, v) => u > PW - 14 || v > 58.6, top[1]);
+    p.where([m.cloth], (u, v) => v > 55.2 && v < 58.4 && u > 6.5 && u < PW - 6.5, col('#b4302a'));
+    p.where([m.cloth], (u, v) => v > 55.8 && v < 57.8 && u > 6.5 && u < PW - 6.5 && Math.abs(((u + 40) % 2.6) - 1.3) * 1.25 < (57.8 - v) * 0.62, col('#1c1216'));
+    p.where([m.cloth], (u, v) => (Math.abs(v - 55.4) < 0.42 || Math.abs(v - 58.2) < 0.42) && u > 6.5 && u < PW - 6.5, col('#efe2c6'));
+    // the flax cord and the hei matau: a greenstone hook at the sternum
+    p.stroke([[CX - 5.6, 46], [CX - 3, 49.6], [CX - 0.6, 51.2]], 0.8, 0.8, col('#b08e40'), m.acc);
+    p.stroke([[CX + 5.6, 46], [CX + 3, 49.6], [CX + 0.6, 51.2]], 0.8, 0.8, col('#8a6a2a'), m.acc);
+    p.stroke([[CX + 1.4, 51.2], [CX - 1.2, 51.8], [CX - 2.0, 54], [CX - 0.6, 56.2], [CX + 1.6, 55.6]], 1.5, 1.1, col('#2c8a5a'), m.acc);
+    p.where([m.acc], (u, v) => v > 51.4 && u < CX - 0.8 && v < 55, col('#7ad0a0'));
   },
   front(p, m) {
-    const [hd, hs, hb, hl] = T('#2e1a14', { sh: 0.18, deep: 0.34, hi: 0.2 });
-    // centre-parted hair framing the face, falling in waves
+    const [hd, hs, hb, hl] = T('#2a1812', { sh: 0.18, deep: 0.34, hi: 0.22 });
+    // swept back off the face: a smooth hairline, the temples showing, the sides drawn back over the ears
     p.fill([
-      [CX - 17, 44], [CX - 16.4, 16], [CX - 11, 7.4], [CX - 1, 5], [CX, 8.6], [CX + 1, 5], [CX + 11, 7.4], [CX + 16.4, 16], [CX + 17, 44],
-      [CX + 14.6, 50], [CX + 13.4, 36], [CX + 12.6, 22], [CX + 7, 14.4], [CX + 1.6, 12], [CX, 13.4], [CX - 1.6, 12], [CX - 7, 14.4], [CX - 12.6, 22], [CX - 13.4, 36], [CX - 14.6, 50],
+      [CX - 15.2, 26], [CX - 15.6, 17.4], [CX - 12.2, 10.2], [CX - 4.4, 7.6], [CX + 4, 7.4], [CX + 12, 9.8], [CX + 15.6, 16.6], [CX + 15.2, 26],
+      [CX + 13.6, 22], [CX + 12.6, 17.4], [CX + 8.4, 13.4], [CX + 2.2, 11.8], [CX - 1.6, 12.4], [CX - 7.6, 13.2], [CX - 12.4, 17.2], [CX - 13.6, 22],
     ], hb, m.hair);
-    p.where([m.hair], (u, v) => u > CX + 10, hs);
-    p.where([m.hair], (u, v) => v > 22 && Math.abs(u - CX) > 13.4 && ((u + Math.sin(v * 0.3) * 1.6 + 40) % 3.6) < 0.9, hs);
-    p.where([m.hair], (u, v) => Math.abs(v - (12.4 + Math.abs(u - CX) * 0.3)) < 0.8 && u < CX - 2 && u > CX - 12, hl);
-    // woven headband with a small red/black pattern
-    p.stroke([[CX - 15.4, 15.4], [CX - 8, 10.6], [CX, 9.6], [CX + 8, 10.6], [CX + 15.4, 15.4]], 2.2, 2.2, col('#a8342c'), m.acc);
-    p.where([m.acc], (u, v) => ((u + 40) % 3) < 1 && v < 17, col('#8a3a24'));
+    // the flax tie round the base of the bun
+    p.stroke([[CX - 5.4, 8.6], [CX + 1.6, 9.5], [CX + 8.6, 8.4]], 1.7, 1.7, col('#c4a050'), m.acc);
+    p.where([m.acc], (u, v) => v < 10.4 && v > 7 && ((u + 40) % 2.2) < 0.9, col('#8a6a28'));
+    // combed strands sweeping back to the bun, darker under them, a sheen across the top
+    p.where([m.hair], (u, v) => v > 9 && ((u * 0.8 + v * 0.9 + 40) % 3.4) < 0.7 && Math.abs(u - CX) > 2, hs);
+    p.where([m.hair], (u, v) => u > CX + 9 && v > 10, hs);
+    p.where([m.hair], (u, v) => Math.abs(v - (10.2 + ((u - CX + 2) / 7) ** 2 * 1.6)) < 0.7 && u > CX - 10 && u < CX + 4, hl);
+    // loose waves escaping at the temples: a long one past her cheekbone to the jaw, a short one
+    // curling by the other ear, a wisp off the hairline
+    p.stroke([[CX - 13.0, 15.2], [CX - 14.8, 20.6], [CX - 13.2, 25.6], [CX - 14.6, 30.4], [CX - 13.4, 34]], 2.1, 0.6, hb, m.hair);
+    p.stroke([[CX + 13.1, 15.4], [CX + 14.6, 20], [CX + 13.4, 24.4], [CX + 14.2, 27.2]], 1.8, 0.6, hs, m.hair);
+    p.stroke([[CX - 3.4, 12.2], [CX - 6.4, 14.2], [CX - 7.2, 17.2], [CX - 6.2, 18.8]], 1.0, 0.45, hb, m.hair);
     void hd;
+  },
+  post(b, e) {
+    const sk = this.skin;
+    // a broader nose: the wings either side of the tip
+    for (const x of [CX - 2, CX + 1]) if (b.get(x, 34) >>> 24) b.set(x, 34, sk[1]);
+    // full lips: a lit lower lip under the mouth line
+    const lit = mix(sk[3], col('#c07a66'), 0.35);
+    if (!['laugh', 'shout', 'o', 'grin', 'grit'].includes(e.mouth)) for (const x of [CX - 1, CX]) if (b.get(x, 39) >>> 24) b.set(x, 39, lit);
+    // a cocky brow: smug / teasing cock the viewer-right brow up a pixel
+    if (e.mouth === 'smirk' || e.mouth === 'cat') for (let x = PW - 17 - 6; x < PW - 17 + 1; x++) { const v = b.get(x, 22); if (v >>> 24 && v === col(this.brow)) { b.set(x, 21, v); b.set(x, 22, sk[2]); } }
+  },
+  postHD(b, S, e) {
+    const sk = this.skin;
+    // a broader nose: nostril wings in shadow, a lit tip
+    const nx = CX * S, ny = 33 * S;
+    for (const [x, y, c] of [[-4, 1, sk[1]], [-3, 2, sk[1]], [3, 1, sk[1]], [4, 2, sk[1]], [-1, -1, sk[3]], [0, -1, sk[3]]] as [number, number, C][]) if (b.get(nx + x, ny + y) >>> 24) b.set(nx + x, ny + y, c);
+    // full lips: the lower lip lit, a soft shadow under it
+    if (!['laugh', 'shout', 'o', 'grin', 'grit', 'talk2'].includes(e.mouth)) {
+      const my = 37 * S;
+      for (let x = -3; x <= 3; x++) {
+        if (b.get(nx + x, my + 3) >>> 24) b.set(nx + x, my + 3, mix(sk[3], col('#c4806a'), 0.4));
+        if (Math.abs(x) < 3 && b.get(nx + x, my + 5) >>> 24) b.set(nx + x, my + 5, mix(sk[2], sk[1], 0.5));
+      }
+    }
+    // the line of the cheekbones catching the light
+    for (const sd of [-1, 1]) for (let i = 0; i < 6; i++) { const x = Math.round(nx + sd * (17 + i * 0.9)), y = Math.round(29 * S - i * 0.6); if (b.get(x, y) >>> 24 && sd < 0) b.set(x, y, sk[3]); }
   },
 };
 
@@ -752,6 +818,8 @@ const EYE_HD: Record<string, EyeSpec> = {
   man: { w: 13, h: 8, irx: 2.9, iry: 3.5, lash: 2, flick: 0, lower: 0.22, arch: 0.13, lid: 0.02, tilt: 0.3 },
   // always squinting: a heavy lid over a sliver of pale iris, crow's feet and a bag beneath
   fierce: { w: 12, h: 8, irx: 2.7, iry: 3.1, lash: 2, flick: 0, lower: 0.9, arch: 0.04, lid: 0.2, tilt: 0.36, crow: true, low: 0.22 },
+  // almond: long and a little narrow, the outer corner lifted, a thick upper lash ending in a sharp flick
+  almond: { w: 14, h: 9, irx: 3.4, iry: 4.1, lash: 3, flick: 4, lower: 0.5, arch: 0.15, lid: 0.05, tilt: 0.44 },
 };
 
 /** paint one HD eye with its outer corner toward +dir (dir 1: viewer-right eye) */

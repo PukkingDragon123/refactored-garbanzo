@@ -768,12 +768,15 @@ const CLIPS: [string, AnimInfo7, Fn, AnimInfo7?][] = [
   ['vault', A7(16, 20), vault, A7(16, 24)],
   ['dodge', A7(10, 20), dodge, A7(10, 24)],
 ];
+// (holding a stance, talking doesn't drop it: the bubble's talk clip is the stance itself)
+const HOLD = new Set(['slingReady', 'slingAim', 'slingStandoff']);
 for (const [name, info, fn, own] of CLIPS) {
+  if (HOLD.has(name)) { info.talk = name; if (own) own.talk = name; }
   registerAnim7(name, info, fn);
   if (own) registerOwn7('aroha', name, { info: own, pose: (b, t) => fn(b, t, 'aroha') });
 }
 // palms out, patting the air (anyone)
-registerAnim7('placate', A7(8, 6, true), (b, t) => placate(b, t));
+registerAnim7('placate', { ...A7(8, 6, true), talk: 'placate' }, (b, t) => placate(b, t));
 
 // ------------------------------------------------------------------ the props, in 3D in the hand
 
