@@ -50,6 +50,9 @@ function stripTrunk(buf: PixelBuffer, x: number, top: number, bot: number, w: nu
   const flare = o.flare ?? 1.2;
   const lean = o.lean ?? 0;
   const mr = o.mossRamp ?? JP.moss;
+  // moss noise at a fixed pixel scale whatever the strip width (periodic over the strip so it still
+  // tiles), its rows sheared across the trunk so patches are ragged, never blocks with flat ends
+  const mP = Math.max(8, Math.round(buf.w / 9)), jP = Math.max(8, Math.round(buf.w * 0.37));
   for (let y = Math.max(0, Math.floor(top)); y < Math.min(buf.h, Math.ceil(bot)); y++) {
     const fromBot = bot - y;
     const hw = hw0 * (1 + Math.exp(-fromBot / (w * 0.5)) * flare) + (pnoise1(y * 0.05, 64, seed) - 0.5) * 1.2;
@@ -64,7 +67,8 @@ function stripTrunk(buf: PixelBuffer, x: number, top: number, bot: number, w: nu
       }
       let c = rc(rp, n * 0.5 + k);
       if (o.moss) {
-        const m = pnoise2((px / buf.w) * 60, y * 0.025, 60, seed + 7) + (nx < 0 ? 0.06 : -0.14) + Math.max(0, 1 - fromBot / 40) * 0.1;
+        const m = pnoise2((px / buf.w) * mP, y * 0.06 + nx * 1.1 + pnoise1((px / buf.w) * jP, jP, seed + 11) * 0.9, mP, seed + 7) * 0.8
+          + pnoise1(y * 0.02, 64, seed + 5) * 0.2 + nx * -0.16 + 0.02 + Math.max(0, 1 - fromBot / 40) * 0.1;
         if (m > 1 - o.moss * 0.45) c = rc(mr, mr.length * 0.42 + k * 0.8 + (m > 1.06 - o.moss * 0.45 ? 0 : 0.8));
       }
       wset(buf, px, y, c);
@@ -378,7 +382,32 @@ export function canopyGaps(seed: number, width = 768): { x: number; w: number }[
  * Hanging foliage along the top edge for below-canopy scenes (width × 200, tileable, transparent
  * below). Light gaps from canopyGaps() are left open, with sunlit, backlit leaves around them.
  */
-export function canopyCeiling(seed: number, width = 768, height = 200): PixelBuffer {
+export function canopyCeiling(seed: number, width = 768, height = 200, above = 0): PixelBuffer {
+  const strip = ceilingStrip(seed, width, height);
+  const A = Math.max(0, Math.round(above));
+  if (!A) return strip;
+  // `above`: the canopy carries on up for A more rows (dense, dark, seen from below) so a camera
+  // looking up never reaches the strip's top edge; its lower edge hangs in ragged lobes over the
+  // strip's own solid top band (and over the light gaps, which become holes in the canopy)
+  const W = strip.w, out = new PixelBuffer(W, strip.h + A);
+  const rng = new Rng(seed * 31 + 17);
+  const rp = subRamp(JP.canopy, 0, 7, 8);
+  const c0 = rc(rp, 0);
+  for (let y = 0; y < A + 2; y++) for (let x = 0; x < W; x++) out.data[y * W + x] = c0;
+  out.blit(strip, 0, A);
+  // texture in the mass, and the hanging lobes along its lower edge
+  for (let i = 0; i < (W * A) / 900; i++) {
+    const x = rng.range(0, W), y = rng.range(6, A - 6), r = rng.range(10, 18);
+    leafMass(out, rng, { cx: x, cy: y, rx: r * 1.2, ry: r * 0.8, ramp: rp, base: rng.int(0, 1), steps: 2, shape: 'point', len: [5, 8], wid: [3, 4], density: 0.6, wrapW: W, jag: 0.5 });
+  }
+  for (let x = 0; x < W; x += rng.range(8, 14)) {
+    const r = rng.range(8, 14);
+    leafMass(out, rng, { cx: x, cy: A + rng.range(-2, 4), rx: r * 1.2, ry: r * 0.7, ramp: rp, base: 0, steps: 2, shape: 'point', len: [5, 8], wid: [3, 4], droop: 0.75, density: 0.8, wrapW: W, jag: 0.5 });
+  }
+  return out;
+}
+
+function ceilingStrip(seed: number, width: number, height: number): PixelBuffer {
   const W = Math.round(width), H = Math.round(height);
   const buf = new PixelBuffer(W, H);
   const rng = new Rng(seed * 29 + 13);

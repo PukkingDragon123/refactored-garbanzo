@@ -383,12 +383,14 @@ function frontFraming(c: Ctx) {
     F.add(new Prop(f, X, fyAt(x) + Math.max(dy, 0) + 46, rng.next(), { sway, flip: rng.chance(0.5), tint }));
   }
   // overhead: pōhutukawa limbs hanging in from above the frame over the stream and the cove
-  const pohu = [0, 1].map(i => sprite(`v9e:pohu${i}`, () => EA.paintLimb(950 + i, 300, 150))!.f);
+  // (each limb's bough carries on 200 px up out of the top, past anywhere the camera can look up to)
+  const pohu = [0, 1].map(i => sprite(`v9e:pohu${i}`, () => EA.paintLimb(950 + i, 300, 150, 200))!.f);
   for (const [x, flip] of [[3560, false], [4010, true], [5560, false], [5890, true]] as const) {
     F.add(new Prop(pohu[x % 2], x * pf + (flip ? 300 : 0), fyAt(x, -90), 2, { sway: 0.25, flip, tint: packColor(0.5, 0.52, 0.5, 1) }));
   }
   for (let x = 5960; x < ISL.W + 200; x += rng.range(130, 230)) {
-    const f = sprite(`fcan:${x % 3}`, () => canopyClump(770 + (x % 3), 300, 140))!.f;
+    // (with deeper canopy continuing up out of the frame, so looking up never finds a clump's top edge)
+    const f = sprite(`v9e:fcan:${x % 3}`, () => canopyClump(770 + (x % 3), 300, 140, { above: 220 }))!.f;
     F.add(new Prop(f, x * pf, fyAt(x, -30) + rng.range(-10, 20), 3, { sway: 0.2, tint: packColor(0.42, 0.5, 0.46, 1) }));
   }
   // big dark trunks right in front of the camera in the forest: the strongest depth cue up there

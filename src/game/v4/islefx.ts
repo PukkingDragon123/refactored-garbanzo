@@ -214,7 +214,8 @@ export class SeaStrip implements Drawable {
     let x = Math.floor((x0 - scroll) / tw) * tw + scroll;
     // the band's lowest rows stretched on downward underneath the next band: when the camera rises
     // or zooms out the bands part (each has its own parallax), and this keeps sea in the gap
-    for (; x < x1; x += tw) { r.drawSub(this.f, 0, H - 3, tw, 3, x, this.y + bob + H - 3, 1, 8); r.drawSub(this.f, 0, 0, tw, H, x, this.y + bob); }
+    // (40x: deep enough for the photo camera looking up from the bush track, where the bands part most)
+    for (; x < x1; x += tw) { r.drawSub(this.f, 0, H - 3, tw, 3, x, this.y + bob + H - 3, 1, 40); r.drawSub(this.f, 0, 0, tw, H, x, this.y + bob); }
     // counter-drifting shimmer copy
     const s2 = -st.time * this.speed * 0.6 + 37;
     x = Math.floor((x0 - s2) / tw) * tw + s2;

@@ -13,6 +13,7 @@
 //  - zombie-cap fungus: dead jewel hornets clamped to twigs on the bush track, puffing spores
 //  - ambient: flies over the wrack, midge clouds over the water, water striders, ants on the track
 
+import { Saplings } from './saplings';
 import type { Renderer, Frame } from '../../gfx/renderer';
 import { packColor } from '../../gfx/renderer';
 import type { Drawable } from '../../world/stage';
@@ -550,6 +551,8 @@ export function startCritters9(s: IslandScene4) {
   [1440, 2470, 3350, 3640, 4065, 4420, 5610, 5840].forEach((x, i) => put(new Wrack(s, x, i + 3)));
   // leaf-veil mantises on twigs in the grove and the bush
   for (const x of [2790, 3185, 6205, 6600]) put(new Mantis(s, x, groundY(x) - 22));
+  // (each of their twigs, and the zombie-caps' below, is the side shoot of a sapling)
+  s.main.add(new Saplings(-2.15, [2790, 3185, 6205, 6600].map(x => [x - 9.5, groundY(x) - 21] as [number, number]), 1));
   // lantern moths (dusk), round the flowers and the bush track
   for (const [x, y] of flowerHeads.filter((_, i) => i % 4 === 0)) put(new Moth(s, x, y - 14));
   for (const x of [5960, 6250, 6520, 6820]) put(new Moth(s, x, groundY(x) - 30));
@@ -559,6 +562,7 @@ export function startCritters9(s: IslandScene4) {
   flowerHeads.forEach(([x, y], i) => { if (i % 6 === 2) put(new Beetle(s, x, y - 1)); });
   // zombie-cap hornets on twigs up the bush track
   for (const x of [6150, 6425, 6705]) put(new ZombieCap(s, x, groundY(x) - 26));
+  s.main.add(new Saplings(-2.15, [6150, 6425, 6705].map(x => [x - 6.5, groundY(x) - 24] as [number, number]), 2));
   // ambient: midges over the water, striders on the stream and the creek, ants on the track
   const amb = new Ambient(s, [[SPOT.stream - 20, groundY(SPOT.stream) - 30], [SPOT.creek, groundY(SPOT.creek) - 28], [5070, 150], [2300, 180]],
     [[SPOT.stream, groundY(SPOT.stream) + 14], [SPOT.creek, groundY(SPOT.creek) + 3]]);

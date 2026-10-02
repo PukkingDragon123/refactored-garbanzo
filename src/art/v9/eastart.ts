@@ -254,19 +254,47 @@ export function paintMossMound(seed: number, w: number): Sprite {
  * above, crimson flowers, twigs and leaf sprays trailing below, everything kept inside the buffer
  * (ragged on every side, so no clipped straight edge can show).
  */
-export function paintLimb(seed: number, w: number, h: number): Sprite {
-  const b = new PixelBuffer(w, h);
+export function paintLimb(seed: number, w: number, h: number, above = 0): Sprite {
+  // `above`: px of the bough the limb grows from, sweeping on up and back out of the top of the
+  // buffer so the limb still comes from off-screen when the view looks up (the anchor stays the
+  // limb's top-left; the buffer grows up and to the left of it)
+  const A = Math.max(0, Math.round(above)), L = Math.round(A * 0.5);
+  const b = new PixelBuffer(w + L, h + A);
   const rng = new Rng(seed);
   const leaf = [H('#1e3a22'), H('#2a4c2a'), H('#3a6232'), H('#4e7a3a'), H('#5e8a40')];
   const limb: P[] = [];
   // it comes down out of the top of the buffer (a tree above the frame), so no cut end ever shows
-  for (let i = 0; i <= 40; i++) { const t = i / 40; limb.push([w * 0.06 + t * w * 0.64, -4 + Math.sin(t * 3 + seed) * 5 + t * h * 0.16 + t * t * h * 0.24]); }
+  for (let i = 0; i <= 40; i++) { const t = i / 40; limb.push([L + w * 0.06 + t * w * 0.64, A - 4 + Math.sin(t * 3 + seed) * 5 + t * h * 0.16 + t * t * h * 0.24]); }
+  if (A > 0) {
+    // the bough: a smooth curve from the limb's root back up toward the tree it belongs to, thicker
+    // the further up it goes
+    const [lx, ly] = limb[0];
+    const p0: P = [lx - L * 0.9, -8], p1: P = [lx - L * 0.55, ly * 0.55], p2: P = [lx, ly];
+    const bough: P[] = [];
+    for (let i = 0; i <= 20; i++) {
+      const t = i / 20, u = 1 - t;
+      bough.push([u * u * p0[0] + 2 * u * t * p1[0] + t * t * p2[0] + Math.sin(t * 5 + seed) * 1.5, u * u * p0[1] + 2 * u * t * p1[1] + t * t * p2[1]]);
+    }
+    tube(b, bough, t => 10 - t * 4.6, JP.bark, 4);
+    // small leaf sprays tucked under the bough
+    for (let i = 0; i < Math.round(A / 30); i++) {
+      const [bx, by] = bough[rng.int(3, 17)];
+      for (let k = 0; k < 3; k++) {
+        const r = rng.range(4, 7);
+        b.ellipseFn(bx + rng.range(2, 12), by + rng.range(2, 9), r * 1.4, r, (x, y, nx, ny) => {
+          const q = nx * nx + ny * ny + (noise2(x / 2.5, y / 2.5, seed + 3) - 0.5) * 0.9;
+          if (q > 1) return -1;
+          return leaf[clamp(Math.floor(clamp(0.5 - ny * 0.45 - nx * 0.15) * 5), 0, 4)];
+        });
+      }
+    }
+  }
   tube(b, limb, t => 5 * (1 - t) + 1.4, JP.bark, 4);
   const blobs: [number, number, number][] = [];
   for (let i = 0; i < 24; i++) {
     const [lx, ly] = limb[rng.int(6, 40)];
     const r = rng.range(8, 17);
-    blobs.push([clamp(lx + rng.range(-12, 16), r * 1.3 + 2, w - r * 1.3 - 2), Math.min(h * 0.7 - r, ly + rng.range(-2, 18)), r]);
+    blobs.push([clamp(lx + rng.range(-12, 16), L + r * 1.3 + 2, L + w - r * 1.3 - 2), Math.min(A + h * 0.7 - r, ly + rng.range(-2, 18)), r]);
   }
   for (const [cx, cy, r] of blobs) {
     b.ellipseFn(cx, cy, r * 1.3, r, (x, y, nx, ny) => {
@@ -280,7 +308,7 @@ export function paintLimb(seed: number, w: number, h: number): Sprite {
   for (let i = 0; i < 14; i++) {
     const [cx, cy, r] = blobs[rng.int(0, blobs.length - 1)];
     const x0 = cx + rng.range(-r, r), y0 = cy + r * 0.6;
-    const len = rng.range(6, Math.max(7, Math.min(26, h - y0 - 2)));
+    const len = rng.range(6, Math.max(7, Math.min(26, A + h - y0 - 2)));
     for (let k = 0; k < len; k++) {
       const x = x0 + Math.sin(k * 0.3 + i) * 1.2, y = y0 + k;
       b.set(x, y, rc(JP.bark, 3));
@@ -295,7 +323,7 @@ export function paintLimb(seed: number, w: number, h: number): Sprite {
     }
   }
   outlineSel(b, 0.4);
-  return { buf: b, ax: 0, ay: 0 };
+  return { buf: b, ax: L, ay: A };
 }
 
 export { mix, clamp };

@@ -33,6 +33,8 @@ import { spend } from './energy';
 import * as B from './boat';
 import * as K from '../../art/v10/boat10';
 import { PixelBuffer } from '../../art/pixel';
+import { tree } from '../../art/jungle-trees';
+import { sprite } from '../sites2/common';
 import { hex, mix, shade } from '../../art/color';
 import '../sites10/ocean';
 
@@ -245,7 +247,12 @@ export class Boatyard {
     const x0 = r.visibleX0(40), x1 = r.visibleX1(40);
     for (const g of GUM) {
       if (g.x < x0 || g.x > x1) continue;
-      const e = this.frame('kauri', kauriBase);
+      // a whole old kauri (the bush track's own tree sprite, trunk up out of the frame and crown), the
+      // gum weeping from a wound low on its trunk
+      const v = g.id === 'gum1' ? 0 : 2;
+      const t = sprite(`ft:kauri:${v}`, () => tree('kauri', 500 + v * 13, 380));
+      if (t) r.draw(t.f, g.x, groundY(g.x) + 2, v ? -1 : 1, 1);
+      const e = this.frame('kauriGum', kauriGum);
       r.draw(e.f, g.x, groundY(g.x) + 2);
       if (this.spotFree(g.id) && questStatus('v10kitten') !== 'hidden') {
         const t = this.s.st.time;
@@ -814,21 +821,15 @@ const smoothstep = (a: number, b: number, x: number) => { const t = clamp((x - a
 
 // ------------------------------------------------------------------ small sprites
 function outlined(b: PixelBuffer) { b.outline(c => mix(shade(c, -0.7), hex('#15100c'), 0.6)); return b; }
-/** the foot of an old kauri, weeping gold gum */
-function kauriBase(): K.Spr {
+/** kauri gum weeping from a wound in the bark (drawn over the kauri trunk at its foot) */
+function kauriGum(): K.Spr {
   const b = new PixelBuffer(30, 44);
-  const bark = [hex('#4a4a46'), hex('#62625c'), hex('#7a7a72'), hex('#929288'), hex('#a8a89c')];
-  for (let y = 0; y < 44; y++) for (let x = 0; x < 30; x++) {
-    const w = 9 + (y > 30 ? (y - 30) * 0.9 : 0);
-    const dx = Math.abs(x - 15);
-    if (dx > w) continue;
-    let i = Math.round(3 - (dx / w) * 2 + ((x * 3 + y) % 9 === 0 ? -1 : 0) + (x < 15 ? 0.6 : -0.4));
-    if ((y + Math.floor(x / 3)) % 7 === 0) i -= 1; // hammered bark scales
-    b.set(x, y, bark[Math.max(0, Math.min(4, i))]);
-  }
+  // the wound: a scar of bare, darker bark the gum runs out of
+  b.ellipseFn(19, 21, 3.5, 5, (_x, _y, nx) => (nx < -0.3 ? hex('#3a362e') : hex('#4e4a40')));
   // gum: drips and a big lump at the wound
   for (const [gx, gy, r] of [[19, 22, 3], [12, 30, 2], [20, 34, 1.6]] as const) b.ellipseFn(gx, gy, r, r * 1.3, (x, y, nx, ny) => (nx < -0.2 && ny < -0.3 ? hex('#ffe08a') : ny > 0.4 ? hex('#b06a14') : hex('#e09a2a')));
   for (let y = 25; y < 31; y++) b.set(19, y, hex('#d08a22'));
+  for (let y = 33; y < 37; y++) b.set(12, y, hex('#d08a22'));
   return { buf: outlined(b), ax: 15, ay: 43 };
 }
 function tarpLump(): K.Spr {

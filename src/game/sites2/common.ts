@@ -17,7 +17,7 @@ import { Rng, bayer, clamp, rand } from '../../core/math';
 import type { Sprite } from '../../art/jungle-core';
 import { tree, canopyClump, TreeKind } from '../../art/jungle-trees';
 import { plant, fungus, deadwood, PlantKind, FungusKind, DeadwoodKind } from '../../art/jungle-plants';
-import { foreground, ForegroundKind } from '../../art/jungle-fg';
+import { foreground, ForegroundKind, FOREGROUND_HANGING } from '../../art/jungle-fg';
 import { ResourceNode, NodeArt } from '../../world/resources';
 import type { HideSpot } from '../../world/player';
 
@@ -96,11 +96,24 @@ export function jungleWalls(f: FieldScene, groundY: number, layers: { p: number;
 /** A canopy ceiling hanging from the top of the view (forest-floor sites). */
 export function ceiling(f: FieldScene, p: number, y: number, seed: number) {
   const r = game.r, st = f.st;
+  // forest-floor sites have no sky: behind everything, the misty air the farthest ridges stand in
+  // (on a far, fogged layer so it takes the same haze and light as they do), so the gaps between the
+  // far walls and the ceiling (looking up with the camera) are never empty black
+  if (!st.hasLayer('sky') && !st.hasLayer('canopy-shade')) {
+    const bg = st.addLayer('canopy-shade', 0.1, 0.6, 0, 0, 0.1);
+    st.layers.splice(st.layers.indexOf(bg), 1);
+    st.layers.unshift(bg);
+    const c = packColor(0.69, 0.8, 0.78, 1);
+    bg.add(new Custom(0, rr => { const k = rr.layerZoom; rr.rect(rr.wx(0) - 4, rr.wy(0) - 4, rr.VW / k + 8, rr.VH / k + 8, c); }));
+  }
   const span = layerSpan(st, p, 60);
-  let buf = jcall<PixelBuffer>('canopyCeiling', seed, span.w);
+  // (with 260 rows of canopy above the strip, so looking up never reaches a straight top edge)
+  const UP = 260;
+  let buf = jcall<PixelBuffer>('canopyCeiling', seed, span.w, 200, UP);
   const lay = st.addLayer('ceiling', p, 0.02, 0.3, 0);
   if (buf) {
-    for (let x = 0; x < span.w; x += buf.w) lay.add(new Prop({ ...bigFrame(r, buf), ax: 0, ay: 0 }, span.x0 + x, y));
+    const up = buf.h - 200;
+    for (let x = 0; x < span.w; x += buf.w) lay.add(new Prop({ ...bigFrame(r, buf), ax: 0, ay: 0 }, span.x0 + x, y - up));
     return lay;
   }
   const rng = new Rng(seed);
@@ -161,7 +174,10 @@ export function frontFoliage(f: FieldScene, x0: number, x1: number, step: [numbe
   for (let x = x0; x < x1; x += rng.range(step[0], step[1])) {
     const kind = kinds[rng.int(0, kinds.length - 1)];
     const v = rng.int(0, 2);
-    const c = sprite(`fg:${kind}:${v}`, () => foreground(kind, 600 + v * 19));
+    // hanging kinds carry their bough / canopy / trunk 300 px up out of the top: far enough that the
+    // photo camera aimed up from the highest climbable branch never finds where they end
+    const hangs = FOREGROUND_HANGING.includes(kind);
+    const c = sprite(`fg:${kind}:${v}${hangs ? ':up' : ''}`, () => foreground(kind, 600 + v * 19, undefined, { above: hangs ? 300 : 0 }));
     if (!c) continue;
     const flip = rng.chance(0.5);
     const wx = x * p, wy = o.hang ? y : y + rng.range(-8, 16);

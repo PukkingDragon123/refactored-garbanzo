@@ -66,10 +66,14 @@ export function dressIsland(s: IslandScene4, L: IsleLayers) {
     const w = Math.min(2048, Math.ceil(x1 - x0) + 40);
     const buf = jcall<PixelBuffer>('forestStrip', depth, 40 + depth, w);
     if (!buf) continue;
-    // feather the left edge into the cove
-    for (let yy = 0; yy < buf.h; yy++) for (let xx = 0; xx < Math.min(buf.w, 220); xx++) {
-      const k = xx / 220 + (Math.sin(yy * 0.13 + xx * 0.05) * 0.08);
-      if (k < 1 - (buf.h - yy) / buf.h * 0.2 && (k < 0.25 || ((xx * 7 + yy * 3) % 11) / 11 > k)) buf.data[yy * buf.w + xx] = 0;
+    // the left edge, over the cove: a ragged, tapering silhouette (the forest thinning out toward the
+    // cliff edge), never a dithered fade or a straight cut
+    const edgeRng = new Rng(300 + depth);
+    const ph = [edgeRng.range(0, 6), edgeRng.range(0, 6), edgeRng.range(0, 6)];
+    for (let yy = 0; yy < buf.h; yy++) {
+      const v = yy / buf.h;
+      const e = 220 * (0.62 - v * 0.4) + Math.sin(yy * 0.021 + ph[0]) * 34 + Math.sin(yy * 0.067 + ph[1]) * 14 + Math.sin(yy * 0.29 + ph[2]) * 4;
+      for (let xx = 0; xx < Math.min(buf.w, Math.ceil(e)); xx++) buf.data[yy * buf.w + xx] = 0;
     }
     const floorY = 180 - 66 * p + 42 / Math.pow(1.25, p);
     const f = bigFrame(r, buf);
@@ -208,7 +212,8 @@ export function dressIsland(s: IslandScene4, L: IsleLayers) {
   }
   // palm fronds hanging into the top of the frame over the grove and the landing beach
   for (let x = 1500; x < 4100; x += rng.range(260, 420)) {
-    const c = sprite(`fpalm:${x % 2}`, () => foreground('palm', 930 + (x % 2), 220));
+    // (each with its trunk leaning in from above the frame)
+    const c = sprite(`fpalm:${x % 2}`, () => foreground('palm', 930 + (x % 2), 220, { above: 240 }));
     if (c) L.front.add(new Prop(c.f, x * pf, layerY(pf, -40) + rng.range(-10, 10), 2, { sway: 0.5, flip: rng.chance(0.5), tint: packColor(0.4, 0.46, 0.42, 1) }));
   }
   // (the sea cave's rock arch is v9/east.ts too)
