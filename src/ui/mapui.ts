@@ -12,6 +12,7 @@ import { TIMES, TIME_LABEL, TimeOfDay } from '../world/timeofday';
 import { speciesSprite } from './icons';
 import { audio } from '../core/audio';
 import { startTrip } from '../game/scenes/travel';
+import { pxIcon } from './pxicons';
 
 const W = 360, H = 220;
 export const SITE_POS: Record<SiteId | 'camp', [number, number]> = {
@@ -163,7 +164,7 @@ export function openMap() {
       fa.appendChild(i);
     }
     if (sel === 'coast' && !s.flags.divegear) side.appendChild(el('p', '', '<i>Needs dive gear from Pip.</i>'));
-    const go = el('button', 'btn', 'Drive! ▶');
+    const go = el('button', 'btn', `Drive! ${pxIcon('play')}`);
     go.style.width = '100%';
     go.disabled = sel === 'coast' && !s.flags.divegear;
     go.onclick = () => { audio.play('engine'); close(); startTrip(sel, tod); };

@@ -21,6 +21,7 @@ import { el } from '../../ui/ui';
 import { audio } from '../../core/audio';
 import { hasSave, newSave, clearSave } from '../save';
 import { continueV4, goShip4 } from './flow';
+import { pxIconCss } from '../../ui/pxicons';
 
 const CSS = `
 .t3 { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
@@ -44,7 +45,7 @@ const CSS = `
 .t3.menu .t3-menu { opacity: 1; transform: none; pointer-events: auto; }
 .t3-menu .btn { width: 100%; font-size: 1.05em; white-space: nowrap; padding: 0.55em 0.8em; text-align: left; display: flex; align-items: center; gap: 0.6em; }
 .t3-menu .btn .ic { width: 1.6em; height: 1.6em; image-rendering: pixelated; flex: none; background: var(--ic) center / contain no-repeat; }
-.t3-menu .btn::after { content: '▶'; margin-left: auto; opacity: 0; transform: translateX(-6px); transition: opacity 0.15s, transform 0.15s; font-size: 0.8em; }
+.t3-menu .btn::after { content: ${pxIconCss('play', 2)}; margin-left: auto; opacity: 0; transform: translateX(-6px); transition: opacity 0.15s, transform 0.15s; font-size: 0.8em; }
 .t3-menu .btn:hover::after, .t3-menu .btn:focus-visible::after { opacity: 1; transform: none; }
 .t3-menu .hd { font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 0.78em; letter-spacing: 0.2em; color: #6a4a2a; text-align: center; margin-bottom: 0.2em; }
 .t3-foot { position: absolute; right: 2.2vw; bottom: 5.4%; font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 0.72em; color: #ffe4c8; opacity: 0; transition: opacity 1s 1s; text-shadow: 0 2px 0 #000; z-index: 3; }

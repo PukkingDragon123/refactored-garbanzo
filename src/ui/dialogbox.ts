@@ -5,6 +5,7 @@
 
 import { el } from './ui';
 import { peopleArt } from '../world/actor';
+import { pxIconCss } from './pxicons';
 
 const CSS = `
 .dbx-wrap { position: absolute; left: 0; right: 0; bottom: max(6px, 1.6vh); display: flex; justify-content: center; pointer-events: none; z-index: 6;
@@ -36,7 +37,7 @@ const CSS = `
 .dbx .dtx .chs button { text-align: left; font-family: inherit; font-size: 0.92em; color: #3a2614; background: rgba(120,80,30,0.12); border: 0;
   box-shadow: inset 0 0 0 2px rgba(90,60,20,0.35); padding: 0.18em 0.6em; cursor: pointer; }
 .dbx .dtx .chs button.sel, .dbx .dtx .chs button:hover { background: rgba(90,164,71,0.3); box-shadow: inset 0 0 0 2px #3f7a34; }
-.dbx .dtx .chs button.sel::before { content: '▶ '; color: #2f6b2a; }
+.dbx .dtx .chs button.sel::before { content: ${pxIconCss('play', 2)}; margin-right: 0.35em; vertical-align: -0.05em; }
 .dbx .dtx .chs .key { margin: 0 0.35em 0 0 !important; }
 .dbx .dtx .nmx { font-family: 'Jersey 10', 'Silkscreen', monospace; font-size: 0.62em; color: #6a4a2a; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.1em; display: none; }
 .dbx.noport .dtx .nmx { display: block; }

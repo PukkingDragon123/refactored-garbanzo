@@ -19,6 +19,7 @@
 import { el } from './ui';
 import { renderAnimePortraitHD } from '../art/anime/portraits';
 import { outfitOf } from '../art/v7/wardrobe';
+import { pxIconCss } from './pxicons';
 
 type BustId = string;
 type PExpr = string;
@@ -56,7 +57,7 @@ const CSS = `
 .cu.anime.flash .fl { animation: cuFlashSoft 0.3s ease-out; }
 @keyframes cuFlashSoft { from { opacity: 0.45; } to { opacity: 0; } }
 .cu.anime .np div { color: #fff; background: #d0488e; box-shadow: inset 0.4em 0 0 #ffd0e6, 0.28em 0.28em 0 #ffd0e6, 0.28em 0.28em 0 2px #6a1a4a; animation: cuNpRise 0.42s cubic-bezier(.25,1.45,.45,1) both 0.16s; }
-.cu.anime .np span::after { content: ' ♥'; color: #ffd0e6; }
+.cu.anime .np span::after { content: ${pxIconCss('heart', 2)}; margin-left: 0.3em; vertical-align: 0.05em; }
 @keyframes cuNpRise { 0% { transform: skewX(-14deg) translateY(70%) scale(0.86); opacity: 0; } 40% { opacity: 1; } }
 .cu.anime .np.out div { animation: cuNpOut 0.14s ease-in both; }
 .cu.plain .dim { background: rgba(10,8,6,0.22); }

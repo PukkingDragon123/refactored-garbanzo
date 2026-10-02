@@ -5,6 +5,7 @@ import { CREW } from '../art/characters';
 import { audio } from '../core/audio';
 import { guardInput } from '../core/input';
 import { Bubbles } from './bubbles';
+import { iconize, pxIcon } from './pxicons';
 import { portraitURL as v2Portrait, peopleArt } from '../world/actor';
 
 export function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', html = ''): HTMLElementTagNameMap[K] {
@@ -56,7 +57,7 @@ export class UI {
     this.caption = root.appendChild(el('div', 'caption'));
     this.card = root.appendChild(el('div', 'titlecard'));
     this.dlg = root.appendChild(el('div', 'dialogue panel'));
-    this.dlg.innerHTML = `<div class="portrait"><img alt=""></div><div class="body"><div class="name pix"></div><div class="text"></div><div class="choices"></div><div class="next">&#9660;</div></div>`;
+    this.dlg.innerHTML = `<div class="portrait"><img alt=""></div><div class="body"><div class="name pix"></div><div class="text"></div><div class="choices"></div><div class="next">${pxIcon('down', { scale: 2 })}</div></div>`;
     this.bubbles = new Bubbles(root);
     this.toasts = root.appendChild(el('div', 'toasts'));
     this.modalLayer = root.appendChild(el('div'));
@@ -109,7 +110,7 @@ export class UI {
   }
 
   private fmt(s: string) {
-    return s.replace(/\*([^*]+)\*?/g, '<em>$1</em>');
+    return iconize(s.replace(/\*([^*]+)\*?/g, '<em>$1</em>'));
   }
 
   portraitURL(who: string, expr: string = 'neutral') {
@@ -198,7 +199,7 @@ export class UI {
   }
 
   toast(text: string, tag = 'NOTE', kind: '' | 'teal' | 'coral' = '', ms = 3200) {
-    const t = el('div', `toast panel ${kind}`, `<span class="ic">${tag}</span><span>${text}</span>`);
+    const t = el('div', `toast panel ${kind}`, `<span class="ic">${tag}</span><span>${iconize(text)}</span>`);
     this.toasts.appendChild(t);
     setTimeout(() => {
       t.classList.add('out');

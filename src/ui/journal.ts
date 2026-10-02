@@ -8,6 +8,7 @@ import { TIME_LABEL } from '../world/timeofday';
 import { el } from './ui';
 import { iconURL, speciesSprite } from './icons';
 import { audio } from '../core/audio';
+import { pxIcon, pxRating } from './pxicons';
 
 type Tab = 'all' | Group | 'album' | 'clues';
 
@@ -89,7 +90,7 @@ const CSS = `
 
 let styled = false;
 const rot = () => `${(Math.random() * 3 - 1.5).toFixed(2)}deg`;
-const stars = (n: number) => '★'.repeat(n) + '☆'.repeat(5 - n);
+const stars = (n: number) => pxRating(n, 5);
 
 export function openJournal(start: Tab | string = 'all') {
   if (!styled) {
@@ -172,7 +173,7 @@ export function openJournal(start: Tab | string = 'all') {
     const seen = !!s.seen[sp.id];
     main.innerHTML = '';
     main.scrollTop = 0;
-    const back = el('button', 'j-back', '◀ Back to the guide');
+    const back = el('button', 'j-back', `${pxIcon('back')} Back to the guide`);
     back.onclick = () => { audio.play('pageTurn'); renderMain(); };
     main.appendChild(back);
     const d = main.appendChild(el('div', 'j-detail'));
@@ -190,7 +191,7 @@ export function openJournal(start: Tab | string = 'all') {
     const behs = info.appendChild(el('div', 'behs'));
     for (const [k, v] of Object.entries(sp.behaviors)) {
       const ok = s.evPhoto[`${sp.id}:${k}`] || s.evVideo[`${sp.id}:${k}`];
-      behs.appendChild(el('span', ok ? 'ok' : '', ok ? '✓ ' + v : seen ? v : '???'));
+      behs.appendChild(el('span', ok ? 'ok' : '', ok ? pxIcon('check') + ' ' + v : seen ? v : '???'));
     }
     const facts = info.appendChild(el('div', 'facts'));
     for (const f of sp.facts) facts.appendChild(factRow(sp, f));
@@ -199,7 +200,7 @@ export function openJournal(start: Tab | string = 'all') {
   const factRow = (sp: Species, f: Fact) => {
     const st = factState(f);
     const row = el('div', 'fact ' + st);
-    const evHtml = f.evidence.map(e => `<span class="${hasEvidence(e) ? 'ok' : ''}">${hasEvidence(e) ? '✓' : '○'} ${evidenceLabel(e)}</span>`).join('');
+    const evHtml = f.evidence.map(e => `<span class="${hasEvidence(e) ? 'ok' : ''}">${hasEvidence(e) ? pxIcon('check') : pxIcon('pip0')} ${evidenceLabel(e)}</span>`).join('');
     if (st === 'solved') row.innerHTML = `<div class="cat">${f.cat}</div><div class="txt">${f.text}</div>`;
     else if (st === 'ready') {
       row.innerHTML = `<div class="cat">${f.cat} — evidence complete</div><div class="txt">${f.q}</div><div class="ev">${evHtml}</div>`;

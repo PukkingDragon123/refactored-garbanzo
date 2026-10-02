@@ -7,6 +7,7 @@ import type { TimeOfDay } from '../world/timeofday';
 import { addEvidence } from '../game/research';
 import { el } from './ui';
 import { audio } from '../core/audio';
+import { pxIconCss, pxIcon, pxRating } from './pxicons';
 
 const CSS = `
 .review { width: min(1100px, 96vw); max-height: 92vh; padding: 1.3em 1.5em; display: flex; flex-direction: column; gap: 0.8em; }
@@ -23,7 +24,7 @@ const CSS = `
 .rshot .rp { font-family: var(--pix); font-size: 0.85em; color: #1f7a68; margin-top: 0.3em; }
 .rshot .vid { font-family: var(--pix); font-size: 0.7em; background: #222; color: #ff6a5a; padding: 1px 5px; }
 .review .ev { font-size: 0.9em; line-height: 1.6; max-height: 7em; overflow-y: auto; }
-.review .ev div::before { content: '✓ '; color: var(--teal2); }
+.review .ev div::before { content: ${pxIconCss('check', 2)}; margin-right: 0.4em; }
 `;
 let styled = false;
 const RP_BY_STARS = [0, 2, 5, 10, 18, 30];
@@ -56,7 +57,7 @@ export function openReview(shots: Shot[], site: SiteId, tod: TimeOfDay): Promise
       const c = el('div', 'rshot');
       c.style.setProperty('--rot', `${(Math.random() * 4 - 2).toFixed(1)}deg`);
       c.style.setProperty('--d', `${i * 0.08}s`);
-      c.innerHTML = `<img src="${sh.thumb}" alt=""><div class="nm"><span>${name}${sh.species && !wasSeen ? '<span class="new">NEW!</span>' : ''}${sh.video ? ' <span class="vid">● VIDEO</span>' : ''}</span><span class="st">${'★'.repeat(sh.stars)}${'☆'.repeat(5 - sh.stars)}</span></div><ul>${sh.notes.map(n => `<li>${n}</li>`).join('')}</ul><div class="rp">+${earned} RP</div>`;
+      c.innerHTML = `<img src="${sh.thumb}" alt=""><div class="nm"><span>${name}${sh.species && !wasSeen ? '<span class="new">NEW!</span>' : ''}${sh.video ? ` <span class="vid">${pxIcon('rec')} VIDEO</span>` : ''}</span><span class="st">${pxRating(sh.stars, 5)}</span></div><ul>${sh.notes.map(n => `<li>${n}</li>`).join('')}</ul><div class="rp">+${earned} RP</div>`;
       if (sh.video && sh.frames && sh.frames.length > 1) {
         const img = c.querySelector('img') as HTMLImageElement;
         let k = 0;
@@ -69,7 +70,7 @@ export function openReview(shots: Shot[], site: SiteId, tod: TimeOfDay): Promise
     for (const k of Object.keys(s.flags)) if (k.startsWith('meal:')) delete s.flags[k];
     game.persist();
     const stars = shots.reduce((a, b) => a + b.stars, 0);
-    box.innerHTML = `<div class="top"><h2 style="margin:0">Expedition report</h2><span class="sum">${shots.length} photo${shots.length === 1 ? '' : 's'} · ${stars}★ · +${rp} RP</span></div>`;
+    box.innerHTML = `<div class="top"><h2 style="margin:0">Expedition report</h2><span class="sum">${shots.length} photo${shots.length === 1 ? '' : 's'} · ${stars} ${pxIcon('star')} · +${rp} RP</span></div>`;
     if (!shots.length) box.appendChild(el('p', '', 'No photos this time. Sometimes the jungle just watches you back.'));
     const grid = box.appendChild(el('div', 'shots'));
     cards.forEach(c => grid.appendChild(c));
@@ -78,7 +79,7 @@ export function openReview(shots: Shot[], site: SiteId, tod: TimeOfDay): Promise
       const ev = box.appendChild(el('div', 'ev'));
       for (const e of evidence) ev.appendChild(el('div', '', e));
     }
-    const b = el('button', 'btn', 'Drive back to camp ▶');
+    const b = el('button', 'btn', `Drive back to camp ${pxIcon('play')}`);
     b.style.alignSelf = 'flex-end';
     box.appendChild(b);
     const close = game.ui.modal(box, () => { intervals.forEach(clearInterval); res(); }, false);

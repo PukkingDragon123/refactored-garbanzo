@@ -200,6 +200,17 @@ export const PX_ICONS: Record<string, PxDef> = {
     pal: { a: '#ffb0a0', b: '#ec3a2a', c: '#a01c14' },
     ink: '#2a0604',
   },
+  /** live indicator (the translator phone) */
+  live: {
+    rows: [
+      '.ab.',
+      'abbc',
+      'bbcc',
+      '.cc.',
+    ],
+    pal: { a: '#d8fff0', b: '#5ee0c0', c: '#2a9a84' },
+    ink: '#06201a',
+  },
   /** autofocus locked */
   focus: {
     rows: [
@@ -389,11 +400,12 @@ const GLYPH: Record<string, string> = {
   '♪': 'note', '♫': 'note', '♥': 'heart', '★': 'star', '☆': 'star0', '✓': 'check', '✔': 'check',
   '✕': 'cross', '✗': 'cross', '▶': 'play', '◀': 'back', '▼': 'down',
 };
-const GLYPH_RE = /[♪♫♥★☆✓✔✕✗▶◀▼]/g;
+const GLYPH_RE = /[♪♫♥★☆✓✔✕✗▶◀▼]/;
+const SWAP_RE = /(<[^>]*>)|[♪♫♥★☆✓✔✕✗▶◀▼]/g;
 
-/** Replace the glyph tokens hand-written text uses (♪ ♥ ★ ☆ ✓ ✕ ▶ ◀ ▼) with painted icons. */
+/** Replace the glyph tokens hand-written text uses (♪ ♥ ★ ☆ ✓ ✕ ▶ ◀ ▼) with painted icons
+ *  (never inside a tag, so attribute values are left alone). */
 export function iconize(html: string, scale = 2): string {
   if (!GLYPH_RE.test(html)) return html;
-  GLYPH_RE.lastIndex = 0;
-  return html.replace(GLYPH_RE, ch => pxIcon(GLYPH[ch], { scale }));
+  return html.replace(SWAP_RE, (m, tag) => tag ?? pxIcon(GLYPH[m], { scale }));
 }

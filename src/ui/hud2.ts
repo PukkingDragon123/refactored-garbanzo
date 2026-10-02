@@ -9,6 +9,7 @@ import { trackedQuest, currentStepIndex } from '../game/quests';
 import { capacity } from '../game/inventory';
 import { itemIconURL, uiIconURL } from '../art/itemicons';
 import { mountBodyHud, BodyHud } from './v10/bodyhud';
+import { pxIcon } from './pxicons';
 
 const CSS = `
 .h2 { position: absolute; inset: 0; pointer-events: none; transition: opacity 0.3s; }
@@ -230,11 +231,11 @@ export class Hud2 {
         };
         const giverImg = q.giver !== 'story' ? game.ui.portraitURL(q.giver, 'neutral') : '';
         this.quest.className = `quest panel${q.main ? '' : ' side'}${this.questMin ? ' min' : ''}`;
-        this.quest.innerHTML = `<div class="rb"><span>${q.main ? '★ STORY' : '◆ SIDE'}</span><small>${q.chapter ? `CHAPTER ${q.chapter}` : `STEP ${Math.min(i + 1, q.steps.length)}/${q.steps.length}`}</small>${giverImg ? `<img src="${giverImg}" alt="">` : ''}</div>`
+        this.quest.innerHTML = `<div class="rb"><span>${q.main ? pxIcon('star') + ' STORY' : pxIcon('side') + ' SIDE'}</span><small>${q.chapter ? `CHAPTER ${q.chapter}` : `STEP ${Math.min(i + 1, q.steps.length)}/${q.steps.length}`}</small>${giverImg ? `<img src="${giverImg}" alt="">` : ''}</div>`
           + `<div class="ti">${esc(q.title)}</div><div class="dv"></div>`
-          + (i > 0 ? row(i - 1, 'done', '✔') : '')
-          + (st ? row(i, 'cur', '▶') : `<div class="st cur"><i>✔</i><span>Complete!</span><span></span></div>`)
-          + row(i + 1, 'next', '○');
+          + (i > 0 ? row(i - 1, 'done', pxIcon('check')) : '')
+          + (st ? row(i, 'cur', pxIcon('play')) : `<div class="st cur"><i>${pxIcon('check')}</i><span>Complete!</span><span></span></div>`)
+          + row(i + 1, 'next', pxIcon('pip0'));
       }
     }
     this.quest.style.display = q ? '' : 'none';

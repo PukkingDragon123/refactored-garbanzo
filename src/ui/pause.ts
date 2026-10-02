@@ -5,6 +5,7 @@ import { el } from './ui';
 import { audio } from '../core/audio';
 import { openJournal } from './journal';
 import { openSettings } from '../game/scenes/title';
+import { pxIconCss } from './pxicons';
 
 const CSS = `
 .pz-pause { width: min(360px, 90vw); padding: 1.2em 1.2em 1.1em; display: flex; flex-direction: column; gap: 0.55em; }
@@ -12,7 +13,7 @@ const CSS = `
 .pz-pause .where { text-align: center; font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 0.78em; color: #6a4a2a; margin-bottom: 0.4em; }
 .pz-pause .btn { width: 100%; text-align: left; display: flex; align-items: center; gap: 0.6em; font-size: 1.02em; padding: 0.5em 0.8em; white-space: nowrap; }
 .pz-pause .btn .ic { width: 1.5em; height: 1.5em; flex: none; image-rendering: pixelated; background: var(--ic) center / contain no-repeat; }
-.pz-pause .btn::after { content: '▶'; margin-left: auto; opacity: 0; font-size: 0.8em; transition: opacity 0.15s; }
+.pz-pause .btn::after { content: ${pxIconCss('play', 2)}; margin-left: auto; opacity: 0; font-size: 0.8em; transition: opacity 0.15s; }
 .pz-pause .btn:hover::after, .pz-pause .btn:focus-visible::after { opacity: 1; }
 .pz-pause .sep { height: 2px; background: repeating-linear-gradient(90deg, #b89a6a 0 4px, transparent 4px 8px); margin: 0.2em 0; }
 `;

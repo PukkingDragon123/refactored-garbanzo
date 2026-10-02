@@ -5,6 +5,7 @@
 import type { TimeOfDay } from '../world/timeofday';
 import { buildTerrain, paintTopDown, GRID, VN, TREE_STRIDE, SITE_POS } from './map3d-terrain';
 import type { Terrain, P2, MapFeature } from './map3d-terrain';
+import { pxIcon } from './pxicons';
 
 export interface MapSite {
   id: string;
@@ -1752,7 +1753,7 @@ class MapView {
     view.appendChild(h('div', 'm3d-inner'));
     this.layer = view.appendChild(h('div', 'm3d-layer'));
     view.appendChild(h('div', 'm3d-title', `<b>ZEALANDIA</b><span>Expedition chart · guided by Aroha</span>`));
-    const x = view.appendChild(h('button', 'm3d-x', '✕'));
+    const x = view.appendChild(h('button', 'm3d-x', pxIcon('cross', { scale: 3 })));
     x.setAttribute('aria-label', 'Close map');
     x.title = 'Close (Esc)';
     x.addEventListener('click', () => this.cancel());
@@ -2304,7 +2305,7 @@ class MapView {
     side.appendChild(h('div', 'm3d-grow'));
     const timeOk = !o.times.find(x => x.id === this.tod)?.locked && o.times.some(x => x.id === this.tod);
     const canGo = !!site && site.unlocked && site.id !== o.from && timeOk;
-    const go = side.appendChild(h('button', 'btn m3d-go', site && site.id === o.from ? 'You are here' : 'Travel ▶'));
+    const go = side.appendChild(h('button', 'btn m3d-go', site && site.id === o.from ? 'You are here' : `Travel ${pxIcon('play')}`));
     go.type = 'button';
     go.disabled = !canGo;
     go.addEventListener('click', () => this.startTravel());

@@ -9,6 +9,7 @@ import { SPECIES, CLUES } from '../game/species';
 import { ITEMS } from '../game/items';
 import { CloseUps, isCastId } from './closeup';
 import { PortraitBox, hasPortrait } from './dialogbox';
+import { iconize, pxIconCss } from './pxicons';
 
 /** expressions that bring the speaker's close-up in (cast only; a line's `close` overrides) */
 const CLOSE_EXPR = ['shocked', 'surprised', 'angry', 'scared', 'excited', 'laugh', 'wow', 'sad', 'cry'];
@@ -89,6 +90,8 @@ function charSpans(html: string): string {
     if (ch === '<') {
       const j = html.indexOf('>', i);
       const tag = html.slice(i, j + 1);
+      // a painted icon (♪ etc.) types out like one character
+      if (tag.startsWith('<img')) { i = j + 1; open(); out += `<span class="c" style="--i:${k++}">${tag}</span>`; continue; }
       // keep words intact across inline tags by closing the word only on closing tags followed by a space
       out += tag;
       i = j + 1;
@@ -186,7 +189,7 @@ const CSS = `
 .bub .chs button { text-align: left; font-family: 'Jersey 15', 'Pixelify Sans', monospace; font-size: 0.95em; background: #fff; color: #0c0a0c; border: 0; box-shadow: 0 0 0 3px #0c0a0c;
   padding: 0.25em 0.6em; margin: 3px; cursor: pointer; }
 .bub .chs button:hover, .bub .chs button.sel { background: #0c0a0c; color: #fff; transform: translateX(4px); }
-.bub .chs button.sel::before { content: '▶ '; }
+.bub .chs button.sel::before { content: ${pxIconCss('play', 2)}; margin-right: 0.35em; vertical-align: -0.05em; }
 .bub .chs .key { box-shadow: none !important; background: #0c0a0c !important; color: #fff !important; }
 .bub .chs button.sel .key { background: #fff !important; color: #0c0a0c !important; }
 /* shout marks (no line bursts) */
@@ -201,7 +204,7 @@ const CSS = `
 .bub.think .box { --bub-img: var(--bub-cloud); color: #3a3a48; }
 .bub.think .tail { background-image: var(--think-img); width: 16px; height: 18px; bottom: -18px; }
 .bub.phone .box { --bub-img: var(--bub-phone); color: #9dffd8; font-family: 'Jersey 10', 'Silkscreen', monospace; font-size: 0.95em; letter-spacing: 0.02em; }
-.bub.phone .box::before { content: '◉ TRANSLATE.EXE'; display: block; font-size: 0.7em; color: #3fbca6; margin-bottom: 0.25em; animation: caret 1s steps(1) infinite; }
+.bub.phone .box::before { content: ${pxIconCss('live', 2)} ' TRANSLATE.EXE'; display: block; font-size: 0.7em; color: #3fbca6; margin-bottom: 0.25em; animation: caret 1s steps(1) infinite; }
 .bub.phone .tail { background-image: var(--tail-phone); }
 .bub.phone .nm, .bub.phone .typing b, .bub.phone .caret { background: #9dffd8; color: #0c0a0c; }
 .bub.phone .tx mark { background: none; color: #ffe45a; }
@@ -303,11 +306,11 @@ export class Bubbles {
   }
 
   private fmt(s: string) {
-    return s
+    return iconize(s
       .replace(/\*([^*]+)\*?/g, '\u0001$1\u0002')
       .replace(keywords(), '<mark>$1</mark>')
       .replace(/\u0001/g, '<em>').replace(/\u0002/g, '</em>')
-      .replace(/_([^_]+)_?/g, '<i>$1</i>');
+      .replace(/_([^_]+)_?/g, '<i>$1</i>'));
   }
 
   private closeWho = '';

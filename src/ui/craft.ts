@@ -11,6 +11,7 @@ import { itemIconURL, uiIconURL } from '../art/itemicons';
 import { el } from './ui';
 import { paintParchment } from './skin';
 import { sfx, css, wait, pixelBackdrop, reduced, pushKeys, esc } from './laptop-kit';
+import { pxIcon } from './pxicons';
 
 const STATION: Record<Station, { name: string; sub: string; verb: string; tool: string }> = {
   bench: { name: 'Workbench', sub: 'Planks, nails and good intentions', verb: 'Craft', tool: 'hammer' },
@@ -204,7 +205,7 @@ export function openCrafting(station: Station, o: { onCraft?: (recipeId: string,
       if (r.tool) {
         detail.appendChild(el('div', 'cft-sec', 'Tool'));
         const ok = hasTool(r.tool);
-        detail.appendChild(el('div', `cft-tool${ok ? '' : ' no'}`, `<img src="${itemIconURL(r.tool, 3)}" alt="">${esc(ITEMS[r.tool]?.name ?? r.tool)} ${ok ? '✓' : '— not on your tool belt'}`));
+        detail.appendChild(el('div', `cft-tool${ok ? '' : ' no'}`, `<img src="${itemIconURL(r.tool, 3)}" alt="">${esc(ITEMS[r.tool]?.name ?? r.tool)} ${ok ? pxIcon('check') : '— not on your tool belt'}`));
       }
       const have = count(r.out);
       const note = d?.eat ? `<b>${EAT[d.eat] ?? d.eat}.</b> ${NOTE.food}` : NOTE[d?.kind ?? ''] ?? '';
@@ -222,8 +223,8 @@ export function openCrafting(station: Station, o: { onCraft?: (recipeId: string,
         all.onclick = () => { batch = mx; sfx('ui', { vol: 0.5, pitch: 1.2 }); renderDetail(); };
         num.title = `You can make up to ${mx}`;
       } else batch = 1;
-      foot.appendChild(el('div', 'cft-time', `⏱ ${(r.time * batch).toFixed(1)}s`));
-      const go = foot.appendChild(el('button', 'btn cft-go', `${st.verb}${batch > 1 ? ' ×' + batch : ''} <span class="key">⏎</span>`)) as HTMLButtonElement;
+      foot.appendChild(el('div', 'cft-time', `${pxIcon('timer')} ${(r.time * batch).toFixed(1)}s`));
+      const go = foot.appendChild(el('button', 'btn cft-go', `${st.verb}${batch > 1 ? ' ×' + batch : ''} <span class="key">${pxIcon('enter')}</span>`)) as HTMLButtonElement;
       go.disabled = s !== 'ok';
       go.onclick = () => doCraft();
       const msg = detail.appendChild(el('div', 'cft-msg'));

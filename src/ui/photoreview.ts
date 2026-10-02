@@ -8,6 +8,7 @@ import { rawPhotos, reviewPhoto, RawPhoto, ReviewResult, deleteRawPhoto } from '
 import { SPECIES_BY_ID } from '../game/species';
 import { el } from './ui';
 import { sfx, css, esc, starsHTML, rpIcon, pushKeys, AppCtx } from './laptop-kit';
+import { pxIcon } from './pxicons';
 
 css('photo-roll', `
 .phr { position: absolute; inset: 0; display: flex; flex-direction: column; color: var(--paper); font-size: 0.95em; }
@@ -71,7 +72,7 @@ export function mountPhotoRoll(container: HTMLElement, onDone?: () => void, ctx?
     const ls = rawPhotos();
     strip.style.display = ls.length ? '' : 'none';
     ls.forEach((p, i) => {
-      const b = strip.appendChild(el('button', p === cur ? 'on' : '', `<img src="${p.img}" alt=""><i>${p.video ? '▶ ' : ''}${i + 1}</i>`));
+      const b = strip.appendChild(el('button', p === cur ? 'on' : '', `<img src="${p.img}" alt=""><i>${p.video ? pxIcon('play') + ' ' : ''}${i + 1}</i>`));
       b.onclick = () => { if (result) return; pick(p); };
     });
   };
@@ -199,7 +200,7 @@ export function openPhotoRoll(o: { standalone?: boolean } = {}): Promise<void> {
   void o;
   return new Promise(res => {
     const cam = el('div', 'phr-cam');
-    const x = cam.appendChild(el('button', 'x', 'Close ✕'));
+    const x = cam.appendChild(el('button', 'x', `Close ${pxIcon('cross')}`));
     const inner = cam.appendChild(el('div', 'inner'));
     const dispose = mountPhotoRoll(inner);
     sfx('uiOpen', { vol: 0.5 });
