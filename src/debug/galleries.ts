@@ -70,9 +70,57 @@ async function iconGallery() {
     }
 }
 
+/** ?gallery=beasts: the idle frame of every registered beast (?gallery=beasts&anim=walk for another anim) */
+async function beastGallery() {
+  const B = await import('../art/beasts');
+  await import('../art/v9/wild/register');
+  await import('../game/v11/species-tiger');
+  const anim = new URLSearchParams(location.search).get('anim') ?? 'idle';
+  const items: GalleryItem[] = [];
+  for (const id of B.BEAST_IDS) {
+    try { items.push({ name: id, buf: B.renderAny(id, B.BEAST_ANIMS[id][anim] ? anim : 'idle', 0).buf }); } catch (e) { console.warn(id, e); }
+  }
+  showGallery(items, 3, '#6d7f86');
+}
+
+/** ?gallery=tiger: every frame of every Cerebral Tiger anim (?gallery=tiger&anim=charge&scale=4 for one) */
+async function tigerGallery() {
+  const B = await import('../art/beasts');
+  await import('../game/v11/species-tiger');
+  const q = new URLSearchParams(location.search);
+  const only = q.get('anim');
+  const scale = +(q.get('scale') ?? 2);
+  const items: GalleryItem[] = [];
+  const t0 = performance.now();
+  const anims = B.BEAST_ANIMS['cerebraltiger' as never] as Record<string, { frames: number }>;
+  const T = await import('../art/v11/tiger');
+  const big = q.get('big');
+  const wet = q.get('wet');
+  const fr = q.get('frame');
+  for (const [a, info] of Object.entries(anims)) {
+    if (only && a !== only) continue;
+    for (let i = 0; i < info.frames; i++) {
+      if (fr !== null && +fr !== i) continue;
+      // big=K paints the pose at K x (the name card); wet=1 shows the world's wet frames
+      const buf = big ? T.paintTigerBig(a, i, +big, wet === '1').buf : wet === '1' ? T.tigerFrame(a, i).wet : B.renderAny('cerebraltiger', a, i).buf;
+      items.push({ name: `${a} ${i}`, buf });
+    }
+  }
+  // scale: a 62 px Mori-high bar
+  const bar = new PixelBuffer(6, 62);
+  for (let y = 0; y < 62; y++) for (let x = 0; x < 6; x++) bar.set(x, y, hex(y % 10 < 5 ? '#e8d8b0' : '#4a6a2a'));
+  items.unshift({ name: 'Mori 62px', buf: bar });
+  showGallery(items, scale, '#5d6f66');
+  const note = document.createElement('div');
+  note.textContent = `painted in ${(performance.now() - t0).toFixed(0)} ms`;
+  document.body.prepend(note);
+}
+
 export function runGallery(name: string) {
   if (name === 'icons') { void iconGallery(); return; }
   if (name === 'camp4') { void camp4Gallery(); return; }
+  if (name === 'beasts') { void beastGallery(); return; }
+  if (name === 'tiger') { void tigerGallery(); return; }
   const items: GalleryItem[] = [];
   if (name === 'flora') {
     items.push({ name: 'treefern', buf: F.paintTreeFern(3, { height: 90 }).buf });
