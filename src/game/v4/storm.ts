@@ -1,9 +1,9 @@
 // The storm. Something massive slams into the Kittiwake; the sky goes black in minutes, lightning,
 // mountainous swell, the lights stutter and everything loose starts sliding. In the flash of the
 // impact Chunk bolts. Joshu hands out the foul-weather gear, and only then does Mori notice the dog is
-// gone: the search leads to the galley, where something is whimpering under the mess table. Carry him
-// up to the wheelhouse, and then the rogue wave: a full cinematic as a wall of water rises off the
-// bow, curls over the boat... and blackout.
+// gone... until a WOOF comes from under the mess table and Chunk pops out on his own and leaps into
+// Mori's arms. Carry him up to the wheelhouse, and then the rogue wave: a full cinematic as a wall of
+// water rises out of the swell off the bow, lifts her up its face, curls over the boat... and blackout.
 
 import { game } from '../game';
 import type { ShipScene4 } from './ship';
@@ -29,23 +29,20 @@ const F = () => game.save.flags;
 // ---------------------------------------------------------------- the storm
 // The steps, each of which survives a reload (the flag that marks it done in brackets):
 //  1. the calm before, then IMPACT [v4:stormStarted]: in the white flash Chunk bolts and is gone
-//  2. Joshu hands out the foul-weather gear in the bunk room [v4:raincoat]; only then does Mori notice
-//     that Chunk is missing
-//  3. the search: in the galley something whimpers under the mess table, the hanging cloth shakes;
-//     look under it [v4:chunkFound] and Mori picks him up
-//  4. carry him up the companionway to the wheelhouse: the rogue wave [v4:bridge]
+//  2. Joshu hands out the foul-weather gear in the bunk room; only then does Mori notice that Chunk is
+//     missing. A bark from under the mess table, the cloth bursts up and out he pops, runs to Mori and
+//     jumps into his arms [v4:raincoat, v4:chunkFound: both set together at the end of it]
+//  3. carry him up the companionway to the wheelhouse: the rogue wave [v4:bridge]
 
 type Lv = 'lower' | 'deck';
 const lvOf = (y: number): Lv => (y > S4.lower.ceil ? 'lower' : 'deck');
 /** Joshu hands out the gear by the bunk room locker; Jenna waits her turn beside him */
 const GEAR_JOSHU = 386, GEAR_JENNA = 408;
-/** where Mori crouches to look under the table (just left of it, by the dog bowls) */
-const LOOK_X = 279;
 /** the wheelhouse: Joshu at the wheel, Jenna holding on behind him */
 const helmX = () => SPOTS.helm[0] - 14, JENNA_BRIDGE = 244;
 
 /** this storm's session state (the scene is rebuilt on a reload, and runStorm with it) */
-interface StormRun { s: ShipScene4; heard: boolean; crewReady: boolean; whimperT: number; barkT: number; li: number; dead: boolean }
+interface StormRun { s: ShipScene4; crewReady: boolean; dead: boolean }
 let run: StormRun | null = null;
 
 /** game-time ticker on the scene's stage (dies with the scene) */
@@ -177,7 +174,7 @@ export async function runStorm(s: ShipScene4) {
   if (F()['v4:bridge']) return;
   if (s.phase === 'storm' || s.phase === 'wave') return;
   s.phase = 'storm';
-  run = { s, heard: false, crewReady: false, whimperT: 3, barkT: 9, li: 0, dead: false };
+  run = { s, crewReady: false, dead: false };
   // nobody wanders off on their daily routine from here on
   (s.story as unknown as { crew?: { stop(): void } | null })?.crew?.stop();
   s.sky.birds = false;
@@ -270,16 +267,22 @@ function restoreStorm(s: ShipScene4) {
     put(s, s.joshu, helmX(), S4.bridge.floor, 1, 'steerHard');
     put(s, s.jenna, JENNA_BRIDGE, S4.bridge.floor, 1, 'scared');
   }
+  if (geared && !f['v4:chunkFound']) {
+    // a save from before he came out on his own (the old search): he's back in Mori's arms
+    f['v4:chunkFound'] = true;
+    game.persist();
+    setTimeout(() => { if (run && s.carrying) { audio.play('callBark', { vol: 0.4, pitch: 0.78 }); s.bark('chunk', 'Boof!', { expr: 'happy' }); } }, 900);
+  }
   if (f['v4:chunkFound']) {
     carryChunk(s);
     game.ui.toast('Carry Chunk up to the <b>wheelhouse</b> (the companionway ladder in the galley).', 'STORM', 'coral', 5000);
   } else {
     hideChunk(s);
-    game.ui.toast(geared ? 'Chunk is missing! Search below deck.' : 'Get your <b>foul-weather gear</b> from Joshu in the <b>bunk room</b>.', 'STORM', 'coral', 5000);
+    game.ui.toast('Get your <b>foul-weather gear</b> from Joshu in the <b>bunk room</b>.', 'STORM', 'coral', 5000);
   }
 }
 
-/** the storm while you play: loose things sliding, jolts and spray, the search, the trip to the wheelhouse */
+/** the storm while you play: loose things sliding, jolts and spray, the trip to the wheelhouse */
 function stormLife(s: ShipScene4) {
   const p = s.player, r = run!;
   const say = (l: Parameters<ShipScene4['say']>[0]) => s.say(l);
@@ -294,8 +297,8 @@ function stormLife(s: ShipScene4) {
     add(FU.cooler(), 'cooler', 170, S4.main.y, 44, 190);
     add(FU.crate(18, 14, FU.P.plank, true), 'crate2', 400, S4.main.y - 3, 360, 500);
   }
-  // storm life: extra jolts, spray over the rails, the whimpering under the table
-  let joltT = 5;
+  // storm life: extra jolts, spray over the rails, the cloth over Chunk's hiding place trembling
+  let joltT = 5, clothT = 4;
   tick(s, dt => {
     if (s.phase !== 'storm' || run !== r) return s.phase === 'wave' ? false : undefined;
     joltT -= dt;
@@ -310,31 +313,12 @@ function stormLife(s: ShipScene4) {
     const u = s.underTable;
     if (u) {
       u.shake = Math.max(0, u.shake - dt * 0.9);
-      // geared up and searching: the galley's where he is. Walking in, Mori hears him.
-      const inGalley = s.level() === 'lower' && p.state !== 'climb' && p.x > 196 && p.x < 340;
-      if (f['v4:raincoat'] && !f['v4:chunkFound'] && !r.heard && inGalley && !s.cutscene && !game.ui.blocking) {
-        r.heard = true;
-        whimper(s, 1);
-        p.body.showEmote('question', 2.2);
-        p.facing = UNDER_TABLE[0] >= p.x ? 1 : -1;
-        game.ui.bubbles.clear();
-        s.bark('mori', '...What was that? Something under the table?', { expr: 'surprised' });
-      }
-      // every so often the cloth trembles and something whimpers (louder close by)
-      r.whimperT -= dt;
-      if (r.whimperT <= 0 && f['v4:raincoat'] && !f['v4:chunkFound']) {
-        r.whimperT = rand.range(3.5, 6);
-        const near = s.level() === 'lower' && Math.abs(p.x - UNDER_TABLE[0]) < 150;
-        if (near || r.heard) whimper(s, near ? 1 : 0.5);
-      }
-    }
-    // search barks, until he hears him
-    if (f['v4:raincoat'] && !f['v4:chunkFound'] && !r.heard) {
-      r.barkT -= dt;
-      if (r.barkT <= 0) {
-        r.barkT = 11;
-        const lines = ['Chunk! Buddy! Where are you?!', 'He hates thunder. He hides somewhere small and dark...', 'Not in the bunks... think. Small. Dark. Near food?'];
-        if (!game.ui.bubbles.active && !s.cutscene) s.bark('mori', lines[r.li++ % lines.length], { expr: 'worried' });
+      // now and then the cloth trembles (something under there doesn't like the thunder)
+      clothT -= dt;
+      if (clothT <= 0 && !s.cutscene) {
+        clothT = rand.range(5, 9);
+        u.shake = Math.min(1, u.shake + 0.6);
+        if (s.level() === 'lower' && Math.abs(p.x - UNDER_TABLE[0]) < 150) audio.play('rustle', { vol: 0.25 });
       }
     }
     // reaching the wheelhouse with Chunk starts the finale
@@ -343,8 +327,6 @@ function stormLife(s: ShipScene4) {
       return false;
     }
   });
-  // quest markers: the gear, the galley, under the table
-  s.questPoints.push({ x: () => (UNDER_TABLE[0] - 20), y: () => L - 40, on: () => run === r && s.phase === 'storm' && !!F()['v4:raincoat'] && !F()['v4:chunkFound'] && !r.heard });
   // Joshu hands out the gear
   s.interact.push({
     get x() { return s.joshu.x; }, get y() { return s.joshu.y; }, w: 14, h: 18, label: 'Get your foul-weather gear', get standX() { return s.joshu.x - 20; },
@@ -352,31 +334,14 @@ function stormLife(s: ShipScene4) {
     enabled: () => run === r && s.phase === 'storm' && r.crewReady && !F()['v4:raincoat'] && !s.cutscene,
     action: () => giveGear(s),
   } as unknown as Interactable);
-  // look under the table
-  s.interact.push({
-    x: UNDER_TABLE[0], y: L, w: 16, h: 16, label: 'Look under the table', standX: LOOK_X,
-    quest: () => true,
-    enabled: () => run === r && s.phase === 'storm' && !!F()['v4:raincoat'] && !F()['v4:chunkFound'] && r.heard && !s.cutscene,
-    action: () => findChunk(s),
-  } as Interactable);
   // Jenna, holding on in the wheelhouse
   s.interact.push({
     get x() { return s.jenna.x; }, get y() { return s.jenna.y; }, w: 14, h: 18, label: 'Jenna!', get standX() { return s.jenna.x + 20; },
     enabled: () => run === r && s.phase === 'storm' && !!F()['v4:raincoat'] && !s.cutscene && lvOf(s.jenna.y) === 'deck' && !s.jenna.walking,
     action: () => say([
-      { who: 'jenna', text: F()['v4:chunkFound'] ? 'You found him!! Okay! Bridge! Go go go, I’m right behind you!' : 'I’m FINE! I’m totally fine! This is fine! FIND CHUNK!', expr: 'scared', style: 'shout' },
+      { who: 'jenna', text: 'He was under the TABLE! Of course he was! Okay! Bridge! Go go go, I’m right behind you!', expr: 'scared', style: 'shout' },
     ]).then(() => {}),
   } as unknown as Interactable);
-}
-
-/** a whimper from under the table, and the cloth trembles */
-function whimper(s: ShipScene4, k: number) {
-  const u = s.underTable;
-  if (!u) return;
-  u.shake = Math.min(1, u.shake + 0.8 * k);
-  audio.play('rustle', { vol: 0.35 * k });
-  setTimeout(() => audio.play('callSqueak', { vol: 0.3 * k, pitch: 0.75 }), 180);
-  s.chunk.react('tremble');
 }
 
 /** Joshu hands out the oilskins; only then does anyone notice who isn't there */
@@ -411,44 +376,92 @@ async function giveGear(s: ShipScene4) {
     { who: 'mori', text: '...Chunk?', expr: 'worried' },
     { who: 'jenna', text: 'He was right next to you when we got hit!', expr: 'scared' },
     { who: 'mori', text: 'CHUNK?!', style: 'shout', expr: 'scared' },
-    { who: 'joshu', text: 'He’ll have gone to ground somewhere. Find that dog and bring him up top, Mori. Jenna, with me. NOW.', expr: 'serious', style: 'shout' },
+  ]);
+  await chunkPopsOut(s);
+  await say([
+    { who: 'mori', text: 'CHUNK! You were under the TABLE?! Don’t DO that to me!', expr: 'surprised', style: 'shout' },
+    { who: 'chunk', text: 'Boof!', expr: 'happy' },
+    { who: 'jenna', text: 'Oh thank goodness. You absolute potato.', expr: 'happy' },
+    { who: 'joshu', text: 'Good. That’s everyone. Up to the wheelhouse, all of you, and hold on to that dog. NOW.', expr: 'serious', style: 'shout' },
   ]);
   F()['v4:raincoat'] = true;
-  game.persist();
-  s.hud?.refresh(true);
-  run!.barkT = 4;
-  s.cutscene = false;
-  void crewToBridge(s);
-  game.ui.toast('Chunk is missing! Search below deck: he hides somewhere small and dark when it thunders.', 'STORM', 'coral', 6000);
-}
-
-async function findChunk(s: ShipScene4) {
-  const p = s.player, c = s.chunk;
-  s.cutscene = true;
-  game.ui.bubbles.clear();
-  p.facing = c.x >= p.x ? 1 : -1;
-  p.poseOverride = 'kneel';
-  // lift the cloth
-  const u = s.underTable;
-  if (u) {
-    audio.play('rustle', { vol: 0.6 });
-    await new Promise<void>(res => tick(s, dt => { u.lift = Math.min(1, u.lift + dt * 3); u.shake = 0; if (u.lift >= 1) { res(); return false; } }));
-  }
-  c.faceTo(p.x);
-  c.react('tremble');
-  await s.say([
-    { who: 'mori', text: 'There you are. Hey. Hey, buddy.', expr: 'worried' },
-    { who: 'chunk', text: '*trembling all over*', expr: 'scared', close: false },
-    { who: 'mori', text: 'I know. It’s loud. I don’t like it either.', expr: 'sad' },
-    { who: 'mori', text: 'C’mere. I’ve got you. I’ve always got you.', expr: 'determined' },
-  ]);
-  p.poseOverride = null;
-  carryChunk(s);
   F()['v4:chunkFound'] = true;
   game.persist();
   s.hud?.refresh(true);
   s.cutscene = false;
+  void crewToBridge(s);
   game.ui.toast('Carry Chunk up to the <b>wheelhouse</b> (the companionway ladder in the galley).', 'STORM', 'coral', 6000);
+}
+
+/** a hop along an arc (x to x1 on the floor y, peaking hgt above it) in dur seconds of game time */
+function hop(s: ShipScene4, a: Actor, x1: number, y: number, hgt: number, dur: number): Promise<void> {
+  const x0 = a.x, y0 = a.y;
+  let k = 0;
+  a.terrain = null;
+  return new Promise(res => tick(s, dt => {
+    k = Math.min(1, k + dt / dur);
+    a.x = x0 + (x1 - x0) * k;
+    a.y = y0 + (y - y0) * k - Math.sin(k * Math.PI) * hgt;
+    if (k >= 1) { res(); return false; }
+  }));
+}
+
+/** a WOOF from under the mess table, and out he pops: the cloth flies up, he shoots out, shakes himself
+ *  off, barks again and makes a run for Mori, and leaps up into his arms */
+async function chunkPopsOut(s: ShipScene4) {
+  const p = s.player, c = s.chunk, L = S4.lower.floor;
+  const u = s.underTable;
+  const all = [p.body, s.jenna, s.joshu];
+  // something shuffles under there...
+  await wait(500);
+  if (u) u.shake = 1;
+  audio.play('rustle', { vol: 0.5 });
+  c.react('tremble');
+  await wait(450);
+  // ...WOOF!
+  audio.play('callBark', { vol: 0.55, pitch: 0.78 });
+  c.play('bark', 'hide').catch(() => {});
+  if (u) u.shake = 1;
+  game.ui.bubbles.clear();
+  s.bark('chunk', 'WOOF!', { expr: 'excited' });
+  for (const a of all) { a.faceTo(UNDER_TABLE[0]); a.showEmote('exclaim', 1.2); }
+  p.facing = UNDER_TABLE[0] >= p.x ? 1 : -1;
+  await wait(900);
+  // the cloth flips up and out he shoots, nose first
+  if (u) { u.shake = 0; u.lift = 1; }
+  audio.play('rustle', { vol: 0.7 });
+  audio.play('callBark', { vol: 0.45, pitch: 0.86 });
+  c.z = 60;
+  c.facing = p.x >= c.x ? 1 : -1;
+  c.setExpr('excited');
+  c.setAnim('jump');
+  c.react('stretch');
+  for (let i = 0; i < 10; i++) s.main.particles.spawn({ frame: A.soft, x: c.x + rand.range(-8, 8), y: L - rand.range(0, 6), vx: rand.range(-30, 30), vy: rand.range(-40, -5), life: rand.range(0.35, 0.6), size: 0.18, size1: 0.45, color: [0.9, 0.88, 0.8], alpha: 0.6, alpha1: 0 });
+  await hop(s, c, c.x + c.facing * 22, L, 16, 0.42);
+  c.terrain = s.st.terrain;
+  c.react('land');
+  s.underTable = null;
+  // a big shake from nose to tail, and another WOOF for good measure
+  c.setAnim('shake');
+  audio.play('rustle', { vol: 0.35 });
+  await wait(520);
+  c.play('bark', 'idle').catch(() => {});
+  audio.play('callBark', { vol: 0.5, pitch: 0.8 });
+  s.bark('chunk', 'WOOF! WOOF!', { expr: 'happy' });
+  await wait(450);
+  // zoom! straight for Mori, and up into his arms
+  const stop = p.x + p.facing * 14;
+  await Promise.race([c.walkTo(stop, 150, 'zoom'), wait(1800)]);
+  c.stopWalk();
+  c.faceTo(p.x);
+  c.setAnim('jump');
+  await hop(s, c, p.x + p.facing * 2, p.y - 18, 12, 0.3);
+  p.body.react('recoil');
+  audio.play('land', { vol: 0.35, pitch: 1.4 });
+  carryChunk(s);
+  c.setExpr('happy');
+  s.chunk.react('bounce');
+  await wait(300);
 }
 
 /** a reload during the finale: back in the wheelhouse with Chunk in his arms, and here it comes again */
@@ -479,7 +492,7 @@ export async function rogueWave(s: ShipScene4) {
   s.phase = 'wave';
   s.cutscene = true;
   s.hud?.show(false);
-  // no stray search barks over the finale
+  // no stray barks over the finale
   game.ui.bubbles.clear();
   p.walkTo(298, 50).catch(() => {});
   // Joshu at the wheel, Jenna made it up too (if either is still on the way, they're there now)
