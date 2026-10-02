@@ -35,6 +35,7 @@ import { dayNumber } from '../v10/day';
 import { spend } from '../v10/energy';
 import { discover, revealMap } from '../v10/regions';
 import type { BubbleLine } from '../../ui/bubbles';
+import { SPECIES_BY_ID } from '../species';
 
 export interface GroundChunk { x0: number; y0: number; base: PixelBuffer; wet: PixelBuffer }
 export interface LandingCfg {
@@ -196,8 +197,13 @@ export abstract class LandingScene extends FieldScene {
     const cfg = this.cfg, top = cfg.water, bot = cfg.BOT;
     this.st.terrain.water.push([-60, cfg.seaX, top, bot]);
     this.main.add(new Custom(24, (rr, s) => {
+      // the water's edge runs off toward the camera as the sand shelves: a wedge, fading at the edge
       rr.water(0.85, 1.2, 0.8);
-      rr.rect(-60, top, cfg.seaX + 60, bot - top, packColor(0.09, 0.22, 0.27, 0.86));
+      for (let x = Math.max(-60, Math.floor(rr.visibleX0(4) / 4) * 4); x < cfg.seaX; x += 4) {
+        const k = clamp((cfg.seaX - x) / 60);
+        const h = Math.min(bot - top, 6 + (cfg.seaX - x) * 1.6);
+        rr.rect(x, top, 4, h, packColor(0.09, 0.22, 0.27, 0.5 + k * 0.38));
+      }
       rr.water(0);
       // the edge of the swash, and glints
       for (let i = 0; i < 6; i++) {
@@ -241,7 +247,9 @@ export abstract class LandingScene extends FieldScene {
     const cx = cfg.spawnX + 30;
     this.chunk = this.addActor('chunk', cx, g(cx), 1);
     this.chunk.z = 47;
-    this.buddy = new ChunkBuddy(this.chunk, { player: this.player, terrain: this.st.terrain, busy: () => this.cutscene });
+    const me = this;
+    // (the player is made after the site is built: look it up when Chunk needs it)
+    this.buddy = new ChunkBuddy(this.chunk, { get player() { return me.player; }, terrain: this.st.terrain, busy: () => this.cutscene });
     this.interact.push({ x: jx, y: g(jx), w: 12, h: 30, label: 'Talk to Joshu', standX: jx + 22, action: () => this.talkJoshu() });
   }
 
@@ -393,6 +401,20 @@ export abstract class LandingScene extends FieldScene {
 
   async enter() {
     await super.enter();
+    // photos: the place's name on the research pages, and each new species on the map
+    (this.cam as unknown as { site: string }).site = this.cfg.label;
+    const prev = this.cam.onShot;
+    this.cam.onShot = ph => {
+      prev?.(ph);
+      for (const x of ph.subjects) {
+        if (x.inFrame < 0.4 || x.visible < 0.4) continue;
+        const fl = `v10:photo:${this.cfg.loc}:${x.species}`;
+        if (game.save.flags[fl]) continue;
+        game.save.flags[fl] = true;
+        discover({ id: 'species:' + x.species, kind: 'species', name: SPECIES_BY_ID[x.species]?.name ?? x.species, loc: this.cfg.loc, note: `Photographed on ${this.cfg.name}` });
+      }
+      game.persist();
+    };
     this.st.cam.tzoom = this.st.cam.zoom = this.zoomBase;
     this.player.speedK = 0.95;
     this.player.ground = 'sand';

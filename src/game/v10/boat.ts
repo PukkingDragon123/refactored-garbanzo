@@ -67,7 +67,7 @@ defineItem({ id: 'v10_obsidian', name: 'Obsidian flake', kind: 'material', stack
   lab: { rp: 8, time: 3, text: 'Lava that cooled too fast to crystallise. Aroha says her tūpuna traded it from island to island for blades.' } });
 defineItem({ id: 'v10_sulphur', name: 'Sulphur crust', kind: 'material', stack: 10, desc: 'Lemon-yellow crystals scraped from a steaming vent. Smells like a thousand rotten eggs.', where: 'Motu Ahi vents (knife)', weight: 0.2,
   lab: { rp: 10, time: 3, text: 'Native sulphur, deposited where volcanic gas cools at the vent. Bacteria in the hot crust live on it: no sunlight needed.' } });
-defineItem({ id: 'v10_down', name: 'Colony down', kind: 'animal', stack: 8, desc: 'A wisp of grey down from the nesting ledges.', where: 'Motu Ahi colony (tweezers)', weight: 0.01,
+defineItem({ id: 'v10_down', name: 'Colony down', kind: 'animal', stack: 8, desc: 'A wisp of grey down from the nesting ledges.', where: 'Under the Motu Ahi colony', weight: 0.01,
   lab: { rp: 12, time: 4, text: 'Chick down, warm and water-shy. The colony lays where the ground is warm: the volcano does half the brooding.', species: 'cragauk' } });
 defineItem({ id: 'v10_coral', name: 'Coral fragment', kind: 'animal', stack: 6, desc: 'A broken twig of reef coral, pink at the tips.', where: 'The reef (dive)', weight: 0.2,
   lab: { rp: 12, time: 4, text: 'Living polyps over a limestone skeleton, with algae inside every polyp feeding it sugar. A whole reef is built on that partnership.' } });

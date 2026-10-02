@@ -95,16 +95,24 @@ export function paintIsleGround(x0: number, w: number): IsleChunk {
         const col = Math.floor((x + Math.floor(y / 9) * 3) / 7);
         const edge = (x + Math.floor(y / 9) * 3) % 7 === 0 || y % 9 === 0;
         c = pick(BASALT, 2.2 + noise1(col * 0.7, 21) * 1.8 - (edge ? 1.2 : 0) + (d < 3 ? 1 : 0) - Math.min(1.2, d * 0.012));
-        if (z === 'colony' && fbm2(x / 5, y / 22, 2, 23) > 0.62 && d < 80) c = pick(GUANO, 1 + noise1(x / 3, 24) * 2);
+        if (z === 'colony' && d < 12 && fbm2(x / 4, y / 9, 2, 23) > 0.66 + d * 0.02) c = pick(GUANO, 1 + noise1(x / 3, 24) * 2);
         if (d < 1.2) c = BASALT[4];
       } else if (z === 'vents') {
-        // warm ash terrace: grey ash, red scoria, yellow sulphur round the vents, steaming cracks
+        // warm ash terrace: fine grey ash in thin strata, flecks of red scoria and black grit,
+        // lemon sulphur crusts round the vents, milky hot pools with a sulphur rim
         const nearVent = Math.min(...VENT_XS.map(v => Math.abs(x - v)));
-        const pool = POOLS.some(([a, b]) => x > a - 6 && x < b + 6);
-        c = noise2(x / 18, y / 10, 31) > 0.55 ? pick(SCORIA, 1.5 + noise1(x / 5 + y, 32) * 2.5) : pick(ASH, 1 + noise2(x / 7, y / 5, 33) * 2.4);
-        if (nearVent < 26 && d < 26 && fbm2(x / 4, y / 4, 2, 34) > 0.38 - (26 - nearVent) / 60) c = pick(SULF, 1 + (1 - nearVent / 26) * 3 + (bayer(x, y) - 0.5));
-        if (pool && d < 6) c = pick(SULF, 2 + d * 0.3);
-        if (d < 1.2) c = shade(c, 0.2);
+        const pool = POOLS.find(([a, b]) => x >= a && x <= b);
+        const strata = Math.sin(y * 0.55 + noise1(x / 34, 35) * 5) * 0.35;
+        c = pick(ASH, 1.7 + noise2(x / 5, y / 3, 33) * 1.1 + strata + (bayer(x, y) - 0.5) * 0.7 - Math.min(1.3, d * 0.014));
+        if (noise2(x / 8, y / 4, 31) > 0.66) c = pick(SCORIA, 2.4 + noise1(x / 3 + y, 32) * 1.4 - Math.min(1.4, d * 0.014));
+        if (hash2(x, y, 36) < 0.025) c = BLACK[1];
+        if (nearVent < 22 && d < 12 && fbm2(x / 3, y / 3, 2, 34) > 0.4 + nearVent / 40 + d * 0.03) c = pick(SULF, 1.5 + (1 - nearVent / 22) * 2.5 + (bayer(x, y) - 0.5));
+        if (pool) {
+          const e = Math.min(x - pool[0], pool[1] - x);
+          const depth = Math.min(5, e * 0.5);
+          if (d < depth) c = d < 1 ? hex('#c8f0e4') : mix(hex('#6ad0c4'), hex('#a8e8dc'), noise2(x / 9, y, 37) * 0.6 + (bayer(x, y) - 0.5) * 0.3);
+          else if (d < depth + 2) c = pick(SULF, 2.5 - (d - depth));
+        } else if (d < 1.2) c = shade(c, 0.2);
       } else {
         // the rim: scoria and ash with scrub clinging to it
         c = pick(SCORIA, 1.2 + noise2(x / 9, y / 6, 41) * 3);
@@ -161,21 +169,27 @@ export function paintColonyCliff(): { buf: PixelBuffer; x: number; y: number } {
 /** the cone of Motu Ahi behind the terrace and the rim (back layer) */
 export function paintCone(w: number, h: number): PixelBuffer {
   const b = new PixelBuffer(w, h);
+  const PU = 0.57, px = PU * w;
   for (let x = 0; x < w; x++) {
     const u = x / w;
     const peak = Math.max(0, 1 - Math.abs(u - 0.55) / 0.5) ** 1.2;
-    const notch = Math.exp(-((u - 0.57) ** 2) / 0.0016) * 0.12;
+    const notch = Math.exp(-((u - PU) ** 2) / 0.0016) * 0.12;
     const t = h - (peak - notch) * h * 0.96 - 2 + (noise1(x / 9, 61) - 0.5) * 3;
     for (let y = Math.floor(t); y < h; y++) {
-      const d = y - t;
-      const slope = (u < 0.55 ? 1 : -1);
-      let c = pick(SCORIA, 1.4 + slope * 0.6 + noise2(x / 12, y / 20, 62) * 1.4 - d * 0.004);
-      // gullies and lava ribs running down the cone
-      if (Math.abs(Math.sin(x * 0.11 + y * 0.02 + noise1(y / 30, 63) * 3)) < 0.08) c = SCORIA[0];
-      // ash fields, the green skirt of scrub at the foot
-      if (noise2(x / 30, y / 18, 64) > 0.62) c = pick(ASH, 1 + noise1(x / 5, 65) * 2);
-      if (y > h * 0.72 && noise2(x / 14, y / 9, 66) > 0.42) c = pick(SCRUB, 1 + noise2(x / 4, y / 3, 67) * 2.5);
-      if (d < 2) c = shade(c, 0.15);
+      const d = y - t, v = y / h;
+      // sunlit west flank, shadowed east flank, fine grain, dithered
+      const lit = u < PU ? 0.7 - (PU - u) * 0.6 : -0.5;
+      let f = 1.9 + lit + noise2(x / 4, y / 3, 62) * 0.7 + (bayer(x, y) - 0.5) * 0.7;
+      // radial gullies running down from the summit
+      const ang = Math.atan2(x - px, y + 6) * 16 + noise1(y / 24 + x / 60, 63) * 2.2;
+      const gully = ang - Math.floor(ang) < 0.09;
+      if (gully) f -= 1.2;
+      // grey ash on the summit grading into red scoria, scrub creeping up the foot
+      const ashLine = 0.38 + noise1(x / 26, 64) * 0.12;
+      let c = v < ashLine ? pick(ASH, f - 0.3) : pick(SCORIA, f);
+      if (Math.abs(v - ashLine) < 0.03 && bayer(x, y) < 0.5) c = pick(ASH, f - 0.6);
+      if (v > 0.7 && noise2(x / 6, y / 4, 66) > 0.95 - (v - 0.7) * 1.6) c = pick(SCRUB, 1 + lit + noise2(x / 3, y / 2, 67) * 1.6);
+      if (d < 1.5) c = shade(c, 0.14);
       b.set(x, y, c);
     }
   }
@@ -185,30 +199,49 @@ export function paintCone(w: number, h: number): PixelBuffer {
 /** the crater lake seen from the rim: a milky turquoise lake in a steaming bowl (far layer) */
 export function paintCrater(w: number, h: number): PixelBuffer {
   const b = new PixelBuffer(w, h);
+  const lakeY = Math.round(h * 0.6);
   for (let x = 0; x < w; x++) {
     const u = x / w;
-    const rim = h * 0.28 + Math.abs(u - 0.5) * h * 0.2 + (noise1(x / 14, 71) - 0.5) * 6;
-    for (let y = Math.floor(rim); y < h; y++) {
-      const v = (y - rim) / (h - rim);
-      let c: C;
-      const lakeTop = 0.42 + Math.abs(u - 0.5) * 0.4;
-      if (v > lakeTop && Math.abs(u - 0.5) < 0.36) c = mix(hex('#5ac8c0'), hex('#a8e8d8'), noise2(x / 20, y / 3, 72) * 0.6 + (bayer(x, y) - 0.5) * 0.2);
-      else c = pick(SCORIA, 1 + v * 2 + noise2(x / 8, y / 6, 73) * 1.6);
-      if (v > lakeTop - 0.03 && v < lakeTop + 0.01 && Math.abs(u - 0.5) < 0.36) c = SULF[2];
+    // the far rim: a ragged skyline, high in the middle, sinking to nothing at both ends
+    const edge = Math.sin(Math.PI * u) ** 0.7;
+    const top = h - edge * h * 0.92 + (noise1(x / 12, 71) - 0.5) * 6 * edge;
+    // the lake: a lens of milky turquoise, seen at a low angle
+    const lu = (u - 0.52) / 0.3;
+    const lens = Math.abs(lu) < 1 ? (1 - lu * lu) * 9 + 1 : 0;
+    for (let y = Math.max(0, Math.floor(top)); y < h; y++) {
+      const d = y - top;
+      // inner walls: the east wall faces the sun, the west wall is in shadow
+      const lit = u > 0.5 ? 0.9 : -0.3;
+      let c = pick(SCORIA, 1.4 + lit + noise2(x / 5, y / 3, 73) * 0.8 + (bayer(x, y) - 0.5) * 0.7 - d * 0.004);
+      if (d < 2) c = pick(SCRUB, 1.5 + noise1(x / 3, 74) * 1.5);
+      if (lens && y >= lakeY - 1 && y < lakeY + lens) {
+        c = y === lakeY - 1 ? SULF[3] : mix(hex('#5ac8c0'), hex('#b0ece0'), clamp(noise2(x / 14, y / 2, 72) * 0.5 + (lakeY + lens - y) / 14 * 0.5 + (bayer(x, y) - 0.5) * 0.2));
+      }
       b.set(x, y, c);
     }
   }
   return b;
 }
-
 export interface PSpr { buf: PixelBuffer; ax: number; ay: number }
 const outline = (b: PixelBuffer) => { b.outline((c: C) => mix(shade(c, -0.7), hex('#100c10'), 0.6)); return b; };
 /** a fumarole: a low mound of crusted rock with a dark mouth */
 export function ventSprite(seed: number): PSpr {
-  const W = 34, H = 16;
+  const W = 28, H = 14;
   const b = new PixelBuffer(W, H);
-  b.ellipseFn(17, 15, 15, 9, (x, y, nx, ny) => (ny > -0.1 && Math.abs(nx) < 0.18 ? hex('#140c08') : fbm2(x / 3, y / 3, 2, seed) > 0.45 - (1 - Math.abs(nx)) * 0.3 ? pick(SULF, 1.5 + (-ny) * 2) : pick(ASH, 1.5 - ny)));
-  return { buf: outline(b), ax: 17, ay: 15 };
+  for (let x = 0; x < W; x++) {
+    const u = (x - W / 2) / (W / 2 - 1);
+    if (Math.abs(u) > 1) continue;
+    const top = H - 1 - (1 - u * u) * 9 + (noise1(x / 3, seed) - 0.5) * 1.5;
+    for (let y = Math.max(0, Math.floor(top)); y < H; y++) {
+      const mouth = Math.abs(u) < 0.2 && y < top + 3.5;
+      const k = (y - top) / 10;
+      let c = pick(ASH, 2.6 - u * 0.9 - k * 1.2 + (bayer(x, y) - 0.5) * 0.6);
+      if (Math.abs(u) < 0.62 && y < top + 5 && fbm2(x / 2.5, y / 2.5, 2, seed) > 0.32 + Math.abs(u) * 0.4) c = pick(SULF, 3.4 - u * 1.2 - k * 2);
+      if (mouth) c = y < top + 1.5 ? hex('#3a2a14') : hex('#120c08');
+      b.set(x, y, c);
+    }
+  }
+  return { buf: outline(b), ax: W / 2, ay: H - 2 };
 }
 /** a hot pool's sulphur-crusted lip (the water is drawn live) */
 export function poolLip(w: number): PSpr {
