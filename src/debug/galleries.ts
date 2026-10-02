@@ -13,6 +13,7 @@ import { PixelBuffer } from '../art/pixel';
 async function camp4Gallery() {
   const [CA, CV] = await Promise.all([import('../art/island4/camp'), import('../game/v10/campart')]);
   const items: GalleryItem[] = [];
+  const t0 = performance.now();
   const add = (n: string, s: import('../art/island4/campkit').CampSprite) => {
     items.push({ name: n, buf: s.buf });
     if (s.alt) items.push({ name: n + ' W', buf: s.alt.buf });
@@ -27,7 +28,11 @@ async function camp4Gallery() {
   add('rod', CV.rodInRock()); add('pot', CV.pot()); add('target', CV.target());
   items.push({ name: 'hanglantern', buf: CV.hangingLantern().buf });
   CV.signalFlags().frames.forEach((f, i) => items.push({ name: 'flag' + i, buf: f[1] }));
+  const ms = performance.now() - t0;
   showGallery(items, 3, '#cdb98e');
+  const note = document.createElement('div');
+  note.textContent = `painted in ${ms.toFixed(0)} ms`;
+  document.body.prepend(note);
 }
 
 /** ?gallery=icons: every item, skill and UI icon at 1x / 2x / 3x on the leather inventory tile. */

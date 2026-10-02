@@ -192,12 +192,12 @@ export class CampDay implements CrewHost {
   private props() {
     const st = this.st, s = this.s;
     const tent = st.prop('v10tent', ART.tarpTent(), C10.tent, groundY(C10.tent) + 2, () => true, -3.1);
-    // the hurricane lantern hung from the ridge line in the tent's open end, swinging in the wind; lit
+    // the hurricane lantern hung from the ridge pole at the tent's closed end, swinging in the wind; lit
     // after dark it throws warm light over the sailcloth and the sand
     const HL = ART.hangingLantern();
     const hlF = local.add('v10:hlan', HL.buf, HL.ax, HL.ay), hlG = local.add('v10:hlanG', HL.glow, HL.ax, HL.ay);
     s.main.add(new Custom(-3.05, (rr, stg) => {
-      const hx = tent.x + 31, hy = tent.y - 39;
+      const hx = tent.x - 21, hy = tent.y - 41;
       const W = stg.wind, a = (Math.sin(stg.time * 1.7) * 0.6 + Math.sin(stg.time * 3.1 + 1) * 0.25) * 0.08 * (0.4 + W) + W * 0.05;
       rr.draw(hlF, hx, hy, 1, 1, -a);
       if (!this.camp.lanternOn || this.inTent) return;

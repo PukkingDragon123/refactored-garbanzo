@@ -5,7 +5,7 @@
 // anything hanging is painted for a cycle of wind phases (see build()).
 
 import { PixelBuffer } from '../../art/pixel';
-import { Cv, RP, build, obox, folds, stencil, hex, mix, shade, clamp, hash2, noise1, noise2 } from '../../art/island4/campkit';
+import { Cv, RP, build, cached, obox, folds, stencil, hex, mix, shade, clamp, hash2, noise1, noise2 } from '../../art/island4/campkit';
 import type { CampSprite, Ramp, Look } from '../../art/island4/campkit';
 import type { C } from '../../art/color';
 
@@ -14,7 +14,7 @@ import type { C } from '../../art/color';
 /** Mori's tarp tent: the Kittiwake's spare mainsail over a ridge line between two driftwood poles, the
  *  near side rolled up and tied so the inside shows (mat, pack, books), the far end open, guyed out to
  *  pegs, a strip of sail streaming from the pole top. The cloth ripples with the wind. */
-export function tarpTent(): CampSprite {
+function tarpTent_(): CampSprite {
   return build(k => {
     const cv = new Cv(132, 74, k);
     const cx = 62, gy = 64, amp = k.amp;
@@ -152,7 +152,7 @@ function guy(cv: Cv, px: number, gy: number, x1: number, y1: number, dir: number
 
 /** a hurricane lantern on a hook, anchored at the hook (draw it rotated to swing): returns the lit and
  *  glow layers (one light, it swings as a whole) */
-export function hangingLantern(): { buf: PixelBuffer; glow: PixelBuffer; ax: number; ay: number } {
+function hangingLantern_(): { buf: PixelBuffer; glow: PixelBuffer; ax: number; ay: number } {
   const k: Look = { lx: -1, ph: 0, amp: 0 };
   const cv = new Cv(16, 26, k);
   const cx = 8, top = 2;
@@ -177,7 +177,7 @@ export function hangingLantern(): { buf: PixelBuffer; glow: PixelBuffer; ax: num
 /** Jenna's tech bench: a hatch-cover table on two crates, a vice, a soldering iron on its coil stand, a
  *  desk lamp on a bent arm, a gutted radio with its board standing in it, a jar of screws, coiled wire,
  *  a battery with a green LED, the wind-up crab, and an oily rag tucked under the edge, flapping */
-export function techBench(): CampSprite {
+function techBench_(): CampSprite {
   return build(k => {
     const cv = new Cv(78, 56, k);
     const gy = 47, x0 = 10, amp = k.amp, top = gy - 20;
@@ -243,7 +243,7 @@ export function techBench(): CampSprite {
 
 /** the camp board: a plank notice board on two driftwood posts under a little flax roof, with pinned
  *  notes (crew requests on the left, the agency's printouts on the right) lifting in the wind */
-export function campBoard(): CampSprite {
+function campBoard_(): CampSprite {
   return build(k => {
     const cv = new Cv(50, 60, k);
     const gy = 52, x0 = 8, amp = k.amp;
@@ -303,7 +303,7 @@ function ramp6(h: string): Ramp {
 
 /** the trail sign at the east end of camp: a post with two arrow boards (painted with a hill and a wave),
  *  a coil of rope on a nail and a strip of red cloth tied round the top, streaming */
-export function trailSign(): CampSprite {
+function trailSign_(): CampSprite {
   return build(k => {
     const cv = new Cv(48, 56, k);
     const gy = 48, x0 = 8;
@@ -339,7 +339,7 @@ export function trailSign(): CampSprite {
 
 /** the fishing rock: a flat-topped boulder at the edge of the beach, lichened on top and wet below with
  *  a glossy waterline, barnacles and weed, and Joshu's dented bait tin */
-export function fishRock(): CampSprite {
+function fishRock_(): CampSprite {
   return build(k => {
     const cv = new Cv(60, 42, k);
     const gy = 34, x0 = 8;
@@ -377,7 +377,7 @@ export function fishRock(): CampSprite {
 }
 
 /** a rod wedged in a crack (drawn on its own so Mori can take it) */
-export function rodInRock(): CampSprite {
+function rodInRock_(): CampSprite {
   const s = build(k => {
     const cv = new Cv(28, 50, k);
     const x0 = 6, gy = 44;
@@ -396,7 +396,7 @@ export function rodInRock(): CampSprite {
 }
 
 /** Joshu's cooking pot (carried to the fire for breakfast): a blackened billy with a bail and a lid */
-export function pot(): CampSprite {
+function pot_(): CampSprite {
   return build(k => {
     const cv = new Cv(24, 20, k);
     const cx = 12, gy = 14;
@@ -409,7 +409,7 @@ export function pot(): CampSprite {
 }
 
 /** Aroha's slingshot target: a driftwood post with a white shell wedged on top, chipped where she hits it */
-export function target(): CampSprite {
+function target_(): CampSprite {
   return build(k => {
     const cv = new Cv(16, 40, k);
     const cx = 8, gy = 34;
@@ -426,7 +426,7 @@ export function target(): CampSprite {
 
 /** the Kittiwake's code flags, strung along the camp lights: [design][wind frame], each anchored at the
  *  middle of its top edge (the line) and rippling */
-export function signalFlags(): { frames: PixelBuffer[][]; ax: number; ay: number } {
+function signalFlags_(): { frames: PixelBuffer[][]; ax: number; ay: number } {
   const designs: ((u: number, v: number) => C)[] = [
     (u, v) => (v < 0.5 ? hex('#e8e2d4') : hex('#c83a2a')),                                   // H: white over red
     (u, v) => (Math.abs(u - 0.5) < 0.2 || Math.abs(v - 0.5) < 0.2 ? hex('#c83a2a') : hex('#e8e2d4')), // a red cross
@@ -434,7 +434,7 @@ export function signalFlags(): { frames: PixelBuffer[][]; ax: number; ay: number
     (u, v) => (Math.abs(u - 0.5) < 0.22 && Math.abs(v - 0.5) < 0.22 ? hex('#e8e2d4') : hex('#2a54a0')), // P: blue, white square
     (u, v) => (u + v < 1 ? hex('#e8c040') : hex('#c83a2a')),                                      // yellow / red diagonal
   ];
-  const N = 4, W = 7, H = 8;
+  const N = 4, W = 5, H = 6;
   const frames = designs.map(d => Array.from({ length: N }, (_, f) => {
     const b = new PixelBuffer(W + 6, H + 4);
     for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
@@ -456,3 +456,13 @@ export function signalFlags(): { frames: PixelBuffer[][]; ax: number; ay: number
 }
 
 void noise1;
+export const tarpTent = cached('tarpTent', tarpTent_);
+export const hangingLantern = cached('hangingLantern', hangingLantern_);
+export const techBench = cached('techBench', techBench_);
+export const campBoard = cached('campBoard', campBoard_);
+export const trailSign = cached('trailSign', trailSign_);
+export const fishRock = cached('fishRock', fishRock_);
+export const rodInRock = cached('rodInRock', rodInRock_);
+export const pot = cached('pot', pot_);
+export const target = cached('target', target_);
+export const signalFlags = cached('signalFlags', signalFlags_);

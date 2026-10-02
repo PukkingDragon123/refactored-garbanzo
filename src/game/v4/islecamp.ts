@@ -104,7 +104,7 @@ export class IsleCamp {
     st.prop('benchL', CA.logBench(40), CAMP.benchL, groundY(CAMP.benchL) + 4, () => this.job('firewood'), -2);
     st.prop('benchR', CA.logBench(40), CAMP.benchR + 14, groundY(CAMP.benchR) + 4, () => this.job('firewood'), -2);
     for (const [i, x] of [CAMP.pole0, CAMP.pole1, CAMP.pole2].entries()) st.prop('pole' + i, CA.pole(52), x, groundY(x) + 2, () => this.jobs() >= 3, -2.5);
-    const lan = st.prop('lantern', CA.lantern(), CAMP.research - 22, groundY(CAMP.research) - 18, () => this.job('research'), -2.8);
+    const lan = st.prop('lantern', CA.lantern(), CAMP.research - 29, groundY(CAMP.research) - 18, () => this.job('research'), -2.8);
     const lanGlow = lan.glow;
     lan.glow = undefined;
     s.main.add(new Custom(-2.7, rr => { if (this.job('research') && this.lanternOn && lanGlow) { rr.emissive(0.75); rr.draw(lanGlow, lan.x, lan.y, 1, 1, 0, packColor(0.9, 0.8, 0.6, 1)); rr.emissive(); rr.light(lan.x, lan.y - 6, 55, 1, 0.82, 0.5, 0.45, 0.1); } }));
@@ -138,7 +138,7 @@ export class IsleCamp {
     const flags: { x: number; d: number }[] = [];
     for (let i = 0; i + 1 < this.bulbs.length; i++) {
       const a = this.bulbs[i].x, b = this.bulbs[i + 1].x;
-      if (b - a < 20) flags.push({ x: Math.round((a + b) / 2), d: flags.length % flagF.length });
+      if (b - a < 20 && i % 2 === 0) flags.push({ x: Math.round((a + b) / 2), d: flags.length % flagF.length });
     }
     s.main.add(new Custom(-1, (rr, stg) => {
       if (this.jobs() < 3 && !F('v4:dinner')) return;

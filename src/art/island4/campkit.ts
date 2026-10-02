@@ -357,6 +357,17 @@ export function build(paint: (k: Look) => Raw, o: { frames?: number; shadow?: Ca
   };
 }
 
+/** painters are deterministic: paint each prop once per session (the island rebuilds on every visit) */
+const CACHE = new Map<string, unknown>();
+export function cached<A extends unknown[], R>(name: string, f: (...a: A) => R): (...a: A) => R {
+  return (...a: A) => {
+    const key = name + JSON.stringify(a);
+    let v = CACHE.get(key) as R | undefined;
+    if (v === undefined) { v = f(...a); CACHE.set(key, v); }
+    return v;
+  };
+}
+
 // ------------------------------------------------------------------ materials
 
 /** sawn wood: grain streaks along u, with the odd knot; returns a lightness offset */

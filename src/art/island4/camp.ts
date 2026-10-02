@@ -9,7 +9,7 @@
 
 import { obj, P, T, hex as khex, mix, shade } from '../ship4/kit';
 import { PixelBuffer } from '../pixel';
-import { Cv, RP, build, obox, grain, folds, stencil, hex, clamp, hash2, noise1, noise2, bayer } from './campkit';
+import { Cv, RP, build, cached, obox, grain, folds, stencil, hex, clamp, hash2, noise1, noise2, bayer } from './campkit';
 import type { CampSprite, Ramp } from './campkit';
 
 export type { CampSprite };
@@ -39,9 +39,10 @@ function guy(cv: Cv, px: number, gy: number, x1: number, y1: number, dir: number
 
 /** a stone for the fire ring: lumpy ball, lichen speckle, soot on the side facing the fire */
 function stone(cv: Cv, cx: number, cy: number, rx: number, ry: number, seed: number, sootDir = 0) {
+  cv.ell(cx + 0.6, cy + 0.6, rx + 0.5, ry + 0.4, (nx, ny, x, y) => cv.tone(RP.stone, 0.08, x, y, 0.2));
   cv.ball(cx, cy, rx, ry, RP.stone, {
     flat: 0.6,
-    tex: (x, y) => (noise2(x * 0.5, y * 0.6, seed) - 0.5) * 0.35 + (hash2(x, y, seed) < 0.06 ? 0.2 : 0) + (sootDir && Math.sign(x + 0.5 - cx) === sootDir ? -0.25 : 0),
+    tex: (x, y) => 0.18 + (noise2(x * 0.5, y * 0.6, seed) - 0.5) * 0.4 + (hash2(x, y, seed) < 0.06 ? 0.2 : 0) + (sootDir && Math.sign(x + 0.5 - cx) === sootDir ? -0.25 : 0),
   });
 }
 
@@ -49,7 +50,7 @@ function stone(cv: Cv, cx: number, cy: number, rx: number, ry: number, seed: num
 
 /** blue dome tent (Jenna and Joshu's, from the Kittiwake's hold): pole sleeves with the panels sagging
  *  between them, an orange fly band, the door unzipped with its curtain swinging, a vent hood, guy lines */
-export function domeTent(open = true): CampSprite {
+function domeTent_(open = true): CampSprite {
   return build(k => {
     const cv = new Cv(112, 62, k);
     const cx = 56, gy = 54, rx = 34, ry = 33, amp = k.amp;
@@ -134,7 +135,7 @@ export function domeTent(open = true): CampSprite {
 
 /** Aroha's lean-to: harakeke (flax) blades laid like shingles over a driftwood frame, the fringe stirring
  *  in the wind, a woven mat and a kete in its shade, a bundle of leaves against the pole */
-export function leanTo(): CampSprite {
+function leanTo_(): CampSprite {
   return build(k => {
     const cv = new Cv(84, 54, k);
     const gy = 46, x0 = 8, amp = k.amp;
@@ -165,7 +166,7 @@ export function leanTo(): CampSprite {
     for (let row = 3; row >= 0; row--) {
       for (let b = 0; b < 15; b++) {
         const bx = x0 - 3 + b * 4.6 + row * 2.3 + (hash2(b, row, 5) - 0.5) * 2;
-        const by = roofAt(bx) + row * 1.9 - 2;
+        const by = roofAt(bx) + row * 2 - 2.5 + (hash2(b, row, 8) - 0.5) * 2.4;
         const len = 9 + hash2(b, row, 9) * 5;
         // the bottom row's tips hang free and stir
         const free = row === 3 ? amp * (0.35 + 0.35 * cv.wave(b * 0.13, 1, 1)) : row === 1 ? amp * 0.12 * cv.wave(b * 0.1) : 0;
@@ -176,11 +177,17 @@ export function leanTo(): CampSprite {
         });
       }
     }
+    // loose blade ends sticking up off the top, lifting in the wind
+    for (let i = 0; i < 6; i++) {
+      const lx2 = x0 + 6 + i * 10 + hash2(i, 4, 1) * 5, ly2 = roofAt(lx2) - 1;
+      const ang = 2.3 + amp * (0.25 + 0.25 * cv.wave(i * 0.17, 1, 1.2)) + (hash2(i, 5, 1) - 0.5) * 0.4;
+      cv.hang(lx2, ly2, 4 + hash2(i, 6, 1) * 4, ang, u => 0.8 * (1 - u * 0.5), (u, v, x, y) => cv.tone(RP.flax, 0.62 - u * 0.1 + (v < 0 ? 0.1 : -0.05), x, y, 0.3));
+    }
     // the fringe along the low edge: blade tips hanging over, swaying
     for (let i = 0; i < 12; i++) {
       const fx = x0 + 2 + i * 5.2, fy = roofAt(fx) + 6;
       const ang = 0.25 + amp * (0.3 + 0.25 * cv.wave(i * 0.11, 1, 1)) + (hash2(i, 7, 2) - 0.5) * 0.2;
-      cv.hang(fx, fy, 5 + hash2(i, 3, 4) * 4, ang, u => 0.9 * (1 - u * 0.5), (u, v, x, y) => cv.tone(RP.flax, 0.42 - u * 0.15 + (v < 0 ? 0.1 : -0.05), x, y, 0.3));
+      cv.hang(fx, fy, 6 + hash2(i, 3, 4) * 6, ang, u => 0.9 * (1 - u * 0.5), (u, v, x, y) => cv.tone(RP.flax, 0.42 - u * 0.15 + (v < 0 ? 0.1 : -0.05), x, y, 0.3));
     }
     // flax ties at the pole tops
     cv.lash(x0 + 7, roofAt(x0 + 7) + 3, 2, 2);
@@ -194,7 +201,7 @@ export function leanTo(): CampSprite {
 
 /** the fire pit: a ring of soot-blackened stones on a bed of ash, charred logs crossed in the middle and a
  *  couple of half-burnt sticks; `glow` holds the live coals (scaled by the fire) */
-export function firePit(lit: boolean): CampSprite {
+function firePit_(lit: boolean): CampSprite {
   const s = build(k => {
     const cv = new Cv(52, 26, k);
     const cx = 26, gy = 19;
@@ -205,7 +212,7 @@ export function firePit(lit: boolean): CampSprite {
       stone(cv, cx + Math.cos(a) * 15.5, gy - 3 + Math.sin(a) * 4.2, 3 + hash2(i, 1, 3) * 0.8, 2.4 + hash2(i, 2, 3) * 0.6, i + 10, Math.cos(a) < 0 ? 1 : -1);
     }
     // ash bed
-    cv.ell(cx, gy - 3, 12.5, 3.4, (nx, ny, x, y) => cv.tone(RP.ash, 0.3 + (noise2(x * 0.4, y * 0.7, 4) - 0.5) * 0.5 - (1 - Math.hypot(nx, ny)) * 0.2, x, y, 0.7));
+    cv.ell(cx, gy - 3, 12.5, 3.4, (nx, ny, x, y) => cv.tone(hash2(x, y, 8) < 0.3 ? RP.iron : RP.ash, 0.22 + (noise2(x * 0.4, y * 0.7, 4) - 0.5) * 0.5 - (1 - Math.hypot(nx, ny)) * 0.15, x, y, 0.7));
     // charred logs crossing, a half-burnt stick poking out
     cv.cyl(cx - 9, gy - 2, cx + 6, gy - 7, 1.6, RP.iron, { grain: 0.4, seed: 2 });
     cv.cyl(cx + 9, gy - 2, cx - 5, gy - 7, 1.6, RP.iron, { grain: 0.4, seed: 3 });
@@ -234,7 +241,7 @@ export function firePit(lit: boolean): CampSprite {
 /** Joshu's cooking bench: a hatch board on lashed driftwood legs; the chopping board with a snapper, a
  *  knife, the pot with its lid, a tin mug, the frying pan hung off the end, a tea towel flapping on the
  *  other, and the dented chilly bin */
-export function cookBench(): CampSprite {
+function cookBench_(): CampSprite {
   return build(k => {
     const cv = new Cv(100, 50, k);
     const gy = 43, x0 = 8, amp = k.amp;
@@ -315,7 +322,7 @@ export function cookBench(): CampSprite {
 
 /** drying rack: two lashed driftwood A-frames and a crossbar, strips of flax and split fish hung to dry,
  *  everything on it swinging with the wind */
-export function dryingRack(): CampSprite {
+function dryingRack_(): CampSprite {
   return build(k => {
     const cv = new Cv(76, 54, k);
     const gy = 47, x0 = 8, amp = k.amp, top = gy - 38;
@@ -360,7 +367,7 @@ export function dryingRack(): CampSprite {
 
 /** the research table: a plank on two crates, the microscope, the laptop (screen glows), specimen jars, a
  *  field notebook with a pencil, a magnifier and a mug of brushes */
-export function researchTable(): CampSprite {
+function researchTable_(): CampSprite {
   return build(k => {
     const cv = new Cv(84, 52, k);
     const gy = 44, x0 = 8, top = gy - 20;
@@ -376,7 +383,7 @@ export function researchTable(): CampSprite {
     obox(cv, x0, top, 66, 3, 6, RP.wood, { seed: 44, tex: (f, u, v, px) => (f === 'top' && (px - x0) % 22 === 0 ? -0.2 : 0) });
     cv.occlude(x0 + 9, gy - 15, 8, 2, 0.35); cv.occlude(x0 + 57, gy - 15, 8, 2, 0.35);
     // microscope: base, pillar, arm, tube, stage, a knob catching the light
-    const mx = x0 + 6, my = top - 1;
+    const mx = x0 + 9, my = top - 1;
     cv.rect(mx, my - 2, 9, 2, RP.black[3]); cv.rect(mx, my - 1, 9, 1, RP.black[1]);
     cv.cyl(mx + 6, my - 2, mx + 6, my - 9, 1, RP.black, {});
     cv.cyl(mx + 6, my - 9, mx + 3, my - 13, 1.1, RP.black, {});
@@ -450,7 +457,7 @@ function coil(cv: Cv, cx: number, gy: number, r: number) {
 
 /** the stores: crates, a drum and a sack under the green deck tarp, roped down to pegs, one corner
  *  loose and lifting in the wind. variant 1 is Jenna's salvage pile from the wreck (no tarp). */
-export function storage(variant = 0): CampSprite {
+function storage_(variant = 0): CampSprite {
   return build(k => {
     const cv = new Cv(88, 56, k);
     const gy = 48, x0 = 12, amp = k.amp;
@@ -508,7 +515,7 @@ export function storage(variant = 0): CampSprite {
 
 /** Chunk's bed: an open crate lined with the orange blanket (spilling over the edge), his paw painted
  *  on the front, a steel bowl of kibble and a chewed rope toy */
-export function chunkBed(): CampSprite {
+function chunkBed_(): CampSprite {
   return build(k => {
     const cv = new Cv(56, 30, k);
     const gy = 23, x0 = 6;
@@ -516,12 +523,12 @@ export function chunkBed(): CampSprite {
     // inside the crate (the blanket's hollow) on the top face
     for (let y = gy - 15; y < gy - 11; y++) for (let x = x0 + 2; x < x0 + 31; x++) {
       if (!cv.op(x, y)) continue;
-      cv.t(x, y, RP.orange, 0.32 + Math.sin(x * 0.7) * 0.1 + (y - gy + 15) * 0.05, 0.5);
+      cv.t(x, y, RP.orange, 0.22 + Math.sin(x * 0.7) * 0.1 + (y - gy + 15) * 0.05, 0.5);
     }
     // the blanket folds spilling over the front edge
     for (let x = x0 + 1; x < x0 + 27; x++) {
       const d = 2 + Math.round(Math.max(0, Math.sin(x * 0.35 + 1)) * 2 + (x > x0 + 18 ? 2 : 0));
-      for (let y = gy - 12; y < gy - 12 + d; y++) cv.t(x, y, RP.orange, 0.6 - (y - gy + 12) * 0.08 + Math.cos(x * 0.7) * 0.1, 0.5);
+      for (let y = gy - 12; y < gy - 12 + d; y++) cv.t(x, y, RP.orange, 0.5 - (y - gy + 12) * 0.08 + Math.cos(x * 0.7) * 0.12, 0.5);
     }
     stencil(cv, x0 + 10, gy - 7, PAW, RP.cream[5], 0.12, 3);
     cv.nail(x0 + 1, gy - 9); cv.nail(x0 + 26, gy - 9);
@@ -540,7 +547,7 @@ export function chunkBed(): CampSprite {
 
 /** Jenna's corner: the battery bank, a solar panel propped on a crate, the radio with its whip aerial
  *  (a ribbon tied on, streaming), and a coil of cable; the LEDs glow */
-export function electronics(): CampSprite {
+function electronics_(): CampSprite {
   return build(k => {
     const cv = new Cv(72, 54, k);
     const gy = 46, x0 = 6;
@@ -585,7 +592,7 @@ export function electronics(): CampSprite {
 
 /** a log seat: a bleached drift log, checked along the grain, the top worn smooth where people sit, a
  *  stub of branch and the sawn end showing its rings */
-export function logBench(len = 46): CampSprite {
+function logBench_(len = 46): CampSprite {
   return build(k => {
     const cv = new Cv(len + 16, 20, k);
     const gy = 14, x0 = 8, r = 4;
@@ -609,7 +616,7 @@ export function logBench(len = 46): CampSprite {
 }
 
 /** firewood, 0..3 armfuls: split rounds stacked, bark on the round side, pale split faces, end grain */
-export function woodPile(n: number): CampSprite {
+function woodPile_(n: number): CampSprite {
   return build(k => {
     const cv = new Cv(52, 30, k);
     const gy = 24, x0 = 6;
@@ -647,7 +654,7 @@ export function woodPile(n: number): CampSprite {
 }
 
 /** a hurricane lantern: wire bail, red-painted cap, the glass globe with the flame in it, brass fount */
-export function lantern(): CampSprite {
+function lantern_(): CampSprite {
   return build(k => {
     const cv = new Cv(16, 22, k);
     const cx = 8, gy = 18;
@@ -670,7 +677,7 @@ export function lantern(): CampSprite {
 }
 
 /** a driftwood pole for the string lights (the wire is lashed round its top) */
-export function pole(h = 50): CampSprite {
+function pole_(h = 50): CampSprite {
   return build(k => {
     const cv = new Cv(14, h + 10, k);
     const gy = h + 6;
@@ -682,7 +689,7 @@ export function pole(h = 50): CampSprite {
 }
 
 /** Mori's orange sleeping bag on a ridged foam mat, quilted baffles, a rolled jacket for a pillow */
-export function bedroll(): CampSprite {
+function bedroll_(): CampSprite {
   return build(k => {
     const cv = new Cv(56, 18, k);
     const gy = 12, x0 = 8;
@@ -740,3 +747,17 @@ export function jacketScrap(): CampSprite {
 }
 
 export { mix, shade };
+export const domeTent = cached('domeTent', domeTent_);
+export const leanTo = cached('leanTo', leanTo_);
+export const firePit = cached('firePit', firePit_);
+export const cookBench = cached('cookBench', cookBench_);
+export const dryingRack = cached('dryingRack', dryingRack_);
+export const researchTable = cached('researchTable', researchTable_);
+export const storage = cached('storage', storage_);
+export const chunkBed = cached('chunkBed', chunkBed_);
+export const electronics = cached('electronics', electronics_);
+export const logBench = cached('logBench', logBench_);
+export const woodPile = cached('woodPile', woodPile_);
+export const lantern = cached('lantern', lantern_);
+export const pole = cached('pole', pole_);
+export const bedroll = cached('bedroll', bedroll_);
