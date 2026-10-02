@@ -209,22 +209,22 @@ function firePit_(lit: boolean): CampSprite {
     // back stones (the far half of the ring)
     for (let i = 0; i < 8; i++) {
       const a = Math.PI + (i + 0.5) / 8 * Math.PI;
-      stone(cv, cx + Math.cos(a) * 15.5, gy - 3 + Math.sin(a) * 4.2, 3 + hash2(i, 1, 3) * 0.8, 2.4 + hash2(i, 2, 3) * 0.6, i + 10, Math.cos(a) < 0 ? 1 : -1);
+      stone(cv, cx + Math.cos(a) * 15.5, gy - 4.5 + Math.sin(a) * 4.4, 3 + hash2(i, 1, 3) * 0.8, 2.4 + hash2(i, 2, 3) * 0.6, i + 10, Math.cos(a) < 0 ? 1 : -1);
     }
     // ash bed
-    cv.ell(cx, gy - 3, 12.5, 3.4, (nx, ny, x, y) => cv.tone(hash2(x, y, 8) < 0.3 ? RP.iron : RP.ash, 0.22 + (noise2(x * 0.4, y * 0.7, 4) - 0.5) * 0.5 - (1 - Math.hypot(nx, ny)) * 0.15, x, y, 0.7));
+    cv.ell(cx, gy - 4, 12.5, 3.8, (nx, ny, x, y) => cv.tone(hash2(x, y, 8) < 0.3 ? RP.iron : RP.ash, 0.22 + (noise2(x * 0.4, y * 0.7, 4) - 0.5) * 0.5 - (1 - Math.hypot(nx, ny)) * 0.15, x, y, 0.7));
     // charred logs crossing, a half-burnt stick poking out
-    cv.cyl(cx - 9, gy - 2, cx + 6, gy - 7, 1.6, RP.iron, { grain: 0.4, seed: 2 });
-    cv.cyl(cx + 9, gy - 2, cx - 5, gy - 7, 1.6, RP.iron, { grain: 0.4, seed: 3 });
-    cv.cyl(cx - 3, gy - 1, cx + 14, gy - 4, 1.2, RP.drift, { grain: 0.3, seed: 5 });
-    for (let t = 0; t < 1; t += 0.12) { const x = cx - 3 + 9 * t, y = gy - 1 - 1.5 * t; cv.t(x, y, RP.iron, 0.25); }
+    cv.cyl(cx - 9, gy - 4, cx + 5, gy - 10, 1.7, RP.iron, { grain: 0.45, seed: 2 });
+    cv.cyl(cx + 9, gy - 4, cx - 4, gy - 10, 1.7, RP.iron, { grain: 0.45, seed: 3 });
+    cv.cyl(cx - 3, gy - 4, cx + 15, gy - 7, 1.3, RP.drift, { grain: 0.3, seed: 5 });
+    for (let t = 0; t < 1; t += 0.12) { const x = cx - 3 + 8 * t, y = gy - 4 - 1.3 * t; cv.t(x, y, RP.iron, 0.25); }
     // coals: cracks in the logs and embers in the ash
     const coal = (x: number, y: number, hot: boolean) => {
       if (!cv.op(x, y)) return;
       cv.set(x, y, lit ? hex(hot ? '#ffb04a' : '#c8501c') : hot ? RP.ash[5] : RP.iron[0]);
       glow.set(x, y, hex(hot ? '#ffcf70' : '#ff7a2a'));
     };
-    for (const [x, y, h] of [[cx - 4, gy - 5, 1], [cx - 1, gy - 6, 0], [cx + 3, gy - 5, 1], [cx + 1, gy - 4, 0], [cx - 6, gy - 3, 0], [cx + 5, gy - 3, 0], [cx, gy - 3, 1], [cx - 2, gy - 2, 0], [cx + 7, gy - 4, 0]] as const) coal(x, y, !!h);
+    for (const [x, y, h] of [[cx - 4, gy - 7, 1], [cx - 1, gy - 9, 0], [cx + 3, gy - 7, 1], [cx + 1, gy - 6, 0], [cx - 6, gy - 5, 0], [cx + 5, gy - 5, 0], [cx, gy - 5, 1], [cx - 2, gy - 4, 0], [cx + 7, gy - 6, 0], [cx - 8, gy - 6, 0], [cx + 2, gy - 9, 1]] as const) coal(x, y, !!h);
     // front stones
     for (let i = 0; i < 7; i++) {
       const a = (i + 0.5) / 7 * Math.PI;
