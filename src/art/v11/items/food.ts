@@ -91,20 +91,22 @@ art('berry_dusk', fp(1, 1), p => {
   for (const [x, y, r] of [[14, 13, 3.6], [9, 16, 3.4], [16.5, 19, 3.2], [11, 20.5, 2.8], [19, 14.4, 2.6]] as number[][]) berry(p, x, y, r, D, { bloom: true });
 });
 
-// ------------------------------------------------------------------ goldcurrants (1x1): tiny golden berries in a hanging cluster
+// ------------------------------------------------------------------ goldcurrants (1x1): tiny golden berries hanging in three little strings
 art('berry_gold', fp(1, 1), p => {
   const Gc = rp('#4a2a04', '#8a5808', '#c89012', '#f0c42c', '#fce678', '#fffbe0');
-  const stem = bez([5, 2], [10, 5], [13, 21], 14);
-  p.tube(stem, 0.5, RP.olive, { lift: 0.3 });
-  leafBlade(p, bez([6, 3], [11, -0.4], [16.5, 1.6], 6), t => 1.9 * Math.sin(Math.PI * Math.min(1, t + 0.05)) + 0.3, RP.leaf, { veins: 0, gloss: true });
-  const c = curve(stem);
-  // a dense cone of berries, back ones first; each translucent, a bright core on its shadow side
-  const pos: [number, number, number][] = [];
-  for (let i = 0; i < 18; i++) { const t = 0.22 + (i / 17) * 0.74, q = c.at(t), sp = 4.6 * (1 - (t - 0.22) * 0.9); pos.push([q.x + (hash(i, 1, 3) - 0.5) * 2 * sp, q.y + (hash(i, 2, 3) - 0.5) * 2, 1.7 + hash(i, 3, 3) * 0.5]); }
-  pos.sort((a, b) => a[1] - b[1]);
-  for (const [x, y, r] of pos) {
-    p.ball(x, y, r, r, Gc, { spec: 0.86, lift: 0.3 });
-    p.px(Math.round(x + 0.5), Math.round(y + 0.5), Gc[4]);
+  p.tube(bez([2, 4], [12, 1.5], [22, 5], 12), 0.6, RP.bark, { lift: 0.3 });
+  leafBlade(p, bez([9, 3], [13, -0.5], [18, 0.6], 6), t => 1.8 * Math.sin(Math.PI * Math.min(1, t + 0.05)) + 0.3, RP.leaf, { veins: 0, gloss: true });
+  // each string: a fine stalk, four berries alternating down it, each one round and lit, a dark gap below it
+  const strings: [Pt, Pt, Pt][] = [[[6, 3.4], [3.6, 12], [5.5, 21]], [[12.5, 2.6], [14, 11], [12, 21.5]], [[19, 3.8], [21, 10], [18.5, 18]]];
+  for (const [a, b, c] of strings) {
+    const pts = bez(a, b, c, 12), cv = curve(pts);
+    p.tube(pts, 0.4, RP.olive, { lift: 0.3 });
+    for (let i = 0; i < 4; i++) {
+      const t = 0.25 + i * 0.24, q = cv.at(t), s = i % 2 ? 1 : -1, r = 2.2 - i * 0.12;
+      const m = p.ball(q.x + s * 1.2, q.y + 0.4, r, r, Gc, { spec: 0.86, lift: 0.3 });
+      p.drop(m, -0.45, 0, 1);
+      p.px(Math.round(q.x + s * 1.2 + 0.7), Math.round(q.y + 1), Gc[4]);
+    }
   }
 });
 
@@ -160,28 +162,37 @@ art('vil_tea', fp(1, 2), p => {
 // ------------------------------------------------------------------ fresh fish (2x1): a snapper, wet and gleaming
 art('v10_fish', fp(2, 1), p => {
   const Fs = rp('#3a0e14', '#6a1e24', '#a4383a', '#d06a5e', '#f0a48e', '#fff0e4');
-  const f = frame(40, 12, 4, 12.5); // tail -> nose
-  const w = (u: number) => (u < 2 ? 2 : u < 30 ? 2 + Math.sin(((u - 2) / 28) * Math.PI * 0.86) ** 0.8 * 7.2 : 7.2 * Math.sqrt(Math.max(0, 1 - ((u - 30) / 7) ** 2)) * 0.98);
-  // tail fin and the soft fins (translucent), then the body over them
-  const tail = p.maskPoly([46, 4, 47, 6, 44, 12, 47, 19, 46, 21, 39, 13.5, 39, 10.5]);
-  p.fill(tail, (x, y) => (Math.abs(y - 12) % 3 < 1 ? H('#c45a50', 230) : H('#e48a74', 200)));
-  const dorsal = p.maskPoly([12, 6, 16, 2.6, 26, 2.4, 34, 5, 34, 7, 12, 8]);
-  p.fill(dorsal, (x, y) => (x % 3 === 0 ? H('#b84a44', 240) : H('#e88a76', 190)));
-  p.fill(p.maskPoly([22, 18, 30, 17, 29, 22, 24, 21.5]), (x) => (x % 2 ? H('#e48a74', 200) : H('#c45a50', 230)));
-  const m = p.maskFn((x, y) => { const [u, v] = f.loc(x, y); return u >= 0 && u <= 37 && Math.abs(v) <= w(u) * (v > 0 ? 0.92 : 1); });
-  p.relief(m, Fs, (x, y) => { if (!p.at(m, x, y)) return 0; const [u, v] = f.loc(x, y); const ww = Math.max(1, w(u)); return Math.sqrt(Math.max(0, 1 - (v / ww) ** 2)) * 5.5; }, { spec: 0.93, lift: 0.3, dither: 0.3 });
-  // silvery-pink belly, scale rows, sky-blue spots
-  p.fill(m, (x, y) => { const [u, v] = f.loc(x, y); const ww = Math.max(1, w(u)); const k = v / ww; if (k < -0.45) return -1; const sc = ((u * 0.9 + (Math.floor(v / 1.5) % 2) * 0.7) % 1.8) < 0.45; return k > 0.35 ? (sc ? H('#f4dcd4') : H('#fcece4')) : sc ? tone(p.get(x, y), -0.1) : -1; });
-  for (let i = 0; i < 12; i++) { const u = 6 + hash(i, 1, 4) * 24, v = -2 - hash(i, 2, 4) * 4; const [x, y] = f.at(u, v); if (p.at(m, x, y)) p.px(x, y, H('#8ad8f0')); }
-  // gill line, the golden eye, mouth
-  for (let v = -4; v <= 4; v++) { const [x, y] = f.at(28.5 - Math.abs(v) * 0.25, v); if (p.at(m, x, y)) p.px(x, y, Fs[1]); }
-  const [ex, ey] = f.at(32.4, -2);
-  p.ball(ex, ey, 1.8, 1.8, RP.amber, { lift: 0.5 });
-  p.px(Math.round(ex), Math.round(ey), H('#0a0806')); p.px(Math.round(ex) - 1, Math.round(ey) - 1, H('#ffffff'));
-  const [mx, my] = f.at(36.4, 1.2); p.px(mx, my, Fs[0]);
-  // wet shine: long highlight streaks along the back, droplets
-  p.fill(m, (x, y) => { const [u, v] = f.loc(x, y); const ww = Math.max(1, w(u)); return Math.abs(v / ww + 0.5) < 0.08 && u > 8 && u < 30 ? H('#ffffff') : -1; });
-  for (const [x, y] of [[14, 9], [22, 15], [30, 8]] as Pt[]) p.droplet(x, y);
+  const x0 = 3, x1 = 38;
+  const T = (x: number) => (x + 0.5 - x0) / (x1 - x0);
+  const top = (t: number) => 12 - 8.6 * (t < 0.3 ? Math.sin((t / 0.3) * Math.PI / 2) ** 0.75 : 1 - ((t - 0.3) / 0.7) ** 1.5 * 0.74);
+  const bot = (t: number) => 12 + 6.6 * (t < 0.36 ? Math.sin((t / 0.36) * Math.PI / 2) ** 0.85 : 1 - ((t - 0.36) / 0.64) ** 1.4 * 0.7);
+  // fins first (translucent): the forked tail, spiny dorsal, the anal fin and the pectoral
+  const finC = (x: number, y: number, k: number) => ((x + y * k) % 3 < 1 ? H('#b84a44', 235) : H('#ec947e', 200));
+  const tail = p.maskPoly([37, 10, 46.5, 2.5, 44, 12, 46.5, 21.5, 37, 14]);
+  p.fill(tail, (x, y) => finC(x, y, 0));
+  const dorsal = p.maskFn((x, y) => { const t = T(x); return t > 0.3 && t < 0.9 && y < top(t) + 0.5 && y > top(t) - 3.8 + Math.abs(Math.sin(x * 1.4)) * 1.4; });
+  p.fill(dorsal, (x, y) => finC(x, y, 0.4));
+  const anal = p.maskFn((x, y) => { const t = T(x); return t > 0.62 && t < 0.88 && y > bot(t) - 0.5 && y < bot(t) + 2.6; });
+  p.fill(anal, (x, y) => finC(x, y, -0.4));
+  // the body: red-pink back to a silvery belly, sky-blue spots, scale rows, a wet gleam
+  const body = p.maskFn((x, y) => { const t = T(x); return t >= 0 && t <= 1 && y + 0.5 >= top(t) && y + 0.5 <= bot(t); });
+  p.fill(body, (x, y) => {
+    const t = T(x), tp = top(t), bt = bot(t), k = (y + 0.5 - tp) / Math.max(1, bt - tp);
+    const l = p.lum(0, (k - 0.5) * 2, Math.sqrt(Math.max(0, 1 - ((k - 0.5) * 2) ** 2))) + 0.1;
+    const sc = ((x + (y % 2) * 1.5) % 3) < 1 && t > 0.3;
+    if (k > 0.62) return sc ? H('#f0d4cc') : H('#fbe8e0');
+    return p.tn(Fs, l + (sc ? -0.08 : 0), x, y, 0.35);
+  });
+  for (let i = 0; i < 14; i++) { const x = Math.round(x0 + 11 + hash(i, 1, 4) * 22), t = T(x); const y = Math.round(top(t) + 1.5 + hash(i, 2, 4) * (bot(t) - top(t)) * 0.4); if (p.at(body, x, y)) p.px(x, y, H('#9ae0f4')); }
+  p.fill(body, (x, y) => { const t = T(x); return t > 0.2 && t < 0.85 && Math.abs(y + 0.5 - (top(t) + 1.6)) < 0.5 ? H('#fff4f0') : -1; });
+  // gill cover, the pectoral fin over the body, the golden eye, the mouth
+  for (let y = 6; y < 18; y++) { const x = Math.round(13 + Math.abs(y - 12) * 0.25); if (p.at(body, x, y)) p.px(x, y, Fs[1]); }
+  const pec = p.maskPoly([15, 13, 21, 11, 22, 14, 16, 15]);
+  p.fill(pec, (x, y) => finC(x, y, 0.2));
+  p.ball(8.4, 9.6, 2, 2, RP.amber, { lift: 0.5 });
+  p.px(8, 10, H('#0a0806')); p.px(9, 10, H('#0a0806')); p.px(7, 9, H('#ffffff'));
+  p.pts([[3, 12], [4, 12], [3, 13]], Fs[0]);
+  for (const [x, y] of [[20, 8], [27, 15], [32, 9]] as Pt[]) p.droplet(x, y);
 });
 
 // ================================================================== lures

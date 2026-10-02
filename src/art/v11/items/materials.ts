@@ -305,21 +305,25 @@ art('driftglass', fp(1, 1), p => {
   glass(18, 17.6, 3.8, 3.2, rp('#3a1a04', '#6e3608', '#a65e12', '#d68e2a', '#f2c060', '#fff0c0'), 9, 0.2);
 });
 
-// ------------------------------------------------------------------ kelp ribbon (1x2): a wet, leathery blade with ruffled edges, its float and stipe
+// ------------------------------------------------------------------ kelp ribbon (1x2): a long wet blade, ruffled and wavy, air bladders on its stipe
 art('kelp', fp(1, 2), p => {
-  const K = rp('#141006', '#2c240c', '#4a3e14', '#6c5c20', '#928032', '#e0d28a');
-  const pts = bez([11, 39], [2.5, 22], [15, 3], 30);
+  const K = rp('#141006', '#2c240c', '#4a3e14', '#6c5c20', '#94823a', '#e4d690');
+  const pts: Pt[] = [];
+  for (let i = 0; i <= 30; i++) { const t = i / 30; pts.push([12 + Math.sin(t * Math.PI * 2.2 + 0.4) * 4.2, 36 - t * 33]); }
   const c = curve(pts);
-  const w = (t: number) => (t < 0.08 ? 1.5 + t * 30 : 4.6 * (1 - t) ** 0.3 + 0.5);
-  const ruffle = (q: { u: number; t: number }) => (q.t > 0.1 ? Math.sin(q.u * 1.1) * 0.8 : 0);
-  const m = p.maskFn((x, y) => { const q = c.loc(x, y); if (q.t < 0 || q.t > 1) return false; return Math.abs(q.v) <= w(clamp(q.t, 0, 1)) + ruffle(q) * Math.sign(q.v); });
-  p.relief(m, K, (x, y) => { if (!p.at(m, x, y)) return 0; const q = c.loc(x, y); const k = Math.abs(q.v) / (w(clamp(q.t, 0, 1)) + 1); return (1 - k * k) * 2.4 + (k > 0.6 ? Math.sin(q.u * 1.1) * 0.5 : 0); }, { spec: 0.92, lift: 0.3 });
-  // translucent amber edges where the light comes through, a wet streak down the middle
-  p.fill(m, (x, y) => { const q = c.loc(x, y); const ww = w(clamp(q.t, 0, 1)); return Math.abs(q.v) > ww - 0.6 && q.t > 0.1 ? K[4] : Math.abs(q.v + 1) < 0.45 && q.t > 0.15 && q.t < 0.9 ? K[5] : -1; });
-  p.ball(10.6, 41, 3, 3.2, K, { spec: 0.9, lift: 0.5 });
-  p.tube([[10.4, 43.6], [12, 46.6]], 1.1, K, { lift: -0.2 });
+  const w = (t: number) => (t < 0.06 ? 1 + t * 30 : 3.6 * (1 - t) ** 0.25 + 0.5);
+  // both edges ruffle in short waves (the right one more), so it reads as a frilled ribbon
+  const edge = (q: { u: number; v: number; t: number }) => w(clamp(q.t, 0, 1)) + (q.t > 0.08 ? Math.sin(q.u * 1.2 + (q.v > 0 ? 0 : 1.6)) * (q.v > 0 ? 1 : 0.5) : 0);
+  const m = p.maskFn((x, y) => { const q = c.loc(x, y); return q.t >= 0 && q.t <= 1 && Math.abs(q.v) <= edge(q); });
+  p.lit(m, K, (x, y) => { const q = c.loc(x, y); const k = q.v / (edge(q) + 0.5); return 0.6 - k * 0.3 + Math.sin(q.u * 1.2) * 0.07; }, 0.35);
+  p.fill(m, (x, y) => { const q = c.loc(x, y); const ww = w(clamp(q.t, 0, 1)); return Math.abs(q.v + ww * 0.35) < 0.45 && q.t > 0.1 && q.t < 0.94 ? K[5] : -1; });
+  p.fill(m, (x, y) => (!p.at(m, x - 1, y) ? K[4] : -1));
+  // the stipe with two air bladders, down to the bottom of the cell
+  p.tube([[12.6, 36], [11.5, 42], [12.5, 47]], 1, K, { lift: -0.1 });
+  p.ball(10.2, 40.6, 2.4, 2.6, K, { spec: 0.9, lift: 0.6 });
+  p.ball(14.4, 44, 2, 2.2, K, { spec: 0.9, lift: 0.4 });
   p.glint(9, 39);
-  for (const [x, y] of [[5, 24], [12, 12], [8, 32]] as Pt[]) p.droplet(x, y);
+  for (const [x, y] of [[6, 22], [14, 10], [10, 30]] as Pt[]) p.droplet(x, y);
 });
 
 // ------------------------------------------------------------------ flint nodule (1x1): a chalky cortex, broken open on glassy black flint

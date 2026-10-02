@@ -237,11 +237,12 @@ art('fos_leaf', fp(2, 1), p => {
   const pr = p.mask();
   const mark = (x: number, y: number) => { x = Math.round(x); y = Math.round(y); if (p.at(slab, x, y) && p.at(slab, x, y + 2)) pr[y * p.w + x] = 1; };
   for (let i = 0; i <= 60; i++) { const q = fc.at(i / 60); mark(q.x, q.y); }
-  for (let i = 0; i < 16; i++) {
-    const t = 0.05 + i * 0.058, q = fc.at(t), L = 6.2 * (1 - t) ** 0.4 + 1;
-    for (const s of [-1, 1]) for (let kk = 1; kk <= L; kk += 0.5) { const x = q.x - q.ty * s * kk + q.tx * kk * 0.55, y = q.y + q.tx * s * kk + q.ty * kk * 0.55; mark(x, y); if (kk < L - 1.5) mark(x + q.tx, y + q.ty); }
+  for (let i = 0; i < 11; i++) {
+    const t = 0.06 + i * 0.085, q = fc.at(t), L = 5.6 * (1 - t) ** 0.5 + 1.2;
+    for (const s of [-1, 1]) for (let kk = 1; kk <= L; kk += 0.5) mark(q.x - q.ty * s * kk + q.tx * kk * 0.7, q.y + q.tx * s * kk + q.ty * kk * 0.7);
   }
-  p.fill(pr, (x, y) => { const tl = !p.at(pr, x - 1, y) || !p.at(pr, x, y - 1), br = !p.at(pr, x + 1, y) || !p.at(pr, x, y + 1); const c = p.get(x, y); return tl && !br ? tone(c, -0.5) : br && !tl ? tone(c, 0.2) : tone(c, -0.3); });
+  // the print is a thin carbon film: dark brown in the hollow, a lit lip on its lower right
+  p.fill(pr, (x, y) => { const tl = !p.at(pr, x - 1, y) || !p.at(pr, x, y - 1), br = !p.at(pr, x + 1, y) || !p.at(pr, x, y + 1); const c = mix(p.get(x, y), H('#2e2012'), 0.62); return tl && !br ? tone(c, -0.4) : br && !tl ? tone(p.get(x, y), 0.3) : c; });
 });
 
 // ------------------------------------------------------------------ fossil serpent tooth (1x2): black, curved, grooved, still sharp

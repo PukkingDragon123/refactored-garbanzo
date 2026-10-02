@@ -17,7 +17,7 @@ import { Pen, RAMP, rp, H, hash, alpha, tone, clamp, mix } from '../../icons/pen
 import type { Ramp, Mask, Pt, Shade } from '../../icons/pen';
 import { frame, curve, bez, lens, ring, halo, sparkle, wisp } from '../../icons/parts';
 import { PixelBuffer } from '../../pixel';
-import { hex, shade, withAlpha, A as AL } from '../../color';
+import { hex, shade, withAlpha, A as AL, R as CR, G as CG, B as CB, rgbToHsl, hslToRgb } from '../../color';
 import type { C } from '../../color';
 import { bayer, noise2, fbm2, noise1 } from '../../../core/math';
 import { ITEM_CELL, registerItemArt } from '../itemart';
@@ -471,6 +471,12 @@ function rimLight(b: PixelBuffer, k: number) {
     }
 }
 
+/** a hue-shifted darker tone that stays sane for near-white colours (whose HSL saturation is unstable) */
+function deep(c: C, k: number): C {
+  const [h, s, l] = rgbToHsl(CR(c), CG(c), CB(c));
+  return shade(hslToRgb(h, s * clamp(1 - (l - 0.72) * 3, 0.25, 1), l), k);
+}
+
 function selOutline(b: PixelBuffer, s: number, ok: (x: number, y: number) => boolean) {
   const W = b.w, Hh = b.h, d = b.data, src = d.slice();
   const op = (x: number, y: number) => x >= 0 && y >= 0 && x < W && y < Hh && (src[y * W + x] >>> 24) > 90;
@@ -486,7 +492,7 @@ function selOutline(b: PixelBuffer, s: number, ok: (x: number, y: number) => boo
       else if (op(x, y + 1)) nb = (y + 1) * W + x;
       if (nb < 0) continue;
       const c = (src[nb] | 0xff000000) >>> 0;
-      const col = dark ? mix(shade(c, -0.8), INK, 0.58) : mix(shade(c, -0.56), INK, 0.3);
+      const col = dark ? mix(deep(c, -0.8), INK, 0.58) : mix(deep(c, -0.56), INK, 0.3);
       d[y * W + x] = s >= 1 ? col : withAlpha(col, Math.round(255 * s));
     }
 }

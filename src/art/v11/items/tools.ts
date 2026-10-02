@@ -121,9 +121,10 @@ art('net', fp(2, 3, '##', '##', '#.'), p => {
   const ca = Math.cos(ang), sa = Math.sin(ang);
   const el = (x: number, y: number, k = 1) => { const dx = x + 0.5 - cx, dy = y + 0.5 - cy; const u = (dx * ca + dy * sa) / (rx * k), v = (-dx * sa + dy * ca) / (ry * k); return u * u + v * v; };
   // the sack hangs from the hoop's lower rim, tapering to a rounded tail
+  const tailC = curve([[cx + 2, cy + 4], [cx + 6, cy + 18], [cx + 9, cy + 27]]);
   const sack = p.maskFn((x, y) => {
     if (el(x, y) <= 1) return true;
-    const c = curve([[cx + 2, cy + 4], [cx + 6, cy + 18], [cx + 9, cy + 27]]).loc(x, y);
+    const c = tailC.loc(x, y);
     return c.t >= 0 && c.t <= 1.04 && Math.abs(c.v) <= 13.5 * (1 - c.t) ** 0.8 + 2.4 && y > cy - 2;
   });
   p.fill(sack, (x, y) => {
