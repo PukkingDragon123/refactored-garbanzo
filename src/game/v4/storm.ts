@@ -1,12 +1,10 @@
 // The storm. Something massive slams into the Kittiwake; the sky goes black in minutes, lightning,
 // mountainous swell, the lights stutter and everything loose starts sliding. In the flash of the
 // impact Chunk bolts. Joshu hands out the foul-weather gear, and only then does Mori notice the dog is
-// gone: the search leads to the galley, where something is whimpering under the mess table. Carry him
-// up to the wheelhouse, and then the rogue wave: a full cinematic as a wall of water rises off the
-// bow, curls over the boat... and blackout.
+// gone... until a WOOF comes from under the mess table and Chunk pops out on his own and leaps into
+// Mori's arms. Carry him up to the wheelhouse, and then the rogue wave: a full cinematic as a wall of
+// water rises out of the swell off the bow, lifts her up its face, curls over the boat... and blackout.
 
-import type { Renderer, Frame } from '../../gfx/renderer';
-import { packColor } from '../../gfx/renderer';
 import { game } from '../game';
 import type { ShipScene4 } from './ship';
 import { SPOTS, S4, UNDER_TABLE } from './ship';
@@ -14,189 +12,37 @@ import { LADDERS } from '../../art/ship5';
 import type { Actor } from '../../world/actor';
 import { startQuest } from '../quests';
 import { audio } from '../../core/audio';
-import { clamp, rand, noise2 } from '../../core/math';
+import { clamp, rand, smoothstep } from '../../core/math';
 import { Custom } from '../../world/props';
 import { updater } from '../../world/ocean';
 import * as FU from '../../art/ship4/furniture';
 import type { Interactable } from '../../world/npc';
 import { el } from '../../ui/ui';
-import { A, local } from '../assets';
-import { PixelBuffer } from '../../art/pixel';
-import { rgba } from '../../art/color';
+import { A } from '../assets';
+import { GiantWave } from './giantwave';
+import { HMAX } from '../../art/giantwave';
 import { climbFrame } from '../../art/ladder';
 
 const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 const F = () => game.save.flags;
 
-/**
- * The wall of water. Side view, rolling in from the bow: a long back slope, a steep concave face
- * toward the boat, a drawdown trough sucked out in front of it, and (as it breaks) a thick lip that
- * pitches forward and curls down over a shadowed barrel. Light glows through the thin water near
- * the crest; foam laces run down the face, whitewater boils at its foot, spray streams off the lip,
- * and lightning flares the whole face.
- */
-class GiantWave {
-  cx = 2500;
-  H = 0;
-  curl = 0;
-  on = false;
-  private spray: { x: number; y: number; vx: number; vy: number; life: number }[] = [];
-  private lastT = 0;
-  private grad: Frame | null = null;
-  constructor(readonly s: ShipScene4) {}
-  /** 1 x 64 vertical ramp of the water body: glowing thin water at the crest down to the deep */
-  private ramp(): Frame {
-    if (this.grad?.tex) return this.grad;
-    const stops: [number, [number, number, number]][] = [[0, [0.66, 0.88, 0.82]], [0.06, [0.46, 0.77, 0.72]], [0.2, [0.27, 0.56, 0.55]], [0.42, [0.14, 0.34, 0.37]], [0.7, [0.07, 0.19, 0.22]], [1, [0.04, 0.1, 0.13]]];
-    // 4 texels wide so sampling never bleeds in the atlas neighbours (it's drawn 2 px wide)
-    const b = new PixelBuffer(4, 64);
-    for (let y = 0; y < 64; y++) {
-      const t = y / 63;
-      let i = 0;
-      while (i < stops.length - 2 && t > stops[i + 1][0]) i++;
-      const [t0, c0] = stops[i], [t1, c1] = stops[i + 1];
-      const k = clamp((t - t0) / (t1 - t0));
-      const c = rgba(Math.round((c0[0] + (c1[0] - c0[0]) * k) * 255), Math.round((c0[1] + (c1[1] - c0[1]) * k) * 255), Math.round((c0[2] + (c1[2] - c0[2]) * k) * 255), 255);
-      for (let x = 0; x < 4; x++) b.set(x, y, c);
-    }
-    this.grad = local.add('storm:waveRamp', b, 0, 0);
-    return this.grad;
-  }
-  /** wave height above the undisturbed sea at column x (negative = the drawdown trough) */
-  private hAt(x: number) {
-    const H = this.H, d = x - this.cx;
-    const Lf = 120 + H * 0.3, Lb = 360 + H * 0.7;
-    if (d >= 0) return H * Math.exp(-((d / Lb) ** 2) * 1.8);
-    const u = -d / Lf;
-    if (u <= 1) return H * Math.pow(1 - u, 1.7);
-    const v = (u - 1) * Lf;
-    return v < 150 ? -H * 0.07 * Math.sin(Math.PI * v / 150) : 0;
-  }
-  draw(r: Renderer) {
-    if (!this.on || this.H < 2) return;
-    const s = this.s, t = s.time;
-    const dt = Math.min(0.1, Math.max(0, t - this.lastT));
-    this.lastT = t;
-    const L = s.weather.lightning;
-    const lit = (k: number, a = 1) => packColor(clamp(k + L * 0.25), clamp(k + L * 0.28), clamp(k + L * 0.3), a);
-    /** a teal water tone (0 deep .. 1 glowing thin water), flared by lightning */
-    const water = (k: number, a = 1) => packColor(clamp(0.05 + 0.5 * k + L * 0.3), clamp(0.13 + 0.68 * k + L * 0.3), clamp(0.16 + 0.6 * k + L * 0.32), a);
-    const FOAM = (a: number) => packColor(clamp(0.86 + L * 0.1), clamp(0.94 + L * 0.06), 0.97, a);
-    const SHADE = (a: number) => packColor(0.02, 0.07, 0.09, a);
-    const H = this.H, cx = this.cx, g = this.ramp();
-    const Lf = 120 + H * 0.3;
-    const x0 = Math.floor((cx - Lf - 170) / 2) * 2, x1 = cx + 360 + H * 1.4;
-    for (let x = x0; x < x1; x += 2) {
-      const h = this.hAt(x);
-      const sea = s.seaY(x);
-      if (h < 0) {
-        // the trough: the sea surface sucked down in front of the face, a dark scooped band
-        r.rect(x, Math.round(sea + h), 2, Math.round(-h) + 2, SHADE(0.8));
-        continue;
-      }
-      if (h < 1) continue;
-      const top = sea - h, d = x - cx;
-      const front = d < 0;
-      // the body: one stretched ramp column (bright near the crest, deep at the foot); the back is in shadow
-      // 3 px wide on a 2 px step: the overlap closes sub-pixel gaps when the camera is zoomed out
-      // (the light falls off smoothly over the crest: no hard seam where the face meets the back)
-      const face = clamp((26 - d) / 52);
-      r.draw(g, x, Math.round(top), 0.75, (h + 14) / 64, 0, lit(0.62 + 0.38 * face));
-      if (front) {
-        // foam lace sliding down the face
-        for (let k = 0; k < 6; k++) {
-          const yy = top + h * (0.08 + k * 0.15) + Math.sin(x * 0.05 + k * 1.7 + t * 1.3) * 4 + ((t * 18 + k * 7) % 12);
-          const n = noise2(x * 0.07, k * 3.1 + t * 0.5, 7);
-          if (n > 0.5) r.rect(x, Math.round(yy), 2, n > 0.7 ? 2 : 1, FOAM((0.3 + (n - 0.5) * 1.8) * (1 - k * 0.1)));
-        }
-        // a few streaks dragged down the steep upper face
-        if (-d < 40 + H * 0.2 && noise2(x * 0.11, Math.floor(t * 3), 3) > 0.82) r.rect(x, Math.round(top + 3), 2, Math.round(h * 0.4), FOAM(0.14));
-        // whitewater boiling at the foot of the face
-        if (-d > Lf * 0.5) {
-          const boil = 3 + noise2(x * 0.12, t * 2.2, 9) * 8;
-          r.rect(x, Math.round(sea - boil), 2, Math.round(boil) + 2, FOAM(0.75));
-        }
-      } else if (noise2(x * 0.03, t * 0.2, 11) > 0.72) {
-        // wind-torn streaks on the back
-        r.rect(x, Math.round(top + h * 0.3 + Math.sin(x * 0.02 + t) * 6), 2, 1, FOAM(0.3));
-      }
-      // the crest: a ragged white cap
-      const cap = 2 + Math.round(noise2(x * 0.18, t * 1.5, 5) * 4 * Math.min(1, h / 60));
-      r.rect(x, Math.round(top) - 1, 2, cap, FOAM(0.95));
-    }
-    // the lip: pitched forward from the crest and falling toward the trough (a thick tapering hook)
-    const top = s.seaY(cx) - H;
-    if (this.curl > 0.02) {
-      const c = this.curl;
-      const P0: [number, number] = [cx + 4, top + 2];
-      const Q: [number, number] = [cx - Lf * 0.62 * c, top - H * 0.1 * c];
-      const P1: [number, number] = [cx - Lf * 0.86 * c, s.seaY(cx - Lf * 0.86 * c) - H * (0.62 - 0.52 * c)];
-      // sample the curve finely and bin it into 2 px columns, so the lip, its barrel shadow and its
-      // foam skin are drawn as clean columns (no overlapping squares, no ladder of stripes)
-      const bins = new Map<number, { y0: number; y1: number; u: number; th: number }>();
-      let tipX = P0[0], tipY = P0[1];
-      for (let i = 0; i <= 360; i++) {
-        const u = i / 360;
-        const px = (1 - u) * (1 - u) * P0[0] + 2 * u * (1 - u) * Q[0] + u * u * P1[0];
-        const py = (1 - u) * (1 - u) * P0[1] + 2 * u * (1 - u) * Q[1] + u * u * P1[1];
-        const th = Math.max(3, H * (0.18 - 0.13 * u) * (0.5 + 0.5 * c));
-        const k = Math.floor(px / 2) * 2, a0 = py - th * 0.5, a1 = py + th * 0.5;
-        const b = bins.get(k);
-        if (!b) bins.set(k, { y0: a0, y1: a1, u, th });
-        else { b.y0 = Math.min(b.y0, a0); b.y1 = Math.max(b.y1, a1); b.u = Math.max(b.u, u); b.th = Math.max(b.th, th); }
-        tipX = px; tipY = py;
-      }
-      for (const [k, b] of bins) {
-        // the barrel: the face in shadow under the lip
-        const faceY = s.seaY(k) - Math.max(0, this.hAt(k));
-        if (faceY > b.y1) r.rect(k, Math.round(b.y1), 2, Math.round(faceY - b.y1), SHADE(0.45 + 0.2 * b.u));
-        const y0 = Math.round(b.y0), hh = Math.max(2, Math.round(b.y1 - b.y0));
-        r.rect(k, y0, 2, hh, water(0.72 - 0.34 * b.u));
-        // darker underside, glowing thin top, foam skin
-        r.rect(k, Math.round(b.y1 - b.th * 0.32), 2, Math.max(1, Math.round(b.th * 0.32)), water(0.18));
-        r.rect(k, y0 + 2, 2, Math.max(1, Math.round(b.th * 0.2)), water(1, 0.8));
-        r.rect(k, y0, 2, 2 + (noise2(k * 0.2, t * 2, 13) > 0.62 ? 1 : 0), FOAM(0.95));
-      }
-      // the tip explodes into foam where it meets the water
-      if (c > 0.85) for (let k = 0; k < 10; k++) r.rect(Math.round(tipX + rand.range(-14, 14)), Math.round(tipY + rand.range(-10, 6)), 3, 2, FOAM(0.85));
-    }
-    // spray streaming back off the crest and the lip
-    const emit = Math.min(40, H * 0.12) * (0.4 + this.curl);
-    for (let i = 0; i < emit * dt * 10; i++) {
-      const ex = cx + rand.range(-30, 60) - this.curl * rand.range(0, Lf * 0.6);
-      this.spray.push({ x: ex, y: top + rand.range(-6, 10), vx: rand.range(30, 140), vy: rand.range(-80, -10), life: rand.range(0.5, 1.3) });
-    }
-    for (let i = this.spray.length - 1; i >= 0; i--) {
-      const q = this.spray[i];
-      q.life -= dt; q.vy += 60 * dt; q.x += q.vx * dt; q.y += q.vy * dt;
-      if (q.life <= 0) { this.spray.splice(i, 1); continue; }
-      r.rect(Math.round(q.x), Math.round(q.y), 2, 1, FOAM(Math.min(0.8, q.life)));
-    }
-    if (this.spray.length > 600) this.spray.splice(0, this.spray.length - 600);
-  }
-}
-
-
 // ---------------------------------------------------------------- the storm
 // The steps, each of which survives a reload (the flag that marks it done in brackets):
 //  1. the calm before, then IMPACT [v4:stormStarted]: in the white flash Chunk bolts and is gone
-//  2. Joshu hands out the foul-weather gear in the bunk room [v4:raincoat]; only then does Mori notice
-//     that Chunk is missing
-//  3. the search: in the galley something whimpers under the mess table, the hanging cloth shakes;
-//     look under it [v4:chunkFound] and Mori picks him up
-//  4. carry him up the companionway to the wheelhouse: the rogue wave [v4:bridge]
+//  2. Joshu hands out the foul-weather gear in the bunk room; only then does Mori notice that Chunk is
+//     missing. A bark from under the mess table, the cloth bursts up and out he pops, runs to Mori and
+//     jumps into his arms [v4:raincoat, v4:chunkFound: both set together at the end of it]
+//  3. carry him up the companionway to the wheelhouse: the rogue wave [v4:bridge]
 
 type Lv = 'lower' | 'deck';
 const lvOf = (y: number): Lv => (y > S4.lower.ceil ? 'lower' : 'deck');
 /** Joshu hands out the gear by the bunk room locker; Jenna waits her turn beside him */
 const GEAR_JOSHU = 386, GEAR_JENNA = 408;
-/** where Mori crouches to look under the table (just left of it, by the dog bowls) */
-const LOOK_X = 279;
 /** the wheelhouse: Joshu at the wheel, Jenna holding on behind him */
 const helmX = () => SPOTS.helm[0] - 14, JENNA_BRIDGE = 244;
 
 /** this storm's session state (the scene is rebuilt on a reload, and runStorm with it) */
-interface StormRun { s: ShipScene4; heard: boolean; crewReady: boolean; whimperT: number; barkT: number; li: number; dead: boolean }
+interface StormRun { s: ShipScene4; crewReady: boolean; dead: boolean }
 let run: StormRun | null = null;
 
 /** game-time ticker on the scene's stage (dies with the scene) */
@@ -328,7 +174,7 @@ export async function runStorm(s: ShipScene4) {
   if (F()['v4:bridge']) return;
   if (s.phase === 'storm' || s.phase === 'wave') return;
   s.phase = 'storm';
-  run = { s, heard: false, crewReady: false, whimperT: 3, barkT: 9, li: 0, dead: false };
+  run = { s, crewReady: false, dead: false };
   // nobody wanders off on their daily routine from here on
   (s.story as unknown as { crew?: { stop(): void } | null })?.crew?.stop();
   s.sky.birds = false;
@@ -421,16 +267,22 @@ function restoreStorm(s: ShipScene4) {
     put(s, s.joshu, helmX(), S4.bridge.floor, 1, 'steerHard');
     put(s, s.jenna, JENNA_BRIDGE, S4.bridge.floor, 1, 'scared');
   }
+  if (geared && !f['v4:chunkFound']) {
+    // a save from before he came out on his own (the old search): he's back in Mori's arms
+    f['v4:chunkFound'] = true;
+    game.persist();
+    setTimeout(() => { if (run && s.carrying) { audio.play('callBark', { vol: 0.4, pitch: 0.78 }); s.bark('chunk', 'Boof!', { expr: 'happy' }); } }, 900);
+  }
   if (f['v4:chunkFound']) {
     carryChunk(s);
     game.ui.toast('Carry Chunk up to the <b>wheelhouse</b> (the companionway ladder in the galley).', 'STORM', 'coral', 5000);
   } else {
     hideChunk(s);
-    game.ui.toast(geared ? 'Chunk is missing! Search below deck.' : 'Get your <b>foul-weather gear</b> from Joshu in the <b>bunk room</b>.', 'STORM', 'coral', 5000);
+    game.ui.toast('Get your <b>foul-weather gear</b> from Joshu in the <b>bunk room</b>.', 'STORM', 'coral', 5000);
   }
 }
 
-/** the storm while you play: loose things sliding, jolts and spray, the search, the trip to the wheelhouse */
+/** the storm while you play: loose things sliding, jolts and spray, the trip to the wheelhouse */
 function stormLife(s: ShipScene4) {
   const p = s.player, r = run!;
   const say = (l: Parameters<ShipScene4['say']>[0]) => s.say(l);
@@ -445,8 +297,8 @@ function stormLife(s: ShipScene4) {
     add(FU.cooler(), 'cooler', 170, S4.main.y, 44, 190);
     add(FU.crate(18, 14, FU.P.plank, true), 'crate2', 400, S4.main.y - 3, 360, 500);
   }
-  // storm life: extra jolts, spray over the rails, the whimpering under the table
-  let joltT = 5;
+  // storm life: extra jolts, spray over the rails, the cloth over Chunk's hiding place trembling
+  let joltT = 5, clothT = 4;
   tick(s, dt => {
     if (s.phase !== 'storm' || run !== r) return s.phase === 'wave' ? false : undefined;
     joltT -= dt;
@@ -461,31 +313,12 @@ function stormLife(s: ShipScene4) {
     const u = s.underTable;
     if (u) {
       u.shake = Math.max(0, u.shake - dt * 0.9);
-      // geared up and searching: the galley's where he is. Walking in, Mori hears him.
-      const inGalley = s.level() === 'lower' && p.state !== 'climb' && p.x > 196 && p.x < 340;
-      if (f['v4:raincoat'] && !f['v4:chunkFound'] && !r.heard && inGalley && !s.cutscene && !game.ui.blocking) {
-        r.heard = true;
-        whimper(s, 1);
-        p.body.showEmote('question', 2.2);
-        p.facing = UNDER_TABLE[0] >= p.x ? 1 : -1;
-        game.ui.bubbles.clear();
-        s.bark('mori', '...What was that? Something under the table?', { expr: 'surprised' });
-      }
-      // every so often the cloth trembles and something whimpers (louder close by)
-      r.whimperT -= dt;
-      if (r.whimperT <= 0 && f['v4:raincoat'] && !f['v4:chunkFound']) {
-        r.whimperT = rand.range(3.5, 6);
-        const near = s.level() === 'lower' && Math.abs(p.x - UNDER_TABLE[0]) < 150;
-        if (near || r.heard) whimper(s, near ? 1 : 0.5);
-      }
-    }
-    // search barks, until he hears him
-    if (f['v4:raincoat'] && !f['v4:chunkFound'] && !r.heard) {
-      r.barkT -= dt;
-      if (r.barkT <= 0) {
-        r.barkT = 11;
-        const lines = ['Chunk! Buddy! Where are you?!', 'He hates thunder. He hides somewhere small and dark...', 'Not in the bunks... think. Small. Dark. Near food?'];
-        if (!game.ui.bubbles.active && !s.cutscene) s.bark('mori', lines[r.li++ % lines.length], { expr: 'worried' });
+      // now and then the cloth trembles (something under there doesn't like the thunder)
+      clothT -= dt;
+      if (clothT <= 0 && !s.cutscene) {
+        clothT = rand.range(5, 9);
+        u.shake = Math.min(1, u.shake + 0.6);
+        if (s.level() === 'lower' && Math.abs(p.x - UNDER_TABLE[0]) < 150) audio.play('rustle', { vol: 0.25 });
       }
     }
     // reaching the wheelhouse with Chunk starts the finale
@@ -494,8 +327,6 @@ function stormLife(s: ShipScene4) {
       return false;
     }
   });
-  // quest markers: the gear, the galley, under the table
-  s.questPoints.push({ x: () => (UNDER_TABLE[0] - 20), y: () => L - 40, on: () => run === r && s.phase === 'storm' && !!F()['v4:raincoat'] && !F()['v4:chunkFound'] && !r.heard });
   // Joshu hands out the gear
   s.interact.push({
     get x() { return s.joshu.x; }, get y() { return s.joshu.y; }, w: 14, h: 18, label: 'Get your foul-weather gear', get standX() { return s.joshu.x - 20; },
@@ -503,31 +334,14 @@ function stormLife(s: ShipScene4) {
     enabled: () => run === r && s.phase === 'storm' && r.crewReady && !F()['v4:raincoat'] && !s.cutscene,
     action: () => giveGear(s),
   } as unknown as Interactable);
-  // look under the table
-  s.interact.push({
-    x: UNDER_TABLE[0], y: L, w: 16, h: 16, label: 'Look under the table', standX: LOOK_X,
-    quest: () => true,
-    enabled: () => run === r && s.phase === 'storm' && !!F()['v4:raincoat'] && !F()['v4:chunkFound'] && r.heard && !s.cutscene,
-    action: () => findChunk(s),
-  } as Interactable);
   // Jenna, holding on in the wheelhouse
   s.interact.push({
     get x() { return s.jenna.x; }, get y() { return s.jenna.y; }, w: 14, h: 18, label: 'Jenna!', get standX() { return s.jenna.x + 20; },
     enabled: () => run === r && s.phase === 'storm' && !!F()['v4:raincoat'] && !s.cutscene && lvOf(s.jenna.y) === 'deck' && !s.jenna.walking,
     action: () => say([
-      { who: 'jenna', text: F()['v4:chunkFound'] ? 'You found him!! Okay! Bridge! Go go go, I’m right behind you!' : 'I’m FINE! I’m totally fine! This is fine! FIND CHUNK!', expr: 'scared', style: 'shout' },
+      { who: 'jenna', text: 'He was under the TABLE! Of course he was! Okay! Bridge! Go go go, I’m right behind you!', expr: 'scared', style: 'shout' },
     ]).then(() => {}),
   } as unknown as Interactable);
-}
-
-/** a whimper from under the table, and the cloth trembles */
-function whimper(s: ShipScene4, k: number) {
-  const u = s.underTable;
-  if (!u) return;
-  u.shake = Math.min(1, u.shake + 0.8 * k);
-  audio.play('rustle', { vol: 0.35 * k });
-  setTimeout(() => audio.play('callSqueak', { vol: 0.3 * k, pitch: 0.75 }), 180);
-  s.chunk.react('tremble');
 }
 
 /** Joshu hands out the oilskins; only then does anyone notice who isn't there */
@@ -562,44 +376,92 @@ async function giveGear(s: ShipScene4) {
     { who: 'mori', text: '...Chunk?', expr: 'worried' },
     { who: 'jenna', text: 'He was right next to you when we got hit!', expr: 'scared' },
     { who: 'mori', text: 'CHUNK?!', style: 'shout', expr: 'scared' },
-    { who: 'joshu', text: 'He’ll have gone to ground somewhere. Find that dog and bring him up top, Mori. Jenna, with me. NOW.', expr: 'serious', style: 'shout' },
+  ]);
+  await chunkPopsOut(s);
+  await say([
+    { who: 'mori', text: 'CHUNK! You were under the TABLE?! Don’t DO that to me!', expr: 'surprised', style: 'shout' },
+    { who: 'chunk', text: 'Boof!', expr: 'happy' },
+    { who: 'jenna', text: 'Oh thank goodness. You absolute potato.', expr: 'happy' },
+    { who: 'joshu', text: 'Good. That’s everyone. Up to the wheelhouse, all of you, and hold on to that dog. NOW.', expr: 'serious', style: 'shout' },
   ]);
   F()['v4:raincoat'] = true;
-  game.persist();
-  s.hud?.refresh(true);
-  run!.barkT = 4;
-  s.cutscene = false;
-  void crewToBridge(s);
-  game.ui.toast('Chunk is missing! Search below deck: he hides somewhere small and dark when it thunders.', 'STORM', 'coral', 6000);
-}
-
-async function findChunk(s: ShipScene4) {
-  const p = s.player, c = s.chunk;
-  s.cutscene = true;
-  game.ui.bubbles.clear();
-  p.facing = c.x >= p.x ? 1 : -1;
-  p.poseOverride = 'kneel';
-  // lift the cloth
-  const u = s.underTable;
-  if (u) {
-    audio.play('rustle', { vol: 0.6 });
-    await new Promise<void>(res => tick(s, dt => { u.lift = Math.min(1, u.lift + dt * 3); u.shake = 0; if (u.lift >= 1) { res(); return false; } }));
-  }
-  c.faceTo(p.x);
-  c.react('tremble');
-  await s.say([
-    { who: 'mori', text: 'There you are. Hey. Hey, buddy.', expr: 'worried' },
-    { who: 'chunk', text: '*trembling all over*', expr: 'scared', close: false },
-    { who: 'mori', text: 'I know. It’s loud. I don’t like it either.', expr: 'sad' },
-    { who: 'mori', text: 'C’mere. I’ve got you. I’ve always got you.', expr: 'determined' },
-  ]);
-  p.poseOverride = null;
-  carryChunk(s);
   F()['v4:chunkFound'] = true;
   game.persist();
   s.hud?.refresh(true);
   s.cutscene = false;
+  void crewToBridge(s);
   game.ui.toast('Carry Chunk up to the <b>wheelhouse</b> (the companionway ladder in the galley).', 'STORM', 'coral', 6000);
+}
+
+/** a hop along an arc (x to x1 on the floor y, peaking hgt above it) in dur seconds of game time */
+function hop(s: ShipScene4, a: Actor, x1: number, y: number, hgt: number, dur: number): Promise<void> {
+  const x0 = a.x, y0 = a.y;
+  let k = 0;
+  a.terrain = null;
+  return new Promise(res => tick(s, dt => {
+    k = Math.min(1, k + dt / dur);
+    a.x = x0 + (x1 - x0) * k;
+    a.y = y0 + (y - y0) * k - Math.sin(k * Math.PI) * hgt;
+    if (k >= 1) { res(); return false; }
+  }));
+}
+
+/** a WOOF from under the mess table, and out he pops: the cloth flies up, he shoots out, shakes himself
+ *  off, barks again and makes a run for Mori, and leaps up into his arms */
+async function chunkPopsOut(s: ShipScene4) {
+  const p = s.player, c = s.chunk, L = S4.lower.floor;
+  const u = s.underTable;
+  const all = [p.body, s.jenna, s.joshu];
+  // something shuffles under there...
+  await wait(500);
+  if (u) u.shake = 1;
+  audio.play('rustle', { vol: 0.5 });
+  c.react('tremble');
+  await wait(450);
+  // ...WOOF!
+  audio.play('callBark', { vol: 0.55, pitch: 0.78 });
+  c.play('bark', 'hide').catch(() => {});
+  if (u) u.shake = 1;
+  game.ui.bubbles.clear();
+  s.bark('chunk', 'WOOF!', { expr: 'excited' });
+  for (const a of all) { a.faceTo(UNDER_TABLE[0]); a.showEmote('exclaim', 1.2); }
+  p.facing = UNDER_TABLE[0] >= p.x ? 1 : -1;
+  await wait(900);
+  // the cloth flips up and out he shoots, nose first
+  if (u) { u.shake = 0; u.lift = 1; }
+  audio.play('rustle', { vol: 0.7 });
+  audio.play('callBark', { vol: 0.45, pitch: 0.86 });
+  c.z = 60;
+  c.facing = p.x >= c.x ? 1 : -1;
+  c.setExpr('excited');
+  c.setAnim('jump');
+  c.react('stretch');
+  for (let i = 0; i < 10; i++) s.main.particles.spawn({ frame: A.soft, x: c.x + rand.range(-8, 8), y: L - rand.range(0, 6), vx: rand.range(-30, 30), vy: rand.range(-40, -5), life: rand.range(0.35, 0.6), size: 0.18, size1: 0.45, color: [0.9, 0.88, 0.8], alpha: 0.6, alpha1: 0 });
+  await hop(s, c, c.x + c.facing * 22, L, 16, 0.42);
+  c.terrain = s.st.terrain;
+  c.react('land');
+  s.underTable = null;
+  // a big shake from nose to tail, and another WOOF for good measure
+  c.setAnim('shake');
+  audio.play('rustle', { vol: 0.35 });
+  await wait(520);
+  c.play('bark', 'idle').catch(() => {});
+  audio.play('callBark', { vol: 0.5, pitch: 0.8 });
+  s.bark('chunk', 'WOOF! WOOF!', { expr: 'happy' });
+  await wait(450);
+  // zoom! straight for Mori, and up into his arms
+  const stop = p.x + p.facing * 14;
+  await Promise.race([c.walkTo(stop, 150, 'zoom'), wait(1800)]);
+  c.stopWalk();
+  c.faceTo(p.x);
+  c.setAnim('jump');
+  await hop(s, c, p.x + p.facing * 2, p.y - 18, 12, 0.3);
+  p.body.react('recoil');
+  audio.play('land', { vol: 0.35, pitch: 1.4 });
+  carryChunk(s);
+  c.setExpr('happy');
+  s.chunk.react('bounce');
+  await wait(300);
 }
 
 /** a reload during the finale: back in the wheelhouse with Chunk in his arms, and here it comes again */
@@ -630,7 +492,7 @@ export async function rogueWave(s: ShipScene4) {
   s.phase = 'wave';
   s.cutscene = true;
   s.hud?.show(false);
-  // no stray search barks over the finale
+  // no stray barks over the finale
   game.ui.bubbles.clear();
   p.walkTo(298, 50).catch(() => {});
   // Joshu at the wheel, Jenna made it up too (if either is still on the way, they're there now)
@@ -642,32 +504,50 @@ export async function rogueWave(s: ShipScene4) {
     { who: 'joshu', text: 'There’s my crew. Got the dog? Good lad.', expr: 'serious' },
     { who: 'jenna', text: 'Dad... Dad, what’s THAT?', expr: 'scared' },
   ]);
-  // the wall of water rises off the bow while the camera pulls back to take it all in
+  // the wall of water rises out of the swell off the bow while the camera pulls back to take it all in
   const wave = new GiantWave(s);
   wave.on = true;
-  wave.cx = 1100;
-  const L = s.st.addLayer('wave', 1, 0, 0.35, 0.42, 1);
-  const li = s.st.layers.indexOf(L), j = s.st.layers.findIndex(x => x.name === 'sea-near');
-  s.st.layers.splice(li, 1);
-  s.st.layers.splice(j, 0, L);
-  L.add(new Custom(0, rr => wave.draw(rr)));
+  wave.cx = 1340;
+  s.rogue = wave;
+  // its body behind the boat (the boat rides on its face), its curl and claws in front of everything
+  const addAt = (name: string, at: number) => {
+    const L = s.st.addLayer(name, 1, 0, 0.6, 0, 1);
+    s.st.layers.splice(s.st.layers.indexOf(L), 1);
+    s.st.layers.splice(at, 0, L);
+    return L;
+  };
+  addAt('wave-back', s.st.layers.findIndex(x => x.name === 'main')).add(new Custom(0, rr => wave.drawBack(rr)));
+  addAt('wave-front', s.st.layers.findIndex(x => x.name === 'sea-near') + 1).add(new Custom(0, rr => wave.drawFront(rr)));
   game.ui.letterbox(true);
   const cam = s.st.cam;
   cam.locked = true;
-  let T = 0, go = -1;
+  // room to frame the boat on the left and the wave on the right
+  s.st.maxX = 1260;
+  s.waveLift = true;
+  let T = 0, go = -1, goReq = false;
   const up = updater(dt => {
     T += dt;
     cam.zoom += (0.52 - cam.zoom) * Math.min(1, dt * 0.8);
-    cam.x += (1480 - cam.x) * Math.min(1, dt * 0.7);
+    cam.x += ((go >= 0 ? 470 : 560) - cam.x) * Math.min(1, dt * 0.7);
     cam.y += (205 - cam.y) * Math.min(1, dt * 0.7);
-    wave.H = Math.min(340, wave.H + dt * 75);
-    // it only comes in once everyone has had their moment
-    if (go >= 0) {
+    // it builds out of the swell as it comes: rising, steepening, the crest starting to pitch
+    const b = smoothstep(0, 5.5, T);
+    wave.H = HMAX * Math.pow(b, 0.8);
+    // it only comes in once everyone has had their moment, and once it has built up to its full height
+    if (goReq && go < 0 && T >= 5.6) go = 0;
+    if (go < 0) {
+      wave.cx = 1340 - 280 * b;
+      wave.curl = 0.22 * smoothstep(1.5, 5.5, T);
+    } else {
+      // here it comes: the lip pitches forward over the boat
       go += dt;
-      wave.cx -= dt * (140 + go * 150);
-      wave.curl = Math.min(1, wave.curl + dt * 0.5);
-      s.jolt = Math.min(0.3, s.jolt + dt * 0.06);
+      wave.cx -= dt * (110 + go * 170);
+      wave.curl = Math.max(wave.curl, 0.22 + 0.78 * smoothstep(0, 1.9, go));
     }
+    // she rides up the face: bow up, lifted
+    const sl = (s.seaY(330) - s.seaY(270)) / 60;
+    s.jolt += (clamp(sl * 0.9, -0.25, 0.25) - s.jolt) * Math.min(1, dt * 3);
+    wave.update(dt);
     if (Math.random() < dt * 0.6) s.sky.flash({ big: Math.random() < 0.25 });
   });
   s.st.layer('sea-horizon').add(up);
@@ -680,12 +560,14 @@ export async function rogueWave(s: ShipScene4) {
     { who: 'mori', text: 'I’ve got you, Chunk. I’ve got you.', style: 'whisper', expr: 'scared', auto: 1700, close: true },
   ]);
   for (const a of [s.jenna, s.joshu]) a.setAnim('brace');
-  go = 0;
+  const until = (f: () => boolean) => new Promise<void>(res => { const chk = () => (f() ? res() : requestAnimationFrame(chk)); chk(); });
+  goReq = true;
+  await until(() => go >= 0);
   audio.play('waveCrash', { vol: 0.8, pitch: 0.8 });
   // slow motion as the lip comes over
-  await wait(700);
+  await until(() => go >= 0.7);
   game.slowmo = 0.45;
-  await new Promise<void>(res => { const chk = () => (wave.cx < 420 ? res() : requestAnimationFrame(chk)); chk(); });
+  await until(() => wave.cx < 420);
   audio.play('waveCrash', { vol: 1 });
   audio.play('shipCrash', { vol: 1 });
   s.st.shake(14, 1.2);

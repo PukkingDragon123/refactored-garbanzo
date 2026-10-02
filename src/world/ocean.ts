@@ -19,6 +19,10 @@
 //                                                // (cutaway hull: pass the transformed BOAT_LAYOUT.cutLine)
 //     maskY(x): number                           // that polyline's y at world x (-Infinity outside it)
 //     fields: SurfaceField[]                     // extra height fields (the giant wave adds itself)
+//                                                // a field may also flatten the regular swell (calm) and paint
+//                                                // whole near-band columns itself (drawColumn)
+//     stormStrip(name): { buf, scroll, texW }    // CPU copy of a band's storm strip and its live scroll (the
+//                                                // giant wave paints the sea's own water into its art)
 //     caps: number                               // 0..1 passing whitecaps riding the moving water (off by default)
 //   weather.cruise may change at any time (the boat slowing / speeding up): the bands' drift and the
 //   swell phase integrate it, so nothing jumps
@@ -36,6 +40,7 @@ import * as O from '../art/ocean';
 import type { BandName, BandSpec } from '../art/ocean';
 import { Sheet, Spray, Weather, col } from './ocean-kit';
 import { Rng, clamp, hash2, lerp, smoothstep } from '../core/math';
+import type { PixelBuffer } from '../art/pixel';
 
 export { Weather } from './ocean-kit';
 export type { BandName } from '../art/ocean';
@@ -53,7 +58,12 @@ export interface SurfaceField {
   offset(x: number): number;
   /** how much of the field shows on the front band (0..1) */
   frontK?: number;
-  /** optional custom drawing for columns the field raises (giant wave face) */
+  /** 0..1: how much of the regular swell is flattened at x on the near band (the giant wave sucks the
+   *  sea flat around itself, so its own surface meets the band's without a step) */
+  calm?(x: number): number;
+  /** optional custom drawing for columns the field raises (giant wave face); return true when the field
+   *  painted the column itself: the band then skips it, overlays included. `top` is the column's surface
+   *  (after the cutaway mask), `bottom` the bottom of the view */
   drawColumn?(r: Renderer, x: number, top: number, w: number, bottom: number): boolean;
 }
 
@@ -238,6 +248,13 @@ export class Ocean {
     return y;
   }
 
+  /** 1 = the regular swell at x on the near band, 0 = flattened by a field (see SurfaceField.calm) */
+  private swellK(x: number) {
+    let c = 0;
+    for (const f of this.fields) if (f.calm) c = Math.max(c, f.calm(x));
+    return 1 - clamp(c);
+  }
+
   private fieldOffset(x: number, front = false) {
     let o = 0;
     for (const f of this.fields) o += f.offset(x) * (front ? f.frontK ?? 0.25 : 1);
@@ -246,7 +263,7 @@ export class Ocean {
 
   /** World y of the water surface on the boat plane (p = 1). */
   heightAt(x: number): number {
-    return this.bands.near.surf - this.elev(this.bands.near, x) + this.fieldOffset(x);
+    return this.bands.near.surf - this.elev(this.bands.near, x) * this.swellK(x) + this.fieldOffset(x);
   }
   slopeAt(x: number): number {
     return (this.heightAt(x + 3) - this.heightAt(x - 3)) / 6;
@@ -254,7 +271,7 @@ export class Ocean {
   /** Surface y of any band at x in that band's own layer coordinates. */
   bandSurfaceY(name: BandName, x: number) {
     const B = this.bands[name];
-    let y = B.surf - this.elev(B, x);
+    let y = B.surf - this.elev(B, x) * (name === 'near' ? this.swellK(x) : 1);
     if (name === 'near') y += this.fieldOffset(x);
     else if (name === 'front') y += this.fieldOffset(x / B.spec.p, true);
     return y;
@@ -319,9 +336,10 @@ export class Ocean {
       if (g.next() > n) break;
       n -= 1;
       const x = cx + g.range(-520, 520);
-      const e = this.elev(B, x) / B.ampSum;
+      const el = this.elev(B, x) * this.swellK(x);
+      const e = el / B.ampSum;
       if (e < 0.45) continue;
-      const y = B.surf - this.elev(B, x) + this.fieldOffset(x);
+      const y = B.surf - el + this.fieldOffset(x);
       const k = (e - 0.45) / 0.55;
       const cnt = 2 + Math.round(k * 5);
       for (let i = 0; i < cnt; i++)
@@ -366,9 +384,12 @@ export class Ocean {
     const cols = Math.ceil((x1 - x0) / cw) + 1;
     const hs = this.colH.length >= cols + 2 ? this.colH : (this.colH = new Float32Array(cols + 8));
     const es = this.colE.length >= cols + 2 ? this.colE : (this.colE = new Float32Array(cols + 8));
+    const own = this.colOwn.length >= cols + 2 ? this.colOwn : (this.colOwn = new Uint8Array(cols + 8));
+    own.fill(0);
+    const calmed = isNear && this.fields.some(f => f.calm);
     for (let i = 0; i <= cols + 1; i++) {
       const x = x0 + (i - 0.5) * cw;
-      const el = this.elev(B, x);
+      const el = calmed ? this.elev(B, x) * this.swellK(x) : this.elev(B, x);
       es[i] = el / B.ampSum;
       let y = B.surf - el;
       if (isNear) y += this.fieldOffset(x);
@@ -390,14 +411,17 @@ export class Ocean {
           y += srcY;
         }
       }
+      if (isNear && this.fields.length) {
+        let custom = false;
+        // (y may sit below the strip when the mask cuts deep into a raised column)
+        for (const f of this.fields) if (f.drawColumn && f.drawColumn(r, x, isNear && this.mask ? Math.max(y, this.maskAt(x + cw / 2)) : y, cw, bottom)) custom = true;
+        if (custom) { own[i] = 1; continue; }
+      }
       const u = (((Math.floor(x + scroll) % texW) + texW) % texW);
       const hh = texH - srcY;
       if (hh <= 0) continue;
       // column raised far above the strip (giant wave): extend with filler
       const extra = y + hh < fillTop ? fillTop - (y + hh) + 1 : 0;
-      let custom = false;
-      for (const f of this.fields) if (f.drawColumn && isNear && f.drawColumn(r, x, y, cw, y + hh + extra)) custom = true;
-      if (custom) continue;
       if (calmA) r.drawSub(B.calm, u, srcY, cw, hh, x, y, 1, 1, WHITE);
       if (stormA) r.drawSub(B.storm, u, srcY, cw, hh, x, y, 1, 1, sBlend >= 0.995 ? WHITE : stormC);
       if (extra > 0) r.rect(x, y + hh - 1, cw, extra + 1, fillC);
@@ -408,7 +432,7 @@ export class Ocean {
     if (shadeK > 0.01) {
       for (let i = 1; i <= cols; i++) {
         const slope = (hs[i + 2 < hs.length ? i + 2 : i + 1] - hs[i - 1]) / (3 * cw);
-        if (slope <= 0.08) continue;
+        if (slope <= 0.08 || own[i]) continue;
         const x = x0 + (i - 1) * cw;
         const y = hs[i];
         if (isNear && this.mask && this.maskAt(x + cw / 2) > y) continue;
@@ -421,7 +445,7 @@ export class Ocean {
     const capK = smoothstep(0.2, 0.75, s);
     for (let i = 1; i <= cols; i++) {
       const c = es[i];
-      if (c < 0.2) continue;
+      if (c < 0.2 || own[i]) continue;
       const x = x0 + (i - 1) * cw;
       const y = hs[i];
       if (isNear && this.mask && this.maskAt(x + cw / 2) > y) continue;
@@ -442,7 +466,7 @@ export class Ocean {
     if (B.trail && capK > 0.01) {
       for (let i = 1; i <= cols; i++) {
         const slope = (hs[i + 1] - hs[i - 1]) / (2 * cw);
-        if (slope <= 0.05) continue;
+        if (slope <= 0.05 || own[i]) continue;
         const c = es[i];
         const ta = clamp(smoothstep(0.05, 0.5, slope) * smoothstep(-0.6, 0.5, c) * capK * 0.8);
         if (ta < 0.03) continue;
@@ -463,6 +487,17 @@ export class Ocean {
   }
   private colH = new Float32Array(0);
   private colE = new Float32Array(0);
+  /** columns a field painted itself this frame (no overlays there) */
+  private colOwn = new Uint8Array(0);
+  private strips: Partial<Record<BandName, PixelBuffer>> = {};
+
+  /** CPU copy of a band's storm strip (painted on first use, exactly as the band's own texture) and its
+   *  current scroll: column u of the strip shows at world x where u = floor(x + scroll) mod texW */
+  stormStrip(name: BandName): { buf: PixelBuffer; scroll: number; texW: number } {
+    const B = this.bands[name];
+    const buf = this.strips[name] ?? (this.strips[name] = O.paintBandStrip(B.spec, O.bandPalette(O.STORM, B.spec.p), true, B.seed + 3));
+    return { buf, scroll: B.scroll, texW: B.spec.texW };
+  }
 
   /** Passing whitecaps: each slot builds a little cap of foam on a wavelet, holds it, then breaks it
    *  up into fizzing dots. They are pinned to the band's texture, so they ride past with the moving
@@ -489,6 +524,7 @@ export class Ocean {
         const x = Math.round(off + hash2(i, gen, B.seed + 11) * texW);
         if (x < x0 || x > x1) continue;
         const ci = clamp(Math.floor((x - x0) / cw) + 1, 1, hs.length - 2);
+        if (this.colOwn[ci]) continue;
         // nearer rows of the band get bigger caps
         const dz = Math.pow(hash2(i, gen, B.seed + 13), 1.4);
         const y = Math.round(hs[ci] + 2 + dz * spec.texH * 0.5);
@@ -561,7 +597,7 @@ export class Ocean {
       const f = cyc - gen;
       const x = x0 + hash2(i, gen, 7) * (x1 - x0);
       const ci = Math.min(hs.length - 2, Math.max(1, Math.floor((x - x0) / cw) + 1));
-      if (this.mask && this.maskAt(x) > hs[ci]) continue;
+      if (this.colOwn[ci] || (this.mask && this.maskAt(x) > hs[ci])) continue;
       const y = hs[ci] + 1 + hash2(i, gen, 9) * 14;
       r.fxDraw(this.ripple[Math.min(2, Math.floor(f * 3))], x, y, 1, 1, 0, col(0.78, 0.84, 0.86, 0.8), 0.9, false);
     }
