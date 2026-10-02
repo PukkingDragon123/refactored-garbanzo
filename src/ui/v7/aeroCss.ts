@@ -375,7 +375,7 @@ export const AERO_CSS = `
 .mos-dl.bye { transition: opacity 0.3s, transform 0.3s; opacity: 0; transform: translateY(10px) scale(0.9); }
 .mos-dl .hd { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font: 21px/1 'Jersey 10', 'Pixelify Sans', monospace; color: #0b4a7a; }
 .mos-dl .hd b { font-weight: 400; }
-.mos-dl .hd span { margin-left: auto; font: 16px/1 'Jersey 15', 'Pixelify Sans', monospace; color: var(--ink2); }
+.mos-dl .hd span { margin-left: auto; white-space: nowrap; font: 16px/1 'Jersey 15', 'Pixelify Sans', monospace; color: var(--ink2); }
 .mos-dl .row { display: grid; grid-template-columns: 26px 1fr auto; gap: 3px 8px; align-items: center; padding: 5px 0 4px; border-top: 1px solid #d4e4f0; animation: lnIn 0.35s cubic-bezier(.25,1.6,.45,1) both; }
 .mos-dl .row .ic { grid-row: 1 / 3; display: flex; }
 .mos-dl .row .ic .pxi { width: 24px; height: 24px; }
@@ -387,7 +387,7 @@ export const AERO_CSS = `
 .mos-dl .row .bar { grid-column: 2 / 4; display: block; height: 10px; padding: 2px; background: #123050; box-shadow: 0 0 0 1px #5a7a96; }
 .mos-dl .row .bar i { display: block; height: 100%; width: 0; background: repeating-linear-gradient(90deg, #7ae64a 0 5px, #4cb42c 5px 6px, transparent 6px 8px); }
 .mos-dl .row.done .bar i { background: repeating-linear-gradient(90deg, #b4f68a 0 5px, #6cd04a 5px 6px, transparent 6px 8px); }
-.mos-ic .nw, .mos-start .mi .nw { position: absolute; left: 6px; top: 0; z-index: 2; padding: 1px 5px 2px; border-radius: 7px; font: 14px/14px 'Jersey 10', 'Pixelify Sans', monospace; font-style: normal; color: #6a3a00; text-shadow: none;
+.mos-ic .nw, .mos-start .mi .nw { position: absolute; left: 10px; top: 8px; z-index: 2; padding: 1px 5px 2px; border-radius: 7px; font: 14px/14px 'Jersey 10', 'Pixelify Sans', monospace; font-style: normal; color: #6a3a00; text-shadow: none;
   background: linear-gradient(180deg, #fff3a0 0 45%, #ffc838 45%); box-shadow: 0 0 0 1px #7a4a08; animation: mosBadge 1.1s cubic-bezier(.3,1.8,.5,1) infinite; pointer-events: none; }
 .mos-start .mi { position: relative; }
 .mos-start .mi .nw { position: static; margin-left: auto; animation: none; }

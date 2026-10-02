@@ -274,7 +274,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
   // ---- gadgets (clock + sea & sky), with a few water droplets on the glass
   gad.innerHTML = field
     ? `<div><canvas class="clockc" width="48" height="48"></canvas></div><div><h4>Island</h4><p>Signal: none</p><p>Battery <span class="dn">${batt}%</span></p><p>Sand in keyboard: yes</p></div>`
-    : `<div><canvas class="clockc" width="48" height="48"></canvas></div><div><h4>Sea & Sky</h4><p>Water 12.4°C <span class="dn">${gi('down')}</span></p><p>Barometer <span class="dn">falling</span></p><p>Wi-Fi: 1,400 km away</p></div>`;
+    : `<div><canvas class="clockc" width="48" height="48"></canvas></div><div><h4>Sea & Sky</h4><p>Water 12.4°C <span class="dn">${gi('down', { k: 1 })}</span></p><p>Barometer <span class="dn">falling</span></p><p>Wi-Fi: 1,400 km away</p></div>`;
   const DROPS = [[8, 10], [84, 58], [44, 84], [20, 70], [90, 14], [62, 30]];
   gad.querySelectorAll(':scope > div').forEach((d, i) => { for (let k = 0; k < 3; k++) { const [x, y] = DROPS[(i * 3 + k) % DROPS.length]; const dr = el('i', 'mos-drop'); dr.style.cssText = `left:${x}%;top:${y}%`; d.appendChild(dr); } });
   const clockG = (gad.querySelector('.clockc') as HTMLCanvasElement).getContext('2d')!;
@@ -1150,7 +1150,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
         const id = queue.shift()!;
         dlCur = id;
         const u = UNLOCK_BY_ID[id];
-        hdS.textContent = queue.length ? `Downloading · ${queue.length + 1} apps` : 'Downloading';
+        hdS.textContent = queue.length ? `Downloading · ${queue.length + 1} to go` : 'Downloading';
         const row = el('div', 'row', `<span class="ic"></span><span class="t"><b>${esc(u.name)}</b><small>${esc(u.why)}</small></span><em>0%</em><span class="bar"><i></i></span>`);
         (row.querySelector('.ic') as HTMLElement).appendChild(ico(desk.find(x => x[0] === id)?.[2] ?? 'doc', 1));
         ls.appendChild(row);
