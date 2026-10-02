@@ -455,7 +455,9 @@ export function openLaptop(o: { app?: LaptopApp } = {}): Promise<void> {
       close();
     };
 
-    const close = game.ui.modal(root, () => { openNow = false; game.persist(); resolve(); }, false);
+    // the painted backdrop covers the screen: the world behind is frozen while the laptop is up
+    game.covered++;
+    const close = game.ui.modal(root, () => { game.covered = Math.max(0, game.covered - 1); openNow = false; game.persist(); resolve(); }, false);
     const wrap = root.parentElement as HTMLElement;
     wrap.classList.add('lt-wrap');
     fit();
