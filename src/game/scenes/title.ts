@@ -21,7 +21,7 @@ import { el } from '../../ui/ui';
 import { audio } from '../../core/audio';
 import { hasSave, newSave, clearSave } from '../save';
 import { continueV4, goShip4 } from './flow';
-import { pxIconCss } from '../../ui/pxicons';
+import { pxIconCss, pxIconURL } from '../../ui/pxicons';
 
 const CSS = `
 .t3 { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
@@ -58,6 +58,10 @@ const CSS = `
 .settings { width: min(460px, 92vw); padding: 1.4em 1.6em; display: flex; flex-direction: column; gap: 1em; }
 .settings label { display: grid; grid-template-columns: 8em 1fr 3em; gap: 0.8em; align-items: center; font-family: var(--pix); }
 .settings input[type=range] { width: 100%; accent-color: #4f9a3a; }
+.settings .dev-row { display: flex; flex-direction: column; gap: 0.3em; padding-top: 0.7em; background: repeating-linear-gradient(90deg, #b89a6a 0 4px, transparent 4px 8px) left top / 100% 2px no-repeat; }
+.settings .dev-row .btn { display: flex; align-items: center; gap: 0.6em; text-align: left; font-size: 0.9em; }
+.settings .dev-row .btn .ic { width: 1.4em; height: 1.4em; flex: none; image-rendering: pixelated; background: var(--ic) center / contain no-repeat; }
+.settings .dev-row small { font-size: 0.78em; color: #a8382a; line-height: 1.25; }
 .credits { width: min(560px, 92vw); padding: 1.4em 1.6em; line-height: 1.6; }
 .confirm { width: min(420px, 92vw); padding: 1.4em 1.6em; display: flex; flex-direction: column; gap: 1em; }
 .confirm .row { display: flex; gap: 10px; justify-content: flex-end; }
@@ -352,6 +356,12 @@ export function openSettings() {
   row('Music', s.music, v => { s.music = v; audio.musicVolume = v; });
   row('Sound', s.sfx, v => { s.sfx = v; audio.sfxVolume = v; audio.play('ui', { vol: 0.6 }); });
   row('Quality', s.quality, v => { s.quality = Math.max(0.35, v); game.r.quality = s.quality; window.dispatchEvent(new Event('resize')); });
+  // developer / test tools (lazy-loaded: nothing of it runs unless opened)
+  const dev = el('div', 'dev-row', `<button class="btn ghost"><span class="ic"></span><span>Developer tools</span></button><small>Test tool: jump to any scene, skip quests, cheats, saves. Not part of the game.</small>`);
+  const devBtn = dev.querySelector('button') as HTMLButtonElement;
+  (dev.querySelector('.ic') as HTMLElement).style.setProperty('--ic', `url(${pxIconURL('wrench', 2)})`);
+  devBtn.onclick = () => { audio.play('uiOpen'); void import('../../debug/devpanel').then(m => m.openDevPanel()); };
+  box.appendChild(dev);
   const done = el('button', 'btn', 'Done');
   box.appendChild(done);
   const close = game.ui.modal(box, () => game.persist());
