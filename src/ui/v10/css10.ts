@@ -357,10 +357,10 @@ export const CSS10 = `
 .skt-col .nodes path.own { stroke: #f0ae22; }
 .skt-col .nodes path.lit { stroke: #ffd048; stroke-width: 5; filter: drop-shadow(0 0 4px #ffe27a); }
 @keyframes skFlow { to { stroke-dashoffset: -13; } }
-.skt-n { position: absolute; width: 112px; margin-left: -56px; display: flex; flex-direction: column; align-items: center; text-align: center; transition: transform 0.4s cubic-bezier(.25,1.9,.45,1); z-index: 1; }
+.skt-n { position: absolute; width: 80px; margin-left: -40px; display: flex; flex-direction: column; align-items: center; text-align: center; transition: transform 0.4s cubic-bezier(.25,1.9,.45,1); z-index: 1; }
 .skt-n .o { position: relative; width: 52px; height: 52px; display: grid; place-items: center; border-radius: 50%; background: radial-gradient(circle at 40% 30%, #ffffff, #e6e2f2 70%, #cfc8e4); box-shadow: 0 0 0 2px #fff, 0 0 0 4px #b8b0d0, 0 3px 6px rgba(30,20,60,0.25); }
 .skt-n .o img { width: 36px; height: 36px; image-rendering: pixelated; }
-.skt-n b { margin-top: 5px; font: 15px/14px 'Jersey 10', 'Pixelify Sans', monospace; font-weight: 400; color: #2a2a4a; max-width: 112px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skt-n b { margin-top: 4px; font: 14px/13px 'Jersey 10', 'Pixelify Sans', monospace; font-weight: 400; color: #2a2a4a; max-width: 80px; max-height: 26px; overflow: hidden; overflow-wrap: anywhere; }
 .skt-n em { font: 14px/13px 'Jersey 15', 'Pixelify Sans', monospace; font-style: normal; color: #6a6a8a; }
 .skt-n small { font-size: 12px; line-height: 12px; color: #9a7a4a; }
 .skt-n .ck { position: absolute; right: -4px; top: -4px; width: 20px; height: 20px; border-radius: 50%; font: 15px/20px 'Jersey 10', 'Pixelify Sans', monospace; font-style: normal; color: #fff; text-align: center; background: linear-gradient(180deg, #fff3a0 0 25%, #ffc838 25% 60%, #e8941a 60%); box-shadow: 0 0 0 1px #7a4a08; }
