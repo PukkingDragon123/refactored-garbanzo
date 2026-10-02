@@ -299,7 +299,7 @@ export class BeachWakeScene implements Scene {
     const zoom = 1 + breath * 0.012 + focus * 0.04;
     const sh = this.shake * this.shake;
     const vy = up * 366 + breath * 2 + focus * 34 + Math.sin(t * 61) * sh * 4;
-    const vx = (W - r.VW) / 2 - (1 - look) * 50 * up + focus * 30 + Math.sin(t * 47) * sh * 5;
+    const vx = (W - r.VW) / 2 - (1 - look) * 50 * up + focus * 60 + Math.sin(t * 47) * sh * 5;
     const roll = Math.sin(up * Math.PI) * -0.06;
     r.pushTransform(r.VW / 2, r.VH / 2, roll, 0, 0);
     const ox = r.VW / 2, oy = r.VH / 2;

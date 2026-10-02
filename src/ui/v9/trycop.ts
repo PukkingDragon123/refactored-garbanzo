@@ -1,6 +1,6 @@
 // V9 Trycop close-up: "Examine the Trycop crab" cuts to a full-screen, UI-free pixel shot of the crab
 // on a wet basalt ledge at the edge of its rock pool, painted live by the same rig as the world
-// sprite at close-up scale (granules, setae, teeth, wet speculars). It forages with its fork claw
+// sprite at close-up scale (granules, setae, hinged mouthparts, claw denticles, wet speculars). It forages with its fork claw
 // and chews, its eyes follow your lens (the pointer), its legs shuffle; froth bubbles at the mouth,
 // drips fall from the claws into the water film, which mirrors it; the pool sparkles behind it.
 // Space / click takes a photo: the flash startles it into a rearing threat display, and on the
@@ -235,6 +235,7 @@ export async function examineTrycop(s: IslandScene4, crab: TrycopCrab | null): P
       P.fork.side = damp(P.fork.side, Math.sin(clock * 0.4) * 0.7, 2, dt);
       chew = f > 0.68 && feeding ? 0.55 + Math.sin(clock * 16) * 0.45 : 0.18 + Math.sin(clock * 2.1) * 0.12;
       P.mouth = damp(P.mouth, threat > 0.4 ? 0.7 + Math.sin(clock * 9) * 0.25 : chew, 14, dt);
+      P.froth = damp(P.froth ?? 0, threat > 0.4 ? 1 : chew > 0.6 ? 0.5 : 0.15, 3, dt);
       scrape -= dt;
       const scraping = scrape < 0 && feeding;
       if (scrape < -1.2) scrape = 4 + Math.random() * 4;

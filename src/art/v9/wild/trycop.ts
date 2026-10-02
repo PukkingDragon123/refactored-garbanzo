@@ -6,7 +6,7 @@
 // walking legs on an alternating tetrapod gait (IK from coxa to dactyl tip), both chelae (raise,
 // open, strike), the fork, swivelling eye stalks, parting maxillipeds and flicking antennules, and
 // the whole body bobbing, rolling and rearing. The same rig paints the 36 px crab in the world
-// (k = 1) and the full-screen close-up (k ~ 4.5, detail 2: granules, setae, teeth, wet speculars and
+// (k = 1) and the full-screen close-up (k ~ 4.5, detail 2: granules, setae, the full set of mouthparts, claw denticles, wet speculars and
 // the root-barnacle parasite under the abdomen).
 //
 // Body space: x lateral (screen right), y up, z toward the camera; the origin is the ground under
