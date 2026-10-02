@@ -43,6 +43,8 @@ export interface LocationDef {
   known?: boolean;
   /** shown as "???" until found */
   secret?: boolean;
+  /** a fixed trip from camp (boat destinations: no trail, the Kitten takes you), hours and energy each way */
+  trip?: { hours: number; energy: number };
   /** terrain words for the map card */
   terrain?: string;
 }
@@ -136,6 +138,14 @@ export function findLocation(locId: string): boolean {
   changed();
   game.persist();
   return true;
+}
+
+/** places with a fixed trip (the boat's destinations) go on the map as soon as their flags are set */
+export function syncReachable(): void {
+  for (const l of LOCATIONS) {
+    if (!l.trip || isFound(l.id)) continue;
+    if ((l.needs ?? []).every(f => !!game.save.flags[f])) findLocation(l.id);
+  }
 }
 
 /** heard of a place (Aroha, a villager, a carving): a "?" on the map */
@@ -296,6 +306,7 @@ export function tripCost(locId: string): Trip | null {
   const l = location(locId);
   if (!l) return null;
   if (isIsland(l)) return { ...beachCost((l.scene as { x: number }).x), legs: [] };
+  if (l.trip) return { ...l.trip, legs: [] };
   const legs = routeChain(locId);
   if (!legs) return null;
   const first = location(legs[0]?.from ?? 'camp');
@@ -308,6 +319,7 @@ export function homeCost(locId: string, x = 0): { hours: number; energy: number 
   const l = location(locId);
   if (!l) return { hours: 0, energy: 0 };
   if (isIsland(l)) return beachCost(x || (l.scene as { x: number }).x);
+  if (l.trip) return { ...l.trip };
   const legs = routeChain(locId, false) ?? [];
   const first = location(legs[0]?.from ?? 'camp');
   const beach = first && isIsland(first) ? beachCost(legs[0].route.at) : { hours: 0, energy: 0 };

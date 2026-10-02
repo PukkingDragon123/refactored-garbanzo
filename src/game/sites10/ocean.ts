@@ -18,6 +18,7 @@
 import { game } from '../game';
 import { addLocation, findLocation, location as locDef } from '../v10/regions';
 import type { LocationDef } from '../v10/regions';
+import { MAP_W, MAP_H } from '../v10/atlas';
 import { BOAT_FLAG, boatReady, boatSave, setBoatAway } from '../v10/boat';
 import { el } from '../../ui/ui';
 import { audio } from '../../core/audio';
@@ -77,14 +78,16 @@ export const TRIPS: Record<string, TripPlan> = {
 };
 export const tripPlan = (id: string) => TRIPS[id] ?? null;
 
+/** region-map pixels (atlas.ts MAP_W x MAP_H) to 0..1 */
+const MP = (x: number, y: number): [number, number] => [x / MAP_W, y / MAP_H];
 const LOCS: LocationDef[] = [
-  { id: 'fishgrounds', name: 'The Shelf', region: 'ocean', kind: 'ocean', pos: [0.78, 0.5], difficulty: 1, needs: [BOAT_FLAG],
+  { id: 'fishgrounds', name: 'The Shelf', region: 'ocean', kind: 'ocean', pos: MP(300, 40), difficulty: 1, needs: [BOAT_FLAG], trip: { hours: 1, energy: 3 }, terrain: 'Open sea, the shelf edge',
     desc: 'Fishing grounds where the sea floor drops off past the reef. Fish from the boat; vanebills, gulls and porpoises follow the boats.', scene: { type: 'custom', go: () => goBoatTrip('fishgrounds') } },
-  { id: 'glassreef', name: 'Glass Reef', region: 'ocean', kind: 'ecosystem', pos: [0.6, 0.66], difficulty: 2, needs: [BOAT_FLAG],
+  { id: 'glassreef', name: 'Glass Reef', region: 'ocean', kind: 'ecosystem', pos: MP(244, 52), difficulty: 2, needs: [BOAT_FLAG], trip: { hours: 1, energy: 4 }, terrain: 'Coral shallows (snorkel)',
     desc: 'Shallow coral gardens inside the barrier reef, clear as glass. Snorkel with the camera among the reef fish.', scene: { type: 'custom', go: () => goBoatTrip('glassreef') } },
-  { id: 'motuahi', name: 'Motu Ahi', region: 'isle2', kind: 'island', pos: [0.86, 0.2], difficulty: 3, needs: [BOAT_FLAG],
+  { id: 'motuahi', name: 'Motu Ahi', region: 'isle2', kind: 'island', pos: MP(808, 44), difficulty: 3, needs: [BOAT_FLAG], trip: { hours: 2.5, energy: 6 }, terrain: 'Black sand, vents, a seabird cliff',
     desc: 'A smoking volcanic islet with black sand beaches, steaming vents and a vast seabird colony on its cliffs.', scene: { type: 'custom', go: () => goBoatTrip('motuahi') } },
-  { id: 'farcoast', name: 'The Far Coast', region: 'south', kind: 'site', pos: [0.32, 0.9], difficulty: 3, needs: [BOAT_FLAG],
+  { id: 'farcoast', name: 'The Far Coast', region: 'south', kind: 'site', pos: MP(470, 562), difficulty: 3, needs: [BOAT_FLAG], trip: { hours: 3, energy: 7 }, terrain: 'Shingle, sea cliffs, a river mouth',
     desc: 'The island’s far side: sea cliffs too steep to walk, a waterfall into the sea and a kelp forest at the river mouth.', scene: { type: 'custom', go: () => goBoatTrip('farcoast') } },
 ];
 export const BOAT_LOCATIONS = LOCS.map(l => l.id);

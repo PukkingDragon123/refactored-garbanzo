@@ -16,7 +16,7 @@ import { clamp, hash2 } from '../../core/math';
 import { W, H, paintBase, paintDetail, PINS, MARKS, INK, INK2, INK3, INK_RED } from './regionmap-art';
 import {
   LOCATIONS, location, isFound, isRumoured, seenBins, binPoint, mapPoint, explored, discoveries, discoveriesAt, mapNotes,
-  travelledRoutes, tripCost, homeCost, lastPos, onMapChange, BINS, xRange,
+  travelledRoutes, tripCost, homeCost, syncReachable, lastPos, onMapChange, BINS, xRange,
 } from '../../game/v10/regions';
 import type { LocationDef, Discovery } from '../../game/v10/regions';
 import { currentExpedition, expeditionHour, clockText } from '../../game/v10/expedition';
@@ -293,6 +293,7 @@ let styled = false;
 /** open the Region Map; resolves with the location picked for travel (null: closed) */
 export function openRegionMap(o: RegionMapOpts = {}): Promise<string | null> {
   if (!styled) { document.head.appendChild(el('style', '', CSS)); styled = true; }
+  syncReachable();
   const ui = game.ui;
   ui.modalOpen++;
   audio.play('pageTurn', { vol: 0.5 });
@@ -427,7 +428,7 @@ export function openRegionMap(o: RegionMapOpts = {}): Promise<string | null> {
       if (L.id === 'camp') html += `<p class="finds">Home. Expeditions leave from the trailhead signpost.</p>`;
       else {
         const t = tripCost(L.id), hc = homeCost(L.id);
-        if (t) html += `<div class="row"><span>From camp</span><b>${fmtH(t.hours)} · −${t.energy} energy</b></div><div class="row"><span>Walk home</span><b>${fmtH(hc.hours)} · −${hc.energy} energy</b></div>`;
+        if (t) html += `<div class="row"><span>${L.trip ? 'By boat' : 'From camp'}</span><b>${fmtH(t.hours)} · −${t.energy} energy</b></div><div class="row"><span>${L.trip ? 'Sail home' : 'Walk home'}</span><b>${fmtH(hc.hours)} · −${hc.energy} energy</b></div>`;
         const here2 = cur === L.id;
         if (here2) html += `<div class="why" style="color:#2f6b2a">You are here.</div>`;
         else if (o.readOnly) html += `<div class="why">Fast travel starts from camp.</div>`;
