@@ -27,13 +27,13 @@ const INK = '#140e12';
 const GOLD = { a: '#fff6c4', b: '#ffd048', c: '#e09422', d: '#9a5810' };
 const GOLD_INK = '#3e1a06';
 
-function arrows(prefix: string, pal: Record<string, string>, ink: string | false): Record<string, PxDef> {
-  const sh = (rows: string[]) => (ink === false ? rows : rows.map((r, y) => (y === rows.length - 1 ? r.replace(/k/g, 's') : r)));
+/** the four arrow-key icons as plain ink shapes (no outline) */
+function arrows(prefix: string, pal: Record<string, string>): Record<string, PxDef> {
   return {
-    [prefix + 'up']: { rows: sh(['..k..', '.kkk.', 'kkkkk', '..k..', '..k..', '..k..']), pal, ink },
-    [prefix + 'down']: { rows: sh(['..k..', '..k..', '..k..', 'kkkkk', '.kkk.', '..k..']), pal, ink },
-    [prefix + 'left']: { rows: sh(['..k...', '.kk...', 'kkkkkk', '.kk...', '..k...']), pal, ink },
-    [prefix + 'right']: { rows: sh(['...k..', '...kk.', 'kkkkkk', '...kk.', '...k..']), pal, ink },
+    [prefix + 'up']: { rows: ['..k..', '.kkk.', 'kkkkk', '..k..', '..k..', '..k..'], pal, ink: false },
+    [prefix + 'down']: { rows: ['..k..', '..k..', '..k..', 'kkkkk', '.kkk.', '..k..'], pal, ink: false },
+    [prefix + 'left']: { rows: ['..k...', '.kk...', 'kkkkkk', '.kk...', '..k...'], pal, ink: false },
+    [prefix + 'right']: { rows: ['...k..', '...kk.', 'kkkkkk', '...kk.', '...k..'], pal, ink: false },
   };
 }
 
@@ -69,9 +69,9 @@ export const PX_ICONS: Record<string, PxDef> = {
   star: {
     rows: [
       '...a...',
-      '..aab..',
-      'aaabbbb',
-      '.abbbc.',
+      '..abb..',
+      'abbbbbc',
+      '.bbbbc.',
       '..bbc..',
       '.bbccc.',
       '.c...c.',
@@ -83,9 +83,9 @@ export const PX_ICONS: Record<string, PxDef> = {
   star0: {
     rows: [
       '...a...',
-      '..aab..',
-      'aaabbbb',
-      '.abbbc.',
+      '..abb..',
+      'abbbbbc',
+      '.bbbbc.',
       '..bbc..',
       '.bbccc.',
       '.c...c.',
@@ -119,11 +119,11 @@ export const PX_ICONS: Record<string, PxDef> = {
   /** right-pointing arrowhead (buttons, selected choice, "continue") */
   play: {
     rows: [
-      'a...',
-      'aa..',
-      'aab.',
+      'b...',
+      'ab..',
+      'abb.',
       'abbc',
-      'abc.',
+      'bbc.',
       'bc..',
       'c...',
     ],
@@ -132,11 +132,11 @@ export const PX_ICONS: Record<string, PxDef> = {
   },
   back: {
     rows: [
-      '...a',
-      '..aa',
-      '.aab',
-      'aabc',
-      '.abc',
+      '...b',
+      '..ab',
+      '.abb',
+      'abbc',
+      '.bbc',
       '..bc',
       '...c',
     ],
@@ -146,9 +146,9 @@ export const PX_ICONS: Record<string, PxDef> = {
   /** "more" marker under a dialogue line */
   down: {
     rows: [
-      'aaaaaab',
-      '.abbbc.',
-      '..bbc..',
+      'abbbbbc',
+      '.bbbcc.',
+      '..bcc..',
       '...c...',
     ],
     pal: GOLD,
@@ -280,9 +280,8 @@ export const PX_ICONS: Record<string, PxDef> = {
     pal: { k: '#2a2230' },
     ink: false,
   },
-  // arrow keys: ink for .key caps (key_up, key_down, key_left, key_right), bone white with an ink edge for big pads
-  ...arrows('key_', { k: '#2a2230' }, false),
-  ...arrows('pad_', { k: '#fffaf0', s: '#d8ccb6' }, INK),
+  // arrow keys: ink, for .key caps and the light minigame buttons (key_up, key_down, key_left, key_right)
+  ...arrows('key_', { k: '#2a2230' }),
   /** map: centre on me */
   target: {
     rows: [
@@ -376,7 +375,7 @@ function installCss() {
   styled = true;
   const s = document.createElement('style');
   // !important: icons land inside cards and buttons whose own `img` rules (thumbnails, portraits) must not apply
-  s.textContent = `img.px-ic { display: inline-block !important; vertical-align: middle; position: relative !important; top: -0.08em; inset: auto;
+  s.textContent = `img.px-ic { display: inline-block !important; vertical-align: middle; position: relative !important; top: -0.08em !important; left: auto !important; right: auto !important; bottom: auto !important;
   margin: 0 !important; padding: 0 !important; border: 0 !important; box-shadow: none !important; background: none !important; border-radius: 0 !important;
   object-fit: fill !important; max-width: none !important; max-height: none !important; aspect-ratio: auto !important; transform: none;
   image-rendering: crisp-edges; image-rendering: pixelated; pointer-events: none; flex: none !important; }
