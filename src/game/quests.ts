@@ -6,6 +6,7 @@ import { add, count } from './inventory';
 import { buildDone, buildLevel } from './crafting';
 import { SPECIES, SPECIES_BY_ID } from './species';
 import { V4_QUESTS } from './v4/quests4';
+import { BOAT_QUESTS } from './v10/boatquests';
 
 export type Giver = 'story' | 'rowan' | 'crowe' | 'aroha' | 'lou' | 'pip' | 'mori' | 'jenna' | 'joshu' | 'chunk';
 
@@ -40,6 +41,7 @@ const cluesN = () => Object.keys(game.save.clues).length;
 
 export const QUESTS: QuestDef[] = [
   ...V4_QUESTS,
+  ...BOAT_QUESTS,
   // ============================================================ MAIN (V2/V3 story)
   {
     id: 'voyage', title: 'The Voyage', giver: 'story', main: true, chapter: 0,
