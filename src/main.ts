@@ -57,6 +57,8 @@ async function boot() {
   else if (scene === 'ship4') await flow.goShip4();
   else if (scene === 'wake4') await flow.goBeachWake();
   else if (scene === 'island4') await (await import('./game/v4/islandflow')).goIsland();
+  // developer panel: a "clean reload" jump to a story point (Settings > Developer tools)
+  else if (params.has('devjump')) await (await import('./debug/devpanel')).bootJump(params.get('devjump')!);
   else {
     const { TitleScene } = await import('./game/scenes/title');
     await game.setNow(new TitleScene());
@@ -140,6 +142,11 @@ async function boot() {
     isle: null as unknown,
   };
   void import('./game/v9/islezl').then(m => { (window as unknown as { zl: { isle: unknown } }).zl.isle = m.ISLE; });
+  // developer panel toggles left on (noclip, overlay...): only then is the dev module loaded
+  try {
+    if (/"(noclip|hud|instant)":true|"fast":[2-9]/.test(localStorage.getItem('zl-dev-prefs') ?? '')) void import('./debug/devpanel').then(m => m.applyToggles());
+  } catch { /* storage blocked */ }
+  (window as unknown as { zl: Record<string, unknown> }).zl.dev = async () => (await import('./debug/devpanel')).openDevPanel();
 }
 
 boot();
