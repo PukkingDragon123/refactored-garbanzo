@@ -33,6 +33,8 @@ export interface RouteDef {
   flag?: { id: string; why: string };
   /** a line Mori or Aroha says on the way */
   say?: string;
+  /** a walking way: no "go on?" question, Mori just walks on into it */
+  walk?: boolean;
 }
 
 /** map extension of a location (the contract's LocationDef carries these optional fields) */
@@ -114,7 +116,10 @@ export const ATLAS: AtlasLoc[] = [
     id: 'fernwood', name: 'Fernwood Floor', sub: 'Te Ngāhere', region: 'interior', kind: 'site', pos: P(430, 198),
     scene: { type: 'site', site: 'fernwood' }, difficulty: 2, xr: [0, 2600],
     path: PATH([380, 162], [404, 186], [432, 200], [458, 210], [470, 214]), knots: [0, 800, 1560, 2280, 2600],
-    routes: [{ from: 'isle-track', at: 6860, label: 'Follow the track deeper into the bush', hours: 1, energy: 10, kind: 'walk', say: 'The track just... keeps going. Into the ferns.' }],
+    routes: [
+      { from: 'isle-track', at: 6860, label: 'Follow the track deeper into the bush', hours: 1, energy: 10, kind: 'walk', say: 'The track just... keeps going. Into the ferns.' },
+      { from: 'forest', at: 5890, label: 'Climb on up over the ridge into the fern gullies', hours: 1, energy: 10, kind: 'walk', say: 'Up over the ridge. The ferns on the other side are taller than the trees here.' },
+    ],
     desc: 'Lowland forest of giant tree ferns and kauri. Striders, delvers and bonefaces, and a lot of things you can’t see.', terrain: 'Forest floor, a stream gully',
   },
   {
@@ -210,10 +215,12 @@ export const ATLAS: AtlasLoc[] = [
     desc: 'A vast sinkhole in the heart of the land. Warm air breathes out of it. Nobody goes there.', terrain: 'Sheer walls, a misty lake',
   },  // ------------------------------------------------------------ V11 placeholders (their modules build the scenes)
   {
-    id: 'forest', name: 'Te Wao Nui', sub: 'The Great Forest', region: 'interior', kind: 'site', pos: P(300, 190),
-    scene: { type: 'custom', go: async () => { console.warn('[atlas] the forest scene is not built yet'); } }, difficulty: 2, xr: [0, 6000],
-    path: PATH([250, 140], [280, 172], [312, 196], [344, 214]),
-    desc: 'The first deep forest inland of the beach: giant trees, ferns taller than a man, mist, and things that watch you.', terrain: 'Deep forest, mud wallows',
+    // (src/game/v11/forest: the scene, its Day 1 story and the walk in from the stream mouth)
+    id: 'forest', name: 'Te Wao Nui', sub: 'The Great Forest', region: 'interior', kind: 'site', pos: P(296, 172),
+    scene: { type: 'custom', go: async () => { await (await import('../v11/forest')).goForest(); } }, difficulty: 2, xr: [0, 6000],
+    path: PATH([254, 118], [262, 142], [282, 168], [306, 186], [330, 200], [348, 214]), knots: [0, 900, 2200, 3500, 4800, 6000],
+    routes: [{ from: 'isle-stream', at: 3918, enter: 92, label: 'Follow the stream inland into the forest', hours: 0.5, energy: 4, kind: 'walk', walk: true, say: 'Up the stream, into the trees. Te Wao Nui.' }],
+    desc: 'The great forest inland of the beach, up the stream: kauri giants rising out of the mist, ferns taller than a man, mud wallows, a gully where Joshu was found, and things that watch you.', terrain: 'Deep forest, stream fords, mud wallows', arriveX: 92,
   },
   {
     id: 'hills', name: 'Ngā Puke Kōhatu', sub: 'The Rocky Hills', region: 'interior', kind: 'site', pos: P(520, 250),

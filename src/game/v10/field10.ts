@@ -285,8 +285,10 @@ export abstract class TripRun {
     const tired = energy() <= r.energy + 2;
     const lines = [{ who: 'mori', text: r.say ?? 'Onward. Deeper.', expr: 'determined' as string, choices: [`Go on (−${r.energy} energy, ${fmtH(r.hours)})`, 'Not yet'] }];
     if (tired && this.guide) lines.unshift(this.aroha('You’re running on empty, Mori. If you go on now, I’ll be carrying you home.', 'worried') as never);
-    const pick = await f.say(lines as never);
+    // (a walking way has no question: Mori just walks on into it)
+    const pick = r.walk && !tired ? 0 : await f.say(lines as never);
     if (pick !== 0) return;
+    if (r.walk && r.say) f.bark('mori', r.say, { expr: 'determined' });
     f.cutscene = true;
     try {
       // walk off into the way on
