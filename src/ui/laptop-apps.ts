@@ -11,6 +11,7 @@ import { QUESTS, activeQuests, currentStepIndex, questStatus } from '../game/que
 import { itemIconURL, skillIconURL, uiIconURL } from '../art/itemicons';
 import { speciesSprite, iconURL } from './icons';
 import { el } from './ui';
+import { gi } from './v7/aeroGlyphs';
 import { sfx, css, esc, wait, starsHTML, rpIcon, AppMount } from './laptop-kit';
 
 css('lt-apps', `
@@ -233,7 +234,7 @@ export const mountSkills: AppMount = (host, ctx) => {
       for (const s of skills) {
         const st = skillState(s.id);
         const p = pos(s.id);
-        const n = el('button', `sk-n ${st}${s.id === sel ? ' sel' : ''}`, `<img src="${skillIconURL(s.icon, 2)}" alt=""><span class="c">${st === 'owned' ? '✓' : s.cost + ' RP'}</span>`);
+        const n = el('button', `sk-n ${st}${s.id === sel ? ' sel' : ''}`, `<img src="${skillIconURL(s.icon, 2)}" alt=""><span class="c">${st === 'owned' ? `<img class="pg" src="${uiIconURL('check', 1)}" alt="">` : s.cost + ' RP'}</span>`);
         n.style.left = p.x + '%';
         n.style.top = p.y + 'em';
         n.title = s.name;
@@ -290,7 +291,7 @@ export const mountGuide: AppMount = (host, ctx, arg) => {
     const x = SPECIES_BY_ID[id];
     const seen = !!s.seen[id];
     const best = s.best[id];
-    const back = main.appendChild(el('button', 'btn2', '← All species'));
+    const back = main.appendChild(el('button', 'btn2', `${gi('back', { col: '#06241e' })} All species`));
     back.onclick = () => { sp = null; draw(); };
     const hero = main.appendChild(el('div', 'gd-hero'));
     hero.style.marginTop = '0.6em';
@@ -304,7 +305,7 @@ export const mountGuide: AppMount = (host, ctx, arg) => {
   const fact = (f: Fact) => {
     const st = factState(f);
     const c = main.appendChild(el('div', `card gd-fact ${st}`));
-    c.appendChild(el('div', 'q', st === 'solved' ? `✓ ${esc(f.q)}` : esc(f.q)));
+    c.appendChild(el('div', 'q', st === 'solved' ? `<img class="pg" src="${uiIconURL('check', 1)}" alt=""> ${esc(f.q)}` : esc(f.q)));
     if (st === 'solved') { c.appendChild(el('p', '', esc(f.text))); return; }
     const ev = c.appendChild(el('div', ''));
     for (const e of f.evidence) ev.appendChild(el('span', `pill ${hasEvidence(e) ? 'ok' : 'no'}`, esc(evidenceLabel(e)).replace(/&lt;b&gt;|&lt;\/b&gt;/g, '')));
@@ -362,7 +363,7 @@ export const mountQuests: AppMount = (host, ctx) => {
     const done = QUESTS.filter(q => questStatus(q.id) === 'done');
     if (done.length) {
       main.appendChild(el('h3', '', 'Done')).style.marginTop = '0.8em';
-      main.appendChild(el('p', '', done.map(q => `<span class="pill ok">✓ ${esc(q.title)}</span>`).join('')));
+      main.appendChild(el('p', '', done.map(q => `<span class="pill ok"><img class="pg" src="${uiIconURL('check', 1)}" alt=""> ${esc(q.title)}</span>`).join('')));
     }
   };
   draw();

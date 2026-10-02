@@ -76,8 +76,7 @@ export const CSS10 = `
 .rl-sheet .sec.locked { background: linear-gradient(180deg, #f6f9fb, #eef3f7); box-shadow: 0 0 0 1px #d4e0ea; }
 .rl-sheet .sec.locked h5 { color: #9ab0c4; }
 .rl-sheet .sec.locked .blur { display: flex; flex-direction: column; gap: 6px; padding: 4px 0 2px; }
-.rl-sheet .sec.locked .blur i { display: block; height: 9px; border-radius: 5px; background: linear-gradient(90deg, #dfe8ef, #e9eff4 40%, #dfe8ef); background-size: 200% 100%; animation: blurShine 2.4s linear infinite; filter: blur(0.6px); }
-@keyframes blurShine { to { background-position: -200% 0; } }
+.rl-sheet .sec.locked .blur i { display: block; height: 9px; border-radius: 5px; background: linear-gradient(90deg, #dfe8ef, #e9eff4 40%, #dfe8ef); }
 .rl-sheet .sec.nudge { grid-column: 1 / -1; color: #5a7690; font-style: italic; background: linear-gradient(180deg, #f4fbff, #e8f4fc); box-shadow: 0 0 0 1px #b8d8ec; }
 .rl-sheet .sec.fun { grid-column: 1 / -1; background: linear-gradient(180deg, #fffbe2, #fff2b8); box-shadow: 0 0 0 1px #f0ce6a, 0 0 12px rgba(255,210,80,0.35); }
 .rl-sheet .sec.fun h5 { color: #a86a08; }
@@ -208,7 +207,7 @@ export const CSS10 = `
 .scope .dish img { width: 62%; height: 62%; image-rendering: pixelated; }
 .scope.in .dish img { animation: dishIn 0.55s cubic-bezier(.25,1.8,.45,1) both; }
 @keyframes dishIn { from { transform: translateY(-60%) scale(0.3) rotate(-20deg); opacity: 0; } }
-.scope .beam { position: absolute; inset: 12%; border-radius: 50%; pointer-events: none; background: linear-gradient(180deg, transparent 0 40%, rgba(140,255,230,0.55) 48%, rgba(230,255,250,0.9) 50%, rgba(140,255,230,0.55) 52%, transparent 60%); background-size: 100% 240%; animation: beamGo 1.1s ease-in-out infinite alternate; mix-blend-mode: screen; }
+.scope .beam { position: absolute; inset: 12%; border-radius: 50%; pointer-events: none; background: linear-gradient(180deg, transparent 0 40%, rgba(140,255,230,0.55) 48%, rgba(230,255,250,0.9) 50%, rgba(140,255,230,0.55) 52%, transparent 60%); background-size: 100% 240%; animation: beamGo 1.1s ease-in-out infinite alternate; }
 @keyframes beamGo { from { background-position: 0 0; } to { background-position: 0 100%; } }
 .scope.care .ring { filter: hue-rotate(160deg) saturate(0.6); animation-duration: 2.6s; }
 .scope.care .beam { opacity: 0.4; }
@@ -363,7 +362,7 @@ export const CSS10 = `
 .skt-n b { margin-top: 4px; font: 14px/13px 'Jersey 10', 'Pixelify Sans', monospace; font-weight: 400; color: #2a2a4a; max-width: 80px; max-height: 26px; overflow: hidden; overflow-wrap: anywhere; }
 .skt-n em { font: 14px/13px 'Jersey 15', 'Pixelify Sans', monospace; font-style: normal; color: #6a6a8a; }
 .skt-n small { font-size: 12px; line-height: 12px; color: #9a7a4a; }
-.skt-n .ck { position: absolute; right: -4px; top: -4px; width: 20px; height: 20px; border-radius: 50%; font: 15px/20px 'Jersey 10', 'Pixelify Sans', monospace; font-style: normal; color: #fff; text-align: center; background: linear-gradient(180deg, #fff3a0 0 25%, #ffc838 25% 60%, #e8941a 60%); box-shadow: 0 0 0 1px #7a4a08; }
+.skt-n .ck { position: absolute; right: -4px; top: -4px; width: 20px; height: 20px; border-radius: 50%; image-rendering: pixelated; background: var(--ckw) 50% 55% / 16px 12px no-repeat, linear-gradient(180deg, #fff3a0 0 25%, #ffc838 25% 60%, #e8941a 60%); box-shadow: 0 0 0 1px #7a4a08; }
 .skt-n .lk { position: absolute; right: -3px; bottom: -3px; width: 16px; height: 16px; border-radius: 4px; background: linear-gradient(180deg, #e8eef4 0 50%, #a9b8c6 50%); box-shadow: 0 0 0 1px #5a7a96; }
 .skt-n .lk::before { content: ''; position: absolute; left: 4px; top: -5px; width: 6px; height: 6px; border: 2px solid #8494a6; border-bottom: 0; border-radius: 4px 4px 0 0; }
 .skt-n.owned .o { background: radial-gradient(circle at 40% 30%, #fffbe0, #ffe27a 60%, #f0ae22); box-shadow: 0 0 0 2px #fff, 0 0 0 4px #e8a020, 0 0 14px rgba(255,200,60,0.7); }

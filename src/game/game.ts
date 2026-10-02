@@ -28,6 +28,11 @@ class Game {
   private busy = false;
   paused = false;
   slowmo = 1;
+  /** full-screen UI covering the world (MoriOS): while > 0 the world is frozen, neither updated nor
+   *  re-rendered (the canvas keeps its last frame behind the laptop), so the laptop gets the GPU */
+  covered = 0;
+  /** the frozen frame needs one redraw (the canvas was resized, which clears it) */
+  private coverDirty = false;
 
   init(canvas: HTMLCanvasElement, uiRoot: HTMLElement) {
     this.r = new Renderer(canvas);
@@ -38,6 +43,7 @@ class Game {
       canvas.style.width = w + 'px';
       canvas.style.height = h + 'px';
       this.r.resize(w, h, Math.min(window.devicePixelRatio || 1, 2));
+      this.coverDirty = true;
     };
     fit();
     window.addEventListener('resize', fit);
@@ -111,18 +117,24 @@ class Game {
         post.fade = Math.abs(d) <= this.fadeSpeed * rdt ? this.fadeTarget : clamp(post.fade + Math.sign(d) * this.fadeSpeed * rdt, 0, 1);
       }
       post.flash = Math.max(0, post.flash - rdt * 4);
-      // textures are (re)uploaded right before each GPU flush, so lazily generated frames never draw blank
-      this.r.beforeFlush = () => { atlas?.upload(); local?.upload(); };
-      this.r.begin(dt);
-      if (this.scene) {
-        try {
-          this.scene.update(dt);
-          this.scene.render(this.r, dt);
-        } catch (e) {
-          console.error(e);
+      // covered by the laptop: skip the world entirely (one still frame after a resize, none otherwise)
+      const frozen = this.covered > 0 && post.fade === this.fadeTarget && !this.afterRender;
+      if (!frozen || this.coverDirty) {
+        if (frozen) dt = 0;
+        this.coverDirty = false;
+        // textures are (re)uploaded right before each GPU flush, so lazily generated frames never draw blank
+        this.r.beforeFlush = () => { atlas?.upload(); local?.upload(); };
+        this.r.begin(dt);
+        if (this.scene) {
+          try {
+            this.scene.update(dt);
+            this.scene.render(this.r, dt);
+          } catch (e) {
+            console.error(e);
+          }
         }
+        this.r.end();
       }
-      this.r.end();
       this.ui.frame(rdt);
       this.afterRender?.();
       this.afterRender = null;

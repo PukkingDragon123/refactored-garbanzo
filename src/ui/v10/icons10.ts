@@ -3,7 +3,7 @@
 // category and place-kind icons, the agency mascot (Tua the tuatara in a pith helmet) and the research
 // crate the samples drop into.
 
-import { canvas, R, E, outline } from '../v7/aeroFx';
+import { canvas, R, E, outline, copyCanvas } from '../v7/aeroFx';
 
 type G = CanvasRenderingContext2D;
 
@@ -194,10 +194,13 @@ DRAW.k_site = DRAW.k_landmark;
 DRAW.k_fossil = DRAW.c_fossils;
 
 /** a V10 icon (24 px art) at the given scale, or null if the name is not one of these */
+const srcs = new Map<string, HTMLCanvasElement>();
 export function icon10(name: string, scale = 2): HTMLCanvasElement | null {
   const draw = DRAW[name];
   if (!draw) return null;
-  const c = canvas(24, 24, g => { draw(g); hardAlpha(g, 24, 24); outline(g, 24, 24, '#15405e'); });
+  let s = srcs.get(name);
+  if (!s) { s = canvas(24, 24, g => { draw(g); hardAlpha(g, 24, 24); outline(g, 24, 24, '#15405e'); }); srcs.set(name, s); }
+  const c = copyCanvas(s);
   c.style.width = c.style.height = 24 * scale + 'px';
   c.className = 'pxi';
   return c;
@@ -212,8 +215,17 @@ export function icon10URL(name: string): string {
 // ------------------------------------------------------------------ Tua, the agency mascot
 
 /** Tua the tuatara in a ZEA pith helmet (40x40 art); mood changes the eyes and mouth */
+const tuas = new Map<string, HTMLCanvasElement>();
 export function mascot(mood: 'happy' | 'wow' | 'meh' | 'wink' = 'happy', scale = 2): HTMLCanvasElement {
-  const c = canvas(40, 40, g => {
+  let src = tuas.get(mood);
+  if (!src) { src = paintTua(mood); tuas.set(mood, src); }
+  const c = copyCanvas(src);
+  c.style.width = c.style.height = 40 * scale + 'px';
+  c.className = 'pxi mascot';
+  return c;
+}
+function paintTua(mood: 'happy' | 'wow' | 'meh' | 'wink'): HTMLCanvasElement {
+  return canvas(40, 40, g => {
     const G1 = '#7cae52', G2 = '#5a8c3a', G3 = '#3e6a28', BELLY = '#d4e2a4';
     // neck and the ZEA scarf
     R(g, 9, 27, 17, 12, G2); R(g, 11, 29, 2, 2, G3); R(g, 16, 33, 2, 2, G3); R(g, 21, 30, 2, 2, G3);
@@ -246,9 +258,6 @@ export function mascot(mood: 'happy' | 'wow' | 'meh' | 'wink' = 'happy', scale =
     E(g, 18, 8.6, 2, 1.8, '#22c4e6'); R(g, 17, 8, 1, 1, '#e8fdff');
     outline(g, 40, 40, '#1a2e12');
   });
-  c.style.width = c.style.height = 40 * scale + 'px';
-  c.className = 'pxi mascot';
-  return c;
 }
 
 // ------------------------------------------------------------------ the research crate (Upload Everything)

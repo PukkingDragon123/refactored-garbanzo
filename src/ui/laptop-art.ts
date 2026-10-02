@@ -533,7 +533,7 @@ const ART: Record<string, () => PixelBuffer> = {
 export const STICKERS: StickerDef[] = [
   // left bezel
   { id: 'serpent', x: 21, y: 34, rot: -0.1, on: 'lid', peel: 0, title: 'A legged serpent. Rowan drew the original on a napkin.', art: ART.serpent },
-  { id: 'snakes', x: 20, y: 56, rot: 0.08, on: 'lid', peel: 2, title: '“I ♥ SNAKES”. Crowe calls this a cry for help.', art: ART.snakes },
+  { id: 'snakes', x: 20, y: 56, rot: 0.08, on: 'lid', peel: 2, title: '“I HEART SNAKES”. Crowe calls this a cry for help.', art: ART.snakes },
   { id: 'fern', x: 20, y: 83, rot: -0.14, on: 'lid', peel: 0, title: 'Silver fern.', art: ART.fern },
   { id: 'coffee', x: 21, y: 110, rot: 0.12, on: 'lid', peel: 4, faded: true, title: 'A coffee cup. There is no coffee on this island.', art: ART.coffee },
   { id: 'paw', x: 22, y: 131, rot: -0.2, on: 'lid', peel: 0, title: 'A paw print, from a vet-school friend.', art: ART.paw },
@@ -546,7 +546,7 @@ export const STICKERS: StickerDef[] = [
   { id: 'mushroom', x: 298, y: 105, rot: -0.12, on: 'lid', peel: 3, title: 'A happy mushroom.', art: ART.mushroom },
   { id: 'koru', x: 299, y: 128, rot: 0.05, on: 'lid', peel: 0, shine: true, title: 'A pounamu-green koru. Aroha stuck it on while you were asleep. “For new beginnings.”', art: ART.koru },
   // deck
-  { id: 'pip', x: 43, y: 170, rot: -0.06, on: 'deck', peel: 0, title: 'PIP’S TECH ✓ WARRANTY VOID. Pip insists this is a certification.', art: ART.pip },
+  { id: 'pip', x: 43, y: 170, rot: -0.06, on: 'deck', peel: 0, title: 'PIP’S TECH: WARRANTY VOID. Pip insists this is a certification.', art: ART.pip },
   { id: 'uni', x: 280, y: 171, rot: 0.05, on: 'deck', peel: 1, faded: true, title: 'University of Otago — Marine Bio. Rowan’s old lab. Peeling, like Rowan’s funding.', art: ART.uni },
 ];
 

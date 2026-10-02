@@ -57,7 +57,7 @@ export const RESEARCH_CSS = `
 .imp-t.on { box-shadow: 0 0 0 3px #22c4e6, 0 0 14px rgba(40,200,255,0.65); }
 .imp-t.on img { filter: none; }
 .imp-t.on .ck { transform: scale(1); background: linear-gradient(180deg, #d8ffc0 0 20%, #7ada4a 20% 55%, #3a9a22 55%); box-shadow: 0 0 0 1px #1c5e0e; }
-.imp-t.on .ck::after { content: '✓'; position: absolute; inset: 0; text-align: center; font: 20px/24px 'Jersey 10', 'Pixelify Sans', monospace; color: #fff; text-shadow: 0 1px 0 #1c5e0e; }
+.imp-t.on .ck::after { content: ''; position: absolute; inset: 0; background: var(--ckw) 50% 55% / 16px 12px no-repeat; image-rendering: pixelated; }
 .imp-t.hov { transform: translateY(-3px) rotate(-1deg); }
 .imp-t.press { transform: scale(0.94, 0.88); transition-duration: 0.05s; }
 .imp-t.bop { animation: mosBump 0.45s cubic-bezier(.25,1.9,.45,1); }
@@ -140,8 +140,7 @@ export const RESEARCH_CSS = `
 .rl-hero .ph.flip { animation: flipIn 0.55s cubic-bezier(.25,1.6,.45,1); }
 @keyframes flipIn { 0% { transform: perspective(600px) rotateY(80deg) scale(0.9); } }
 .rl-hero.fresh .ph { animation: cardPop 0.7s cubic-bezier(.25,1.8,.45,1) both; }
-.rl-hero .hl { position: absolute; border-radius: 6px; box-shadow: 0 0 0 2px rgba(255,255,255,0.85), 0 0 14px 2px rgba(150,240,255,0.85), 0 0 0 999px rgba(4,24,44,0.3); animation: hlPulse 2.4s ease-in-out infinite; }
-@keyframes hlPulse { 50% { box-shadow: 0 0 0 2px rgba(255,255,255,0.65), 0 0 22px 4px rgba(150,240,255,0.6), 0 0 0 999px rgba(4,24,44,0.22); } }
+.rl-hero .hl { position: absolute; border-radius: 6px; box-shadow: 0 0 0 2px rgba(255,255,255,0.85), 0 0 14px 2px rgba(150,240,255,0.85), 0 0 0 999px rgba(4,24,44,0.26); }
 .rl-hero .nw { position: absolute; left: 8px; top: 8px; padding: 2px 10px 4px; border-radius: 9px; font: 22px/1 'Jersey 10', 'Pixelify Sans', monospace; color: #6a3a00; background: linear-gradient(180deg, #fff3a0 0 40%, #ffc838 40%); box-shadow: 0 0 0 1px #7a4a08, 0 0 16px rgba(255,210,80,0.9); animation: stampIn2 0.6s 0.2s cubic-bezier(.25,1.8,.45,1) both; }
 @keyframes stampIn2 { from { transform: scale(2.4) rotate(-12deg); opacity: 0; } }
 .rl-hero .gone { position: absolute; inset: 0; display: grid; place-items: center; color: #9ab0c4; }

@@ -52,7 +52,7 @@ export function countUp(e: HTMLElement, a: number, b: number, ms = 700, fmt: (n:
 /** Row of pixel stars. */
 export function starsHTML(n: number, max = 5, cls = 'k-stars') {
   let h = `<span class="${cls}">`;
-  for (let i = 0; i < max; i++) h += `<img src="${uiIconURL(i < n ? 'star' : 'star0', 2)}" alt="${i < n ? '★' : '☆'}">`;
+  for (let i = 0; i < max; i++) h += `<img src="${uiIconURL(i < n ? 'star' : 'star0', 2)}" alt="">`;
   return h + '</span>';
 }
 export const rpIcon = (cls = 'k-rp') => `<img class="${cls}" src="${uiIconURL('rp', 2)}" alt="RP">`;

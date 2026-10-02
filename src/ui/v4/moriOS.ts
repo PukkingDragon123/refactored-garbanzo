@@ -14,6 +14,10 @@
 // crate with a lab analysis each, field notes, then the day report), the Zealandia Encyclopedia
 // (replaces the Research Log), ZEA Mail (the agency that pays Research Points: targets, praise and
 // snark) and the Skill Tree (spend RP). The tray shows the RP balance and unread agency mail.
+// A fresh laptop only has the Report, the Spreadsheet and Upload Everything: every other app unlocks
+// with progress and downloads itself through the installer toast (./moriApps).
+// Performance: while open, the world behind is frozen (game.covered); the wallpaper stops animating
+// under a maximised window; particles, cursor and icons cost nothing when idle.
 
 import { game } from '../../game/game';
 import { el } from '../ui';
@@ -34,6 +38,8 @@ import bliss from '../../assets/bliss.jpg';
 import { AERO_CSS } from '../v7/aeroCss';
 import { Spring, Fx, sfx, canvas, R, E, icon, cloudSprite, clamp, bubSprite } from '../v7/aeroFx';
 import { VCursor } from '../v7/aeroCursor';
+import { gi, glyphURL, batteryGi } from '../v7/aeroGlyphs';
+import { UNLOCK_BY_ID, installed, unlockable, isFresh, markInstalled, markOpened } from './moriApps';
 
 let styled = false;
 
@@ -116,7 +122,7 @@ const FILES: { path: string; name: string; text: string; lock?: boolean }[] = [
   { path: 'Documents', name: 'chunk_diet_plan_FINAL_v7_REAL.docx', text: 'CHUNK DIET PLAN (v7)\n\nBreakfast: 1/2 cup kibble\nLunch: nothing (he will beg, stay strong)\nDinner: 1/2 cup kibble\nTreats: ONE biscuit per day\n\nStatus: failed on day 1 (noodles?? how)\nStatus: failed on day 2 (Joshu)\nStatus: failed on day 3 (Jenna, "he looked sad")' },
   { path: 'Documents', name: 'thesis_draft_47.doc', text: 'Chapter 1: Introduction\n\nSeabirds of the Southern Ocean are\n\n[the rest of this page is blank. It has been blank for eight months.]' },
   { path: 'Documents', name: 'packing_list.txt', text: 'Camera (x2)\nSpare batteries (x9)\nField notebooks\nNoodles (x80)\nMore noodles\nChunk\'s puffer jacket (he gets COLD)\nChunk\'s backup puffer jacket\nToothbrush?' },
-  { path: 'Music', name: 'whale_songs_vol2.mp3', text: '♪ ooOOOOoooo... wuuuuuhhh... ooOOooo ♪\n\n(Jenna says it\'s "the most relaxing thing she\'s ever heard" and then fell asleep on her keyboard.)' },
+  { path: 'Music', name: 'whale_songs_vol2.mp3', text: '~ ooOOOOoooo... wuuuuuhhh... ooOOooo ~\n\n(Jenna says it\'s "the most relaxing thing she\'s ever heard" and then fell asleep on her keyboard.)' },
   { path: 'Music', name: 'joshu_sea_shanties_live.wav', text: 'Recorded at 2 a.m. in the galley.\nContains 14 verses of "The Wellerman" and one verse about his knee.' },
   { path: 'Downloads', name: 'how_to_tie_a_bowline.pdf', text: 'The rabbit comes out of the hole, goes around the tree, and back down the hole.\n\n(Joshu wrote underneath: "THE RABBIT IS NOT THE POINT, DOC")' },
   { path: 'Jenna\'s Stuff', name: 'fishcount_ai.py', text: '# fish counter v3 "Captain Count"\n# counts: birds, fish, clouds (mostly not clouds)\n# known bug: classifies Chunk as potato (0.93 confidence)\n\ndef count(frame):\n    return vibes(frame) * 1.0  # TODO: real math', lock: true },
@@ -157,21 +163,25 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
       <div class="mos-flare f2"></div><div class="mos-flare f0"></div><div class="mos-flare f1"></div><div class="mos-flare f3"></div>
       <div class="mos-icons"></div><div class="mos-gad"></div><div class="mos-wins"></div>
       <div class="mos-bar"><div class="mos-orb ctl" title="Start"></div><div class="mos-tabs"></div>
-        <div class="mos-tray"><span class="tp ctl" data-direct="1" title="Touch mode"></span><span class="rpc ctl" title="Research Points (Skill Tree)"></span><span class="ml ctl" title="ZEA Mail"></span><span class="cm ctl" title="Camera connected"></span><span class="wf" title="${field ? 'No internet: shipwrecked' : 'No internet: middle of the ocean'}">✕ Wi-Fi</span><span class="bt${batt < 25 ? ' lo' : ''}" title="${field ? 'Charged off the wreck’s battery. Mostly.' : 'Battery'}">${batt > 60 ? '▮▮▮' : batt > 30 ? '▮▮▯' : '▮▯▯'} ${batt}%</span><span class="clk"></span></div><div class="mos-peek ctl" title="Show desktop"></div></div>
+        <div class="mos-tray"><span class="tp ctl" data-direct="1" title="Touch mode"></span><span class="rpc ctl" title="Research Points (Skill Tree)"></span><span class="ml ctl" title="ZEA Mail"></span><span class="cm ctl" title="Camera connected"></span><span class="wf" title="${field ? 'No internet: shipwrecked' : 'No internet: middle of the ocean'}">${gi('wifix')} Wi-Fi</span><span class="bt${batt < 25 ? ' lo' : ''}" title="${field ? 'Charged off the wreck’s battery. Mostly.' : 'Battery'}">${batteryGi(batt)} ${batt}%</span><span class="clk"></span></div><div class="mos-peek ctl" title="Show desktop"></div></div>
       <div class="mos-menus"></div><div class="mos-focus"></div>
     </div><div class="mos-brand"><i></i>MoriBook</div></div>`;
   if (field) wrap.classList.add('field');
+  // painted glyphs the stylesheets use (ticks on picked photos and owned skills)
+  wrap.style.setProperty('--ckw', `url(${glyphURL('check', { col: '#ffffff', edge: '#1c5e0e' })})`);
   const $ = <T extends HTMLElement = HTMLElement>(s: string) => wrap.querySelector(s) as T;
   const lap = $('.mos-lap'), scr = $('.mos-scr'), bgEl = $('.mos-bg'), wins = $('.mos-wins'), tabs = $('.mos-tabs'), bar = $('.mos-bar');
   const orb = $('.mos-orb'), peek = $('.mos-peek'), clk = $('.clk'), menus = $('.mos-menus'), ring = $('.mos-focus'), iconsEl = $('.mos-icons'), gad = $('.mos-gad');
   ($('.mos-bg img') as HTMLImageElement).src = bliss;
   orb.appendChild(icon('pug', 1.34));
-  const lid = el('div', 'gel red sm mos-lid ctl', '✕ Close lid');
+  const lid = el('div', 'gel red sm mos-lid ctl', `${gi('close')} Close lid`);
   lid.dataset.direct = '1';
   lid.title = 'Close the laptop (Esc)';
   lap.appendChild(lid);
   game.ui.modalLayer.appendChild(wrap);
   game.ui.modalOpen++;
+  // the laptop covers the screen: freeze the world behind it so the desktop gets the GPU
+  game.covered++;
   sfx.open();
 
   let open: Win[] = [];
@@ -186,7 +196,12 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
 
   // ---- geometry
   const S = { w: 0, h: 0, dh: 0 };
-  const scrPt = (cx: number, cy: number) => { const r = scr.getBoundingClientRect(); const k = r.width / (scr.offsetWidth || 1); return { x: (cx - r.left) / k, y: (cy - r.top) / k }; };
+  // the screen's rect, read at most once per frame (pointer moves and effects ask for it constantly)
+  let scrR: DOMRect | null = null, scrK = 1;
+  const scrPt = (cx: number, cy: number) => {
+    if (!scrR) { scrR = scr.getBoundingClientRect(); scrK = scrR.width / (scr.offsetWidth || 1) || 1; }
+    return { x: (cx - scrR.left) / scrK, y: (cy - scrR.top) / scrK };
+  };
   const center = (e: Element) => { const r = e.getBoundingClientRect(); return scrPt(r.left + r.width / 2, r.top + r.height / 2); };
   let bgW = 0, bgH = 0;
   const measure = () => {
@@ -206,7 +221,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
   if (coarse() || ('ontouchstart' in window && navigator.maxTouchPoints > 0)) bigUI();
   wrap.classList.toggle('direct', cur.direct);
   const tpBtn = $('.mos-tray .tp');
-  const tpLabel = () => { tpBtn.textContent = cur.direct ? '☝ Touch' : '◎ Trackpad'; tpBtn.title = cur.direct ? 'Direct touch (tap to use the trackpad cursor instead)' : 'Trackpad cursor (tap for direct touch)'; };
+  const tpLabel = () => { tpBtn.innerHTML = cur.direct ? `${gi('touch')} Touch` : `${gi('pad')} Trackpad`; tpBtn.title = cur.direct ? 'Direct touch (tap to use the trackpad cursor instead)' : 'Trackpad cursor (tap for direct touch)'; };
   tpLabel();
   tpBtn.addEventListener('click', () => {
     cur.setDirect(!cur.direct);
@@ -234,7 +249,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
     if (cur.direct) { game.save.vars['v4:touchHint'] = 1; }
     hintEl?.remove();
     const h = el('div', 'mos-hint', cur.direct
-      ? `<b>Touch mode</b>Tap to click · Swipe to scroll · Pinch the spreadsheet<br>Drag a title bar to move a window · Hold for more<br>(Tray: ☝ Touch switches to the trackpad cursor)`
+      ? `<b>Touch mode</b>Tap to click · Swipe to scroll · Pinch the spreadsheet<br>Drag a title bar to move a window · Hold for more<br>(Tray: ${gi('touch')} Touch switches to the trackpad cursor)`
       : `<b>Chunk is your trackpad</b>Drag anywhere to move the cursor · Tap to click<br>Hold (or two-finger tap) for more · Two fingers scroll<br>Tap, then drag, to move windows`);
     wrap.appendChild(h);
     hintEl = h;
@@ -259,7 +274,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
   // ---- gadgets (clock + sea & sky), with a few water droplets on the glass
   gad.innerHTML = field
     ? `<div><canvas class="clockc" width="48" height="48"></canvas></div><div><h4>Island</h4><p>Signal: none</p><p>Battery <span class="dn">${batt}%</span></p><p>Sand in keyboard: yes</p></div>`
-    : `<div><canvas class="clockc" width="48" height="48"></canvas></div><div><h4>Sea & Sky</h4><p>Water 12.4°C <span class="dn">▼</span></p><p>Barometer <span class="dn">falling</span></p><p>Wi-Fi: 1,400 km away</p></div>`;
+    : `<div><canvas class="clockc" width="48" height="48"></canvas></div><div><h4>Sea & Sky</h4><p>Water 12.4°C <span class="dn">${gi('down', { k: 1 })}</span></p><p>Barometer <span class="dn">falling</span></p><p>Wi-Fi: 1,400 km away</p></div>`;
   const DROPS = [[8, 10], [84, 58], [44, 84], [20, 70], [90, 14], [62, 30]];
   gad.querySelectorAll(':scope > div').forEach((d, i) => { for (let k = 0; k < 3; k++) { const [x, y] = DROPS[(i * 3 + k) % DROPS.length]; const dr = el('i', 'mos-drop'); dr.style.cssText = `left:${x}%;top:${y}%`; d.appendChild(dr); } });
   const clockG = (gad.querySelector('.clockc') as HTMLCanvasElement).getContext('2d')!;
@@ -294,6 +309,8 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
 
   // ---- balloons from the tray
   let bal: HTMLElement | null = null;
+  /** the app installer toast (see the downloads below) */
+  let dlEl: HTMLElement | null = null;
   const balloon = (title: string, text: string, ms = 6500, bo: { icon?: string; onClick?: () => void } = {}) => {
     bal?.remove();
     const b = el('div', 'mos-balloon' + (bo.onClick ? ' ctl act' : ''), `<b></b><span>${text}</span>`);
@@ -302,6 +319,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
     bb.appendChild(document.createTextNode(title));
     scr.appendChild(b);
     bal = b;
+    if (dlEl) b.style.bottom = `calc(var(--bar) + ${dlEl.offsetHeight + 22}px)`;
     const kill = () => { if (!b.isConnected) return; b.classList.add('bye'); setTimeout(() => b.remove(), 320); if (bal === b) bal = null; };
     b.addEventListener('click', () => { kill(); if (bo.onClick) { lastPress = center(b); bo.onClick(); } });
     setTimeout(kill, ms);
@@ -391,7 +409,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
       if (pops.some(p => p.anchor === v)) { closePops(); return; }
       const kp = el('div', 'mos-menu kp');
       for (const k of ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'back', '0', 'ok']) {
-        const b = el('div', 'gel ctl' + (k === 'ok' ? ' green' : k === 'back' ? ' glass' : ''), k === 'back' ? '⌫' : k === 'ok' ? 'OK' : k);
+        const b = el('div', 'gel ctl' + (k === 'ok' ? ' green' : k === 'back' ? ' glass' : ''), k === 'back' ? gi('bksp') : k === 'ok' ? 'OK' : k);
         b.addEventListener('click', () => { api.type(k); if (k !== 'ok') { const c = center(b); fx.sparkle(c.x, c.y, 4, 40); } });
         kp.appendChild(b);
       }
@@ -590,14 +608,16 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
     oldPhotos: ([['albatross', 'Fluting vanebill, day 20. Whistled at me the whole time.'], ['dolphins', 'Moonfin porpoises riding the bow wave'], ['sunset', 'The Kittiwake at sunset (Jenna took this one)'], ['jennaSleep', 'Jenna, asleep on her keyboard at 3 a.m. "zzzzzzzzzzzzzzzz" x 4000'], ['joshuFish', 'Joshu and The Fish That Was Bigger Last Time He Told It'], ['chunkBucket', 'Chunk in a bucket. He chose this.']] as [PhotoKind, string][])
       .map(([k, cap]) => ({ key: k, cap, make: () => photo(k) })),
     balloon: (title, text, ms, bo) => balloon(title, text, ms, bo),
-    open: (app, arg) => { closePops(); if (app === 'enc') ENC.open(arg); else if (app === 'mail') MAIL.open(arg); else if (app === 'skills') SK.open(arg); else if (app === 'upall') UP.open(); else apps[app]?.(); },
+    open: (app, arg) => { closePops(); openApp(app, arg); },
+    has: app => available(app),
     refresh: () => { RA.refresh(); ENC.refresh(); MAIL.refresh(); SK.refresh(); UP.refresh(); badges(); },
     sessionDone: ses => {
       const got = MAIL.react(ses);
       MAIL.refresh();
       badges();
       const m = got.find(x => x.tag === 'upload') ?? got[0];
-      if (m) setTimeout(() => { if (!closed) balloon('New mail from ZEA', `<b>${esc(m.subj)}</b>${got.length > 1 ? ` (+${got.length - 1} more)` : ''}`, 7000, { icon: 'mail', onClick: () => MAIL.open(m.id) }); }, 900);
+      // (the agency's replies wait in the inbox until ZEA Mail is installed)
+      if (m && installed('mail')) setTimeout(() => { if (!closed) balloon('New mail from ZEA', `<b>${esc(m.subj)}</b>${got.length > 1 ? ` (+${got.length - 1} more)` : ''}`, 7000, { icon: 'mail', onClick: () => openApp('mail', m.id) }); }, 900);
     },
     icon: (name, scale) => ico(name, scale),
   };
@@ -608,9 +628,10 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
   const UP = uploadAllApp(os, RA);
   /** desktop & tray badges: photos waiting on the camera, the haul to upload, new encyclopedia pages, unread mail, the RP balance */
   const trayCam = $('.mos-tray .cm'), trayRp = $('.mos-tray .rpc'), trayMail = $('.mos-tray .ml');
-  trayCam.addEventListener('click', () => { lastPress = center(trayCam); apps.cam(); });
-  trayRp.addEventListener('click', () => { lastPress = center(trayRp); SK.open(); });
-  trayMail.addEventListener('click', () => { lastPress = center(trayMail); MAIL.open(); });
+  // the camera chip imports through the Camera app once it's installed, Upload All before that
+  trayCam.addEventListener('click', () => { lastPress = center(trayCam); openApp(installed('cam') ? 'cam' : 'upall'); });
+  trayRp.addEventListener('click', () => { lastPress = center(trayRp); openApp('skills'); });
+  trayMail.addEventListener('click', () => { lastPress = center(trayMail); openApp('mail'); });
   let lastPend = -1, lastRp = -1, lastMail = -1;
   const count = (k: string, n: number) => { const e = iconEls[k]; if (e) { e.dataset.n = n ? String(n) : ''; e.classList.toggle('cnt', n > 0); } };
   const badges = () => {
@@ -621,6 +642,9 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
     iconEls.enc?.classList.toggle('new', freshTotal() > 0);
     iconEls.skills?.classList.toggle('new', SK.buyable() > 0);
     trayCam.style.display = n ? '' : 'none';
+    // the RP and mail chips belong to their apps: hidden until those are installed
+    trayRp.style.display = installed('skills') ? '' : 'none';
+    if (unlocksOn) checkUnlocks();
     if (n !== lastPend) {
       trayCam.innerHTML = '';
       trayCam.appendChild(icon('cam', 0.75));
@@ -629,8 +653,8 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
       lastPend = n;
     }
     const rp = game.save.rp;
-    if (rp !== lastRp) { trayRp.textContent = `◆ ${rp} RP`; if (lastRp >= 0) retrigger(trayRp, 'pop'); lastRp = rp; }
-    const um = unreadMail();
+    if (rp !== lastRp) { trayRp.innerHTML = `${gi('gem')} ${rp} RP`; if (lastRp >= 0) retrigger(trayRp, 'pop'); lastRp = rp; }
+    const um = installed('mail') ? unreadMail() : 0;
     trayMail.style.display = um ? '' : 'none';
     if (um !== lastMail) {
       trayMail.innerHTML = '';
@@ -726,7 +750,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
         return;
       }
       if (game.save.flags['v4:report']) {
-        b.innerHTML = head('Morning Report · Day 23') + `<div class="done-stamp"><b>✓ Submitted</b>It will upload to the university the moment we have signal. (In about three weeks.)</div>`;
+        b.innerHTML = head('Morning Report · Day 23') + `<div class="done-stamp"><b>${gi('check')} Submitted</b>It will upload to the university the moment we have signal. (In about three weeks.)</div>`;
         win('report', 'morning_report_day23.doc', 'report', 470, 250, b);
         return;
       }
@@ -740,7 +764,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
         <div class="q"><label>2. Total vanebill sightings this week</label><div class="s2"></div><div class="tip t2"></div></div>
         <div class="q"><label>3. Water temperature trend</label><div class="s3"></div><div class="tip t3"></div></div>
         <div class="q"><label>4. Photo of the day</label><div class="thumbs"></div><div class="tip t4"></div></div>
-        <div class="act"><div class="gel green big go ctl">Send report ➤</div><div class="pw"></div></div><div class="out"></div>`;
+        <div class="act"><div class="gel green big go ctl">Send report ${gi('send')}</div><div class="pw"></div></div><div class="out"></div>`;
       const opSheet = b.querySelector('.opsheet') as HTMLElement;
       opSheet.addEventListener('click', () => { lastPress = center(opSheet); apps.sheet(); });
       const q1 = dropdown(BIRDS), q2 = numField(), q3 = dropdown(['Rising', 'Falling', 'Steady']);
@@ -807,7 +831,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
           sfx.win();
           if (b.isConnected) {
             act.innerHTML = '';
-            (b.querySelector('.out') as HTMLElement).innerHTML = `<div class="done-stamp">${shots[pick] ? `<img src="${shots[pick].img}" style="width:96px;float:right;margin-left:8px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4);transform:rotate(3deg)">` : ''}<b>✓ Report complete!</b>Scythewings lead the week, ${sumCol(0)} vanebills, and the water is cooling fast. Cooling fast... huh. Might mention that to Joshu.</div>`;
+            (b.querySelector('.out') as HTMLElement).innerHTML = `<div class="done-stamp">${shots[pick] ? `<img src="${shots[pick].img}" style="width:96px;float:right;margin-left:8px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4);transform:rotate(3deg)">` : ''}<b>${gi('check')} Report complete!</b>Scythewings lead the week, ${sumCol(0)} vanebills, and the water is cooling fast. Cooling fast... huh. Might mention that to Joshu.</div>`;
             const c = center(b);
             fx.confetti(c.x - b.offsetWidth * 0.3, c.y - b.offsetHeight / 2, 70, b.offsetWidth * 0.5); fx.confetti(c.x + b.offsetWidth * 0.3, c.y - b.offsetHeight / 2, 70, b.offsetWidth * 0.5);
             fx.bubbles(c.x, c.y, 16, b.offsetWidth * 0.6);
@@ -830,7 +854,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
     skills: () => SK.open(),
     files: () => {
       const b = el('div');
-      b.innerHTML = `<div class="addr"><div class="gel glass sm">◀</div><span>Computer ▸ MoriBook ▸ Files</span></div>`;
+      b.innerHTML = `<div class="addr"><div class="gel glass sm">${gi('back', { col: '#3a5a78' })}</div><span>Computer ${gi('crumb')} MoriBook ${gi('crumb')} Files</span></div>`;
       const list = el('div', 'fl');
       b.appendChild(list);
       let unlocked = false;
@@ -1077,22 +1101,123 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
       const c = center(from); lastPress = c; fx.bubbles(c.x, c.y - 10, 6, 40);
     }
     closePops();
-    apps[id]();
+    openApp(id);
   };
   const iconEls: Record<string, HTMLElement> = {};
-  for (const [id, name, ic, isNew] of desk) {
+  /** put an installed app's icon on the desktop, in catalogue order (fresh: the NEW badge) */
+  const addIcon = (id: string) => {
+    const dd = desk.find(x => x[0] === id);
+    if (!dd || iconEls[id]) return;
+    const [, name, ic, isNew] = dd;
     const d = el('div', 'mos-ic ctl' + (isNew ? ' new' : '') + (id === 'upall' && field ? ' big0' : ''));
     d.appendChild(ico(ic, 2));
     d.appendChild(el('span', '', name));
+    if (isFresh(id)) d.appendChild(el('i', 'nw', 'NEW'));
     d.addEventListener('click', () => launch(id, d));
-    iconsEl.appendChild(d);
+    const after = desk.slice(desk.indexOf(dd) + 1).map(x => iconEls[x[0]]).find(Boolean);
+    iconsEl.insertBefore(d, after ?? null);
     iconEls[id] = d;
-  }
+    return d;
+  };
+  for (const [id] of desk) if (installed(id)) addIcon(id);
+
+  // ---- app downloads: an unlocked app arrives through the installer toast in the tray corner
+  /** turn the unlock checks on once the desktop has settled (not under the report's opening windows) */
+  let unlocksOn = false;
+  const queue: string[] = [];
+  let dlCur: string | null = null;
+  const pendingOpen: Record<string, () => void> = {};
+  const queued = (id: string) => dlCur === id || queue.includes(id);
+  /** worth a button: installed, downloading, or its unlock is met (it downloads on demand) */
+  const available = (id: string) => installed(id) || queued(id) || !UNLOCK_BY_ID[id] || UNLOCK_BY_ID[id].when();
+  /** balloons sit above the installer while it's up */
+  const stackBal = () => { if (bal) bal.style.bottom = dlEl ? `calc(var(--bar) + ${dlEl.offsetHeight + 22}px)` : ''; };
+  const checkUnlocks = () => {
+    if (closed) return;
+    let added = false;
+    for (const u of unlockable()) if (!queued(u.id)) { queue.push(u.id); added = true; }
+    if (added && !dlEl) void runDownloads();
+  };
+  const runDownloads = async () => {
+    const box = el('div', 'mos-dl', `<div class="hd">${gi('dl')}<b>MoriStore</b><span>Downloading</span></div><div class="ls"></div>`);
+    dlEl = box;
+    scr.appendChild(box);
+    const ls = box.querySelector('.ls') as HTMLElement, hdS = box.querySelector('.hd span') as HTMLElement;
+    sfx.beep();
+    stackBal();
+    for (;;) {
+      while (queue.length && !closed) {
+        const id = queue.shift()!;
+        dlCur = id;
+        const u = UNLOCK_BY_ID[id];
+        hdS.textContent = queue.length ? `Downloading · ${queue.length + 1} to go` : 'Downloading';
+        const row = el('div', 'row', `<span class="ic"></span><span class="t"><b>${esc(u.name)}</b><small>${esc(u.why)}</small></span><em>0%</em><span class="bar"><i></i></span>`);
+        (row.querySelector('.ic') as HTMLElement).appendChild(ico(desk.find(x => x[0] === id)?.[2] ?? 'doc', 1));
+        ls.appendChild(row);
+        // three rows at most: the oldest finished one goes
+        while (ls.children.length > 3) ls.firstElementChild?.remove();
+        stackBal();
+        const bar = row.querySelector('.bar i') as HTMLElement, pct = row.querySelector('em') as HTMLElement;
+        const T = queue.length > 1 ? 0.75 : 1.25;
+        await new Promise<void>(res => {
+          let t = 0, lastQ = -1;
+          animate(dt => {
+            t += dt;
+            const f = Math.min(1, t / T);
+            // the bar fills in whole pixel blocks
+            const q = Math.floor(f * 12);
+            if (q !== lastQ) { lastQ = q; bar.style.width = (q / 12) * 100 + '%'; pct.textContent = Math.round((q / 12) * 100) + '%'; if (q % 3 === 0) sfx.tick(q / 2); }
+            if (f >= 1 || closed) { res(); return false; }
+            return true;
+          });
+        });
+        if (closed) { dlCur = null; return; }
+        markInstalled(id);
+        dlCur = null;
+        row.classList.add('done');
+        pct.textContent = 'Installed';
+        const d = addIcon(id);
+        if (d) {
+          retrigger(d, 'pop');
+          const c = center(d);
+          fx.sparkle(c.x, c.y - 10, 14, 90); fx.ring(c.x, c.y - 8, 'rgba(255,240,160,0.95)', 60); fx.bubbles(c.x, c.y, 6, 40);
+        }
+        sfx.unlock();
+        if (id === 'mail') { MAIL.welcome(); MAIL.refresh(); }
+        lastRp = -1; lastMail = -1;
+        badges();
+        const go = pendingOpen[id];
+        delete pendingOpen[id];
+        if (go) go();
+      }
+      hdS.textContent = 'All done';
+      await new Promise<void>(r => setTimeout(r, 1700));
+      if (closed || !queue.length) break;
+    }
+    if (dlEl === box) dlEl = null;
+    box.classList.add('bye');
+    setTimeout(() => box.remove(), 320);
+    stackBal();
+  };
+  /** open an app: straight away if installed; after its download if it's coming; otherwise say why not */
+  const openApp = (id: string, arg?: string) => {
+    const go = () => {
+      if (closed) return;
+      markOpened(id);
+      iconEls[id]?.querySelector('.nw')?.remove();
+      if (id === 'enc') ENC.open(arg); else if (id === 'mail') MAIL.open(arg); else if (id === 'skills') SK.open(arg); else if (id === 'upall') UP.open(); else apps[id]?.();
+    };
+    const u = UNLOCK_BY_ID[id];
+    if (!u || installed(id)) { go(); return; }
+    if (queued(id) || u.when()) { pendingOpen[id] = go; if (!queued(id)) { queue.push(id); if (!dlEl) void runDownloads(); } return; }
+    sfx.bad();
+    balloon(`${u.name}: not installed yet`, esc(u.hint ?? 'It will download later.'), 5500, { icon: desk.find(x => x[0] === id)?.[2] ?? 'doc' });
+  };
   const refresh = () => {
     iconsEl.querySelectorAll('.mos-ic').forEach((d, i) => setTimeout(() => { retrigger(d, 'pop'); sfx.pop(i); const c = center(d); fx.sparkle(c.x, c.y - 10, 4, 40); }, i * 70));
   };
   const blow = () => { sfx.bubbles(); for (let i = 0; i < 6; i++) setTimeout(() => fx.bubbles(S.w * (0.1 + Math.random() * 0.8), S.dh - 10, 6, 80), i * 120); };
-  const pet = (x: number, y: number) => { sfx.bark(); fx.sparkle(x, y, 14, 90); floatText(x, y - 16, '♥ boof!', '#ffc4e4'); };
+  const pet = (x: number, y: number) => { sfx.bark(); fx.sparkle(x, y, 14, 90); floatText(x, y - 16, `${gi('heart')} boof!`, '#ffc4e4'); };
 
   // ---- start menu
   const startMenu = () => {
@@ -1101,22 +1226,25 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
     const l = el('div', 'l'), r = el('div', 'r');
     m.append(l, r);
     for (const [id, name, ic] of desk) {
+      if (!iconEls[id]) continue;
       const mi = el('div', 'mi ctl');
       mi.appendChild(ico(ic, 1));
       mi.appendChild(el('span', '', name.replace('Spread-sheets', 'Spreadsheets').replace('Encyclo-pedia', 'Encyclopedia').replace('Upload All', 'Upload Everything').replace('Jenna-Shell', 'JennaShell')));
-      mi.addEventListener('click', () => { closePops(); lastPress = center(orb); apps[id](); });
+      if (isFresh(id)) mi.appendChild(el('i', 'nw', 'NEW'));
+      mi.addEventListener('click', () => { closePops(); lastPress = center(orb); openApp(id); });
       l.appendChild(mi);
     }
     const av = el('div', 'av');
     av.appendChild(icon('pug', 2));
     r.append(av, el('div', 'nm', 'Mori'));
     for (const [label, id] of [['Documents', 'files'], ['Pictures', 'photos'], ['Encyclopedia', 'enc'], ['ZEA Mail', 'mail'], ['Games', 'plankton'], ['Blow bubbles', '*b'], ['Pet Chunk', '*p']] as const) {
+      if (id[0] !== '*' && !iconEls[id]) continue;
       const mi = el('div', 'mi ctl', label);
-      mi.addEventListener('click', () => { closePops(); if (id === '*b') blow(); else if (id === '*p') { const c = center(orb); pet(c.x + 20, c.y - 30); } else { lastPress = center(orb); apps[id](); } });
+      mi.addEventListener('click', () => { closePops(); if (id === '*b') blow(); else if (id === '*p') { const c = center(orb); pet(c.x + 20, c.y - 30); } else { lastPress = center(orb); openApp(id); } });
       r.appendChild(mi);
     }
     r.appendChild(el('div', 'sp'));
-    const pw = el('div', 'gel red sm ctl', '⏻ Close lid');
+    const pw = el('div', 'gel red sm ctl', `${gi('power')} Close lid`);
     pw.addEventListener('click', () => finish());
     r.appendChild(pw);
     openPop(m, 4, 0, { anchor: orb, bottom: true });
@@ -1257,6 +1385,8 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
 
   // ---- resize
   const ro = new ResizeObserver(() => {
+    scrR = null;
+    cur.invalidate();
     measure();
     for (const W of open) {
       if (W.max) { W.w = S.w; W.h = S.dh; }
@@ -1268,11 +1398,18 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
 
   // ---- the frame loop
   let hovEl: Element | null = null;
+  /** write a transform only when it changed (an unchanged string still costs a style recalc) */
+  const tfs = new WeakMap<HTMLElement, string>();
+  const setTf = (e: HTMLElement, t: string) => { if (tfs.get(e) !== t) { tfs.set(e, t); e.style.transform = t; } };
   let last = performance.now(), T = 0, clockT = 0;
+  /** the wallpaper is out of sight under a maximised window: its clouds, flares and bubbles rest */
+  let wallHidden = false;
   const frame = (now: number) => {
     if (closed) return;
     const dt = Math.min(0.25, (now - last) / 1000);
     last = now; T += dt;
+    // the screen rect is re-read lazily once per frame (it only moves while the lid springs open)
+    scrR = null;
     cur.update(dt);
     if (cur.hoverDirty) {
       cur.hoverDirty = false;
@@ -1286,22 +1423,26 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
       }
       cur.setLink(!!h && !h.classList.contains('hv'));
     }
-    // parallax + clouds + flares
-    const k = Math.min(1, dt * 3.5);
-    par.x += (par.tx - par.x) * k; par.y += (par.ty - par.y) * k;
-    const mx = (bgW - S.w) / 2, my = (bgH - S.h) / 2;
-    bgEl.style.transform = `translate(${(-mx - par.x * mx * 1.2).toFixed(1)}px,${(-my - par.y * my * 1.2).toFixed(1)}px)`;
-    const px = bgW / 160;
-    for (const c of clouds) {
-      c.x += c.v * dt * 0.6;
-      if (c.x > 168) c.x = -c.c.width - Math.random() * 20;
-      c.c.style.transform = `translate(${(c.x * px - par.x * 26 * c.d).toFixed(1)}px,${(c.y * px - par.y * 10 * c.d).toFixed(1)}px) scale(${px.toFixed(3)})`;
-    }
-    const sx0 = S.w * 0.03, sy0 = -S.h * 0.02, cx0 = S.w * (0.5 + par.x * 0.5), cy0 = S.h * (0.5 + par.y * 0.5);
-    for (const f of flares) {
-      const x = sx0 + (cx0 - sx0) * f.k, y = sy0 + (cy0 - sy0) * f.k;
-      f.e.style.transform = `translate(${(x - f.s / 2).toFixed(1)}px,${(y - f.s / 2).toFixed(1)}px)`;
-      f.e.style.opacity = String(0.55 + Math.sin(T * 0.7 + f.k * 5) * 0.25);
+    // parallax + clouds + flares (skipped while a maximised window hides the wallpaper)
+    const hidden = open.some(W => W.max && !W.min && !W.minning && !W.closing && !W.anim);
+    if (hidden !== wallHidden) { wallHidden = hidden; scr.classList.toggle('wallq', hidden); }
+    if (!hidden) {
+      const k = Math.min(1, dt * 3.5);
+      par.x += (par.tx - par.x) * k; par.y += (par.ty - par.y) * k;
+      const mx = (bgW - S.w) / 2, my = (bgH - S.h) / 2;
+      setTf(bgEl, `translate(${(-mx - par.x * mx * 1.2).toFixed(1)}px,${(-my - par.y * my * 1.2).toFixed(1)}px)`);
+      const px = bgW / 160;
+      for (const c of clouds) {
+        c.x += c.v * dt * 0.6;
+        if (c.x > 168) c.x = -c.c.width - Math.random() * 20;
+        setTf(c.c, `translate(${(c.x * px - par.x * 26 * c.d).toFixed(1)}px,${(c.y * px - par.y * 10 * c.d).toFixed(1)}px) scale(${px.toFixed(3)})`);
+      }
+      const sx0 = S.w * 0.03, sy0 = -S.h * 0.02, cx0 = S.w * (0.5 + par.x * 0.5), cy0 = S.h * (0.5 + par.y * 0.5);
+      for (const f of flares) {
+        const x = sx0 + (cx0 - sx0) * f.k, y = sy0 + (cy0 - sy0) * f.k;
+        setTf(f.e, `translate(${(x - f.s / 2).toFixed(1)}px,${(y - f.s / 2).toFixed(1)}px)`);
+        f.e.style.opacity = (0.55 + Math.sin(T * 0.7 + f.k * 5) * 0.25).toFixed(2);
+      }
     }
     // windows
     for (const W of open.slice()) {
@@ -1341,7 +1482,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
       }
     }
     for (const f of [...anims]) if (!f(dt)) anims.delete(f);
-    fx.step(dt, true, S.dh);
+    fx.step(dt, !wallHidden, S.dh);
     fx.draw();
     clockT -= dt;
     if (clockT <= 0) {
@@ -1362,16 +1503,19 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
   }
   // the camera plugs in: its icon hops, the tray lights up and a balloon offers the import (at camp
   // with specimens or field notes too: Upload Everything)
-  const welcomed = MAIL.welcome();
+  // (Tua's welcome waits until ZEA Mail is installed: it's sent by the download)
+  const welcomed = installed('mail') ? MAIL.welcome() : null;
   badges();
+  // newly unlocked apps start downloading once the desktop has settled
+  setTimeout(() => { if (closed) return; unlocksOn = true; checkUnlocks(); }, reportDue ? 4000 : 1100);
   const pend = pendingCount();
   const nItems = atCamp() ? handInCount() : 0, nNotes = pendingNotes().length;
-  if (o.app && !reportDue) setTimeout(() => { if (!closed) { lastPress = center(iconEls[o.app!] ?? orb); os.open(o.app!); } }, 520);
+  if (o.app && !reportDue) setTimeout(() => { if (!closed) { lastPress = center(iconEls[o.app!] ?? orb); openApp(o.app!); } }, 520);
   if (pend || nItems || nNotes) {
     setTimeout(() => {
       if (closed) return;
       if (pend) {
-        const ci = iconEls.cam;
+        const ci = iconEls.cam ?? iconEls.upall;
         retrigger(ci, 'pop');
         ci.classList.add('plug');
         const c = center(ci);
@@ -1383,21 +1527,22 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
       if (nItems || nNotes) {
         const parts = [pend ? `${pend} photo${pend === 1 ? '' : 's'}` : '', nItems ? `${nItems} specimen${nItems === 1 ? '' : 's'}` : '', nNotes ? `${nNotes} field note${nNotes === 1 ? '' : 's'}` : ''].filter(Boolean);
         balloon(atCamp() && field ? 'Back at camp' : 'Ready to upload', `<b>${parts.join(', ')}</b> to upload. Click here to upload everything in one go.`, 9000, { icon: 'upall', onClick: () => UP.open() });
-      } else balloon('Camera connected', `<b>${pend} new photo${pend === 1 ? '' : 's'}</b> on the ZX-7. Click here to upload ${pend === 1 ? 'it' : 'them'} to the Encyclopedia.`, 9000, { icon: 'cam', onClick: () => apps.cam() });
+      } else balloon('Camera connected', `<b>${pend} new photo${pend === 1 ? '' : 's'}</b> on the ZX-7. Click here to upload ${pend === 1 ? 'it' : 'them'}.`, 9000, { icon: 'cam', onClick: () => openApp(installed('cam') ? 'cam' : 'upall') });
     }, reportDue ? 9000 : 800);
   } else if (field && opens === 1) {
     setTimeout(() => { if (!closed) balloon('It boots!', `Sand in the hinges, ${batt}% battery, and every file survived. The camera plugs in here when you have photos to upload.`, 8000); }, 900);
   }
   // agency mail waiting
-  const um = unreadMail();
+  const um = installed('mail') ? unreadMail() : 0;
   if (um && !o.app) setTimeout(() => {
     if (closed || bal) return;
-    balloon('ZEA Mail', welcomed ? 'A message from the Zealandia Expedition Agency, the people who sent the expedition. (Tua says hi.)' : `<b>${um} unread message${um === 1 ? '' : 's'}</b> from the agency.`, 7000, { icon: 'mail', onClick: () => MAIL.open() });
+    balloon('ZEA Mail', welcomed ? 'A message from the Zealandia Expedition Agency, the people who sent the expedition. (Tua says hi.)' : `<b>${um} unread message${um === 1 ? '' : 's'}</b> from the agency.`, 7000, { icon: 'mail', onClick: () => openApp('mail') });
   }, reportDue ? 20000 : pend || nItems || nNotes ? 10500 : field && opens === 1 ? 9500 : 1600);
   lid.addEventListener('click', () => finish());
 
   await new Promise<void>(res => { finish = () => { finish = () => {}; res(); }; });
   closed = true;
+  game.covered = Math.max(0, game.covered - 1);
   window.removeEventListener('keydown', kd, true);
   ro.disconnect();
   cur.destroy();

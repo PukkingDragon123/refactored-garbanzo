@@ -217,10 +217,21 @@ const ICON_DRAW: Record<string, (g: CanvasRenderingContext2D) => void> = {
   },
 };
 const cache = new Map<string, string>();
-/** 24x24 glossy pixel icon; returns a fresh canvas each call */
+const srcs = new Map<string, HTMLCanvasElement>();
+/** a fresh canvas copy of a cached source (painting + hardAlpha + outline runs once per icon, not per use) */
+export function copyCanvas(src: HTMLCanvasElement): HTMLCanvasElement {
+  return canvas(src.width, src.height, g => g.drawImage(src, 0, 0));
+}
+/** 24x24 glossy pixel icon; returns a fresh canvas each call (copied from a cached painting) */
 export function icon(name: string, scale = 2): HTMLCanvasElement {
-  const draw = ICON_DRAW[name] ?? ICON_DRAW.doc;
-  const c = canvas(24, 24, g => { draw(g); hardAlpha(g, 24, 24); outline(g, 24, 24, name === 'term' ? '#0a1018' : '#15405e'); });
+  const key = ICON_DRAW[name] ? name : 'doc';
+  let s = srcs.get(key);
+  if (!s) {
+    const draw = ICON_DRAW[key];
+    s = canvas(24, 24, g => { draw(g); hardAlpha(g, 24, 24); outline(g, 24, 24, key === 'term' ? '#0a1018' : '#15405e'); });
+    srcs.set(key, s);
+  }
+  const c = copyCanvas(s);
   c.style.width = c.style.height = 24 * scale + 'px';
   c.className = 'pxi';
   return c;
@@ -374,10 +385,17 @@ export class Fx {
     }
   }
   get busy() { return this.ps.length > 0 || this.wall.length > 0; }
+  /** something is on the canvases from the last draw (so an idle frame still needs one clear) */
+  private dirty = { b: true, f: true };
   draw() {
     const { gb, gf, PX } = this;
-    gb.clearRect(0, 0, this.W, this.H);
-    gf.clearRect(0, 0, this.W, this.H);
+    // idle frames cost nothing: only clear a canvas that has something on it, skip the rest
+    let nb = this.wall.length > 0, nf = false;
+    for (const p of this.ps) { if (p.front) nf = true; else nb = true; if (nb && nf) break; }
+    if (nb || this.dirty.b) gb.clearRect(0, 0, this.W, this.H);
+    if (nf || this.dirty.f) gf.clearRect(0, 0, this.W, this.H);
+    this.dirty.b = nb; this.dirty.f = nf;
+    if (!nb && !nf) return;
     for (const b of this.wall) gb.drawImage(bubSprite(b.r), Math.round(b.x / PX - b.r), Math.round(b.y / PX - b.r));
     for (const p of this.ps) {
       const g = p.front ? gf : gb;

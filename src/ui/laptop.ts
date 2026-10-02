@@ -9,6 +9,7 @@ import { readyFactCount } from '../game/research';
 import { trackedQuest, currentStepIndex } from '../game/quests';
 import { skillIconURL, uiIconURL } from '../art/itemicons';
 import { el } from './ui';
+import { gi } from './v7/aeroGlyphs';
 import { sfx, css, wait, reduced, pushKeys, esc, bufCanvas, countUp, AppCtx, AppMount, LaptopAppId } from './laptop-kit';
 import { RIG, STICKERS, paintLid, paintDeck, paintBackdrop, paintWallpaper, stickerBuffer, DECK } from './laptop-art';
 import { mountSamples } from './laptop-samples';
@@ -231,7 +232,7 @@ export function openLaptop(o: { app?: LaptopApp } = {}): Promise<void> {
       <div class="lt-wm">FieldOS 3.1 · unregistered copy<br>Pip Nakamura Industries (est. last Tuesday)</div>
       <div class="lt-bar"><button class="lt-start" title="Start"><img src="${uiIconURL('tree', 1)}" alt="">FieldOS</button><div class="lt-tasks"></div>
         <div class="lt-tray"><span class="rp" title="Research points"><img src="${uiIconURL('rp', 1)}" alt=""><b></b></span><span class="bat" title="Battery (charging from the Kittiwake’s batteries)"><img src="${uiIconURL('battery', 1)}" alt=""><span class="pc"></span><img src="${uiIconURL('bolt', 1)}" alt="" style="width:0.9em;margin-left:-0.2em"></span><span class="clk"></span></div>
-        <button class="lt-shut" title="Close the lid (Esc)">⏻</button></div>
+        <button class="lt-shut" title="Close the lid (Esc)">${gi('power')}</button></div>
       <div class="lt-menu"></div>`;
     const wall = os.querySelector('.lt-wall') as HTMLCanvasElement;
     const wp = paintWallpaper();
@@ -277,7 +278,7 @@ export function openLaptop(o: { app?: LaptopApp } = {}): Promise<void> {
         desk.appendChild(b);
       }
       const rd = el('button', 'lt-di', `<img src="${uiIconURL('readme', 1)}" alt=""><span>readme.txt</span>`);
-      rd.onclick = () => mini('readme.txt', `hi rowan!!\n\ni fixed the laptop. mostly. the E key is red now because it was the only key cap left in the wreck.\n\n- battery runs off the boat. DON'T unplug it\n- do NOT put tea near the keyboard (LOOKING AT YOU CROWE)\n- the microscope app is just the webcam + a lens i taped on. works great tho\n\nlove, pip  ✓ warranty void`);
+      rd.onclick = () => mini('readme.txt', `hi rowan!!\n\ni fixed the laptop. mostly. the E key is red now because it was the only key cap left in the wreck.\n\n- battery runs off the boat. DON'T unplug it\n- do NOT put tea near the keyboard (LOOKING AT YOU CROWE)\n- the microscope app is just the webcam + a lens i taped on. works great tho\n\nlove, pip\n(warranty: void)`);
       desk.appendChild(rd);
       // taskbar
       tasks.innerHTML = '';
@@ -343,7 +344,7 @@ export function openLaptop(o: { app?: LaptopApp } = {}): Promise<void> {
         win.style.setProperty('--ox', `${r.left + r.width / 2 - sr.left}px`);
         win.style.setProperty('--oy', `${r.top + r.height / 2 - sr.top}px`);
       }
-      win.innerHTML = `<div class="lt-wt"><img src="${a.icon()}" alt=""><span class="ttl">${a.title}</span><span class="ctl"><button title="Minimise">_</button><button title="Maximise">□</button><button class="x" title="Close app">×</button></span></div><div class="lt-wb"></div>`;
+      win.innerHTML = `<div class="lt-wt"><img src="${a.icon()}" alt=""><span class="ttl">${a.title}</span><span class="ctl"><button title="Minimise">_</button><button title="Maximise">${gi('max', { col: '#f1e8d0' })}</button><button class="x" title="Close app">${gi('close')}</button></span></div><div class="lt-wb"></div>`;
       const btns = win.querySelectorAll('.ctl button');
       (btns[0] as HTMLElement).onclick = () => openApp('home');
       (btns[1] as HTMLElement).onclick = () => { sfx('wrong', { vol: 0.3 }); win.animate?.([{ transform: 'scale(1.01)' }, { transform: 'none' }], { duration: 160 }); };
@@ -454,7 +455,9 @@ export function openLaptop(o: { app?: LaptopApp } = {}): Promise<void> {
       close();
     };
 
-    const close = game.ui.modal(root, () => { openNow = false; game.persist(); resolve(); }, false);
+    // the painted backdrop covers the screen: the world behind is frozen while the laptop is up
+    game.covered++;
+    const close = game.ui.modal(root, () => { game.covered = Math.max(0, game.covered - 1); openNow = false; game.persist(); resolve(); }, false);
     const wrap = root.parentElement as HTMLElement;
     wrap.classList.add('lt-wrap');
     fit();
