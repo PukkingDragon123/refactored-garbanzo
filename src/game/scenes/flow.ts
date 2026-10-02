@@ -3,6 +3,7 @@
 import { game } from '../game';
 import type { TimeOfDay } from '../../world/timeofday';
 import type { SiteId } from '../species';
+import type { FieldSite } from './field';
 
 const NEXT_TIME: Record<TimeOfDay, TimeOfDay> = { dawn: 'day', day: 'dusk', dusk: 'night', night: 'night' };
 
@@ -22,7 +23,8 @@ export async function goTent(night = game.save.campTime === 'night') {
 
 export async function goField(site: SiteId, tod: TimeOfDay) {
   const { SITES2 } = await import('../sites2');
-  const def = SITES2[site];
+  // (the V10 sites too, so ?scene=site&site=glowforest etc. open them for checking)
+  const def = SITES2[site] ?? ((await import('../sites10')).SITES10[site] as unknown as FieldSite | undefined);
   if (!def) return;
   const { FieldScene } = await import('./field');
   game.go(() => new FieldScene(def, tod));

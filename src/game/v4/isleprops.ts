@@ -212,7 +212,8 @@ export function dressIsland(s: IslandScene4, L: IsleLayers) {
   }
   // palm fronds hanging into the top of the frame over the grove and the landing beach
   for (let x = 1500; x < 4100; x += rng.range(260, 420)) {
-    const c = sprite(`fpalm:${x % 2}`, () => foreground('palm', 930 + (x % 2), 220));
+    // (each with its trunk leaning in from above the frame)
+    const c = sprite(`fpalm:${x % 2}`, () => foreground('palm', 930 + (x % 2), 220, { above: 240 }));
     if (c) L.front.add(new Prop(c.f, x * pf, layerY(pf, -40) + rng.range(-10, 10), 2, { sway: 0.5, flip: rng.chance(0.5), tint: packColor(0.4, 0.46, 0.42, 1) }));
   }
   // (the sea cave's rock arch is v9/east.ts too)
