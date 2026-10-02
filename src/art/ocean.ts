@@ -101,6 +101,9 @@ export const STORM: WaterPalette = {
   haze: h('#46595a'),
 };
 
+/** The storm whitecaps' foam (dark -> light): the white water riding the storm crests. */
+export const STORM_WHITECAP: C[] = [h('#9fb3ac'), h('#c9d8d2'), h('#eef5f1'), h('#ffffff')];
+
 /** Shallow lagoon water over sand for the beach camp. */
 export const SHORE: WaterPalette = {
   rim: h('#f2fffb'),
@@ -420,7 +423,7 @@ export function paintWhitecap(spec: BandSpec, seed = 5): PixelBuffer {
   const W = spec.texW, H = Math.round(12 + spec.detail * 20);
   const b = new PixelBuffer(W + WRAP, H);
   const rng = new Rng(seed * 131 + W);
-  const foam = [h('#9fb3ac'), h('#c9d8d2'), h('#eef5f1'), h('#ffffff')];
+  const foam = STORM_WHITECAP;
   for (let x = 0; x < W; x++) {
     const n = tfbm(x / 10, 0.3, W / 10, 3, seed);
     const depth = Math.round((0.25 + n * 0.75) * H * 0.55);
