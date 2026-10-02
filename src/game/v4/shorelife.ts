@@ -32,6 +32,7 @@ import { audio } from '../../core/audio';
 import { clamp, rand, smoothstep } from '../../core/math';
 import { shoreFrame, shoreAnims } from '../../art/v9/shore';
 import { paintTwig } from '../../art/v9/shore/birds';
+import { Saplings } from '../v9/saplings';
 import type { BeastEye } from '../../art/beasts';
 import { groundY } from '../../art/island4/layout';
 import type { Animal } from '../wild/animal';
@@ -868,18 +869,18 @@ class Twinfan extends ShoreBeast {
     this.target = best; this.mode = 'fly'; this.play('fly'); this.timer = rand.range(1, 2); this.bug = null;
   }
 }
-/** twigs the twinfan perches on (drawn on the gameplay plane behind the walker) */
+/** twigs the twinfan perches on (drawn on the gameplay plane behind the walker), each the side shoot of a sapling */
 class Twigs implements Drawable {
   z = 29;
-  constructor(readonly list: Perch[]) {}
+  private stems: Saplings;
+  constructor(readonly list: Perch[], roots: [number, number][]) {
+    this.stems = new Saplings(this.z, roots, 3);
+  }
   draw(r: Renderer) {
+    this.stems.draw(r);
     const x0 = r.visibleX0(30), x1 = r.visibleX1(30);
     for (const q of this.list) {
       if (q.x < x0 || q.x > x1) continue;
-      // a sapling: a thin stem from the forest floor up to the perching twig
-      const gy = groundY(q.x - 9);
-      r.rect(q.x - 10, q.y + 2, 1, gy - q.y - 1, packColor(0.27, 0.21, 0.15, 1));
-      r.rect(q.x - 9, q.y + 6, 1, gy - q.y - 6, packColor(0.2, 0.16, 0.11, 1));
       r.draw(q.fr, q.x, q.y + 0.5);
     }
   }
@@ -1006,14 +1007,16 @@ export function startShoreLife(s: IslandScene4) {
   // the periscope octopus in the big west rock pool
   add(new Periscope(s, 200, Math.round(groundY(200)) + 56));
   // the twinfan and its perches along the bush track
-  const perches: Perch[] = [];
+  const perches: Perch[] = [], roots: [number, number][] = [];
   for (let x = 5960; x < 6880; x += rand.range(38, 70)) {
     const v = perches.length % 4;
     const tw = paintTwig(v * 7 + 3);
     const fr = local.has(`shore:twig${v}`) ? local.get(`shore:twig${v}`) : local.add(`shore:twig${v}`, tw.buf, tw.ax, tw.ay);
-    perches.push({ x, y: groundY(x) - rand.range(26, 64), fr });
+    const y = Math.round(groundY(x) - rand.range(26, 64));
+    perches.push({ x, y, fr });
+    roots.push([x + tw.root[0], y + 0.5 + tw.root[1]]);
   }
-  s.main.add(new Twigs(perches));
+  s.main.add(new Twigs(perches, roots));
   add(new Twinfan(s, perches, perches[Math.min(perches.length - 1, 4)]));
   // the starweb colony on the sea cave roof
   const colony = new StarwebColony(s, [[5122, 104], [5178, 98], [5236, 108], [5298, 100], [5362, 106]]);

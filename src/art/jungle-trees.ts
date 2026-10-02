@@ -1049,11 +1049,30 @@ export function tree(kind: TreeKind, seed: number, height?: number, o: TreeOpts 
  * Free-standing broadleaf canopy clump (no trunk) of about w × h px, for stacking overhead or in
  * canopy layers. `flowers` scatters rātā blossoms. Anchor: centre of the bottom edge.
  */
-export function canopyClump(seed: number, w = 180, h = 110, o: { ramp?: Ramp; flowers?: boolean; vines?: boolean; shape?: 'oval' | 'point' } = {}): Sprite {
+export function canopyClump(seed: number, w = 180, h = 110, o: { ramp?: Ramp; flowers?: boolean; vines?: boolean; shape?: 'oval' | 'point'; above?: number } = {}): Sprite {
   const rng = new Rng(seed * 37 + 19);
-  const buf = newCanvas(w + 20, h + 90);
-  const cx = (w + 20) / 2, cy = h / 2 + 8;
+  // `above`: px of deeper canopy (and the limbs the clump hangs from) continuing up out of the clump,
+  // so a clump hung at the top of the frame never shows a top edge when the view looks up
+  const above = Math.max(0, Math.round(o.above ?? 0));
+  const buf = newCanvas(w + 20, h + 90 + above);
+  const cx = (w + 20) / 2, cy = h / 2 + 8 + above;
   const rp = o.ramp ?? JP.canopy;
+  if (above > 0) {
+    const ur = new Rng(seed * 41 + 7);
+    // the limbs it hangs from, rising out of the top
+    for (let i = 0; i < 3; i++) {
+      const x = cx + (i - 1) * w * 0.26 + ur.range(-10, 10);
+      tube(buf, [[x, cy], [x + ur.range(-20, 20), cy - h * 0.6], [x + ur.range(-30, 30), 0]], t => 3 + t * 4, JP.bark, 3);
+    }
+    // deeper canopy above: overlapping dark leaf masses, widening upward, right up to the top
+    for (let y = cy - h * 0.25; y > -20; y -= ur.range(22, 32)) {
+      const k = clamp((cy - y) / (above + h * 0.5));
+      for (let x = cx - w * (0.36 + k * 0.1); x <= cx + w * (0.36 + k * 0.1); x += ur.range(26, 40)) {
+        const r = ur.range(20, 30);
+        leafMass(buf, ur, { cx: x, cy: y, rx: r * 1.25, ry: r, ramp: rp, base: ur.int(0, 1), steps: 2, shape: o.shape ?? 'oval', len: [5, 8], wid: [3, 4.5], density: 0.85, jag: 0.45 });
+      }
+    }
+  }
   crown(buf, rng, { cx, cy: cy - 4, rx: w * 0.44, ry: h * 0.38, ramp: rp, n: 6, lo: 0, hi: 2, shape: o.shape ?? 'oval', len: [5, 8], wid: [3, 4.5], density: 0.8 });
   // a few branch stubs peeking out
   for (let i = 0; i < 3; i++) {
@@ -1064,7 +1083,7 @@ export function canopyClump(seed: number, w = 180, h = 110, o: { ramp?: Ramp; fl
   if (o.flowers) rataFlowers(buf, rng, cl, Math.round(w * 0.4));
   if (o.vines !== false) for (let i = 0; i < 4; i++) vine(buf, rng, cx + rng.range(-w * 0.35, w * 0.35), cy + h * 0.25, rng.range(20, 80), JP.fern, rng.int(3, 5));
   outlineSel(buf, 0.5);
-  return trimSprite({ buf, ax: cx, ay: h + 8 });
+  return trimSprite({ buf, ax: cx, ay: h + 8 + above });
 }
 
 export { despeckle, occlude, leafMass, mix, hex };

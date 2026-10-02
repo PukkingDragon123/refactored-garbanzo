@@ -50,6 +50,9 @@ function stripTrunk(buf: PixelBuffer, x: number, top: number, bot: number, w: nu
   const flare = o.flare ?? 1.2;
   const lean = o.lean ?? 0;
   const mr = o.mossRamp ?? JP.moss;
+  // moss noise at a fixed pixel scale whatever the strip width (periodic over the strip so it still
+  // tiles), its rows sheared across the trunk so patches are ragged, never blocks with flat ends
+  const mP = Math.max(8, Math.round(buf.w / 9)), jP = Math.max(8, Math.round(buf.w * 0.37));
   for (let y = Math.max(0, Math.floor(top)); y < Math.min(buf.h, Math.ceil(bot)); y++) {
     const fromBot = bot - y;
     const hw = hw0 * (1 + Math.exp(-fromBot / (w * 0.5)) * flare) + (pnoise1(y * 0.05, 64, seed) - 0.5) * 1.2;
@@ -64,7 +67,8 @@ function stripTrunk(buf: PixelBuffer, x: number, top: number, bot: number, w: nu
       }
       let c = rc(rp, n * 0.5 + k);
       if (o.moss) {
-        const m = pnoise2((px / buf.w) * 60, y * 0.025, 60, seed + 7) + (nx < 0 ? 0.06 : -0.14) + Math.max(0, 1 - fromBot / 40) * 0.1;
+        const m = pnoise2((px / buf.w) * mP, y * 0.06 + nx * 1.1 + pnoise1((px / buf.w) * jP, jP, seed + 11) * 0.9, mP, seed + 7) * 0.8
+          + pnoise1(y * 0.02, 64, seed + 5) * 0.2 + nx * -0.16 + 0.02 + Math.max(0, 1 - fromBot / 40) * 0.1;
         if (m > 1 - o.moss * 0.45) c = rc(mr, mr.length * 0.42 + k * 0.8 + (m > 1.06 - o.moss * 0.45 ? 0 : 0.8));
       }
       wset(buf, px, y, c);

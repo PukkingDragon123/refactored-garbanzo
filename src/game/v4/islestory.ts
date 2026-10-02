@@ -4,6 +4,7 @@
 // boots, a trail up the bush track and Joshu himself, out cold by the creek. Part two (the walk back,
 // Aroha, making camp, the night) lives in islecamp.ts.
 
+import { Saplings } from '../v9/saplings';
 import { game } from '../game';
 import type { IslandScene4, IsleHooks } from './island';
 import { startQuest, questStatus } from '../quests';
@@ -233,6 +234,8 @@ export class IsleStory implements IsleHooks {
     this.prop('boots', CA.boots(), SPOT.boots, groundY(SPOT.boots) + 6, notF('v4:joshuAwake'), -2);
     this.prop('scrap1', CA.jacketScrap(), 5995, groundY(5995) - 14, () => true, -2);
     this.prop('scrap', CA.jacketScrap(), 6130, groundY(6130) - 18, () => true, -2);
+    // (the twigs they snagged on grow from saplings)
+    this.s.main.add(new Saplings(-2.05, [[5995 - 7, groundY(5995) - 26], [6130 - 7, groundY(6130) - 30]], 0));
     // footprints: Joshu's big boot prints along the wet sand (the left one drags), then bare feet up the track
     const prints: [number, number, number, boolean][] = [];
     for (let x = 3440, i = 0; x < 4960; x += 15, i++) prints.push([x, groundY(x) + 7 + (i % 2 ? 3 : 0) + Math.sin(x * 0.05) * 1.5, i % 2, true]);

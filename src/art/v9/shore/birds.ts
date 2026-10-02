@@ -582,7 +582,7 @@ void hh;
  * A bush twig for the twinfan to perch on (anchored at the perch point, the twig's top middle):
  * a mossy stem sprouting from the left with a few small leaves.
  */
-export function paintTwig(seed: number): { buf: PixelBuffer; ax: number; ay: number } {
+export function paintTwig(seed: number): { buf: PixelBuffer; ax: number; ay: number; root: [number, number] } {
   const sk = new Sk(30, 14, 15, 3);
   const bark = sk.m(rmp('#5a4632', { n: 4, dark: 0.5, light: 0.35 }), { edge: 1 });
   const moss = sk.m(rmp('#6a7a32', { n: 4, dark: 0.5 }), { edge: 0 });
@@ -596,5 +596,6 @@ export function paintTwig(seed: number): { buf: PixelBuffer; ax: number; ay: num
     sk.np();
     sk.blade(x, 1, x + Math.cos(a) * 4, 1 + Math.sin(a) * 4, s => Math.sin(Math.min(1, s * 1.1) * Math.PI) * 1.3 + 0.2, leaf, { z0: 2, z1: 2 });
   }
-  return { buf: sk.resolve(), ax: 15, ay: 3 };
+  // root: where the twig's thick end meets the sapling it grows from (relative to the anchor)
+  return { buf: sk.resolve(), ax: 15, ay: 3, root: [-14, pts[0][1] - 0.5] };
 }
