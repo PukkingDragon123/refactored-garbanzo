@@ -162,7 +162,7 @@ export function openDevPanel() {
     <span class="dv-warn">${ic('bolt')}<span>TEST TOOL, not part of the game. Jumps and cheats change your save (it is backed up to the Auto slot first).</span></span>
     <button class="pz-x" aria-label="Close developer tools" title="Close (Esc)"></button></div>
     <div class="dv-tabs" role="tablist"></div><div class="dv-body"></div>
-    <div class="dv-foot"><span class="st">Arrows / Tab move · Enter presses · 1-5 switch tabs · Esc closes</span></div>`;
+    <div class="dv-foot"><span class="st">${matchMedia('(pointer: coarse)').matches ? 'Tap to jump or press · swipe the tabs for more' : 'Arrows / Tab move · Enter presses · 1-5 switch tabs · Esc closes'}</span></div>`;
   const tabs = root.querySelector('.dv-tabs') as HTMLElement;
   const body = root.querySelector('.dv-body') as HTMLElement;
   const status = root.querySelector('.dv-foot .st') as HTMLElement;
