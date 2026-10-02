@@ -208,6 +208,18 @@ export const ATLAS: AtlasLoc[] = [
       { from: 'ruins', at: 2240, enter: 2280, label: 'Rope down the collapsed stair', hours: 1.5, energy: 20, kind: 'tunnel', needs: { item: 'rope', n: 2, why: 'The stair is gone: you need 2 rope to get down.' }, say: 'Tie it off. Twice. Okay. Three times.' },
     ],
     desc: 'A vast sinkhole in the heart of the land. Warm air breathes out of it. Nobody goes there.', terrain: 'Sheer walls, a misty lake',
+  },  // ------------------------------------------------------------ V11 placeholders (their modules build the scenes)
+  {
+    id: 'forest', name: 'Te Wao Nui', sub: 'The Great Forest', region: 'interior', kind: 'site', pos: P(300, 190),
+    scene: { type: 'custom', go: async () => { console.warn('[atlas] the forest scene is not built yet'); } }, difficulty: 2, xr: [0, 6000],
+    path: PATH([250, 140], [280, 172], [312, 196], [344, 214]),
+    desc: 'The first deep forest inland of the beach: giant trees, ferns taller than a man, mist, and things that watch you.', terrain: 'Deep forest, mud wallows',
+  },
+  {
+    id: 'hills', name: 'Ngā Puke Kōhatu', sub: 'The Rocky Hills', region: 'interior', kind: 'site', pos: P(520, 250),
+    scene: { type: 'custom', go: async () => { console.warn('[atlas] the rocky hills scene is not built yet'); } }, difficulty: 3, xr: [0, 3200],
+    path: PATH([470, 236], [500, 246], [530, 252], [560, 250]),
+    desc: 'Tors, scree and tussock above the bush line. Wind, hawks, and a long view over everything.', terrain: 'Boulders, scree, crags',
   },
 ];
 
