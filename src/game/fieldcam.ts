@@ -20,6 +20,13 @@ import { addRawPhoto, PhotoSubject, RawPhoto, rawPhotos } from './photos';
 import { SPECIES_BY_ID } from './species';
 import { perks } from './skills';
 import { fx10 } from './v10/skills10';
+import type * as GearMod from './v10/campgear';
+
+// Jenna's camera upgrades at the camp bench stack with the skill tree (loaded lazily: campgear pulls in the day loop)
+var gearMod: typeof GearMod | null = null; // eslint-disable-line no-var
+void import('./v10/campgear').then(m => { gearMod = m; });
+const holdSecs10 = (): number => Math.max(0.6, fx10.captureHold() - (gearMod?.gearFx.captureHoldCut() ?? 0));
+const devSecs10 = (): number => fx10.developTime() * (gearMod?.gearFx.developMult() ?? 1);
 import { audio } from '../core/audio';
 import { clamp, damp } from '../core/math';
 
@@ -275,7 +282,7 @@ export class FieldCamera {
     const stab = clamp(1 - (Math.hypot(this.swayVX, this.swayVY) * this.shutterTime()) / 5);
     if (still < 0.35) { this.hold = Math.max(0, this.hold - dt * 0.7); this.holdQ = Math.floor(this.hold * 4); this.holdState = 'shaky'; return; }
     const af = !tgt || this.afState === 'locked' ? 1 : 0.5;
-    const rate = (still * (0.6 + 0.4 * stab) * (this.holding ? 1.2 : 1) * (brace ? 1.1 : 1) * af) / Math.max(0.2, fx10.captureHold());
+    const rate = (still * (0.6 + 0.4 * stab) * (this.holding ? 1.2 : 1) * (brace ? 1.1 : 1) * af) / Math.max(0.2, holdSecs10());
     this.hold = Math.min(1, this.hold + rate * dt);
     this.holdState = this.hold >= 1 ? 'ready' : 'filling';
     // a soft tick each quarter of the ring
@@ -517,7 +524,7 @@ export class FieldCamera {
   private developRate() {
     const night = this.host.tod === 'night';
     if (!this.v10) return (1 / 4.2) * (1 + this.shakeK * 3.5) * (night ? 0.8 : 1);
-    return (1 / Math.max(0.5, fx10.developTime())) * (1 + this.shakeK * 0.6) * (night ? 0.85 : 1);
+    return (1 / Math.max(0.5, devSecs10())) * (1 + this.shakeK * 0.6) * (night ? 0.85 : 1);
   }
   /** seconds until the print is dry, at the current rate */
   developLeft() {
@@ -646,7 +653,7 @@ export class FieldCamera {
     this.uiT -= 1;
     if (this.uiT > 0 && !nag) return;
     this.uiT = 6;
-    const left = Math.max(0.1, (1 - this.hold) * fx10.captureHold());
+    const left = Math.max(0.1, (1 - this.hold) * holdSecs10());
     const auto = !!this.holdOn;
     e.holdlab.innerHTML = nag ? 'HOLD STILL… the shutter goes when the ring is full'
       : st === 'filling' ? `HOLD STEADY <b>${left.toFixed(1)}s</b>${auto ? '' : ' · nothing in focus'}`

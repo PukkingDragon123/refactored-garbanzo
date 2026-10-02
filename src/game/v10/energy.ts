@@ -18,6 +18,7 @@ import { fx10 } from './skills10';
 import { audio } from '../../core/audio';
 import type * as ExpMod from './expedition';
 import type * as DayMod from './day';
+import type * as GearMod from './campgear';
 import type * as RegMod from './regions';
 import type { Player } from '../../world/player';
 import type { Stage } from '../../world/stage';
@@ -55,6 +56,8 @@ var dayMod: typeof DayMod | null = null; // eslint-disable-line no-var
 var regMod: typeof RegMod | null = null; // eslint-disable-line no-var
 void import('./expedition').then(m => { expMod = m; });
 void import('./day').then(m => { dayMod = m; });
+var gearMod: typeof GearMod | null = null; // eslint-disable-line no-var
+void import('./campgear').then(m => { gearMod = m; });
 void import('./regions').then(m => { regMod = m; });
 
 function S(): BodyState { return bucket<BodyState>('energy', () => ({ e: 100, day: '', out: false, ail: [] })); }
@@ -114,7 +117,7 @@ export function spend(n: number, why = ''): void {
 /** spend energy for physical effort (a cliff, a river crossing...): scaled by Field Skills
  *  (fx10.energyMult), the pack's weight and the route's difficulty */
 export function effort(n: number, why = ''): void {
-  spend(n * fx10.energyMult() * loadCostK() * routeK(), why);
+  spend(n * fx10.energyMult() * (gearMod?.gearFx.energyMult() ?? 1) * loadCostK() * routeK(), why);
 }
 
 export function restore(n: number): void {
@@ -178,7 +181,7 @@ export function packWeight(): number {
   return Math.round(w * 100) / 100;
 }
 /** the pack's comfortable capacity, kg */
-export function packCapacity(): number { return 12 + fx10.packBonus(); }
+export function packCapacity(): number { return 12 + fx10.packBonus() + (gearMod?.gearFx.packBonus() ?? 0); }
 /** 0..1+ : carried weight over capacity */
 export function encumbrance(): number { return packWeight() / Math.max(1, packCapacity()); }
 
@@ -359,8 +362,9 @@ export function tickBody(dt: number, s: FieldLike) {
   if (live) {
     let rate = COST.idle;
     activity = 'idle';
-    if (p.underwater || p.anim === 'swim') { rate = COST.swim * fx10.swimMult() * (vx + vy > 50 ? 1.2 : 0.8); activity = 'swim'; }
-    else if (p.state === 'climb') { rate = (vy > 4 ? COST.climb : COST.hang) * fx10.climbMult(); activity = 'climb'; }
+    const gf = gearMod?.gearFx;
+    if (p.underwater || p.anim === 'swim') { rate = COST.swim * fx10.swimMult() * (gf?.swimEnergyMult() ?? 1) * (vx + vy > 50 ? 1.2 : 0.8); activity = 'swim'; }
+    else if (p.state === 'climb') { rate = (vy > 4 ? COST.climb : COST.hang) * fx10.climbMult() * (gf?.climbEnergyMult() ?? 1); activity = 'climb'; }
     else if (p.state === 'work') { rate = COST.work; activity = 'work'; }
     else if (p.onGround && vx > 8 && vx < 600) {
       if (p.running && vx > 80 * p.speedK) { rate = COST.sprint * fx10.sprintMult(); activity = 'sprint'; }
@@ -370,7 +374,8 @@ export function tickBody(dt: number, s: FieldLike) {
     let cost = rate * dt;
     if (p.onGround && p.state === 'normal' && up > 0 && up < 30) cost += up * COST.uphill;
     if (wasGround && !p.onGround && p.vy < -80 && p.state === 'normal') cost += COST.jump;
-    spend(cost * fx10.energyMult() * loadCostK(enc) * routeK(), activity);
+    const walkish = activity === 'walk' || activity.startsWith('sprint') || activity.startsWith('walk');
+    spend(cost * fx10.energyMult() * (walkish ? gf?.energyMult() ?? 1 : 1) * loadCostK(enc) * routeK(), activity);
   }
   lastX = p.x; lastY = p.y; wasGround = p.onGround;
   // ---- ailments (they run at camp too: a stomach ache doesn't care where you are)
