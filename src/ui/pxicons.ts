@@ -310,6 +310,189 @@ export const PX_ICONS: Record<string, PxDef> = {
     pal: GOLD,
     ink: GOLD_INK,
   },
+
+  // ---- developer panel (src/debug/devpanel.ts)
+  /** wrench: developer / test tools */
+  wrench: {
+    rows: [
+      '.....ab.',
+      '....a..b',
+      '....a.b.',
+      '...abb..',
+      '..abb...',
+      '.abb....',
+      'abb.....',
+      'bc......',
+    ],
+    pal: { a: '#eef2f6', b: '#a8b0bc', c: '#6a7280' },
+    ink: '#141a20',
+  },
+  /** folded map: scene select */
+  map: {
+    rows: [
+      'abbcabbc',
+      'abbcabbc',
+      'abrcabbc',
+      'abbcarbc',
+      'abbcabbc',
+      'abbcabbc',
+    ],
+    pal: { a: '#fff4d0', b: '#e8cf8e', c: '#b8945a', r: '#e04430' },
+    ink: '#3a2614',
+  },
+  /** scroll: quests */
+  scroll: {
+    rows: [
+      'aaaaaaa',
+      '.bbbbb.',
+      '.bcccb.',
+      '.bbbbb.',
+      '.bcccb.',
+      '.bbbbb.',
+      'aaaaaaa',
+    ],
+    pal: { a: '#9a5a26', b: '#f6e6b8', c: '#7a5a34' },
+    ink: '#2a1408',
+  },
+  /** lightning bolt: energy / cheats */
+  bolt: {
+    rows: [
+      '...ab',
+      '..ab.',
+      '.ab..',
+      'abbbc',
+      '..bc.',
+      '.bc..',
+      'bc...',
+    ],
+    pal: GOLD,
+    ink: GOLD_INK,
+  },
+  /** a pennant on a pole: flags */
+  flag: {
+    rows: [
+      'kaabb.',
+      'kabbbc',
+      'kbbcc.',
+      'k.....',
+      'k.....',
+      'k.....',
+      'k.....',
+    ],
+    pal: { a: '#ff9a7a', b: '#e04430', c: '#a8281a', k: '#c08a48' },
+    ink: '#2a0a06',
+  },
+  /** floppy disk: saves */
+  disk: {
+    rows: [
+      'bbbbbb.',
+      'baaacbb',
+      'baaacbb',
+      'bbbbbbb',
+      'bwwwwwb',
+      'bwkkkwb',
+      'bbbbbbb',
+    ],
+    pal: { a: '#e4ecf4', c: '#8a96a4', b: '#3a62c0', w: '#f6f2e4', k: '#a8a296' },
+    ink: '#0c1430',
+  },
+  /** fast-forward: skip */
+  skip: {
+    rows: [
+      'a..a..b',
+      'ab.ab.b',
+      'abbabbb',
+      'abcabcb',
+      'ac.ac.b',
+      'c..c..b',
+    ],
+    pal: GOLD,
+    ink: GOLD_INK,
+  },
+  plus: {
+    rows: [
+      '.a.',
+      'abb',
+      '.b.',
+    ],
+    pal: { a: '#d4ffb0', b: '#5ac03c' },
+    ink: '#0a2406',
+  },
+  minus: {
+    rows: [
+      'abb',
+    ],
+    pal: { a: '#ffb0a0', b: '#e04430' },
+    ink: '#2a0604',
+  },
+  /** crescent moon: night */
+  moon: {
+    rows: [
+      '..aab',
+      '.ab..',
+      'ab...',
+      'ab...',
+      'bc...',
+      '.bc..',
+      '..ccb',
+    ],
+    pal: { a: '#fffbe0', b: '#e8dca0', c: '#b8a868' },
+    ink: '#1a1830',
+  },
+  /** a little sailing boat: boat trips */
+  boat: {
+    rows: [
+      '...k....',
+      '...kw...',
+      '...kww..',
+      '...kwww.',
+      '...k....',
+      'bbbbbbbb',
+      '.bccccb.',
+    ],
+    pal: { k: '#7a5028', w: '#fff6e0', b: '#c0643a', c: '#8a3a22' },
+    ink: '#1a0e06',
+  },
+  /** a wrapped box: items */
+  gift: {
+    rows: [
+      'bbbabbb',
+      'bbbabbb',
+      'aaaaaaa',
+      'cccaccc',
+      'cccaccc',
+      'cccaccc',
+    ],
+    pal: { a: '#ffd048', b: '#ec5a6a', c: '#b8324a' },
+    ink: '#3a0a14',
+  },
+  /** bug: debug overlay */
+  bug: {
+    rows: [
+      '.k...k.',
+      '..k.k..',
+      '.bbbbb.',
+      'kbbabbk',
+      '.bbabb.',
+      'kbbabbk',
+      '.bbbbb.',
+    ],
+    pal: { a: '#1a1a1a', b: '#5ac03c', k: '#3a2a1a' },
+    ink: '#0a1806',
+  },
+  /** bin: delete */
+  trash: {
+    rows: [
+      '..aa..',
+      'bbbbbb',
+      '.cdcd.',
+      '.cdcd.',
+      '.cdcd.',
+      '.cccc.',
+    ],
+    pal: { a: '#a8b0bc', b: '#d8dee6', c: '#a8b0bc', d: '#6a7280' },
+    ink: '#141a20',
+  },
 };
 
 // ---------------------------------------------------------------- render + caches
