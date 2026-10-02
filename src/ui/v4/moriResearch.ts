@@ -20,6 +20,7 @@ import {
 } from '../../game/v9/research9';
 import type { Session } from '../../game/v9/research9';
 import { Fx, sfx, icon, clamp } from '../v7/aeroFx';
+import { gi, starsGi } from '../v7/aeroGlyphs';
 
 export interface OSWin { el: HTMLElement; bd: HTMLElement; id: string; closing: boolean }
 export interface OSProgress { el: HTMLElement; set: (f: number, label?: string, instant?: boolean) => void; edge: () => { x: number; y: number } }
@@ -47,6 +48,8 @@ export interface OSCtx {
   balloon(title: string, text: string, ms?: number, o?: { icon?: string; onClick?: () => void }): void;
   /** V10: launch a desktop app by id, with an optional argument (an encyclopedia entry key, a mail id) */
   open(app: string, arg?: string): void;
+  /** the app is on the desktop, downloading, or about to be (its unlock is met): worth offering a button for */
+  has(app: string): boolean;
   /** V10: re-render every open research window (encyclopedia, photos, mail, skills) and the badges */
   refresh(): void;
   /** V10: an upload session finished (the agency answers it) */
@@ -59,7 +62,11 @@ export const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
 const TOD: Record<string, string> = { dawn: 'Dawn', day: 'Daytime', dusk: 'Dusk', night: 'Night' };
 export const SITE: Record<string, string> = { sea: 'Aboard the Kittiwake', coast: 'The island', camp: 'Camp' };
 export const when = (p: { day: number; time: string }) => `Day ${p.day} · ${TOD[p.time] ?? p.time}`;
-export const stars = (n: number) => '★'.repeat(n) + '☆'.repeat(Math.max(0, 5 - n));
+export const stars = (n: number) => starsGi(n, 1);
+/** painted verdict marks (white: on the green / red analysis boxes) */
+export const OK = () => gi('check'), NO = () => gi('cross');
+const OKW = () => gi('check', { col: '#ffffff', edge: null }), NOW = () => gi('cross', { col: '#ffffff', edge: null });
+const CLIP = () => `${gi('clip', { k: 1 })}CLIP`;
 export const STATUS = ['', 'Common', 'Uncommon', 'Scarce', 'Rare', 'Legendary'];
 export const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 export const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -140,12 +147,12 @@ export function researchApps(os: OSCtx) {
       const n = b.querySelector('.imp-foot .n') as HTMLElement, go = b.querySelector('.go') as HTMLElement;
       const upd = () => {
         n.textContent = `${sel.size} of ${roll.length} selected`;
-        go.textContent = sel.size ? `Upload ${plural(sel.size, 'photo')} ▲` : 'Pick some photos';
+        go.innerHTML = sel.size ? `Upload ${plural(sel.size, 'photo')} ${gi('up')}` : 'Pick some photos';
         go.classList.toggle('dim', !sel.size);
         grid.querySelectorAll<HTMLElement>('.imp-t').forEach(t => t.classList.toggle('on', sel.has(+t.dataset.id!)));
       };
       roll.forEach((p, i) => {
-        const t = el('div', 'imp-t ctl', `<img alt="" draggable="false"><i class="ck"></i><span class="cap">${when(p)}</span>${p.video ? '<span class="vid">▶ CLIP</span>' : ''}`);
+        const t = el('div', 'imp-t ctl', `<img alt="" draggable="false"><i class="ck"></i><span class="cap">${when(p)}</span>${p.video ? `<span class="vid">${CLIP()}</span>` : ''}`);
         (t.querySelector('img') as HTMLImageElement).src = p.img;
         t.dataset.id = String(p.id);
         t.style.animationDelay = Math.min(i, 14) * 40 + 'ms';
@@ -184,9 +191,9 @@ export function researchApps(os: OSCtx) {
         <div class="rw"><i>${tot.beh}</i>${tot.beh === 1 ? 'behaviour' : 'behaviours'} recorded</div>
         ${tot.facts ? `<div class="rw"><i>${tot.facts}</i>new ${tot.facts === 1 ? 'finding' : 'findings'}</div>` : ''}
         ${tot.rp ? `<div class="rp">+${tot.rp} RP</div>` : ''}
-        <div class="bt"><div class="gel sm green ctl log">Open Encyclopedia</div><div class="gel sm glass ctl more">${pendingCount() ? 'Back to the camera' : 'Done'}</div></div>`);
+        <div class="bt">${os.has('enc') ? '<div class="gel sm green ctl log">Open Encyclopedia</div>' : ''}<div class="gel sm glass ctl more">${pendingCount() ? 'Back to the camera' : 'Done'}</div></div>`);
       side.insertBefore(sum, side.firstChild);
-      (sum.querySelector('.log') as HTMLElement).addEventListener('click', () => { os.from(sum); disc(tot.species[0]); });
+      sum.querySelector('.log')?.addEventListener('click', () => { os.from(sum); disc(tot.species[0]); });
       (sum.querySelector('.more') as HTMLElement).addEventListener('click', () => { if (pendingCount()) render(); else os.closeWin('cam'); });
       sfx.win();
       const c = os.center(b);
@@ -248,7 +255,7 @@ export function researchApps(os: OSCtx) {
       for (const f of out.found) {
         const known2 = !!entry(f.species);
         const nm = f.ok || known2 ? f.sp?.name ?? 'Unknown animal' : 'Unidentified animal';
-        const bx = el('div', 'bx ' + (f.ok ? 'ok' : 'no'), f.ok || known2 ? `<span>${f.ok ? '✓' : '✕'} ${esc(nm)}${f.n > 1 ? ' ×' + f.n : ''}</span>` : '<span>✕ ?</span>');
+        const bx = el('div', 'bx ' + (f.ok ? 'ok' : 'no'), f.ok || known2 ? `<span>${f.ok ? OKW() : NOW()} ${esc(nm)}${f.n > 1 ? ' ×' + f.n : ''}</span>` : `<span>${NOW()} ?</span>`);
         bx.setAttribute('style', boxStyle(f.bbox));
         if (f.bbox[1] < 0.18) bx.classList.add('lo');
         boxes.appendChild(bx);
@@ -298,13 +305,13 @@ export function researchApps(os: OSCtx) {
       if (f.ok) {
         const isNew = out.newSpecies.includes(f.species);
         const bh = f.beh.map(x => `${out.newBeh.some(([s, b]) => s === f.species && b === x) ? '<em>+</em>' : ''}${esc(behLabel(f.sp, x))}`).join(', ');
-        ls.appendChild(el('div', 'ln ok', `<b>✓ ${esc(f.sp?.name ?? f.species)}</b>${f.n > 1 ? ` ×${f.n}` : ''}${isNew ? ' <span class="tag">NEW SPECIES</span>' : ''}<small>${f.auto ? 'Auto-tagged from a poor photo · ' : ''}${bh ? bh + ' · ' : ''}<span class="st">${stars(f.stars)}</span></small>`));
+        ls.appendChild(el('div', 'ln ok', `<b>${OK()} ${esc(f.sp?.name ?? f.species)}</b>${f.n > 1 ? ` ×${f.n}` : ''}${isNew ? ' <span class="tag">NEW SPECIES</span>' : ''}<small>${f.auto ? 'Auto-tagged from a poor photo · ' : ''}${bh ? bh + ' · ' : ''}<span class="st">${stars(f.stars)}</span></small>`));
       } else {
         const nm = entry(f.species) ? f.sp?.name ?? f.species : 'Unidentified animal';
-        ls.appendChild(el('div', 'ln no', `<b>✕ ${esc(nm)}</b><small>${esc(f.why ?? 'Not identifiable')}</small>`));
+        ls.appendChild(el('div', 'ln no', `<b>${NO()} ${esc(nm)}</b><small>${esc(f.why ?? 'Not identifiable')}</small>`));
       }
     }
-    for (const [, f] of out.newFacts) ls.appendChild(el('div', 'ln fact', `<b>✦ New finding</b><small>${esc(f.text)}</small>`));
+    for (const [, f] of out.newFacts) ls.appendChild(el('div', 'ln fact', `<b>${gi('spark')} New finding</b><small>${esc(f.text)}</small>`));
     g.appendChild(ls);
     feed.appendChild(g);
     feed.scrollTop = feed.scrollHeight;
@@ -336,7 +343,7 @@ export function researchApps(os: OSCtx) {
         img.src = u.img; img.draggable = false; img.alt = '';
         f.appendChild(img);
         f.appendChild(el('figcaption', '', esc(caption(u))));
-        if (u.video) f.appendChild(el('span', 'vid', '▶ CLIP'));
+        if (u.video) f.appendChild(el('span', 'vid', CLIP()));
         f.addEventListener('click', () => { os.from(f); viewer(u.id); });
         up.appendChild(f);
       }
@@ -378,13 +385,13 @@ export function researchApps(os: OSCtx) {
       u.subjects.forEach((s: UploadSubject) => {
         const sp = SPECIES_BY_ID[s.species] ?? null;
         const nm = s.ok || entry(s.species) ? sp?.name ?? s.species : 'Unidentified animal';
-        const x = el('div', 'bx ' + (s.ok ? 'ok' : 'no'), s.ok || entry(s.species) ? `<span>${s.ok ? '✓' : '✕'} ${esc(nm)}</span>` : '<span>✕ ?</span>');
+        const x = el('div', 'bx ' + (s.ok ? 'ok' : 'no'), s.ok || entry(s.species) ? `<span>${s.ok ? OKW() : NOW()} ${esc(nm)}</span>` : `<span>${NOW()} ?</span>`);
         x.setAttribute('style', boxStyle(s.bbox));
         if (s.bbox[1] < 0.18) x.classList.add('lo');
         bx.appendChild(x);
         const ln = el('div', 'ln ' + (s.ok ? 'ok' : 'no'), s.ok
-          ? `<b>✓ ${esc(nm)}</b>${s.n > 1 ? ' ×' + s.n : ''}<small>${s.beh.map(k => esc(behLabel(sp, k))).join(', ')}${s.beh.length ? ' · ' : ''}<span class="st">${stars(s.stars)}</span></small>`
-          : `<b>✕ ${esc(nm)}</b><small>${esc(s.why ?? '')}</small>`);
+          ? `<b>${OK()} ${esc(nm)}</b>${s.n > 1 ? ' ×' + s.n : ''}<small>${s.beh.map(k => esc(behLabel(sp, k))).join(', ')}${s.beh.length ? ' · ' : ''}<span class="st">${stars(s.stars)}</span></small>`
+          : `<b>${NO()} ${esc(nm)}</b><small>${esc(s.why ?? '')}</small>`);
         const e = entry(s.species);
         if (s.ok && e) {
           const row = el('div', 'acts');

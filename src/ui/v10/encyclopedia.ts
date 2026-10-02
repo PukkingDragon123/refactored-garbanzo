@@ -25,6 +25,7 @@ import {
 import type { OSCtx, ResearchApps } from '../v4/moriResearch';
 import { esc, when, cropBg, boxStyle, padBox, STATUS, plural } from '../v4/moriResearch';
 import { sfx, clamp } from '../v7/aeroFx';
+import { gi, gemsGi } from '../v7/aeroGlyphs';
 import { icon10URL } from './icons10';
 import {
   CATS, entries, catStat, overall, speciesSections, speciesProgress, catOfKey, discByKey, locByKey, kindLabel, placeIcon, faunaPool,
@@ -105,7 +106,7 @@ export function encyclopediaApp(os: OSCtx, ra: ResearchApps): EncApp {
     const c = CATS.find(x => x.id === cat)!;
     L.innerHTML = `<div class="hd"><b>${esc(c.name)}</b><span>${st.known} of ${st.total}</span></div>`;
     if (cat === 'fauna') {
-      const wb = el('div', 'gel sm glass ctl wbtn' + (web ? ' on' : ''), web ? '◀ Back to pages' : 'Food web ✦');
+      const wb = el('div', 'gel sm glass ctl wbtn' + (web ? ' on' : ''), web ? `${gi('back', { col: '#3a5a78' })} Back to pages` : `Food web ${gi('spark')}`);
       wb.addEventListener('click', () => { web = !web; sfx.menu(); renderListHead(); renderPage(); });
       L.appendChild(wb);
     }
@@ -130,7 +131,7 @@ export function encyclopediaApp(os: OSCtx, ra: ResearchApps): EncApp {
   };
   const renderListHead = () => {
     const wb = b?.querySelector('.wbtn') as HTMLElement | null;
-    if (wb) { wb.classList.toggle('on', web); wb.textContent = web ? '◀ Back to pages' : 'Food web ✦'; }
+    if (wb) { wb.classList.toggle('on', web); wb.innerHTML = web ? `${gi('back', { col: '#3a5a78' })} Back to pages` : `Food web ${gi('spark')}`; }
     if (web) b?.querySelectorAll('.enc-card.on').forEach(x => x.classList.remove('on'));
   };
 
@@ -215,7 +216,7 @@ export function encyclopediaApp(os: OSCtx, ra: ResearchApps): EncApp {
       <div class="rl-title"><h2>${esc(sp.name)}</h2><i>${esc(sp.sci)}</i><div class="chips"><span>${esc(sp.group)}</span><span>${esc(sp.size)}</span><span class="st">${esc(status)}</span>${sp.danger >= 2 ? '<span class="dg">Keep your distance</span>' : ''}</div></div>
       <div class="enc-prog"><span>Page complete</span><i><u style="width:${(prog * 100).toFixed(0)}%"></u></i><b>${Math.round(prog * 100)}%</b></div>
       <p class="blurb">${esc(sp.blurb)}</p>
-      <div class="rl-sec beh"><h4>Behaviours <b>${e.beh.filter(x => x in sp.behaviors).length}/${behs.length}</b></h4><ul>${behs.map(([k, v]) => e.beh.includes(k) ? `<li class="ok"><i>✓</i>${esc(v)}${e.vid.includes(k) ? ' <small>on video</small>' : ''}</li>` : `<li><i>○</i>${esc(v)} <small>not photographed yet</small></li>`).join('')}</ul></div>
+      <div class="rl-sec beh"><h4>Behaviours <b>${e.beh.filter(x => x in sp.behaviors).length}/${behs.length}</b></h4><ul>${behs.map(([k, v]) => e.beh.includes(k) ? `<li class="ok"><i>${gi('check', { k: 1 })}</i>${esc(v)}${e.vid.includes(k) ? ' <small>on video</small>' : ''}</li>` : `<li><i>${gi('dot0', { k: 1 })}</i>${esc(v)} <small>not photographed yet</small></li>`).join('')}</ul></div>
       <div class="rl-sheet"></div>
       <div class="rl-sec facts"></div>
       <div class="rl-sec pics"><h4>Photos <b>${pics.length}</b></h4><div class="strip"></div></div>`;
@@ -229,7 +230,7 @@ export function encyclopediaApp(os: OSCtx, ra: ResearchApps): EncApp {
     const fs = pg.querySelector('.rl-sec.facts') as HTMLElement;
     if (sp.facts.length) {
       fs.innerHTML = `<h4>Findings <b>${e.facts.length}/${sp.facts.length}</b></h4><ul>${sp.facts.map(f => e.facts.includes(f.id)
-        ? `<li class="ok"><i>✦</i><span><b>${esc(f.cat)}</b> ${esc(f.text)}</span></li>`
+        ? `<li class="ok"><i>${gi('spark', { k: 1 })}</i><span><b>${esc(f.cat)}</b> ${esc(f.text)}</span></li>`
         : `<li class="lock"><i>?</i><span><b>${esc(f.q)}</b><small>${esc(f.hint)}</small></span></li>`).join('')}</ul>`;
     } else fs.remove();
     // photos
@@ -284,11 +285,11 @@ export function encyclopediaApp(os: OSCtx, ra: ResearchApps): EncApp {
     secs.forEach((s, i) => {
       if (i >= n) {
         const lines = 2 + ((sp.id.length + i) % 3);
-        parts.push(`<div class="sec locked ${s.key}"><h5>🔒 ${esc(s.title)}</h5><div class="blur">${Array.from({ length: lines }, (_, j) => `<i style="width:${92 - ((j * 23 + i * 11) % 40)}%"></i>`).join('')}</div></div>`);
+        parts.push(`<div class="sec locked ${s.key}"><h5>${gi('lock', { k: 1 })} ${esc(s.title)}</h5><div class="blur">${Array.from({ length: lines }, (_, j) => `<i style="width:${92 - ((j * 23 + i * 11) % 40)}%"></i>`).join('')}</div></div>`);
         return;
       }
       const body = s.list ? `<ul>${s.list.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : s.text ? `<p>${esc(s.text)}</p>` : '';
-      parts.push(`<div class="sec ${s.key}${s.key === 'notes' ? ' notes' : ''}${s.fun ? ' fun' : ''}${s.web ? ' webs' : ''}"><h5>${s.fun ? '✦ ' : ''}${esc(s.title)}</h5>${body}${s.web ? '<div class="fweb"></div>' : ''}</div>`);
+      parts.push(`<div class="sec ${s.key}${s.key === 'notes' ? ' notes' : ''}${s.fun ? ' fun' : ''}${s.web ? ' webs' : ''}"><h5>${s.fun ? gi('spark', { k: 1 }) + ' ' : ''}${esc(s.title)}</h5>${body}${s.web ? '<div class="fweb"></div>' : ''}</div>`);
     });
     if (n < secs.length) parts.push(`<div class="sec nudge"><p>${secs.length - n} more ${secs.length - n === 1 ? 'section' : 'sections'} to reveal. Every new photo of the ${esc(sp.name)} uploads ${depth} more (Data Analysis depth ${depth}); every new behaviour, one more.</p></div>`);
     sh.innerHTML = parts.join('');
@@ -299,7 +300,7 @@ export function encyclopediaApp(os: OSCtx, ra: ResearchApps): EncApp {
   /** without the Food-Web Mapping skill the links stay undrawn */
   const webTeaser = (w: HTMLElement, n: number) => {
     w.classList.add('locked');
-    w.innerHTML = `<div class="tz"><b>🔒 ${plural(n, 'connection')} to map</b><span>Learn <em>Food-Web Mapping</em> (Data Analysis) and your uploads draw who eats whom, who lives on whom and who tags along.</span><div class="gel sm ctl skl">Open the Skill Tree</div></div>`;
+    w.innerHTML = `<div class="tz"><b>${gi('lock')} ${plural(n, 'connection')} to map</b><span>Learn <em>Food-Web Mapping</em> (Data Analysis) and your uploads draw who eats whom, who lives on whom and who tags along.</span><div class="gel sm ctl skl">Open the Skill Tree</div></div>`;
     const k = w.querySelector('.skl') as HTMLElement;
     k.addEventListener('click', () => { os.from(k); os.open('skills', 'data_web'); });
   };
@@ -420,7 +421,7 @@ export function encyclopediaApp(os: OSCtx, ra: ResearchApps): EncApp {
         const sp = SPECIES_BY_ID[lab.species];
         if (sp) parts.push(`<div class="sec lnk"><h5>Points to</h5><p>${entry(sp.id) ? link('sp:' + sp.id, sp.name) : `An animal not documented yet${game.save.hints[sp.id] ? ` (the lab's guess: the ${esc(sp.name)})` : ''}. Photograph it to start its page.`}</p></div>`);
       }
-      if (lab?.fact && !Object.values(SPECIES_BY_ID).some(s => s.facts.some(f => f.id === lab.fact))) parts.push(`<div class="sec fun"><h5>✦ Fun fact</h5><p>${esc(lab.fact)}</p></div>`);
+      if (lab?.fact && !Object.values(SPECIES_BY_ID).some(s => s.facts.some(f => f.id === lab.fact))) parts.push(`<div class="sec fun"><h5>${gi('spark', { k: 1 })} Fun fact</h5><p>${esc(lab.fact)}</p></div>`);
     } else if (inPack) {
       parts.push(`<div class="sec nudge"><p>Hand it in at the camp laptop (Upload Everything) and the lab will analyse it.</p></div>`);
     } else if (disc) {
@@ -431,7 +432,7 @@ export function encyclopediaApp(os: OSCtx, ra: ResearchApps): EncApp {
       const fi = foodInfo(id);
       const txt = !fi.known ? 'Not identified yet: eating it is a gamble. Hand one in at camp and the lab will tell you.'
         : fi.tox === 0 ? `Safe to eat${fi.energy ? `: about ${fi.energy} energy` : ''}.` : fi.tox === 1 ? 'Mildly poisonous: a stomach ache at best. Better left alone.' : 'Poisonous. Do not eat it, whatever Chunk thinks.';
-      parts.push(`<div class="sec ${!fi.known ? 'nudge' : fi.tox ? 'poison' : 'edible'}"><h5>${!fi.known ? 'Edible?' : fi.tox ? '✕ Not safe to eat' : '✓ Safe to eat'}</h5><p>${esc(txt)}</p></div>`);
+      parts.push(`<div class="sec ${!fi.known ? 'nudge' : fi.tox ? 'poison' : 'edible'}"><h5>${!fi.known ? 'Edible?' : fi.tox ? `${gi('cross', { k: 1 })} Not safe to eat` : `${gi('check', { k: 1 })} Safe to eat`}</h5><p>${esc(txt)}</p></div>`);
     }
     if (c === 'artifact') parts.push(cultureNote(d.name, taonga, !!back));
     if (d.where || where) parts.push(`<div class="sec hab"><h5>Where it was found</h5><p>${esc(where ?? d.where ?? '')}${where && d.where ? ` · ${esc(d.where)}` : ''}</p></div>`);
@@ -461,7 +462,7 @@ export function encyclopediaApp(os: OSCtx, ra: ResearchApps): EncApp {
   const locPage = (pg: HTMLElement, l: LocationDef) => {
     const notes = discoveries().filter(d => d.loc === l.id && filedDay(d.id));
     const ups = game.save.uploads.filter(u => u.site === l.id);
-    pg.innerHTML = `<div class="enc-hero place"><img class="big" src="${icon10URL(placeIcon(l.kind))}" alt=""><div class="tag"><b>${esc(kindLabel(l.kind))}</b><span>${esc(regionName(l.region))}</span><span>Route: ${'◆'.repeat(clamp(l.difficulty, 1, 5))}${'◇'.repeat(5 - clamp(l.difficulty, 1, 5))}</span></div></div>
+    pg.innerHTML = `<div class="enc-hero place"><img class="big" src="${icon10URL(placeIcon(l.kind))}" alt=""><div class="tag"><b>${esc(kindLabel(l.kind))}</b><span>${esc(regionName(l.region))}</span><span>Route: ${gemsGi(clamp(l.difficulty, 1, 5), 1)}</span></div></div>
       <div class="rl-title"><h2>${esc(l.name)}</h2><div class="chips"><span>${esc(kindLabel(l.kind))}</span><span>${esc(regionName(l.region))}</span></div></div>
       <p class="blurb">${esc(l.desc)}</p>
       <div class="rl-sheet">${notes.length ? `<div class="sec notes"><h5>Field notes here</h5><ul>${notes.map(d => `<li>${link('dc:' + d.id, d.name)} <small>(${esc(kindLabel(d.kind))})</small></li>`).join('')}</ul></div>` : '<div class="sec nudge"><p>No field notes filed here yet: explore it, and upload what you find.</p></div>'}</div>

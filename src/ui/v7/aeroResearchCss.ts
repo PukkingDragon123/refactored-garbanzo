@@ -57,7 +57,7 @@ export const RESEARCH_CSS = `
 .imp-t.on { box-shadow: 0 0 0 3px #22c4e6, 0 0 14px rgba(40,200,255,0.65); }
 .imp-t.on img { filter: none; }
 .imp-t.on .ck { transform: scale(1); background: linear-gradient(180deg, #d8ffc0 0 20%, #7ada4a 20% 55%, #3a9a22 55%); box-shadow: 0 0 0 1px #1c5e0e; }
-.imp-t.on .ck::after { content: '✓'; position: absolute; inset: 0; text-align: center; font: 20px/24px 'Jersey 10', 'Pixelify Sans', monospace; color: #fff; text-shadow: 0 1px 0 #1c5e0e; }
+.imp-t.on .ck::after { content: ''; position: absolute; inset: 0; background: var(--ckw) 50% 55% / 16px 12px no-repeat; image-rendering: pixelated; }
 .imp-t.hov { transform: translateY(-3px) rotate(-1deg); }
 .imp-t.press { transform: scale(0.94, 0.88); transition-duration: 0.05s; }
 .imp-t.bop { animation: mosBump 0.45s cubic-bezier(.25,1.9,.45,1); }

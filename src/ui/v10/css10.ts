@@ -362,7 +362,7 @@ export const CSS10 = `
 .skt-n b { margin-top: 4px; font: 14px/13px 'Jersey 10', 'Pixelify Sans', monospace; font-weight: 400; color: #2a2a4a; max-width: 80px; max-height: 26px; overflow: hidden; overflow-wrap: anywhere; }
 .skt-n em { font: 14px/13px 'Jersey 15', 'Pixelify Sans', monospace; font-style: normal; color: #6a6a8a; }
 .skt-n small { font-size: 12px; line-height: 12px; color: #9a7a4a; }
-.skt-n .ck { position: absolute; right: -4px; top: -4px; width: 20px; height: 20px; border-radius: 50%; font: 15px/20px 'Jersey 10', 'Pixelify Sans', monospace; font-style: normal; color: #fff; text-align: center; background: linear-gradient(180deg, #fff3a0 0 25%, #ffc838 25% 60%, #e8941a 60%); box-shadow: 0 0 0 1px #7a4a08; }
+.skt-n .ck { position: absolute; right: -4px; top: -4px; width: 20px; height: 20px; border-radius: 50%; image-rendering: pixelated; background: var(--ckw) 50% 55% / 16px 12px no-repeat, linear-gradient(180deg, #fff3a0 0 25%, #ffc838 25% 60%, #e8941a 60%); box-shadow: 0 0 0 1px #7a4a08; }
 .skt-n .lk { position: absolute; right: -3px; bottom: -3px; width: 16px; height: 16px; border-radius: 4px; background: linear-gradient(180deg, #e8eef4 0 50%, #a9b8c6 50%); box-shadow: 0 0 0 1px #5a7a96; }
 .skt-n .lk::before { content: ''; position: absolute; left: 4px; top: -5px; width: 6px; height: 6px; border: 2px solid #8494a6; border-bottom: 0; border-radius: 4px 4px 0 0; }
 .skt-n.owned .o { background: radial-gradient(circle at 40% 30%, #fffbe0, #ffe27a 60%, #f0ae22); box-shadow: 0 0 0 2px #fff, 0 0 0 4px #e8a020, 0 0 14px rgba(255,200,60,0.7); }

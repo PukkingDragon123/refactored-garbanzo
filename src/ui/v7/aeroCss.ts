@@ -259,8 +259,8 @@ export const AERO_CSS = `
 .rp .thumbs .th.hov { transform: translateY(-3px) rotate(-1.5deg); box-shadow: 0 0 0 1px #5ab4e8, 0 6px 10px rgba(0,40,80,0.2); }
 .rp .thumbs .th.press { transform: scale(0.94, 0.88); transition-duration: 0.05s; }
 .rp .thumbs .th.on { box-shadow: 0 0 0 3px #22c4e6, 0 0 14px rgba(40,200,255,0.8); transform: translateY(-2px); }
-.rp .thumbs .th.on::after { content: '✓'; position: absolute; right: -7px; top: -8px; width: 22px; height: 22px; border-radius: 50%; color: #fff; text-align: center; font: 20px/22px 'Jersey 10', 'Pixelify Sans', monospace;
-  background: linear-gradient(180deg, #d8ffc0 0 20%, #7ada4a 20% 55%, #3a9a22 55%); box-shadow: 0 0 0 1px #1c5e0e; animation: mosBump 0.5s cubic-bezier(.25,1.9,.45,1); }
+.rp .thumbs .th.on::after { content: ''; position: absolute; right: -7px; top: -8px; width: 22px; height: 22px; border-radius: 50%; image-rendering: pixelated;
+  background: var(--ckw) 50% 55% / 16px 12px no-repeat, linear-gradient(180deg, #d8ffc0 0 20%, #7ada4a 20% 55%, #3a9a22 55%); box-shadow: 0 0 0 1px #1c5e0e; animation: mosBump 0.5s cubic-bezier(.25,1.9,.45,1); }
 .rp .ok { box-shadow: 0 0 0 2px #4cc42c, 0 0 10px rgba(90,220,60,0.6) !important; }
 .rp .bad { box-shadow: 0 0 0 2px #e8483a, 0 0 10px rgba(255,80,60,0.55) !important; }
 .rp .act { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
@@ -362,4 +362,33 @@ export const AERO_CSS = `
 .mos-wrap.big .mos-lid { min-height: 32px; }
 .mos-wrap.big .rp .head .gel { flex: none; }
 @media (max-width: 480px) { .mos-tray .wf { display: none; } .mos-tray { gap: 6px; padding: 0 6px; } .rp .head { flex-wrap: wrap; } }
+/* ---- tray glyphs */
+.mos-tray > span { display: inline-flex; align-items: center; gap: 4px; }
+.mos-tray .bt img.pg { vertical-align: middle; }
+.mos-gad .dn img.pg { vertical-align: 0; }
+/* ---- the wallpaper rests under a maximised window */
+.mos-scr.wallq .mos-bg, .mos-scr.wallq .mos-rays, .mos-scr.wallq .mos-sun, .mos-scr.wallq .mos-flare, .mos-scr.wallq .mos-fxb { visibility: hidden; }
+.mos-scr.wallq .mos-rays { animation-play-state: paused; }
+/* ---- app downloads: the installer toast and the NEW badge */
+.mos-dl { position: absolute; right: 8px; bottom: calc(var(--bar) + 10px); z-index: 66; width: min(310px, calc(100% - 16px)); padding: 8px 10px 6px; border-radius: 8px; pointer-events: none;
+  background: linear-gradient(180deg, #ffffff, #eef8ff); box-shadow: 0 0 0 1px rgba(20,60,100,0.7), inset 0 0 0 1px #fff, 0 10px 24px rgba(0,30,60,0.35); animation: mosBal 0.5s cubic-bezier(.25,1.7,.45,1) both; transform-origin: 90% 100%; }
+.mos-dl.bye { transition: opacity 0.3s, transform 0.3s; opacity: 0; transform: translateY(10px) scale(0.9); }
+.mos-dl .hd { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font: 21px/1 'Jersey 10', 'Pixelify Sans', monospace; color: #0b4a7a; }
+.mos-dl .hd b { font-weight: 400; }
+.mos-dl .hd span { margin-left: auto; font: 16px/1 'Jersey 15', 'Pixelify Sans', monospace; color: var(--ink2); }
+.mos-dl .row { display: grid; grid-template-columns: 26px 1fr auto; gap: 3px 8px; align-items: center; padding: 5px 0 4px; border-top: 1px solid #d4e4f0; animation: lnIn 0.35s cubic-bezier(.25,1.6,.45,1) both; }
+.mos-dl .row .ic { grid-row: 1 / 3; display: flex; }
+.mos-dl .row .ic .pxi { width: 24px; height: 24px; }
+.mos-dl .row .t { min-width: 0; }
+.mos-dl .row .t b { display: block; font: 19px/1 'Jersey 10', 'Pixelify Sans', monospace; font-weight: 400; color: var(--ink); }
+.mos-dl .row .t small { display: block; font: 15px/14px 'Jersey 15', 'Pixelify Sans', monospace; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mos-dl .row em { font: 16px/1 'Jersey 15', 'Pixelify Sans', monospace; font-style: normal; color: #2a6a9a; text-align: right; }
+.mos-dl .row.done em { color: #2a8a18; }
+.mos-dl .row .bar { grid-column: 2 / 4; display: block; height: 10px; padding: 2px; background: #123050; box-shadow: 0 0 0 1px #5a7a96; }
+.mos-dl .row .bar i { display: block; height: 100%; width: 0; background: repeating-linear-gradient(90deg, #7ae64a 0 5px, #4cb42c 5px 6px, transparent 6px 8px); }
+.mos-dl .row.done .bar i { background: repeating-linear-gradient(90deg, #b4f68a 0 5px, #6cd04a 5px 6px, transparent 6px 8px); }
+.mos-ic .nw, .mos-start .mi .nw { position: absolute; left: 6px; top: 0; z-index: 2; padding: 1px 5px 2px; border-radius: 7px; font: 14px/14px 'Jersey 10', 'Pixelify Sans', monospace; font-style: normal; color: #6a3a00; text-shadow: none;
+  background: linear-gradient(180deg, #fff3a0 0 45%, #ffc838 45%); box-shadow: 0 0 0 1px #7a4a08; animation: mosBadge 1.1s cubic-bezier(.3,1.8,.5,1) infinite; pointer-events: none; }
+.mos-start .mi { position: relative; }
+.mos-start .mi .nw { position: static; margin-left: auto; animation: none; }
 `;

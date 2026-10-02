@@ -21,6 +21,7 @@ import { game } from '../../game/game';
 import type { OSCtx, ResearchApps } from '../v4/moriResearch';
 import { esc, plural, wait } from '../v4/moriResearch';
 import { sfx, clamp } from '../v7/aeroFx';
+import { gi } from '../v7/aeroGlyphs';
 import { icon10URL, crateArt, mascot } from './icons10';
 import { placeIcon, kindLabel } from './encyData';
 
@@ -74,9 +75,11 @@ export function uploadAllApp(os: OSCtx, ra: ResearchApps): UploadApp {
     const cards = b.querySelector('.up-cards') as HTMLElement;
     if (nothing) {
       cards.innerHTML = `<div class="up-empty"><b>Nothing to upload.</b><span>The camera is empty, the pack has no specimens and the notebook is up to date. Go and explore: everything you photograph, collect and find comes back here.</span></div>`;
-      const enc = el('div', 'gel sm ctl', 'Open the Encyclopedia');
-      enc.addEventListener('click', () => { os.from(enc); os.open('enc'); });
-      (cards.firstElementChild as HTMLElement).appendChild(enc);
+      if (os.has('enc')) {
+        const enc = el('div', 'gel sm ctl', 'Open the Encyclopedia');
+        enc.addEventListener('click', () => { os.from(enc); os.open('enc'); });
+        (cards.firstElementChild as HTMLElement).appendChild(enc);
+      }
     }
     // the camera
     if (roll.length) {
@@ -123,7 +126,7 @@ export function uploadAllApp(os: OSCtx, ra: ResearchApps): UploadApp {
       const n = camp ? items.reduce((a, h) => a + h.take, 0) : 0;
       const parts = [roll.length ? plural(roll.length, 'photo') : '', n ? plural(n, 'specimen') : '', notes.length ? plural(notes.length, 'field note') : ''].filter(Boolean);
       (b!.querySelector('.sum') as HTMLElement).textContent = parts.length ? parts.join(' · ') : 'Nothing selected';
-      go.textContent = parts.length ? 'Upload everything ▲' : 'Nothing to upload';
+      go.innerHTML = parts.length ? `Upload everything ${gi('up')}` : 'Nothing to upload';
       go.classList.toggle('dim', !parts.length);
     };
     foot();
@@ -144,9 +147,9 @@ export function uploadAllApp(os: OSCtx, ra: ResearchApps): UploadApp {
     const notes = pendingNotes();
     const steps = [['Photos', photos.length], ['Lab bench', items.length], ['Field notes', notes.length], ['Day report', 1]] as const;
     fastK = 1;
-    b.innerHTML = `<div class="up-steps">${steps.map(([n, c], i) => `<span class="${c ? '' : 'nop'}" data-i="${i}"><i>${i + 1}</i>${n}</span>`).join('<u></u>')}<div class="gel sm glass ctl ff">⏩ Faster</div></div><div class="up-stage"></div>`;
+    b.innerHTML = `<div class="up-steps">${steps.map(([n, c], i) => `<span class="${c ? '' : 'nop'}" data-i="${i}"><i>${i + 1}</i>${n}</span>`).join('<u></u>')}<div class="gel sm glass ctl ff">${gi('ff', { col: '#3a5a78' })} Faster</div></div><div class="up-stage"></div>`;
     const ff = b.querySelector('.ff') as HTMLElement;
-    ff.addEventListener('click', () => { fastK = fastK < 1 ? 1 : 0.35; ff.classList.toggle('green', fastK < 1); ff.classList.toggle('glass', fastK >= 1); ff.textContent = fastK < 1 ? '⏩ Fast!' : '⏩ Faster'; sfx.click(); });
+    ff.addEventListener('click', () => { fastK = fastK < 1 ? 1 : 0.35; ff.classList.toggle('green', fastK < 1); ff.classList.toggle('glass', fastK >= 1); ff.innerHTML = fastK < 1 ? `${gi('ff')} Fast!` : `${gi('ff', { col: '#3a5a78' })} Faster`; sfx.click(); });
     const stage = b.querySelector('.up-stage') as HTMLElement;
     const step = (i: number) => b?.querySelectorAll('.up-steps span').forEach((s, j) => { s.classList.toggle('on', j === i); s.classList.toggle('done', j < i); });
     try {
@@ -231,7 +234,7 @@ export function uploadAllApp(os: OSCtx, ra: ResearchApps): UploadApp {
         audio.play('fact', { vol: 0.4 });
         os.fx.sparkle(c.x, c.y, 10, 70);
       } else if (out.first) {
-        stamp.className = 'stamp new'; stamp.innerHTML = `New ${CAT_WORD[out.cat] ?? 'find'}!<small>${out.edible ? (out.edible === 'safe' ? 'safe to eat ✓' : out.edible === 'mild' ? 'mildly poisonous ✕' : 'POISONOUS ✕') : esc(nm)}</small>`;
+        stamp.className = 'stamp new'; stamp.innerHTML = `New ${CAT_WORD[out.cat] ?? 'find'}!<small>${out.edible ? (out.edible === 'safe' ? `safe to eat ${gi('check', { k: 1 })}` : out.edible === 'mild' ? `mildly poisonous ${gi('cross', { k: 1 })}` : `POISONOUS ${gi('cross', { k: 1 })}`) : esc(nm)}</small>`;
         audio.play('discover', { vol: 0.5 });
         if (out.firstOfCat) os.fx.confetti(c.x, c.y - scope.offsetHeight / 2, 50, scope.offsetWidth);
         os.fx.sparkle(c.x, c.y, 14, 110);
@@ -278,8 +281,8 @@ export function uploadAllApp(os: OSCtx, ra: ResearchApps): UploadApp {
     const extra: string[] = [];
     if (o.species) extra.push(o.species.documented ? `Matches the <b>${esc(o.species.name)}</b>` : 'Points to an animal nobody has photographed yet');
     if (o.clue) extra.push(`${o.clue.isNew ? 'New clue' : 'Clue'}: <b>${esc(CLUE_BY_ID[o.clue.id]?.name ?? o.clue.name)}</b>`);
-    if (o.fact) extra.push(`✦ ${esc(o.fact)}`);
-    if (o.edible && !o.first) extra.push(o.edible === 'safe' ? 'Safe to eat ✓' : 'Not safe to eat ✕');
+    if (o.fact) extra.push(`${gi('spark', { k: 1 })} ${esc(o.fact)}`);
+    if (o.edible && !o.first) extra.push(o.edible === 'safe' ? `Safe to eat ${gi('check', { k: 1 })}` : `Not safe to eat ${gi('cross', { k: 1 })}`);
     const card = el('div', 'ln lab ' + (o.taonga ? 'care' : o.first ? 'ok' : 'rep'),
       `<img src="${itemSrc(o.id)}" alt=""><div><b>${esc(o.name)}${o.n > 1 ? ` ×${o.n}` : ''}</b>${o.first && !o.taonga ? ' <span class="tag">NEW</span>' : ''}${o.rp ? `<em class="rp">+${o.rp} RP</em>` : ''}<small>${esc(o.text)}</small>${o.lines.length ? `<small class="ms">${o.lines.map(esc).join(' · ')}</small>` : ''}${extra.map(x => `<small class="x">${x}</small>`).join('')}</div>`);
     feed.appendChild(card);
@@ -337,10 +340,10 @@ export function uploadAllApp(os: OSCtx, ra: ResearchApps): UploadApp {
       <div class="rows">${rows.filter(r => r[1] > 0).map(([l, n, x]) => `<div class="rw"><i data-n="${n}">0</i><span><b>${l}</b>${x ? `<small>${x}</small>` : ''}</span></div>`).join('') || '<div class="rw none">Nothing new today. Tomorrow is another day.</div>'}</div>
       <div class="tot"><span>Research Points from the agency</span><b class="rp">+0 RP</b>${fx10.rpMult() !== 1 ? `<small>×${fx10.rpMult().toFixed(2)} agency rate</small>` : ''}${paid ? `<small class="wb">includes the week ${wk.week} bonus: +${paid} RP</small>` : ''}</div>
       <div class="wk"><h5>Week ${wk.week} targets${wk.met ? ' <em>met!</em>' : ''}</h5>${wk.targets.map(t => `<div class="trow${t.have >= t.need ? ' ok' : ''}"><span>${esc(t.label)}</span><i><u style="width:${(Math.min(1, t.have / t.need) * 100).toFixed(0)}%"></u></i><b>${t.have}/${t.need}</b></div>`).join('')}<small>${wk.paid ? `Bonus paid: +${wk.bonus} RP base` : `Bonus when all are met: ${wk.bonus} RP`}</small></div>
-      <div class="bt"><div class="gel green ctl enc">Open Encyclopedia</div><div class="gel ctl mail">ZEA Mail${unreadMail() ? ` (${unreadMail()} new)` : ''}</div><div class="gel glass ctl done">Done</div></div></div>`;
+      <div class="bt">${os.has('enc') ? '<div class="gel green ctl enc">Open Encyclopedia</div>' : ''}${os.has('mail') ? `<div class="gel ctl mail">ZEA Mail${unreadMail() ? ` (${unreadMail()} new)` : ''}</div>` : ''}<div class="gel glass ctl done">Done</div></div></div>`;
     (stage.querySelector('.hd .ms') as HTMLElement).appendChild(mascot(ses.species.length || arts.length || ses.rp > 40 ? 'wow' : ses.rp ? 'happy' : 'meh', 1.5));
-    (stage.querySelector('.enc') as HTMLElement).addEventListener('click', e => { os.from(e.currentTarget as Element); os.open('enc', ses.species[0] ? 'sp:' + ses.species[0] : arts[0] ? 'it:' + arts[0].id : undefined); });
-    (stage.querySelector('.mail') as HTMLElement).addEventListener('click', e => { os.from(e.currentTarget as Element); os.open('mail'); });
+    stage.querySelector('.enc')?.addEventListener('click', e => { os.from(e.currentTarget as Element); os.open('enc', ses.species[0] ? 'sp:' + ses.species[0] : arts[0] ? 'it:' + arts[0].id : undefined); });
+    stage.querySelector('.mail')?.addEventListener('click', e => { os.from(e.currentTarget as Element); os.open('mail'); });
     (stage.querySelector('.done') as HTMLElement).addEventListener('click', () => { if (cameraRoll().length || pendingCount() || pendingNotes().length) render(); else os.closeWin('upall'); });
     // count up the rows, then the RP
     const rp = stage.querySelector('.tot .rp') as HTMLElement;

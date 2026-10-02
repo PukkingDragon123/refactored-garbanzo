@@ -15,6 +15,7 @@ import { skillIconURL } from '../../art/itemicons';
 import type { OSCtx } from '../v4/moriResearch';
 import { esc } from '../v4/moriResearch';
 import { sfx, clamp } from '../v7/aeroFx';
+import { gi } from '../v7/aeroGlyphs';
 import { mascot } from './icons10';
 import type { AgencyApp } from './agency';
 
@@ -144,7 +145,7 @@ export function skillTreeApp(os: OSCtx, agency: AgencyApp): SkillApp {
       const p = pos.get(s.id)!;
       const st = stateOf(s);
       const ext = s.req.filter(r => !skills.some(x => x.id === r));
-      const n = el('div', `skt-n ctl ${st}${sel === s.id ? ' on' : ''}${fresh.has(s.id) ? ' newly' : ''}`, `<span class="o"><img src="${skillIconURL(skillIcon(s), 2)}" alt="" draggable="false">${st === 'owned' ? '<i class="ck">✓</i>' : st === 'locked' ? '<i class="lk"></i>' : ''}</span><b>${esc(s.name)}</b><em>${st === 'owned' ? 'owned' : `${s.cost} RP`}</em>${ext.length ? `<small>needs ${ext.map(r => esc(SKILL_TREE10.find(x => x.id === r)?.name ?? r)).join(', ')}</small>` : ''}`);
+      const n = el('div', `skt-n ctl ${st}${sel === s.id ? ' on' : ''}${fresh.has(s.id) ? ' newly' : ''}`, `<span class="o"><img src="${skillIconURL(skillIcon(s), 2)}" alt="" draggable="false">${st === 'owned' ? '<i class="ck"></i>' : st === 'locked' ? '<i class="lk"></i>' : ''}</span><b>${esc(s.name)}</b><em>${st === 'owned' ? 'owned' : `${s.cost} RP`}</em>${ext.length ? `<small>needs ${ext.map(r => esc(SKILL_TREE10.find(x => x.id === r)?.name ?? r)).join(', ')}</small>` : ''}`);
       n.style.left = p.x + '%';
       n.style.top = p.y - 26 + 'px';
       n.dataset.id = s.id;
@@ -176,8 +177,8 @@ export function skillTreeApp(os: OSCtx, agency: AgencyApp): SkillApp {
     const why = canBuy10(s.id).reason ?? '';
     I.innerHTML = `<div class="skt-card ${st}" style="--bc:${br.color}"><div class="h"><img src="${skillIconURL(skillIcon(s), 2)}" alt=""><div><b>${esc(s.name)}</b><span>${esc(br.name)} · tier ${s.tier}</span></div></div>
       <p class="efx">${esc(s.effect)}</p><p>${esc(s.desc)}</p>
-      ${s.req.length ? `<div class="rq">${s.req.map(r => `<span class="${owned10(r) ? 'ok' : ''}">${owned10(r) ? '✓' : '✕'} ${esc(SKILL_TREE10.find(x => x.id === r)?.name ?? r)}</span>`).join('')}</div>` : ''}
-      <div class="buy">${st === 'owned' ? '<div class="own">✓ Unlocked</div>' : `<div class="gel ${st === 'ready' ? 'green' : 'glass'} big ctl go">${st === 'locked' ? 'Locked' : `Unlock · ${s.cost} RP`}</div>`}<div class="why">${st === 'poor' ? (game.save.rp < s.cost ? `You need ${s.cost - game.save.rp} more RP. Upload some research!` : esc(why)) : st === 'locked' ? `${esc(why)} first.` : ''}</div></div></div>` + kitHtml;
+      ${s.req.length ? `<div class="rq">${s.req.map(r => `<span class="${owned10(r) ? 'ok' : ''}">${owned10(r) ? gi('check', { k: 1 }) : gi('cross', { k: 1 })} ${esc(SKILL_TREE10.find(x => x.id === r)?.name ?? r)}</span>`).join('')}</div>` : ''}
+      <div class="buy">${st === 'owned' ? `<div class="own">${gi('check')} Unlocked</div>` : `<div class="gel ${st === 'ready' ? 'green' : 'glass'} big ctl go">${st === 'locked' ? 'Locked' : `Unlock · ${s.cost} RP`}</div>`}<div class="why">${st === 'poor' ? (game.save.rp < s.cost ? `You need ${s.cost - game.save.rp} more RP. Upload some research!` : esc(why)) : st === 'locked' ? `${esc(why)} first.` : ''}</div></div></div>` + kitHtml;
     flash = new Set();
     (I.querySelector('.go') as HTMLElement | null)?.addEventListener('click', buy);
   };
@@ -236,7 +237,7 @@ export function skillTreeApp(os: OSCtx, agency: AgencyApp): SkillApp {
       if (nn) os.retrigger(nn, 'got');
       setTimeout(() => { fresh = new Set(); }, 50);
       os.badges();
-      if (m) os.balloon('New mail from ZEA', esc(m.subj), 6000, { icon: 'mail', onClick: () => os.open('mail', m.id) });
+      if (m && os.has('mail')) os.balloon('New mail from ZEA', esc(m.subj), 6000, { icon: 'mail', onClick: () => os.open('mail', m.id) });
     }, 650);
   };
 
