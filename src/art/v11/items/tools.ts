@@ -21,7 +21,8 @@ art('camera', fp(2, 2), p => {
   p.fill(b.side, (x, y) => (Math.abs(y - (17 - (9 - x) * 0.8)) < 0.6 ? Cr[4] : -1));
   // the rubber grip bulging out of the front at the left
   const grip = p.maskBox(9, 21, 9, 22, 3);
-  p.relief(grip, Rb, p.dome(grip, 4), { lift: 0.9, tex: (x, y) => ((x * 3 + y * 5) % 7 === 0 ? -0.8 : 0) });
+  p.relief(grip, I, p.dome(grip, 4), { lift: 0.5, tex: (x, y) => ((x + y * 2) % 4 === 0 ? -0.6 : 0) });
+  p.fill(grip, (x, y) => (x === 10 && y > 23 && y < 40 ? I[4] : -1));
   p.seam(grip, I[0], 8);
   // viewfinder hump set back on the top plate, with the hot shoe; mode dial and shutter button
   const hb = box3(p, 19, 7, 13, 8, -3, -3, 1);
@@ -330,7 +331,7 @@ function frond(p: IP, x0: number, y0: number, len: number, ang: number, R: Ramp,
   return m;
 }
 art('ghillie', fp(2, 2), p => {
-  const F = RP.fern, Fd = RP.flaxDry, dry = rp('#1e1408', '#3a2810', '#5a4018', '#7a5a22', '#9a7a34', '#c2a258');
+  const F = RP.fern, Fd = RP.flaxDry, dry = rp('#1a1006', '#2e1e0c', '#4a3214', '#664a1e', '#80602a', '#a07c3c');
   const cape = p.maskPoly([24, 2, 30, 4, 32.5, 9, 33, 13, 39, 18, 43, 30, 45.5, 43, 2.5, 43, 5, 30, 9, 18, 15, 13, 15.5, 9, 18, 4]);
   p.relief(cape, rp('#04100a', '#081a10', '#0e2816', '#16381e', '#204a26', '#2e602e'), p.dome(cape, 6), { lift: 0 });
   // rows of fronds tied on, shingled: each row overlaps the one below
@@ -348,7 +349,7 @@ art('ghillie', fp(2, 2), p => {
     }
   }
   // flax ties dangling from the shoulders and the neck cord
-  for (const [x, y, l] of [[12, 18, 15], [37, 19, 13]] as [number, number, number][]) p.tube([[x, y], [x + (x < 24 ? -1.5 : 1.5), y + l]], 0.8, Fd, { spec: 1 });
+  for (const [x, y, l] of [[12, 18, 15], [37, 19, 13]] as [number, number, number][]) p.tube([[x, y], [x + (x < 24 ? -1.5 : 1.5), y + l]], 0.8, dry, { spec: 1, lift: 0.3 });
   p.ball(24, 9.5, 4.4, 5, rp('#020403', '#050a07', '#09120d', '#0f1c14', '#16281c', '#16281c'), { spec: 1, lift: -1 });
   p.tube([[19, 14], [29, 14]], 1.1, Fd, { spec: 1 });
   p.ball(24, 14.5, 1.6, 1.4, Fd, { lift: 0.5 });

@@ -326,7 +326,7 @@ art('plt_thermomat', fp(2, 1), p => {
 // ------------------------------------------------------------------ cave lichen (1x1): silver rosettes on a chip of limestone
 art('plt_cavelichen', fp(1, 1), p => {
   const rock = p.lump(12, 13.5, 10, 7.6, 23, 0.16, -0.1);
-  p.relief(rock, RP.lime, p.dome(rock, 3.4), { tex: stoneTex(23, 0.5, 0.1), lift: 0 });
+  p.relief(rock, RP.limestone, p.dome(rock, 3.4), { tex: stoneTex(23, 0.5, 0.1), lift: 0 });
   const L = rp('#3a4448', '#5e6a6c', '#86928e', '#adb8b0', '#d4ddd2', '#ffffff');
   for (const [cx, cy, r] of [[8, 11, 4.4], [15.5, 14, 4], [10.5, 17.5, 2.8], [16, 8, 2.6]] as [number, number, number][]) {
     const m = Pen.and(rock, p.maskFn((x, y) => { const dx = x + 0.5 - cx, dy = y + 0.5 - cy, a = Math.atan2(dy, dx); return Math.hypot(dx, dy) <= r * (0.82 + 0.18 * Math.abs(Math.sin(a * 4))); }));

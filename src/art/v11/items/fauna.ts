@@ -89,21 +89,31 @@ art('weta', fp(2, 1), p => {
 art('skymoth', fp(2, 1), p => {
   const Or = rp('#3a1606', '#7a3410', '#b86018', '#e0922c', '#f6c060', '#fff0b8');
   const Hw = rp('#3a1414', '#6e2a26', '#a24a3a', '#cc7656', '#eaa682', '#ffdcc4');
-  const wing = (pts: number[], R: Ramp, eye: Pt | null, lift: number) => {
-    const m = p.maskPoly(pts);
-    p.relief(m, R, p.dome(m, 3), { spec: 1, lift, tex: (x, y) => (noise2(x * 0.5, y * 0.5, 4) > 0.64 ? -0.4 : 0) });
-    // dusky margin and fine scale lines
-    p.fill(m, (x, y) => (!p.at(m, x, y + 1) || !p.at(m, x + (x < 24 ? -1 : 1), y) ? R[1] : -1));
+  /** a wing as a rounded sector from its root: angles a0..a1, length L, the tip broadest */
+  const wingM = (bx: number, by: number, a0: number, a1: number, L: number) => p.maskFn((x, y) => {
+    const dx = x + 0.5 - bx, dy = y + 0.5 - by, r = Math.hypot(dx, dy);
+    let a = Math.atan2(dy, dx);
+    const lo = Math.min(a0, a1), hi = Math.max(a0, a1);
+    if (a < lo - 0.01) a += Math.PI * 2;
+    if (a < lo || a > hi) return false;
+    const k = (a - lo) / (hi - lo);
+    return r <= L * (0.62 + 0.38 * Math.sin(Math.PI * Math.min(1, k * 0.85 + 0.12)));
+  });
+  const paint = (m: Mask, R: Ramp, bx: number, by: number, eye: Pt | null, lift: number) => {
+    p.relief(m, R, p.dome(m, 3), { spec: 1, lift, tex: (x, y) => (noise2(x * 0.5, y * 0.5, 4) > 0.64 ? -0.35 : 0) });
+    // veins from the root, a dusky margin and a pale band
+    p.fill(m, (x, y) => { const a = Math.atan2(y + 0.5 - by, x + 0.5 - bx); return Math.abs(Math.sin(a * 11)) < 0.12 ? tone(p.get(x, y), -0.2) : -1; });
+    p.fill(m, (x, y) => (!p.at(m, x, y + 1) || !p.at(m, x - 1, y) || !p.at(m, x + 1, y) || !p.at(m, x, y - 1) ? R[1] : -1));
     if (eye) {
       const [ex, ey] = eye;
-      p.fill(Pen.and(m, p.maskDisc(ex, ey, 4)), (x, y) => { const d = Math.hypot(x + 0.5 - ex, y + 0.5 - ey); return d < 1.1 ? H('#fffbe8') : d < 2.3 ? H('#141018') : d < 3.1 ? RP.yellow[4] : H('#2a1410'); });
+      p.fill(Pen.and(m, p.maskDisc(ex, ey, 4.2)), (x, y) => { const d = Math.hypot(x + 0.5 - ex, y + 0.5 - ey); return d < 1.2 ? H('#fffbe8') : d < 2.4 ? H('#141018') : d < 3.2 ? RP.yellow[4] : H('#3a1a10'); });
     }
-    return m;
   };
-  wing([24, 12, 14, 17, 7, 22, 4, 17, 11, 12], Hw, null, 0);
-  wing([24, 12, 34, 17, 41, 22, 44, 17, 37, 12], Hw, null, -0.3);
-  wing([24, 11, 13, 2, 3, 3, 1, 9, 6, 15, 18, 15], Or, [10, 8.5], 0.3);
-  wing([24, 11, 35, 2, 45, 3, 47, 9, 42, 15, 30, 15], Or, [38, 8.5], -0.1);
+  // hind wings under the forewings
+  paint(wingM(23, 12, Math.PI * 0.55, Math.PI * 0.95, 11), Hw, 23, 12, null, 0);
+  paint(wingM(25, 12, Math.PI * 0.05, Math.PI * 0.45, 11), Hw, 25, 12, null, -0.3);
+  paint(wingM(23, 12, -Math.PI * 0.99, -Math.PI * 0.72, 21.5), Or, 23, 12, [11, 6.6], 0.3);
+  paint(wingM(25, 12, -Math.PI * 0.28, -Math.PI * 0.01, 21.5), Or, 25, 12, [37, 6.6], -0.1);
   // furry body and feathery antennae
   p.tube([[24, 5], [24, 19]], t => (t < 0.3 ? 2.2 : 1.9 - (t - 0.3) * 1.1), rp('#1e0e08', '#3e2012', '#62381c', '#8a5428', '#b07a3c', '#d4a060'), { tex: (x, y) => (y % 2 ? -0.8 : 0), spec: 1 });
   for (const s of [-1, 1]) { feeler(p, bez([24 + s, 4], [24 + s * 3, 1], [24 + s * 7, 0.5], 10), Or[3]); p.px(24 + s * 4, 1, Or[2]); p.px(24 + s * 6, 0, Or[2]); }
@@ -190,19 +200,28 @@ art('bug_jewelbeetle', fp(1, 1), p => {
   feeler(p, [[10, 2], [9, 1], [8, 1]], RP.iron[3]); feeler(p, [[14, 2], [15, 1], [16, 1]], RP.iron[3]);
 });
 
-// ------------------------------------------------------------------ sand hopper (1x1): a springy little amphipod
+// ------------------------------------------------------------------ sand hopper (1x1): a springy little amphipod, arched and glossy
 art('bug_sandhopper', fp(1, 1), p => {
-  const Sh = rp('#3a3428', '#625a46', '#8c8268', '#b6ac8c', '#dcd4b4', '#fffaea');
-  const pts = bez([5, 10], [12, 4], [20, 13], 16);
-  const c = curve(pts);
-  for (let i = 0; i < 6; i++) { const q = c.at(0.15 + i * 0.13); leg(p, [[q.x, q.y + 2], [q.x + (i < 3 ? -1.5 : 1.5), q.y + 6], [q.x + (i < 3 ? -2.5 : 2.5), q.y + 8.5]], Sh, 0.5); }
-  const m = p.tube(pts, t => 2.8 - Math.abs(t - 0.4) * 2.6, Sh, { spec: 0.92, lift: 0.4 });
-  p.fill(m, (x, y) => { const q = c.loc(x, y); return Math.round(q.u) % 2 === 0 && q.v > 0.4 ? tone(p.get(x, y), -0.25) : -1; });
-  // tail fan, a big black eye, antennae
-  p.tube([[20, 13], [22, 17]], 0.8, Sh, { lift: 0.2 });
-  p.px(6, 9, H('#0a0a0a')); p.px(6, 8, H('#ffffff'));
-  feeler(p, bez([4, 9], [1, 6], [2, 2], 8), Sh[3]);
-  feeler(p, bez([5, 8], [4, 4], [7, 1], 8), Sh[4]);
+  const Sh = rp('#3a2a24', '#664a3e', '#94705c', '#bc9a80', '#e0c4a8', '#fff2e2');
+  const arc: Pt[] = [];
+  for (let i = 0; i <= 18; i++) { const a = Math.PI * (1.05 - 1.25 * (i / 18)); arc.push([12 + Math.cos(a) * 7.4, 14.5 - Math.sin(a) * 6.8]); }
+  const c = curve(arc);
+  // legs under the arch, then the segmented body, the tail fan, the head with its eye
+  for (let i = 0; i < 7; i++) {
+    const q = c.at(0.12 + i * 0.1), nx = q.ty, ny = -q.tx;
+    const x0 = q.x - nx * 2.4, y0 = q.y - ny * 2.4;
+    const fwd = i < 3 ? -1 : 1;
+    leg(p, [[x0, y0], [x0 + fwd * 1.4 - nx * 2.4, y0 - ny * 2.4 + 1.2], [x0 + fwd * 2.6 - nx * 3, y0 - ny * 3 + 3]], Sh, 0.5);
+  }
+  const body = p.tube(arc, t => (t < 0.12 ? 2.4 + t * 6 : 3.3 * (1 - (t - 0.12) * 0.75)), Sh, { spec: 0.9, lift: 0.4 });
+  p.fill(body, (x, y) => { const q = c.loc(x, y); return Math.round(q.u * 0.75) % 2 === 0 && q.t > 0.12 && q.v < 1.4 ? tone(p.get(x, y), -0.22) : -1; });
+  const tail = c.at(1);
+  p.tube([[tail.x, tail.y], [tail.x - 1, tail.y + 3], [tail.x - 3, tail.y + 4.5]], 0.8, Sh, { lift: 0.2 });
+  const hd = c.at(0.02);
+  p.ball(hd.x + 0.5, hd.y - 0.2, 2.6, 2.4, Sh, { spec: 0.88, lift: 0.5 });
+  p.px(Math.round(hd.x), Math.round(hd.y - 1), H('#0a0808')); p.px(Math.round(hd.x) + 1, Math.round(hd.y - 1), H('#0a0808')); p.px(Math.round(hd.x), Math.round(hd.y - 2), H('#ffffff'));
+  feeler(p, bez([hd.x - 1, hd.y - 2], [hd.x - 3, hd.y - 7], [hd.x + 1, hd.y - 10], 10).map(([x, y]) => [Math.round(x), Math.round(y)] as Pt), Sh[3]);
+  feeler(p, bez([hd.x - 2, hd.y - 1], [hd.x - 5, hd.y - 3], [hd.x - 4, hd.y - 7], 8).map(([x, y]) => [Math.round(x), Math.round(y)] as Pt), Sh[4]);
 });
 
 // ------------------------------------------------------------------ lantern moth (1x1): pale wings, two glowing spots
@@ -220,37 +239,44 @@ art('bug_lanternmoth', fp(1, 1), p => {
 
 // ------------------------------------------------------------------ jewel hornet (1x1): teal, violet and gold, cross even in death
 art('bug_hornet', fp(1, 1), p => {
-  const f = frame(20, 19, 4, 6); // tail -> head
+  const f = frame(20, 20, 4, 4); // tail -> head
   const ang = Math.atan2(f.uy, f.ux);
-  // wings (glassy, smoky violet) behind the body
+  const at = (u: number, v: number) => f.at(u, v);
+  // legs, then the wings folded back over the abdomen, slightly spread
+  for (const [u, s] of [[11.5, 1], [13, 1], [14.5, 1], [11.5, -1], [13, -1], [14.5, -1]] as Pt[]) leg(p, [at(u, s * 2.2), at(u - 1.6 + (u - 13) * 0.8, s * 4.6), at(u - 3.2 + (u - 13) * 1.4, s * 5.8)], RP.iron, 0.5);
+  // the striped abdomen: teal, violet and gold bands, glossy
+  const ab = p.maskFn((x, y) => { const [u, v] = f.loc(x, y); return u >= 0.5 && u <= 10.4 && Math.abs(v) <= 3.8 * Math.sin(Math.PI * Math.min(1, (u + 0.2) / 11)) ** 0.6; });
+  const bands = [RP.yellow, RP.teal, RP.violet];
+  p.fill(ab, (x, y) => { const [u, v] = f.loc(x, y); const R = bands[Math.floor((u + 0.3) / 2.1) % 3]; return p.tn(R, p.lum(v / 3.8 * f.nx, v / 3.8 * f.ny, 0.9) + (Math.abs(v + 1) < 0.6 ? 0.25 : 0), x, y, 0.4); });
+  p.px(...at(0.6, 0), RP.iron[0]);
+  // waist, thorax with gold markings, head with big violet eyes
+  p.ball(...at(11.2, 0), 1, 1, RP.iron, { lift: 0.5 });
+  const th = p.ball(...at(13.4, 0), 2.8, 2.6, RP.teal, { ang, spec: 0.88, lift: 0.3 });
+  p.fill(th, (x, y) => (Math.abs(f.loc(x, y)[1]) < 0.6 ? RP.yellow[4] : -1));
+  p.ball(...at(16.8, 0), 2.1, 2.9, RP.yellow, { ang, spec: 0.88, lift: 0.4 });
+  for (const s of [-1, 1]) p.ball(...at(17, s * 1.9), 1.2, 1.4, RP.violet, { ang, spec: 0.85, lift: 0.6 });
+  for (const s of [-1, 1]) { const [x0, y0] = at(18.4, s * 0.8), [x1, y1] = at(20.6, s * 2.4), [x2, y2] = at(21.6, s * 4.2); p.line(x0, y0, x1, y1, RP.iron[3]); p.line(x1, y1, x2, y2, RP.iron[2]); }
   for (const s of [-1, 1]) {
-    const [bx, by] = f.at(12, s * 1.2);
-    const wf = frame(bx, by, ...f.at(5.5, s * 8));
-    const m = p.maskFn((x, y) => { const [a, b] = wf.loc(x, y); return a >= 0 && a <= wf.len && Math.abs(b) <= 2.6 * Math.sin(Math.PI * Math.min(1, a / wf.len * 0.9 + 0.1)); });
-    wing(p, m, bx, by, '#c8b8f0', 90, '#5a4a8a');
+    const [bx, by] = at(13.6, s * 1.6);
+    const wf = frame(bx, by, ...at(4.5, s * 5.2));
+    const m = p.maskFn((x, y) => { const [a, b] = wf.loc(x, y); return a >= 0 && a <= wf.len && Math.abs(b) <= 2.2 * Math.sin(Math.PI * Math.min(1, a / wf.len * 0.9 + 0.1)); });
+    wing(p, m, bx, by, '#d8ccff', 80, '#6a5aa0');
   }
-  for (const [u, s] of [[10, 1], [12.5, 1], [10, -1], [12.5, -1]] as Pt[]) leg(p, [f.at(u, s * 2.5), f.at(u - 1, s * 5), f.at(u - 2.5, s * 5.6)], RP.iron, 0.55);
-  // striped abdomen: teal, violet and gold bands
-  const ab = p.ball(...f.at(5.4, 0), 5.6, 3.6, RP.teal, { ang, spec: 0.9 });
-  p.fill(ab, (x, y) => { const [u] = f.loc(x, y); const b = Math.floor((u + 0.5) / 1.8) % 3; const base = b === 0 ? RP.teal : b === 1 ? RP.violet : RP.yellow; return mix(p.get(x, y), base[clamp(RP.teal.indexOf(p.get(x, y)), 1, 4)], 0.75); });
-  p.ball(...f.at(11.6, 0), 2.6, 2.4, RP.violet, { ang, spec: 0.88, lift: 0.4 });
-  p.ball(...f.at(15.4, 0), 2.2, 2.5, RP.teal, { ang, spec: 0.88, lift: 0.4 });
-  const [hx, hy] = f.at(15.8, 1.4); p.px(hx, hy, H('#fff4c0'));
-  const [sx, sy] = f.at(0, 0); p.px(sx, sy, RP.yellow[2]);
-  feeler(p, [f.at(17, 0.8), f.at(18.5, 2.5), f.at(19.5, 4)].map(([x, y]) => [Math.round(x), Math.round(y)] as Pt), RP.iron[3]);
 });
 
-// ------------------------------------------------------------------ fur tuft (1x1): brown fur snagged on a thorn twig
+// ------------------------------------------------------------------ fur tuft (1x1): brown fur snagged on a thorny twig
 art('furtuft', fp(1, 1), p => {
-  p.tube([[2, 20], [21, 5]], 1.1, RP.bark, { lift: 0.3 });
-  for (const [x, y, dx, dy] of [[7, 15.5, -1, -3], [14, 10, 1, 3], [17, 7.5, -1, -3]] as number[][]) p.tube([[x, y], [x + dx, y + dy]], t => 0.8 - t * 0.6, RP.bark, { lift: 0.2 });
+  p.tube([[2, 21], [21.5, 4]], 1.2, RP.bark, { lift: 0.3 });
+  for (const [x, y, dx, dy] of [[6.5, 16.5, -1.5, -3.5], [16.5, 8, 1.5, 3.2], [18.5, 6.5, -1, -3]] as number[][]) p.tube([[x, y], [x + dx, y + dy]], t => 0.9 - t * 0.7, RP.bark, { lift: 0.4 });
   const F = rp('#22110a', '#432213', '#6a3a1e', '#94562c', '#ba7c44', '#e0b07c');
-  // the tuft: many fine curved hairs bunched where they caught
-  for (let i = 0; i < 46; i++) {
-    const a = -0.6 + hash(i, 1, 3) * 1.9, l = 4 + hash(i, 2, 3) * 6.5;
-    const x0 = 11 + (hash(i, 3, 3) - 0.5) * 3, y0 = 12 + (hash(i, 4, 3) - 0.5) * 2;
-    const tone_ = clamp(Math.round(2 + hash(i, 5, 3) * 3 - (a > 0.6 ? 1 : 0)), 1, 5);
-    for (let k = 0; k < l; k++) { const t = k / l; p.px(x0 + Math.cos(a) * k + Math.sin(t * 3) * 0.8, y0 + Math.sin(a) * k + t * t * 3, F[k > l - 1.5 ? Math.min(5, tone_ + 1) : tone_]); }
+  // the tuft: a soft mass, combed by the wind into strands, lighter tips
+  const tuft = Pen.or(p.lump(11.5, 12.5, 5.6, 4.4, 3, 0.3, -0.6), p.lump(14, 15.5, 4, 3, 5, 0.3, -0.3), p.lump(9, 10, 3.4, 2.6, 7, 0.3, -0.7));
+  p.relief(tuft, F, p.dome(tuft, 3), { lift: 0.3, tex: (x, y) => (noise2(x * 0.9 + y * 0.6, y * 0.2 - x * 0.1, 4) - 0.5) * 1.6, dither: 0.4 });
+  for (let i = 0; i < 22; i++) {
+    const a = -0.4 + hash(i, 1, 3) * 1.6, l = 2.5 + hash(i, 2, 3) * 4;
+    const x0 = 11.5 + (hash(i, 3, 3) - 0.5) * 7, y0 = 12.5 + (hash(i, 4, 3) - 0.5) * 6;
+    if (!p.at(tuft, Math.round(x0), Math.round(y0))) continue;
+    for (let k = 0; k < l; k++) { const t = k / l; p.px(x0 + Math.cos(a) * k, y0 + Math.sin(a) * k + t * t * 2, F[k > l - 1.5 ? 4 : 3]); }
   }
 });
 
@@ -366,13 +392,23 @@ art('eggshell', fp(1, 1), p => {
   shard([3, 17, 8, 15, 10, 19, 6, 22, 3, 21], false, 0);
 });
 
-// ------------------------------------------------------------------ armour plate (1x1): a bony osteoderm, fang marks skidding off it
+// ------------------------------------------------------------------ armour plate (1x1): a bony osteoderm, honeycomb-pitted, fang marks skidding off it
 art('plate', fp(1, 1), p => {
   const P = rp('#3a3226', '#64584a', '#8e8270', '#b8ac96', '#ddd2bc', '#fffaec');
-  const m = p.lump(12, 12.5, 9.6, 8, 31, 0.07, 0.25);
-  p.relief(m, P, (x, y) => (p.at(m, x, y) ? p.dome(m, 4)(x, y) + (Math.abs((x - 12) - (y - 12.5) * 0.5) < 1 ? 1 : 0) : 0), { tex: (x, y) => (hash(x, y, 31) > 0.84 ? -0.8 : 0), lift: 0.2 });
-  // the fang grooves: two skids that failed to pierce it
-  for (const [a, b] of [[[6, 9], [11, 13]], [[13, 7], [18, 11]]] as Pt[][]) { p.line(a[0], a[1], b[0], b[1], P[0]); p.line(a[0], a[1] + 1, b[0], b[1] + 1, P[4]); }
+  const m = p.lump(12, 12.5, 9.8, 8, 31, 0.07, 0.25);
+  const dome = p.dome(m, 4);
+  const sa = Math.sin(0.25), ca = Math.cos(0.25);
+  const pit = (x: number, y: number) => {
+    const gy = (y + 0.5) / 2.6, row = Math.round(gy), off = (row & 1) * 0.5, col = Math.round((x + 0.5) / 3 - off);
+    return Math.hypot(x + 0.5 - (col + off) * 3, y + 0.5 - row * 2.6) < 0.95;
+  };
+  p.relief(m, P, (x, y) => {
+    if (!p.at(m, x, y)) return 0;
+    const d = Math.abs(-(x + 0.5 - 12) * sa + (y + 0.5 - 12.5) * ca);
+    return dome(x, y) + Math.max(0, 1.8 - d * 0.9) - (pit(x, y) ? 0.8 : 0);
+  }, { lift: 0.25, spec: 1 });
+  // the two fang grooves that failed to pierce it
+  for (const [a, b] of [[[6, 8], [11, 12]], [[13, 6.5], [18, 10.5]]] as Pt[][]) { p.line(a[0], a[1], b[0], b[1], P[0]); p.line(a[0], a[1] + 1, b[0], b[1] + 1, P[4]); }
 });
 
 // ------------------------------------------------------------------ colony down (1x1): a wisp of grey down, all fluff

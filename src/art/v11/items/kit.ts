@@ -63,7 +63,7 @@ export const RP = {
   mud: rp('#08070a', '#121014', '#1c181c', '#282226', '#3a3236', '#7a7276'),
   ochre: rp('#3a1a0a', '#6a3412', '#9a5422', '#c47a36', '#e0a056', '#f6cc8a'),
   ash: rp('#3a140c', '#6a2614', '#96401e', '#b85e30', '#d48452', '#f0b88a'),
-  lime: rp('#4a4436', '#6e6650', '#968c70', '#bcb292', '#dcd4b6', '#f6f0dc'),
+  limestone: rp('#4a4436', '#6e6650', '#968c70', '#bcb292', '#dcd4b6', '#f6f0dc'),
   water: rp('#0a2a3a', '#14465e', '#226a86', '#3a90aa', '#6ab8c8', '#d4f6f8'),
   quartz: rp('#2a3a3a', '#4a6062', '#748c8c', '#a2bab6', '#d0e4de', '#ffffff'),
   obsidian: rp('#050608', '#0c0e14', '#161a24', '#242a38', '#3a4458', '#b6c8e4'),
@@ -376,7 +376,7 @@ export function jar(p: IP, x: number, y: number, w: number, h: number, o: {
       const i = t < 0.25 ? 4 : t < 0.7 ? 3 : 2;
       return col[py === lb.y ? Math.min(5, i + 1) : py === lb.y + lb.h - 1 ? i - 1 : i];
     });
-    const ink = lb.ink ?? H('#3a2a20');
+    const ink = lb.ink ?? H('#8a7258');
     for (let ly = lb.y + 1; ly < lb.y + lb.h - 1; ly += 2) p.scribble(x + 2, x + w - 4, ly, ink, ly * 7 + x, lm);
   }
   // highlights: a long streak on the lit side, a short one on the right

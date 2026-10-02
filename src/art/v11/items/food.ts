@@ -17,18 +17,21 @@ function berry(p: IP, cx: number, cy: number, r: number, R: Ramp, o: { bloom?: b
   return m;
 }
 
-// ------------------------------------------------------------------ ship biscuit (1x1): hard as a brick, docked with holes
+// ------------------------------------------------------------------ ship biscuit (1x1): a square of hardtack, docked with holes, hard as a brick
 art('ration', fp(1, 1), p => {
   const Bs = rp('#4a2a10', '#7a4a1e', '#a8743a', '#d0a060', '#ecc88a', '#fff0c8');
-  const b = box3(p, 3, 6, 16, 15, 3, -3, 1);
-  p.lit(b.top, Bs, () => 0.82, 0.3);
-  p.lit(b.side, Bs, () => 0.32, 0.3);
-  p.lit(b.front, Bs, (x, y) => 0.6 + (noise2(x * 0.5, y * 0.5, 3) - 0.5) * 0.35 - (y - 6) * 0.01, 0.5);
-  // toasty edges, docking holes in a grid, a crack and crumbs
-  p.fill(b.front, (x, y) => (!p.at(b.front, x - 1, y) || !p.at(b.front, x, y + 1) || !p.at(b.front, x + 1, y) ? Bs[2] : -1));
-  for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) { const x = 6 + i * 5, y = 9 + j * 4; p.px(x, y, Bs[0]); p.px(x + 1, y + 1, Bs[4]); }
-  p.line(13, 6, 15, 12, Bs[1]);
-  for (const [x, y] of [[20, 20], [2, 21], [21, 17]] as Pt[]) p.px(x, y, Bs[3]);
+  // a thick square tile seen from above: the docked top, a toasted edge below
+  const top = p.maskPoly([2, 9, 15, 5, 22, 11, 9, 16]);
+  const front = p.maskPoly([2, 9, 9, 16, 9, 20, 2, 13]);
+  const side = p.maskPoly([9, 16, 22, 11, 22, 15, 9, 20]);
+  p.lit(front, Bs, (x, y) => 0.5 + (noise2(x * 0.5, y * 0.5, 3) - 0.5) * 0.3, 0.4);
+  p.lit(side, Bs, (x, y) => 0.3 + (noise2(x * 0.5, y * 0.5, 4) - 0.5) * 0.3, 0.4);
+  p.lit(top, Bs, (x, y) => 0.72 + (noise2(x * 0.45, y * 0.45, 5) - 0.5) * 0.35 - (x + y - 20) * 0.006, 0.5);
+  // the docking holes in a skewed grid, a crack, and crumbs
+  for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) { const x = Math.round(6 + i * 4.2 + j * -1.6), y = Math.round(8.4 + i * -1.2 + j * 2.4); p.px(x, y, Bs[1]); p.px(x + 1, y, Bs[4]); }
+  p.line(15, 6, 14, 10, Bs[2]);
+  p.fill(top, (x, y) => (!p.at(top, x, y - 1) ? Bs[4] : -1));
+  for (const [x, y] of [[20, 19], [3, 18], [22, 18]] as Pt[]) p.px(x, y, Bs[3]);
 });
 
 // ------------------------------------------------------------------ Lou's stew (1x1): a dented billy of something spicy, steaming
@@ -88,22 +91,21 @@ art('berry_dusk', fp(1, 1), p => {
   for (const [x, y, r] of [[14, 13, 3.6], [9, 16, 3.4], [16.5, 19, 3.2], [11, 20.5, 2.8], [19, 14.4, 2.6]] as number[][]) berry(p, x, y, r, D, { bloom: true });
 });
 
-// ------------------------------------------------------------------ goldcurrants (1x1): tiny golden berries in clusters
+// ------------------------------------------------------------------ goldcurrants (1x1): tiny golden berries in a hanging cluster
 art('berry_gold', fp(1, 1), p => {
   const Gc = rp('#4a2a04', '#8a5808', '#c89012', '#f0c42c', '#fce678', '#fffbe0');
-  const stem = bez([5, 3], [12, 8], [17, 20], 14);
+  const stem = bez([5, 2], [10, 5], [13, 21], 14);
   p.tube(stem, 0.5, RP.olive, { lift: 0.3 });
+  leafBlade(p, bez([6, 3], [11, -0.4], [16.5, 1.6], 6), t => 1.9 * Math.sin(Math.PI * Math.min(1, t + 0.05)) + 0.3, RP.leaf, { veins: 0, gloss: true });
   const c = curve(stem);
-  for (let i = 0; i < 11; i++) {
-    const q = c.at(0.14 + i * 0.078), s = i % 2 ? 1 : -1;
-    const x = q.x + s * (2.2 + hash(i, 1, 3)), y = q.y + 1.4;
-    p.line(Math.round(q.x), Math.round(q.y), Math.round(x), Math.round(y), RP.olive[2]);
-    const m = p.ball(x, y, 2, 2, Gc, { spec: 0.88, lift: 0.4 });
-    // translucent: a bright core on the shadow side
-    p.px(Math.round(x + 0.6), Math.round(y + 0.6), Gc[4]);
-    void m;
+  // a dense cone of berries, back ones first; each translucent, a bright core on its shadow side
+  const pos: [number, number, number][] = [];
+  for (let i = 0; i < 18; i++) { const t = 0.22 + (i / 17) * 0.74, q = c.at(t), sp = 4.6 * (1 - (t - 0.22) * 0.9); pos.push([q.x + (hash(i, 1, 3) - 0.5) * 2 * sp, q.y + (hash(i, 2, 3) - 0.5) * 2, 1.7 + hash(i, 3, 3) * 0.5]); }
+  pos.sort((a, b) => a[1] - b[1]);
+  for (const [x, y, r] of pos) {
+    p.ball(x, y, r, r, Gc, { spec: 0.86, lift: 0.3 });
+    p.px(Math.round(x + 0.5), Math.round(y + 0.5), Gc[4]);
   }
-  leafBlade(p, bez([6, 4], [10, 0.8], [15, 1.6], 6), t => 1.7 * Math.sin(Math.PI * Math.min(1, t + 0.05)) + 0.3, RP.leaf, { veins: 0, gloss: true });
 });
 
 // ------------------------------------------------------------------ rēwena bread (2x1): a round loaf, cracked crust, the cut end soft and holey
@@ -231,32 +233,38 @@ lure('fishbait', fp(1, 1), p => {
   p.steam(16, 8, 5, '#b8e070', 100, -1);
 });
 
-// ------------------------------------------------------------------ musk lure (1x1): droppings and resin balled up on a string
+// ------------------------------------------------------------------ musk lure (1x1): droppings and resin in a leaf wrap, hung on a string
 lure('scentlure', fp(1, 1), p => {
-  rope(p, [[12, 2], [12, 8]], 0.6, RP.flaxDry, { lift: 0.3 });
-  const m = p.lump(12, 15, 7.4, 6.6, 9, 0.12);
-  p.relief(m, RP.poo, p.dome(m, 4), { spec: 1, tex: (x, y) => (noise2(x * 0.6, y * 0.6, 5) > 0.6 ? 0.5 : 0), lift: 0.1 });
-  // glossy resin smeared over it
-  const rs = Pen.and(m, p.maskFn((x, y) => noise2(x * 0.25, y * 0.3, 7) > 0.5));
-  p.relief(rs, RP.amber, p.dome(rs, 2), { spec: 0.92, lift: -0.2 });
-  for (let x = 9; x <= 15; x++) { p.px(x, 9, RP.flaxDry[x % 2 ? 2 : 4]); }
-  p.steam(6, 9, 5, '#c890d8', 110);
-  p.steam(18, 10, 5, '#a8c870', 100, -1);
+  // the leaf wrap cupped round the bottom, the dark ball of musk, amber resin poured over the top
+  const L = rp('#16200c', '#283a14', '#3e5620', '#5a742e', '#7c9642', '#b6c878');
+  const cup = p.maskFn((x, y) => { const dx = (x + 0.5 - 12) / 9, dy = (y + 0.5 - 13) / 9; return dx * dx + dy * dy <= 1 && y >= 13; });
+  p.relief(cup, L, p.dome(cup, 3), { spec: 1, lift: 0.1 });
+  p.fill(cup, (x, y) => (Math.abs(x + 0.5 - 12) < 0.6 ? L[4] : Math.abs((x - 12) * 0.6 + (y - 22)) < 0.5 ? L[1] : -1));
+  const ball = p.lump(12, 12.4, 6.8, 5.6, 9, 0.1);
+  p.relief(ball, RP.poo, p.dome(ball, 3.5), { spec: 1, lift: 0, tex: (x, y) => (noise2(x * 0.6, y * 0.6, 5) > 0.62 ? 0.5 : 0) });
+  const rs = Pen.and(ball, p.maskFn((x, y) => y < 11 + Math.sin(x * 1.3) * 1.5 + (x % 5 === 0 ? 3 : 0)));
+  p.relief(rs, RP.amber, p.dome(rs, 2), { spec: 0.9, lift: 0.1 });
+  rope(p, [[12, 1.5], [12, 6.8]], 0.6, RP.flaxDry, { lift: 0.3 });
+  p.steam(5, 9, 6, '#b8d070', 110);
+  p.steam(19, 8, 6, '#c890d8', 100, -1);
 });
 
 // ------------------------------------------------------------------ glow lure (1x1): glowcaps set in a ball of clear resin
 lure('glowlure', fp(1, 1), p => {
-  const Am = rp('#3a2a08', '#6a4e10', '#a07a1a', '#d0aa38', '#f0d878', '#fffbe0');
-  const orb = p.ball(12, 13, 8.4, 8, Am, { spec: 0.93, lift: 0.4 });
-  // the glowing mushrooms inside, seen through the resin
+  const Am = rp('#2e2208', '#5a4210', '#8a6a1a', '#c09a34', '#e8cc70', '#fffbe0');
+  const orb = p.ball(12, 13, 8.4, 8, Am, { spec: 0.93, lift: 0.1 });
+  // light from inside: the resin brightest round the mushrooms
+  p.tint(orb, (x, y) => { const d = Math.hypot(x + 0.5 - 11.5, y + 0.5 - 13.5); return d < 3.5 ? 0.45 : d < 5.5 ? 0.25 : 0; });
   const Gl = RP.glow;
   for (const [x, y, r] of [[10, 14, 3.4], [15, 12, 2.6], [12, 9, 2]] as number[][]) {
     p.fill(Pen.and(orb, p.maskFn((px, py) => Math.abs(px + 0.5 - x) < 0.8 && py >= y && py < y + r * 1.4)), Gl[4]);
     p.fill(Pen.and(orb, p.maskFn((px, py) => { const dx = (px + 0.5 - x) / r, dy = (py + 0.5 - y) / (r * 0.7); return dx * dx + dy * dy <= 1 && py + 0.5 <= y + 0.4; })), (px) => (px < x ? Gl[5] : Gl[4]));
   }
   p.glint(8, 8, H('#ffffff'), 0.5);
-  p.glow(12, 13, 12, '#6ff0d0', 100);
+  p.glow(12, 13, 12, '#6ff0d0', 130);
+  p.glow(12, 13, 6, '#d8fff4', 90);
   p.spark(20, 5, '#c0fff0');
+  p.spark(4, 19, '#c0fff0');
 });
 
 // ------------------------------------------------------------------ bird caller (1x1): a cut reed whistle, lashed with flax

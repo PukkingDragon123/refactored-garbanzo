@@ -16,34 +16,44 @@ function paper(p: IP, pts: number[], o: { R?: Ramp; ruled?: { dy: number; c: C; 
   if (o.ruled) { const r = o.ruled; p.fill(m, (x, y) => ((y - 2) % r.dy === 0 && x > r.x0 ? r.c : -1)); }
   return m;
 }
-/** a drawstring cloth sample bag with its contents showing at the open neck */
+/** a drawstring cloth sample bag: a round belly, a gathered neck tied with string, the contents heaped
+ *  in the open mouth, a paper tag on the string */
 function sampleBag(p: IP, cloth: Ramp, fill: Ramp, seed: number) {
-  const m = p.maskFn((x, y) => { const dy = (y + 0.5 - 15) / 7.6; return y >= 7 && y <= 22 && Math.abs(x + 0.5 - 12) <= (dy < -0.55 ? 4.4 + (y - 7) * 0.3 : 8.6 * Math.sqrt(Math.max(0, 1 - Math.max(0, dy) ** 2 * 0.6))); });
-  p.relief(m, cloth, p.dome(m, 4), { lift: 0.2, tex: weaveTex(2, 2, 0.4), dither: 0.3 });
-  // the gathered neck, the drawstring, the contents peeking out
-  p.fill(m, (x, y) => (y === 10 || y === 11 ? cloth[y === 10 ? 1 : 2] : y < 10 && (x % 2 === 0) ? tone(p.get(x, y), -0.2) : -1));
-  p.fill(p.maskEllipse(12, 6.8, 4.4, 1.6), (x, y) => p.tn(fill, 0.6 + (hash(x, y, seed) > 0.7 ? 0.25 : 0) - (x - 12) * 0.05, x, y, 0.4));
-  rope(p, [[7, 10.5], [3, 14], [3.5, 17]], 0.55, RP.flaxDry, { lift: 0.3 });
-  tag(p, 3.5, 17, 1, 17, 6, 5);
+  const belly = p.maskEllipse(11.5, 15.8, 8.6, 7.2);
+  const neck = p.maskPoly([8, 4.6, 15, 4.6, 13.6, 10.5, 9.4, 10.5]);
+  const m = Pen.or(belly, neck);
+  p.relief(m, cloth, p.dome(m, 4), { lift: 0.25, tex: weaveTex(2, 2, 0.3), dither: 0.3 });
+  // creases gathered up into the neck
+  for (const k of [-2, -1, 1, 2]) p.line(11.5 + k * 1.2, 10, 11.5 + k * 3.4, 15 + Math.abs(k), tone(cloth[2], -0.2));
+  // the tie, and the contents heaped in the mouth
+  for (let x = 9; x <= 14; x++) { p.px(x, 9, RP.flaxDry[x % 2 ? 2 : 4]); p.px(x, 10, RP.flaxDry[1]); }
+  const heap = p.maskEllipse(11.5, 4.8, 3.8, 1.8);
+  p.fill(heap, (x, y) => p.tn(fill, 0.62 + (hash(x, y, seed) > 0.7 ? 0.22 : 0) - (x - 11) * 0.06 - (y - 4) * 0.08, x, y, 0.4));
+  rope(p, [[14.5, 9.6], [18, 12], [18.6, 14.6]], 0.5, RP.flaxDry, { lift: 0.3 });
+  tag(p, 18.6, 14.6, 16, 15, 6, 5);
+  for (const [x, y] of [[4, 22], [6, 23], [17, 22]] as Pt[]) p.px(x, y, fill[3]);
   return m;
 }
 
 // ------------------------------------------------------------------ Captain's pipe (2x1): briar, an anchor on the bowl, teeth marks on the bit
 art('pipe', fp(2, 1), p => {
   const Bw = rp('#1e0c06', '#3a180c', '#5c2a14', '#843e1e', '#ae5a2c', '#d88a50');
-  // stem: briar shank, then the black bit with teeth marks
-  p.tube([[14, 15], [32, 13]], 2.6, Bw, { spec: 0.93, lift: 0.3 });
-  const bit = p.tube([[31, 13], [46, 10.5]], t => 2.2 - t * 0.9, RP.iron, { spec: 0.9, lift: 0.5 });
+  // the stem: briar shank, a brass band, then the black bit with teeth marks
+  p.tube([[16, 16], [31, 13.6]], 2.5, Bw, { spec: 0.93, lift: 0.3 });
+  const bit = p.tube([[30.5, 13.6], [46, 11]], t => 2.1 - t * 0.9, RP.iron, { spec: 0.9, lift: 0.6 });
   p.fill(bit, (x) => (x === 41 || x === 43 ? RP.iron[1] : -1));
-  ring(p, 31.5, 13, 0.5, 2.7, RP.brass, { ry: 1 });
-  // the bowl: grain swirling round it, charred rim, the dark ash inside
-  const bowl = p.maskFn((x, y) => { const dx = (x + 0.5 - 11) / 8.6, dy = (y + 0.5 - 12) / 10; return (dy < 0 ? Math.abs(dx) <= 1 : dx * dx + dy * dy <= 1) && y >= 3; });
-  p.relief(bowl, Bw, (x, y) => (p.at(bowl, x, y) ? Math.sqrt(Math.max(0, 1 - ((x + 0.5 - 11) / 8.6) ** 2)) * 5 : 0), { spec: 0.93, lift: 0.3, tex: (x, y) => (Math.sin(Math.hypot(x - 8, y - 16) * 1.4 + noise2(x * 0.3, y * 0.3, 4) * 2) > 0.7 ? -0.6 : 0) });
-  p.fill(p.maskEllipse(11, 3.6, 8.2, 2.2), (x, y) => (Math.hypot((x + 0.5 - 11) / 6.4, (y + 0.5 - 3.6) / 1.4) < 1 ? (hash(x, y, 2) > 0.6 ? H('#3a3230') : H('#1a1210')) : Bw[1]));
-  // the carved anchor
-  const A = Bw[0];
+  p.tube([[30, 13.7], [32, 13.4]], 2.7, RP.brass, { cap: 'flat', lift: 0.3 });
+  // the bowl: a rounded billiard bowl, the grain swirling round it
+  const cx = 11, top = 3.5, R = 8;
+  const bowl = p.maskFn((x, y) => { const dx = x + 0.5 - cx; if (y + 0.5 < top) return false; if (y + 0.5 <= 12) return Math.abs(dx) <= R; return Math.hypot(dx, (y + 0.5 - 12) * 1.15) <= R; });
+  const dome = p.dome(bowl, 4);
+  p.relief(bowl, Bw, (x, y) => (p.at(bowl, x, y) ? Math.sqrt(Math.max(0, 1 - ((x + 0.5 - cx) / R) ** 2)) * 4 + dome(x, y) * 0.4 : 0), { spec: 0.93, lift: 0.3, tex: (x, y) => (Math.sin(Math.hypot(x - 7, y - 19) * 1.3 + noise2(x * 0.3, y * 0.3, 4) * 2.2) > 0.72 ? -0.7 : 0) });
+  // the charred rim and the ash inside
+  p.fill(p.maskEllipse(cx, top + 0.6, R, 2.4), (x, y) => (Math.hypot((x + 0.5 - cx) / (R - 1.6), (y + 0.5 - top - 0.6) / 1.4) < 1 ? (hash(x, y, 2) > 0.6 ? H('#4a403c') : H('#1a1210')) : Bw[1]));
+  // the anchor carved in the front of the bowl
+  const A = Bw[0], L = Bw[4];
   p.pts([[11, 8], [11, 9], [11, 10], [11, 11], [11, 12], [11, 13], [11, 14], [10, 9], [12, 9], [9, 13], [13, 13], [8, 12], [14, 12], [10, 14], [12, 14]], A);
-  p.pts([[11, 7], [12, 8], [12, 10], [12, 12]], Bw[4]);
+  p.pts([[12, 10], [12, 11], [12, 12], [13, 9], [14, 13], [12, 15]], L);
   p.glint(6, 8, H('#ffffff'), 0.4);
 });
 
@@ -68,17 +78,29 @@ art('taonga_toggle', fp(1, 1), p => {
   p.spark(17, 5, '#c8ffe0');
 });
 
-// ------------------------------------------------------------------ stone toki (1x2): a polished basalt adze head, its lashing groove worn
+// ------------------------------------------------------------------ stone toki (1x2): a polished basalt adze head, tang worn by its lashing
 art('taonga_toki', fp(1, 2), p => {
-  const Bs = RP.basalt;
-  const m = p.maskPoly([7, 4, 17, 3, 18.5, 26, 19, 42, 12, 45, 5, 42, 5.5, 26]);
-  p.relief(m, Bs, (x, y) => (p.at(m, x, y) ? p.dome(m, 4)(x, y) + (x > 12 ? -0.6 : 0) : 0), { spec: 0.94, lift: 0.4, tex: (x, y) => (y < 22 ? (noise2(x * 0.7, y * 0.7, 3) > 0.6 ? -0.5 : 0) : 0) });
-  // the hammer-dressed butt (flake scars), the ground and polished blade, the honed edge
-  p.fill(m, (x, y) => (y < 22 && hash(x >> 1, y >> 1, 5) > 0.8 ? tone(p.get(x, y), 0.18) : -1));
-  p.fill(m, (x, y) => (y > 36 && y < 41 && x < 12 ? Bs[4] : y > 41 && y < 44 ? Bs[5] : -1));
-  // the lashing groove near the butt
-  p.fill(m, (x, y) => (y === 9 ? Bs[0] : y === 10 ? Bs[3] : -1));
-  p.glint(8, 30, H('#e0e8f0'), 0.4);
+  const Bs = rp('#0a0d10', '#151a20', '#222a32', '#36404a', '#58646e', '#b4c2ca');
+  const f = frame(14.8, 3, 9.6, 45); // butt -> cutting edge
+  const L = f.len;
+  // a narrow tang for the lashing, then the body widening to a broad, slightly curved blade
+  const w = (u: number) => (u < 9 ? 3.4 : u < 12 ? 3.4 + (u - 9) * 0.5 : 4.9 + (u - 12) / (L - 12) * 2.3);
+  const m = p.maskFn((x, y) => { const [u, v] = f.loc(x, y); const edge = L - Math.abs(v) * Math.abs(v) * 0.06; return u >= 0 && u <= edge && Math.abs(v) <= w(Math.max(0, u)); });
+  p.fill(m, (x, y) => {
+    const [u, v] = f.loc(x, y);
+    const k = v / w(Math.max(0, u));
+    // faces: a lit left bevel, the flat polished front, a shaded right bevel; the ground blade facet near the edge
+    let l = k < -0.72 ? 0.84 : k > 0.72 ? 0.28 : 0.56 - k * 0.1;
+    if (u > L - 7) l += 0.18 + (u - (L - 7)) * 0.02;
+    if (u < 18) l += (noise2(x * 0.8, y * 0.8, 3) - 0.5) * 0.45; // hammer-dressed, pecked surface
+    else l += (noise2(x * 0.3, y * 0.08, 4) - 0.5) * 0.12;
+    return p.tn(Bs, l, x, y, 0.4);
+  });
+  // the lashing groove across the tang, the honed edge, a long polished streak
+  p.fill(m, (x, y) => { const [u] = f.loc(x, y); return Math.abs(u - 6) < 0.6 ? Bs[0] : Math.abs(u - 7) < 0.5 ? Bs[4] : -1; });
+  p.fill(m, (x, y) => (!p.at(m, x, y + 1) && f.loc(x, y)[0] > L - 3 ? Bs[5] : -1));
+  for (let u = 19; u < L - 9; u++) { const [x, y] = f.at(u, -1.8); p.px(x, y, Bs[4]); }
+  p.glint(Math.round(f.at(21, -1.8)[0]), Math.round(f.at(21, -1.8)[1]), H('#e8f0f4'), 0.4);
 });
 
 // ------------------------------------------------------------------ bone matau (1x1): a fishhook carved from serpent rib, barb turned in
@@ -185,34 +207,41 @@ art('fos_vertebra', fp(2, 2), p => {
 
 // ------------------------------------------------------------------ ammonite (1x1): a coiled shell turned to stone, ribbed like a ram's horn
 art('fos_ammonite', fp(1, 1), p => {
-  const St = rp('#3a2e22', '#5e4e3c', '#86745a', '#ae9c7c', '#d4c4a2', '#f4ead0');
-  const cx = 12, cy = 12.4;
-  const m = p.maskDisc(cx, cy, 10);
+  const St = rp('#3a2e22', '#5e4e3c', '#86745a', '#ae9c7c', '#d4c4a2', '#f6eed6');
+  const cx = 11.6, cy = 12, k = 0.16;
+  const m = p.maskDisc(cx, cy, 10.2);
+  const whorl = (x: number, y: number) => {
+    const dx = x + 0.5 - cx, dy = y + 0.5 - cy, r = Math.max(0.6, Math.hypot(dx, dy)), a = Math.atan2(dy, dx);
+    const w = Math.log(r) / (k * Math.PI * 2) - a / (Math.PI * 2);
+    return { f: ((w % 1) + 1) % 1, r, a };
+  };
+  // each whorl a rounded tube, crossed by curved ribs
   p.relief(m, St, (x, y) => {
-    const dx = x + 0.5 - cx, dy = y + 0.5 - cy, r = Math.hypot(dx, dy), a = Math.atan2(dy, dx);
-    // the whorls: a logarithmic spiral of rounded tubes, each ribbed
-    const th = (Math.log(Math.max(0.5, r)) / 0.23 - a / (Math.PI * 2) * 6.8) % 6.8;
-    const tube = Math.sin(((th + 6.8) % 6.8) / 6.8 * Math.PI) * 2.4;
-    const rib = Math.cos(a * 22 + r * 0.4) * 0.35 * Math.min(1, r / 5);
-    return tube + rib + (10 - r) * 0.12;
-  }, { spec: 1, lift: 0.3, tex: stoneTex(5, 0.4, 0.06), dither: 0.3 });
-  p.fill(p.maskDisc(cx, cy, 1.4), St[0]);
+    if (!p.at(m, x, y)) return 0;
+    const { f, r, a } = whorl(x, y);
+    return Math.sin(f * Math.PI) * 2.4 + Math.max(0, Math.cos(a * 16 + Math.log(r) * 5)) * 0.7 * Math.min(1, r / 3);
+  }, { spec: 1, lift: 0.3, tex: stoneTex(5, 0.3, 0.05) });
+  // the sutures where the whorls meet
+  p.fill(m, (x, y) => { const { f } = whorl(x, y); return f < 0.08 || f > 0.95 ? St[0] : -1; });
 });
 
 // ------------------------------------------------------------------ fossil fern imprint (2x1): a siltstone slab printed with a frond
 art('fos_leaf', fp(2, 1), p => {
   const Sl = rp('#2e2a22', '#4c4638', '#6e6652', '#928a72', '#b6ae94', '#dcd6bc');
   const slab = p.maskPoly([3, 7, 10, 3, 38, 2, 45, 6, 44, 18, 36, 22, 8, 21, 2, 16]);
-  p.relief(slab, Sl, p.dome(slab, 2), { tex: stoneTex(7, 0.4, 0.05), lift: 0.3 });
+  p.relief(slab, Sl, p.dome(slab, 2), { tex: stoneTex(7, 0.4, 0.05), lift: 0.4 });
   // the broken edge face along the bottom
   p.fill(slab, (x, y) => (!p.at(slab, x, y + 2) ? Sl[1] : !p.at(slab, x, y + 3) ? Sl[2] : -1));
-  // the frond printed in darker stone, lying across the slab
+  // the frond: pressed into the stone, its walls lit like a hollow (dark top-left, bright bottom-right)
   const fc = curve(bez([6, 15], [24, 6], [41, 9], 30));
-  for (let i = 0; i < 30; i++) {
-    const t = 0.04 + i * 0.032, q = fc.at(t), L = 5.4 * (1 - t) ** 0.4 + 0.8;
-    for (const s of [-1, 1]) for (let k = 1; k <= L; k++) { const x = Math.round(q.x - q.ty * s * k + q.tx * k * 0.5), y = Math.round(q.y + q.tx * s * k + q.ty * k * 0.5); if (p.at(slab, x, y) && p.at(slab, x, y + 2)) p.px(x, y, k === 1 ? Sl[1] : Sl[2]); }
+  const pr = p.mask();
+  const mark = (x: number, y: number) => { x = Math.round(x); y = Math.round(y); if (p.at(slab, x, y) && p.at(slab, x, y + 2)) pr[y * p.w + x] = 1; };
+  for (let i = 0; i <= 60; i++) { const q = fc.at(i / 60); mark(q.x, q.y); }
+  for (let i = 0; i < 16; i++) {
+    const t = 0.05 + i * 0.058, q = fc.at(t), L = 6.2 * (1 - t) ** 0.4 + 1;
+    for (const s of [-1, 1]) for (let kk = 1; kk <= L; kk += 0.5) { const x = q.x - q.ty * s * kk + q.tx * kk * 0.55, y = q.y + q.tx * s * kk + q.ty * kk * 0.55; mark(x, y); if (kk < L - 1.5) mark(x + q.tx, y + q.ty); }
   }
-  for (let i = 0; i <= 40; i++) { const q = fc.at(i / 40); p.px(q.x, q.y, Sl[0]); }
+  p.fill(pr, (x, y) => { const tl = !p.at(pr, x - 1, y) || !p.at(pr, x, y - 1), br = !p.at(pr, x + 1, y) || !p.at(pr, x, y + 1); const c = p.get(x, y); return tl && !br ? tone(c, -0.5) : br && !tl ? tone(c, 0.2) : tone(c, -0.3); });
 });
 
 // ------------------------------------------------------------------ fossil serpent tooth (1x2): black, curved, grooved, still sharp
@@ -229,16 +258,23 @@ art('fos_tooth', fp(1, 2), p => {
 // ------------------------------------------------------------------ fossil scallop (1x1): a ribbed shell set in cave limestone
 art('fos_shell', fp(1, 1), p => {
   const rock = p.lump(12, 13, 10.6, 9, 41, 0.12);
-  p.relief(rock, RP.lime, p.dome(rock, 3), { tex: stoneTex(41, 0.6, 0.15), lift: 0.1 });
-  const hx = 12, hy = 19;
-  const sh = Pen.and(rock, p.maskFn((x, y) => { const dx = x + 0.5 - hx, dy = y + 0.5 - hy, a = Math.atan2(dx, -dy), r = Math.hypot(dx, dy); return Math.abs(a) < 0.95 && r < 12.6 - a * a * 1.6; }));
-  p.relief(sh, rp('#5a4a38', '#86745a', '#b09c7e', '#d4c4a4', '#eee4c8', '#fffaec'), (x, y) => { const dx = x + 0.5 - hx, dy = y + 0.5 - hy, a = Math.atan2(dx, -dy), r = Math.hypot(dx, dy); return Math.cos(a * 9) * 0.6 + Math.sin(Math.min(1, r / 12) * Math.PI) * 2; }, { lift: 0.3, spec: 1 });
+  p.relief(rock, RP.limestone, p.dome(rock, 3), { tex: stoneTex(41, 0.6, 0.15), lift: -0.1 });
+  const SH = rp('#5a4a38', '#86745a', '#b09c7e', '#d4c4a4', '#eee4c8', '#fffaec');
+  const hx = 11.5, hy = 19.5;
+  const sh = Pen.and(rock, p.maskFn((x, y) => { const dx = x + 0.5 - hx, dy = y + 0.5 - hy, a = Math.atan2(dx, -dy), r = Math.hypot(dx, dy); return Math.abs(a) < 0.98 && r < 13.4 - a * a * 2 - Math.abs(Math.sin(a * 6.5)) * 0.7 && r > 1; }));
+  p.fill(sh, (x, y) => {
+    const dx = x + 0.5 - hx, dy = y + 0.5 - hy, a = Math.atan2(dx, -dy), r = Math.hypot(dx, dy);
+    const rib = Math.floor((a + 1) * 6.5) % 2;
+    return p.tn(SH, 0.62 + (rib ? 0.16 : -0.12) - (dx + dy) * 0.012 + (Math.sin(r * 1.5) > 0.85 ? -0.14 : 0), x, y, 0.3);
+  });
+  const ears = Pen.and(rock, Pen.or(p.maskPoly([hx - 1, hy - 1.5, hx - 5.5, hy - 2.5, hx - 5, hy + 0.6, hx - 1, hy + 0.8]), p.maskPoly([hx + 1, hy - 1.5, hx + 5.5, hy - 2.5, hx + 5, hy + 0.6, hx + 1, hy + 0.8])));
+  p.lit(ears, SH, (x) => 0.6 - (x - hx) * 0.03, 0.3);
 });
 
 // ------------------------------------------------------------------ cave limestone (1x1): a soft pale chip, fizzing in vinegar
 art('smp_limestone', fp(1, 1), p => {
   const m = p.lump(11, 13, 9, 7.4, 51, 0.2, 0.3);
-  p.relief(m, RP.lime, p.dome(m, 3), { tex: stoneTex(51, 0.5, 0.05), lift: 0.3 });
+  p.relief(m, RP.limestone, p.dome(m, 3), { tex: stoneTex(51, 0.5, 0.05), lift: 0.3 });
   // shell fragments in the stone
   for (let i = 0; i < 10; i++) { const x = Math.round(4 + hash(i, 1, 5) * 14), y = Math.round(8 + hash(i, 2, 5) * 10); if (p.at(m, x, y)) { p.px(x, y, RP.cream[5]); p.px(x + 1, y, RP.cream[3]); } }
   tag(p, 18, 9, 18, 14, 5, 5);

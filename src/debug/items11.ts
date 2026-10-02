@@ -23,9 +23,11 @@ export async function items11Gallery(params: URLSearchParams) {
   const head = document.createElement('div');
   head.style.cssText = 'margin-bottom:12px;line-height:1.6';
   const t0 = performance.now();
-  for (const e of list) itemArtCanvas(e.id);
+  const times: [string, number][] = [];
+  for (const e of list) { const t = performance.now(); itemArtCanvas(e.id); times.push([e.id, performance.now() - t]); }
   const ms = performance.now() - t0;
-  head.innerHTML = `<b>V11 item art</b> · ${Object.keys(ITEMS).length} items · ${artList().length} pictures · painted ${list.length} in ${ms.toFixed(0)} ms` +
+  const slow = times.sort((a, b) => b[1] - a[1]).slice(0, 8).map(([id, t]) => `${id} ${t.toFixed(0)}`).join(', ');
+  head.innerHTML = `<b>V11 item art</b> · ${Object.keys(ITEMS).length} items · ${artList().length} pictures · painted ${list.length} in ${ms.toFixed(0)} ms <span style="opacity:0.6">(slowest ms: ${slow})</span>` +
     (missing.length ? `<br><span style="color:#ff7a6a">no art: ${missing.join(', ')}</span>` : '<br><span style="color:#8ae6a0">every item has a picture</span>');
   document.body.appendChild(head);
 
