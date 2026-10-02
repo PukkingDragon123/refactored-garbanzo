@@ -73,6 +73,7 @@ async function iconGallery() {
 export function runGallery(name: string) {
   if (name === 'icons') { void iconGallery(); return; }
   if (name === 'camp4') { void camp4Gallery(); return; }
+  if (name === 'hands') { void import('./handsgallery').then(m => m.handsGallery(new URLSearchParams(location.search))); return; }
   const items: GalleryItem[] = [];
   if (name === 'flora') {
     items.push({ name: 'treefern', buf: F.paintTreeFern(3, { height: 90 }).buf });

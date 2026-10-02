@@ -39,7 +39,7 @@ export const at = (r: C[], i: number) => r[clampi(Math.round(i), 0, r.length - 1
 
 // ------------------------------------------------------------------ skeleton
 
-export type Hand = 'fist' | 'open' | 'grip' | 'point' | 'flat' | 'pinch' | 'relax' | 'none';
+export type Hand = 'fist' | 'open' | 'grip' | 'point' | 'flat' | 'pinch' | 'relax' | 'none' | 'wave' | 'cup' | 'hook' | 'claw' | 'thumb';
 
 export interface ArmP {
   /** FK: shoulder angle, 0 = hanging down, + swings forward (toward facing), PI = straight up */
@@ -53,6 +53,14 @@ export interface ArmP {
   hand?: Hand;
   /** hand angle override (ground space radians, 0 = pointing forward, + = up) */
   ha?: number;
+  /** V7 hands (src/art/v7/hands.ts): where the palm faces ('in' toward the body by default) */
+  palm?: 'in' | 'out' | 'up' | 'down' | 'fwd' | 'back' | 'cam';
+  /** V7 hands: wrist flex in radians (+ tips the hand toward the palm, - bends it back) */
+  flex?: number;
+  /** V7 hands: wrist tilt toward the thumb (radians) */
+  dev?: number;
+  /** V7 hands: how far the fingers fan (1 = the shape's own splay) */
+  spread?: number;
 }
 
 export interface LegP {
@@ -106,6 +114,8 @@ export interface Pose {
   headBehind?: boolean;
   /** pose flavour flags for per-character painters */
   flags?: Record<string, number>;
+  /** V7: a real object in the hands (src/art/v7/held.ts draws it where the pose put the hands) */
+  held?: { kind: string; /** fill level, count, open/closed... per kind */ v?: number; /** animation phase 0..1 */ t?: number };
 }
 
 export interface Build {

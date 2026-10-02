@@ -12,6 +12,8 @@ import { finish5 } from '../v5/body';
 import type { Ctx, CharDef } from '../people-parts';
 import type { C } from '../color';
 import { Scene3D, V3, Hit, Mat, vadd, vsub, vsc, vnorm, vdot, vlerp, vlen, vcross, cel, Ramp6 } from './raster';
+import { drawHand7, HandFrame } from './hands';
+import { drawHeld7 } from './held';
 
 export const YAW = 0.95; // radians: how far the cast turns toward the camera
 
@@ -49,6 +51,8 @@ export interface Char7 {
   cuff?: { r: number; len: number; mat?: PartMat };
   /** finger thickness (insulated gloves > 1) */
   fingerK?: number;
+  /** the fingers and thumb, when they differ from the rest of the hand (fingerless gloves) */
+  fingers?: PartMat;
   /** shoe size multipliers [length, height, width] (chunky snow and sea boots > 1) */
   shoeK?: [number, number, number];
   /** a boot shaft or gaiter hugging the shin from `t` (0 knee → 1 ankle) down, `r` px proud of it */
@@ -72,7 +76,7 @@ export interface J3 {
   legFwd: V3;
 }
 
-const G = { torso: 1, armN: 2, armF: 3, legN: 4, legF: 5, skirt: 6, extra: 7 };
+const G = { torso: 1, armN: 2, armF: 3, legN: 4, legF: 5, skirt: 6, extra: 7, handN: 40, handF: 41 };
 export { G as GROUPS };
 
 /** body space (x forward, y up, z lateral +near) → world, yawed toward the camera */
@@ -180,7 +184,11 @@ export function lift(ch: Char7, pose: Pose, yaw0 = YAW): J3 {
 
 const CW = 128, CH = 118, OX = 64, OY = 100;
 
-export interface Frame7 { back: PixelBuffer; front: PixelBuffer | null; ax: number; ay: number; hx: number; hy: number; hand: [number, number]; look?: 'fwd' | 'up' | 'down' | 'back'; headBehind?: boolean; hrot?: number; hflip?: boolean; hair?: number }
+export interface Frame7 {
+  back: PixelBuffer; front: PixelBuffer | null; ax: number; ay: number; hx: number; hy: number; hand: [number, number]; look?: 'fwd' | 'up' | 'down' | 'back'; headBehind?: boolean; hrot?: number; hflip?: boolean; hair?: number;
+  /** named points on the sprite (buffer px, sub-pixel): the palms ('handN', 'handF') and the held object's own (held.ts) */
+  pts?: Record<string, [number, number]>;
+}
 
 export function renderBody7(ch: Char7, pose: Pose): Frame7 {
   const s = new Scene3D(CW, CH, OX, OY);
@@ -242,6 +250,7 @@ export function renderBody7(ch: Char7, pose: Pose): Frame7 {
   }
 
   // ---- arms (upper, fore, hand)
+  let hN: HandFrame | null = null, hF: HandFrame | null = null;
   const arm = (near: boolean) => {
     const g = near ? G.armN : G.armF;
     // a raised near arm (waving, cheering, hand at the face) goes in front of the head
@@ -253,18 +262,25 @@ export function renderBody7(ch: Char7, pose: Pose): Frame7 {
     s.limb(el, wr, r1, r2, g, pm(ch.foreArm, near));
     const hp = (near ? pose.fa.hand : pose.ba.hand) ?? 'relax';
     if (hp !== 'none') {
-      hand7(s, wr, el, J, near, hp, ch.hand, g, pm(ch.hands, near), ch.fingerK ?? 1);
+      const am = near ? pose.fa : pose.ba;
+      const hf = drawHand7(s, wr, el, J, near, am, ch.hand, near ? G.handN : G.handF, pm(ch.hands, near), pm(ch.fingers ?? ch.hands, near), ch.fingerK ?? 1);
+      if (near) hN = hf; else hF = hf;
       // glove cuff over the wrist, flaring a little over the sleeve
       const cf = ch.cuff;
-      if (cf) { const d = vnorm(vsub(wr, el)); s.limb(vadd(wr, vsc(d, -cf.len)), vadd(wr, vsc(d, 0.35 * ch.hand)), cf.r, cf.r * 0.9, g, pm(cf.mat ?? ch.hands, near)); }
+      if (cf) { const d = vnorm(vsub(wr, el)); s.limb(vadd(wr, vsc(d, -cf.len)), vadd(wr, vsc(d, 0.35 * hf.k)), cf.r, cf.r * 0.9, g, pm(cf.mat ?? ch.hands, near)); }
     }
     s.layer = 0;
   };
   arm(false);
   ch.extras?.(s, J, pose, ch);
   arm(true);
+  // ---- whatever the hands are holding (held.ts), sitting in the hands it was posed for
+  const pts: Record<string, V3> = {};
+  if (hN) pts.handN = (hN as HandFrame).palm;
+  if (hF) pts.handF = (hF as HandFrame).palm;
+  if (pose.held) drawHeld7(s, J, pose, ch, hN, hF, pts);
 
-  const r = s.finish({ ink: ch.ink });
+  const r = s.finish({ ink: ch.ink, inkK: HAND_INK });
   if (pose.props?.length) drawProps(ch, pose, J, r.back, r.front ?? (r.front = new PixelBuffer(CW, CH)));
   const tr = trimPair(r.back, r.front, 1);
   const nt = J.neckTop;
@@ -274,10 +290,13 @@ export function renderBody7(ch: Char7, pose: Pose): Frame7 {
     hx: Math.round(OX + nt[0]) - tr.ox, hy: Math.round(OY - nt[1]) - tr.oy,
     hand: [Math.round(OX + J.wrN[0]) - tr.ox, Math.round(OY - J.wrN[1]) - tr.oy],
     look: pose.flags?.back ? 'back' : pose.look, headBehind: pose.headBehind || undefined, hrot: pose.flags?.hrot, hflip: (pose.flags?.hrot ?? 0) < 0 || undefined,
+    pts: Object.fromEntries(Object.entries(pts).map(([k, p]) => [k, [OX + p[0] - tr.ox, OY - p[1] - tr.oy] as [number, number]])),
   };
 }
 
 const flat = (v: V3): V3 => vnorm([v[0], 0, v[2]]);
+/** hands are small: their edges go darker (less of the skin's own red) so they read clean */
+const HAND_INK: Record<number, number> = { [G.handN]: 0.62, [G.handF]: 0.62 };
 
 /**
  * Held props reuse the side-view prop painter, placed at the projected 3D hands (absolute props are
@@ -305,43 +324,4 @@ function drawProps(ch: Char7, pose: Pose, J: J3, back: PixelBuffer, front: Pixel
       dst.data[i] = v;
     }
   }
-}
-
-/**
- * A hand: a palm and four two-jointed fingers plus a thumb, curled by the grip. The thumb sits on
- * the body's forward side, the palm faces the body (hanging) or the thing held.
- */
-const CURL: Record<string, number> = { fist: 1, grip: 0.82, relax: 0.42, open: 0.08, flat: 0, point: 1, pinch: 0.55 };
-function hand7(s: Scene3D, wr: V3, el: V3, J: J3, near: boolean, type: string, k: number, g: number, mat: Mat, fk = 1) {
-  const d = vnorm(vsub(wr, el));
-  let side = vsub(J.fwd, vsc(d, vdot(J.fwd, d)));
-  if (vlen(side) < 0.25) side = vsub(J.up, vsc(d, vdot(J.up, d)));
-  side = vnorm(side);
-  let n = vnorm(vcross(d, side));
-  if (vdot(n, J.lat) * (near ? 1 : -1) > 0) n = vsc(n, -1);
-  const WR = 0.75;
-  const P = (a: number, b: number, c: number): V3 => vadd(wr, vadd(vsc(d, (a + WR) * k), vadd(vsc(side, b * k), vsc(n, c * k))));
-  // wrist: slimmer than the forearm, flaring into the heel of the hand
-  s.limb(wr, P(0, 0, 0), 0.72 * k, 0.66 * k, g, mat);
-  // palm
-  s.ellipsoid(P(1.0, 0, 0), vsc(d, 1.15 * k), vsc(side, 1.0 * k), vsc(n, 0.56 * k), g, mat);
-  const fr = 0.46 * k * fk;
-  const curl = CURL[type] ?? 0.5;
-  const LEN = [1.45, 1.7, 1.6, 1.25], OFF = [0.64, 0.22, -0.22, -0.62];
-  const bend = (a: number): V3 => vnorm(vadd(vsc(d, Math.cos(a)), vsc(n, Math.sin(a))));
-  for (let i = 0; i < 4; i++) {
-    const c = type === 'point' && i === 0 ? 0.05 : type === 'pinch' && i === 0 ? 0.7 : curl;
-    const k0 = P(1.95, OFF[i], 0.05);
-    const a1 = c * 1.25, a2 = a1 + c * 1.55;
-    const m1 = vadd(k0, vsc(bend(a1), LEN[i] * 0.55 * k));
-    const tip = vadd(m1, vsc(bend(a2), LEN[i] * 0.48 * k));
-    s.limb(k0, m1, fr, fr * 0.94, g, mat);
-    s.limb(m1, tip, fr * 0.94, fr * 0.78, g, mat);
-  }
-  // thumb: out along the side when open, wrapped over the fingers in a fist
-  const tb = P(0.75, 0.82, 0.2);
-  const td = curl > 0.7 ? vnorm(vadd(vsc(d, 0.75), vadd(vsc(n, 0.55), vsc(side, -0.35)))) : curl > 0.3 ? vnorm(vadd(vsc(d, 0.8), vadd(vsc(side, 0.35), vsc(n, 0.35)))) : vnorm(vadd(vsc(d, 0.6), vsc(side, 0.8)));
-  const tm = vadd(tb, vsc(td, 0.8 * k));
-  s.limb(tb, tm, fr * 1.1, fr, g, mat);
-  s.limb(tm, vadd(tm, vsc(td, 0.65 * k)), fr, fr * 0.8, g, mat);
 }

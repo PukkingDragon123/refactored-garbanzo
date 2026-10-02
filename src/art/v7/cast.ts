@@ -49,6 +49,8 @@ export const MORI7: Char7 = {
   upperArm(p) { return cel(M.tunic, L(p), lb(p)); },
   foreArm(p) { return p.t > 0.62 ? cel(M.glove, L(p), lb(p)) : p.t > 0.5 ? cel(M.tunic, L(p), lb(p) - 0.3) : cel(M.tunic, L(p), lb(p)); },
   hands(p) { return cel(M.glove, L(p), lb(p) + 0.1); },
+  // fingerless field gloves: the fingers and thumb are bare from the first knuckle
+  fingers(p) { return p.t < 0.2 ? cel(M.glove, L(p), lb(p) + 0.1) : cel(BOY_SKIN, L(p), lb(p) + 0.12); },
   thigh(p) { return cel(M.shorts, L(p), lb(p)); },
   shin(p) { return p.t < 0.18 ? cel(BOY_SKIN, L(p), lb(p)) : p.t < 0.28 ? cel(M.boot, L(p), lb(p) + 0.25) : cel(M.boot, L(p), lb(p)); },
   shoe(p) { return p.hit.q[1] < -0.45 ? M.boot[0] : cel(M.boot, L(p), lb(p) + 0.05); },

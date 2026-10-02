@@ -168,6 +168,28 @@ export class Scene3D {
     this.col[i] = c;
     return true;
   }
+  /**
+   * A crease along a 3D segment lying on a surface of group `g` (the gap between two fingers, a
+   * knuckle line): the visible pixels it crosses are darkened by `k` (shade amount), each once.
+   * A pixel only takes it if its surface is within `tol` of the segment's depth (not something in front).
+   * The crease mixes toward a warm dark (`ink`) rather than re-shading, so skin stays skin-toned.
+   */
+  crease(a: V3, b: V3, g: number, k = 0.35, tol = 1.3, done?: Set<number>, ink: C = 0xff181018) {
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const n = Math.max(1, Math.ceil(L / 0.4));
+    const seen = done ?? new Set<number>();
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      const px = a[0] + (b[0] - a[0]) * t, py = a[1] + (b[1] - a[1]) * t, pz = a[2] + (b[2] - a[2]) * t;
+      const x = Math.floor(this.ox + px), y = Math.floor(this.oy - py);
+      if (x < 0 || y < 0 || x >= this.w || y >= this.h) continue;
+      const j = y * this.w + x;
+      if (seen.has(j) || this.grp[j] !== g || Math.abs(this.z[j] - pz) > tol) continue;
+      seen.add(j);
+      this.col[j] = mix(this.col[j], ink, k);
+    }
+    return seen;
+  }
   /** overwrite a pixel that's already on a surface (no depth test) */
   paint(x: number, y: number, c: C) {
     x = Math.floor(x); y = Math.floor(y);
@@ -181,10 +203,10 @@ export class Scene3D {
    * pixel, so the near part keeps its full shape), a contact shadow just under overlaps, and a
    * dark outline round the silhouette. Returns the back layer and (if used) the front layer.
    */
-  finish(o: { ink: C; line?: number; depthLine?: number } = { ink: 0xff201418 }): { back: PixelBuffer; front: PixelBuffer | null; ox: number; oy: number } {
+  finish(o: { ink: C; line?: number; depthLine?: number; /** per group: how far its edge lines go toward the ink (small parts, e.g. hands, read cleaner darker) */ inkK?: Record<number, number> } = { ink: 0xff201418 }): { back: PixelBuffer; front: PixelBuffer | null; ox: number; oy: number } {
     const W = this.w, Hh = this.h, z = this.z, g = this.grp, src = this.col.slice();
     const out = this.col;
-    const lineK = o.line ?? 0.55, dl = o.depthLine ?? 2.2;
+    const lineK = o.line ?? 0.55, dl = o.depthLine ?? 2.2, ik = o.inkK;
     for (let y = 0; y < Hh; y++) for (let x = 0; x < W; x++) {
       const i = y * W + x;
       if (!g[i]) continue;
@@ -199,7 +221,7 @@ export class Scene3D {
         else if (dy === -1 && g[j] !== g[i] && nearer > -0.4) contact = true;
       }
       // the line takes the dark tone of the part in front (a hand-inked edge of that part)
-      if (line >= 0) out[i] = mix(mix(shade(src[line], -lineK - 0.1), shade(src[i], -lineK), 0.3), o.ink, 0.3);
+      if (line >= 0) out[i] = mix(mix(shade(src[line], -lineK - 0.1), shade(src[i], -lineK), 0.3), o.ink, ik?.[g[line]] ?? 0.3);
       else if (contact) out[i] = mix(src[i], shade(src[i], -0.3), 0.6);
     }
     // silhouette outline (tinted by the neighbour)
@@ -220,7 +242,7 @@ export class Scene3D {
         if (filled[Y * W + X]) { nb = Y * W + X; break; }
       }
       if (nb >= 0) {
-        const c = mix(shade(src[nb], -0.72), o.ink, 0.55);
+        const c = mix(shade(src[nb], -0.72), o.ink, ik ? Math.max(0.55, ik[g[nb]] ?? 0) : 0.55);
         if (this.lay[nb]) { front.data[i] = c; anyFront = true; } else back.data[i] = c;
       }
     }
