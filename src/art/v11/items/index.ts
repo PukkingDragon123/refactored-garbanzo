@@ -8,6 +8,11 @@
 
 import './tools';
 import './materials';
+import './flora';
+import './fauna';
+import './shore';
+import './food';
+import './finds';
 
 export { artList } from './kit';
 export type { ArtEntry } from './kit';
