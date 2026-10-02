@@ -34,6 +34,9 @@ const CSS = () => `
 .dv-wrap { position: absolute; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center; padding: 8px; background: rgba(10, 8, 4, 0.6); pointer-events: auto; animation: dvFade 0.15s ease-out; }
 @keyframes dvFade { from { opacity: 0; } }
 .dv { position: relative; width: min(800px, 100%); height: min(700px, 100%); display: flex; flex-direction: column; padding: 0.55em 0.8em 0.6em; font-family: var(--pix); color: #3a2614; }
+/* a tall window: the frame without its tiled page (whose edge lines would stripe the list), on a plain page */
+.dv.panel { border-image-slice: 6; background: #f2e4bc padding-box !important; }
+.dv-jump { display: flex; flex-wrap: wrap; gap: 0.3em; margin: 0.1em 0 0.2em; }
 .dv-head { display: flex; align-items: center; gap: 0.6em; flex-wrap: wrap; }
 .dv-head .pz-tab { font-size: 1.2em !important; display: inline-flex; align-items: center; gap: 0.4em; }
 .dv-warn { flex: 1; min-width: 12em; font-size: 0.8em; line-height: 1.2; color: #a8382a; display: flex; align-items: center; gap: 0.4em; }
@@ -323,24 +326,38 @@ export function closeAll() {
   game.paused = false;
 }
 
+/** a cutscene or conversation is running: its script would carry on into the next scene (and could
+ *  set flags in the new save), so a jump then refreshes the page instead */
+function midCutscene() {
+  const sc = game.scene as unknown as { cutscene?: boolean; story?: { busy?: boolean } } | null;
+  return !!(sc?.cutscene || sc?.story?.busy || game.ui.dialogueOpen || game.ui.bubbles.active || (game as unknown as { busy: boolean }).busy);
+}
+function reloadTo(key: string) {
+  backupAuto();
+  game.persist();
+  const u = new URL(location.href);
+  u.searchParams.delete('scene');
+  u.searchParams.set('devjump', key);
+  game.ui.toast('Reloading the page...', 'DEV', 'teal', 4000);
+  setTimeout(() => { location.href = u.toString(); }, 60);
+}
 async function runPoint(name: string, run: () => Promise<void>, key?: string) {
-  if (prefs.cleanReload && key) {
-    backupAuto();
-    game.persist();
-    const u = new URL(location.href);
-    u.searchParams.delete('scene');
-    u.searchParams.set('devjump', key);
-    location.href = u.toString();
-    return;
-  }
+  if (key && (prefs.cleanReload || midCutscene())) { closeAll(); reloadTo(key); return; }
   prepJump();
   game.ui.toast(`Jumping to <b>${esc(name)}</b>`, 'DEV', 'teal', 2400);
   try { await run(); } catch (e) { console.error('[dev] jump failed', e); game.ui.toast('Jump failed: ' + esc(String(e)), 'DEV', 'coral', 5000); }
+}
+/** rebuild the scene from the save (after a quest skip), refreshing the page if a cutscene is running */
+async function reloadHere(): Promise<boolean> {
+  if (prefs.cleanReload || midCutscene()) { reloadTo('reload'); return true; }
+  prepJump();
+  return P.reloadScene();
 }
 
 /** ?devjump=<point>[~<variant>] (a clean-reload jump): run it on boot */
 export async function bootJump(key: string) {
   const [id, vi] = key.split('~');
+  if (id === 'reload') { try { history.replaceState(null, '', location.pathname); } catch { /* */ } const f = await import('../game/scenes/flow'); await f.continueV4(); return; }
   const all = await loadChapters();
   const p = all.flatMap(c => c.points).find(x => x.id === id);
   const run = p ? (vi !== undefined ? p.variants?.[+vi]?.run : p.run) : null;
@@ -401,7 +418,7 @@ function renderQuests(body: HTMLElement) {
     hudRefresh();
     if (prefs.reloadAfter) {
       closeAll();
-      const ok = await P.reloadScene();
+      const ok = await reloadHere();
       game.ui.toast(msg + (ok ? '' : ' (this scene cannot be reloaded: use Scenes)'), 'DEV', 'teal', 3000);
     } else { say(msg); rerender(); }
   };
@@ -453,6 +470,17 @@ function questCard(q: QuestDef, tracked: boolean, after: (msg: string) => Promis
   b.appendChild(btn('Complete quest', () => { P.completeWhole(q); void after(`Completed ${esc(q.title)}.`); }, { icon: 'star', cls: 'amber' }));
   b.appendChild(btn('Skip to next', async () => {
     const all = await loadChapters();
+    if (prefs.cleanReload || midCutscene()) {
+      // a cutscene is running: do the same through a page refresh
+      closeAll();
+      const pid = P.nextPointId(q);
+      if (pid) { reloadTo(pid); return; }
+      if (q.id === 'v10day') { await (await import('../game/v10/day')).startNextDay(); reloadTo('reload'); return; }
+      P.completeWhole(q);
+      if (q.next && P.questStatus(q.next) === 'hidden') P.startQuest(q.next, true);
+      reloadTo('reload');
+      return;
+    }
     prepJump();
     const msg = await P.skipToNext(q, all);
     game.ui.toast(esc(msg), 'DEV', 'teal', 3200);
@@ -468,6 +496,13 @@ async function renderCheats(body: HTMLElement) {
   ]);
   await Promise.all([import('../game/v10/finds'), import('../game/sites10/ocean')]).catch(() => {});
 
+  // quick links to the sections below (long on a phone)
+  const nav = body.appendChild(el('div', 'dv-jump'));
+  const NAV: [string, string][] = [['Toggles', 'bug'], ['Research', 'star'], ['Energy', 'bolt'], ['Unlocks', 'check'], ['Kitten', 'boat'], ['Day', 'sun'], ['Camp events', 'flag'], ['Expedition', 'map'], ['Give items', 'gift']];
+  for (const [label, icn] of NAV) nav.appendChild(btn(label, () => {
+    const h = [...body.querySelectorAll('h3')].find(x => x.textContent?.includes(label === 'Day' ? 'Day ' : label));
+    h?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, { icon: icn }));
   // toggles
   sec(body, 'Toggles', 'bug');
   const t = row(body);
@@ -481,35 +516,6 @@ async function renderCheats(body: HTMLElement) {
   const sp = row(body, 'Move speed');
   for (const k of [1, 2, 3, 5]) sp.appendChild(btn(`${k}x`, () => { prefs.fast = k; savePrefs(); applyToggles(); rerender(); }, { cls: prefs.fast === k ? '' : 'ghost' }));
   body.appendChild(el('div', 'dv-note', 'Noclip: arrows / WASD fly (Space up, Shift faster). Instant photos: prints are dry at once and the hold-steady ring fills on its own.'));
-
-  // items
-  sec(body, 'Give items', 'gift');
-  const it = body.appendChild(el('div', 'dv-tools'));
-  const iq = it.appendChild(el('input')) as HTMLInputElement;
-  iq.type = 'search'; iq.placeholder = 'Search items'; iq.setAttribute('aria-label', 'Search items');
-  const nIn = it.appendChild(el('input')) as HTMLInputElement;
-  nIn.type = 'number'; nIn.min = '1'; nIn.max = '99'; nIn.value = '5'; nIn.setAttribute('aria-label', 'How many'); nIn.title = 'How many';
-  const ir = row(body);
-  ir.appendChild(btn('All tools', () => { for (const d of Object.values(ITEMS)) if (d.kind === 'tool') add(d.id, 1); game.persist(); hudRefresh(); say('All tools on the belt.'); rerender(); }, { icon: 'wrench' }));
-  ir.appendChild(btn('Empty backpack', () => { game.save.inv = []; game.persist(); hudRefresh(); say('Backpack emptied.'); rerender(); }, { icon: 'trash', cls: 'red', confirm: 'Sure? Tap again' }));
-  const grid = body.appendChild(el('div', 'dv-grid'));
-  const items = Object.values(ITEMS).sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name));
-  const cells: [HTMLElement, string][] = [];
-  for (const d of items) {
-    const c = el('button', 'dv-item', `<img src="${itemIconURL(d.id, 2)}" alt=""><span class="nm">${esc(d.name)}<small>${esc(d.kind)} · ${esc(d.id)}</small></span><span class="n">${count(d.id) || ''}</span>`);
-    c.title = `Give ${d.name}`;
-    c.onclick = () => {
-      const n = Math.max(1, Math.min(99, Math.round(+nIn.value || 1)));
-      const got = add(d.id, n);
-      game.persist(); hudRefresh();
-      (c.querySelector('.n') as HTMLElement).textContent = String(count(d.id));
-      audio.play('ui', { vol: 0.4, pitch: 1.3 });
-      say(got ? `+${got} ${esc(d.name)}` : `No room for ${esc(d.name)} (backpack full)`, got ? 'ok' : 'bad');
-    };
-    grid.appendChild(c);
-    cells.push([c, `${d.name} ${d.id} ${d.kind}`.toLowerCase()]);
-  }
-  iq.oninput = () => { const s = iq.value.trim().toLowerCase(); for (const [c, tx] of cells) c.style.display = !s || tx.includes(s) ? '' : 'none'; };
 
   // RP and energy
   sec(body, `Research Points (${game.save.rp} RP)`, 'star');
@@ -604,6 +610,35 @@ async function renderCheats(body: HTMLElement) {
     const b = r.appendChild(btn('Run', () => { const cur = f10.run; if (!cur) return; closeAll(); void Promise.resolve(ev.run(cur)).catch(e => console.warn(e)); }, { icon: 'play', cls: '' }));
     if (!run) b.disabled = true;
   }
+  // items
+  sec(body, 'Give items', 'gift');
+  const it = body.appendChild(el('div', 'dv-tools'));
+  const iq = it.appendChild(el('input')) as HTMLInputElement;
+  iq.type = 'search'; iq.placeholder = 'Search items'; iq.setAttribute('aria-label', 'Search items');
+  const nIn = it.appendChild(el('input')) as HTMLInputElement;
+  nIn.type = 'number'; nIn.min = '1'; nIn.max = '99'; nIn.value = '5'; nIn.setAttribute('aria-label', 'How many'); nIn.title = 'How many';
+  const ir = row(body);
+  ir.appendChild(btn('All tools', () => { for (const d of Object.values(ITEMS)) if (d.kind === 'tool') add(d.id, 1); game.persist(); hudRefresh(); say('All tools on the belt.'); rerender(); }, { icon: 'wrench' }));
+  ir.appendChild(btn('Empty backpack', () => { game.save.inv = []; game.persist(); hudRefresh(); say('Backpack emptied.'); rerender(); }, { icon: 'trash', cls: 'red', confirm: 'Sure? Tap again' }));
+  const grid = body.appendChild(el('div', 'dv-grid'));
+  const items = Object.values(ITEMS).sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name));
+  const cells: [HTMLElement, string][] = [];
+  for (const d of items) {
+    const c = el('button', 'dv-item', `<img src="${itemIconURL(d.id, 2)}" alt=""><span class="nm">${esc(d.name)}<small>${esc(d.kind)} · ${esc(d.id)}</small></span><span class="n">${count(d.id) || ''}</span>`);
+    c.title = `Give ${d.name}`;
+    c.onclick = () => {
+      const n = Math.max(1, Math.min(99, Math.round(+nIn.value || 1)));
+      const got = add(d.id, n);
+      game.persist(); hudRefresh();
+      (c.querySelector('.n') as HTMLElement).textContent = String(count(d.id));
+      audio.play('ui', { vol: 0.4, pitch: 1.3 });
+      say(got ? `+${got} ${esc(d.name)}` : `No room for ${esc(d.name)} (backpack full)`, got ? 'ok' : 'bad');
+    };
+    grid.appendChild(c);
+    cells.push([c, `${d.name} ${d.id} ${d.kind}`.toLowerCase()]);
+  }
+  iq.oninput = () => { const s = iq.value.trim().toLowerCase(); for (const [c, tx] of cells) c.style.display = !s || tx.includes(s) ? '' : 'none'; };
+
 }
 
 // ---------------------------------------------------------------- tab: flags

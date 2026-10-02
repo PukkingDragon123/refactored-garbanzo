@@ -45,6 +45,11 @@ export async function sceneWhere(pred: (s: unknown) => boolean, ms = 25000) {
   return pred(game.scene);
 }
 
+async function until(pred: () => boolean, ms: number) {
+  const t0 = performance.now();
+  while (!pred() && performance.now() - t0 < ms) await sleep(100);
+}
+
 const F = (...ks: string[]) => { for (const k of ks) game.save.flags[k] = true; };
 const V = (k: string, n: number) => { game.save.vars[k] = n; };
 const tool = (...ids: string[]) => { for (const id of ids) if (!game.save.tools.includes(id)) game.save.tools.push(id); };
@@ -291,9 +296,16 @@ export async function chapters(): Promise<DevChapter[]> {
     { id: 'ship:wake', name: 'Morning: wake up with Chunk', sub: 'A brand-new save, from the very first scene', icon: 'sun', run: sh('ship:wake') },
     { id: 'ship:morning', name: 'Morning: noodles, rounds, report', sub: 'Up and about (the wake-up skipped)', icon: 'sun', run: sh('ship:morning') },
     { id: 'ship:engineCall', name: 'Engine trouble: Jenna calls', sub: 'The morning report is written', icon: 'scroll', run: sh('ship:engineCall') },
-    { id: 'ship:engine', name: 'Engine repair', sub: 'Straight into the engine room minigame', icon: 'wrench', run: sh('ship:engine', s => { s.player.x = 190; s.snapCamera(); }) },
+    { id: 'ship:engine', name: 'Engine repair', sub: 'Straight into the engine room minigame', icon: 'wrench', run: sh('ship:engine', async s => {
+      // walk Mori into the engine room (the story starts the repair when he gets there)
+      for (let i = 0; i < 40 && !game.save.flags['v4:engineArrive'] && game.scene === (s as unknown); i++) {
+        if (!s.cutscene) { s.player.x = 190; s.snapCamera(); }
+        await sleep(250);
+      }
+    }) },
     { id: 'ship:deck', name: 'Deck photography', sub: 'Afternoon: wildlife round the boat', icon: 'film', run: sh('ship:deck') },
     { id: 'ship:fishing', name: 'Fishing at the stern', sub: 'Photos uploaded; the rod is in your hands', icon: 'target', run: sh('ship:fishing', async s => {
+      await until(() => !s.cutscene && !game.ui.blocking, 8000);
       const { SPOTS } = await import('../game/v4/ship');
       s.player.x = SPOTS.fishing[0] + 8; s.player.y = SPOTS.fishing[1]; s.player.facing = -1; s.snapCamera();
       const st = s.story as { fish?: () => Promise<void> } | null;
@@ -317,7 +329,7 @@ export async function chapters(): Promise<DevChapter[]> {
     { id: 'isle:camp', name: 'Camp build', sub: 'Six jobs before dark', icon: 'wrench', run: isle('isle:camp') },
     { id: 'isle:dinner', name: 'Dinner round the fire', icon: 'heart', run: isle('isle:dinner') },
     { id: 'isle:night', name: 'Night at camp', sub: 'Tidy up and get some sleep', icon: 'moon', run: isle('isle:night') },
-    { id: 'isle:day1end', name: 'Day 1 complete', sub: 'Lights out and the end card', icon: 'star', run: isle('isle:night', async s => { await sleep(600); void s.story?.camp.lightsOut(); }) },
+    { id: 'isle:day1end', name: 'Day 1 complete', sub: 'Lights out and the end card', icon: 'star', run: isle('isle:night', async s => { await until(() => !s.cutscene && !game.ui.blocking, 8000); void s.story?.camp.lightsOut(); }) },
   ] });
   out.push({ id: 'loop', name: 'Day 2+ · The camp loop', points: [
     { id: 'camp:wake', name: 'Morning: wake up in the tent', sub: 'The day’s wake-up scene (and any wake event)', icon: 'sun', run: () => campLoop('wake') },
@@ -597,6 +609,7 @@ const NEXT_POINT: Record<string, string> = {
   v4morning: 'ship:engineCall', v4engine: 'ship:deck', v4deck: 'ship:storm', v4storm: 'beach:wake',
   v4shore: 'isle:seal', v4joshu: 'isle:walkBack', v4return: 'isle:standoff', v4aroha: 'isle:camp', v4camp: 'camp:wake',
 };
+export const nextPointId = (q: QuestDef): string | null => NEXT_POINT[q.id] ?? null;
 /** finish the quest and go on to the next one; story quests jump to where the next one starts */
 export async function skipToNext(q: QuestDef, all: DevChapter[]): Promise<string> {
   const pid = NEXT_POINT[q.id];
