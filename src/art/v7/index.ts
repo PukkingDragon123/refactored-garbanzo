@@ -61,7 +61,10 @@ tr(['idle', 'walk', 'run', 'brace', 'slip'], ['camera', 'cameraWalk'], 'cameraUp
 tr(['crouch', 'crouchWalk'], ['cameraCrouch', 'cameraCrouchWalk'], 'cameraUpC');
 tr(['camera', 'cameraWalk'], ['idle', 'walk', 'run', 'brace', 'slip'], 'cameraDown');
 tr(['cameraCrouch', 'cameraCrouchWalk'], ['crouch', 'crouchWalk', 'idle', 'walk'], 'cameraDownC');
-// the slingshot: drawing it from the ready stance (or straight from standing) up to the held aim
+// the slingshot: out of the belt into the ready stance and back; drawn (from the ready stance, or
+// straight from standing) up to the held aim (combat7.ts)
+tr(['idle', 'walk', 'run', 'crouch', 'talk'], ['slingReady'], 'slingUnholster');
+tr(['slingReady', 'slingAim', 'slingRelease', 'slingshot'], ['idle', 'walk', 'run', 'talk'], 'slingHolster');
 tr(['idle', 'walk', 'run', 'slingReady', 'crouch'], ['slingAim'], 'slingDraw');
 export function transitionFor(id: string, from: string, to: string): string | null {
   if (parse(id)[0] === 'chunk') return CHUNK_TRANS[from]?.[to] ?? null;
