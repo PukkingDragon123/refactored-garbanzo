@@ -199,9 +199,21 @@ function isField(t: EventTarget | null): t is HTMLInputElement | HTMLTextAreaEle
   const e = t as HTMLElement | null;
   return !!e && (e.tagName === 'TEXTAREA' || (e.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'file'].includes((e as HTMLInputElement).type)));
 }
-function focusables(): HTMLElement[] {
+function focusables(host?: HTMLElement): HTMLElement[] {
   if (!panel) return [];
-  return [...panel.root.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), textarea, summary')].filter(e => e.offsetParent !== null || e === document.activeElement);
+  return [...(host ?? panel.root).querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), textarea, summary')].filter(e => e.offsetParent !== null || e === document.activeElement);
+}
+const activeTab = () => panel?.root.querySelector<HTMLElement>(`.dv-tabs [data-tab="${prefs.tab}"]`) ?? null;
+/** up / down inside the tab's page; up from its first control goes back to the tab strip */
+function moveInBody(d: number) {
+  if (!panel) return;
+  const f = focusables(panel.body);
+  const i = f.indexOf(document.activeElement as HTMLElement);
+  if (d < 0 && i <= 0) { activeTab()?.focus(); return; }
+  const n = f[i < 0 ? 0 : Math.min(f.length - 1, i + d)];
+  if (!n) return;
+  n.focus();
+  n.scrollIntoView({ block: 'nearest' });
 }
 function moveFocus(d: number) {
   const f = focusables();
@@ -217,7 +229,7 @@ function onKey(e: KeyboardEvent): boolean {
   if (isField(t) && panel.root.contains(t)) {
     if (e.code === 'Escape') { t.blur(); (t.closest('.dv-body') ? panel.body : panel.root).focus?.(); moveFocus(0); return true; }
     if (e.code === 'Tab') { moveFocus(e.shiftKey ? -1 : 1); return true; }
-    if ((e.code === 'ArrowDown' || e.code === 'ArrowUp') && t.tagName === 'INPUT' && (t as HTMLInputElement).type !== 'number') { moveFocus(e.code === 'ArrowDown' ? 1 : -1); return true; }
+    if ((e.code === 'ArrowDown' || e.code === 'ArrowUp') && t.tagName === 'INPUT' && (t as HTMLInputElement).type !== 'number') { moveInBody(e.code === 'ArrowDown' ? 1 : -1); return true; }
     return false;
   }
   // browser shortcuts (reload, dev tools, copy) pass straight through
@@ -226,8 +238,8 @@ function onKey(e: KeyboardEvent): boolean {
   switch (e.code) {
     case 'Escape': audio.play('uiBack'); panel.close(); return true;
     case 'Tab': moveFocus(e.shiftKey ? -1 : 1); return true;
-    case 'ArrowDown': moveFocus(1); return true;
-    case 'ArrowUp': moveFocus(-1); return true;
+    case 'ArrowDown': moveInBody(1); return true;
+    case 'ArrowUp': if (inTabs) return true; moveInBody(-1); return true;
     case 'ArrowRight': case 'ArrowLeft': {
       const d = e.code === 'ArrowRight' ? 1 : -1;
       if (inTabs) {

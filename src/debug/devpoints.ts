@@ -132,7 +132,7 @@ const CHAIN: Beat[] = [
   { id: 'ship:engineCall', apply: () => {
     F('v4:noodles', 'v4:ate', 'v4:round:tank', 'v4:round:engine', 'v4:round:jenna', 'v4:round:joshu', 'v9:morningBird', 'v4:report');
     V('v4:rounds', 4);
-    Q(['v4morning']);
+    Q(['v4morning'], ['v4engine']);
   } },
   { id: 'ship:engine', apply: () => { F('v4:engineCall'); Q([], ['v4engine']); } },
   { id: 'ship:deck', apply: () => { F('v4:engineArrive', 'v4:engineFixed'); Q(['v4engine'], ['v4deck']); } },
