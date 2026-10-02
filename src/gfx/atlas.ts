@@ -126,6 +126,12 @@ export function disposeSceneTextures() {
   sceneTextures.length = 0;
 }
 
+/** Free this texture on the next scene change (with the scene's other textures). */
+export function trackSceneTexture(t: Texture) {
+  sceneTextures.push(t);
+  return t;
+}
+
 /** Upload a big standalone image (background layer) as a texture frame (freed on scene change). */
 export function bigFrame(r: Renderer, buf: PixelBuffer, ax = 0, ay = 0): Frame {
   const tex = r.texture(buf.w, buf.h, buf.bytes);

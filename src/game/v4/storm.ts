@@ -5,8 +5,6 @@
 // up to the wheelhouse, and then the rogue wave: a full cinematic as a wall of water rises off the
 // bow, curls over the boat... and blackout.
 
-import type { Renderer, Frame } from '../../gfx/renderer';
-import { packColor } from '../../gfx/renderer';
 import { game } from '../game';
 import type { ShipScene4 } from './ship';
 import { SPOTS, S4, UNDER_TABLE } from './ship';
@@ -14,168 +12,19 @@ import { LADDERS } from '../../art/ship5';
 import type { Actor } from '../../world/actor';
 import { startQuest } from '../quests';
 import { audio } from '../../core/audio';
-import { clamp, rand, noise2 } from '../../core/math';
+import { clamp, rand, smoothstep } from '../../core/math';
 import { Custom } from '../../world/props';
 import { updater } from '../../world/ocean';
 import * as FU from '../../art/ship4/furniture';
 import type { Interactable } from '../../world/npc';
 import { el } from '../../ui/ui';
-import { A, local } from '../assets';
-import { PixelBuffer } from '../../art/pixel';
-import { rgba } from '../../art/color';
+import { A } from '../assets';
+import { GiantWave } from './giantwave';
+import { HMAX } from '../../art/giantwave';
 import { climbFrame } from '../../art/ladder';
 
 const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 const F = () => game.save.flags;
-
-/**
- * The wall of water. Side view, rolling in from the bow: a long back slope, a steep concave face
- * toward the boat, a drawdown trough sucked out in front of it, and (as it breaks) a thick lip that
- * pitches forward and curls down over a shadowed barrel. Light glows through the thin water near
- * the crest; foam laces run down the face, whitewater boils at its foot, spray streams off the lip,
- * and lightning flares the whole face.
- */
-class GiantWave {
-  cx = 2500;
-  H = 0;
-  curl = 0;
-  on = false;
-  private spray: { x: number; y: number; vx: number; vy: number; life: number }[] = [];
-  private lastT = 0;
-  private grad: Frame | null = null;
-  constructor(readonly s: ShipScene4) {}
-  /** 1 x 64 vertical ramp of the water body: glowing thin water at the crest down to the deep */
-  private ramp(): Frame {
-    if (this.grad?.tex) return this.grad;
-    const stops: [number, [number, number, number]][] = [[0, [0.66, 0.88, 0.82]], [0.06, [0.46, 0.77, 0.72]], [0.2, [0.27, 0.56, 0.55]], [0.42, [0.14, 0.34, 0.37]], [0.7, [0.07, 0.19, 0.22]], [1, [0.04, 0.1, 0.13]]];
-    // 4 texels wide so sampling never bleeds in the atlas neighbours (it's drawn 2 px wide)
-    const b = new PixelBuffer(4, 64);
-    for (let y = 0; y < 64; y++) {
-      const t = y / 63;
-      let i = 0;
-      while (i < stops.length - 2 && t > stops[i + 1][0]) i++;
-      const [t0, c0] = stops[i], [t1, c1] = stops[i + 1];
-      const k = clamp((t - t0) / (t1 - t0));
-      const c = rgba(Math.round((c0[0] + (c1[0] - c0[0]) * k) * 255), Math.round((c0[1] + (c1[1] - c0[1]) * k) * 255), Math.round((c0[2] + (c1[2] - c0[2]) * k) * 255), 255);
-      for (let x = 0; x < 4; x++) b.set(x, y, c);
-    }
-    this.grad = local.add('storm:waveRamp', b, 0, 0);
-    return this.grad;
-  }
-  /** wave height above the undisturbed sea at column x (negative = the drawdown trough) */
-  private hAt(x: number) {
-    const H = this.H, d = x - this.cx;
-    const Lf = 120 + H * 0.3, Lb = 360 + H * 0.7;
-    if (d >= 0) return H * Math.exp(-((d / Lb) ** 2) * 1.8);
-    const u = -d / Lf;
-    if (u <= 1) return H * Math.pow(1 - u, 1.7);
-    const v = (u - 1) * Lf;
-    return v < 150 ? -H * 0.07 * Math.sin(Math.PI * v / 150) : 0;
-  }
-  draw(r: Renderer) {
-    if (!this.on || this.H < 2) return;
-    const s = this.s, t = s.time;
-    const dt = Math.min(0.1, Math.max(0, t - this.lastT));
-    this.lastT = t;
-    const L = s.weather.lightning;
-    const lit = (k: number, a = 1) => packColor(clamp(k + L * 0.25), clamp(k + L * 0.28), clamp(k + L * 0.3), a);
-    /** a teal water tone (0 deep .. 1 glowing thin water), flared by lightning */
-    const water = (k: number, a = 1) => packColor(clamp(0.05 + 0.5 * k + L * 0.3), clamp(0.13 + 0.68 * k + L * 0.3), clamp(0.16 + 0.6 * k + L * 0.32), a);
-    const FOAM = (a: number) => packColor(clamp(0.86 + L * 0.1), clamp(0.94 + L * 0.06), 0.97, a);
-    const SHADE = (a: number) => packColor(0.02, 0.07, 0.09, a);
-    const H = this.H, cx = this.cx, g = this.ramp();
-    const Lf = 120 + H * 0.3;
-    const x0 = Math.floor((cx - Lf - 170) / 2) * 2, x1 = cx + 360 + H * 1.4;
-    for (let x = x0; x < x1; x += 2) {
-      const h = this.hAt(x);
-      const sea = s.seaY(x);
-      if (h < 0) {
-        // the trough: the sea surface sucked down in front of the face, a dark scooped band
-        r.rect(x, Math.round(sea + h), 2, Math.round(-h) + 2, SHADE(0.8));
-        continue;
-      }
-      if (h < 1) continue;
-      const top = sea - h, d = x - cx;
-      const front = d < 0;
-      // the body: one stretched ramp column (bright near the crest, deep at the foot); the back is in shadow
-      // 3 px wide on a 2 px step: the overlap closes sub-pixel gaps when the camera is zoomed out
-      // (the light falls off smoothly over the crest: no hard seam where the face meets the back)
-      const face = clamp((26 - d) / 52);
-      r.draw(g, x, Math.round(top), 0.75, (h + 14) / 64, 0, lit(0.62 + 0.38 * face));
-      if (front) {
-        // foam lace sliding down the face
-        for (let k = 0; k < 6; k++) {
-          const yy = top + h * (0.08 + k * 0.15) + Math.sin(x * 0.05 + k * 1.7 + t * 1.3) * 4 + ((t * 18 + k * 7) % 12);
-          const n = noise2(x * 0.07, k * 3.1 + t * 0.5, 7);
-          if (n > 0.5) r.rect(x, Math.round(yy), 2, n > 0.7 ? 2 : 1, FOAM((0.3 + (n - 0.5) * 1.8) * (1 - k * 0.1)));
-        }
-        // a few streaks dragged down the steep upper face
-        if (-d < 40 + H * 0.2 && noise2(x * 0.11, Math.floor(t * 3), 3) > 0.82) r.rect(x, Math.round(top + 3), 2, Math.round(h * 0.4), FOAM(0.14));
-        // whitewater boiling at the foot of the face
-        if (-d > Lf * 0.5) {
-          const boil = 3 + noise2(x * 0.12, t * 2.2, 9) * 8;
-          r.rect(x, Math.round(sea - boil), 2, Math.round(boil) + 2, FOAM(0.75));
-        }
-      } else if (noise2(x * 0.03, t * 0.2, 11) > 0.72) {
-        // wind-torn streaks on the back
-        r.rect(x, Math.round(top + h * 0.3 + Math.sin(x * 0.02 + t) * 6), 2, 1, FOAM(0.3));
-      }
-      // the crest: a ragged white cap
-      const cap = 2 + Math.round(noise2(x * 0.18, t * 1.5, 5) * 4 * Math.min(1, h / 60));
-      r.rect(x, Math.round(top) - 1, 2, cap, FOAM(0.95));
-    }
-    // the lip: pitched forward from the crest and falling toward the trough (a thick tapering hook)
-    const top = s.seaY(cx) - H;
-    if (this.curl > 0.02) {
-      const c = this.curl;
-      const P0: [number, number] = [cx + 4, top + 2];
-      const Q: [number, number] = [cx - Lf * 0.62 * c, top - H * 0.1 * c];
-      const P1: [number, number] = [cx - Lf * 0.86 * c, s.seaY(cx - Lf * 0.86 * c) - H * (0.62 - 0.52 * c)];
-      // sample the curve finely and bin it into 2 px columns, so the lip, its barrel shadow and its
-      // foam skin are drawn as clean columns (no overlapping squares, no ladder of stripes)
-      const bins = new Map<number, { y0: number; y1: number; u: number; th: number }>();
-      let tipX = P0[0], tipY = P0[1];
-      for (let i = 0; i <= 360; i++) {
-        const u = i / 360;
-        const px = (1 - u) * (1 - u) * P0[0] + 2 * u * (1 - u) * Q[0] + u * u * P1[0];
-        const py = (1 - u) * (1 - u) * P0[1] + 2 * u * (1 - u) * Q[1] + u * u * P1[1];
-        const th = Math.max(3, H * (0.18 - 0.13 * u) * (0.5 + 0.5 * c));
-        const k = Math.floor(px / 2) * 2, a0 = py - th * 0.5, a1 = py + th * 0.5;
-        const b = bins.get(k);
-        if (!b) bins.set(k, { y0: a0, y1: a1, u, th });
-        else { b.y0 = Math.min(b.y0, a0); b.y1 = Math.max(b.y1, a1); b.u = Math.max(b.u, u); b.th = Math.max(b.th, th); }
-        tipX = px; tipY = py;
-      }
-      for (const [k, b] of bins) {
-        // the barrel: the face in shadow under the lip
-        const faceY = s.seaY(k) - Math.max(0, this.hAt(k));
-        if (faceY > b.y1) r.rect(k, Math.round(b.y1), 2, Math.round(faceY - b.y1), SHADE(0.45 + 0.2 * b.u));
-        const y0 = Math.round(b.y0), hh = Math.max(2, Math.round(b.y1 - b.y0));
-        r.rect(k, y0, 2, hh, water(0.72 - 0.34 * b.u));
-        // darker underside, glowing thin top, foam skin
-        r.rect(k, Math.round(b.y1 - b.th * 0.32), 2, Math.max(1, Math.round(b.th * 0.32)), water(0.18));
-        r.rect(k, y0 + 2, 2, Math.max(1, Math.round(b.th * 0.2)), water(1, 0.8));
-        r.rect(k, y0, 2, 2 + (noise2(k * 0.2, t * 2, 13) > 0.62 ? 1 : 0), FOAM(0.95));
-      }
-      // the tip explodes into foam where it meets the water
-      if (c > 0.85) for (let k = 0; k < 10; k++) r.rect(Math.round(tipX + rand.range(-14, 14)), Math.round(tipY + rand.range(-10, 6)), 3, 2, FOAM(0.85));
-    }
-    // spray streaming back off the crest and the lip
-    const emit = Math.min(40, H * 0.12) * (0.4 + this.curl);
-    for (let i = 0; i < emit * dt * 10; i++) {
-      const ex = cx + rand.range(-30, 60) - this.curl * rand.range(0, Lf * 0.6);
-      this.spray.push({ x: ex, y: top + rand.range(-6, 10), vx: rand.range(30, 140), vy: rand.range(-80, -10), life: rand.range(0.5, 1.3) });
-    }
-    for (let i = this.spray.length - 1; i >= 0; i--) {
-      const q = this.spray[i];
-      q.life -= dt; q.vy += 60 * dt; q.x += q.vx * dt; q.y += q.vy * dt;
-      if (q.life <= 0) { this.spray.splice(i, 1); continue; }
-      r.rect(Math.round(q.x), Math.round(q.y), 2, 1, FOAM(Math.min(0.8, q.life)));
-    }
-    if (this.spray.length > 600) this.spray.splice(0, this.spray.length - 600);
-  }
-}
-
 
 // ---------------------------------------------------------------- the storm
 // The steps, each of which survives a reload (the flag that marks it done in brackets):
@@ -642,32 +491,50 @@ export async function rogueWave(s: ShipScene4) {
     { who: 'joshu', text: 'There’s my crew. Got the dog? Good lad.', expr: 'serious' },
     { who: 'jenna', text: 'Dad... Dad, what’s THAT?', expr: 'scared' },
   ]);
-  // the wall of water rises off the bow while the camera pulls back to take it all in
+  // the wall of water rises out of the swell off the bow while the camera pulls back to take it all in
   const wave = new GiantWave(s);
   wave.on = true;
-  wave.cx = 1100;
-  const L = s.st.addLayer('wave', 1, 0, 0.35, 0.42, 1);
-  const li = s.st.layers.indexOf(L), j = s.st.layers.findIndex(x => x.name === 'sea-near');
-  s.st.layers.splice(li, 1);
-  s.st.layers.splice(j, 0, L);
-  L.add(new Custom(0, rr => wave.draw(rr)));
+  wave.cx = 1340;
+  s.rogue = wave;
+  // its body behind the boat (the boat rides on its face), its curl and claws in front of everything
+  const addAt = (name: string, at: number) => {
+    const L = s.st.addLayer(name, 1, 0, 0.6, 0, 1);
+    s.st.layers.splice(s.st.layers.indexOf(L), 1);
+    s.st.layers.splice(at, 0, L);
+    return L;
+  };
+  addAt('wave-back', s.st.layers.findIndex(x => x.name === 'main')).add(new Custom(0, rr => wave.drawBack(rr)));
+  addAt('wave-front', s.st.layers.findIndex(x => x.name === 'sea-near') + 1).add(new Custom(0, rr => wave.drawFront(rr)));
   game.ui.letterbox(true);
   const cam = s.st.cam;
   cam.locked = true;
-  let T = 0, go = -1;
+  // room to frame the boat on the left and the wave on the right
+  s.st.maxX = 1260;
+  s.waveLift = true;
+  let T = 0, go = -1, goReq = false;
   const up = updater(dt => {
     T += dt;
     cam.zoom += (0.52 - cam.zoom) * Math.min(1, dt * 0.8);
-    cam.x += (1480 - cam.x) * Math.min(1, dt * 0.7);
+    cam.x += ((go >= 0 ? 470 : 560) - cam.x) * Math.min(1, dt * 0.7);
     cam.y += (205 - cam.y) * Math.min(1, dt * 0.7);
-    wave.H = Math.min(340, wave.H + dt * 75);
-    // it only comes in once everyone has had their moment
-    if (go >= 0) {
+    // it builds out of the swell as it comes: rising, steepening, the crest starting to pitch
+    const b = smoothstep(0, 5.5, T);
+    wave.H = HMAX * Math.pow(b, 0.8);
+    // it only comes in once everyone has had their moment, and once it has built up to its full height
+    if (goReq && go < 0 && T >= 5.6) go = 0;
+    if (go < 0) {
+      wave.cx = 1340 - 280 * b;
+      wave.curl = 0.22 * smoothstep(1.5, 5.5, T);
+    } else {
+      // here it comes: the lip pitches forward over the boat
       go += dt;
-      wave.cx -= dt * (140 + go * 150);
-      wave.curl = Math.min(1, wave.curl + dt * 0.5);
-      s.jolt = Math.min(0.3, s.jolt + dt * 0.06);
+      wave.cx -= dt * (110 + go * 170);
+      wave.curl = Math.max(wave.curl, 0.22 + 0.78 * smoothstep(0, 1.9, go));
     }
+    // she rides up the face: bow up, lifted
+    const sl = (s.seaY(330) - s.seaY(270)) / 60;
+    s.jolt += (clamp(sl * 0.9, -0.25, 0.25) - s.jolt) * Math.min(1, dt * 3);
+    wave.update(dt);
     if (Math.random() < dt * 0.6) s.sky.flash({ big: Math.random() < 0.25 });
   });
   s.st.layer('sea-horizon').add(up);
@@ -680,12 +547,14 @@ export async function rogueWave(s: ShipScene4) {
     { who: 'mori', text: 'I’ve got you, Chunk. I’ve got you.', style: 'whisper', expr: 'scared', auto: 1700, close: true },
   ]);
   for (const a of [s.jenna, s.joshu]) a.setAnim('brace');
-  go = 0;
+  const until = (f: () => boolean) => new Promise<void>(res => { const chk = () => (f() ? res() : requestAnimationFrame(chk)); chk(); });
+  goReq = true;
+  await until(() => go >= 0);
   audio.play('waveCrash', { vol: 0.8, pitch: 0.8 });
   // slow motion as the lip comes over
-  await wait(700);
+  await until(() => go >= 0.7);
   game.slowmo = 0.45;
-  await new Promise<void>(res => { const chk = () => (wave.cx < 420 ? res() : requestAnimationFrame(chk)); chk(); });
+  await until(() => wave.cx < 420);
   audio.play('waveCrash', { vol: 1 });
   audio.play('shipCrash', { vol: 1 });
   s.st.shake(14, 1.2);

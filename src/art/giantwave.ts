@@ -83,11 +83,12 @@ export class GiantWaveArt {
   readonly body: PixelBuffer;
   readonly lip: PixelBuffer;
   readonly faceTop: Int16Array;
-  tips: { u: number; v: number; dx: number; dy: number }[] = [];
+  tips: { u: number; v: number; dx: number; dy: number; body: boolean }[] = [];
   H = 0;
   c = 0;
   t = 0;
-  private pal = wavePalette();
+  readonly pal = wavePalette();
+  private cl: Curl | null = null;
   private colH: Float32Array;
   private colS: Float32Array;
   private rowU: Float32Array;
@@ -190,16 +191,19 @@ export class GiantWaveArt {
 
   // ---------------------------------------------------------------- painting
 
-  paint(Hin: number, c: number, t: number, x0: number, strip?: Strip) {
+  /** repaint both buffers for this shape (see paintBody and paintLip) */
+  paint(H: number, c: number, t: number, x0: number, strip?: Strip) {
+    this.paintBody(H, c, t, x0, strip);
+    this.paintLip();
+  }
+
+  /** take on a new shape and repaint the body (paintLip then repaints the curl to match: the two can be
+   *  painted on separate frames) */
+  paintBody(Hin: number, c: number, t: number, x0: number, strip?: Strip) {
     const H = Math.min(HMAX, Hin);
     this.H = H; this.c = c; this.t = t;
     this.tips = [];
-    const cl = H >= 20 ? this.curl(H, c) : null;
-    this.paintBody(H, c, t, x0, strip, cl);
-    this.paintLip(H, c, t, cl);
-  }
-
-  private paintBody(H: number, c: number, t: number, x0: number, strip: Strip | undefined, cl: Curl | null) {
+    const cl = (this.cl = H >= 20 ? this.curl(H, c) : null);
     const b = this.body, D = b.data, W = b.w, Hh = b.h, N = noiseTile(), P = this.pal;
     const F = P.face, deep = P.deep;
     D.fill(0);
@@ -370,7 +374,10 @@ export class GiantWaveArt {
     }
   }
 
-  private paintLip(H: number, c: number, t: number, cl: Curl | null) {
+  /** repaint the curl and its claws for the shape of the last paintBody */
+  paintLip() {
+    const H = this.H, c = this.c, t = this.t, cl = this.cl;
+    this.tips = this.tips.filter(tp => tp.body);
     const b = this.lip, D = b.data, W = b.w, Hh = b.h, N = noiseTile(), P = this.pal, F = P.face;
     D.fill(0);
     if (!cl) return;
@@ -505,7 +512,7 @@ export class GiantWaveArt {
         this.finger(buf, u0, v1, x, y, Math.cos(ba), Math.sin(ba), L * (0.66 - s * 0.03), Math.max(1.2, r * 0.8), hook * 1.15, k * 7 + s, t, false, depth + 1);
       }
     }
-    this.tips.push({ u: x, v: y, dx: Math.cos(a), dy: Math.sin(a) });
+    this.tips.push({ u: x, v: y, dx: Math.cos(a), dy: Math.sin(a), body: buf === this.body });
   }
 }
 

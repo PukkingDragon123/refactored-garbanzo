@@ -22,6 +22,7 @@ import { fishTank, gripOf } from '../../art/v9/fish';
 import type { Actor } from '../../world/actor';
 import { ChunkBuddy } from './buddy';
 import { Underway } from './underway';
+import type { GiantWave } from './giantwave';
 import type { Interactable } from '../../world/npc';
 import type { Env } from '../../gfx/renderer';
 
@@ -49,6 +50,10 @@ export class ShipScene4 extends FieldScene {
   bob = 0;
   /** extra scripted roll (impact jolts, the giant wave) */
   jolt = 0;
+  /** the rogue wave: she may be lifted high up its face (not just the swell's usual heave) */
+  waveLift = false;
+  /** the rogue wave, while it's coming */
+  rogue: GiantWave | null = null;
   private joltV = 0;
   hullA = 1;
   houseA = 1;
@@ -611,7 +616,7 @@ export class ShipScene4 extends FieldScene {
     // never roll her past ~20 degrees: further and the cutaway turns into a spinning top
     this.jolt = clamp(this.jolt, -0.25, 0.25);
     this.rot = clamp(this.rot, -0.36, 0.36);
-    this.bob = clamp(this.bob, -30, 30);
+    this.bob = clamp(this.bob, this.waveLift ? -70 : -30, 30);
     if (this.main.xf) { this.main.xf[2] = this.rot; this.main.xf[4] = this.bob; }
     this.ocean?.setMask(CUTLINE.map(([x, y]) => this.shipToWorld(x, y)));
     // under way: speed from the engine, bow wave, wake, foam and wind (after the roll, so it sits on the hull)
