@@ -40,6 +40,7 @@ import { Spring, Fx, sfx, canvas, R, E, icon, cloudSprite, clamp, bubSprite } fr
 import { VCursor } from '../v7/aeroCursor';
 import { gi, glyphURL, batteryGi } from '../v7/aeroGlyphs';
 import { UNLOCK_BY_ID, installed, unlockable, isFresh, markInstalled, markOpened } from './moriApps';
+import { bookOpen } from '../v11/paper/book';
 
 let styled = false;
 
@@ -1353,6 +1354,8 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
     if (best) setNav(best); else if (navCur) retrigger(navCur, 'mos-wiggle');
   };
   const kd = (e: KeyboardEvent) => {
+    // a book lifted out over the laptop (the Encyclopedia) has the keyboard
+    if (bookOpen()) return;
     const inText = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
     if (e.code === 'Escape') {
       e.preventDefault(); e.stopPropagation();

@@ -144,6 +144,16 @@ async function boot() {
     isle: null as unknown,
     /** V11 physical UI kit sampler book (see src/ui/v11/paper/index.ts) */
     paper: async () => (await import('./ui/v11/paper/demo')).paperDemo(),
+    /** V11 the Zealandia Encyclopedia book (optionally at an entry: 'sp:glasscrab', 'cat:flora') */
+    ency: async (key?: string) => (await import('./ui/v11/encybook')).openEncyclopedia({ key }),
+    /** dev: document the first n species (stand-in photos) so the encyclopedia has pages */
+    devDoc: async (n = 8) => {
+      const d = await import('./debug/devpoints');
+      const { SPECIES } = await import('./game/species');
+      for (const sp of SPECIES.slice(0, n)) d.documentSpecies(sp.id, Object.keys(sp.behaviors).slice(0, 2));
+      game.persist();
+      return n;
+    },
   };
   void import('./game/v9/islezl').then(m => { (window as unknown as { zl: { isle: unknown } }).zl.isle = m.ISLE; });
   // developer panel toggles left on (noclip, overlay...): only then is the dev module loaded
