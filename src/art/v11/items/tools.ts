@@ -1,7 +1,7 @@
 // V11 item art: the tool belt. Field camera, pocket knife, specimen jar, bug net, trowel, tweezers,
 // lab gloves, claw hammer, headlamp, the cracked phone, the ghillie cape and Crowe's binoculars.
 
-import { artGroup, fp, IP, RP, H, rp, hash, clamp, mix, tone, Pen, frame, bez, ring, glassLens, grainTex, jar, curve, box3, knurl } from './kit';
+import { artGroup, fp, IP, RP, H, rp, hash, clamp, mix, tone, Pen, frame, bez, ring, glassLens, grainTex, jar, curve, box3, knurl, noise2 } from './kit';
 import type { Pt, Ramp, Mask } from './kit';
 
 const art = artGroup('Tools');
@@ -393,4 +393,27 @@ art('binoculars', fp(2, 2), p => {
   // strap rings and a stub of the old leather strap
   ring(p, 3.5, 15, 0.6, 1.8, Br); ring(p, 44.5, 15, 0.6, 1.8, Br);
   p.tube([[3, 16.5], [1.6, 22]], 1, Lt, { lift: 0.3, cap: 'flat' });
+});
+
+// ------------------------------------------------------------------ slingshot (1x2): Aroha's design, a forked mānuka frame, inner-tube bands, a leather pouch
+// (the item is defined by the predators module; the art is ready whenever it exists)
+art('slingshot', fp(1, 2), p => {
+  const Mk = rp('#200c08', '#3e1a10', '#622c18', '#8a4424', '#b0663a', '#d89462');
+  const bark = (x: number, y: number) => (noise2(x * 0.9, y * 0.25, 5) > 0.66 ? -0.6 : hash(x, y, 6) > 0.92 ? 0.5 : 0);
+  // the fork: two arms rising from the crotch, then the handle below
+  p.tube(bez([12, 27], [6, 20], [5, 6], 14), t => 2 - t * 0.5, Mk, { lift: 0.3, tex: bark, spec: 0.97 });
+  p.tube(bez([12, 27], [18, 20], [19, 6], 14), t => 2 - t * 0.5, Mk, { lift: 0, tex: bark, spec: 0.97 });
+  p.tube([[12, 46], [12.4, 36], [12, 26]], t => 2.6 - t * 0.4, Mk, { lift: 0.2, tex: bark, spec: 0.97 });
+  // a flax-cord wrap on the grip
+  for (let y = 33; y <= 42; y += 2) for (let x = 9; x <= 15; x++) if (p.has(x, y)) { p.px(x, y, RP.flaxDry[x < 12 ? 4 : 3]); p.px(x, y + 1, RP.flaxDry[1]); }
+  // black inner-tube bands from the fork tips to the leather pouch
+  const band = rp('#08080a', '#121214', '#1e1e22', '#2c2c32', '#44444c', '#7a7a86');
+  for (const [tx, ty] of [[5, 6], [19, 6]] as Pt[]) {
+    p.tube(bez([tx, ty + 0.5], [(tx + 12) / 2 + (tx < 12 ? -1 : 1), 12], [12 + (tx < 12 ? -1.6 : 1.6), 17], 10), 0.8, band, { lift: 0.4, spec: 0.92 });
+    for (let k = -2; k <= 2; k++) p.px(tx + k, ty + 1, band[2]);
+  }
+  const pouch = p.maskEllipse(12, 18, 3.6, 2.4);
+  p.relief(pouch, RP.fur, p.dome(pouch, 1.6), { lift: 0.3 });
+  p.ball(12, 17.2, 1.5, 1.2, RP.stone, { lift: 0.6 });
+  p.glint(7, 12, H('#fff4e0'), 0.3);
 });
