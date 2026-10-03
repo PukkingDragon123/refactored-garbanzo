@@ -15,6 +15,7 @@ import { openCloseup, CW, CH, rgb, hx as hx0, mixc, put, blend, add, ramp, dith,
 import { Hold, loop } from '../v4/mini';
 import { audio } from '../../core/audio';
 import { pxIcon } from '../pxicons';
+import { closeupHands, HANDS3D, HandsController } from '../../art/v11/hands3d';
 
 // ------------------------------------------------------------------ shared palettes & helpers
 const HXC = new Map<string, number>();
@@ -623,7 +624,7 @@ function drawGrip(buf: Uint32Array, cx: number, cy: number, ux: number, uy: numb
 // Joshu's forearm and mallet, laid out in the strike pose (head flat on the peg top), swung about his elbow
 const ELB: [number, number] = [338, 176];
 const STRIKE_X = 218, STRIKE_Y = 113;
-function drawJoshu(buf: Uint32Array, beta: number, ox: number, oy: number) {
+function drawJoshu(buf: Uint32Array, beta: number, ox: number, oy: number, malletOnly = false) {
   const c = Math.cos(beta), s = Math.sin(beta);
   const T = (x: number, y: number): [number, number] => { const dx = x - ELB[0], dy = y - ELB[1]; return [ELB[0] + dx * c - dy * s + ox, ELB[1] + dx * s + dy * c + oy]; };
   const cap = (a: [number, number], b: [number, number], r0: number, r1: number, sh: Shade, o?: CapOpt) => {
@@ -637,6 +638,9 @@ function drawJoshu(buf: Uint32Array, beta: number, ox: number, oy: number) {
     if (h > 0.55 - (v < -0.2 ? 0.15 : 0) && frac(t * 60 + v * 1.5) < 0.38 && v < 0.65) cc = mixc(cc, JHAIR, 0.55 + (v < -0.2 ? 0.3 : 0));
     return cc;
   };
+  if (malletOnly) {
+    cap([222, 98], [279, 104], 3.1, 3.3, (t, v, nx, ny, nz, x, y) => shadeC(MALLET, lit(nx, ny, nz) + 0.14 + (Math.sin(t * 60 + v * 3) > 0.7 ? -0.07 : 0), x, y));
+  } else {
   // navy knit sleeve pushed up past the elbow, a rolled cuff
   cap([330, 166], [376, 220], 17, 19, (t, _v, nx, ny, nz, x, y) => shadeC(KNIT, lit(nx, ny, nz) + 0.06 + (frac(t * 26) < 0.5 ? 0.04 : -0.05), x, y), { caps: false });
   // forearm: big and hairy, with a faded anchor tattoo
@@ -658,6 +662,7 @@ function drawJoshu(buf: Uint32Array, beta: number, ox: number, oy: number) {
     cap([x0 + 1.4, 97], [x0 - 0.4, 111], k === 0 ? 2.4 : k === 3 ? 2 : 2.35, 2.1, (t, _v, nx, ny, nz, x, y) => shadeC(JSKIN, lit(nx, ny, nz) + 0.1 + (t < 0.2 ? 0.1 : 0) - (t > 0.82 ? 0.14 : 0), x, y));
   }
   cap([273, 94], [257, 96], 2.9, 2.4, (t, _v, nx, ny, nz, x, y) => (t > 0.84 && nz > 0.6 ? JSKIN[5] : shadeC(JSKIN, lit(nx, ny, nz) + 0.12, x, y)));
+  }
   // the head: a ship's caulking mallet, iron hoops at both ends
   const [hbx, hby] = T(STRIKE_X, STRIKE_Y), [htx, hty] = T(STRIKE_X, STRIKE_Y - 29);
   capsule(buf, hbx, hby, htx, hty, 11.5, 11.5, (t, v, nx, ny, nz, x, y) => {
@@ -689,6 +694,13 @@ export async function holdSteady(title: string, hint: string): Promise<boolean> 
   const buf = cu.buf;
   const pano = paintPano();
   const hold = new Hold(cu.wrap);
+  // Mori's two hands on the pole and Joshu's big fist round the mallet, in 3D once their meshes are built
+  const hands: HandsController | null = HANDS3D.enabled ? closeupHands(cu, { who: 'mori', side: 'both', lights: 'sunset', scale: 2.5 }) : null;
+  hands?.right?.shoulderAt(150, 330, 130);
+  hands?.left?.shoulderAt(-90, 230, 120);
+  const joshu = hands ? hands.add({ who: 'joshu', side: 'right' }) : null;
+  let joshuH: import('../../art/v11/hands3d').Hand | null = null;
+  void joshu?.then(h => { joshuH = h; h.shoulderAt(470, 290, 40); });
   const bg = new Uint32Array(CW * CH), ids = new Uint8Array(CW * CH), tmp = new Uint32Array(CW * CH);
   const vig = vignette(0.6);
   const pegs: Peg[] = VIEWS.map(yaw => { const c = mkCam(yaw); return { x: c.rx * 0.45 + c.fx * 0.3, z: c.rz * 0.45 + c.fz * 0.3, h: 0.14, target: 0.14, lean: 0, twang: 0, bruise: 0 }; });
@@ -839,15 +851,30 @@ export async function holdSteady(title: string, hint: string): Promise<boolean> 
       }, false);
       for (const [z, i] of order) if (z <= RC) drawPeg(pegs[i]);
       // Mori's hands on the pole
-      drawGrip(buf, pbx + ux * 44, pby + uy * 44, ux, uy, 24, 226, 6);
-      drawGrip(buf, pbx + ux * 80, pby + uy * 80, ux, uy, -34, 186, 5.6);
+      const mR = hands?.right?.ready ? hands.right : null, mL = hands?.left?.ready ? hands.left : null;
+      if (mR && mL) {
+        // thumbs up the pole, the fingers wrapped round it
+        const at = (d: number, r: number, h: typeof mR) => h.hold({ a: [pbx + ux * (d + 6), pby + uy * (d + 6), 0], b: [pbx + ux * (d - 6), pby + uy * (d - 6), 0], r }, { follow: 0, force: 0.6 + wob * 0.3 });
+        at(44, 6, mR);
+        at(80, 5.6, mL);
+      } else {
+        drawGrip(buf, pbx + ux * 44, pby + uy * 44, ux, uy, 24, 226, 6);
+        drawGrip(buf, pbx + ux * 80, pby + uy * 80, ux, uy, -34, 186, 5.6);
+      }
       // Joshu, the mallet squared on the peg top (or glancing off its edge)
       {
         const pg = pegs[Math.min(2, hits - (swing?.kind === 'hit' && swing.done ? 1 : 0))];
         proj(cam, pg.x, 0, pg.z);
         const s = FOC / PJ[2];
         const topX = PJ[0] + Math.sin(pg.lean) * pg.h * s, topY = PJ[1] - Math.cos(pg.lean) * pg.h * s - 1;
-        drawJoshu(buf, beta, topX - STRIKE_X + gx + retract * 120, topY - STRIKE_Y + retract * 70);
+        const jox = topX - STRIKE_X + gx + retract * 120, joy = topY - STRIKE_Y + retract * 70;
+        if (joshuH?.ready) {
+          // only the mallet is painted; his real forearm and fist swing it about the elbow
+          drawJoshu(buf, beta, jox, joy, true);
+          const c = Math.cos(beta), sn = Math.sin(beta);
+          const T = (x: number, y: number): [number, number, number] => { const dx = x - ELB[0], dy = y - ELB[1]; return [ELB[0] + dx * c - dy * sn + jox, ELB[1] + dx * sn + dy * c + joy, 10]; };
+          joshuH.hold({ a: T(257, 99), b: T(277, 105), r: 3.4 }, { follow: 0, approach: [0.2, -0.75, 0.6], force: 0.8 });
+        } else drawJoshu(buf, beta, jox, joy);
       }
       // sand burst and wood chips, flying out in front of the mallet
       for (let i = grains.length - 1; i >= 0; i--) {
@@ -888,10 +915,12 @@ export async function holdSteady(title: string, hint: string): Promise<boolean> 
       shakeBuf(buf, tmp, Math.round(Math.sin(t * 97) * 3 * shake), Math.round(Math.cos(t * 83) * 3 * shake));
       (window as unknown as { __camp?: unknown }).__camp = { t: +t.toFixed(2), ms: +(performance.now() - f0).toFixed(1), next: Math.sin((phase + 0.05 * (1.6 + hits * 0.5)) * 2), lean, tol, hits, misses, tries, pan: !!pan, ready: !swing && !pan && lock <= 0 && retract < 0.15 && endT < 0 };
       cu.present();
+      hands?.frame(dt);
       return true;
     });
   });
   hold.dispose();
+  hands?.destroy();
   return ok;
 }
 
@@ -1158,6 +1187,14 @@ export async function lashingKnot(): Promise<boolean> {
     tight: 0, arohaOut: 1, fibres: [] as Spark[], embers: [] as Spark[],
     moriX: 70, moriY: 150, tipX: 0, tipY: 0,
   };
+  // Mori's hand on the cord, Aroha's two (one steadying the frame, one showing the move), in 3D when built
+  const hands: HandsController | null = HANDS3D.enabled ? closeupHands(cu, { who: 'mori', side: 'right', lights: 'campfire', scale: 2.6 }) : null;
+  hands?.right?.shoulderAt(10, 330, 120);
+  let arSteady: import('../../art/v11/hands3d').Hand | null = null, arPoint: import('../../art/v11/hands3d').Hand | null = null;
+  if (hands) {
+    void hands.add({ who: 'aroha', side: 'left' }).then(h => { arSteady = h; h.shoulderAt(380, -90, 90); });
+    void hands.add({ who: 'aroha', side: 'right' }).then(h => { arPoint = h; h.shoulderAt(340, -140, 120); });
+  }
   // the clove hitch the cord starts from, on A's lower arm
   const HITCH = { x: KJX - KAx * 50, y: KJY - KAy * 50 };
   const lastTip = (): [number, number] => {
@@ -1266,9 +1303,19 @@ export async function lashingKnot(): Promise<boolean> {
       put(buf, f.x, f.y, FLAX[6]); put(buf, f.x + (f.vx > 0 ? 1 : -1), f.y + 1, FLAX[4]);
     }
     // Mori's hand holding the cord
-    drawHand(buf, S.moriX, S.moriY, Math.atan2(S.moriY - 262, S.moriX - 40), SKIN, 40, 262, { sleeve: true, k: 1.25 });
+    const mh = hands?.right?.ready ? hands.right : null;
+    if (mh) {
+      // thumb and finger pads pinch the working strand
+      const da = Math.atan2(S.moriY - 262, S.moriX - 40);
+      mh.setPose(A && A.who === 'mori' && A.kind === 3 ? 'fist' : 'pinch').reachTo(S.moriX, S.moriY, 10, { with: 'pinch', fingers: [Math.cos(da) * 0.8, Math.sin(da) * 0.8, -0.5], palm: [0.55, 0.15, -0.8], follow: 30 });
+    } else drawHand(buf, S.moriX, S.moriY, Math.atan2(S.moriY - 262, S.moriX - 40), SKIN, 40, 262, { sleeve: true, k: 1.25 });
     // Aroha: one hand steadying the frame, the other showing the move
-    drawSteadyHand(buf, KJX + KAx * 80, KJY + KAy * 80, 350, -30);
+    const sH = (arSteady as import('../../art/v11/hands3d').Hand | null)?.ready ? arSteady as unknown as import('../../art/v11/hands3d').Hand : null;
+    if (sH) {
+      // her palm on pole A's upper edge, fingers curled over its front
+      const cx = KJX + KAx * 80, cy = KJY + KAy * 80;
+      sH.setPose('hold', 1).reachTo(cx + KAy * (RA + 2), cy - KAx * (RA + 2), 14, { with: 'palm', fingers: [-KAy * 0.7, KAx * 0.7, 0.7], palm: [-KAy, KAx, -0.5], follow: 0 });
+    } else drawSteadyHand(buf, KJX + KAx * 80, KJY + KAy * 80, 350, -30);
     {
       const ghost = S.ghost;
       if (ghost) {
@@ -1282,7 +1329,11 @@ export async function lashingKnot(): Promise<boolean> {
       }
       const ap = arohaP ?? [300 + S.arohaOut * 40, -20 - S.arohaOut * 60];
       const ax = 330, ay = -70;
-      drawHand(buf, ap[0], ap[1], Math.atan2(ap[1] - ay, ap[0] - ax), AROHA, ax, ay, { band: true, point: true, k: 1.25, flip: true });
+      const pH = (arPoint as import('../../art/v11/hands3d').Hand | null)?.ready ? arPoint as unknown as import('../../art/v11/hands3d').Hand : null;
+      if (pH) {
+        const dx = ap[0] - ax, dy = ap[1] - ay, dl = Math.hypot(dx, dy) || 1;
+        pH.setPose('point').reachTo(ap[0], ap[1], 14, { with: 'index', fingers: [dx / dl, dy / dl, -0.35], palm: [0.3, 0.6, -0.75], follow: 26 });
+      } else drawHand(buf, ap[0], ap[1], Math.atan2(ap[1] - ay, ap[0] - ax), AROHA, ax, ay, { band: true, point: true, k: 1.25, flip: true });
     }
     // the prompt glyph
     if (S.glyph >= 0) {
@@ -1302,6 +1353,7 @@ export async function lashingKnot(): Promise<boolean> {
     applyVignette(buf, vig);
     (window as unknown as { __knot?: unknown }).__knot = { t: +t.toFixed(2), act: S.act ? S.act.who + S.act.kind : "", wraps: wraps.length, glyph: S.glyph, busy: !!S.act, input: !!press };
     cu.present();
+    hands?.frame(dt);
     return true;
   });
 
@@ -1406,5 +1458,6 @@ export async function lashingKnot(): Promise<boolean> {
     await cu.close();
   }
   stop();
+  hands?.destroy();
   return good;
 }

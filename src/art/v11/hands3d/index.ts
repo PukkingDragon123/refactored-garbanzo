@@ -90,9 +90,9 @@ export const LIGHTS: Record<string, LightRig> = {
   // bright beach day: sun high on the left, blue sky fill, warm sand bounce
   beach: { key: { dir: [-0.5, 0.75, 0.45], col: lin('#fff6e4', 3.0) }, fill: { dir: [0.5, 0.2, 0.8], col: lin('#9cc4ec', 0.75) }, rim: { dir: [0.4, 0.5, -0.75], col: lin('#ffffff', 1.4) }, sky: lin('#a8c8e8', 0.55), ground: lin('#d8b884', 0.42), exposure: 1.0, soft: 2.4 },
   // low sun behind and to the left: a hot rim, purple-pink shadows
-  sunset: { key: { dir: [-0.75, 0.25, 0.25], col: lin('#ffb070', 2.4) }, fill: { dir: [0.6, 0.1, 0.8], col: lin('#9a78b8', 0.6) }, rim: { dir: [-0.35, 0.3, -0.9], col: lin('#ffc890', 3.2) }, sky: lin('#a48ac0', 0.4), ground: lin('#c08868', 0.3), exposure: 1.0, soft: 2.6 },
+  sunset: { key: { dir: [-0.75, 0.25, 0.25], col: lin('#ffc490', 2.2) }, fill: { dir: [0.6, 0.1, 0.8], col: lin('#9a78b8', 0.6) }, rim: { dir: [-0.35, 0.3, -0.9], col: lin('#ffc890', 3.2) }, sky: lin('#a48ac0', 0.4), ground: lin('#c08868', 0.3), exposure: 1.0, soft: 2.6 },
   // the campfire low on the left, the dusk sky rimming from the upper right
-  campfire: { key: { dir: [-0.78, -0.12, 0.6], col: lin('#ff9a50', 2.8) }, fill: { dir: [0.6, 0.4, 0.7], col: lin('#7058a0', 0.4) }, rim: { dir: [0.7, 0.55, -0.45], col: lin('#f0a0c0', 2.0) }, sky: lin('#5a4878', 0.32), ground: lin('#6a3428', 0.3), exposure: 1.05, soft: 2.2 },
+  campfire: { key: { dir: [-0.78, -0.12, 0.6], col: lin('#ffbc84', 2.1) }, fill: { dir: [0.6, 0.4, 0.7], col: lin('#8070b0', 0.45) }, rim: { dir: [0.7, 0.55, -0.45], col: lin('#f4b4cc', 1.7) }, sky: lin('#6a5a88', 0.36), ground: lin('#6a3a30', 0.28), exposure: 1.0, soft: 2.2 },
   dusk: { key: { dir: [-0.6, 0.45, 0.55], col: lin('#ffd2a8', 1.8) }, fill: { dir: [0.7, 0.1, 0.6], col: lin('#8070b0', 0.5) }, rim: { dir: [0.5, 0.45, -0.75], col: lin('#ffb0c8', 1.8) }, sky: lin('#7a6a9a', 0.35), ground: lin('#704a50', 0.25), exposure: 1.0, soft: 2.4 },
   night: { key: { dir: [-0.4, 0.7, 0.55], col: lin('#a8c0ff', 1.1) }, fill: { dir: [0.7, -0.3, 0.6], col: lin('#ff9a5a', 0.5) }, rim: { dir: [0.4, 0.4, -0.8], col: lin('#c0d0ff', 1.2) }, sky: lin('#28324a', 0.4), ground: lin('#1a1418', 0.25), exposure: 1.15, soft: 2.4 },
   overcast: { key: { dir: [-0.3, 0.85, 0.45], col: lin('#e8eef4', 1.8) }, fill: { dir: [0.6, 0.2, 0.75], col: lin('#c0ccd8', 0.8) }, rim: { dir: [0.3, 0.5, -0.8], col: lin('#e0e8f0', 1.0) }, sky: lin('#b8c4d0', 0.55), ground: lin('#7a7468', 0.35), exposure: 1.0, soft: 3.2 },
@@ -169,6 +169,8 @@ export class Hand {
   }
 
   get rig() { return this.anim.rig; }
+  /** the mesh is built and the GPU is up: this hand is drawn in 3D */
+  get ready() { return !!this.asset && !!this.ctl.renderer && !this.ctl.renderer.lost && this.ctl.alive; }
   /** idle tremor and breathing (0..1) */
   get life() { return this.anim.life; }
   set life(v: number) { this.anim.life = v; }
