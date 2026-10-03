@@ -117,7 +117,7 @@ async function waitFor(pred: (s: unknown) => boolean, ms = 20000) {
 async function loadLocation(L: LocationDef, enter?: number) {
   await idle();
   if (L.scene.type === 'island') return islandAt(L.scene.x);
-  if (L.scene.type === 'custom') return L.scene.go();
+  if (L.scene.type === 'custom') return L.scene.go(enter);
   const def = await siteDef(L.scene.type === 'ocean' ? 'deep' : L.scene.site);
   if (!def) { console.warn('no scene for', L.id); return; }
   const site = enter !== undefined ? { ...def, spawnX: enter } : def;

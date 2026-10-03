@@ -109,7 +109,7 @@ export const ATLAS: AtlasLoc[] = [
   {
     id: 'isle-track', name: 'The Bush Track', sub: 'Te Ara Ngahere', region: 'home', kind: 'site', pos: P(360, 136),
     scene: { type: 'island', x: 6200 }, difficulty: 2, xr: [5900, 6900], ...shore(5900, 6900),
-    desc: 'Up the bank from the cove and into the bush, where Joshu was found by the creek.', terrain: 'Uphill track, creek',
+    desc: 'Up the bank from the cove and into the bush, toward the creek and the fern gullies.', terrain: 'Uphill track, creek',
   },
   // ------------------------------------------------------------ the V2 expedition sites
   {
@@ -217,7 +217,7 @@ export const ATLAS: AtlasLoc[] = [
   {
     // (src/game/v11/forest: the scene, its Day 1 story and the walk in from the stream mouth)
     id: 'forest', name: 'Te Wao Nui', sub: 'The Great Forest', region: 'interior', kind: 'site', pos: P(296, 172),
-    scene: { type: 'custom', go: async () => { await (await import('../v11/forest')).goForest(); } }, difficulty: 2, xr: [0, 6000],
+    scene: { type: 'custom', go: async (at?: number) => { await (await import('../v11/forest')).goForest(at !== undefined && Number.isFinite(at) ? { x: at } : {}); } }, difficulty: 2, xr: [0, 6000],
     path: PATH([254, 118], [262, 142], [282, 168], [306, 186], [330, 200], [348, 214]), knots: [0, 900, 2200, 3500, 4800, 6000],
     routes: [{ from: 'isle-stream', at: 3918, enter: 92, label: 'Follow the stream inland into the forest', hours: 0.5, energy: 4, kind: 'walk', walk: true, say: 'Up the stream, into the trees. Te Wao Nui.' }],
     desc: 'The great forest inland of the beach, up the stream: kauri giants rising out of the mist, ferns taller than a man, mud wallows, a gully where Joshu was found, and things that watch you.', terrain: 'Deep forest, stream fords, mud wallows', arriveX: 92,
