@@ -395,7 +395,7 @@ export class HandAnim {
   snap() { this.snapped = true; }
 
   update(dt: number) {
-    dt = Math.min(dt, 1 / 20);
+    dt = Math.max(0, Math.min(dt, 1 / 20));
     this.t += dt;
     const life = this.life;
     // ---------------------------------------------------------------- the wrist toward its target

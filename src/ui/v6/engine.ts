@@ -16,6 +16,7 @@
 import { openCloseup, CW, CH, rgb, hx, mixc, ramp, dith, hash, R, G, B } from './closeup';
 import { Hold, loop } from '../v4/mini';
 import { audio } from '../../core/audio';
+import { closeupHands, HANDS3D, HandsController } from '../../art/v11/hands3d';
 
 type Stage = 'valve' | 'bleed' | 'fuse' | 'start';
 const STAGES: Stage[] = ['valve', 'bleed', 'fuse', 'start'];
@@ -782,6 +783,10 @@ export async function runEngineRepair(o: { onStep?: (k: string) => void | Promis
   SPR = S;
   const prev = new Uint32Array(CW * CH);
   const hold = new Hold(cu.wrap);
+  // Mori's real arms and hands (the painted ones stand in until the meshes are ready)
+  const hands: HandsController | null = HANDS3D.enabled ? closeupHands(cu, { who: 'mori', side: 'both', lights: 'engine', scale: 2.3 }) : null;
+  hands?.left?.shoulderAt(-70, 330, 90);
+  hands?.right?.shoulderAt(400, 320, 90);
 
   let si = 0, stage: Stage = 'valve', T = 0, stageT = 0, lastSay = -9;
   const cam = { x: VIEW.valve[0], y: VIEW.valve[1] };
@@ -1136,6 +1141,10 @@ export async function runEngineRepair(o: { onStep?: (k: string) => void | Promis
         if (pan && STAGES[si - 1] === k) return 1 - ease(Math.min(1, pan.t * 3));
         return 0;
       };
+      const use3d = !!hands?.ready3d;
+      const L3 = hands?.left ?? null, R3 = hands?.right ?? null;
+      if (L3) L3.visible = false;
+      if (R3) R3.visible = false;
       const pv = pres('valve');
       if (pv > 0) {
         const drop = (1 - pv) * 110;
@@ -1147,17 +1156,30 @@ export async function runEngineRepair(o: { onStep?: (k: string) => void | Promis
           const a = baseA + ph * (vPress < 4 ? 0.08 : 0.42) + slip;
           const lift = push > 0 && push < 0.72 ? Math.sin(push / 0.72 * Math.PI) * 4 : 0;
           const hx0 = cxw + Math.cos(a) * (WRX - 3 + lift), hy0 = cyw + Math.sin(a) * (WRY - 3 + lift) + drop;
-          return [hx0, hy0, a] as const;
+          return [hx0, hy0, a, lift] as const;
         };
-        const [lx, ly, la] = hand(Math.PI * 1.12, pushL, -1);
-        const [rx, ry, ra] = hand(-Math.PI * 0.12, pushR, 1);
-        const lwx = lx + Math.cos(la) * 12, lwy = ly + Math.sin(la) * 12 + 4, rwx = rx + Math.cos(ra) * 12, rwy = ry + Math.sin(ra) * 12 + 4;
-        sleeve(S, lwx - 44, lwy + 130, lwx, lwy, 24, 9);
-        sleeve(S, rwx + 44, rwy + 130, rwx, rwy, 24, 9);
-        flush(S, F, 5);
-        grip(S, lx, ly, la, -1);
-        grip(S, rx, ry, ra, 1);
-        flush(S, F, 3);
+        const [lx, ly, la, ll] = hand(Math.PI * 1.12, pushL, -1);
+        const [rx, ry, ra, rl] = hand(-Math.PI * 0.12, pushR, 1);
+        if (use3d && L3 && R3) {
+          // both fists round the rim: a short chord of the rim under each hand, the index side on top
+          const rim = (a: number, lift: number, d: number): [number, number, number] => [cxw + Math.cos(a + d) * (WRX - 3 + lift), cyw + Math.sin(a + d) * (WRY - 3 + lift) + drop, 4];
+          const grip = (h: typeof L3, a: number, lift: number, push: number) => {
+            const p0 = rim(a, lift, -0.2), p1 = rim(a, lift, 0.2);
+            const top = p0[1] < p1[1];
+            h.visible = true;
+            h.hold({ a: top ? p0 : p1, b: top ? p1 : p0, r: 3.4 }, { follow: 0, force: 0.55 + push * 0.4 });
+          };
+          grip(L3, la, ll, pushL);
+          grip(R3, ra, rl, pushR);
+        } else {
+          const lwx = lx + Math.cos(la) * 12, lwy = ly + Math.sin(la) * 12 + 4, rwx = rx + Math.cos(ra) * 12, rwy = ry + Math.sin(ra) * 12 + 4;
+          sleeve(S, lwx - 44, lwy + 130, lwx, lwy, 24, 9);
+          sleeve(S, rwx + 44, rwy + 130, rwx, rwy, 24, 9);
+          flush(S, F, 5);
+          grip(S, lx, ly, la, -1);
+          grip(S, rx, ry, ra, 1);
+          flush(S, F, 3);
+        }
       }
       const pb = pres('bleed');
       if (pb > 0) {
@@ -1166,21 +1188,46 @@ export async function runEngineRepair(o: { onStep?: (k: string) => void | Promis
         // the screwdriver: shaft into the slot, a fluted amber handle that turns
         drawDriver(S, SCREW.x + ox + 10 + screwOut * 3, hy0, hx0 - 2, screwRot);
         flush(S, F);
-        sleeve(S, hx0 + 34, hy0 + 110, hx0 + 8, hy0 + 12, 24, 9);
-        fist(S, hx0 + 4, hy0 + 1, -Math.PI / 2 - 0.35 + Math.sin(screwRot * 2) * 0.12 * screwOut, 10, 8.5, 1);
-        flush(S, F, 4);
+        if (use3d && R3 && pb >= pv) {
+          // the fist round the handle, the wrist rolling as the screw backs out
+          const phi = 0.7 + Math.sin(screwRot * 2) * 0.28 * screwOut;
+          R3.visible = true;
+          R3.hold({ a: [hx0 - 13, hy0, 6], b: [hx0 + 6, hy0, 6], r: 5 }, { follow: 0, approach: [0.25, Math.cos(phi), Math.sin(phi)], force: 0.5 + screwOut * 0.3 });
+        } else if (!use3d) {
+          sleeve(S, hx0 + 34, hy0 + 110, hx0 + 8, hy0 + 12, 24, 9);
+          fist(S, hx0 + 4, hy0 + 1, -Math.PI / 2 - 0.35 + Math.sin(screwRot * 2) * 0.12 * screwOut, 10, 8.5, 1);
+          flush(S, F, 4);
+        }
       }
       const pfz = pres('fuse');
-      if (pfz > 0) drawTray(S, F, pfz, -cx, -cy, box0, boy0, { sel, anim: fAnim, done: fDone, recoil }, t);
+      if (pfz > 0) {
+        const tr = drawTray(S, F, pfz, -cx, -cy, box0, boy0, { sel, anim: fAnim, done: fDone, recoil }, t, use3d);
+        if (use3d && L3 && R3) {
+          // the left hand under the tray, palm up; the right pinches the fuse or points at the one picked
+          L3.visible = true;
+          L3.release().setPose('hold').reachTo(tr.lx + 6, tr.ly + 4, 2, { with: 'palm', fingers: [0.85, -0.15, -0.35], palm: [0.05, -1, 0.15], follow: 0 });
+          R3.visible = true;
+          R3.release();
+          if (tr.holding) R3.setPose('pinch').reachTo(tr.tx + 2, tr.ty + 1, 8, { with: 'pinch', fingers: [-0.45, 0.55, -0.55], palm: [-0.5, 0.2, -0.8], follow: 26 });
+          else if (tr.pointing) R3.setPose('point').reachTo(tr.tx + 2, tr.ty - 3, 10, { with: 'index', fingers: [-0.5, 0.65, -0.5], palm: [-0.3, 0.3, -1], follow: 18 });
+          else R3.setPose('relaxed').reachTo(tr.tx + 16, tr.ty + 26, 6, { with: 'palm', fingers: [-0.5, -0.6, -0.4], palm: [-0.3, 0.4, -1], follow: 12 });
+        }
+      }
       const ps = pres('start');
       if (ps > 0) {
         const drop = (1 - ps) * 90;
         const bxs = BTN.x + ox, bys = BTN.y + oy;
         const pr = press > 0.5 ? (1 - press) * 2 : press * 2;
         const wx0 = bxs + 26 - pr * 3, wy0 = bys + 20 + drop - pr * 2;
-        sleeve(S, wx0 + 60, wy0 + 40, wx0 + 4, wy0 + 2, 15, 9);
-        reach(S, wx0, wy0, bxs + 3 - pr * 2, bys - 1 - pr, 0);
-        flush(S, F, 4);
+        if (use3d && R3 && ps >= pfz) {
+          // a fingertip on the starter: the index jabs it, the hand follows through
+          R3.visible = true;
+          R3.release().setPose('press').reachTo(bxs + 3 - pr * 2, bys - 1 - pr + drop, 6 - pr * 3, { with: 'index', fingers: [-0.55, -0.45, -0.7], palm: [0.1, 0.5, -1], follow: 0 });
+        } else if (!use3d) {
+          sleeve(S, wx0 + 60, wy0 + 40, wx0 + 4, wy0 + 2, 15, 9);
+          reach(S, wx0, wy0, bxs + 3 - pr * 2, bys - 1 - pr, 0);
+          flush(S, F, 4);
+        }
       }
 
       // ---------------------------------------------------------- particles
@@ -1223,9 +1270,15 @@ export async function runEngineRepair(o: { onStep?: (k: string) => void | Promis
       prev.set(buf);
       frameMs = frameMs * 0.9 + (performance.now() - t0) * 0.1;
       cu.present();
+      if (hands) {
+        // the bulb's flicker on the hands too
+        hands.keyGain = Math.min(1.15, flick);
+        hands.frame(dt);
+      }
       return true;
     });
   });
+  hands?.destroy();
 
   window.removeEventListener('keydown', kd, true);
   cu.wrap.removeEventListener('pointerdown', pd);
@@ -1549,12 +1602,13 @@ function drawWheel(S: Lay, cx: number, cy: number, ang: number) {
   paint(0, 0, false);
 }
 interface TraySt { sel: number; anim: { i: number; t: number; ok: boolean; zapped: boolean } | null; done: boolean; recoil: number }
-function drawTray(S: Lay, F: Lay, pres: number, ox: number, oy: number, box0: number, boy0: number, st: TraySt, t: number) {
+interface Tray3 { lx: number; ly: number; tx: number; ty: number; holding: boolean; pointing: boolean }
+function drawTray(S: Lay, F: Lay, pres: number, ox: number, oy: number, box0: number, boy0: number, st: TraySt, t: number, skipHands = false): Tray3 {
   const drop = (1 - pres) * 100;
   const X0 = TRAY.x0 + ox, X1 = TRAY.x1 + ox, Y0 = TRAY.y0 + oy + drop, Y1 = TRAY.y1 + oy + drop + 8;
   const TP = ['#0a0a0c', '#141418', '#1e1e24', '#2a2a32', '#3a3a44', '#50505c'].map(hx);
   // Mori's left hand under the tray's left end
-  sleeve(S, X0 - 40, Y1 + 90, X0 - 2, Y0 + 16, 22, 9);
+  if (!skipHands) sleeve(S, X0 - 40, Y1 + 90, X0 - 2, Y0 + 16, 22, 9);
   // tray: the top rim and dark compartments (seen from above), then the fuses standing in them
   for (let y = Y0; y < Y0 + 8; y++) for (let x = X0 + Math.round((Y0 + 8 - y) * 0.3); x < X1 + Math.round((Y0 + 8 - y) * 0.3); x++) {
     const inner = y > Y0 + 1 && y < Y0 + 7 && ((x - X0 - 4) % 28) > 2;
@@ -1577,7 +1631,7 @@ function drawTray(S: Lay, F: Lay, pres: number, ox: number, oy: number, box0: nu
     sp(S, x, y, c);
   }
   for (let i = 0; i < 4; i++) txt(S, String(i + 1), trayFuseX(i) + ox + 5, Y0 + 13, INK);
-  fist(S, X0 + 2, Y0 + 16, -Math.PI * 0.35, 9, 7.5, 1);
+  if (!skipHands) fist(S, X0 + 2, Y0 + 16, -Math.PI * 0.35, 9, 7.5, 1);
   // the fuse in flight to F3 (and back, if it was the wrong one)
   let holding = false;
   if (st.anim) {
@@ -1602,6 +1656,8 @@ function drawTray(S: Lay, F: Lay, pres: number, ox: number, oy: number, box0: nu
   if (st.done && !(st.anim && st.anim.t < 0.9)) { tx = idle[0] + 16; ty = idle[1] + 40; }
   const rc = st.recoil;
   tx += rc * 14; ty += rc * 10;
+  const out: Tray3 = { lx: X0 + 2, ly: Y0 + 16, tx, ty: ty + drop, holding, pointing: !!handTo && !holding };
+  if (skipHands) { flush(S, F, 4); return out; }
   if (holding) {
     // pinched between thumb and fingers: the fist sits on the fuse's right side, thumb across its face
     const fx = tx + 9, fy = ty + 9 + drop;
@@ -1616,6 +1672,7 @@ function drawTray(S: Lay, F: Lay, pres: number, ox: number, oy: number, box0: nu
     else restHand(S, wx - 2, wy - 4 + drop, -Math.PI * 0.72);
   }
   flush(S, F, 4);
+  return out;
 }
 function drawPart(F: Lay, p: P) {
   const x = p.x, y = p.y, f = p.life / p.max;

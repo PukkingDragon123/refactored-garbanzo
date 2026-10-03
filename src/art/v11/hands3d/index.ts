@@ -153,6 +153,8 @@ export class Hand {
   readonly dq = new Float32Array(NB * 8);
   readonly model: M4;
   private holdCap: Capsule | null = null;
+  /** the last handle passed to hold() (debugging) */
+  lastHold: { a: Vec; b: Vec; r: number } | null = null;
 
   constructor(readonly ctl: HandsController, readonly who: Who, readonly side: Side, look: Look, rig: Rig) {
     this.look = look;
@@ -214,6 +216,7 @@ export class Hand {
   /** wrap round a handle drawn in the scene: axis from a to b (grid points), radius in grid px */
   hold(h: { a: Vec; b: Vec; r: number } | null, o: { occlude?: boolean; force?: number; approach?: Vec; follow?: number } = {}) {
     if (!h) return this.release();
+    this.lastHold = h;
     const a = this.toSolver(this.ctl.at(h.a[0], h.a[1], h.a[2])), b = this.toSolver(this.ctl.at(h.b[0], h.b[1], h.b[2]));
     const r = h.r / this.ctl.scale;
     this.anim.handle = { a, b, r };
@@ -548,6 +551,7 @@ export function mountHands3d(container: HTMLElement, opts: Hands3dOptions = {}):
 /** the v6 close-ups: lay the hands over the close-up's 320x180 pixel canvas */
 export function closeupHands(cu: { wrap: HTMLElement; cv: HTMLCanvasElement; closed: boolean }, opts: Hands3dOptions = {}): HandsController {
   const ctl = new HandsController(cu.wrap, { grid: [cu.cv.width, cu.cv.height], fitTo: cu.cv, before: cu.cv.nextSibling, scale: 3.2, pixel: HANDS3D.pixel ?? 4, outline: 0, ...opts, ...(HANDS3D.pixel !== null ? { pixel: HANDS3D.pixel } : {}) });
+  (window as unknown as { __hands3d?: HandsController }).__hands3d = ctl;
   return ctl;
 }
 

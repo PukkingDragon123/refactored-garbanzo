@@ -112,7 +112,8 @@ export function loop(fn: (dt: number, t: number) => boolean | void): () => void 
   let last = performance.now(), t = 0, alive = true;
   const step = (now: number) => {
     if (!alive) return;
-    const dt = Math.min(0.05, (now - last) / 1000);
+    // a frame stamped before the loop started (after a long task) must not run time backwards
+    const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
     last = now;
     t += dt;
     if (fn(dt, t) === false) { alive = false; return; }
