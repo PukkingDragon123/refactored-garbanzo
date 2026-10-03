@@ -34,11 +34,11 @@ const axis = (rig: Rig, i: number, a: V3): V3 => qrot(rig.bind[i].q, a);
 /** the forearm cross-section knots: y, half-width, half-depth, centre x, centre z */
 function armKnots(rig: Rig) {
   const b = rig.build, LF = rig.foreLen, s = b.size, bw = b.breadth, A = b.arm, M = 0.88 + 0.12 * b.muscle;
-  const ys = [-LF - 1.5, -LF * 0.86, -LF * 0.68, -LF * 0.48, -LF * 0.28, -LF * 0.12, -0.6 * s, 0.9 * s];
-  const as = [3.95 * A, 4.35 * A * M, 4.15 * A * M, 3.65 * A, 3.2 * A, 2.95 * A, 2.98 * s * bw, 2.95 * s * bw];
-  const bs = [3.7 * A, 3.62 * A * M, 3.15 * A * M, 2.62 * A, 2.2 * A, 1.95 * A, 1.86 * s, 1.62 * s];
+  const ys = [-LF - 1.5, -LF * 0.86, -LF * 0.68, -LF * 0.48, -LF * 0.28, -LF * 0.12, -0.6 * s, 0.35 * s];
+  const as = [3.95 * A, 4.35 * A * M, 4.15 * A * M, 3.65 * A, 3.2 * A, 2.95 * A, 2.94 * s * bw, 2.62 * s * bw];
+  const bs = [3.7 * A, 3.62 * A * M, 3.15 * A * M, 2.62 * A, 2.2 * A, 1.95 * A, 1.84 * s, 1.42 * s];
   const xs = [0.25 * A, 0.18 * A, 0.08 * A, 0, 0, 0, 0, 0];
-  const zs = [0.25 * A, 0.28 * A, 0.22 * A, 0.12 * A, 0.04, 0, -0.02 * s, -0.08 * s];
+  const zs = [0.25 * A, 0.28 * A, 0.22 * A, 0.12 * A, 0.04, 0, -0.02 * s, -0.1 * s];
   return { ys, as, bs, xs, zs };
 }
 /** the arm's surface radius (half-width, half-depth) at y, for sleeves and bands */
@@ -89,7 +89,7 @@ export function skinSdf(rig: Rig, look: Look): SkinBuild {
   const mcp = FINGERS.map(ch => rig.bind[ch[0]].t);
   const fdir = FINGERS.map(ch => axis(rig, ch[0], [0, 1, 0]));
   const cmc: V3[] = [[-1.45 * s * bw, 2.4 * s, 0.05 * s], [-0.35 * s * bw, 2.55 * s, 0.1 * s], rig.bind[B.cup4].t, rig.bind[B.cup5].t];
-  palm.add(ell([-0.15 * s * bw, 5.35 * s, -0.22 * s], [3.5 * s * bw, 3.55 * s, 1.12 * s], [0, 1, 0], [1, 0, 0], 0));
+  palm.add(ell([-0.15 * s * bw, 5.35 * s, -0.32 * s], [3.5 * s * bw, 3.55 * s, 1.02 * s], [0, 1, 0], [1, 0, 0], 0));
   for (let k = 0; k < 4; k++) {
     const r0 = rig.rad[FINGERS[k][0]][0];
     palm.add(cone(cmc[k], vsub(mcp[k], vscale(fdir[k], 0.2 * s)), 0.62 * s, r0 * 0.9, 0.8));
@@ -105,7 +105,7 @@ export function skinSdf(rig: Rig, look: Look): SkinBuild {
   // knuckle heads: the metacarpal ends show through on the back, most of all with the fist closed
   for (let k = 0; k < 4; k++) {
     const r0 = rig.rad[FINGERS[k][0]][0];
-    palm.add(ell(vadd(mcp[k], [0, -0.12 * s, 0.16 * s * bony]), [r0 * 0.98, r0 * 0.92, r0 * (0.84 + 0.08 * bony)], fdir[k], [1, 0, 0], 0.42));
+    palm.add(ell(vadd(mcp[k], [0, -0.16 * s, 0.24 * s * bony]), [r0 * 0.96, r0 * 0.9, r0 * (0.76 + 0.06 * bony)], fdir[k], [1, 0, 0], 0.4));
   }
   // ---------------------------------------------------------------- fingers (each its own group, so they only web at the palm)
   const fingers = new Sdf(0.62);
@@ -119,11 +119,11 @@ export function skinSdf(rig: Rig, look: Look): SkinBuild {
       const pr = j === 2 ? r1 : (r0 + r1) / 2;
       f.add(ell(pt(rig, i, 0, L * (j === 2 ? 0.6 : 0.52), -pr * 0.3), [pr * 0.88, L * (j === 2 ? 0.4 : 0.36), pr * 0.68], axis(rig, i, [0, 1, 0]), axis(rig, i, [1, 0, 0]), 0.22));
       // joint knuckles (middle and end joints): a little wider and higher on the back
-      if (j > 0) f.add(ell(pt(rig, i, 0, 0.02 * s, r0 * 0.08 * bony), [r0 * (1.06 + 0.04 * bony), r0 * 0.6, r0 * 0.98], axis(rig, i, [0, 1, 0]), axis(rig, i, [1, 0, 0]), 0.2));
+      if (j > 0) f.add(ell(pt(rig, i, 0, 0.0, r0 * 0.1 * bony), [r0 * (1.0 + 0.03 * bony), r0 * 0.75, r0 * 0.86], axis(rig, i, [0, 1, 0]), axis(rig, i, [1, 0, 0]), 0.34));
     }
     // the nail plate, a hair proud of the nail bed
     const i3 = FINGERS[k][2], L3 = rig.len[i3], rt = rig.rad[i3][1];
-    f.add(ell(pt(rig, i3, 0, L3 * 0.6, rt * 0.82), [rt * 0.7, L3 * 0.36, rt * 0.2], axis(rig, i3, [0, 1, 0]), axis(rig, i3, [1, 0, 0]), 0.07));
+    f.add(ell(pt(rig, i3, 0, L3 * 0.52, rt * 0.68), [rt * 0.74, L3 * 0.32, rt * 0.36], axis(rig, i3, [0, 1, 0]), axis(rig, i3, [1, 0, 0]), 0.12));
     fingers.add(f);
   }
   // ---------------------------------------------------------------- thumb
@@ -138,7 +138,7 @@ export function skinSdf(rig: Rig, look: Look): SkinBuild {
     thumb.add(ell(pt(rig, t1, 0, 0.1 * s, 0.12 * s * bony), [rig.rad[t1][0] * 1.08, rig.rad[t1][0] * 0.7, rig.rad[t1][0] * 1.0], axis(rig, t1, [0, 1, 0]), axis(rig, t1, [1, 0, 0]), 0.25));
     thumb.add(ell(pt(rig, t1, 0, rig.len[t1] * 0.5, -rig.rad[t1][0] * 0.3), [rig.rad[t1][0] * 0.86, rig.len[t1] * 0.36, rig.rad[t1][0] * 0.66], axis(rig, t1, [0, 1, 0]), axis(rig, t1, [1, 0, 0]), 0.24));
     thumb.add(ell(pt(rig, t2, 0, L2 * 0.58, -r2 * 0.34), [r2 * 0.98, L2 * 0.42, r2 * 0.72], axis(rig, t2, [0, 1, 0]), axis(rig, t2, [1, 0, 0]), 0.24));
-    thumb.add(ell(pt(rig, t2, 0, L2 * 0.6, r2 * 0.84), [r2 * 0.74, L2 * 0.36, r2 * 0.2], axis(rig, t2, [0, 1, 0]), axis(rig, t2, [1, 0, 0]), 0.07));
+    thumb.add(ell(pt(rig, t2, 0, L2 * 0.52, r2 * 0.68), [r2 * 0.76, L2 * 0.33, r2 * 0.36], axis(rig, t2, [0, 1, 0]), axis(rig, t2, [1, 0, 0]), 0.12));
   }
   // the first web: the dorsal muscle between thumb and index, and the fold of skin on the palm side
   const web = new Sdf(0.9);
@@ -149,12 +149,12 @@ export function skinSdf(rig: Rig, look: Look): SkinBuild {
     web.add(ell(vadd(vadd(tm, vscale(vsub(im, tm), 0.52)), [0.2 * s, 0.05 * s, -0.42 * s]), [0.42 * s, 1.55 * s, 0.42 * s], d, [0, 0, 1], 0));
   }
   // ---------------------------------------------------------------- wrist bones
-  const bones = new Sdf(0.5);
-  bones.add(ell([2.45 * s * bw, -0.55 * s, 1.0 * s], [0.55 * s, 0.62 * s, 0.42 * s * (0.7 + 0.3 * bony)], [0, 1, 0], [1, 0, 0], 0));
+  const bones = new Sdf(0.65);
+  bones.add(ell([2.4 * s * bw, -0.6 * s, 0.95 * s], [0.46 * s, 0.6 * s, 0.36 * s * (0.7 + 0.3 * bony)], [0, 1, 0], [1, 0, 0], 0));
   bones.add(ell([-2.62 * s * bw, -0.35 * s, 0.15 * s], [0.48 * s, 0.75 * s, 0.5 * s], [0, 1, 0], [1, 0, 0], 0));
 
-  const hand = new Sdf(0).add(palm, fingers, thumb, web);
-  hand.k = 0;
+  // the hand blends into the end of the forearm over the wrist
+  const hand = new Sdf(1.1).add(palm, fingers, thumb, web);
   const base = new Sdf(0).add(arm, hand, bones);
   // ---------------------------------------------------------------- tendons and veins laid onto the surface
   const lay = (pts: number[][], r: number, proud: number): V3[] => pts.map(p0 => {
@@ -168,33 +168,30 @@ export function skinSdf(rig: Rig, look: Look): SkinBuild {
     return vsub(q as V3, vscale(n, r - proud));
   });
   const tendons: V3[][] = [];
-  const tg = new Sdf(0.32);
+  const tg = new Sdf(0.5);
   for (let k = 0; k < 4; k++) {
     const m = mcp[k];
-    const path = lay([[m[0] * 0.22, 0.6 * s, 3], [m[0] * 0.55, 3.6 * s, 3], [m[0] * 0.86, 6.4 * s, 3], [m[0], m[1] - 0.55 * s, 3]], 0.17 * s, 0.07 * s * bony);
+    // under the wrist band they lie flat; they rise toward the knuckles
+    const path = lay([[m[0] * 0.25, 1.2 * s, 3], [m[0] * 0.58, 3.8 * s, 3], [m[0] * 0.88, 6.4 * s, 3], [m[0], m[1] - 0.7 * s, 3]], 0.26 * s, 0.045 * s * bony);
     tendons.push(path);
-    for (let i = 0; i + 1 < path.length; i++) tg.add(cone(path[i], path[i + 1], 0.17 * s, 0.17 * s, 0));
+    for (let i = 0; i + 1 < path.length; i++) tg.add(cone(path[i], path[i + 1], i === 0 ? 0.2 * s : 0.26 * s, 0.26 * s, 0));
   }
   // the wrist flexor tendons on the inside of the wrist
   for (const x of [0.2, -1.05]) {
-    const path = lay([[x * s * bw, -LF * 0.38, -6], [x * s * bw, -LF * 0.22, -6], [x * s * bw, -2.5 * s, -6], [x * s * bw, 0.35 * s, -6]], 0.2 * s, 0.05 * s * bony);
+    const path = lay([[x * s * bw, -LF * 0.22, -6], [x * s * bw, -LF * 0.13, -6], [x * s * bw, -2.4 * s, -6], [x * s * bw, -1.2 * s, -6]], 0.22 * s, 0.016 * s * bony);
     tendons.push(path);
     for (let i = 0; i + 1 < path.length; i++) tg.add(cone(path[i], path[i + 1], 0.2 * s, 0.2 * s, 0));
   }
   const veins: V3[][] = [];
-  const vg = new Sdf(0.26);
-  const vr = 0.15 * s, vp = 0.055 * s * b.veins;
+  const vg = new Sdf(0.34);
+  const vr = 0.13 * s, vp = 0.042 * s * b.veins;
   const vlines: number[][][] = [
     // from between the index and middle knuckles across the back of the hand to the thumb side of the wrist, then up the forearm
     [[-2.1, 7.7, 3], [-1.6, 5.9, 3], [-1.85, 3.8, 3], [-2.1, 1.6, 3], [-2.3, -1.2, 3], [-2.55, -LF * 0.25, 3], [-2.9, -LF * 0.5, 2], [-2.6, -LF * 0.75, 2]],
     // the little-finger side
     [[1.85, 7.4, 3], [1.5, 5.4, 3], [1.25, 3.4, 3], [1.55, 1.2, 3], [2.0, -1.5, 3], [2.4, -LF * 0.22, 2]],
-    // the arch across the back of the hand
-    [[-1.85, 3.9, 3], [-0.6, 3.15, 3], [0.6, 3.05, 3], [1.3, 3.5, 3]],
-    // between middle and ring
-    [[0.0, 7.6, 3], [-0.25, 5.6, 3], [-0.45, 3.3, 3]],
-    // a vein on the inside of the forearm
-    [[-0.6, -1.5, -6], [-0.9, -LF * 0.25, -6], [-0.5, -LF * 0.5, -6], [-0.2, -LF * 0.78, -6]],
+    // a short branch across the back of the hand
+    [[-1.75, 3.6, 3], [-0.7, 2.9, 3], [0.4, 2.7, 3]],
   ];
   if (b.veins > 0.2) for (const vl of vlines) {
     const path = lay(vl.map(([x, y, z]) => [x * s * bw, y > 0 ? y * s : y, z]), vr, vp);

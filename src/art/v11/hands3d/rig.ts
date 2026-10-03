@@ -100,6 +100,9 @@ export interface Rig {
   upperLen: number;
   /** the cupping axes (local to the hand bone) for the ring and little metacarpals */
   cupAxis: [V3, V3];
+  /** the thumb's carpometacarpal axes in the metacarpal's own frame: flexion swings it across the
+   *  palm (about the palm's normal), abduction lifts it out of the palm's plane */
+  thumbAx: { flex: V3; abd: V3 };
 }
 
 export function makeRig(b: Build): Rig {
@@ -138,7 +141,8 @@ export function makeRig(b: Build): Rig {
   // thumb: out from the base of the palm on the radial side, its nail turned to face sideways
   const tcmc: V3 = [-1.85 * s * bw, 1.65 * s, -0.55 * s];
   const d0 = vnorm([-0.56, 0.8, -0.26]), d1 = vnorm([-0.4, 0.88, -0.25]), d2 = vnorm([-0.33, 0.9, -0.28]);
-  const tz = (d: V3) => vnorm(vsub([-0.62, 0.0, 0.78], vscale(d, -0.62 * d[0] + 0.78 * d[2])));
+  // the thumbnail faces mostly sideways (radially), so the thumb curls across the palm when it bends
+  const tz = (d: V3) => vnorm(vsub([-0.86, 0.0, 0.5], vscale(d, -0.86 * d[0] + 0.5 * d[2])));
   const tl = [4.5 * s, 3.25 * s * fl, 2.75 * s * fl];
   const tr: [number, number][] = [[1.55 * s * b.girth, 1.12 * s * b.girth], [1.12 * s * b.girth, 0.92 * s * b.girth], [0.92 * s * b.girth, 0.76 * s * b.girth]];
   set(B.th0, tcmc, d0, tz(d0)); len[B.th0] = tl[0]; rad[B.th0] = tr[0];
@@ -154,7 +158,9 @@ export function makeRig(b: Build): Rig {
   }
   // the 4th and 5th metacarpals fold toward the palm about axes running across their bases, slanted
   const cupAxis: [V3, V3] = [vnorm([0.92, -0.38, 0]), vnorm([0.8, -0.6, 0])];
-  return { build: b, bind, local, invBind, len, rad, foreLen: LF, upperLen: LU, cupAxis };
+  const lq = local[B.th0].q, inv: Q = [-lq[0], -lq[1], -lq[2], lq[3]];
+  const thumbAx = { flex: qrot(inv, vnorm([0.1, 0.12, -1])), abd: qrot(inv, vnorm([-0.82, -0.57, 0.05])) };
+  return { build: b, bind, local, invBind, len, rad, foreLen: LF, upperLen: LU, cupAxis, thumbAx };
 }
 
 // ------------------------------------------------------------------ forward kinematics
@@ -166,7 +172,7 @@ export function poseRot(rig: Rig, i: number, p: Pose): Q {
   switch (i) {
     case B.cup4: return qaxis(rig.cupAxis[0], -p[D.cup] * 9 * DEG);
     case B.cup5: return qaxis(rig.cupAxis[1], -p[D.cup] * 19 * DEG);
-    case B.th0: return qnorm(qmul(qmul(qaxis(ROT_Z, p[D.tabd]), qaxis(ROT_X, -p[D.tflex])), qaxis(ROT_Y, p[D.troll])));
+    case B.th0: return qnorm(qmul(qmul(qaxis(rig.thumbAx.flex, p[D.tflex]), qaxis(rig.thumbAx.abd, p[D.tabd])), qaxis(ROT_Y, p[D.troll])));
     case B.th1: return qaxis(ROT_X, -p[D.tmcp]);
     case B.th2: return qaxis(ROT_X, -p[D.tip]);
   }

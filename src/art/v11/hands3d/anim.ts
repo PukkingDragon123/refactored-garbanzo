@@ -38,7 +38,7 @@ export function basePose(name: PoseName, o: PoseParams = {}): Pose {
     case 'flat': return build([[0, -1, 2, 0], [0, 0, 2, 0], [0, 1, 2, 0], [1, 2, 2, 0]], [0, 10, 0, 0, 0], 0);
     case 'spread': return build([[-4, -14, 3, 2], [-3, -4, 3, 2], [-3, 7, 4, 3], [-2, 17, 5, 4]], [-6, 42, 0, -4, -6], 0);
     case 'wave': return build([[-2, -12, 4, 2], [-2, -3, 4, 2], [-2, 6, 5, 3], [-1, 15, 6, 4]], [-4, 36, 2, -2, -4], 0);
-    case 'fist': return build([[86 + f * 6, 0, 100, 62], [88 + f * 6, 0, 102, 64], [90 + f * 4, 0, 102, 64], [90 + f * 4, 2, 100, 62]], [34, 6, 34, 44, 34], 0.9);
+    case 'fist': return build([[86 + f * 6, 0, 102, 66], [88 + f * 6, 0, 104, 68], [90 + f * 4, 0, 104, 68], [92 + f * 4, 2, 102, 66]], [30, 22, 26, 20, 12], 0.9);
     case 'point': return build([[4, -2, 6, 3], [84, 0, 98, 60], [86, 1, 100, 62], [88, 3, 98, 60]], [30, 14, 30, 34, 26], 0.8);
     case 'press': return build([[22, -2, 26, 8], [70, 0, 92, 56], [76, 1, 96, 58], [80, 3, 94, 58]], [26, 16, 28, 30, 22], 0.7);
     case 'tap': return build([[16, -2, 20, 10], [40, 0, 56, 30], [46, 1, 62, 34], [52, 3, 64, 36]], [16, 22, 18, 18, 14], 0.4);
@@ -123,7 +123,7 @@ export function wrapFinger(rig: Rig, k: number, p: Pose, cyl: { a: V3; u: V3; r:
     const hits = (ang: number) => {
       p[dof] = ang;
       fingerJoints(rig, k, p, pts);
-      return segLine(pts[j], pts[j + 1], cyl.a, cyl.u) < cyl.r + rr;
+      return segLine(pts[j], pts[j + 1], cyl.a, cyl.u) < cyl.r + rr || intoPalm(rig, k, pts, j + 1);
     };
     let a = lo, b = hi;
     if (!hits(b)) { p[dof] = b; continue; }
@@ -132,6 +132,47 @@ export function wrapFinger(rig: Rig, k: number, p: Pose, cyl: { a: V3; u: V3; r:
     p[dof] = a;
   }
 }
+/** the palm's skin (hand space): how far palmar it reaches at (x, y) */
+function palmZ(rig: Rig, x: number, y: number) {
+  const s = rig.build.size, bw = rig.build.breadth;
+  let z = -1.28 * s;
+  // the thenar and hypothenar mounds stand proud of the hollow
+  const th = Math.exp(-(((x + 1.9 * s * bw) / (1.6 * s)) ** 2 + ((y - 3.4 * s) / (2.4 * s)) ** 2));
+  const hy = Math.exp(-(((x - 2.7 * s * bw) / (1.1 * s)) ** 2 + ((y - 4.2 * s) / (2.8 * s)) ** 2));
+  z -= th * 0.75 * s + hy * 0.3 * s;
+  return z;
+}
+/** does any part of finger k (from joint j on) sink into the palm? */
+function intoPalm(rig: Rig, k: number, pts: V3[], from: number) {
+  const s = rig.build.size, top = rig.bind[FINGERS[k][0]].t[1] - 0.6 * s;
+  for (let i = Math.max(1, from); i < 4; i++) {
+    const q = pts[i];
+    if (q[1] > top || q[1] < 0.6 * s || Math.abs(q[0]) > 4.2 * s) continue;
+    const r = i === 3 ? rig.rad[FINGERS[k][2]][1] * 0.8 : rig.rad[FINGERS[k][Math.min(2, i)]][0] * 0.9;
+    if (q[2] - r < palmZ(rig, q[0], q[1])) return true;
+  }
+  return false;
+}
+/** curl finger k as one motion (all three joints together, toward `max`) until it meets the palm */
+export function curlToPalm(rig: Rig, k: number, p: Pose, max: [number, number, number]) {
+  const pts: V3[] = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  const dm = fdof(k, 0), dp = fdof(k, 2), dd = fdof(k, 3);
+  const set = (t: number) => { p[dm] = max[0] * Math.min(1, t * 1.15); p[dp] = max[1] * t; p[dd] = max[2] * Math.max(0, t * 1.2 - 0.2); };
+  const hits = (t: number) => { set(t); fingerJoints(rig, k, p, pts); return intoPalm(rig, k, pts, 1); };
+  let a = 0, b = 1;
+  if (!hits(1)) { set(1); return; }
+  for (let it = 0; it < 14; it++) { const m = (a + b) / 2; if (hits(m)) b = m; else a = m; }
+  set(a);
+}
+/** a cylinder along the front of the curled fingers (index to ring middle joints), for the thumb to rest on */
+function curledFront(rig: Rig, p: Pose): { a: V3; u: V3; r: number } {
+  const pi: V3[] = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]], pr: V3[] = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  fingerJoints(rig, 0, p, pi); fingerJoints(rig, 2, p, pr);
+  // the middle phalanges' midpoints
+  const a = vscale(vadd(pi[1], pi[2]), 0.5), b = vscale(vadd(pr[1], pr[2]), 0.5);
+  return { a, u: vnorm(vsub(b, a)), r: rig.rad[FINGERS[0][1]][0] * 0.95 };
+}
+
 /** the thumb round the far side of the same cylinder: MCP and IP flex until they touch */
 export function wrapThumb(rig: Rig, p: Pose, cyl: { a: V3; u: V3; r: number }) {
   const pts: V3[] = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]];
@@ -299,6 +340,13 @@ export class HandAnim {
     // the active layer decides the contact solvers
     const main = this.layers.reduce((a, b) => (b.w > a.w ? b : a), this.layers[0]);
     const nm = main?.name;
+    const fistLike = (nm === 'fist' || nm === 'point' || nm === 'thumbsUp') && !this.handle && (main?.w ?? 0) > 0.35;
+    if (fistLike) {
+      // the curled fingers close until they meet the palm; the thumb then rests across them
+      const fp = basePose(nm, main.o);
+      for (let k = nm === 'point' ? 1 : 0; k < 4; k++) curlToPalm(this.rig, k, T, [fp[fdof(k, 0)], fp[fdof(k, 2)], fp[fdof(k, 3)]]);
+      if (nm === 'fist') wrapThumb(this.rig, T, curledFront(this.rig, T));
+    }
     const solveGrip = this.handle || nm === 'grip' || nm === 'pour' || nm === 'crank' || nm === 'pullCord';
     if (solveGrip && (main?.w ?? 0) > 0.35) {
       const cyl = this.handleInHand() ?? palmCylinder(this.rig, main.o.r ?? this.gripR);

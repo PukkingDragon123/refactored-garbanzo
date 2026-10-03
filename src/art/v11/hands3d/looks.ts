@@ -53,7 +53,7 @@ const AROHA_BUILD: Build = { size: 0.9, breadth: 0.93, fingers: 1.05, girth: 0.8
 export const LOOKS: Record<Who, Look> = {
   mori: {
     who: 'mori', build: MORI_BUILD,
-    skin: { base: '#c98c6c', palm: '#d79a84', flush: '#c4675a', sss: '#d2502e', nail: '#e6b4a8', vein: '#7f8a9a', rough: 0.52 },
+    skin: { base: '#c48e74', palm: '#d4a08c', flush: '#c4675a', sss: '#d2502e', nail: '#e2aca4', vein: '#5a6a8a', rough: 0.52 },
     hair: [0.45, '#3a2418'], weathered: 0.25, grease: 0, freckles: 0.15, tattoo: null,
     sleeve: 'rolled', cloth: ['#2c2628', '#4a4244', '#6e6466'], cuff: '#5e5050',
     watch: 'left', bracelet: null, gloves: null,

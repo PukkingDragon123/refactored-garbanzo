@@ -123,7 +123,7 @@ uniform float uMirror, uExposure, uTime, uSize;
 // the look
 uniform vec3 uSkin, uPalm, uFlush, uSss, uNail, uVein, uHair, uCloth0, uCloth1, uCloth2, uCuff, uGlove0, uGlove1, uGlove2, uGCuff;
 uniform float uRough, uHairK, uWeather, uGrease, uFreckle, uTattoo, uBony;
-uniform int uSleeve, uGloveKind;
+uniform int uSleeve, uGloveKind, uDebug;
 uniform vec4 uTint; // rgb multiplier, a = saturation
 // digit lengths (proximal, middle, distal, tip radius) thumb..little, and their flexion (mcp/cmc, pip, dip)
 uniform vec4 uLen[5];
@@ -180,16 +180,18 @@ float skinHeight(vec3 b, vec4 det, float fw) {
       float u = (s - sj) / (rt * (j == 0 ? 0.9 : 0.7)), v = lat * 1.3;
       float e = u * u + v * v;
       if (e < 1.6 && dors > 0.0) {
-        float rings = sin(sqrt(e) * (j == 0 ? 15.0 : 12.0)) * 0.5 + 0.5;
-        float lines = sin(s * (j == 0 ? 52.0 : 44.0) + lat * lat * 4.0);
-        float m = (1.0 - smoothstep(0.4, 1.6, e)) * smoothstep(0.1, 0.5, dors) * loose * clamp(1.0 - fw * 18.0, 0.0, 1.0);
-        h -= (rings * 0.35 + max(0.0, lines) * 0.65) * 0.018 * m * regionOk;
+        // a few irregular transverse folds, bowed toward the joint
+        float wob = (vn3(vec3(lat * 3.0, s * 2.0, float(region) * 7.0 + float(j) * 3.0)) - 0.5) * 1.6;
+        float lines = sin((s - sj) * (j == 0 ? 46.0 : 40.0) + lat * lat * 5.0 * sign(s - sj) + wob);
+        float m = (1.0 - smoothstep(0.3, 1.5, e)) * smoothstep(0.15, 0.55, dors) * loose * clamp(1.0 - fw * 16.0, 0.0, 1.0);
+        h -= smoothstep(0.35, 1.0, lines) * 0.011 * m * regionOk;
         gWrinkle = max(gWrinkle, m * regionOk);
       }
       // palm-side creases at the joints, deeper when the joint is bent
-      float cr = groove(s - sj - (j == 0 ? -0.05 : 0.02), 0.045) + (j == 0 ? groove(s - sj + 0.16, 0.035) * 0.7 : 0.0);
-      float pm = smoothstep(-0.15, -0.55, dors) * (1.0 - smoothstep(0.85, 1.0, abs(lat)));
-      h -= cr * pm * (0.022 + flex * 0.03) * regionOk;
+      float wv = (vn3(vec3(lat * 4.0, float(region), float(j) * 5.0)) - 0.5) * 0.08;
+      float cr = groove(s - sj - (j == 0 ? -0.06 : 0.02) + wv, 0.06) + (j == 0 ? groove(s - sj + 0.14 + wv, 0.05) * 0.75 : 0.0);
+      float pm = smoothstep(-0.15, -0.55, dors) * (1.0 - smoothstep(0.75, 0.98, abs(lat)));
+      h -= cr * pm * (0.014 + flex * 0.026) * regionOk;
       gCrease = max(gCrease, cr * pm * (0.5 + flex * 0.6) * regionOk);
     }
     // the crease where the finger meets the palm
@@ -214,13 +216,20 @@ float skinHeight(vec3 b, vec4 det, float fw) {
     gPalmar = smoothstep(0.1, -0.5, vBN.z);
     float S = uSize;
     vec2 p = b.xy / S;
-    float heart = abs(p.y - (7.25 + 0.12 * (3.7 - p.x) - 0.032 * (3.7 - p.x) * (3.7 - p.x))) * step(-1.6, p.x) * step(p.x, 3.9) + (1.0 - step(-1.6, p.x) * step(p.x, 3.9)) * 9.0;
-    float head = abs(p.y - (6.55 - 0.26 * (p.x + 3.3))) + (step(2.5, p.x) + step(p.x, -3.5)) * 9.0;
-    vec2 lc = p - vec2(-2.55, 3.1);
-    float life = abs(length(lc * vec2(1.0, 0.82)) - 2.35) + step(lc.x, -0.2) * 9.0 + step(6.9, p.y) * 9.0 + step(p.y, 1.2) * 9.0;
-    float lines = max(max(groove(heart, 0.06), groove(head, 0.055)), groove(life, 0.06));
-    float minor = smoothstep(0.62, 0.7, fbm3(vec3(p * 3.3, 1.0))) * 0.4;
-    h -= (lines * 0.04 + minor * 0.012) * pal;
+    float wob = (vn3(vec3(p * 2.2, 3.0)) - 0.5) * 0.12;
+    // heart line: from the little-finger edge, curving up between index and middle
+    float hx = clamp(p.x, -1.7, 3.9);
+    float heart = length(vec2(p.x - hx, p.y - (7.2 + 0.16 * (3.8 - hx) - 0.04 * (3.8 - hx) * (3.8 - hx)) + wob));
+    // head line: from the thumb side, sloping down across the palm
+    float hdx = clamp(p.x, -3.4, 2.3);
+    float head = length(vec2(p.x - hdx, p.y - (6.45 - 0.3 * (hdx + 3.4) + 0.02 * (hdx + 3.4) * (hdx + 3.4)) + wob));
+    // life line: an arc round the thenar mound
+    vec2 lc = (p - vec2(-2.4, 3.0)) * vec2(1.0, 0.8);
+    float la = atan(lc.y, lc.x);
+    float life = abs(length(lc) - 2.25 + wob) + (1.0 - smoothstep(-1.45, -1.2, la)) * 9.0 + smoothstep(1.35, 1.55, la) * 9.0;
+    float lines = max(max(groove(heart, 0.075) * smoothstep(-1.75, -1.2, p.x), groove(head, 0.07) * smoothstep(2.4, 1.6, p.x)), groove(life, 0.075));
+    float minor = smoothstep(0.6, 0.72, fbm3(vec3(p * 3.3, 1.0))) * 0.5;
+    h -= (lines * 0.03 + minor * 0.01) * pal;
     gCrease = max(gCrease, (lines + minor * 0.5) * pal);
     // back of the hand: the skin over the knuckles
     gDirt = uGrease * smoothstep(0.62, 0.78, fbm3(b * 1.3 + 2.0)) * 0.8;
@@ -282,14 +291,14 @@ void main() {
       float frk = smoothstep(0.78, 0.86, vn3(vB * 7.0 + 3.0)) * (1.0 - gPalmar) * uFreckle;
       alb = mix(alb, alb * vec3(0.72, 0.58, 0.5), frk);
       alb *= 1.0 - uWeather * 0.12 * fbm3(vB * 1.1);
-      // veins: blue-green under the skin
-      alb = mix(alb, uVein, vBake.y * 0.32 * (1.0 - gPalmar * 0.6));
+      // veins: a cool shadow under the skin
+      alb *= mix(vec3(1.0), uVein / max(dot(uVein, vec3(0.33)), 0.05) * 0.8, vBake.y * 0.32 * (1.0 - gPalmar * 0.6));
       // forearm and back-of-hand hair: fine dark strands along the arm, averaging to a tint far away
       float hairMask = uHairK * (1.0 - gPalmar) * smoothstep(5.0, -1.0, vB.y) * (region >= 5 ? 1.0 : 0.25);
       if (hairMask > 0.0) {
-        float strand = smoothstep(0.62, 0.9, vn3(vec3(vB.x * 14.0, vB.y * 2.2, vB.z * 14.0)));
-        float far = clamp(fw * 5.0, 0.0, 1.0);
-        alb = mix(alb, uHair, hairMask * mix(strand * 0.75, 0.22, far));
+        float strand = smoothstep(0.7, 0.92, vn3(vec3(vB.x * 26.0, vB.y * 3.2 + vB.x * 4.0, vB.z * 26.0)));
+        float far = clamp(fw * 9.0, 0.0, 1.0);
+        alb = mix(alb, uHair, hairMask * mix(strand * 0.55, 0.16, far));
       }
       // the tattoo, faded blue-green on the forearm
       if (uTattoo > 0.5 && region == 6) {
@@ -299,10 +308,12 @@ void main() {
         alb = mix(alb, vec3(0.06, 0.13, 0.2), ink * 0.6 * (0.8 + 0.2 * vn3(vB * 9.0)));
       }
       // nails: pink bed under a glossy plate, a pale moon, the white free edge
-      vec3 nail = mix(uNail, vec3(0.95, 0.88, 0.84), gLunula * 0.5);
-      nail = mix(nail, vec3(0.94, 0.9, 0.84), gFree);
+      // the nail bed shows pink through the plate; a paler moon at the base, a narrow pale free edge
+      vec3 nail = mix(alb * vec3(1.12, 0.98, 0.98), uNail, 0.45);
+      nail = mix(nail, nail * 1.18 + 0.02, gLunula * 0.45);
+      nail = mix(nail, vec3(0.78, 0.72, 0.62), gFree * 0.85);
       alb = mix(alb, nail, gNail);
-      rough = mix(rough, 0.24, gNail);
+      rough = mix(rough, 0.17, gNail);
       rough = mix(rough, rough * 0.8, gKnuckle * 0.4);
       rough = mix(rough, min(1.0, rough + 0.12), gPalmar * 0.6);
       // grease: dark, a bit shiny
@@ -421,6 +432,10 @@ void main() {
   alb *= uTint.rgb;
   float lum = dot(alb, vec3(0.3, 0.59, 0.11));
   alb = mix(vec3(lum), alb, uTint.a);
+  if (uDebug == 1) { alb = vec3(0.55, 0.42, 0.36); rough = 0.6; sss = 0.6; metal = 0.0; sheen = 0.0; emit = vec3(0.0); }
+  if (uDebug == 2) { vec3 rc[8] = vec3[8](vec3(1,0.2,0.2), vec3(0.2,1,0.2), vec3(0.2,0.3,1), vec3(1,1,0.2), vec3(1,0.2,1), vec3(0.6,0.6,0.6), vec3(0.2,1,1), vec3(1,0.6,0.2)); outC = vec4(rc[clamp(region, 0, 7)] * (0.5 + 0.5 * N.z), 1.0); return; }
+  if (uDebug == 3) { outC = vec4(vec3(ao * capsAO(vW, N, region <= 4 ? region : 5, region == 0 ? 6 : 5)), 1.0); return; }
+  if (uDebug == 4) { outC = vec4(N * 0.5 + 0.5, 1.0); return; }
 
   // ---------------------------------------------------------- lighting
   float sh = shadowAt(vSh);
@@ -428,7 +443,7 @@ void main() {
   int skipA = region <= 4 ? region : (region == 5 ? 5 : 6);
   int skipB = region == 0 ? 6 : region <= 4 ? 5 : (region == 5 ? 6 : 5);
   float cao = skinLike ? capsAO(vW, N, skipA, skipB) : capsAO(vW, N, 6, 5);
-  float occ = ao * cao;
+  float occ = max(0.18, ao) * mix(1.0, cao, 0.75);
   vec3 col = vec3(0.0);
   // key: wrapped diffuse per channel (light bleeds red into the shadow side), soft shadow
   float nlK = dot(N, uKeyDir);
@@ -437,7 +452,7 @@ void main() {
   vec3 shC = mix(vec3(sh), vec3(sqrt(sh), sh, sh), sss * 0.5);
   vec3 diffK = dK * shC;
   // subsurface: the terminator and the shadow edge pick up the blood colour
-  vec3 sssTint = mix(vec3(1.0), uSss * 1.8, sss * 0.35 * (1.0 - abs(nlK)) * smoothstep(-0.3, 0.3, nlK + 0.2));
+  vec3 sssTint = mix(vec3(1.0), uSss * 1.8, sss * 0.2 * (1.0 - abs(nlK)) * smoothstep(-0.3, 0.3, nlK + 0.2));
   col += alb * diffK * sssTint * uKeyCol;
   // fill: soft, unshadowed
   float nlF = dot(N, uFillDir);

@@ -155,16 +155,17 @@ export function polygonize(f: Sdf, box: number[], h: number, yCut = -1e9, inset 
   return { pos, nrm, idx };
 }
 
-/** ambient occlusion from the field: how much the field closes in along the normal */
+/** ambient occlusion from the field: how much the field closes in along the normal (0 dark .. 1 open) */
 function aoAt(f: Sdf, p: number[], n: number[], s: number) {
-  let occ = 0;
-  const H = [0.22, 0.6, 1.25], W = [1, 0.62, 0.38];
+  let occ = 0, wsum = 0;
+  const H = [0.22, 0.6, 1.25], W = [1, 0.7, 0.45];
   for (let i = 0; i < 3; i++) {
     const hh = H[i] * s;
     const d = f.eval(p[0] + n[0] * hh, p[1] + n[1] * hh, p[2] + n[2] * hh);
-    occ += Math.max(0, hh - d) * W[i];
+    occ += Math.min(1, Math.max(0, (hh - d) / hh)) * W[i];
+    wsum += W[i];
   }
-  return Math.max(0, Math.min(1, 1 - occ * 1.3 / s));
+  return 1 - 0.82 * Math.pow(occ / wsum, 0.85);
 }
 /** roughly how thick the body is behind this point (cm): light shines through thin parts */
 function thickAt(f: Sdf, p: number[], n: number[]) {

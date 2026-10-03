@@ -82,7 +82,7 @@ export type Vec = [number, number, number];
 // ------------------------------------------------------------------ light presets (linear colours)
 const lin = (h: string, k = 1): V3 => { const n = parseInt(h.slice(1), 16); return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255].map(c => Math.pow(c, 2.2) * k) as V3; };
 export const LIGHTS: Record<string, LightRig> = {
-  studio: { key: { dir: [-0.55, 0.62, 0.62], col: lin('#fff4ea', 2.6) }, fill: { dir: [0.75, -0.05, 0.55], col: lin('#c8d8ff', 0.55) }, rim: { dir: [0.45, 0.4, -0.8], col: lin('#ffffff', 2.2) }, sky: lin('#c8ccd4', 0.42), ground: lin('#8a8078', 0.24), exposure: 1.0, soft: 2.6 },
+  studio: { key: { dir: [-0.55, 0.62, 0.62], col: lin('#fff4ea', 2.0) }, fill: { dir: [0.75, -0.05, 0.55], col: lin('#c8d8ff', 0.55) }, rim: { dir: [0.45, 0.4, -0.8], col: lin('#ffffff', 2.2) }, sky: lin('#c8ccd4', 0.42), ground: lin('#8a8078', 0.24), exposure: 1.0, soft: 2.6 },
   // the porthole up on the left, warm tiles, the wooden counter bouncing amber light up
   galley: { key: { dir: [-0.7, 0.55, 0.45], col: lin('#fff1dc', 2.5) }, fill: { dir: [0.6, -0.5, 0.6], col: lin('#e8a868', 0.6) }, rim: { dir: [0.35, 0.55, -0.75], col: lin('#ffe6c4', 1.5) }, sky: lin('#d8d2c4', 0.38), ground: lin('#a06a40', 0.32), exposure: 1.0, soft: 2.8 },
   // a caged bulb up to the left, grimy teal murk all round
@@ -515,6 +515,7 @@ function setLookUniforms(gl: WebGL2RenderingContext, loc: (n: string) => WebGLUn
   gl.uniform1i(loc('uSleeve'), ({ rolled: 0, hoodie: 1, pushed: 2, parka: 3, oilskin: 4, none: 0 } as Record<string, number>)[look.sleeve] ?? 0);
   gl.uniform1i(loc('uGloveKind'), g ? ({ knit: 0, leather: 1, rubber: 2 } as Record<string, number>)[g.kind] : 0);
   gl.uniform4fv(loc('uTint'), tint);
+  gl.uniform1i(loc('uDebug'), HANDS3D.debug);
   // digit lengths: thumb (metacarpal, proximal, distal, tip radius), then the fingers (proximal, middle, distal, tip radius)
   const L = new Float32Array(20);
   L.set([rig.len[B.th0], rig.len[B.th1], rig.len[B.th2], rig.rad[B.th2][1]], 0);
@@ -543,7 +544,7 @@ export function prewarmHands3d(who: Who | Who[], sides: Side[] = ['right', 'left
 }
 
 /** global switch: false brings back the classic 2D pixel hands in the minigames */
-export const HANDS3D = { enabled: true };
+export const HANDS3D = { enabled: true, /** shading debug: 0 off, 1 clay, 2 regions, 3 AO, 4 normals */ debug: 0 };
 
 export { handAsset, LIMITS };
 export type { LightRig } from './render';

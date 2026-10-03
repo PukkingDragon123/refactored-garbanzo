@@ -5,13 +5,14 @@
 //   lights=<preset>  pixel=0|2|3|4  outline=0|1  outfit=casual|winter|storm  bg=%23rrggbb  t=<seconds to run first>
 //   demo=1 (cycle through the poses)  scale=<px per cm>
 
-import { mountHands3d, HandsController, Hand, LIGHTS, PoseName, Who } from '../art/v11/hands3d';
+import { mountHands3d, HandsController, Hand, LIGHTS, PoseName, Who, HANDS3D } from '../art/v11/hands3d';
 
 const POSES: PoseName[] = ['relaxed', 'open', 'spread', 'fist', 'grip', 'pinch', 'point', 'press', 'cup', 'pullCord', 'crank', 'knot', 'tap', 'wave', 'hook', 'hold', 'thumbsUp'];
 const WHO: Who[] = ['mori', 'jenna', 'joshu', 'aroha'];
 
 export async function hands3dGallery() {
   const q = new URLSearchParams(location.search);
+  HANDS3D.debug = +(q.get('dbg') ?? 0);
   document.body.innerHTML = '';
   const bg = q.get('bg') ?? '#d9d9d9';
   document.body.style.cssText = `margin:0;background:radial-gradient(ellipse at 50% 40%, ${bg} 0%, #b8b8b8 100%);overflow:hidden;font:12px monospace;color:#222;`;
@@ -26,18 +27,21 @@ export async function hands3dGallery() {
   const scale = +(q.get('scale') ?? H / 26);
   let ctl: HandsController;
   const all = whoQ === 'all';
+  const multi = q.get('views') === '1';
   ctl = mountHands3d(stage, {
-    who: all ? 'mori' : (whoQ as Who), side: all ? 'right' : sideQ, grid: [W, H], scale: all ? H / 40 : scale, pixel,
+    who: all ? 'mori' : (whoQ as Who), side: all || multi ? 'right' : sideQ, grid: [W, H], scale: all || multi ? H / 40 : scale, pixel,
     lights: q.get('lights') ?? 'studio', outline: +(q.get('outline') ?? 0), outfit: q.get('outfit') ?? undefined,
   });
   if (all) for (const w of WHO.slice(1)) await ctl.add({ who: w, side: 'right', outfit: q.get('outfit') ?? undefined });
+  if (multi) for (let i = 0; i < 3; i++) await ctl.add({ who: whoQ as Who, side: 'right', outfit: q.get('outfit') ?? undefined });
+  const VIEWS = ['back', 'side', 'palm', 'thumb'];
   await ctl.ready;
   await Promise.all(ctl.hands.map(h => new Promise<void>(r => { const chk = () => (h.asset ? r() : setTimeout(chk, 50)); chk(); })));
   const hands = ctl.hands;
   ctl.plane(-90, 0.28, 0.25, '#202020');
   const place = (h: Hand, i: number, n: number, x = 0, y = 0, z = 0) => {
     const cx = n > 1 ? W * (0.16 + 0.68 * (i / (n - 1))) : h.side === 'left' && sideQ === 'both' ? W * 0.3 : sideQ === 'both' ? W * 0.7 : W * 0.5;
-    const cy = H * 0.42;
+    const cy = H * +(q.get('cy') ?? 0.42);
     h.shoulderAt(cx + (h.side === 'left' ? -W * 0.04 : W * 0.04), H * 1.9, 30);
     const dirs: Record<string, [number[], number[]]> = {
       back: [[0, -1, 0], [0, 0.05, -1]],
@@ -46,10 +50,16 @@ export async function hands3dGallery() {
       grip: [[h.side === 'left' ? 1 : -1, -0.25, 0.2], [0, 1, 0.1]],
       down: [[h.side === 'left' ? 0.3 : -0.3, 0.1, -1], [0, 1, 0]],
     };
-    const [f, p] = dirs[view] ?? dirs.back;
+    dirs.thumb = [[0, -1, 0], [h.side === 'left' ? -1 : 1, 0, 0.15]];
+    const [f, p] = dirs[multi ? VIEWS[i] : view] ?? dirs.back;
     h.reachTo(cx + x, cy + y, 40 + z, { with: 'palm', fingers: f as [number, number, number], palm: p as [number, number, number] });
   };
   hands.forEach((h, i) => { place(h, i, hands.length); h.setPose((q.get('pose') ?? 'relaxed') as PoseName); h.snap(); });
+  // joint overrides: joints=tflex:30;tabd:0;index.pip:90
+  for (const kv of (q.get('joints') ?? '').split(';').filter(Boolean)) {
+    const [k, v] = kv.split(':');
+    hands.forEach(h => h.setJoint(k, +v));
+  }
   // ---- controls
   const bar = document.createElement('div');
   bar.style.cssText = 'position:fixed;left:8px;top:8px;display:flex;flex-wrap:wrap;gap:4px;max-width:96vw;z-index:5';
