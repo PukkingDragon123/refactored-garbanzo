@@ -306,6 +306,7 @@ const CSS = `
 .rm11 .here i { position: absolute; left: -9px; top: -24px; width: 20px; height: 26px; background-size: 200% 100%; image-rendering: pixelated; animation: rmBob 2.4s ease-in-out infinite; }
 .rm11 .here b { position: absolute; right: 14px; top: -22px; transform: rotate(-4deg); font: 700 16px ${HAND}; color: #b0281e; white-space: nowrap; text-shadow: 0 0 2px #f6ead0, 0 0 4px #f6ead0; }
 .rm11 .here b::after { content: ' →'; }
+.rm11 .here.far b { display: none; }
 @keyframes rmBreath { 0%, 100% { transform: scale(0.82); opacity: 0.95; } 50% { transform: scale(1.18); opacity: 0.45; } }
 @keyframes rmBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
 .rm11 .walker { width: 0; height: 0; }
@@ -365,6 +366,7 @@ const CSS = `
   .rm11 .tools button { width: 42px; height: 42px; }
   .rm11 .top .pz-tab { font-size: 1.05em !important; }
   .rm11 .top .st { font-size: 0.86em; }
+  .rm11 .top .st .dn { display: none; }
   .rm11 .top { left: 10px; transform: none; gap: 0.4em; }
   .rm11 .lbl { font-size: 17px; }
   .rm11 .lbl.sm { font-size: 14px; }
@@ -412,7 +414,7 @@ export function openRegionMap(o: RegionMapOpts = {}): Promise<string | null> {
   const cur = currentExpedition();
   const hour0 = cur ? expeditionHour() : game.save.vars['v10:hour'] ?? 7.5;
   const header = (h = hour0, e = energy(), to?: number) => {
-    st.innerHTML = `Day ${dayNumber()} · ${clockText(h)}${to !== undefined ? ` <em>→ ${clockText(to)}</em>` : ''} · <i>Energy ${Math.round(e)}/${maxEnergy()}</i>`;
+    st.innerHTML = `<span class="dn">Day ${dayNumber()} · </span>${clockText(h)}${to !== undefined ? ` <em>→ ${clockText(to)}</em>` : ''} · <i>Energy ${Math.round(e)}<span class="dn">/${maxEnergy()}</span></i>`;
   };
   header();
   // ---- legend
@@ -541,7 +543,7 @@ export function openRegionMap(o: RegionMapOpts = {}): Promise<string | null> {
     const showSub = scale >= 1.9;
     for (const l of labs) {
       const sx = ox + l.x * scale + l.dx, sy = oy + l.y * scale + l.dy;
-      let vis = scale >= l.min && (l.max === undefined || scale <= l.max) && sx > -300 && sx < vw + 300 && sy > -80 && sy < vh + 80 && sx < u + 40;
+      let vis = scale >= l.min && (l.max === undefined || scale <= l.max) && !(l.scaled && l.scaled * scale * 0.5 < 9) && sx > -300 && sx < vw + 300 && sy > -80 && sy < vh + 80 && sx < u + 40;
       if (vis && l.region && live) vis = live.stateAt(l.region[0], l.region[1]) === 3;
       if (vis && l.pri !== undefined && l.w && l.h) {
         const hh = l.h * (l.sub && showSub ? 1.8 : 1);
@@ -559,18 +561,21 @@ export function openRegionMap(o: RegionMapOpts = {}): Promise<string | null> {
       } else l.el.style.transform = `translate(${Math.round(sx)}px, ${Math.round(sy)}px) translateX(-50%)${l.rot ? ` rotate(${l.rot}deg)` : ''}`;
       l.el.classList.toggle('sel', !!l.loc && !!sel && sel.loc === l.loc && sel.t.at === undefined);
     }
+    // pins shrink with the sheet when it is zoomed far out (a phone's whole-island view)
+    const pk = clamp(scale / 1.35, 0.5, 1);
     for (const p of pins) {
       const sx = ox + p.x * scale, sy = oy + p.y * scale;
       const vis = scale >= p.min && sx > -60 && sx < vw + 60 && sy > -60 && sy < vh + 80 && sx < u;
       p.el.style.display = vis ? '' : 'none';
-      if (vis) p.el.style.transform = `translate(${Math.round(sx)}px, ${Math.round(sy)}px)`;
+      if (vis) p.el.style.transform = `translate(${Math.round(sx)}px, ${Math.round(sy)}px)${pk < 1 ? ` scale(${pk.toFixed(2)})` : ''}`;
       p.el.classList.toggle('sel', p === sel);
       p.el.classList.toggle('hov', p === hov && p !== sel);
     }
     if (hereP) {
       const sx = ox + hereP[0] * scale, sy = oy + hereP[1] * scale;
       hereEl.style.display = sx < u && !trip ? '' : 'none';
-      hereEl.style.transform = `translate(${Math.round(sx)}px, ${Math.round(sy)}px)`;
+      hereEl.style.transform = `translate(${Math.round(sx)}px, ${Math.round(sy)}px)${pk < 1 ? ` scale(${pk.toFixed(2)})` : ''}`;
+      hereEl.classList.toggle('far', scale < 1.2);
     }
     if (trip && trip.walkerP) { walker.style.display = ''; walker.style.transform = `translate(${Math.round(ox + trip.walkerP[0] * scale)}px, ${Math.round(oy + trip.walkerP[1] * scale)}px)`; }
   };
