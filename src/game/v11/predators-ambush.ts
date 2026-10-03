@@ -36,6 +36,8 @@ import { TIGER_ID, TIGER_SPECIES } from './species-tiger';
 let running = false;
 /** is the ambush playing right now? (scene follower code can check this) */
 export const ambushRunning = () => running;
+/** the current beat, for tests (window.__ambBeat) */
+const beat = (b: string) => { (window as unknown as { __ambBeat?: string }).__ambBeat = b; };
 
 // ------------------------------------------------------------------ timing helpers
 /** wait in game time (slow motion stretches it) */
@@ -191,6 +193,7 @@ export async function tigerAmbush(o: AmbushOpts): Promise<void> {
   try {
     // ---- take the scene
     s.cutscene = true;
+    s.hud?.show(false);
     s.cam?.raise(false);
     ctl.sling.lower();
     p.vx = 0;
@@ -214,6 +217,10 @@ export async function tigerAmbush(o: AmbushOpts): Promise<void> {
     warmTiger();
     tiger = spawnTiger(s, x, { lurk: true, facing: toGroup });
     const T = tiger;
+    // it comes at the group but never past the spot in front of where Aroha lands
+    const stopX = p.x + dir * (34 + 78);
+    const adv = (d: number) => { T.x += toGroup * d; if ((T.x - stopX) * dir < 0) T.x = stopX; T.y = ground(T.x); };
+    const gy = ground(p.x);
     const tst = predState(T);
     tst.script = true;
     T.setAct('cine', 999);
@@ -223,9 +230,10 @@ export async function tigerAmbush(o: AmbushOpts): Promise<void> {
     glint.g = s.main.add(new EyeGlint(T));
 
     // ---- the hush
+    beat('hush');
     cineBars(true);
     const mid = (p.x + x) / 2;
-    void cineTo(st, { x: mid, y: s.camY - 6, zoom: 1.12, secs: 1.4 });
+    void cineTo(st, { x: mid, y: gy - 52, zoom: 1.12, secs: 1.4 });
     hush(true, 1.6);
     audio.setMusic('none');
     s.main.add(new Flock(x + dir * 30, ground(x) - 170, dir));
@@ -245,6 +253,7 @@ export async function tigerAmbush(o: AmbushOpts): Promise<void> {
     await waitGame(1.1);
 
     // ---- the mud bulges, two eyes come up
+    beat('bulge');
     void cineTo(st, { x: x - dir * 26, y: ground(x) - 44, zoom: 1.6, secs: 1.5, focus: 1 });
     audio.setHeartbeat(0.55);
     await during(1.5, (_d, k) => { wallow.bulge = ease(k) * 0.9; wallow.busy = 1; });
@@ -257,6 +266,7 @@ export async function tigerAmbush(o: AmbushOpts): Promise<void> {
     await during(0.9, (_d, k) => { wallow.bulge = 0.9 + Math.sin(k * 20) * 0.05; });
 
     // ---- ERUPTION
+    beat('erupt');
     wallow.bulge = 0;
     glint.g.on = 0;
     T.anim = 'emerge';
@@ -267,7 +277,7 @@ export async function tigerAmbush(o: AmbushOpts): Promise<void> {
     game.r.post.flash = 0.5;
     st.shake(7, 0.7);
     emitPred('ambush', { a: T });
-    void cineTo(st, { x: (p.x + x) / 2 + dir * 20, y: s.camY - 10, zoom: 1.3, secs: 0.22 });
+    void cineTo(st, { x: (p.x + x) / 2 + dir * 20, y: gy - 50, zoom: 1.3, secs: 0.22 });
     for (const a of [p.body, ...s.actors.values()]) {
       if (!a.visible) continue;
       a.react('jump');
@@ -279,19 +289,22 @@ export async function tigerAmbush(o: AmbushOpts): Promise<void> {
     await waitGame(animDur('emerge') * 0.92);
 
     // ---- the charge, and the freeze-frame
+    beat('charge');
     T.anim = 'charge';
     let v = 40;
-    await during(0.42, dt => { v = Math.min(150, v + 340 * dt); T.x += toGroup * v * dt; T.y = ground(T.x); T.vx = toGroup * v; });
+    await during(0.42, dt => { v = Math.min(150, v + 340 * dt); adv(v * dt); T.vx = toGroup * v; });
     cineSlowmo(0.04);
     const card = nameCard();
     void cineTo(st, { x: T.x + toGroup * 18, y: T.y - 34, zoom: 2.3, secs: 0.3, focus: 1 });
     sfx11('sting', { vol: 1 });
     card.show();
+    beat('card');
     await waitReal(2.5);
     await card.hide();
     cineSlowmo(0.32);
 
     // ---- Aroha flips in over everyone and lands in front
+    beat('flip');
     const land = p.x + dir * 34;
     const flipFrom = ar.x;
     ar.visible = true;
@@ -299,22 +312,25 @@ export async function tigerAmbush(o: AmbushOpts): Promise<void> {
     ar.faceTo(T.x);
     ar.play(anim7('flipBack', 'vault', 'jump'), anim7('landCrouch', 'crouch')).catch(() => {});
     audio.play('whoosh', { vol: 0.8, pitch: 0.9 });
-    void cineTo(st, { x: (land + T.x) / 2 - dir * 10, y: s.camY - 4, zoom: 1.65, secs: 0.6 });
+    void cineTo(st, { x: (land + T.x) / 2 - dir * 10, y: gy - 40, zoom: 1.65, secs: 0.6 });
     const flipDur = 0.5;
     await during(flipDur, (dt, k) => {
       ar!.x = flipFrom + (land - flipFrom) * ease(k);
+      ar!.y = ground(clamp(ar!.x, s.minX + 4, s.maxX - 4));
       ar!.oy = -Math.sin(k * Math.PI) * 46;
       // the tiger keeps coming, in slow motion
-      T.x += toGroup * 150 * dt; T.y = ground(T.x);
+      adv(70 * dt);
     });
     ar.oy = 0;
     ar.x = land;
+    ar.y = ground(land);
     ar.play(anim7('landCrouch', 'crouch'), anim7('slingReady', 'slingAim')).catch(() => {});
     st.shake(1.5, 0.15);
     for (let i = 0; i < 8; i++) s.main.particles.spawn({ frame: A.dot2, x: land + rand.range(-8, 8), y: ground(land) - 1, vx: rand.range(-50, 50), vy: rand.range(-40, -10), ay: 160, life: 0.6, color: [0.5, 0.42, 0.3], alpha: 0.8, alpha1: 0 });
     game.ui.bubbles.bark('aroha', 'OI! Not today!', { style: 'shout', expr: 'determined' } as never);
     cineSlowmo(0.6);
 
+    beat('volley');
     // ---- the volley: three pebbles to the brow, each one a flinch, then it skids to a stop
     let hits = 0;
     offs.push(onPredator((ev, info) => {
@@ -327,23 +343,25 @@ export async function tigerAmbush(o: AmbushOpts): Promise<void> {
       ar.idleAnim = anim7('slingDraw', 'slingAim');
       ar.setAnim(ar.idleAnim);
       if (ar.idleAnim === 'slingAim') ar.holdFrame = 1;
-      await during(0.13, dt => { T.x += toGroup * (hits ? 40 : 120) * dt; T.y = ground(T.x); });
+      await during(0.13, dt => adv((hits ? 30 : 90) * dt));
       ctl.aroha.shootAt(ar, T, 0.5);
       ar.setAnim(anim7('slingRelease', 'slingshot'));
       if (anim7('slingRelease', 'slingshot') === 'slingshot') ar.holdFrame = 2;
-      await during(0.2, dt => { T.x += toGroup * (hits ? 25 : 100) * dt; T.y = ground(T.x); if (T.anim === 'flinch' && tigerBody(T).done) T.anim = 'charge'; });
+      await during(0.2, dt => { adv((hits ? 20 : 70) * dt); if (T.anim === 'flinch' && tigerBody(T).done) T.anim = 'charge'; });
     }
     cineSlowmo(1);
-    await during(0.35, dt => { T.x += toGroup * 20 * dt; T.y = ground(T.x); });
+    await during(0.35, dt => adv(20 * dt));
     // it skids to a halt and roars in her face
+    beat('roar');
     T.anim = 'roar';
     tigerBody(T).restart();
     sfx11('tigerRoar', { x: T.x, vol: 1.1 });
     st.shake(3, 0.8);
-    void cineTo(st, { x: (ar.x + T.x) / 2, y: s.camY - 8, zoom: 1.55, secs: 0.5 });
+    void cineTo(st, { x: (ar.x + T.x) / 2, y: gy - 42, zoom: 1.55, secs: 0.5 });
     await waitGame(animDur('roar') * 0.7);
 
     // ---- the grenade: pepper smoke and crackers at its feet
+    beat('grenade');
     ar.holdFrame = null;
     ar.play(anim7('grenadeThrow', 'point'), anim7('slingReady', 'slingAim')).catch(() => {});
     await waitGame(0.22);
@@ -358,6 +376,7 @@ export async function tigerAmbush(o: AmbushOpts): Promise<void> {
     await waitGame(0.9);
 
     // ---- the retreat: back into the mud, a last glare, gone
+    beat('retreat');
     T.anim = 'retreat';
     sfx11('tigerGrowl', { x: T.x });
     const backTo = wallow.x;
@@ -379,8 +398,9 @@ export async function tigerAmbush(o: AmbushOpts): Promise<void> {
     hush(false, 3);
 
     // ---- everyone reacts
+    beat('talk');
     p.poseOverride = anim7('sitShock', 'scared');
-    void cineTo(st, { x: (p.x + ar.x) / 2, y: s.camY - 6, zoom: 1.35, secs: 0.8 });
+    void cineTo(st, { x: (p.x + ar.x) / 2, y: gy - 46, zoom: 1.35, secs: 0.8 });
     const lines: { who: string; text: string; expr?: string; style?: 'shout' | 'whisper' | 'say'; onShow?: () => void; auto?: number }[] = [];
     lines.push({ who: p.id, text: 'W-w-what... WHAT was THAT?!', expr: 'shocked', style: 'shout' });
     if (s.actors.get('jenna')?.visible) lines.push({ who: 'jenna', text: 'It had a FOREHEAD. Why did the mud monster have a forehead?!', expr: 'shocked' });
@@ -428,6 +448,7 @@ export async function tigerAmbush(o: AmbushOpts): Promise<void> {
     if (buddy && held.buddyMode !== null) buddy.release();
     ctl.aroha.script = false;
     s.cutscene = false;
+    s.hud?.show(true);
     // a stand-in Aroha heads off again
     if (spawnedAroha && ar) {
       const a = ar;
@@ -435,6 +456,7 @@ export async function tigerAmbush(o: AmbushOpts): Promise<void> {
       a.walkTo(a.x + toGroup * 260, 90, 'run').then(() => { a.visible = false; }).catch(() => {});
     }
     emitPred('ambushEnd', { a: tiger });
+    beat('done');
     running = false;
   }
 }
