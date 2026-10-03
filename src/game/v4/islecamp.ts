@@ -298,7 +298,7 @@ export class IsleCamp {
         { who: 'joshu', text: 'JENNA!', expr: 'shocked', style: 'shout', close: false, auto: 700 },
         { who: 'mori', text: 'CHUNK! Come on!', expr: 'shocked', style: 'shout', close: false, auto: 800 },
       ]);
-      // everyone runs for the wreck: Mori flat out, Joshu hobbling as fast as one good leg allows
+      // everyone runs for the wreck: Mori flat out, Joshu forgetting all about his ankle
       const goal = CAMP.salvage + 230;
       jo.walkAnim = 'run';
       void jo.walkTo(goal + 46, 96, 'run');

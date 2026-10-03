@@ -171,8 +171,13 @@ export class GroundCover implements Drawable {
         if (m === p && Math.abs(m.vx) > 20) touched++;
       }
       const wind = Math.sin(st.time * 1.3 + t.ph) * (0.4 + st.wind) * t.h * 0.03;
-      t.vel += ((push + wind) - t.bend) * 38 * dt - t.vel * 5.5 * dt;
-      t.bend += t.vel * dt;
+      // (sub-stepped so long frames can't blow the spring up)
+      const n = Math.min(8, Math.ceil(dt / 0.02)), h = dt / n, tgt = push + wind;
+      for (let s = 0; s < n; s++) {
+        t.vel += (tgt - t.bend) * 38 * h - t.vel * 5.5 * h;
+        t.bend += t.vel * h;
+      }
+      if (!(Math.abs(t.bend) < 24)) { t.bend = Math.max(-24, Math.min(24, t.bend || 0)); t.vel = 0; }
     }
     this.rustleT -= dt;
     if (touched > 0 && this.rustleT <= 0 && p) { this.rustleT = rand.range(0.35, 0.7); audio.play('rustleBush', { vol: Math.min(0.35, 0.12 + touched * 0.05), pitch: rand.range(0.9, 1.2) }); }
