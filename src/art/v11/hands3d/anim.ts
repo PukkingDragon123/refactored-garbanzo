@@ -38,7 +38,7 @@ export function basePose(name: PoseName, o: PoseParams = {}): Pose {
     case 'flat': return build([[0, -1, 2, 0], [0, 0, 2, 0], [0, 1, 2, 0], [1, 2, 2, 0]], [0, 10, 0, 0, 0], 0);
     case 'spread': return build([[-4, -14, 3, 2], [-3, -4, 3, 2], [-3, 7, 4, 3], [-2, 17, 5, 4]], [-6, 42, 0, -4, -6], 0);
     case 'wave': return build([[-2, -12, 4, 2], [-2, -3, 4, 2], [-2, 6, 5, 3], [-1, 15, 6, 4]], [-4, 36, 2, -2, -4], 0);
-    case 'fist': return build([[86 + f * 6, 0, 102, 66], [88 + f * 6, 0, 104, 68], [90 + f * 4, 0, 104, 68], [92 + f * 4, 2, 102, 66]], [30, 22, 26, 20, 12], 0.9);
+    case 'fist': return build([[86 + f * 6, 0, 102, 66], [88 + f * 6, 0, 104, 68], [90 + f * 4, 0, 104, 68], [92 + f * 4, 2, 102, 66]], [42, 20, 20, 42, 30], 0.9);
     case 'point': return build([[4, -2, 6, 3], [84, 0, 98, 60], [86, 1, 100, 62], [88, 3, 98, 60]], [30, 14, 30, 34, 26], 0.8);
     case 'press': return build([[22, -2, 26, 8], [70, 0, 92, 56], [76, 1, 96, 58], [80, 3, 94, 58]], [26, 16, 28, 30, 22], 0.7);
     case 'tap': return build([[16, -2, 20, 10], [40, 0, 56, 30], [46, 1, 62, 34], [52, 3, 64, 36]], [16, 22, 18, 18, 14], 0.4);
@@ -148,8 +148,8 @@ function intoPalm(rig: Rig, k: number, pts: V3[], from: number) {
   for (let i = Math.max(1, from); i < 4; i++) {
     const q = pts[i];
     if (q[1] > top || q[1] < 0.6 * s || Math.abs(q[0]) > 4.2 * s) continue;
-    const r = i === 3 ? rig.rad[FINGERS[k][2]][1] * 0.8 : rig.rad[FINGERS[k][Math.min(2, i)]][0] * 0.9;
-    if (q[2] - r < palmZ(rig, q[0], q[1])) return true;
+    const r = i === 3 ? rig.rad[FINGERS[k][2]][1] * 0.3 : rig.rad[FINGERS[k][Math.min(2, i)]][0] * 0.5;
+    if (q[2] + r > palmZ(rig, q[0], q[1]) && q[2] < 1.2 * s) return true;
   }
   return false;
 }
@@ -157,7 +157,7 @@ function intoPalm(rig: Rig, k: number, pts: V3[], from: number) {
 export function curlToPalm(rig: Rig, k: number, p: Pose, max: [number, number, number]) {
   const pts: V3[] = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]];
   const dm = fdof(k, 0), dp = fdof(k, 2), dd = fdof(k, 3);
-  const set = (t: number) => { p[dm] = max[0] * Math.min(1, t * 1.15); p[dp] = max[1] * t; p[dd] = max[2] * Math.max(0, t * 1.2 - 0.2); };
+  const set = (t: number) => { p[dm] = max[0] * Math.min(1, t * 1.35); p[dp] = max[1] * t; p[dd] = max[2] * Math.max(0, t * 1.2 - 0.2); };
   const hits = (t: number) => { set(t); fingerJoints(rig, k, p, pts); return intoPalm(rig, k, pts, 1); };
   let a = 0, b = 1;
   if (!hits(1)) { set(1); return; }
@@ -345,7 +345,7 @@ export class HandAnim {
       // the curled fingers close until they meet the palm; the thumb then rests across them
       const fp = basePose(nm, main.o);
       for (let k = nm === 'point' ? 1 : 0; k < 4; k++) curlToPalm(this.rig, k, T, [fp[fdof(k, 0)], fp[fdof(k, 2)], fp[fdof(k, 3)]]);
-      if (nm === 'fist') wrapThumb(this.rig, T, curledFront(this.rig, T));
+      void curledFront;
     }
     const solveGrip = this.handle || nm === 'grip' || nm === 'pour' || nm === 'crank' || nm === 'pullCord';
     if (solveGrip && (main?.w ?? 0) > 0.35) {
