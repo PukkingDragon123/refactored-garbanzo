@@ -784,7 +784,7 @@ registerAnim7('placate', { ...A7(8, 6, true), talk: 'placate' }, (b, t) => placa
 const WOOD: Ramp6 = R6('#3a2410', '#6e4a26', '#9a7040', '#c49a62', '#dcb882', '#f2d8a8');
 const BARK: Ramp6 = R6('#1a1410', '#342a22', '#4e4234', '#665a48', '#7e735e', '#9a8e78');
 const RUBBER = { slack: hex('#4a1410'), base: hex('#7a2018'), taut: hex('#b8443a'), hi: hex('#d86a52') };
-const STONE: Ramp6 = R6('#1a1a1e', '#34343a', '#55555c', '#76767e', '#9a9aa2', '#c4c4ca');
+const STONE: Ramp6 = R6('#2a2a2e', '#5a5a62', '#8a8a92', '#b4b4bc', '#d8d8de', '#f4f4f8');
 const FIRE = { edge: hex('#8a2a0e'), core: hex('#ff8a2a'), hot: hex('#ffd060'), white: hex('#fff6d0') };
 const GS = 17; // the prop's ink group
 
@@ -864,7 +864,7 @@ function drawCombatProps(s: Scene3D, J: J3, P: Pose, ch: Char7): ((back: PixelBu
   }
   // a stone in the draw hand (reloading) or tossed up over it (the idle)
   if (f.st === 2 || (f.ts !== undefined && f.ts >= 0)) {
-    const at = vadd(along(J.wrN, J.elN, 1.9, k), [0, f.st === 2 ? 0.4 : (f.ts ?? 0) + 1.2, 0.8]);
+    const at = vadd(along(J.wrN, J.elN, 1.9, k), f.st === 2 ? [0, 0.4, 0.8] : [1.2 + (f.ts ?? 0) * 0.18, (f.ts ?? 0) + 1.2, 0.8]);
     s.layer = high(at, 5);
     s.ellipsoid(at, [0.66, 0, 0], [0, 0.6, 0], [0, 0, 0.66], GS + 1, stoneMat(f.st === 2 ? f.fs ?? 0 : 0));
     s.layer = layer0;

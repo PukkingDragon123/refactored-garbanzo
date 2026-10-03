@@ -377,12 +377,12 @@ function idle(b: Build, t: number): Pose {
   const hip = p.hip;
   // the near hand on her hip (elbow out), or out in front for the toss
   const onHip: [number, number] = [hip[0] + 0.5 * k, hip[1] + 2.4 * k];
-  const tossAt: [number, number] = [hip[0] + 4.6 * k, hip[1] + 5.6 * k + flick * 1.6 * k - catchK * 1.4 * k];
+  const tossAt: [number, number] = [hip[0] + 6.2 * k, hip[1] + 5.6 * k + flick * 1.6 * k - catchK * 1.4 * k];
   const u = smooth(toss * 1.25);
   p.fa = { ik: [onHip[0] + (tossAt[0] - onHip[0]) * u, onHip[1] + (tossAt[1] - onHip[1]) * u], hand: toss > 0.4 ? (flick > 0.3 ? 'open' : 'grip') : 'fist' };
   // the far arm loose, a little sway
   p.ba = { a: -0.06 + sh * 0.04, e: 0.32 + br * 0.04, hand: 'relax' };
-  p.flags = { aoN: 2.5 * (1 - u), sx: 0.55 * k * sh, ts: toss > 0.35 ? fl * 9 * k : -1 };
+  p.flags = { aoN: 2.5 * (1 - u), sx: 0.55 * k * sh, ts: toss > 0.35 ? fl * 13 * k : -1 };
   // eyes on the tree line; a glance up at the stone at the top of its flight; a cocky tilt after the catch
   p.look = fl > 0.45 ? 'up' : 'fwd';
   p.hd = [0.25 * k + catchK * 0.3 * k, -0.15 * k * catchK];
