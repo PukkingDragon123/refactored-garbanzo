@@ -80,7 +80,13 @@ async function boot() {
     /** the salvaged laptop on the island (needs flag v9:laptop for the HUD button / L key) */
     fieldLaptop: async () => (await import('./game/v9/research9')).openFieldLaptop(game.scene as never),
     noodles: async () => (await import('./ui/v4/noodles')).runNoodleGame(),
-    standoff: async () => { const a = await import('./game/v4/islearoha'); return (await import('./ui/v6/standoff')).runNegotiation(a.ROUNDS, a.EXTRA); },
+    /** the Aroha standoff: on the beach where Mori stands (island scene), else the old full-screen close-up */
+    standoff: async () => {
+      const a = await import('./game/v4/islearoha');
+      const st = (game.scene as unknown as { story?: { s?: { aroha?: unknown } } } | null)?.story;
+      if (st?.s?.aroha) return a.standoffOnly(st as never);
+      return (await import('./ui/v6/standoff')).runNegotiation(a.ROUNDS, a.EXTRA);
+    },
     ramen: async () => (await import('./ui/v6/ramen')).runRamenPour(),
     engine: async () => (await import('./ui/v6/engine')).runEngineRepair({}),
     /** stand Mori at the stern (ship scene) and go fishing; resolves with the catch or null (window.__fish) */
