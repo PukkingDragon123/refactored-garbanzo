@@ -1,10 +1,14 @@
-// V10 body HUD: an ENERGY bar on top of the portrait's gold-trimmed bars, the PACK bar turned into a
-// weight readout (kg / capacity), ailment chips (SICK / DIZZY), and the low-energy screen-edge dim.
-// Shown on expeditions (see v10/energy.ts onExpedition); Hud2 mounts it and ticks it.
+// V11 body HUD: no bars. On expeditions Mori's state shows on Mori and around the edge of the
+// screen: when he runs low he sweats (an emote now and then) and breathes hard (energy.ts plays the
+// breathing), the screen edge darkens and pulses, and a small canteen appears in the corner with
+// what's left in it (click it, or press H, for a snack). An overloaded pack shows as a pencilled
+// note by the canteen; a stomach ache or dizziness tints the edge of the screen (and gets a note).
+// Hud2 mounts it and ticks it.
 
 import { el } from '../ui';
 import { game } from '../../game/game';
 import { energy, maxEnergy, packWeight, packCapacity, onExpedition, lowness, hasAilment, dizziness, onSpend, EAT_KEY } from '../../game/v10/energy';
+import { svgInk, roughRect, roughLine } from '../v11/paper';
 
 const CSS = `
 .h2 .v10dim { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.6s;
@@ -15,24 +19,6 @@ const CSS = `
 .h2 .v10dim i.dizzy { background: radial-gradient(ellipse 80% 75% at 50% 50%, transparent 55%, rgba(120, 60, 160, 0.32) 100%); animation: v10Swirl 3.2s ease-in-out infinite; }
 @keyframes v10Breath { 50% { filter: brightness(1.35); transform: scale(0.985); } }
 @keyframes v10Swirl { 0%, 100% { transform: translate(-1.5%, 0.5%) scale(1.02); } 50% { transform: translate(1.5%, -0.5%) scale(1.04); } }
-.h2 .who .bars small.v10en { pointer-events: auto; cursor: pointer; display: flex; align-items: center; gap: 0.35em; }
-.h2 .who .bars small.v10en b { font-weight: 400; color: #fff6d0; min-width: 1.6em; }
-.h2 .who .bars small .v10k { display: inline-grid; place-items: center; min-width: 1.35em; height: 1.35em; padding: 0 0.2em; background: #ffe9a8; color: #2a1408; text-shadow: none; box-shadow: 0 2px 0 #a87410; font-size: 0.85em; margin-left: auto; margin-right: 0.3em; }
-body.touchmode .h2 .who .bars small .v10k { display: none; }
-.h2 .who .bars small .v10st { padding: 0 0.35em; font-size: 0.85em; color: #fff; text-shadow: none; box-shadow: 0 0 0 1px #1a0e06; }
-.h2 .who .bars small .v10st.sick { background: #6a8a1c; }
-.h2 .who .bars small .v10st.dizzy { background: #7a3aa8; animation: v10Wob 0.9s ease-in-out infinite; }
-@keyframes v10Wob { 25% { transform: rotate(-6deg); } 75% { transform: rotate(6deg); } }
-.h2 .who .bars i.v10e::after { background: linear-gradient(#e2fa96 0 35%, #8ac83a 35% 75%, #5a9a2a 75%); }
-.h2 .who .bars i.v10e.mid::after { background: linear-gradient(#ffe48a 0 35%, #e8a830 35% 75%, #b87a18 75%); }
-.h2 .who .bars i.v10e.low::after { background: linear-gradient(#ff9a7a 0 35%, #e0442e 35% 75%, #a8281a 75%); }
-.h2 .who .bars i.v10e.low { animation: v10Low 0.8s steps(2) infinite; }
-.h2 .who .bars i.v10e.hit { box-shadow: 0 0 0 2px #1a0e06, 0 0 0 4px #ff5a3a, 0 0 0 6px #1a0e06; }
-@keyframes v10Low { 50% { box-shadow: 0 0 0 2px #1a0e06, 0 0 0 4px #ff6a4a, 0 0 0 6px #1a0e06, 0 0 10px 4px rgba(255, 80, 50, 0.55); } }
-.h2 .who .bars i.v10w::after { background: linear-gradient(#ffe2a0 0 35%, #d8a050 35% 75%, #a8743a 75%); }
-.h2 .who .bars i.v10w.over::after { background: linear-gradient(#ff9a7a 0 35%, #e0442e 35% 75%, #a8281a 75%); }
-.h2 .who .bars i.v10w.over { animation: v10Low 1.2s steps(2) infinite; }
-.h2 .who .bars small.v10over { color: #ffb3a4; }
 `;
 
 let styled = false;
@@ -42,77 +28,75 @@ export function setBodyHud(m: 'auto' | 'always' | 'never') { mode = m; }
 const shown = () => (mode === 'always' ? true : mode === 'never' ? false : onExpedition());
 
 export interface BodyHud {
-  /** the PACK bar shows weight right now (Hud2 then leaves it alone) */
+  /** (kept for the V2 API: the pack readout is the canteen note now) */
   ownsPack(): boolean;
   update(dt: number): void;
   destroy(): void;
 }
 
-/** add the energy / weight rows to Hud2's portrait bars (who) and the dim overlay to its root */
-export function mountBodyHud(root: HTMLElement, who: HTMLElement): BodyHud {
+/** a canteen drawn in ink with the water level showing through */
+function canteenSvg(level: number): string {
+  const top = 12 + (1 - level) * 30;
+  return svgInk(30, 48, [
+    { d: `M6 ${top.toFixed(1)} L24 ${top.toFixed(1)} L24 43 Q15 46 6 43 Z`, c: 'none', fill: 'rgba(90,160,220,0.75)', w: 0 },
+    { d: roughRect(4, 9, 22, 36, { seed: 3, double: false, rough: 0.8 }), c: '#f4e6c4', w: 2.2 },
+    { d: roughRect(10, 2, 10, 7, { seed: 5, double: false, rough: 0.5 }), c: '#f4e6c4', w: 2 },
+    { d: roughLine(4, 22, 26, 22, { seed: 7, double: false }) + roughLine(4, 34, 26, 34, { seed: 9, double: false }), c: '#f4e6c4', w: 1, opacity: 0.5 },
+  ]);
+}
+
+/** add the canteen and the edge dim to the HUD root */
+export function mountBodyHud(root: HTMLElement, _who?: HTMLElement): BodyHud {
   if (!styled) { document.head.appendChild(el('style', '', CSS)); styled = true; }
-  const bars = who.querySelector('.bars') as HTMLElement;
   const dim = root.insertBefore(el('div', 'v10dim', '<i class="sick"></i><i class="dizzy"></i>'), root.firstChild);
-  const lab = el('small', 'v10en', `ENERGY <b>100</b><span class="v10s"></span><span class="v10k">${EAT_KEY.replace('Key', '')}</span>`);
-  lab.title = `Eat a snack (${EAT_KEY.replace('Key', '')})`;
-  const bar = el('i', 'v10e');
-  bars.insertBefore(bar, bars.firstChild);
-  bars.insertBefore(lab, bar);
-  lab.addEventListener('pointerdown', e => { e.stopPropagation(); if (!game.ui.blocking) void import('../../game/v10/forage10').then(m => m.quickEat()); });
-  const packLab = bars.querySelector('small:not(.v10en)') as HTMLElement | null;
-  const packBar = bars.querySelector('i.a') as HTMLElement | null;
-  const num = lab.querySelector('b') as HTMLElement, st = lab.querySelector('.v10s') as HTMLElement;
+  const can = root.appendChild(el('div', 'hm-can pp-hand', '<div class="bottle"></div><span></span>'));
+  can.title = `Eat a snack (${EAT_KEY.replace('Key', '')})`;
+  can.addEventListener('pointerdown', e => { e.stopPropagation(); if (!game.ui.blocking) void import('../../game/v10/forage10').then(m => m.quickEat()); });
+  const bottle = can.querySelector('.bottle') as HTMLElement, label = can.querySelector('span') as HTMLElement;
   const sick = dim.querySelector('.sick') as HTMLElement, dizzy = dim.querySelector('.dizzy') as HTMLElement;
-  let on: boolean | null = null, hitT = 0, t = 1, keyStatus = '';
-  const off = onSpend(n => { if (n >= 4) hitT = 0.6; });
-  const vis = (v: boolean) => {
-    lab.style.display = bar.style.display = v ? '' : 'none';
-    if (!v) {
-      dim.style.opacity = '0';
-      if (packLab) { packLab.textContent = 'PACK'; packLab.classList.remove('v10over'); }
-      packBar?.classList.remove('v10w', 'over');
-    } else packBar?.classList.add('v10w');
-  };
+  let on: boolean | null = null, t = 1, sweatT = 3, lastLvl = -1, lastLab = '';
+  const off = onSpend(n => { if (n >= 4) can.animate([{ transform: 'translateX(-3px)' }, { transform: 'translateX(3px)' }, { transform: 'none' }], { duration: 220 }); });
   return {
-    ownsPack: () => !!on,
+    ownsPack: () => false,
     update(dt: number) {
       t += dt;
-      hitT = Math.max(0, hitT - dt);
       const now = shown();
-      if (now !== on) { on = now; vis(now); t = 1; }
+      if (now !== on) { on = now; if (!now) { dim.style.opacity = '0'; can.classList.remove('on'); } t = 1; }
       if (!on) return;
-      bar.classList.toggle('hit', hitT > 0);
-      // the dim and ailment tints follow every frame (cheap); the numbers four times a second
+      // the edge of the screen darkens and breathes as he tires; ailments tint it
       const low = lowness();
       dim.style.opacity = (low > 0 ? 0.25 + low * 0.75 : 0).toFixed(3);
       dim.classList.toggle('pulse', low > 0.55);
       sick.style.opacity = hasAilment('stomach') ? '1' : '0';
       dizzy.style.opacity = Math.min(1, dizziness() * 1.4).toFixed(2);
+      // sweat drops on Mori when he's worn out
+      if (low > 0.25) {
+        sweatT -= dt;
+        if (sweatT <= 0) {
+          sweatT = 6 - low * 3 + Math.random() * 2;
+          const p = (game.scene as unknown as { player?: { body?: { showEmote?(e: string, t?: number): void } }; cutscene?: boolean } | null);
+          if (p && !p.cutscene && !game.ui.blocking) p.player?.body?.showEmote?.('sweat', 1.2);
+        }
+      }
       if (t < 0.25) return;
       t = 0;
-      const e = energy(), m = maxEnergy(), f = e / m;
-      num.textContent = String(Math.ceil(e));
-      bar.style.setProperty('--v', `${Math.round(f * 100)}%`);
-      bar.classList.toggle('mid', f < 0.5 && f >= 0.25);
-      bar.classList.toggle('low', f < 0.25);
-      const ks = (hasAilment('stomach') ? 's' : '') + (hasAilment('dizzy') ? 'd' : '');
-      if (ks !== keyStatus) {
-        keyStatus = ks;
-        st.innerHTML = (ks.includes('s') ? '<span class="v10st sick">SICK</span>' : '') + (ks.includes('d') ? '<span class="v10st dizzy">DIZZY</span>' : '');
-      }
+      const f = energy() / maxEnergy();
       const w = packWeight(), cap = packCapacity();
-      if (packLab) {
-        packLab.textContent = `${w > cap ? 'OVERLOADED' : 'PACK'} ${w.toFixed(1)}/${cap} kg`;
-        packLab.classList.toggle('v10over', w > cap);
-      }
-      if (packBar) {
-        packBar.style.setProperty('--v', `${Math.round(Math.min(1, w / cap) * 100)}%`);
-        packBar.classList.toggle('over', w > cap);
-      }
+      const over = w > cap;
+      const ail = hasAilment('stomach') ? 'tummy ache' : hasAilment('dizzy') ? 'dizzy' : '';
+      // the canteen only comes out when it's needed
+      const need = f < 0.35 || over || !!ail;
+      can.classList.toggle('on', need);
+      can.classList.toggle('crit', f < 0.15);
+      const lvl = Math.round(f * 20) / 20;
+      if (lvl !== lastLvl) { lastLvl = lvl; bottle.innerHTML = canteenSvg(Math.max(0.04, Math.min(1, f / 0.5))); }
+      const lab = `${f < 0.35 ? `running low <span class="key">${EAT_KEY.replace('Key', '')}</span> eat` : ''}${over ? `<span class="hm-ail">pack too heavy (${w.toFixed(1)}/${cap} kg)</span>` : ''}${ail ? `<span class="hm-ail">${ail}</span>` : ''}`;
+      if (lab !== lastLab) { lastLab = lab; label.innerHTML = lab; }
     },
     destroy() {
       off();
       dim.remove();
+      can.remove();
     },
   };
 }

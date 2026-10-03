@@ -146,6 +146,9 @@ async function boot() {
     paper: async () => (await import('./ui/v11/paper/demo')).paperDemo(),
     /** V11 the Zealandia Encyclopedia book (optionally at an entry: 'sp:glasscrab', 'cat:flora') */
     ency: async (key?: string) => (await import('./ui/v11/encybook')).openEncyclopedia({ key }),
+    /** V11 Mori's field journal (quests), the camp board */
+    journal: async (id?: string) => (await import('./ui/v11/journalbook')).openJournal({ quest: id }),
+    board: async () => (await import('./ui/v10/campboard')).openBoard(),
     /** dev: document the first n species (stand-in photos) so the encyclopedia has pages */
     devDoc: async (n = 8) => {
       const d = await import('./debug/devpoints');

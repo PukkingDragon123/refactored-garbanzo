@@ -189,8 +189,10 @@ const CSS = `
 .ppb-tab.left { border-radius: 0.45em 0 0 0.45em; box-shadow: -0.12em 0.15em 0.25em rgba(0,0,0,0.35); }
 .ppb-tab:hover { transform: translateX(0.25em); } .ppb-tab.left:hover { transform: translateX(-0.25em); }
 .ppb-tab.on { filter: brightness(1.08); }
-.ppb-tab img { width: 1.5em; height: 1.5em; image-rendering: pixelated; }
-.ppb-tab span { writing-mode: vertical-rl; font-size: 0.85em; letter-spacing: 0.08em; line-height: 1; white-space: nowrap; }
+.ppb-tab { overflow: hidden; }
+.ppb-tab img { width: 1.25em; height: 1.25em; image-rendering: pixelated; flex: none; }
+.ppb-tab span { writing-mode: vertical-rl; font-size: 0.72em; letter-spacing: 0.04em; line-height: 1; white-space: nowrap; }
+.ppb-tab.tight img { display: none; }
 .ppb-tab .nw { position: absolute; top: -0.35em; right: -0.25em; width: 0.8em; height: 0.8em; border-radius: 50%; background: #c8321e; box-shadow: 0 0 0 0.12em #f8ecd0; }
 /* ribbons */
 .ppb-rib { position: absolute; width: 1.05em; z-index: 9; cursor: pointer; pointer-events: auto; transition: left 0.3s, height 0.3s;
@@ -520,7 +522,7 @@ export function openBook(o: BookOpts): BookHandle {
         const si = secIndex(t.section);
         // a tab is glued to its section's first page: once that page is turned it sits on the left
         const left = spread && si >= 0 && si <= curS;
-        const e = el('div', `ppb-tab pp-pix${left ? ' left' : ''}${tabOf(sections[curS]) === t.id ? ' on' : ''}`);
+        const e = el('div', `ppb-tab pp-pix${left ? ' left' : ''}${tabOf(sections[curS]) === t.id ? ' on' : ''}${th < parseFloat(book.style.fontSize) * (1.9 + t.label.length * 0.62) ? ' tight' : ''}`);
         e.style.background = `${paperTex('card')} 0 0 / 256px, ${t.color}`;
         e.style.backgroundBlendMode = 'multiply';
         e.style.top = `${top + i * (span / n)}px`;
