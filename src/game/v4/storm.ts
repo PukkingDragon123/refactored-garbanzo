@@ -22,6 +22,7 @@ import { A } from '../assets';
 import { GiantWave } from './giantwave';
 import { HMAX } from '../../art/giantwave';
 import { climbFrame } from '../../art/ladder';
+import { cinePunch, cineSlowmo, cineBlackout, cineState } from '../v11/cine';
 
 const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 const F = () => game.save.flags;
@@ -211,6 +212,7 @@ async function stormIntro(s: ShipScene4) {
   s.jolt = 0.22;
   s.st.shake(10, 1.4);
   game.r.post.flash = 1;
+  void cinePunch({ zoom: 0.1, blur: 1, secs: 0.7, x: p.x, y: p.y - 30, stage: s.st });
   s.power = 0;
   p.body.react('jump');
   p.body.setExpr('shocked', 2);
@@ -519,6 +521,9 @@ export async function rogueWave(s: ShipScene4) {
   addAt('wave-back', s.st.layers.findIndex(x => x.name === 'main')).add(new Custom(0, rr => wave.drawBack(rr)));
   addAt('wave-front', s.st.layers.findIndex(x => x.name === 'sea-near') + 1).add(new Custom(0, rr => wave.drawFront(rr)));
   game.ui.letterbox(true);
+  // a cinematic lens on the wide shot: the boat (the gameplay plane) sharp, the far sea and the curl softer
+  cineState.focus = 1;
+  cineState.dof = 0.6;
   const cam = s.st.cam;
   cam.locked = true;
   // room to frame the boat on the left and the wave on the right
@@ -566,15 +571,17 @@ export async function rogueWave(s: ShipScene4) {
   audio.play('waveCrash', { vol: 0.8, pitch: 0.8 });
   // slow motion as the lip comes over
   await until(() => go >= 0.7);
-  game.slowmo = 0.45;
+  cineSlowmo(0.45, 0.35);
   await until(() => wave.cx < 420);
   audio.play('waveCrash', { vol: 1 });
   audio.play('shipCrash', { vol: 1 });
   s.st.shake(14, 1.2);
   game.r.post.flash = 1;
+  void cinePunch({ zoom: 0.2, blur: 1, secs: 0.6, x: p.x, y: p.y - 30, stage: s.st });
   await wait(260);
-  // blackout
-  game.slowmo = 1;
+  // knocked out: the image swims out of focus and the edges close in, then black
+  await cineBlackout(0.55);
+  cineSlowmo(1, 0);
   game.r.post.fadeColor = [0, 0, 0];
   game.r.post.fade = 1;
   game.fadeTo(1, 20);
