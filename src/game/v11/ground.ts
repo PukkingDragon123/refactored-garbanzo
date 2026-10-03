@@ -131,14 +131,14 @@ function hook(sc: SceneLike) {
         : q.y - Math.abs(Math.sin(((t - fall) / 0.22) * Math.PI)) * 3 * Math.max(0, 1 - (t - fall) / 0.44);
       const bounce = t < fall ? 1 - t / fall : 0;
       rr.beginShadows();
-      rr.rect(q.x - 7, q.y - 1, 14, 2, packColor(0, 0, 0, 0.25));
+      rr.rect(q.x - 12, q.y - 1, 24, 2, packColor(0, 0, 0, 0.28));
       rr.endShadows();
       const n = Math.min(4, q.stacks.length);
       for (let i = 0; i < n; i++) {
         const f = frameOf(q.stacks[i].id);
         if (!f) continue;
-        const ox = (i - (n - 1) / 2) * 5 + (i % 2 ? 1 : -1), oy = i % 2 ? -2 : 0;
-        rr.draw(f, q.x + ox, yy + oy, 0.5, 0.5, (i % 2 ? 0.35 : -0.25) * (1 - bounce));
+        const ox = (i - (n - 1) / 2) * 8 + (i % 2 ? 1 : -1), oy = i % 2 ? -3 : 0;
+        rr.draw(f, q.x + ox, yy + oy, 0.72, 0.72, (i % 2 ? 0.35 : -0.25) * (1 - bounce));
       }
     }
   }, dt => { for (const q of piles) if (q.scene === sc) q.t += dt; }));

@@ -1597,6 +1597,7 @@ export const BP_ZL = {
   add: async (id: string, n = 1) => (await import('../../game/inventory')).add(id, n),
   stash: async (id: string, n = 1) => (await import('../../game/v11/stash')).stashAdd(id, n),
   inv: invLine,
+  piles: () => groundPiles().map(q => ({ x: Math.round(q.x), y: Math.round(q.y), t: +q.t.toFixed(2), s: q.stacks.map(t => t.id + 'x' + t.n) })),
   screen: () => screen,
 };
 function hookZl() {
