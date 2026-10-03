@@ -187,10 +187,12 @@ export function wrapThumb(rig: Rig, p: Pose, cyl: { a: V3; u: V3; r: number }) {
       thumbJoints(rig, p, pts);
       return segLine(pts[j], pts[j + 1], cyl.a, cyl.u) < cyl.r + rr;
     };
+    const start = p[dof];
     let a = j === 0 ? p[dof] - d(12) : lo, b = hi;
     a = Math.max(lo, a);
-    if (!hits(b)) { p[dof] = j === 0 ? Math.min(b, p[dof] + d(10)) : b; continue; }
-    if (hits(a)) { p[dof] = a; continue; }
+    if (!hits(b)) { p[dof] = j === 0 ? Math.min(b, start + d(10)) : b; continue; }
+    // already touching at its most open: keep the pose's own angle rather than snapping straight
+    if (hits(a)) { p[dof] = start; continue; }
     for (let it = 0; it < 12; it++) { const m = (a + b) / 2; if (hits(m)) b = m; else a = m; }
     p[dof] = a;
   }

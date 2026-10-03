@@ -287,9 +287,9 @@ void main() {
       alb = mix(alb, uFlush, clamp(gKnuckle * 0.3 + gPad * 0.18 + gCrease * 0.22, 0.0, 0.5));
       // weathering: sun spots and a rougher, redder back of the hand
       float spots = smoothstep(0.7, 0.78, vn3(vB * 2.6 + 11.0)) * (1.0 - gPalmar);
-      alb = mix(alb, alb * vec3(0.78, 0.66, 0.6), spots * (uFreckle * 0.7 + uWeather * 0.4));
+      alb = mix(alb, alb * vec3(0.84, 0.74, 0.68), spots * (uFreckle * 0.35 + uWeather * 0.25));
       float frk = smoothstep(0.78, 0.86, vn3(vB * 7.0 + 3.0)) * (1.0 - gPalmar) * uFreckle;
-      alb = mix(alb, alb * vec3(0.72, 0.58, 0.5), frk);
+      alb = mix(alb, alb * vec3(0.8, 0.68, 0.6), frk * 0.7);
       alb *= 1.0 - uWeather * 0.12 * fbm3(vB * 1.1);
       // veins: a cool shadow under the skin
       alb *= mix(vec3(1.0), uVein / max(dot(uVein, vec3(0.33)), 0.05) * 0.8, vBake.y * 0.32 * (1.0 - gPalmar * 0.6));
@@ -328,9 +328,9 @@ void main() {
       vec3 c1 = uGlove1;
       float k = 0.0;
       if (uGloveKind == 0) {
-        vec2 q = vec2(vB.x * 9.0 + vB.z * 9.0, vB.y * 7.0);
+        vec2 q = vec2(vB.x * 16.0 + vB.z * 16.0, vB.y * 13.0);
         k = abs(sin(q.x)) * abs(sin(q.y + sin(q.x) * 0.5));
-        alb = mix(uGlove0, uGlove2, smoothstep(0.2, 0.9, k) * 0.6 + 0.15);
+        alb = mix(uGlove1, mix(uGlove0, uGlove2, 0.5), smoothstep(0.3, 0.95, k) * 0.35 * clamp(1.0 - fw * 12.0, 0.0, 1.0));
         rough = 0.92; sheen = 0.35;
       } else if (uGloveKind == 1) {
         float seam = region >= 1 && region <= 4 ? groove(abs(vDet.z) - 0.98, 0.05) : 0.0;

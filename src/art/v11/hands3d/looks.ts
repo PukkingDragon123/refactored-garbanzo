@@ -74,7 +74,7 @@ export const LOOKS: Record<Who, Look> = {
   },
   aroha: {
     who: 'aroha', build: AROHA_BUILD,
-    skin: { base: '#8c5838', palm: '#bf8466', flush: '#8e3c2c', sss: '#a8381e', nail: '#d2a28c', vein: '#5a4a52', rough: 0.44 },
+    skin: { base: '#82563e', palm: '#b88672', flush: '#8a4434', sss: '#a0402a', nail: '#cca090', vein: '#5a4a52', rough: 0.44 },
     hair: [0.05, '#1a0e08'], weathered: 0.1, grease: 0, freckles: 0, tattoo: null,
     sleeve: 'none', cloth: ['#4a3820', '#6e5434', '#9c7a4c'], cuff: '#6e5434',
     watch: null, bracelet: 'both', gloves: null,

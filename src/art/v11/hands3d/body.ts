@@ -286,7 +286,7 @@ export function sleeveSdf(rig: Rig, look: Look): SleeveBuild {
       body.disp = puffy
         ? (x, y, z) => { const q = Math.cos(y * 1.05); return q * q * q * q * -1 + 0.5 + snoise3(x * 0.4, y * 0.4, z * 0.4) * 0.5; }
         : (x, y, z) => { const a = th(x, z); return Math.sin(y * 0.6 + Math.sin(a * 2) * 1.4) * 0.6 + snoise3(x * 0.3, y * 0.25, z * 0.3); };
-      body.dispAmp = puffy ? 0.42 : 0.3;
+      body.dispAmp = puffy ? 0.2 : 0.3;
       sl.add(body);
       parts.push({ sdf: sl, mat: MAT.sleeve });
       return { parts, skinFrom: -3.2 * s };
