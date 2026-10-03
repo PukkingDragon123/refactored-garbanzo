@@ -325,21 +325,21 @@ export function buildForest(f: ForestScene) {
   // rising from the bottom of the frame: tree fern sprays, big leaves, fronds
   for (let x = 120; x < FOREST.W + 300; x += rng.range(160, 300)) {
     const k = rng.next(), v = rng.int(0, 2);
-    const fr = k < 0.45 ? frameOf(`fs:${v}`, () => fgFernSpray(1500 + v, 150 + v * 26, false, 1, dark, 0.62))
-      : k < 0.7 ? frameOf(`fl:${v}`, () => fgPlant('leaves', 1510 + v, 190 + v * 20, 1, dark, 0.66))
-        : k < 0.88 ? frameOf(`ff:${v}`, () => fgPlant('fronds', 1520 + v, 200, 1, dark, 0.64))
-          : frameOf(`fm:${v}`, () => fgPlant('monstera', 1530 + v, 180, 1, dark, 0.66));
-    const X = x * pf, flip = rng.chance(0.5), y = fyB + rng.range(0, 26);
+    const fr = k < 0.45 ? frameOf(`fs:${v}`, () => fgFernSpray(1500 + v, 76 + v * 14, false, 1, dark, 0.62))
+      : k < 0.7 ? frameOf(`fl:${v}`, () => fgPlant('leaves', 1510 + v, 92 + v * 12, 1, dark, 0.66))
+        : k < 0.88 ? frameOf(`ff:${v}`, () => fgPlant('fronds', 1520 + v, 100, 1, dark, 0.64))
+          : frameOf(`fm:${v}`, () => fgPlant('monstera', 1530 + v, 90, 1, dark, 0.66));
+    const X = x * pf, flip = rng.chance(0.5), y = fyB + rng.range(4, 22);
     front.add(new Prop(fr, X, y, rng.next(), { sway: 0.45, flip }));
     occ(fr.sprite, X, y, flip, pf);
   }
   // hanging into the top of the frame: fronds, vines, canopy clumps carried on up
   for (let x = 60; x < FOREST.W + 300; x += rng.range(140, 260)) {
     const k = rng.next(), v = rng.int(0, 2);
-    const fr = k < 0.4 ? frameOf(`fh:${v}`, () => fgFernSpray(1540 + v, 130 + v * 20, true, 1, dark, 0.6))
-      : k < 0.7 ? frameOf(`fv:${v}`, () => fgVines(1550 + v, 120, 150 + v * 40, 1, dark, 0.6))
-        : frameOf(`fc:${v}`, () => soften(canopyClump(1560 + v, 300, 140, { above: 260 }), 1, dark, 0.58));
-    const X = x * pf, flip = rng.chance(0.5), y = k < 0.7 ? fyT - 8 + rng.range(-10, 6) : fyT + 40 + rng.range(-10, 14);
+    const fr = k < 0.4 ? frameOf(`fh:${v}`, () => fgFernSpray(1540 + v, 66 + v * 10, true, 1, dark, 0.6))
+      : k < 0.7 ? frameOf(`fv:${v}`, () => fgVines(1550 + v, 80, 70 + v * 20, 1, dark, 0.6))
+        : frameOf(`fc:${v}`, () => soften(canopyClump(1560 + v, 200, 70, { above: 260 }), 1, dark, 0.58));
+    const X = x * pf, flip = rng.chance(0.5), y = k < 0.7 ? fyT - 14 + rng.range(-8, 4) : fyT + 10 + rng.range(-8, 8);
     front.add(new Prop(fr, X, y, 2 + rng.next(), { sway: 0.25, flip }));
   }
   // giant trunks passing close by
@@ -355,8 +355,8 @@ export function buildForest(f: ForestScene) {
   const nyB = layerY(pn, 380) + 10;
   for (let x = 400; x < FOREST.W + 300; x += rng.range(620, 1100)) {
     const v = rng.int(0, 1);
-    const fr = frameOf(`fn:${v}`, () => fgPlant(v ? 'fronds' : 'leaves', 1570 + v, 260, 3, dark, 0.86));
-    near.add(new Prop(fr, x * pn, nyB, 0, { sway: 0.3, flip: rng.chance(0.5) }));
+    const fr = frameOf(`fn:${v}`, () => fgPlant(v ? 'fronds' : 'leaves', 1570 + v, 96, 3, dark, 0.86));
+    near.add(new Prop(fr, x * pn, nyB + 24, 0, { sway: 0.3, flip: rng.chance(0.5) }));
   }
 
   tick('front');

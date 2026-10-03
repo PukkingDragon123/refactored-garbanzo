@@ -130,6 +130,9 @@ export class ForestStory implements ForestHooks {
   async enter() {
     const f = this.f;
     f.onWalkOut = () => this.walkOut();
+    // the way out at the west end (walking on into it does the same)
+    this.it({ x: FSPOT.exit, y: fgroundY(FSPOT.exit), w: 18, h: 26, get label() { return f.day1 ? 'Back down the stream to the beach' : 'Down the stream: head back to camp'; }, standX: FSPOT.exit + 4,
+      enabled: () => !f.cutscene && !f.leaving, action: () => f.walkOut() } as never);
     if (f.day1) await this.enterDay1();
     else this.enterExpedition();
   }

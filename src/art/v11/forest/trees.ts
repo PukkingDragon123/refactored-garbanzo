@@ -75,7 +75,7 @@ export function paintGiant(kind: GiantKind, seed: number, w: number, H: number, 
       if (kind === 'kauri' || kind === 'kahikatea') {
         flakes(u, y, kind === 'kauri' ? 9 : 6, kind === 'kauri' ? 13 : 8, seed + 11);
         l += (CEL.id - 0.5) * 0.45 + (CEL.e < 0.07 ? -0.75 : CEL.e < 0.14 ? -0.2 : 0.08);
-        c = pick(rp, n * 0.5 + l * n * 0.22);
+        c = pick(rp, n * 0.42 + l * n * 0.22);
         // pale lichen blotches
         const lc = noise2(u / 7 + 30, y / 9, seed + 13);
         if (lc > 0.76 && l > -0.5) c = mix(c, pick(FP.lichen, (lc - 0.76) * 10 + l), 0.42);
