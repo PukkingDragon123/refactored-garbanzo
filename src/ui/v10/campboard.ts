@@ -76,11 +76,12 @@ const CSS = `
 .cb-x { position: absolute; right: -0.6em; top: -0.8em; width: 2.6em; height: 2.6em; cursor: pointer; z-index: 6; filter: drop-shadow(0 0.1em 0.15em rgba(0,0,0,0.5)); transition: transform 0.15s; }
 .cb-x:hover { transform: rotate(-8deg) scale(1.1); }
 .cb-rp { position: absolute; right: 2.2em; top: -0.7em; z-index: 5; }
-.cb-zoom { position: absolute; inset: 0; z-index: 8; display: grid; place-items: center; background: rgba(20,10,0,0.45); }
+.cb-zoom { position: absolute; inset: 0; z-index: 8; display: grid; place-items: center; background: rgba(20,10,0,0.6); }
 .cb-zoom .cb-n { width: min(24em, 86vw); font-size: 1.15em; cursor: default; animation: cbLift 0.35s cubic-bezier(.2,1.3,.4,1) both; transform: rotate(-1deg) !important; }
 @keyframes cbLift { from { transform: scale(0.6) rotate(-6deg); opacity: 0; } }
 .cb-zoom .acts { display: flex; gap: 1.2em; justify-content: center; margin-top: 0.8em; }
-.cb-act { position: relative; display: inline-block; padding: 0.15em 0.7em 0.25em; font-size: 1.35em; font-weight: 700; color: #26408a; cursor: pointer; }
+.cb-act { position: relative; display: inline-block; padding: 0.2em 0.9em 0.3em; font-size: 1.45em; font-weight: 700; color: #26408a; cursor: pointer; background: #f4ead0; box-shadow: 0 0.15em 0.3em rgba(0,0,0,0.45); transform: rotate(-1.5deg); }
+.cb-act + .cb-act { transform: rotate(1.2deg); }
 .cb-act svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .cb-act:hover { color: #a8321e; }
 .cb-act.dim { color: #8a8070; cursor: default; }

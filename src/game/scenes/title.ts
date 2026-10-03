@@ -264,8 +264,9 @@ export class TitleScene implements Scene {
       <div class="t3-foot">Click for sound &middot; V3</div><div class="t3-skip">Click to skip</div>`;
     const menu = this.root.appendChild(el('div', 't3-menu panel paper'));
     installPaper();
-    menu.style.background = `${paperTex('journal')} 0 0 / 256px`;
-    menu.style.clipPath = edgeClip(11, { top: 'torn', right: 'deckle', bottom: 'deckle', left: 'perforated', amp: 0.7 });
+    // (the skin's .panel rules are !important, so these have to be too)
+    menu.style.setProperty('background', `${paperTex('journal')} 0 0 / 256px`, 'important');
+    menu.style.setProperty('clip-path', edgeClip(11, { top: 'torn', right: 'deckle', bottom: 'deckle', left: 'perforated', amp: 0.7 }), 'important');
     menu.insertAdjacentHTML('beforeend', tape({ seed: 4 }));
     menu.appendChild(el('div', 'hd', 'EXPEDITION LOG'));
     let ulN = 0;

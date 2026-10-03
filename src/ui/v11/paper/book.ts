@@ -174,7 +174,7 @@ const CSS = `
 .ppb-cover > .b { transform: rotateY(180deg); border-radius: 0.9em 0.2em 0.2em 0.9em; }
 .ppb-cover > .f { box-shadow: inset 0.5em 0 0.8em -0.3em rgba(0,0,0,0.5), inset 0 0 0 0.12em rgba(255,255,255,0.06), inset 0 0 2em rgba(0,0,0,0.35); }
 .ppb-cover .ttl { position: absolute; left: 12%; right: 10%; top: 18%; text-align: center; }
-.ppb-cover .ttl b { display: block; font-size: 2.1em; line-height: 0.95; letter-spacing: 0.04em; color: var(--foil, #e8c870);
+.ppb-cover .ttl b { display: block; font-size: 1.85em; line-height: 1.15; letter-spacing: 0.04em; color: var(--foil, #e8c870);
   text-shadow: 0 -1px 0 rgba(255,255,255,0.35), 0 2px 0 rgba(0,0,0,0.55), 0 0 0.6em rgba(255, 220, 140, 0.18); }
 .ppb-cover .ttl small { display: block; margin-top: 0.7em; font-size: 0.85em; letter-spacing: 0.3em; text-transform: uppercase; color: var(--foil, #e8c870); opacity: 0.8; }
 .ppb-cover .frame { position: absolute; inset: 6% 7% 6% 9%; border: 0.14em solid var(--foil, #e8c870); opacity: 0.45; border-radius: 0.3em; box-shadow: inset 0 0 0 0.3em transparent, inset 0 0 0 0.38em rgba(232,200,112,0.5); }

@@ -181,8 +181,8 @@ function speciesBlocks(id: string, e0: EncEntry): BookBlock[] {
   const sub = cov?.subjects.find(s => s.species === id);
   // the plate: Mori's sketch of the animal (from the sprite, or traced off his photo)
   const box: [string, string] = ['92%', '8.4em'];
-  const sk = spr ? sketchImg(spr, { size: 460, seed, box }, 'sk')
-    : cov ? sketchImg(cov.img, { photo: true, crop: padCrop(sub?.bbox ?? [0.3, 0.3, 0.7, 0.7], 0.35), size: 420, seed, box }, 'sk') : '';
+  const sk = spr ? sketchImg(spr, { size: 340, seed, box }, 'sk')
+    : cov ? sketchImg(cov.img, { photo: true, crop: padCrop(sub?.bbox ?? [0.3, 0.3, 0.7, 0.7], 0.35), size: 320, seed, box }, 'sk') : '';
   const fresh = !!e?.fresh;
   const out: BookBlock[] = [];
   out.push({ html: `<div class="eb-plate">${sk ? `<div class="sk" style="transform:rotate(${tilt(seed, 2.5)})">${sk}${tape({ seed, style: 'left:42%' })}</div>` : doodle('magnifier', { size: '6em', pencil: true })}${fresh ? `<span class="eb-new" data-new="1">${stamp('New entry', { color: 'red', fresh: false, rot: '8deg' })}</span>` : ''}<div class="eb-name pp-head">${esc(sp.name)}</div><div class="eb-sci pp-hand">${esc(sp.sci)}</div></div>` });

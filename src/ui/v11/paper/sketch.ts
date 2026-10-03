@@ -252,6 +252,8 @@ export function sketchCanvas(src: CanvasImageSource & { width: number; height: n
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const sx = (x - pad) / k, sy = (y - pad) / k;
     const a = samp(As, sx, sy, 0);
+    // nothing to draw well outside the animal
+    if (a <= 0.01 && !o.photo) continue;
     let v = 0;
     const nz = fbm(x / 13 + brk, y / 13, seed + 11, 2);
     if (!o.photo && a > 0.01 && a < 0.99) {

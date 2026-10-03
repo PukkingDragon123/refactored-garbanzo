@@ -50,7 +50,7 @@ export function stamp(text: string, o: { color?: 'red' | 'blue' | 'green' | 'bla
 
 /** a polaroid: a photo (or any image URL) in a white frame with a handwritten caption */
 export function polaroid(img: string, cap = '', o: { rot?: string; w?: string; style?: string; tape?: boolean; pin?: string; cls?: string; bg?: string; attrs?: string } = {}): string {
-  const pic = img ? (o.bg ? `<span class="ph" style="${o.bg}"></span>` : `<img class="ph" src="${img}" alt="" draggable="false">`) : '<span class="ph none"></span>';
+  const pic = o.bg ? `<span class="ph" style="${o.bg}"></span>` : img ? `<img class="ph" src="${img}" alt="" draggable="false">` : '<span class="ph none"></span>';
   return `<span class="pp-polaroid ${o.cls ?? ''}" style="width:${o.w ?? '10em'};transform:rotate(${o.rot ?? tilt(cap || img.length, 4)});${o.style ?? ''}"${o.attrs ? ' ' + o.attrs : ''}>${o.tape ? tape({ w: '3.6em', style: 'position:absolute;left:50%;top:-0.7em;margin-left:-1.8em' }) : ''}${o.pin ? pin({ color: o.pin as 'red', style: 'position:absolute;left:50%;top:-0.35em;margin-left:-0.45em' }) : ''}${pic}${cap ? `<span class="cap pp-hand">${escHtml(cap)}</span>` : ''}</span>`;
 }
 
