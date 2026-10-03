@@ -12,6 +12,8 @@ import { bindActorArt, PeopleArt, EmoteArt } from '../world/actor';
 // V9 painters registered as beasts up front, so field-guide portraits work from any scene
 import '../art/v9/shore';
 import '../art/v9/wild/register';
+// V11 illustrated item art and footprints for every item (painted lazily on first use)
+import '../art/v11/items';
 import { bindBeastArt, BeastArt } from './wild/bodies';
 import { bindInsectArt, InsectArt } from './wild/insects';
 import { bindCampArt } from './scenes/camp2';
