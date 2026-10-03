@@ -21,11 +21,32 @@ import { isPredator, predState, deterArea, emitPred, addShootTarget, anim7 } fro
 import { PredFx } from './predators-fx';
 import { PlayerSling } from './predators-sling';
 import { ArohaCombat, PartyReact } from './predators-aroha';
-import { TigerBody, warmTigerStep, wallowsOf } from './predators-tiger';
+import { TigerBody, warmTigerStep, wallowsOf, spawnTiger } from './predators-tiger';
 import { sfx11 } from './predators-sfx';
 import { TIGER_ID } from './species-tiger';
 
 const ctls = new WeakMap<FieldScene, PredatorScene>();
+
+// console / test helpers: zlPred.give(), zlPred.tiger(dx), zlPred.ambush(dx), zlPred.state()
+const here = () => { const s = game.scene as unknown as FieldScene; return s && s.animals && s.player ? s : null; };
+(window as unknown as { zlPred?: unknown }).zlPred = {
+  give: (n = 15) => { add('slingshot', 1); game.save.vars['v11:pebbles'] = n; game.persist(); here()?.hud?.refresh(); },
+  tiger: (dx = 320, lurk = true) => { const s = here(); if (!s) return null; attachPredators(s); return spawnTiger(s, s.player.x + s.player.facing * dx, { lurk }); },
+  ambush: async (dx = 230) => {
+    const s = here(); if (!s) return;
+    const m = await import('./predators-ambush');
+    await m.tigerAmbush({ scene: s, x: s.player.x + s.player.facing * dx, dir: s.player.facing >= 0 ? 1 : -1 });
+  },
+  ctl: () => { const s = here(); return s ? predatorsOf(s) : null; },
+  state: () => {
+    const s = here(); if (!s) return null;
+    return {
+      x: Math.round(s.player.x), cut: s.cutscene, slowmo: game.slowmo,
+      tigers: s.animals.filter(a => isPredator(a)).map(a => { const q = predState(a); return { x: Math.round(a.x), act: a.act, anim: a.anim, phase: q.phase, nerve: +q.nerve.toFixed(2), stun: +q.stun.toFixed(2), hidden: a.hidden, aw: +a.aw.toFixed(2) }; }),
+      actors: [...s.actors.values()].map(a => ({ id: a.id, x: Math.round(a.x), vis: a.visible, anim: a.anim })),
+    };
+  },
+};
 
 /** the controller of a scene, if attached */
 export const predatorsOf = (s: FieldScene) => ctls.get(s) ?? null;
