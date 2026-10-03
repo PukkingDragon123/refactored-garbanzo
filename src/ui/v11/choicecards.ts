@@ -88,19 +88,31 @@ export function choiceCards(cards: ChoiceCard[], o: CardOpts = {}): Promise<numb
       const k = o.timeout ? Math.min(1, t / o.timeout) : 0;
       o.tick?.(t, k);
       if (o.timeout && t >= o.timeout) { finish(null); return; }
-      // stack each speaker's cards over their head, the first nearest; keep them on screen
+      // each speaker's cards in a column over their head (the first on top); columns are pushed apart
+      // so two speakers standing close never overlap, and kept below the letterbox bars
       const R = rootR();
-      const stacks = new Map<string, number>();
-      for (let i = cards.length - 1; i >= 0; i--) {
-        const c = cards[i], b = els[i];
-        const a = c.anchor();
-        const w = b.offsetWidth, h = b.offsetHeight;
-        const below = stacks.get(c.who) ?? 0;
-        stacks.set(c.who, below + h + 7);
-        const x = Math.max(8, Math.min(R.width - w - 8, (a ? a[0] : R.width / 2) - w / 2));
-        const y = Math.max(8, Math.min(R.height - h - 8, (a ? a[1] : R.height * 0.3) - 26 - h - below));
-        b.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
-        b.style.visibility = '';
+      const top = R.height * 0.11 + 6;
+      const groups: { who: string; ids: number[]; ax: number; ay: number; w: number; h: number; x: number }[] = [];
+      cards.forEach((c, i) => {
+        let g = groups.find(q => q.who === c.who);
+        if (!g) { const a = c.anchor(); g = { who: c.who, ids: [], ax: a ? a[0] : R.width / 2, ay: a ? a[1] : R.height * 0.35, w: 0, h: 0, x: 0 }; groups.push(g); }
+        g.ids.push(i);
+        g.w = Math.max(g.w, els[i].offsetWidth);
+        g.h += els[i].offsetHeight + 7;
+      });
+      groups.sort((a, b) => a.ax - b.ax);
+      let right = 8;
+      for (const g of groups) { g.x = Math.max(right, g.ax - g.w / 2); right = g.x + g.w + 10; }
+      const over = right - 10 - (R.width - 8);
+      if (over > 0) for (const g of groups) g.x = Math.max(8, g.x - over);
+      for (const g of groups) {
+        let y = Math.max(top, g.ay - 26 - g.h);
+        for (const i of g.ids) {
+          const b = els[i];
+          b.style.transform = `translate(${Math.round(g.x + (g.w - b.offsetWidth) / 2)}px, ${Math.round(y)}px)`;
+          b.style.visibility = '';
+          y += b.offsetHeight + 7;
+        }
       }
       raf = requestAnimationFrame(frame);
     };
