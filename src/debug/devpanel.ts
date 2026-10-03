@@ -510,7 +510,7 @@ async function renderCheats(body: HTMLElement) {
 
   // quick links to the sections below (long on a phone)
   const nav = body.appendChild(el('div', 'dv-jump'));
-  const NAV: [string, string][] = [['Toggles', 'bug'], ['Research', 'star'], ['Energy', 'bolt'], ['Unlocks', 'check'], ['Kitten', 'boat'], ['Day', 'sun'], ['Camp events', 'flag'], ['Expedition', 'map'], ['Give items', 'gift']];
+  const NAV: [string, string][] = [['Toggles', 'bug'], ['Research', 'star'], ['Energy', 'bolt'], ['Unlocks', 'check'], ['Predators', 'bolt'], ['Kitten', 'boat'], ['Day', 'sun'], ['Camp events', 'flag'], ['Expedition', 'map'], ['Give items', 'gift']];
   for (const [label, icn] of NAV) nav.appendChild(btn(label, () => {
     const h = [...body.querySelectorAll('h3')].find(x => x.textContent?.includes(label === 'Day' ? 'Day ' : label));
     h?.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -552,6 +552,29 @@ async function renderCheats(body: HTMLElement) {
   ul.appendChild(btn('All laptop apps', () => { for (const u of appsM.UNLOCKS) appsM.markInstalled(u.id); say(`${appsM.UNLOCKS.length} apps installed on MoriOS.`); }, { icon: 'film' }));
   ul.appendChild(btn('Reveal Region Map', () => { for (const l of regionsM.LOCATIONS) regionsM.revealMap(l.id, -1e9, 1e9); game.persist(); say('The whole map is explored.'); }, { icon: 'map' }));
   ul.appendChild(btn('Find all places', () => { let n = 0; for (const l of regionsM.LOCATIONS) if (regionsM.findLocation(l.id)) n++; game.persist(); say(`${n} new places on the map (fast travel).`); }, { icon: 'flag' }));
+
+  // predators (V11): the slingshot, the forest ambush, a tiger to practise on
+  sec(body, 'Predators', 'bolt');
+  const pd = row(body);
+  const fieldNow = () => game.scene as unknown as { player?: { x: number; facing: number }; animals?: unknown[] } | null;
+  pd.appendChild(btn('Give slingshot', () => { add('slingshot', 1); game.save.vars['v11:pebbles'] = 15; game.persist(); hudRefresh(); say('Slingshot on the belt, pouch full (G to ready it).'); }, { icon: 'wrench' }));
+  const amb = pd.appendChild(btn('Tiger ambush here', async () => {
+    const sc = fieldNow();
+    if (!sc?.player || !sc.animals) return;
+    closeAll();
+    const m = await import('../game/v11/predators');
+    await m.tigerAmbush({ scene: sc, x: sc.player.x + sc.player.facing * 230, dir: (sc.player.facing >= 0 ? 1 : -1) });
+  }, { icon: 'play', cls: 'amber', title: 'The Cerebral Tiger bursts out of a wallow ahead of Mori (any field scene)' }));
+  const lurk = pd.appendChild(btn('Lurking tiger ahead', async () => {
+    const sc = fieldNow();
+    if (!sc?.player || !sc.animals) return;
+    const m = await import('../game/v11/predators');
+    await m.spawnCerebralTiger(sc, sc.player.x + sc.player.facing * 320, { lurk: true });
+    closeAll();
+    say('A Cerebral Tiger lurks in a wallow ahead. Creep up, photograph its eyes, or provoke it.');
+  }, { icon: 'target' }));
+  if (!fieldNow()?.animals) { amb.disabled = true; lurk.disabled = true; amb.title = lurk.title = 'Only in a field scene (try ?scene=site&site=fernwood)'; }
+  body.appendChild(el('div', 'dv-note', 'The ambush plays inside the current scene: the hush, the eruption, the name card, Aroha (flown in if she is not there), the retreat. Afterwards the tiger stays lurking in its wallow, resting for a few minutes.'));
 
   // boat
   const bs = boatM.boatStage();

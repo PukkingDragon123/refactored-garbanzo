@@ -5,6 +5,7 @@ import { SEA9 } from './v9/species-sea';
 import { SHORE9 } from './v9/species-shore';
 import { FISH9 } from './v9/species-fish';
 import { WILD9 } from './v9/species-wild';
+import { TIGER_SPECIES } from './v11/species-tiger';
 
 export type SiteId = 'fernwood' | 'canopy' | 'falls' | 'mangrove' | 'coast';
 export type Group = 'Serpent' | 'Bird' | 'Mammal' | 'Reptile' | 'Amphibian' | 'Fish' | 'Crustacean' | 'Mollusc' | 'Insect' | 'Parasite' | 'Arachnid' | 'Worm' | 'Cnidarian';
@@ -352,6 +353,8 @@ export const CLUES: ClueDef[] = [
 ];
 
 SPECIES.unshift(...SEA9, ...SHORE9, ...FISH9, ...WILD9);
+// V11: the forest's predators
+SPECIES.push(TIGER_SPECIES);
 
 export const SPECIES_BY_ID: Record<string, Species> = Object.fromEntries(SPECIES.map(s => [s.id, s]));
 export const CLUE_BY_ID: Record<string, ClueDef> = Object.fromEntries(CLUES.map(c => [c.id, c]));

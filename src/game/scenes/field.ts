@@ -225,6 +225,8 @@ export class FieldScene extends WorldScene implements WildHost {
 
   async enter() {
     await super.enter();
+    // V11: predators, Mori's slingshot and Aroha's combat AI in every field scene
+    void import('../v11/predators-scene').then(m => m.attachPredators(this));
     // V10: the expedition runtime (map reveal, ways deeper, finds, events) for every field scene
     await (await import('../v10/field10')).onFieldEnter(this);
     await this.site.onEnter?.(this);

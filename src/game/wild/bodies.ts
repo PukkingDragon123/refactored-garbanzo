@@ -377,8 +377,13 @@ export class SpineBody implements Body {
   }
 }
 
+/** V11: species with their own Body class (the predators module registers the Cerebral Tiger's) */
+export const BODY_MAKERS: Record<string, (a: Animal) => Body> = {};
+
 /** Pick the right body type for a species. */
 export function makeBody(a: Animal): Body {
+  const mk = BODY_MAKERS[a.species];
+  if (mk) return mk(a);
   if (SERPENT_LOOKS[a.species] || ['strider', 'sprinter', 'skyribbon', 'lurevip', 'titan', 'leviathan', 'mudribbon', 'cragviper', 'ironjaw', 'barkgecko', 'pteramander'].includes(a.species)) return new SpineBody(a.species, a);
   return new BeastBody(a.species);
 }
