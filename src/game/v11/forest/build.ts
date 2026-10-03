@@ -72,7 +72,7 @@ function frameOf(key: string, gen: () => Sprite): Frame & { sprite: Sprite } {
 export function buildForest(f: ForestScene) {
   const st = f.st, clock = f.clock;
   const T0 = performance.now();
-  const tick = (what: string) => { if ((window as unknown as { __ftime?: boolean }).__ftime !== false) console.log(`[T] forest ${what} ${Math.round(performance.now() - T0)} ms`); };
+  const tick = (what: string) => { if ((window as unknown as { __ftime?: boolean }).__ftime) console.log(`[T] forest ${what} ${Math.round(performance.now() - T0)} ms`); };
   st.minX = 0; st.maxX = FOREST.W; st.minY = FOREST.minY; st.maxY = FOREST.maxY;
   st.waterY = null;
   const rng = new Rng(1111);

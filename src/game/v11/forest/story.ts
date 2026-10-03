@@ -100,11 +100,11 @@ export class ForestStory implements ForestHooks {
     try { return await fn(); } finally {
       this.cutDepth = Math.max(0, this.cutDepth - 1);
       if (this.cutDepth === 0) {
-        f.cutscene = false; this.busy = false; this.pose(null);
+        this.pose(null);
         cineBars(false);
+        // (the camera eases back before control returns, so no trigger fires mid-glide)
         if (f.st.cam.locked) await cineRelease(f.st, 0.6).catch(() => { f.st.cam.locked = false; });
-        f.st.cam.locked = false;
-        f.hud?.show(true);
+        if (this.cutDepth === 0) { f.st.cam.locked = false; f.cutscene = false; this.busy = false; f.hud?.show(true); }
       }
     }
   }
