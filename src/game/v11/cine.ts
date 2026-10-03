@@ -185,10 +185,12 @@ export function cineBars(on: boolean): void {
   game.ui?.letterbox(on);
 }
 
-/** slow motion (1 = normal), ramped over `secs` of real time */
-export function cineSlowmo(k: number, secs = 0.25): void {
+/** slow motion (1 = normal), ramped over `secs` of real time (by default it snaps into slow motion,
+ *  so a hit-stop like cineSlowmo(0.04) freezes at once, and eases back out over a quarter second) */
+export function cineSlowmo(k: number, secs?: number): void {
   ensureRunning();
   const to = Math.max(0.02, Math.min(4, k));
+  if (secs === undefined) secs = to < game.slowmo ? 0.04 : 0.25;
   cineState.slowmo = to;
   if (secs <= 0) { slow = null; game.slowmo = to; return; }
   slow = { from: game.slowmo, to, t: 0, dur: secs };
