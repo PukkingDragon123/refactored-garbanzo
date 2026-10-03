@@ -235,6 +235,9 @@ export class Renderer {
   vignetteOn = true;
   /** this frame is a parallax-layered scene (Stage.render sets it): the depth of field reads its layers */
   layered = false;
+  /** nearest / farthest parallax drawn this frame (sizes the depth of field's reach) */
+  private pMin = Infinity;
+  private pMax = -Infinity;
   /** what the last frame's post pipeline ran (debug overlay / tests) */
   readonly stats = { dof: false, motion: false, coc: 0, blur: 0 };
 
@@ -250,6 +253,8 @@ export class Renderer {
   private pDofPre: Program;
   private pDofBlur: Program;
   private pVel: Program;
+  private pDofTile: Program;
+  private pDofDilate: Program;
   private pBloomPre: Program;
   private pBloomDown: Program;
   private pBloomUp: Program;
@@ -264,6 +269,9 @@ export class Renderer {
   private rtFx!: Target;
   private rtDofA!: Target;
   private rtDofB!: Target;
+  /** widest circle of confusion per 16x16 tile of the DOF buffer, and dilated by a tile */
+  private rtTile!: Target;
+  private rtTileD!: Target;
   private bloom: Target[] = [];
   /** camera velocity on screen (art px/s on the gameplay plane) and zoom rate (1/s), smoothed */
   private vel = { x: 0, y: 0, z: 0, px: NaN, py: NaN, pz: NaN };
@@ -298,6 +306,8 @@ export class Renderer {
     this.pDofPre = new Program(gl, S.FULL_VS, S.DOF_PRE_FS, 'dofPre');
     this.pDofBlur = new Program(gl, S.FULL_VS, S.DOF_BLUR_FS, 'dofBlur');
     this.pVel = new Program(gl, S.FULL_VS, S.VELBLUR_FS, 'velocity');
+    this.pDofTile = new Program(gl, S.FULL_VS, S.DOF_TILE_FS, 'dofTile');
+    this.pDofDilate = new Program(gl, S.FULL_VS, S.DOF_DILATE_FS, 'dofDilate');
     this.pBloomPre = new Program(gl, S.FULL_VS, S.BLOOM_PRE_FS, 'bloomPre');
     this.pBloomDown = new Program(gl, S.FULL_VS, S.BLOOM_DOWN_FS, 'bloomDown');
     this.pBloomUp = new Program(gl, S.FULL_VS, S.BLOOM_UP_FS, 'bloomUp');
@@ -356,6 +366,9 @@ export class Renderer {
       this.rtFx = new Target(gl, w, h, [hdr]);
       this.rtDofA = new Target(gl, dw, dh, [hdr]);
       this.rtDofB = new Target(gl, dw, dh, [hdr]);
+      const tile = { ...rgba8, filter: gl.NEAREST };
+      this.rtTile = new Target(gl, Math.ceil(dw / 16), Math.ceil(dh / 16), [tile]);
+      this.rtTileD = new Target(gl, Math.ceil(dw / 16), Math.ceil(dh / 16), [tile]);
     } else {
       this.rtScene.resize(w, h);
       this.rtLight.resize(Math.max(1, w >> 1), Math.max(1, h >> 1));
@@ -364,6 +377,8 @@ export class Renderer {
       this.rtFx.resize(w, h);
       this.rtDofA.resize(dw, dh);
       this.rtDofB.resize(dw, dh);
+      this.rtTile.resize(Math.ceil(dw / 16), Math.ceil(dh / 16));
+      this.rtTileD.resize(Math.ceil(dw / 16), Math.ceil(dh / 16));
     }
     let bw = w >> 1, bh = h >> 1;
     for (let i = 0; i < 6; i++) {
@@ -389,6 +404,8 @@ export class Renderer {
       const [dw, dh] = this.dofSize(this.W, this.H);
       this.rtDofA.resize(dw, dh);
       this.rtDofB.resize(dw, dh);
+      this.rtTile.resize(Math.ceil(dw / 16), Math.ceil(dh / 16));
+      this.rtTileD.resize(Math.ceil(dw / 16), Math.ceil(dh / 16));
     }
   }
 
@@ -431,6 +448,9 @@ export class Renderer {
     L.emissive = emissive;
     L.depth = depth;
     L.aux = packColor(fog, emissive, receive, Math.min(depth, 1));
+    const pd = 1 / Math.max(depth, 0.02) - 1;
+    if (pd < this.pMin) this.pMin = pd;
+    if (pd > this.pMax) this.pMax = pd;
     return this;
   }
   /** Screen-space layer: coordinates are art pixels from the top-left of the view. */
@@ -446,6 +466,9 @@ export class Renderer {
     L.emissive = emissive;
     L.depth = depth;
     L.aux = packColor(fog, emissive, receive, Math.min(depth, 1));
+    const pd = 1 / Math.max(depth, 0.02) - 1;
+    if (pd < this.pMin) this.pMin = pd;
+    if (pd > this.pMax) this.pMax = pd;
     return this;
   }
   /** Temporarily override emissive for following draws (call with no args to restore layer value). */
@@ -674,6 +697,8 @@ export class Renderer {
     this.time += dt;
     this.rdt = rdt;
     this.layered = false;
+    this.pMin = Infinity;
+    this.pMax = -Infinity;
     this.scene.reset();
     this.lights.reset();
     this.fx.reset();
@@ -837,8 +862,20 @@ export class Renderer {
       d.v4('u_lens', lens.focus, lens.dzNear, lens.dzFar, lens.near).v4('u_lens2', lens.far, lens.max, lens.defocus, post.dof ? 1 : 0);
       d.v3('u_legacy', [post.focus, post.dofStrength, 4]);
       this.fullscreen();
+      // tiles: where nothing is out of focus the blur passes skip their gather
+      this.rtTile.bind();
+      this.pDofTile.use().i('u_src', 0);
+      dofA.tex[0].bind(0);
+      this.fullscreen();
+      this.rtTileD.bind();
+      this.pDofDilate.use().i('u_src', 0);
+      this.rtTile.tex[0].bind(0);
+      this.fullscreen();
+      // the blur only reaches as far as this frame's widest circle of confusion
+      const reach = Math.max(1, Math.min(q.dofReach, Math.ceil(lens.peak * dofA.h / this.VH + 0.5)));
       const b = this.pDofBlur.use();
-      b.i('u_src', 0).f('u_R', q.dofReach);
+      this.rtTileD.tex[0].bind(1);
+      b.i('u_src', 0).i('u_tile', 1).f('u_R', reach);
       dofB.bind();
       dofA.tex[0].bind(0);
       b.v2('u_step', 1 / dofA.w, 0);
@@ -962,7 +999,9 @@ export class Renderer {
     far *= zk;
     // the everyday lens focuses on the gameplay plane; a cinematic one racks to its own plane as it comes in
     const focus = Math.max(0, 1 + (c.focus - 1) * Math.min(1, a));
-    const peak = Math.max(Math.max(0, focus - dzFar) * far, Math.max(0, 1.5 - focus - dzNear) * near, defocus);
+    // the widest blur on screen: the farthest and the nearest layer drawn this frame
+    const pFar = Number.isFinite(this.pMin) ? Math.max(0, this.pMin) : 0, pNear = Number.isFinite(this.pMax) ? this.pMax : 1.5;
+    const peak = Math.max(Math.max(0, focus - pFar - dzFar) * far, Math.max(0, pNear - focus - dzNear) * near, defocus);
     if (peak < 0.3) return null;
     return { focus, dzNear, dzFar, near, far, max: maxCoc, defocus, peak: Math.min(peak, maxCoc) };
   }

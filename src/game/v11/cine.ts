@@ -117,8 +117,6 @@ let lastScene: unknown = null;
 let swayT = 0, swayK = 0;
 /** frames ticked (the watchdog counts frames, so a frozen world never times a shot out) */
 let frameN = 0;
-/** additive view offsets this module put on each stage's camera last frame (so they never pile up) */
-const applied = new WeakMap<Stage, { ox: number; oy: number; oz: number }>();
 
 // ---------------------------------------------------------------- shots
 function settle(m: Move | null) {
@@ -370,28 +368,30 @@ function direct(st: Stage, dt: number, r: Renderer) {
       }
     }
   }
-  // handheld sway and punch-ins: additive view offsets (whatever else uses them is kept)
-  const prev = applied.get(st) ?? { ox: 0, oy: 0, oz: 1 };
+}
+
+/** handheld sway and punch-ins, on the rendered view only (after the stage has set it) */
+function directView(st: Stage, _dt: number, r: Renderer) {
+  const m = move, v = r.view, rdt = game.rdt;
   const want = Math.max(lookSway(), m && m.st === st && m.phase !== 'release' ? m.sway : 0);
   swayK += (want - swayK) * (1 - Math.exp(-rdt * 3));
   const sway = swayK, t = swayT;
-  let ox = sway * (Math.sin(t * 1.31) * 1.1 + Math.sin(t * 2.87 + 1.2) * 0.55 + Math.sin(t * 6.3 + 2.1) * 0.12 + Math.sin(t * 0.37) * 1.4);
-  let oy = sway * (Math.cos(t * 1.13) * 0.8 + Math.sin(t * 3.71 + 0.4) * 0.35 + Math.sin(t * 0.29 + 1) * 0.9);
-  let oz = 1;
-  for (const p of punches) {
-    const env = punchEnv(p);
-    const mz = 1 + p.zoom * env.zoom;
-    oz *= mz;
-    if (p.x !== null && p.y !== null && mz > 1) {
-      // keep the punch's point where it is on screen while the view closes in on it
-      ox += (p.x - c.x) * (1 - 1 / mz);
-      oy += (p.y - c.y) * (1 - 1 / mz);
-    }
+  if (sway > 0.001) {
+    // a hand holding a long lens: slow drift, a breathing bob and a little tremor (world px, so the
+    // screen sway grows with the zoom like a real one)
+    v.x += sway * (Math.sin(t * 1.31) * 1.1 + Math.sin(t * 2.87 + 1.2) * 0.55 + Math.sin(t * 6.3 + 2.1) * 0.12 + Math.sin(t * 0.37) * 1.4);
+    v.y += sway * (Math.cos(t * 1.13) * 0.8 + Math.sin(t * 3.71 + 0.4) * 0.35 + Math.sin(t * 0.29 + 1) * 0.9);
   }
-  c.ox = (c.ox ?? 0) - prev.ox + ox;
-  c.oy = (c.oy ?? 0) - prev.oy + oy;
-  c.oz = ((c.oz ?? 1) / prev.oz) * oz;
-  applied.set(st, { ox, oy, oz });
+  for (const p of punches) {
+    const mz = 1 + p.zoom * punchEnv(p).zoom;
+    if (mz <= 1) continue;
+    if (p.x !== null && p.y !== null) {
+      // keep the punch's point where it is on screen while the view closes in on it
+      v.x += (p.x - v.x) * (1 - 1 / mz);
+      v.y += (p.y - v.y) * (1 - 1 / mz);
+    }
+    v.zoom *= mz;
+  }
 }
 function lookSway() {
   let s = 0;
@@ -498,7 +498,7 @@ let running = false;
 function ensureRunning() {
   if (running) return;
   running = true;
-  setCamDirector(direct);
+  setCamDirector({ move: direct, view: directView });
   game.frameHooks.push(tick);
 }
 // the director is wanted as soon as anything imports this module (the binoculars, a story beat)

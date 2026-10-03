@@ -236,26 +236,32 @@ void main() {
 
 /**
  * One separable pass of a scatter-as-gather blur: every sample spreads its colour over its own
- * circle of confusion (a normalised gaussian, so a wide blur gives each pixel less), and a sample
- * behind the pixel may not spread over it further than the pixel's own blur. Blurred foreground
- * therefore bleeds softly over the sharp playfield, while the sharp playfield never haloes into the
- * blurred background. Alpha carries the weighted circle of confusion on to the next pass.
+ * circle of confusion (a smooth compact kernel, normalised, so a wide blur gives each pixel less),
+ * and a sample behind the pixel may not spread over it further than the pixel's own blur. Blurred
+ * foreground therefore bleeds softly over the sharp playfield, while the sharp playfield never
+ * haloes into the blurred background (and in-focus pixels are untouched by their neighbours). Alpha
+ * carries the weighted circle of confusion on to the next pass.
  */
 export const DOF_BLUR_FS = /* glsl */ `#version 300 es
 precision highp float;
 uniform sampler2D u_src;
+uniform sampler2D u_tile; // the widest circle of confusion around this pixel's 16x16 tile (/ 16)
 uniform vec2 u_step;   // one DOF texel along the blur direction (uv)
 uniform float u_R;     // reach in texels
 in vec2 v_uv;
 out vec4 o;
 ${COC_FN}
 const int MAXR = 16;
+// (1 - d^2/R^2)^2 over R = coc + 0.5: smooth, gaussian-like, zero beyond R; normalised by its sum over
+// the texel taps (16R/15 for a wide kernel, 1 for one narrower than a texel)
+float kern(float d2, float s) { float R = s + 0.5; float q = max(1.0 - d2 / (R * R), 0.0); return q * q / max(1.0, 1.0667 * R); }
 void main() {
   vec4 c0 = texture(u_src, v_uv);
+  // nothing around here is out of focus (most of the playfield): no blur to gather
+  if (texelFetch(u_tile, ivec2(gl_FragCoord.xy) / 16, 0).r * 16.0 < 0.3) { o = c0; return; }
   float cc = cocDec(c0.a);
-  float sc = max(abs(cc), 0.35);
-  float g0 = sc * 0.5;
-  float w0 = 1.0 / g0;
+  float sc = abs(cc);
+  float w0 = kern(0.0, sc);
   vec3 acc = c0.rgb * w0;
   float ws = w0, cs = cc * w0;
   for (int i = 1; i <= MAXR; i++) {
@@ -264,17 +270,41 @@ void main() {
     vec4 ta = texture(u_src, v_uv + u_step * fi);
     vec4 tb = texture(u_src, v_uv - u_step * fi);
     float ca = cocDec(ta.a), cb = cocDec(tb.a);
-    float sa = max(abs(ca), 0.35), sb = max(abs(cb), 0.35);
+    float sa = abs(ca), sb = abs(cb);
     if (ca > cc) sa = min(sa, sc);
     if (cb > cc) sb = min(sb, sc);
-    float ga = sa * 0.5, gb = sb * 0.5;
-    float wa = exp(-fi * fi / (2.0 * ga * ga)) / ga;
-    float wb = exp(-fi * fi / (2.0 * gb * gb)) / gb;
+    float wa = kern(fi * fi, sa), wb = kern(fi * fi, sb);
     acc += ta.rgb * wa + tb.rgb * wb;
     ws += wa + wb;
     cs += ca * wa + cb * wb;
   }
   o = vec4(acc / ws, cocEnc(cs / ws));
+}`;
+
+/** the widest circle of confusion in each 16x16 tile of the DOF buffer (stored / 16) */
+export const DOF_TILE_FS = /* glsl */ `#version 300 es
+precision highp float;
+uniform sampler2D u_src;
+out vec4 o;
+${COC_FN}
+void main() {
+  ivec2 sz = textureSize(u_src, 0) - 1;
+  ivec2 b = ivec2(gl_FragCoord.xy) * 16;
+  float m = 0.0;
+  for (int y = 0; y < 16; y++) for (int x = 0; x < 16; x++) m = max(m, abs(cocDec(texelFetch(u_src, min(b + ivec2(x, y), sz), 0).a)));
+  o = vec4(min(m / 16.0, 1.0), 0.0, 0.0, 1.0);
+}`;
+
+/** each tile takes the widest blur of its neighbours (a blur reaches at most 16 texels) */
+export const DOF_DILATE_FS = /* glsl */ `#version 300 es
+precision highp float;
+uniform sampler2D u_src;
+out vec4 o;
+void main() {
+  ivec2 sz = textureSize(u_src, 0) - 1, c = ivec2(gl_FragCoord.xy);
+  float m = 0.0;
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) m = max(m, texelFetch(u_src, clamp(c + ivec2(x, y), ivec2(0), sz), 0).r);
+  o = vec4(m, 0.0, 0.0, 1.0);
 }`;
 
 /**

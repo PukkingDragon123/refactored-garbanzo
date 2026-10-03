@@ -67,15 +67,18 @@ export interface CamState {
   /** additive view offset (handheld camera sway), world px */
   ox?: number;
   oy?: number;
-  /** view zoom multiplier on top of zoom (a cinematic punch-in), 1 = none */
-  oz?: number;
 }
 
 /**
- * The cinematic camera (src/game/v11/cine.ts) directs the camera of whichever stage is rendering:
- * it runs every frame inside updateCamera, after the follow smoothing and before the world clamp.
+ * The cinematic camera (src/game/v11/cine.ts) directs the camera of whichever stage is rendering,
+ * every frame inside updateCamera: move() after the follow smoothing and before the world clamp (it
+ * moves the camera itself), view() once the view is set (handheld sway and punch-ins, applied to the
+ * rendered view only, so they never pile up on the camera).
  */
-export type CamDirector = (st: Stage, dt: number, r: Renderer) => void;
+export interface CamDirector {
+  move(st: Stage, dt: number, r: Renderer): void;
+  view(st: Stage, dt: number, r: Renderer): void;
+}
 let director: CamDirector | null = null;
 export function setCamDirector(d: CamDirector | null) {
   director = d;
@@ -150,7 +153,7 @@ export class Stage {
       c.x = damp(c.x, c.tx, c.follow, dt);
       c.y = damp(c.y, c.ty, c.follow, dt);
     }
-    director?.(this, dt, r);
+    director?.move(this, dt, r);
     const halfW = r.VW / 2 / c.zoom, halfH = r.VH / 2 / c.zoom;
     if (this.maxX - this.minX > halfW * 2) c.x = clamp(c.x, this.minX + halfW, this.maxX - halfW);
     else c.x = (this.minX + this.maxX) / 2;
@@ -166,9 +169,10 @@ export class Stage {
     }
     r.view.x = c.x + (c.ox ?? 0);
     r.view.y = c.y + (c.oy ?? 0);
-    r.view.zoom = c.zoom * (c.oz ?? 1);
+    r.view.zoom = c.zoom;
     r.view.shakeX = sx;
     r.view.shakeY = sy;
+    director?.view(this, dt, r);
   }
 
   render(r: Renderer, dt: number) {
