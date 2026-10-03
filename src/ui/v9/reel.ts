@@ -12,6 +12,7 @@ import { el } from '../ui';
 import { audio } from '../../core/audio';
 import { PixelBuffer } from '../../art/pixel';
 import { hex, C, withAlpha } from '../../art/color';
+import type { HandsController } from '../../art/v11/hands3d';
 
 const CSS = `
 .frl { position: absolute; right: max(14px, 2.4vw); bottom: max(12px, 3vh); z-index: 27; touch-action: none; user-select: none; -webkit-user-select: none;
@@ -64,6 +65,10 @@ export class Reel {
   private dragAcc = 0;
   private scale = 3;
   private shake = 0;
+  /** Mori's 3D hand on the knob: an overlay twice the reel's size, centred on it */
+  private hands: HandsController | null = null;
+  private handBox: HTMLElement | null = null;
+  private dead = false;
 
   constructor(parent: HTMLElement) {
     if (!styled) { document.head.appendChild(el('style', '', CSS)); styled = true; }
@@ -79,11 +84,32 @@ export class Reel {
     this.fit();
     window.addEventListener('resize', this.fit);
     this.draw();
+    void import('../../art/v11/hands3d').then(m => {
+      if (this.dead || !m.HANDS3D.enabled) return;
+      const box = document.createElement('div');
+      box.style.cssText = 'position:absolute;pointer-events:none;';
+      this.el.appendChild(box);
+      this.handBox = box;
+      this.placeBox();
+      this.hands = m.mountHands3d(box, { who: 'mori', side: 'right', grid: [ART * 2, ART * 2], scale: 3.6, lights: 'ui', pixel: 3, fov: 34, outline: 0.8, quant: 24 });
+      this.hands.right?.shoulderAt(ART * 2.3, ART * 3.8, 50).setPose('crank');
+    });
+  }
+  private placeBox() {
+    const b = this.handBox;
+    if (!b) return;
+    const s = ART * this.scale;
+    b.style.width = b.style.height = s * 2 + 'px';
+    // the reel canvas sits under the tip label; centre the box on the canvas
+    b.style.left = `calc(50% - ${s}px)`;
+    b.style.top = `${this.cv.offsetTop + s / 2 - s}px`;
+    this.hands?.layout();
   }
   private fit = () => {
     const vmin = Math.min(window.innerWidth, window.innerHeight);
     this.scale = Math.max(2, Math.min(4, Math.floor((vmin * 0.34) / ART)));
     this.cv.style.width = this.cv.style.height = ART * this.scale + 'px';
+    this.placeBox();
   };
   show(on: boolean) { this.el.classList.toggle('off', !on); }
   tip(text: string) { this.tipEl.innerHTML = text; this.tipEl.classList.toggle('on', !!text); }
@@ -115,6 +141,14 @@ export class Reel {
     this.ctr.classList.toggle('warn', warn);
     this.ctr.innerHTML = `LINE <b>${this.line.toFixed(1)}</b> m`;
     this.draw();
+    const h = this.hands?.right;
+    if (h && this.hands) {
+      // fingertips round the knob, the wrist circling with it; a touch of strain when the line is tight
+      const c = ART / 2 - 0.5, kx = c + Math.cos(this.angle) * 17, ky = c + Math.sin(this.angle) * 17;
+      h.setPose('crank', 1, { force: Math.min(1, this.tension) });
+      h.reachTo(ART / 2 + kx + (sx || 0) / this.scale, ART / 2 + ky + (sy || 0) / this.scale, 18, { with: 'pinch', fingers: [-0.55, -0.45, -0.7], palm: [-0.35, -0.2, -0.9], follow: 30 });
+      this.hands.frame(dt);
+    }
   }
 
   // ------------------------------------------------------------ pixel art
@@ -197,6 +231,8 @@ export class Reel {
   }
 
   dispose() {
+    this.dead = true;
+    this.hands?.destroy();
     window.removeEventListener('resize', this.fit);
     this.el.remove();
   }

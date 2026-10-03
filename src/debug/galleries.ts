@@ -117,6 +117,7 @@ async function tigerGallery() {
 }
 
 export function runGallery(name: string) {
+  if (name === 'hands3d') { void import('./hands3dGallery').then(m => m.hands3dGallery()); return; }
   if (name === 'icons') { void iconGallery(); return; }
   // V11 illustrated item art on its Backpack footprints (src/debug/items11.ts)
   if (name === 'items11') { void import('./items11').then(m => m.items11Gallery(new URLSearchParams(location.search))); return; }

@@ -11,6 +11,7 @@
 import { openCloseup, CW, CH, rgb, hx, mixc, put, blend, ramp, dith, hash, R, G, B } from './closeup';
 import { Hold, loop } from '../v4/mini';
 import { audio } from '../../core/audio';
+import { closeupHands, HANDS3D } from '../../art/v11/hands3d';
 
 type Outcome = 'perfect' | 'over' | 'under';
 
@@ -152,7 +153,7 @@ function paintBase(): Uint32Array {
 // ------------------------------------------------------------------ gooseneck kettle (drawn upright, rotated at runtime)
 const KW = 96, KH = 70, KPX = 84, KPY = 30; // pivot = Mori's grip on the handle
 const TIP: [number, number] = [5, 22];
-function paintKettle(): Uint32Array {
+function paintKettle(withHand = true): Uint32Array {
   const k = new Uint32Array(KW * KH);
   const set = (x: number, y: number, c: number) => { x |= 0; y |= 0; if (x >= 0 && y >= 0 && x < KW && y < KH) k[y * KW + x] = c; };
   // body: a squat brushed-steel drum with rounded shoulders
@@ -198,7 +199,7 @@ function paintKettle(): Uint32Array {
     const x = 82 + Math.cos(a) * 11, y = 42 + Math.sin(a) * 18;
     for (let r = -2.2; r <= 2.2; r += 0.5) set(x + Math.cos(a) * r, y + Math.sin(a) * r, r < -0.8 ? hx('#4a4246') : hx('#161214'));
   }
-  for (let y = 18; y < 42; y++) for (let x = 76; x < 96; x++) {
+  if (withHand) for (let y = 18; y < 42; y++) for (let x = 76; x < 96; x++) {
     const dx = (x - 86) / 9.6, dy = (y - 30) / 11;
     if (dx * dx + dy * dy > 1) continue;
     const fing = x < 80 && (y - 20) % 5 === 0;
@@ -315,7 +316,10 @@ function paintTwinkles(buf: Uint32Array, tt: number) {
 export async function runRamenPour(): Promise<Outcome> {
   const cu = openCloseup();
   const base = paintBase();
-  const kettle = paintKettle();
+  const kettleHand = paintKettle(true), kettleBare = paintKettle(false);
+  // Mori's real hand on the handle (the painted one stays as the fallback while it loads)
+  const hands = HANDS3D.enabled ? closeupHands(cu, { who: 'mori', side: 'right', lights: 'galley', scale: 2.7 }) : null;
+  hands?.right?.shoulderAt(410, -90, 110);
   const hold = new Hold(cu.wrap);
   const buf = cu.buf;
   // water surface heightfield over the cup's disk (-1..1 in both axes)
@@ -614,6 +618,8 @@ export async function runRamenPour(): Promise<Outcome> {
         }
       }
       // the kettle in Mori's hand (rotated sprite, nearest-neighbour), his sleeve out to the edge
+      const use3d = !!hands?.ready3d;
+      const kettle = use3d ? kettleBare : kettleHand;
       const ca = Math.cos(tilt), sa = Math.sin(tilt);
       for (let y = 0; y < CH; y++) for (let x = 100; x < CW; x++) {
         const dx = x + 0.5 - KX, dy = y + 0.5 - KY;
@@ -623,7 +629,7 @@ export async function runRamenPour(): Promise<Outcome> {
         if (v >>> 24) buf[y * CW + x] = v;
       }
       const [hx0, hy0] = rot(92 - KPX, 26 - KPY, -tilt, KX, KY);
-      for (let x = Math.round(hx0 - 1); x < CW; x++) {
+      if (!use3d) for (let x = Math.round(hx0 - 1); x < CW; x++) {
         const k = (x - hx0) / (CW - hx0);
         const cy = hy0 - 4 - k * 36, r = 8 + k * 6;
         for (let y = Math.round(cy - r); y <= Math.round(cy + r); y++) {
@@ -644,9 +650,16 @@ export async function runRamenPour(): Promise<Outcome> {
       }
       (window as unknown as { __ramen?: string }).__ramen = `${L.toFixed(3)} t${t.toFixed(1)} n${stream.length} s${steam.length}`;
       cu.present();
+      if (hands) {
+        // the grip rides the handle's upper curve as the kettle tips
+        const [ax, ay] = rot(82.5 - KPX, 23.5 - KPY, -tilt, KX, KY), [bx, by] = rot(91.5 - KPX, 34 - KPY, -tilt, KX, KY);
+        hands.right?.hold({ a: [ax, ay, 0], b: [bx, by, 0], r: 2.4 }, { follow: 0, force: 0.4 + flow * 0.4 });
+        hands.frame(dt);
+      }
       return true;
     });
   });
   hold.dispose();
+  hands?.destroy();
   return result;
 }
