@@ -398,13 +398,41 @@ export async function chapters(): Promise<DevChapter[]> {
     { id: 'm:regionmap', name: 'Region Map (pick a place to go)', icon: 'map', run: async () => {
       const { openRegionMap } = await import('../ui/v10/regionmap');
       const to = await openRegionMap({});
-      if (to) await goLocation(to);
+      if (to) await goLocation(to.split('@')[0]);
+    } },
+    { id: 'm:mapall', name: 'Region Map: explore everything', sub: 'Every place found, every trail walked; new land inks itself in', icon: 'map', run: async () => {
+      ensureLoop();
+      await revealAll();
+      await goIsle();
+      await sleep(600);
+      const { openRegionMap } = await import('../ui/v10/regionmap');
+      const to = await openRegionMap({ here: { loc: 'camp', x: 1980 } });
+      if (to) { const { departFromCamp } = await import('../game/v10/field10'); await departFromCamp(to); }
+    } },
+    { id: 'm:mapforget', name: 'Region Map: replay the inking', sub: 'Forget what the map showed last, so everything explored draws itself in again', icon: 'map', run: async () => {
+      const s = game.save as unknown as { v10?: Record<string, unknown> };
+      if (s.v10) delete s.v10['mapview'];
+      game.persist();
     } },
     { id: 'm:pack', name: 'Backpack', icon: 'gift', run: async () => { await zl().pack?.(); } },
     { id: 'm:review', name: 'Photo review', icon: 'film', run: async () => { await zl().review?.(); } },
     { id: 'm:journal', name: 'Field Guide', icon: 'scroll', run: async () => { (await import('../ui/journal')).openJournal(); } },
   ] });
   return out;
+}
+
+/** the whole Region Map explored: every place found (the Kitten afloat), every stretch walked, every way taken */
+async function revealAll() {
+  const R = await import('../game/v10/regions');
+  boatTo(6);
+  for (const L of R.LOCATIONS) {
+    for (const f of L.needs ?? []) game.save.flags[f] = true;
+    R.findLocation(L.id);
+    const [a, b] = R.xRange(L);
+    R.revealMap(L.id, a, b);
+    for (const r of L.routes ?? []) R.markRoute(r.from, L.id);
+  }
+  game.persist();
 }
 
 // ---------------------------------------------------------------- reloading the scene (after a skip)

@@ -116,7 +116,7 @@ async function waitFor(pred: (s: unknown) => boolean, ms = 20000) {
 
 async function loadLocation(L: LocationDef, enter?: number) {
   await idle();
-  if (L.scene.type === 'island') return islandAt(L.scene.x);
+  if (L.scene.type === 'island') return islandAt(enter ?? L.scene.x);
   if (L.scene.type === 'custom') return L.scene.go();
   const def = await siteDef(L.scene.type === 'ocean' ? 'deep' : L.scene.site);
   if (!def) { console.warn('no scene for', L.id); return; }
@@ -159,9 +159,9 @@ let busy = false;
 /**
  * Go to a location. From camp this is fast travel along the known trail (it costs the trip's energy
  * and hours); with `route` it is the way deeper from the scene Mori is in (field10.ts spends the
- * route's energy at the exit before calling this).
+ * route's energy at the exit before calling this). `at`: arrive at that world x (a map checkpoint).
  */
-export async function goExpedition(locId: string, o: { route?: RouteDef; from?: string } = {}): Promise<void> {
+export async function goExpedition(locId: string, o: { route?: RouteDef; from?: string; at?: number } = {}): Promise<void> {
   if (busy) return;
   const L = location(locId);
   if (!L) return;
@@ -188,7 +188,7 @@ export async function goExpedition(locId: string, o: { route?: RouteDef; from?: 
     s.cur = locId === 'camp' ? null : locId;
     if (s.cur && !s.trail.includes(locId)) s.trail.push(locId);
     game.persist();
-    await loadLocation(L, o.route?.enter);
+    await loadLocation(L, o.route?.enter ?? o.at);
   } finally {
     busy = false;
   }

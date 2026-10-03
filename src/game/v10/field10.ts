@@ -120,15 +120,17 @@ export abstract class TripRun {
   }
   protected mapAllowed() { return true; }
 
-  /** M / the map button: the Region Map (travel only from camp) */
+  /** M / the map button: the Region Map (from camp: an expedition; out here: on to another checkpoint) */
   async openMap() {
     if (game.ui.blocking || this.f.cutscene) return;
     const atCamp = currentExpedition() === null && isIslandScene(this.f) && Math.abs(this.p.x - CAMP_X) < 700;
     const { openRegionMap } = await import('../../ui/v10/regionmap');
     game.paused = true;
     let to: string | null = null;
-    try { to = await openRegionMap({ readOnly: !atCamp, here: { loc: this.loc, x: this.p.x } }); } finally { game.paused = false; }
+    const here = { loc: this.loc, x: this.p.x };
+    try { to = await openRegionMap({ readOnly: !atCamp, travelFrom: atCamp ? undefined : here, here }); } finally { game.paused = false; }
     if (to && atCamp) await departFromCamp(to);
+    else if (to) { const { travelOn } = await import('./maptravel'); await travelOn(here, to); }
   }
 
   protected addMapButton() {
@@ -569,8 +571,11 @@ export const TRAILHEAD = { x: 2420, on: false };
  *  back into camp; `end` lets this module end it too) */
 export const ISLAND_TRIPS = { auto: true, end: true };
 
-/** leave camp for a location picked on the map (fast travel along the known trail) */
-export async function departFromCamp(to: string) {
+/** leave camp for a location picked on the map (fast travel along the known trail); 'loc@x' is a
+ *  checkpoint on the way (arrive in loc's scene at world x) */
+export async function departFromCamp(target: string) {
+  const [to, atS] = target.split('@');
+  const at = atS ? +atS : undefined;
   const L = location(to);
   if (!L) return;
   if (to === 'camp') return;
@@ -579,7 +584,7 @@ export async function departFromCamp(to: string) {
     void sc.say([{ who: 'aroha', ...tr(`${L.name}? Kia tūpato. Pack light, and we go.`), expr: 'determined' } as never]);
     await sleep(900);
   }
-  await goExpedition(to);
+  await goExpedition(to, at !== undefined && Number.isFinite(at) ? { at } : {});
 }
 
 // ------------------------------------------------------------------ art & css

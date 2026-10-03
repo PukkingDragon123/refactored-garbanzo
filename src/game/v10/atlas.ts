@@ -216,9 +216,9 @@ export const ATLAS: AtlasLoc[] = [
     desc: 'The first deep forest inland of the beach: giant trees, ferns taller than a man, mist, and things that watch you.', terrain: 'Deep forest, mud wallows',
   },
   {
-    id: 'hills', name: 'Ngā Puke Kōhatu', sub: 'The Rocky Hills', region: 'interior', kind: 'site', pos: P(520, 250),
+    id: 'hills', name: 'Ngā Puke Kōhatu', sub: 'The Rocky Hills', region: 'interior', kind: 'site', pos: P(572, 190),
     scene: { type: 'custom', go: async () => { console.warn('[atlas] the rocky hills scene is not built yet'); } }, difficulty: 3, xr: [0, 3200],
-    path: PATH([470, 236], [500, 246], [530, 252], [560, 250]),
+    path: PATH([528, 234], [548, 212], [574, 192], [604, 176], [628, 164]),
     desc: 'Tors, scree and tussock above the bush line. Wind, hawks, and a long view over everything.', terrain: 'Boulders, scree, crags',
   },
 ];
