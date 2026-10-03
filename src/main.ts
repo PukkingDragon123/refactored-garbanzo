@@ -3,6 +3,7 @@ import { game } from './game/game';
 import { bakeAssets } from './game/assets';
 import { bindAllArt } from './game/bindart';
 import { installSkin } from './ui/skin';
+import { installPaper } from './ui/v11/paper/css';
 import { loadSave, newSave } from './game/save';
 import { audio } from './core/audio';
 import { el } from './ui/ui';
@@ -20,6 +21,7 @@ async function boot() {
     return;
   }
   installSkin();
+  installPaper();
   const canvas = document.getElementById('gl') as HTMLCanvasElement;
   const ui = document.getElementById('ui') as HTMLElement;
   try {
@@ -166,6 +168,21 @@ async function boot() {
     },
     /** the cinematic camera and post FX (cineTo, cinePunch, cineLook...): (await zl.cine()).cinePunch() */
     cine: () => import('./game/v11/cine'),
+    /** V11 physical UI kit sampler book (see src/ui/v11/paper/index.ts) */
+    paper: async () => (await import('./ui/v11/paper/demo')).paperDemo(),
+    /** V11 the Zealandia Encyclopedia book (optionally at an entry: 'sp:glasscrab', 'cat:flora') */
+    ency: async (key?: string) => (await import('./ui/v11/encybook')).openEncyclopedia({ key }),
+    /** V11 Mori's field journal (quests), the camp board */
+    journal: async (id?: string) => (await import('./ui/v11/journalbook')).openJournal({ quest: id }),
+    board: async () => (await import('./ui/v10/campboard')).openBoard(),
+    /** dev: document the first n species (stand-in photos) so the encyclopedia has pages */
+    devDoc: async (n = 8) => {
+      const d = await import('./debug/devpoints');
+      const { SPECIES } = await import('./game/species');
+      for (const sp of SPECIES.slice(0, n)) d.documentSpecies(sp.id, Object.keys(sp.behaviors).slice(0, 2));
+      game.persist();
+      return n;
+    },
   };
   void import('./game/v9/islezl').then(m => { (window as unknown as { zl: { isle: unknown } }).zl.isle = m.ISLE; });
   // Mori's 3D hands for the cooking minigame register with it (if it's in the build)

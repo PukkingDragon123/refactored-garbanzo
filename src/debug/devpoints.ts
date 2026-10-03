@@ -432,7 +432,11 @@ export async function chapters(): Promise<DevChapter[]> {
     } },
     { id: 'm:pack', name: 'Backpack', icon: 'gift', run: async () => { await zl().pack?.(); } },
     { id: 'm:review', name: 'Photo review', icon: 'film', run: async () => { await zl().review?.(); } },
-    { id: 'm:journal', name: 'Field Guide', icon: 'scroll', run: async () => { (await import('../ui/journal')).openJournal(); } },
+    { id: 'm:journal', name: 'Field Guide (V2)', icon: 'scroll', run: async () => { (await import('../ui/journal')).openJournal(); } },
+    { id: 'm:fieldjournal', name: 'Field journal (quests book)', icon: 'scroll', run: async () => { await (await import('../ui/v11/journalbook')).openJournal(); } },
+    { id: 'm:ency', name: 'Zealandia Encyclopedia (book)', icon: 'scroll', run: async () => { await (await import('../ui/v11/encybook')).openEncyclopedia(); } },
+    { id: 'm:board', name: 'Camp board (cork)', icon: 'flag', run: async () => { await (await import('../ui/v10/campboard')).openBoard(); } },
+    { id: 'm:paper', name: 'Paper kit sampler', icon: 'scroll', run: async () => { (await import('../ui/v11/paper/demo')).paperDemo(); } },
   ] });
   return out;
 }

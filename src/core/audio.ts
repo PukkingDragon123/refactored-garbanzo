@@ -22,6 +22,8 @@ export type Sfx =
   | 'ui' | 'uiBack' | 'uiOpen' | 'discover' | 'fact' | 'star' | 'coin' | 'place' | 'hiss' | 'roar'
   | 'splash' | 'rustle' | 'birdCall' | 'chirp' | 'engine' | 'thunder' | 'alert' | 'wrong' | 'pageTurn'
   | 'bubble' | 'wingFlap' | 'croc' | 'dialogBlip' | 'whoosh'
+  // V11 physical UI: paper, books, pencils, stamps and the cork board
+  | 'pageFlip' | 'pageRiffle' | 'bookOpen' | 'bookClose' | 'pencil' | 'stamp' | 'pinPush' | 'tapeRip' | 'paperSlide' | 'inkBleed'
   // camp life, crafting & research
   | 'hammer' | 'saw' | 'rope' | 'zipper' | 'pluck' | 'dig' | 'netSwish' | 'jarClink' | 'collectPop'
   | 'munch' | 'gulp' | 'craft' | 'skillUnlock' | 'typing' | 'scanBeep' | 'lanternOn' | 'fireLight'
@@ -489,6 +491,8 @@ const UI_SFX: ReadonlySet<Sfx> = new Set<Sfx>([
   'bubblePop', 'emoteSurprise', 'emoteQuestion', 'emoteLaugh', 'emoteAngry', 'emoteHeart', 'emoteSweat',
   'collectPop', 'skillUnlock', 'craft', 'typing', 'scanBeep', 'jumpscare',
   'reelClick', 'reelDrag', 'catchJingle',
+  // v11: the physical UI (books, journal, cork board, transitions)
+  'pageFlip', 'pageRiffle', 'bookOpen', 'bookClose', 'pencil', 'stamp', 'pinPush', 'tapeRip', 'paperSlide', 'inkBleed',
 ]);
 
 /** Minimum seconds between repeats of the same sfx (per pitch bucket for animal calls). */
@@ -500,6 +504,7 @@ const THROTTLE: Partial<Record<Sfx, number>> = {
   emoteAngry: 0.1, emoteHeart: 0.1, emoteSweat: 0.08, jumpscare: 0.8, rustleBush: 0.08,
   waveCrash: 0.15, woodCreak: 0.12, thunderClose: 0.3, gust: 0.15, splashBig: 0.1, shipCrash: 1,
   reelClick: 0.018, reelDrag: 0.06, catchJingle: 1,
+  pageFlip: 0.06, pageRiffle: 0.3, pencil: 0.09, stamp: 0.12, pinPush: 0.05, paperSlide: 0.08, inkBleed: 0.5,
 };
 const CALL_THROTTLE = 0.05;
 /** Loud one-shots never get pushed past these per-play volumes (keeps them out of clipping). */
@@ -2901,6 +2906,120 @@ export class AudioEngine {
         const v = V(0.3, 0.6, 0.08);
         this.burst(v, { t, a: 0.05, hold: 0.05, d: 0.15, vol: 0.7, ft: 'bandpass', f: 1200 * p, f2: 4000 * p, Q: 0.8 });
         this.burst(v, { t: t + 0.2, a: 0.001, d: 0.03, vol: 0.4, ft: 'highpass', f: 3000 * p, Q: 0.6 });
+        break;
+      }
+      // ---- V11 physical UI
+      case 'pageFlip': {
+        // a book page lifting, fluttering over and landing: a swept, flapping hiss, then a soft flap
+        const v = V(0.34, 0.75, 0.1);
+        const end = t + 0.36;
+        const src = this.noiseSrc(v, 'pink', t, end);
+        const bp = this.filt(v, 'bandpass', 900 * p, 0.9);
+        bp.frequency.setValueAtTime(800 * p, t);
+        bp.frequency.exponentialRampToValueAtTime(3600 * p, t + 0.16);
+        bp.frequency.exponentialRampToValueAtTime(1400 * p, end);
+        const flap = this.gain(v, 0.7);
+        this.lfo(v, t, end, 26 + Math.random() * 10, 0.3, flap.gain, 'triangle');
+        const e = this.env(v, t, 0.06, 0.9, 0.2, 0.06);
+        src.connect(bp);
+        bp.connect(flap);
+        flap.connect(e);
+        e.connect(v.out);
+        this.burst(v, { t: t + 0.27, a: 0.002, d: 0.06, vol: 0.55, noise: 'brown', ft: 'lowpass', f: 520 * p, Q: 0.7 });
+        this.burst(v, { t: t + 0.28, a: 0.001, d: 0.02, vol: 0.18, ft: 'highpass', f: 4200 * p, Q: 0.5 });
+        break;
+      }
+      case 'pageRiffle': {
+        // thumbing through a stack of pages: a run of quick flicks, slowing down
+        const v = V(0.3, 1.1, 0.08);
+        let tt = t;
+        for (let i = 0; i < 9; i++) {
+          const k = 1 - i / 12;
+          this.burst(v, { t: tt, a: 0.004, d: 0.035, vol: 0.55 * k + 0.1, ft: 'bandpass', f: (2200 + Math.random() * 1600) * p, Q: 1.1 });
+          this.burst(v, { t: tt + 0.012, a: 0.001, d: 0.015, vol: 0.2, noise: 'brown', ft: 'lowpass', f: 700 * p });
+          tt += 0.032 + i * 0.009 + Math.random() * 0.012;
+        }
+        break;
+      }
+      case 'bookOpen': {
+        // a leather cover creaking open, the spine crackling, the board landing on the table
+        const v = V(0.36, 1.2, 0.18);
+        for (let i = 0; i < 3; i++) {
+          const ct = t + i * 0.09 + Math.random() * 0.03;
+          this.tone(v, { type: 'sawtooth', f: (150 + Math.random() * 60) * p, f2: (110 + Math.random() * 40) * p, t: ct, a: 0.01, hold: 0.03, d: 0.08, vol: 0.05 });
+          this.burst(v, { t: ct, a: 0.003, d: 0.02, vol: 0.3, ft: 'bandpass', f: (1400 + Math.random() * 900) * p, Q: 3 });
+        }
+        this.burst(v, { t: t + 0.1, a: 0.12, hold: 0.06, d: 0.22, vol: 0.45, ft: 'bandpass', f: 1100 * p, f2: 2600 * p, Q: 0.7 });
+        this.burst(v, { t: t + 0.42, a: 0.002, d: 0.12, vol: 0.9, noise: 'brown', ft: 'lowpass', f: 300 * p, Q: 0.8 });
+        this.tone(v, { f: 95 * p, f2: 60 * p, t: t + 0.42, a: 0.003, d: 0.12, vol: 0.35 });
+        break;
+      }
+      case 'bookClose': {
+        // the cover clapping shut: an air puff and a firm thump
+        const v = V(0.42, 0.7, 0.16);
+        this.burst(v, { t, a: 0.04, d: 0.08, vol: 0.4, ft: 'bandpass', f: 1600 * p, f2: 900 * p, Q: 0.8 });
+        this.burst(v, { t: t + 0.07, a: 0.001, d: 0.14, vol: 1, noise: 'brown', ft: 'lowpass', f: 260 * p, Q: 0.9 });
+        this.tone(v, { f: 120 * p, f2: 55 * p, t: t + 0.07, a: 0.002, d: 0.14, vol: 0.5 });
+        this.burst(v, { t: t + 0.075, a: 0.001, d: 0.02, vol: 0.25, ft: 'highpass', f: 3200 * p, Q: 0.5 });
+        break;
+      }
+      case 'pencil': {
+        // graphite on paper: a few quick strokes of gritty hiss
+        const v = V(0.2, 0.6, 0.04);
+        const n = 3 + Math.floor(Math.random() * 3);
+        let tt = t;
+        for (let i = 0; i < n; i++) {
+          const len = 0.04 + Math.random() * 0.06;
+          this.burst(v, { t: tt, a: 0.008, hold: len, d: 0.03, vol: 0.5 + Math.random() * 0.3, noise: 'drops', ft: 'bandpass', f: (4200 + Math.random() * 1800) * p, Q: 1.3 });
+          this.burst(v, { t: tt, a: 0.01, hold: len, d: 0.03, vol: 0.25, ft: 'highpass', f: 6500 * p, Q: 0.6 });
+          tt += len + 0.03 + Math.random() * 0.04;
+        }
+        break;
+      }
+      case 'stamp': {
+        // a rubber stamp coming down hard on paper
+        const v = V(0.42, 0.5, 0.1);
+        this.tone(v, { f: 170 * p, f2: 70 * p, t, a: 0.002, d: 0.09, vol: 0.7 });
+        this.burst(v, { t, a: 0.001, d: 0.07, vol: 0.8, noise: 'brown', ft: 'lowpass', f: 420 * p, Q: 1 });
+        this.burst(v, { t, a: 0.001, d: 0.03, vol: 0.35, ft: 'bandpass', f: 1800 * p, Q: 1.2 });
+        this.burst(v, { t: t + 0.09, a: 0.004, d: 0.05, vol: 0.12, ft: 'bandpass', f: 2600 * p, Q: 2 });
+        break;
+      }
+      case 'pinPush': {
+        // a push pin going into cork: a tiny click and a muffled tuck
+        const v = V(0.3, 0.3, 0.05);
+        this.tone(v, { type: 'triangle', f: 1900 * p, f2: 1300 * p, t, a: 0.001, d: 0.012, vol: 0.4 });
+        this.burst(v, { t: t + 0.008, a: 0.002, d: 0.05, vol: 0.6, noise: 'brown', ft: 'lowpass', f: 600 * p, Q: 0.8 });
+        break;
+      }
+      case 'tapeRip': {
+        // masking tape torn off the roll: a fast crackling rasp
+        const v = V(0.26, 0.5, 0.05);
+        const end = t + 0.24;
+        const src = this.noiseSrc(v, 'white', t, end);
+        const bp = this.filt(v, 'bandpass', 2400 * p, 1.4);
+        bp.frequency.setValueAtTime(1900 * p, t);
+        bp.frequency.exponentialRampToValueAtTime(3600 * p, end);
+        const teeth = this.gain(v, 0.5);
+        this.lfo(v, t, end, 70 + Math.random() * 30, 0.5, teeth.gain, 'square');
+        const e = this.env(v, t, 0.01, 1, 0.08, 0.14);
+        src.connect(bp);
+        bp.connect(teeth);
+        teeth.connect(e);
+        e.connect(v.out);
+        break;
+      }
+      case 'paperSlide': {
+        // a sheet slid across a table
+        const v = V(0.22, 0.6, 0.06);
+        this.burst(v, { t, a: 0.08, hold: 0.06, d: 0.16, vol: 0.7, noise: 'pink', ft: 'bandpass', f: 1300 * p, f2: 2100 * p, Q: 0.7 });
+        break;
+      }
+      case 'inkBleed': {
+        // wet ink blooming across the page: a soft low swell under a hush
+        const v = V(0.22, 1.4, 0.3, true);
+        this.tone(v, { f: 92 * p, f2: 56 * p, t, a: 0.25, hold: 0.2, d: 0.6, vol: 0.35 });
+        this.burst(v, { t, a: 0.3, hold: 0.15, d: 0.5, vol: 0.4, noise: 'pink', ft: 'lowpass', f: 900 * p, f2: 380 * p, Q: 0.6 });
         break;
       }
       case 'bubble': {

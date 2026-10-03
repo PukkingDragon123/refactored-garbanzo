@@ -28,7 +28,8 @@ The game needs a browser with WebGL2 (any recent Chrome, Edge, Firefox or Safari
 | Zoom | mouse wheel (or `Z` / `X`) |
 | Photo / video mode | `V` (needs the video module) |
 | Pick and place gadget | `1`-`5`, then `F` |
-| Field Guide | `J` or `Tab` |
+| Field journal (quests) | `J` |
+| Zealandia Encyclopedia | `G` |
 | Pause | `Esc` |
 
 ## How it plays

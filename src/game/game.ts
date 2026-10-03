@@ -7,6 +7,8 @@ import { SaveData, newSave, writeSave } from './save';
 import { UI } from '../ui/ui';
 import { clamp } from '../core/math';
 import { atlas, local, newLocalAtlas } from './assets';
+import { beginTransition, transitionFrame } from '../ui/v11/paper/transition';
+import type { TransitionStyle } from '../ui/v11/paper/transition';
 
 export interface Scene {
   enter?(): void | Promise<void>;
@@ -59,11 +61,12 @@ class Game {
     writeSave(this.save);
   }
 
-  /** Switch scenes with a pixel-dissolve fade. */
-  async go(next: Scene | (() => Scene | Promise<Scene>), color: [number, number, number] = [0.02, 0.03, 0.04], speed = 2.2) {
+  /** Switch scenes behind a transition (ink bleed by default; see ui/v11/paper/transition.ts). */
+  async go(next: Scene | (() => Scene | Promise<Scene>), color: [number, number, number] = [0.02, 0.03, 0.04], speed = 2.2, style?: TransitionStyle) {
     if (this.busy) return;
     this.busy = true;
     this.r.post.fadeColor = color;
+    beginTransition(style ? { style } : undefined);
     await this.fadeTo(1, speed);
     this.scene?.exit?.();
     this.ui.clearScene();
@@ -123,6 +126,8 @@ class Game {
         post.fade = Math.abs(d) <= this.fadeSpeed * rdt ? this.fadeTarget : clamp(post.fade + Math.sign(d) * this.fadeSpeed * rdt, 0, 1);
       }
       post.flash = Math.max(0, post.flash - rdt * 4);
+      // a scene transition draws its own cover (ink, a page, an iris) and takes the dissolve's place
+      const shaderFade = transitionFrame(post.fade, post.fadeColor);
       // covered by the laptop: skip the world entirely (one still frame after a resize, none otherwise)
       const frozen = this.covered > 0 && post.fade === this.fadeTarget && !this.afterRender;
       if (!frozen || this.coverDirty) {
@@ -143,7 +148,10 @@ class Game {
             console.error(e);
           }
         }
+        const fadeNow = post.fade;
+        post.fade = shaderFade;
         this.r.end();
+        post.fade = fadeNow;
       }
       this.ui.frame(rdt);
       this.afterRender?.();

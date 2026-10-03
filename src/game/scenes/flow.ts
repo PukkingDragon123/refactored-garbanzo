@@ -18,7 +18,7 @@ export async function goCamp(fromTrip = false) {
 
 export async function goTent(night = game.save.campTime === 'night') {
   const { TentScene } = await import('./tent');
-  game.go(() => new TentScene(night), [0.02, 0.02, 0.03], 3);
+  game.go(() => new TentScene(night), [0.02, 0.02, 0.03], 3, 'iris');
 }
 
 export async function goField(site: SiteId, tod: TimeOfDay) {
@@ -37,7 +37,7 @@ export async function goPrologue() {
 
 export async function goTitle() {
   const { TitleScene } = await import('./title');
-  game.go(() => new TitleScene());
+  game.go(() => new TitleScene(), undefined, undefined, 'page');
 }
 
 /** V4: the Kittiwake (Day 1 at sea) */

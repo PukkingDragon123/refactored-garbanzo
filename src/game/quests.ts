@@ -240,7 +240,8 @@ export function startQuest(id: string, quiet = false) {
   if (q.main && q.chapter !== undefined) game.save.chapter = Math.max(game.save.chapter, q.chapter);
   if (!game.save.tracked || q.main) game.save.tracked = id;
   game.persist();
-  if (!quiet) game.ui.toast(`${q.main ? 'New objective' : 'New quest'}: <b>${q.title}</b>`, q.main ? 'STORY' : 'QUEST', 'teal', 3600);
+  // the HUD's note scrap shows new quests (written into Mori's journal); a toast only without one
+  if (!quiet) { if (questNotice) questNotice(q); else game.ui.toast(`${q.main ? 'New objective' : 'New quest'}: <b>${q.title}</b>`, q.main ? 'STORY' : 'QUEST', 'teal', 3600); }
   onQuestEvent?.('start', q);
 }
 
@@ -283,6 +284,10 @@ export function completeQuest(id: string) {
   if (q.next) startQuest(q.next, true);
 }
 
+
+/** V11: the HUD's note scrap announces new quests (null: fall back to a toast) */
+let questNotice: ((q: QuestDef) => void) | null = null;
+export function setQuestNotice(fn: ((q: QuestDef) => void) | null) { questNotice = fn; }
 
 /** Optional hook for scenes (e.g. play a jingle, trigger dialogue). */
 export let onQuestEvent: ((kind: 'start' | 'done', q: QuestDef) => void) | null = null;

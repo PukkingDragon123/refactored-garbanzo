@@ -131,10 +131,8 @@ const CSS = `
   .tc-top { top: auto; bottom: calc(var(--tu) * 52); }
 }
 body.touchmode, body.touchmode #app { touch-action: none; overscroll-behavior: none; -webkit-touch-callout: none; }
-/* the HUD makes room for the thumbs */
-body.touchmode .h2 .keys, body.touchmode .h2 .belt, body.touchmode .h2 .btn2, body.touchmode .h2 .rp { display: none; }
-body.touchmode .h2 .bar { bottom: auto; top: 7em; transform: scale(0.78); transform-origin: 0 0; }
-body.touchmode .h2 .quest { top: auto; bottom: 46%; max-width: 30vw; opacity: 0.9; }
+/* (the V11 HUD makes room for the thumbs itself: see hud2.ts) */
+.tc-top { opacity: 0.85; }
 `;
 
 type BtnOpts = { cls?: string; icon?: string; label?: string; code?: string; hold?: boolean; tap?: () => void; pos?: [number, number] };
@@ -281,7 +279,7 @@ export function setupTouch() {
 
   const top = root.appendChild(el('div', 'tc-top'));
   btn(top, { cls: 'wood sm', icon: 'bag', label: 'PACK', code: 'KeyI' });
-  btn(top, { cls: 'wood sm', icon: 'book', label: 'GUIDE', code: 'KeyJ' });
+  btn(top, { cls: 'wood sm', icon: 'book', label: 'JOURNAL', code: 'KeyJ' });
   btn(top, { cls: 'wood sm', icon: 'menu', label: 'MENU', code: 'Escape' });
 
   const walkSet = [jump, use, cam, crouch], camSet = [shoot, breath, lower, mode];

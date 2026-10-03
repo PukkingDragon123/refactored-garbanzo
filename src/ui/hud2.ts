@@ -1,85 +1,124 @@
-// V2 HUD: location + day, tracked quest, backpack button with slot count, RP counter, key hints,
-// and little item icons that fly into the backpack when you collect something. On the island, once
-// Mori has salvaged his laptop, a laptop button sits on the belt (L) with a badge of photos to upload.
+// V11 HUD: almost nothing on screen. The world shows the time (the sky), Mori shows how tired he is
+// (breathing, sweat, a canteen that only appears when he's running low), the camera shows its own
+// film count in the viewfinder. What's left is physical and comes and goes:
+//   - the quest note: a torn scrap of Mori's journal pinned in the top corner with the current step
+//     handwritten on it; it slides in when something changes (the old step gets ticked and struck
+//     through in ink, the new one is written in), then fades away. Hover the corner (or tap the
+//     little folded corner) to bring it back; click it to open the field journal (J).
+//   - the place: a handwritten name that writes itself in when you walk somewhere new, then fades.
+//   - the kit in the bottom corner: the backpack (things fly into it), the field laptop when there's
+//     something to upload, the canteen when energy is low.
+//   - research points: a "+15 RP" stamp when they come in, no counter.
+//   - the controls: a pencilled line at the bottom for the first seconds of a scene.
+// The API is the V2 Hud2 one (setPlace, setKeys, setLaptop, show, refresh, update, flyItem, banner,
+// packPos, bumpPack, destroy), so every scene keeps working.
 
 import { el } from './ui';
 import { game } from '../game/game';
 import { audio } from '../core/audio';
-import { trackedQuest, currentStepIndex } from '../game/quests';
+import { trackedQuest, currentStepIndex, setQuestNotice } from '../game/quests';
+import type { QuestDef } from '../game/quests';
 import { capacity } from '../game/inventory';
 import { itemIconURL, uiIconURL } from '../art/itemicons';
 import { mountBodyHud, BodyHud } from './v10/bodyhud';
-import { pxIcon } from './pxicons';
+import { installPaper, paperTex, edgeClip, checkbox, struck, tallyMarks, stamp, pin, svgInk, underline, paperSfx, escHtml as esc, tilt, INK_RED, setTransitionFocus } from './v11/paper';
 
 const CSS = `
 .h2 { position: absolute; inset: 0; pointer-events: none; transition: opacity 0.3s; }
 .h2.off { opacity: 0; }
-.h2 .loc { position: absolute; left: 16px; top: 14px; padding: 0.45em 0.9em; display: flex; flex-direction: column; gap: 1px; }
-.h2 .loc b { font-family: var(--pix); color: var(--amber2); font-weight: 600; font-size: 1.05em; letter-spacing: 0.02em; }
-.h2 .loc span { font-size: 0.8em; opacity: 0.8; }
-.h2 .quest { position: absolute; right: 16px; top: 14px; width: min(20em, 34vw); padding: 0.55em 0.8em 0.6em; color: #3a2a1a; pointer-events: auto; cursor: pointer; }
-.h2 .quest .rb { display: flex; align-items: center; gap: 0.45em; margin: -0.1em 0 0.25em; }
-.h2 .quest .rb span { font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 0.66em; letter-spacing: 0.12em; color: #fff; background: #3f7a32; padding: 0.15em 0.55em 0.1em; box-shadow: 0 2px 0 #1f3a18; }
-.h2 .quest.side .rb span { background: #b8761c; box-shadow: 0 2px 0 #5a3408; }
-.h2 .quest .rb small { font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 0.62em; color: #8a6a44; letter-spacing: 0.08em; margin-left: auto; }
-.h2 .quest .rb img { width: 1.9em; height: 1.9em; image-rendering: pixelated; margin: -0.35em 0 -0.35em 0.2em; border-radius: 50%; background: #d8c49a; box-shadow: 0 0 0 2px #6a4a2a; }
-.h2 .quest .ti { font-family: 'Jersey 15', 'Pixelify Sans', var(--pix); font-weight: 700; font-size: 1.05em; color: #2a1c10; letter-spacing: 0.02em; line-height: 1.1; }
-.h2 .quest .dv { height: 2px; margin: 0.4em 0 0.35em; background: repeating-linear-gradient(90deg, #b89a6a 0 4px, transparent 4px 8px); }
-.h2 .quest .st { display: grid; grid-template-columns: 1.1em 1fr auto; gap: 0.1em 0.45em; align-items: start; font-family: 'Jersey 15', 'Pixelify Sans', var(--pix); font-size: 0.88em; line-height: 1.25; margin: 0.12em 0; }
-.h2 .quest .st i { font-style: normal; font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 0.85em; text-align: center; line-height: 1.45; }
-.h2 .quest .st.done { color: #9a8462; text-decoration: line-through; text-decoration-thickness: 2px; }
-.h2 .quest .st.done i { color: #3f7a32; text-decoration: none; }
-.h2 .quest .st.next { color: #a8926c; }
-.h2 .quest .st.cur { color: #1c120a; font-weight: 600; background: rgba(255, 236, 170, 0.55); margin: 0.2em -0.35em; padding: 0.2em 0.35em; box-shadow: inset 3px 0 0 #3f7a32; }
-.h2 .quest .st.cur i { color: #3f7a32; animation: qArrow 0.8s steps(2) infinite; }
-.h2 .quest .st b { font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 0.8em; color: #fff; background: #2a1c10; padding: 0.1em 0.4em; }
-@keyframes qArrow { 50% { transform: translateX(3px); } }
-.h2 .quest .pb { grid-column: 2 / 4; height: 6px; background: #c9b489; box-shadow: inset 0 0 0 1px #8a6a44; margin-top: 0.25em; }
-.h2 .quest .pb > div { height: 100%; background: linear-gradient(#8ad05a 0 50%, #5a9a3a 50%); transition: width 0.4s steps(6); }
-.h2 .quest .hn { grid-column: 2 / 4; font-size: 0.82em; color: #7a5a38; font-weight: 400; font-style: italic; }
-.h2 .quest.min .st.done, .h2 .quest.min .st.next, .h2 .quest.min .hn, .h2 .quest.min .dv { display: none; }
-.h2 .quest.flash { animation: qflash 0.9s ease-out; }
-.h2 .qbanner { position: absolute; left: 50%; top: 16%; transform: translateX(-50%); font-family: 'Jersey 15', 'Pixelify Sans', var(--pix); font-weight: 700; font-size: 1.5em; letter-spacing: 0.08em;
-  color: #fff6d8; padding: 0.35em 1.2em 0.3em; background: #3f7a32; box-shadow: 0 0 0 3px #1f3a18, 0 0 0 6px #fff6d8, 0 0 0 9px #1f3a18, 0 10px 0 6px rgba(0,0,0,0.35);
-  text-shadow: 0 3px 0 #1f3a18; white-space: nowrap; pointer-events: none; animation: qBan 2.2s cubic-bezier(.2,1.6,.4,1) both; z-index: 4; }
-.h2 .qbanner small { display: block; font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-weight: 400; font-size: 0.45em; letter-spacing: 0.2em; color: #cfe8b8; text-shadow: none; text-align: center; }
-@keyframes qBan { 0% { transform: translateX(-50%) scale(2.4) rotate(-6deg); opacity: 0; } 12% { transform: translateX(-50%) scale(0.92) rotate(-2deg); opacity: 1; } 18% { transform: translateX(-50%) scale(1) rotate(-2deg); } 85% { opacity: 1; transform: translateX(-50%) scale(1) rotate(-2deg); } 100% { opacity: 0; transform: translateX(-50%) translateY(-12px) scale(0.96) rotate(-2deg); } }
-@keyframes qflash { 0% { box-shadow: 0 0 0 3px var(--amber2), 0 10px 30px var(--shadow); } 100% { box-shadow: 0 0 0 2px rgba(4,10,9,0.7), 0 10px 30px var(--shadow); } }
-.h2 .bar { position: absolute; left: 16px; bottom: 14px; display: flex; gap: 8px; align-items: flex-end; }
-.h2 .btn2 { pointer-events: auto; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 0.35em 0.55em 0.3em; font-family: var(--pix); font-size: 0.78em; color: var(--paper); }
-.h2 .btn2 img { width: 2.6em; height: 2.6em; image-rendering: pixelated; }
-.h2 .btn2 .k { position: absolute; left: 4px; top: 2px; font-size: 0.85em; opacity: 0.6; }
-.h2 .btn2:hover { filter: brightness(1.15); transform: translateY(-1px); }
-.h2 .btn2.bump { animation: bump 0.35s cubic-bezier(.2,1.8,.4,1); }
-@keyframes bump { 40% { transform: scale(1.18); } }
-.h2 .rp { position: absolute; right: 16px; bottom: 14px; padding: 0.35em 0.8em; font-family: var(--pix); display: flex; gap: 0.45em; align-items: center; font-variant-numeric: tabular-nums; }
-.h2 .rp img { width: 1.4em; image-rendering: pixelated; }
-.h2 .rp b { color: var(--amber2); font-weight: 600; }
-.h2 .keys { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); font-size: 0.78em; opacity: 0.72; white-space: nowrap; text-shadow: 0 1px 2px #000; }
-.h2 .who { position: relative; pointer-events: none; display: flex; align-items: center; margin-right: 0.3em; }
-.h2 .who .med { width: 4.6em; height: 4.6em; border-radius: 50%; background: radial-gradient(circle at 50% 38%, #c48a4a, #6a3e1c 70%); box-shadow: 0 0 0 3px #1a0e06, 0 0 0 5px #ffd84a, 0 0 0 7px #a87410, 0 0 0 9px #1a0e06, 0 5px 0 8px rgba(0,0,0,0.35); overflow: hidden; display: grid; place-items: end center; z-index: 2; }
-.h2 .who .med img { width: 118%; image-rendering: pixelated; margin-bottom: -0.2em; }
-.h2 .who .bars { margin-left: -0.9em; padding-left: 1.2em; display: flex; flex-direction: column; gap: 3px; z-index: 1; }
-.h2 .who .bars i { display: block; width: 9em; height: 0.8em; background: #2a1408; box-shadow: 0 0 0 2px #1a0e06, 0 0 0 4px #e0a818, 0 0 0 6px #1a0e06; position: relative; margin: 2px 0 4px 4px; }
-.h2 .who .bars i::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: var(--v, 100%); background: linear-gradient(#ff8a6a 0 35%, #d8543e 35% 75%, #a8382a 75%); transition: width 0.3s; }
-.h2 .who .bars i.b::after { background: linear-gradient(#8ad8ff 0 35%, #3a8ad8 35% 75%, #2a5aa8 75%); }
-.h2 .who .bars small { font-family: var(--head); font-size: 0.72em; color: #ffe9a8; text-shadow: 0 2px 0 #1a0e06, 1px 0 0 #1a0e06, -1px 0 0 #1a0e06; letter-spacing: 0.08em; margin-left: 4px; }
-.h2 .belt { display: flex; gap: 4px; padding: 5px; background: linear-gradient(#6a3e1c, #4a2a12); box-shadow: 0 0 0 2px #1a0e06, 0 0 0 4px #e0a818, 0 0 0 6px #1a0e06, 0 6px 0 6px rgba(0,0,0,0.3); }
-.h2 .belt span { width: 3.1em; height: 3.1em; background: var(--sk-slot) center / 100% 100%; image-rendering: pixelated; display: grid; place-items: center; transition: transform 0.12s cubic-bezier(.2,1.8,.4,1); }
-.h2 .belt span:hover { transform: translateY(-3px) scale(1.06); }
-.h2 .belt span img { width: 2.1em; height: 2.1em; image-rendering: pixelated; filter: drop-shadow(0 2px 0 rgba(0,0,0,0.45)); }
-.h2 .lapb { position: relative; pointer-events: auto; cursor: pointer; padding: 5px; background: linear-gradient(#6a3e1c, #4a2a12); box-shadow: 0 0 0 2px #1a0e06, 0 0 0 4px #e0a818, 0 0 0 6px #1a0e06, 0 6px 0 6px rgba(0,0,0,0.3); margin-left: 6px; }
-.h2 .lapb > span { width: 3.1em; height: 3.1em; background: var(--sk-slot) center / 100% 100%; image-rendering: pixelated; display: grid; place-items: center; transition: transform 0.12s cubic-bezier(.2,1.8,.4,1); }
-.h2 .lapb:hover > span { transform: translateY(-3px) scale(1.06); }
-.h2 .lapb img { width: 2.3em; height: 2.3em; image-rendering: pixelated; filter: drop-shadow(0 2px 0 rgba(0,0,0,0.45)); }
-.h2 .lapb .k { position: absolute; left: 3px; top: 1px; font-family: var(--head); font-size: 0.72em; color: #ffe9a8; text-shadow: 0 2px 0 #1a0e06, 1px 0 0 #1a0e06, -1px 0 0 #1a0e06; }
-.h2 .lapb .n { position: absolute; right: -9px; top: -11px; min-width: 1.5em; height: 1.5em; padding: 0 0.3em; border-radius: 0.75em; display: grid; place-items: center; font-family: var(--head); font-size: 0.78em; color: #fff;
-  background: radial-gradient(circle at 40% 35%, #ff8a6a, #c8341e 70%); box-shadow: 0 0 0 2px #1a0e06, 0 0 0 3px #ffd84a; animation: lapBadge 1.2s cubic-bezier(.3,1.8,.5,1) infinite; }
-.h2 .lapb .n:empty { display: none; }
-@keyframes lapBadge { 0%, 60%, 100% { transform: scale(1); } 20% { transform: scale(1.25, 0.85); } 40% { transform: scale(0.92, 1.12) translateY(-3px); } }
+/* the quest note */
+.hm-q { position: absolute; right: 1.2em; top: 0.9em; width: min(17.5em, 40vw); pointer-events: auto; cursor: pointer; transform-origin: 90% 0;
+  transition: transform 0.55s cubic-bezier(.25,1.3,.4,1), opacity 0.5s; filter: drop-shadow(0 0.18em 0.22em rgba(20, 12, 4, 0.45)); }
+.hm-q.hid { transform: translate(0.6em, -115%) rotate(6deg); opacity: 0; pointer-events: none; }
+.hm-q .in { position: relative; padding: 0.75em 0.95em 0.85em 1.05em; color: var(--pp-ink); background-size: 256px 256px; }
+.hm-q .in::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(180deg, transparent 0 calc(1.32em - 1px), rgba(70, 110, 160, 0.18) calc(1.32em - 1px) 1.32em); }
+.hm-q .ti { position: relative; font-size: 0.72em; letter-spacing: 0.12em; text-transform: uppercase; color: #6a5a40; margin-bottom: 0.2em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 0.6em; }
+.hm-q .st { position: relative; display: flex; gap: 0.4em; align-items: flex-start; font-size: 1.32em; line-height: 1.02; }
+.hm-q .st + .st { margin-top: 0.25em; }
+.hm-q .st.old { color: #6a6458; }
+.hm-q .st .tx { flex: 1; min-width: 0; }
+.hm-q .st.new .tx { animation: hmWrite 1.1s steps(18) both; }
+@keyframes hmWrite { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+.hm-q .pr { position: relative; margin: 0.2em 0 0 1.65em; font-size: 0.95em; color: var(--pp-pencil); display: flex; align-items: center; gap: 0.4em; }
+.hm-q .pp-pin { left: 50%; top: -0.35em; margin-left: -0.45em; }
+.hm-q .new-q { position: absolute; right: -0.6em; top: -0.9em; font-size: 0.68em; }
+.hm-peek { position: absolute; right: 0.5em; top: 0.5em; width: 2.1em; height: 2.1em; pointer-events: auto; cursor: pointer; opacity: 0; transition: opacity 0.6s, transform 0.2s; }
+.hm-peek.on { opacity: 0.75; }
+.hm-peek:hover { opacity: 1; transform: rotate(-6deg) scale(1.08); }
+.hm-peek i { position: absolute; inset: 0; clip-path: polygon(0 0, 100% 0, 100% 100%); box-shadow: inset 0 0 0.4em rgba(80,50,20,0.35); }
+.hm-peek b { position: absolute; right: 0.15em; top: 0.1em; }
+.hm-hot { position: absolute; right: 0; top: 0; width: 22vw; height: 18vh; pointer-events: auto; }
+body.touchmode .hm-hot { display: none; }
+/* the place name */
+.hm-place { position: absolute; left: 1.4em; top: 1em; color: #fff6e0; text-shadow: 0 0.06em 0.3em rgba(0,0,0,0.75), 0 0 0.12em rgba(0,0,0,0.6); opacity: 0; transition: opacity 0.9s; }
+.hm-place.on { opacity: 1; }
+.hm-place b { display: block; font-size: 2.2em; font-weight: 600; line-height: 1; }
+.hm-place.on b { animation: hmWrite 1.2s steps(22) both; }
+.hm-place small { display: block; font-size: 1.15em; opacity: 0.9; margin-top: 0.1em; }
+.hm-place .ul { display: block; width: 11em; height: 0.5em; margin-top: 0.1em; }
+.hm-place .ul path { filter: drop-shadow(0 0 2px rgba(0,0,0,0.6)); }
+/* the controls line */
+.hm-keys { position: absolute; left: 50%; bottom: 0.9em; transform: translateX(-50%); font-size: 1.12em; color: #fff4dc; white-space: nowrap; text-shadow: 0 0.05em 0.3em rgba(0,0,0,0.9); transition: opacity 1.2s; opacity: 0.88; }
+.hm-keys.gone { opacity: 0; }
+.hm-keys .key { font-size: 0.68em !important; }
+body.touchmode .hm-keys { display: none; }
+/* the kit in the corner */
+.hm-kit { position: absolute; left: 1em; bottom: 0.8em; display: flex; align-items: flex-end; gap: 0.7em; }
+.hm-it { position: relative; pointer-events: auto; cursor: pointer; opacity: 0.6; transition: opacity 0.3s, transform 0.15s; filter: drop-shadow(0 0.15em 0.15em rgba(0,0,0,0.55)); }
+.hm-it:hover { opacity: 1; transform: translateY(-0.15em) rotate(-3deg); }
+.hm-it img { display: block; width: 2.9em; height: 2.9em; image-rendering: pixelated; }
+.hm-it .n { position: absolute; left: 100%; bottom: 0.1em; margin-left: 0.2em; font-size: 1.05em; color: #fff4dc; text-shadow: 0 0.05em 0.25em rgba(0,0,0,0.9); white-space: nowrap; }
+.hm-it.full { opacity: 0.95; }
+.hm-it.full .n { color: #ffb8a0; }
+.hm-it.bump { animation: hmBump 0.4s cubic-bezier(.2,1.8,.4,1); }
+@keyframes hmBump { 40% { transform: scale(1.25) rotate(-6deg); opacity: 1; } }
+.hm-it .badge { position: absolute; right: -0.5em; top: -0.45em; min-width: 1.4em; height: 1.4em; border-radius: 50%; display: grid; place-items: center; font-size: 0.95em; color: #fff;
+  background: #b8321e; box-shadow: 0 0 0 0.12em #f4e6c4; }
+.hm-it.lap { display: none; } .hm-it.lap.on { display: block; opacity: 0.9; }
+.hm-can { position: absolute; left: 1em; bottom: 4.6em; pointer-events: auto; cursor: pointer; display: flex; align-items: flex-end; gap: 0.35em; opacity: 0; transform: translateY(0.6em); transition: opacity 0.6s, transform 0.6s; filter: drop-shadow(0 0.15em 0.15em rgba(0,0,0,0.55)); }
+.hm-can.on { opacity: 1; transform: none; }
+.hm-can.crit .bottle { animation: hmShake 0.9s ease-in-out infinite; }
+@keyframes hmShake { 20% { transform: rotate(-6deg); } 40% { transform: rotate(5deg); } 60% { transform: rotate(-3deg); } 80% { transform: none; } }
+.hm-can .bottle { position: relative; width: 1.9em; height: 3em; }
+.hm-can .bottle svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.hm-can span { font-size: 1.05em; color: #fff4dc; text-shadow: 0 0.05em 0.25em rgba(0,0,0,0.9); line-height: 1; }
+.hm-can span .key { font-size: 0.62em !important; }
+.hm-ail { display: block; color: #e0f0a0; }
+body.touchmode .hm-kit { display: none; }
+body.touchmode .hm-can { left: 0.8em; top: 4.2em; bottom: auto; }
+body.touchmode .hm-place { top: 3.6em; }
+/* research points and banners */
+.hm-rp { position: absolute; right: 2em; top: 7.2em; font-size: 1.15em; pointer-events: none; animation: hmRp 2.6s ease-out forwards; }
+@keyframes hmRp { 0% { opacity: 0; } 10% { opacity: 1; } 75% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-0.8em); } }
+.hm-ban { position: absolute; left: 50%; top: 14%; transform: translateX(-50%); pointer-events: none; z-index: 4; text-align: center; animation: hmBan 3.4s ease-out both; filter: drop-shadow(0 0.25em 0.3em rgba(0,0,0,0.5)); }
+.hm-ban .in { padding: 0.8em 1.6em 0.9em; background-size: 256px 256px; color: var(--pp-ink); }
+.hm-ban .t { font-size: 1.15em; }
+.hm-ban .s { font-size: 1.25em; margin-top: 0.3em; max-width: 26em; }
+@keyframes hmBan { 0% { opacity: 0; transform: translateX(-50%) translateY(-40%) rotate(-4deg); } 10% { opacity: 1; transform: translateX(-50%) rotate(-1deg); } 85% { opacity: 1; transform: translateX(-50%) rotate(-1deg); } 100% { opacity: 0; transform: translateX(-50%) translateY(-0.6em) rotate(-1deg); } }
 .flyitem { position: absolute; width: 36px; height: 36px; image-rendering: pixelated; pointer-events: none; z-index: 9; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.5)); }
-.pickup { position: absolute; transform: translate(-50%, -100%); font-family: var(--pix); font-size: 0.95em; color: #fff4c4; text-shadow: 0 2px 0 #1b1a1f, 0 0 6px rgba(0,0,0,0.6); pointer-events: none; animation: pickupRise 1.3s ease-out forwards; white-space: nowrap; }
+.pickup { position: absolute; transform: translate(-50%, -100%); font-family: var(--pp-hand); font-size-adjust: none !important; font-size: 1.35em; font-weight: 600; color: #fff6dc; text-shadow: 0 0.05em 0.3em rgba(0,0,0,0.85); pointer-events: none; animation: pickupRise 1.3s ease-out forwards; white-space: nowrap; }
 @keyframes pickupRise { 0% { opacity: 0; transform: translate(-50%, -80%) scale(0.7); } 15% { opacity: 1; transform: translate(-50%, -110%) scale(1.1); } 100% { opacity: 0; transform: translate(-50%, -260%) scale(1); } }
+/* the interaction prompt: a manila tag on a string */
+#ui .prompt.panel { border: 0 !important; border-image: none !important; box-shadow: none !important; background: linear-gradient(180deg, #ecd6a2, #d9b87c) !important;
+  clip-path: polygon(0.85em 0, 100% 0, 100% 100%, 0.85em 100%, 0 50%) !important; padding: 0.12em 0.75em 0.2em 1.35em; color: #3a2614; font-family: var(--pp-hand); font-size: 1.3em; font-weight: 600; filter: drop-shadow(0 0.1em 0.12em rgba(0,0,0,0.4)); }
+#ui .prompt.panel, #ui .prompt.panel * { font-size-adjust: none; -webkit-font-smoothing: antialiased; }
+#ui .prompt.panel::before { content: ''; position: absolute; left: 0.55em; top: 50%; width: 0.36em; height: 0.36em; margin-top: -0.18em; border-radius: 50%; background: rgba(40,24,8,0.6); }
+#ui .prompt.panel .key { font-family: var(--pp-pix) !important; font-size: 0.55em !important; vertical-align: 0.2em; font-size-adjust: 0.62; }
+/* toasts: little paper slips */
+#ui .toast.panel { border: 0 !important; border-image: none !important; background: ${'${PAPER}'} !important; box-shadow: 0 0.2em 0.35em rgba(0,0,0,0.4) !important; color: var(--pp-ink);
+  font-family: var(--pp-hand); font-size: 1.12em; padding: 0.4em 0.9em 0.45em; transform: rotate(-0.8deg); }
+#ui .toast.panel, #ui .toast.panel * { font-size-adjust: none; -webkit-font-smoothing: antialiased; }
+#ui .toast.panel .ic { font-family: var(--pp-head) !important; font-size-adjust: 0.62; font-size: 0.62em; background: none !important; box-shadow: inset 0 0 0 0.14em currentColor !important; color: #a8321e !important; transform: rotate(-4deg); }
+#ui .toast.panel.teal .ic { color: #26408a !important; }
+#ui .toast.panel b { color: #2a2440; }
+/* the region-map button from the expedition runtime: a folded map in the corner */
+#ui .v10-mapb { left: 1em; top: auto; bottom: 4.4em; padding: 0.15em 0.5em 0.15em 0.15em; background: none; box-shadow: none; opacity: 0.6; filter: drop-shadow(0 0.15em 0.15em rgba(0,0,0,0.55)); }
+#ui .v10-mapb:hover { opacity: 1; }
+#ui .v10-mapb i { background: none; }
+#ui .v10-mapb .k { display: none; }
+#ui .v10-mapb .t { font-family: var(--pp-hand); font-size-adjust: none; font-size: 1.15em; color: #fff4dc; text-shadow: 0 0.05em 0.25em rgba(0,0,0,0.9); }
+body.touchmode #ui .v10-mapb { bottom: auto; top: 0.6em; left: 0.6em; }
 `;
 
 let styled = false;
@@ -97,22 +136,8 @@ let lapIcon = '';
 function laptopIconURL(): string {
   if (lapIcon) return lapIcon;
   const rows = [
-    '................',
-    '................',
-    '..kkkkkkkkkkkk..',
-    '..kTTTTTTTTTTk..',
-    '..kTjCCCCCCcTk..',
-    '..kTCjCCCCCcTk..',
-    '..kTCCCCCCccTk..',
-    '..kTCCGGCcccTk..',
-    '..kTGGGGGGGGTk..',
-    '..kTTTTTTTTTTk..',
-    '.kkkkkkkkkkkkkk.',
-    'kqqqqqqqqqqqqqqk',
-    'kTqTqTqTqTqTqTqk',
-    'kTTTTTTKKTTTTTTk',
-    '.kkkkkkkkkkkkkk.',
-    '................',
+    '................', '................', '..kkkkkkkkkkkk..', '..kTTTTTTTTTTk..', '..kTjCCCCCCcTk..', '..kTCjCCCCCcTk..', '..kTCCCCCCccTk..', '..kTCCGGCcccTk..',
+    '..kTGGGGGGGGTk..', '..kTTTTTTTTTTk..', '.kkkkkkkkkkkkkk.', 'kqqqqqqqqqqqqqqk', 'kTqTqTqTqTqTqTqk', 'kTTTTTTKKTTTTTTk', '.kkkkkkkkkkkkkk.', '................',
   ];
   const col: Record<string, string> = { k: '#0b0f12', T: '#7a8189', q: '#b9c0c4', K: '#454b53', C: '#3fd1c1', c: '#138a86', j: '#eafffb', G: '#6fb150' };
   const c = document.createElement('canvas');
@@ -130,166 +155,206 @@ export interface HudOpts {
   onBackpack?: () => void;
 }
 
+type SceneLike = { player?: { x: number; y: number; body?: { showEmote?(e: string, t?: number): void } }; cutscene?: boolean; st?: { cam: { x: number; y: number; zoom: number } } } | null;
+
 export class Hud2 {
   readonly root: HTMLElement;
-  private loc: HTMLElement;
-  private quest: HTMLElement;
-  private questMin = false;
-  private bannerT = 0;
-  /** big stamped banner in the middle of the screen (objective complete / new quest) */
-  banner(title: string, sub = '') {
-    const now = performance.now();
-    if (now - this.bannerT < 600) return;
-    this.bannerT = now;
-    const b = el('div', 'qbanner', `${title}${sub ? `<small>${sub.replace(/</g, '&lt;')}</small>` : ''}`);
-    this.root.appendChild(b);
-    audio.play('uiOpen', { vol: 0.5, pitch: 1.2 });
-    setTimeout(() => b.remove(), 2300);
-  }
-  private pack: HTMLElement;
-  private rpEl: HTMLElement;
+  private q: HTMLElement;
+  private qIn: HTMLElement;
+  private peek: HTMLElement;
+  private place: HTMLElement;
   private keys: HTMLElement;
-  private who!: HTMLElement;
-  private belt!: HTMLElement;
-  private beltKey = '';
+  private pack: HTMLElement;
+  private lapEl: HTMLElement;
   private lap: HudLaptop | null = null;
-  private lapEl: HTMLElement | null = null;
-  private shownRp = -1;
-  private lastQuestKey = '';
-  private t = 0;
-  /** V10: energy, pack weight and ailments on expeditions */
   private body: BodyHud | null = null;
+  private lastKey = '';
+  private lastQuest = '';
+  private lastStep = -1;
+  private showT = 0;
+  private hover = false;
+  private placeName = '';
+  private placeT = 0;
+  private keysT = 7;
+  private moved = false;
+  private idleT = 0;
+  private lastRp = -1;
+  private t = 0;
+  private bannerT = 0;
+  private swapT: ReturnType<typeof setTimeout> | null = null;
+  private dayShown = -1;
+  /** a new side quest is on the note for a moment */
+  private holdT = 0;
 
   constructor(parent: HTMLElement, o: HudOpts) {
-    if (!styled) { document.head.appendChild(el('style', '', CSS)); styled = true; }
+    installPaper();
+    if (!styled) { styled = true; document.head.appendChild(el('style', '', CSS.replace('${PAPER}', `${paperTex('card')} 0 0 / 256px`))); }
     this.root = parent.appendChild(el('div', 'h2'));
-    this.loc = this.root.appendChild(el('div', 'loc panel'));
-    this.quest = this.root.appendChild(el('div', 'quest panel'));
-    this.quest.addEventListener('click', () => { this.questMin = !this.questMin; this.quest.classList.toggle('min', this.questMin); });
-    const bar = this.root.appendChild(el('div', 'bar'));
-    this.who = bar.appendChild(el('div', 'who', `<div class="med"><img alt=""></div><div class="bars"><small>PACK</small><i class="a"></i><small>FILM</small><i class="b"></i></div>`));
-    this.body = mountBodyHud(this.root, this.who);
-    this.belt = bar.appendChild(el('div', 'belt'));
-    this.lapEl = bar.appendChild(el('div', 'lapb interactive', `<span><img src="${laptopIconURL()}" alt=""></span><i class="k">L</i><b class="n"></b>`));
-    this.lapEl.title = 'Laptop (L)';
-    this.lapEl.style.display = 'none';
-    this.lapEl.addEventListener('pointerdown', e => { e.stopPropagation(); this.lap?.open(); });
-    this.pack = bar.appendChild(el('div', 'btn2 panel interactive', `<span class="k">I</span><img src="${uiIconURL('pack', 3)}" alt=""><span class="n"></span>`));
+    // the quest note and its folded corner
+    this.q = this.root.appendChild(el('div', 'hm-q hid'));
+    this.qIn = this.q.appendChild(el('div', 'in'));
+    this.qIn.style.backgroundImage = paperTex('journal');
+    this.qIn.style.clipPath = edgeClip(7, { top: 'perforated', bottom: 'torn', left: 'deckle', right: 'deckle', amp: 0.8 });
+    this.q.style.transform = '';
+    this.q.addEventListener('click', e => { e.stopPropagation(); this.openJournal(); });
+    this.peek = this.root.appendChild(el('div', 'hm-peek'));
+    this.peek.innerHTML = `<i style="background:${paperTex('journal')} 0 0/256px"></i><b>${svgInk(20, 20, [{ d: 'M4 10 L9 15 L17 4', c: INK_RED, w: 2.2 }], { w: '0.9em', h: '0.9em' })}</b>`;
+    this.peek.title = 'What am I doing? (J)';
+    this.peek.addEventListener('pointerdown', e => { e.stopPropagation(); if (this.showT > 0) this.openJournal(); else this.reveal(6); });
+    const hot = this.root.appendChild(el('div', 'hm-hot'));
+    hot.addEventListener('pointerenter', () => { this.hover = true; this.reveal(1.5); });
+    hot.addEventListener('pointerleave', () => { this.hover = false; });
+    hot.addEventListener('click', e => { e.stopPropagation(); this.openJournal(); });
+    // place name, controls line
+    this.place = this.root.appendChild(el('div', 'hm-place pp-hand'));
+    this.keys = this.root.appendChild(el('div', 'hm-keys pp-hand'));
+    // the kit
+    const kit = this.root.appendChild(el('div', 'hm-kit'));
+    this.pack = kit.appendChild(el('div', 'hm-it pack', `<img src="${uiIconURL('pack', 3)}" alt=""><span class="n pp-hand"></span>`));
+    this.pack.title = 'Backpack (I / Tab)';
     this.pack.addEventListener('pointerdown', e => { e.stopPropagation(); o.onBackpack?.(); });
-    this.rpEl = this.root.appendChild(el('div', 'rp panel', `<img src="${uiIconURL('rp', 3)}" alt=""><b>0</b><span style="opacity:0.7">RP</span>`));
-    this.keys = this.root.appendChild(el('div', 'keys'));
+    this.lapEl = kit.appendChild(el('div', 'hm-it lap', `<img src="${laptopIconURL()}" alt=""><b class="badge pp-hand"></b>`));
+    this.lapEl.title = 'Laptop (L)';
+    this.lapEl.addEventListener('pointerdown', e => { e.stopPropagation(); this.lap?.open(); });
+    this.body = mountBodyHud(this.root);
     this.setPlace(o.place, o.sub);
-    this.keys.innerHTML = o.keys ?? '<span class="key">A</span><span class="key">D</span> move · <span class="key">E</span> interact · <span class="key">I</span> backpack';
+    this.keys.innerHTML = o.keys ?? '<span class="key">A</span><span class="key">D</span> move · <span class="key">E</span> use · <span class="key">I</span> backpack · <span class="key">J</span> journal';
+    if (!/journal/.test(this.keys.innerHTML)) this.keys.innerHTML += ' · <span class="key">J</span> journal';
+    setQuestNotice(q => this.noticeQuest(q));
+    // transitions centre their iris / first ink blot on Mori
+    setTransitionFocus(() => {
+      const s = game.scene as SceneLike;
+      const p = s?.player, c = s?.st?.cam;
+      if (!p || !c) return null;
+      const r = game.r;
+      return [Math.max(0, Math.min(1, r.projectX(p.x, 1) / r.VW)), Math.max(0, Math.min(1, r.projectY(p.y - 20, 1) / r.VH))];
+    });
+    this.lastRp = game.save.rp;
     this.refresh(true);
+    // a fresh scene: show where we are and what we're doing for a few seconds
+    this.reveal(5.5);
   }
 
+  // ---------------------------------------------------------------- API
   setPlace(place: string, sub = '') {
-    this.loc.innerHTML = `<b>${place}</b>${sub ? `<span>${sub}</span>` : ''}`;
+    const day = game.save.day || 1;
+    // only a new place (or a new day) is worth writing on the screen; the time of day is the sky's job
+    if (place === this.placeName && day === this.dayShown) return;
+    const firstOfDay = day !== this.dayShown;
+    this.placeName = place;
+    this.dayShown = day;
+    const subTxt = firstOfDay && /day/i.test(sub) ? `Day ${day}` : '';
+    this.place.innerHTML = `<b>${esc(place)}</b>${subTxt ? `<small>${esc(subTxt)}</small>` : ''}<span class="ul">${svgInk(100, 6, [{ d: underline(100, { seed: place.length }), c: '#fff4dc', w: 1.6, draw: 1 }], { stretch: true, w: '100%', h: '100%' })}</span>`;
+    this.place.classList.remove('on');
+    void this.place.offsetWidth;
+    this.place.classList.add('on');
+    this.placeT = 4.2;
   }
   setKeys(html: string) {
     this.keys.innerHTML = html;
+    this.keys.classList.remove('gone');
+    this.keysT = 6;
   }
-  /** put the field laptop on the belt (null removes it); L opens it too */
-  setLaptop(l: HudLaptop | null) {
-    this.lap = l;
-    this.refresh();
-  }
-  show(on: boolean) {
-    this.root.classList.toggle('off', !on);
-  }
+  /** put the field laptop in the corner kit (null removes it); L opens it too */
+  setLaptop(l: HudLaptop | null) { this.lap = l; this.refresh(); }
+  show(on: boolean) { this.root.classList.toggle('off', !on); }
 
-  /** backpack button screen position (for flying pickups) */
+  /** backpack screen position (for flying pickups) */
   packPos(): [number, number] {
     const r = this.pack.getBoundingClientRect(), p = game.ui.root.getBoundingClientRect();
+    if (!r.width) return [p.width * 0.06, p.height * 0.92];
     return [r.left - p.left + r.width / 2, r.top - p.top + r.height / 2];
   }
-
   bumpPack() {
     this.pack.classList.remove('bump');
     void this.pack.offsetWidth;
     this.pack.classList.add('bump');
   }
 
+  /** big stamped note in the middle of the screen (a new place on the map...) */
+  banner(title: string, sub = '') {
+    const now = performance.now();
+    if (now - this.bannerT < 600) return;
+    this.bannerT = now;
+    const b = el('div', 'hm-ban', `<div class="in" style="background-image:${paperTex('card')};clip-path:${edgeClip(title.length, { top: 'deckle', bottom: 'torn', left: 'deckle', right: 'deckle' })}"><div class="t">${stamp(title, { color: 'red', fresh: true, rot: '-2deg' })}</div>${sub ? `<div class="s pp-hand">${esc(sub)}</div>` : ''}</div>`);
+    this.root.appendChild(b);
+    setTimeout(() => paperSfx('stamp'), 140);
+    setTimeout(() => b.remove(), 3500);
+  }
+
   refresh(force = false) {
     const s = game.save;
-    // quest
+    // the quest note
     const q = trackedQuest();
     let key = 'none';
     if (q) {
       const i = currentStepIndex(q);
-      const st = q.steps[i];
-      const pr = st?.progress?.();
+      const pr = q.steps[i]?.progress?.();
       key = `${q.id}:${i}:${pr ? pr.join('/') : ''}`;
-      if (key !== this.lastQuestKey || force) {
-        // a finished step or a new quest just updates the tracker quietly (no stamped banner, no flash)
-        const esc = (t: string) => t.replace(/</g, '&lt;');
-        const row = (k: number, cls: string, mark: string) => {
-          const x = q.steps[k];
-          if (!x) return '';
-          const p2 = cls === 'cur' ? pr : undefined;
-          return `<div class="st ${cls}"><i>${mark}</i><span>${esc(x.text)}</span>${p2 ? `<b>${p2[0]}/${p2[1]}</b>` : '<span></span>'}${p2 ? `<div class="pb"><div style="width:${Math.round((p2[0] / Math.max(1, p2[1])) * 100)}%"></div></div>` : ''}${cls === 'cur' && x.hint ? `<div class="hn">${esc(x.hint)}</div>` : ''}</div>`;
-        };
-        const giverImg = q.giver !== 'story' ? game.ui.portraitURL(q.giver, 'neutral') : '';
-        this.quest.className = `quest panel${q.main ? '' : ' side'}${this.questMin ? ' min' : ''}`;
-        this.quest.innerHTML = `<div class="rb"><span>${q.main ? pxIcon('star') + ' STORY' : pxIcon('side') + ' SIDE'}</span><small>${q.chapter ? `CHAPTER ${q.chapter}` : `STEP ${Math.min(i + 1, q.steps.length)}/${q.steps.length}`}</small>${giverImg ? `<img src="${giverImg}" alt="">` : ''}</div>`
-          + `<div class="ti">${esc(q.title)}</div><div class="dv"></div>`
-          + (i > 0 ? row(i - 1, 'done', pxIcon('check')) : '')
-          + (st ? row(i, 'cur', pxIcon('play')) : `<div class="st cur"><i>${pxIcon('check')}</i><span>Complete!</span><span></span></div>`)
-          + row(i + 1, 'next', pxIcon('pip0'));
+      if (key !== this.lastKey || force) {
+        const sameQuest = q.id === this.lastQuest;
+        const advanced = sameQuest && i > this.lastStep && this.lastStep >= 0;
+        if (advanced) this.tickAndWrite(q, this.lastStep, i);
+        else this.drawNote(q, i, !sameQuest && this.lastQuest !== '' && !force);
+        if (!force && this.lastKey !== '' && (advanced || !sameQuest)) this.reveal(7);
+        else if (!force && this.lastKey !== '') this.reveal(3.5);
+        this.lastQuest = q.id;
+        this.lastStep = i;
       }
-    }
-    this.quest.style.display = q ? '' : 'none';
-    this.lastQuestKey = key;
-    // backpack
-    (this.pack.querySelector('.n') as HTMLElement).textContent = `${s.inv.length}/${capacity()}`;
-    // portrait, pack meter, film (field camera) and tool belt
-    const img = this.who.querySelector('img') as HTMLImageElement;
-    if (!img.src) { const u = game.ui.portraitURL('rowan', 'happy'); if (u) img.src = u; }
-    if (!this.body?.ownsPack()) (this.who.querySelector('i.a') as HTMLElement).style.setProperty('--v', `${Math.round((s.inv.length / Math.max(1, capacity())) * 100)}%`);
-    const cam = (game.scene as { cam?: { shots: number } } | null)?.cam;
-    const film = this.who.querySelector('i.b') as HTMLElement;
-    film.style.display = cam ? '' : 'none';
-    (film.previousElementSibling as HTMLElement).style.display = cam ? '' : 'none';
-    if (cam) film.style.setProperty('--v', `${Math.round(Math.min(1, cam.shots / 24) * 100)}%`);
-    const bk = s.tools.join(',');
-    if (bk !== this.beltKey) {
-      this.beltKey = bk;
-      this.belt.innerHTML = s.tools.slice(0, 8).map(t => `<span title="${t}"><img src="${itemIconURL(t, 3)}" alt=""></span>`).join('') + '<span></span>'.repeat(Math.max(0, 6 - s.tools.length));
-    }
-    // field laptop
-    if (this.lapEl) {
-      const on = !!this.lap?.shown();
-      this.lapEl.style.display = on ? '' : 'none';
-      const n = on ? this.lap!.badge() : 0;
-      const nb = this.lapEl.querySelector('.n') as HTMLElement;
-      const txt = n > 0 ? String(n) : '';
-      if (nb.textContent !== txt) nb.textContent = txt;
-    }
-    // rp count-up
-    if (this.shownRp < 0 || force) this.shownRp = s.rp;
+    } else if (this.lastKey !== 'none') { this.q.classList.add('hid'); this.lastQuest = ''; this.lastStep = -1; }
+    this.lastKey = key;
+    this.peek.classList.toggle('on', !!q && this.showT <= 0);
+    // the backpack: only says something when it's nearly full
+    const n = s.inv.length, cap = Math.max(1, capacity());
+    const full = n / cap >= 0.8;
+    this.pack.classList.toggle('full', full);
+    (this.pack.querySelector('.n') as HTMLElement).textContent = full ? `${n}/${cap}` : '';
+    // the field laptop: there when something's waiting to be uploaded
+    const on = !!this.lap?.shown();
+    const badge = on ? this.lap!.badge() : 0;
+    this.lapEl.classList.toggle('on', on && badge > 0);
+    const nb = this.lapEl.querySelector('.badge') as HTMLElement;
+    const txt = badge > 0 ? String(badge) : '';
+    if (nb.textContent !== txt) nb.textContent = txt;
+    nb.style.display = txt ? '' : 'none';
   }
 
   update(dt: number) {
     this.t += dt;
     const s = game.save;
-    if (this.shownRp !== s.rp) {
-      const d = s.rp - this.shownRp;
-      this.shownRp += Math.sign(d) * Math.max(1, Math.round(Math.abs(d) * Math.min(1, dt * 6)));
-      if (Math.abs(s.rp - this.shownRp) < 1) this.shownRp = s.rp;
+    const sc = game.scene as SceneLike;
+    const inp = game.input;
+    const free = !game.ui.blocking && !sc?.cutscene;
+    // research points come in as a stamp, then they're gone (the laptop and the blueprints keep count)
+    if (s.rp > this.lastRp && this.lastRp >= 0) this.rpStamp(s.rp - this.lastRp);
+    this.lastRp = s.rp;
+    // keys: J journal, G encyclopedia, L laptop
+    if (free && inp.keyHit('KeyJ')) this.openJournal();
+    if (free && inp.keyHit('KeyG')) void this.openEncyclopedia();
+    if (this.lap && inp.keyHit('KeyL') && free && this.lap.shown()) this.lap.open();
+    // the note comes and goes
+    const moving = inp.axisX() !== 0 || inp.down('jump');
+    if (moving) { this.moved = true; this.idleT = 0; } else this.idleT += dt;
+    if (this.showT > 0) {
+      this.showT -= dt;
+      if (this.showT <= 0 && !this.hover) this.q.classList.add('hid');
     }
-    (this.rpEl.querySelector('b') as HTMLElement).textContent = String(Math.round(this.shownRp));
-    if (this.lap && game.input.keyHit('KeyL') && !game.ui.blocking && this.lap.shown()) this.lap.open();
-    if (this.t > 0.25) {
-      this.t = 0;
-      this.refresh();
-    }
+    if (this.hover && this.showT < 0.5) this.showT = 0.5;
+    // standing about for a while: a gentle reminder of what's next
+    if (this.idleT > 24 && free) { this.idleT = -40; this.reveal(5); }
+    // the controls line fades once you're on your way
+    this.keysT -= dt;
+    if ((this.keysT <= 0 || (this.moved && this.keysT < 4.5)) && !this.keys.classList.contains('gone')) this.keys.classList.add('gone');
+    if (this.placeT > 0) { this.placeT -= dt; if (this.placeT <= 0) this.place.classList.remove('on'); }
+    if (this.holdT > 0) { this.holdT -= dt; if (this.holdT <= 0) this.lastKey = ''; }
+    if (this.t > 0.25) { this.t = 0; if (this.holdT <= 0) this.refresh(); }
     this.body?.update(dt);
   }
 
-  /** icon flies from a screen point into the backpack button, with a floating "+2 Flax" label */
+  /** icon flies from a screen point into the backpack, with a pencilled "+2 Flax" */
   flyItem(id: string, n: number, name: string, cssX: number, cssY: number) {
     const root = game.ui.root;
-    const lab = el('div', 'pickup', `+${n} ${name}`);
+    const lab = el('div', 'pickup', `+${n} ${esc(name)}`);
     lab.style.left = cssX + 'px';
     lab.style.top = cssY + 'px';
     root.appendChild(lab);
@@ -299,6 +364,7 @@ export class Hud2 {
     img.style.left = cssX - 18 + 'px';
     img.style.top = cssY - 18 + 'px';
     root.appendChild(img);
+    this.pack.style.opacity = '1';
     const [tx, ty] = this.packPos();
     const dx = tx - cssX, dy = ty - cssY;
     const anim = img.animate([
@@ -306,11 +372,89 @@ export class Hud2 {
       { transform: `translate(${dx * 0.15}px, ${-40 + dy * 0.05}px) scale(1.25)`, opacity: 1, offset: 0.25 },
       { transform: `translate(${dx}px, ${dy}px) scale(0.5)`, opacity: 0.9 },
     ], { duration: 850, easing: 'cubic-bezier(.5,0,.6,1)' });
-    anim.onfinish = () => { img.remove(); this.bumpPack(); this.refresh(); };
+    anim.onfinish = () => { img.remove(); this.bumpPack(); this.refresh(); setTimeout(() => { this.pack.style.opacity = ''; }, 900); };
   }
 
   destroy() {
+    setQuestNotice(null);
+    setTransitionFocus(null);
+    if (this.swapT) clearTimeout(this.swapT);
     this.body?.destroy();
     this.root.remove();
   }
+
+  // ---------------------------------------------------------------- the note
+  private reveal(secs: number) {
+    if (!trackedQuest()) return;
+    this.showT = Math.max(this.showT, secs);
+    this.q.classList.remove('hid');
+    this.peek.classList.remove('on');
+  }
+  private noticeQuest(q: QuestDef) {
+    // a new quest: the note shows it (with a little NEW stamp) for a moment, then goes back to the
+    // tracked one if that's a different quest
+    if (trackedQuest()?.id !== q.id) {
+      this.drawNote(q, currentStepIndex(q), true);
+      this.holdT = 5.5;
+      this.lastKey = 'held';
+    } else { this.lastKey = ''; this.refresh(); }
+    this.qIn.insertAdjacentHTML('beforeend', `<span class="new-q">${stamp(q.main ? 'New' : 'New job', { color: 'red', fresh: true, rot: '10deg' })}</span>`);
+    setTimeout(() => paperSfx('stamp', 0.6), 150);
+    this.reveal(7);
+  }
+  private noteHtml(q: QuestDef, i: number, rows: string): string {
+    const pr = q.steps[i]?.progress?.();
+    return `${pin({ color: q.main ? 'red' : 'blue' })}<div class="ti pp-pix">${esc(q.title)}</div>${rows}${pr && i < q.steps.length ? `<div class="pr pp-hand">${tallyMarks(Math.min(pr[0], 20), Math.min(pr[1], 20), i + 3)}<span>${pr[0]}/${pr[1]}</span></div>` : ''}`;
+  }
+  private drawNote(q: QuestDef, i: number, slideIn: boolean) {
+    const st = q.steps[i];
+    const row = st ? `<div class="st">${checkbox('todo', i + 1)}<span class="tx pp-hand">${esc(st.text)}</span></div>` : `<div class="st">${checkbox('done', i + 1)}<span class="tx pp-hand">All done!</span></div>`;
+    this.qIn.innerHTML = this.noteHtml(q, i, row);
+    this.q.style.setProperty('--r', tilt(q.id, 2.5));
+    this.qIn.style.transform = `rotate(${tilt(q.id, 1.6)})`;
+    if (slideIn) paperSfx('slide', 0.6);
+  }
+  /** the step just finished gets ticked and struck through, then the next one is written in */
+  private tickAndWrite(q: QuestDef, from: number, to: number) {
+    const old = q.steps[from];
+    if (this.swapT) clearTimeout(this.swapT);
+    this.qIn.innerHTML = this.noteHtml(q, from, `<div class="st old">${checkbox('done', from + 1, true)}<span class="tx pp-hand">${struck(esc(old?.text ?? ''), from + 1, true)}</span></div>`);
+    paperSfx('tick');
+    audio.play('ui', { vol: 0.25, pitch: 1.4 });
+    this.swapT = setTimeout(() => {
+      this.swapT = null;
+      if (trackedQuest()?.id !== q.id) return;
+      const st = q.steps[to];
+      this.qIn.innerHTML = this.noteHtml(q, to, `<div class="st old">${checkbox('done', from + 1)}<span class="tx pp-hand">${struck(esc(old?.text ?? ''), from + 1)}</span></div>`
+        + (st ? `<div class="st new">${checkbox('todo', to + 1)}<span class="tx pp-hand">${esc(st.text)}</span></div>` : ''));
+      paperSfx('pencil', 0.8);
+      // after a moment only the new step stays
+      this.swapT = setTimeout(() => { this.swapT = null; if (trackedQuest()?.id === q.id) this.drawNote(q, currentStepIndex(q), false); }, 3200);
+    }, 1300);
+  }
+  private rpStamp(n: number) {
+    const e = el('div', 'hm-rp', stamp(`+${n} RP`, { color: 'blue', fresh: true, rot: '-8deg' }));
+    this.root.appendChild(e);
+    setTimeout(() => paperSfx('stamp', 0.45), 100);
+    setTimeout(() => e.remove(), 2700);
+  }
+
+  private openJournal() {
+    if (game.ui.blocking) return;
+    this.showT = 0;
+    this.q.classList.add('hid');
+    void import('./v11/journalbook').then(m => m.openJournal({ quest: trackedQuest()?.id }).then(() => { this.lastKey = ''; this.refresh(); this.reveal(3); }));
+  }
+  private async openEncyclopedia() {
+    if (game.ui.blocking) return;
+    const apps = await import('./v4/moriApps');
+    if (!apps.installed('enc') && !apps.UNLOCK_BY_ID['enc']?.when()) {
+      const who = (game.scene as unknown as { player?: { id?: string } } | null)?.player?.id ?? 'mori';
+      game.ui.bubbles.bark(who, 'Nothing to look up yet. Get some photos uploaded first.', { expr: 'thinking' } as never);
+      return;
+    }
+    const m = await import('./v11/encybook');
+    await m.openEncyclopedia({});
+  }
 }
+
