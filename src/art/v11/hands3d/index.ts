@@ -236,7 +236,7 @@ export class Hand {
     this.anim.wristT = mid;
     if (o.follow !== undefined) { if (o.follow <= 0) this.anim.snap(); else this.anim.follow = o.follow; }
     if (o.force !== undefined) this.anim.squeeze = o.force;
-    if (this.anim.layers.length !== 1 || (this.anim.layers[0].name !== 'grip' && this.anim.layers[0].name !== 'pour' && this.anim.layers[0].name !== 'crank')) this.setPose('grip', 1, { r, force: o.force });
+    if (this.anim.layers.length !== 1 || !['grip', 'pour', 'crank', 'pullCord', 'hook'].includes(this.anim.layers[0].name)) this.setPose('grip', 1, { r, force: o.force });
     this.holdCap = o.occlude === false ? null : { a: this.ctl.at(h.a[0], h.a[1], h.a[2]), b: this.ctl.at(h.b[0], h.b[1], h.b[2]), r: r * 0.9, tag: 9 };
     return this;
   }

@@ -405,10 +405,12 @@ export class HandAnim {
     if (this.snapped || dt <= 0) {
       this.wristP = wt; this.wristV = [0, 0, 0]; this.handQ = this.handQT; this.snapped = false;
     } else {
-      const w = this.follow, k = w * w, c = 2 * w;
-      const acc = vsub(vscale(vsub(wt, this.wristP), k), vscale(this.wristV, c));
-      this.wristV = vmadd(this.wristV, acc, dt);
-      this.wristP = vmadd(this.wristP, this.wristV, dt);
+      // exact critically damped spring (stable at any frame rate)
+      const w = this.follow, e = Math.exp(-w * dt);
+      const x0 = vsub(this.wristP, wt), v0 = this.wristV;
+      const tmp = vmadd(v0, x0, w);
+      this.wristP = vadd(wt, vscale(vmadd(x0, tmp, dt), e));
+      this.wristV = vscale(vsub(v0, vscale(tmp, w * dt)), e);
       this.handQ = qslerp(this.handQ, this.handQT, 1 - Math.exp(-dt * this.follow * 0.9));
     }
     // breathing and a faint tremor in the arm
@@ -423,18 +425,22 @@ export class HandAnim {
     this.composeTarget();
     const T = this.target, P = this.pose, V = this.vel;
     const inZ = clamp(this.inertia[2] * 0.00035, -0.5, 0.5), inX = clamp(this.inertia[0] * 0.00025, -0.3, 0.3);
+    // substeps keep the underdamped springs stable when frames are slow
+    const nSub = Math.max(1, Math.ceil(dt * 34 / 0.3)), h = dt / nSub;
     for (let i = 0; i < NDOF; i++) {
       let tgt = T[i];
       // idle: slow drift and a physiological tremor, a little different for every joint
       if (i >= D.tflex) tgt += (Math.sin(this.t * (0.31 + i * 0.037) + i * 1.7) * d(1.4) + Math.sin(this.t * (9.3 + i * 0.41) + i) * d(0.22)) * life;
       if (i >= D.f0) tgt += (i - D.f0) % 4 === 1 ? inX : inZ * (1 + ((i - D.f0) >> 2) * 0.25);
       const w = OMEGA[i];
-      const acc = w * w * (tgt - P[i]) - 2 * ZETA * w * V[i];
-      V[i] += acc * dt;
-      P[i] += V[i] * dt;
       const [lo, hi] = LIMITS[i];
-      if (P[i] < lo) { P[i] = lo; if (V[i] < 0) V[i] = 0; }
-      if (P[i] > hi) { P[i] = hi; if (V[i] > 0) V[i] = 0; }
+      for (let k = 0; k < nSub; k++) {
+        const acc = w * w * (tgt - P[i]) - 2 * ZETA * w * V[i];
+        V[i] += acc * h;
+        P[i] += V[i] * h;
+        if (P[i] < lo) { P[i] = lo; if (V[i] < 0) V[i] = 0; }
+        if (P[i] > hi) { P[i] = hi; if (V[i] > 0) V[i] = 0; }
+      }
     }
     // ---------------------------------------------------------------- arm
     this.arm = solveArm(this.rig, this.shoulder, wristLive, this.handQ, this.pole);

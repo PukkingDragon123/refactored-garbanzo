@@ -83,6 +83,10 @@ async function boot() {
     standoff: async () => { const a = await import('./game/v4/islearoha'); return (await import('./ui/v6/standoff')).runNegotiation(a.ROUNDS, a.EXTRA); },
     ramen: async () => (await import('./ui/v6/ramen')).runRamenPour(),
     engine: async () => (await import('./ui/v6/engine')).runEngineRepair({}),
+    /** the outboard repair close-up on the beach (window.__outboard.go('plug' | 'prime' | 'start') jumps a job) */
+    outboard: async () => (await import('./game/v10/boatfix')).runOutboardRepair(),
+    /** the 3D hands module (HANDS3D.enabled = false brings back the pixel hands; ?gallery=hands3d to look at them) */
+    hands3d: async () => import('./art/v11/hands3d'),
     /** stand Mori at the stern (ship scene) and go fishing; resolves with the catch or null (window.__fish) */
     fish: async (opts: { fish?: string; skipTo?: 'fight' } = {}) => {
       const s = game.scene as unknown as { player: { x: number; y: number; facing: number }; snapCamera?(): void; cutscene: boolean };
@@ -142,6 +146,8 @@ async function boot() {
     isle: null as unknown,
   };
   void import('./game/v9/islezl').then(m => { (window as unknown as { zl: { isle: unknown } }).zl.isle = m.ISLE; });
+  // build Mori's 3D hands in the background (a worker) so the first close-up has them ready
+  setTimeout(() => { void import('./art/v11/hands3d').then(m => m.prewarmHands3d('mori')); }, 3000);
   // developer panel toggles left on (noclip, overlay...): only then is the dev module loaded
   try {
     if (/"(noclip|hud|instant)":true|"fast":[2-9]/.test(localStorage.getItem('zl-dev-prefs') ?? '')) void import('./debug/devpanel').then(m => m.applyToggles());

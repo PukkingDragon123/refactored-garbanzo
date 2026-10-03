@@ -12,6 +12,7 @@
 import { openCloseup, CW, CH, hx, mixc, put, blend, ramp, dith, hash } from '../../ui/v6/closeup';
 import { Hold, loop } from '../../ui/v4/mini';
 import { audio } from '../../core/audio';
+import { closeupHands, HANDS3D } from '../../art/v11/hands3d';
 
 const INK = hx('#1a1014');
 const SKY = ['#5e86b8', '#78a0cc', '#94b8dc', '#b4d0e8', '#d8e6f0'].map(hx);
@@ -37,6 +38,10 @@ export async function runOutboardRepair(): Promise<void> {
   const c = openCloseup();
   const buf = c.buf;
   const hold = new Hold(c.wrap);
+  // Mori's real hand does the jobs (the old pixel arm stands in until the mesh is ready)
+  const hands = HANDS3D.enabled ? closeupHands(c, { who: 'mori', side: 'right', lights: 'beach', scale: 2.4 }) : null;
+  hands?.right?.shoulderAt(330, 290, 90);
+  hands?.plane(-30, 0.22, 0.18, '#3a2a18');
   // A / D (or the two halves of the screen) for the plug and the brush
   let dir = 0, tapL = false, tapR = false;
   const kd = (e: KeyboardEvent) => {
@@ -65,6 +70,7 @@ export async function runOutboardRepair(): Promise<void> {
   let pull = 0, pulls = 0, pullState: 'ready' | 'drawing' | 'snap' = 'ready', zone = [0.62, 0.82] as [number, number], swing = 0, runK = 0, cough = 0, smoke: Drop[] = [];
   let shake = 0, camX = 0, camTX = 0, done = false;
   const view: Record<Stage, number> = { drain: 0, plug: 40, prime: -36, start: 0 };
+  (window as unknown as { __outboard?: unknown }).__outboard = { go: (s2: Stage) => { stage = s2; T = 0; if (s2 !== 'drain') plugTurn = 1; } };
 
   const hint = (h: string, ms = 4200) => c.hint(h, ms);
   say('Drain plug first. Bottom of the leg. Lefty-loosey!');
@@ -185,6 +191,7 @@ export async function runOutboardRepair(): Promise<void> {
       // ---------------------------------------------------------------- draw
       draw();
       c.present();
+      hands?.frame(dt);
       return true;
     });
 
@@ -203,6 +210,7 @@ export async function runOutboardRepair(): Promise<void> {
   c.wrap.removeEventListener('pointerdown', pd);
   window.removeEventListener('pointerup', pu);
   hold.dispose();
+  hands?.destroy();
   audio.setEngine(0);
 
   // ------------------------------------------------------------------ painting
@@ -318,11 +326,31 @@ export async function runOutboardRepair(): Promise<void> {
     else if (stage === 'plug') { hxp = 160 + brushX; hyp = 96; }
     else if (stage === 'prime') { hxp = 116; hyp = 104; }
     else { hxp = 150 - pull * 70; hyp = 52 + pull * 26; }
-    const ax = hxp + 60, ay = CH + 10;
-    for (let i = 0; i <= 40; i++) {
-      const t = i / 40, x = ax + (hxp - ax) * t, y = ay + (hyp - ay) * t;
-      const w = t > 0.8 ? 5 : 7;
-      for (let k = -w; k <= w; k++) put(buf, Math.round(x + k * 0.7) + ox, Math.round(y + k * 0.5) + oy, t > 0.82 ? ramp(SKIN, 0.6 - k / 14, x, y) : ramp(SLEEVE, 0.6 - k / 16, x, y));
+    const R = hands?.ready3d ? hands.right : null;
+    if (R) {
+      if (stage === 'drain') {
+        // finger and thumb on the plug, the wrist turning it an eighth with every tap
+        const tw = ((plugTurn * 12) % 1) * 70 - 35;
+        R.release().setPose('pinch').setJoint('twist', tw).reachTo(196 + ox, 150 + oy, 6, { with: 'pinch', fingers: [-0.55, -0.55, -0.6], palm: [-0.6, 0.2, -0.75], follow: 22 });
+      } else if (stage === 'plug') {
+        // a fist round the wire brush's handle, scrubbing
+        R.clearJoints().hold({ a: [hxp - 9 + ox, hyp - 12 + oy, 6], b: [hxp + 9 + ox, hyp - 12 + oy, 6], r: 2.4 }, { follow: 0, approach: [0.25, 0.3, 0.9] });
+      } else if (stage === 'prime') {
+        // the hand round the bulb, squeezing it flat
+        const sq = 1 - bulb * 0.45;
+        R.clearJoints().hold({ a: [108 - 9 + ox, 96 - 2 + oy, 4], b: [108 + 9 + ox, 96 + 2 + oy, 4], r: 7.5 * sq }, { follow: 0, approach: [0.35, 0.75, 0.6], force: 0.3 + bulb * 0.7 });
+      } else {
+        // hooked round the starter's T-handle, hauling it back
+        const hx = 190 - 40 - pull * 70, hy = 40 + 6 + pull * 26;
+        R.clearJoints().setPose('pullCord').hold({ a: [hx - 5 + ox, hy + oy, 6], b: [hx + 5 + ox, hy + oy, 6], r: 2.2 }, { follow: 0, approach: [0.55, 0.65, 0.5], force: 0.5 + pull * 0.5 });
+      }
+    } else {
+      const ax = hxp + 60, ay = CH + 10;
+      for (let i = 0; i <= 40; i++) {
+        const t = i / 40, x = ax + (hxp - ax) * t, y = ay + (hyp - ay) * t;
+        const w = t > 0.8 ? 5 : 7;
+        for (let k = -w; k <= w; k++) put(buf, Math.round(x + k * 0.7) + ox, Math.round(y + k * 0.5) + oy, t > 0.82 ? ramp(SKIN, 0.6 - k / 14, x, y) : ramp(SLEEVE, 0.6 - k / 16, x, y));
+      }
     }
     // the tool in hand: a wire brush for the plug
     if (stage === 'plug') {
