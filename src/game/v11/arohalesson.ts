@@ -95,7 +95,11 @@ addCampEvent({
     const cd = campOf(ctx), st = cd.st, s = cd.s, ar = s.aroha;
     await st.cut(async () => {
       cd.hold('aroha');
-      ar.setAnim('sit');
+      s.hud?.show(false);
+      // by the fire: she sits across from Mori (whatever the evening was doing)
+      st.place(ar, C10.seats.aroha, -1, 'sit');
+      if (Math.abs(cd.p.x - C10.seats.mori) > 30) { cd.p.x = C10.seats.mori; cd.p.y = groundY(cd.p.x); }
+      cd.p.facing = 1;
       cd.frame(C10.fire + 10, groundY(C10.fire) - 34, 1.9);
       cineBars(true);
       await st.say([
@@ -121,6 +125,7 @@ addCampEvent({
       ]);
       if (got) game.ui.toast('New blueprint: <b>Slingshot</b>. Craft it to defend yourself from predators.', 'BLUEPRINT', 'teal', 5200);
       cineBars(false);
+      s.hud?.show(true);
       cd.release('aroha');
     });
   },
@@ -252,9 +257,14 @@ export function attachArohaLesson(st: IsleStory) {
   })();
 }
 
+/** keep the camp's crew brain off Aroha while the lesson needs her */
+async function holdAroha() { (await import('../v10/campday')).activeCamp()?.hold('aroha'); }
+
 async function readTracks(st: IsleStory) {
   const s = st.s, p = s.player, ar = s.aroha;
+  await holdAroha();
   await st.cut(async () => {
+    s.hud?.show(false);
     ar.stopWalk();
     st.place(ar, LESSON.tracks + 16, -1, 'kneel');
     p.facing = 1;
@@ -282,13 +292,15 @@ async function creep(st: IsleStory) {
   if (creeping) return;
   creeping = true;
   const s = st.s, p = s.player, ar = s.aroha;
+  await holdAroha();
   ar.walkAnim = 'sneak';
   let scold = 0, x = Math.max(ar.x, LESSON.tracks + 16);
   try {
     while (x < LESSON.manuka + 26 && attachedTo === st && game.scene === s) {
       await wait(120);
       if (s.cutscene) continue;
-      const near = Math.abs(p.x - (ar.x - 30)) < 46;
+      const near = Math.abs(p.x - ar.x) < 80;
+      if (p.x > ar.x + 24 && scold <= 0) { scold = 3; s.bark('aroha', 'Behind me. I lead, you follow.', { expr: 'teasing' }); }
       const loud = p.running || (!p.crouch && Math.abs(p.vx) > 8);
       scold -= 0.12;
       if (loud && Math.abs(p.x - ar.x) < 120) {
