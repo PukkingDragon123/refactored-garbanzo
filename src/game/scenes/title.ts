@@ -22,6 +22,7 @@ import { audio } from '../../core/audio';
 import { hasSave, newSave, clearSave } from '../save';
 import { continueV4, goShip4 } from './flow';
 import { pxIconCss, pxIconURL } from '../../ui/pxicons';
+import { installPaper, paperTex, edgeClip, tape, svgInk, underline, INK_RED } from '../../ui/v11/paper';
 
 const CSS = `
 .t3 { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
@@ -48,6 +49,20 @@ const CSS = `
 .t3-menu .btn::after { content: ${pxIconCss('play', 2)}; margin-left: auto; opacity: 0; transform: translateX(-6px); transition: opacity 0.15s, transform 0.15s; font-size: 0.8em; }
 .t3-menu .btn:hover::after, .t3-menu .btn:focus-visible::after { opacity: 1; transform: none; }
 .t3-menu .hd { font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 0.78em; letter-spacing: 0.2em; color: #6a4a2a; text-align: center; margin-bottom: 0.2em; }
+/* V11: the menu is a page torn out of the expedition log, taped to the screen */
+#ui .t3-menu.paper { border: 0 !important; border-image: none !important; box-shadow: none !important; background-size: 256px 256px !important; padding: 1.5em 1.4em 1.3em; gap: 0.15em;
+  filter: drop-shadow(0 0.4em 0.6em rgba(0,0,0,0.5)); }
+#ui .t3.menu .t3-menu.paper { transform: rotate(-1.5deg); }
+#ui .t3-menu.paper .hd { font-size: 0.85em; margin-bottom: 0.4em; color: #5a4a34; }
+#ui .t3-menu.paper .btn { position: relative; border: 0 !important; border-image: none !important; background: none !important; color: #2a2440 !important; text-shadow: none !important;
+  font-family: var(--pp-hand) !important; font-size-adjust: none; text-transform: none; letter-spacing: 0; font-size: 1.7em; font-weight: 600; padding: 0.05em 0.3em !important; -webkit-font-smoothing: antialiased; }
+#ui .t3-menu.paper .btn * { font-size-adjust: none; }
+#ui .t3-menu.paper .btn .ic { filter: brightness(0.25) sepia(1) hue-rotate(200deg); width: 1.1em; height: 1.1em; }
+#ui .t3-menu.paper .btn::after { display: none; }
+#ui .t3-menu.paper .btn .ul { position: absolute; left: 1.6em; right: 10%; bottom: 0.08em; height: 0.3em; opacity: 0; transition: opacity 0.15s; }
+#ui .t3-menu.paper .btn:hover .ul, #ui .t3-menu.paper .btn:focus-visible .ul { opacity: 1; }
+#ui .t3-menu.paper .btn:hover, #ui .t3-menu.paper .btn:focus-visible { transform: translateX(0.2em); filter: none; outline: none; }
+#ui .t3-menu.paper .pp-tape { left: 40%; top: -0.55em; }
 .t3-foot { position: absolute; right: 2.2vw; bottom: 5.4%; font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 0.72em; color: #ffe4c8; opacity: 0; transition: opacity 1s 1s; text-shadow: 0 2px 0 #000; z-index: 3; }
 .t3.menu .t3-foot { opacity: 0.75; }
 .t3-skip { position: absolute; right: 2.2vw; bottom: 1.2%; font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 0.7em; color: #fff; opacity: 0.55; z-index: 4; }
@@ -247,10 +262,15 @@ export class TitleScene implements Scene {
       <div class="t3-logo"><small>PROJECT</small><h1>ZEALANDIA<i>ZEALANDIA</i></h1><p>Shipwrecked on a lost continent where <b>serpents</b> rule. Bring back the photographs.</p></div>
       <div class="t3-cap"></div>
       <div class="t3-foot">Click for sound &middot; V3</div><div class="t3-skip">Click to skip</div>`;
-    const menu = this.root.appendChild(el('div', 't3-menu panel'));
+    const menu = this.root.appendChild(el('div', 't3-menu panel paper'));
+    installPaper();
+    menu.style.background = `${paperTex('journal')} 0 0 / 256px`;
+    menu.style.clipPath = edgeClip(11, { top: 'torn', right: 'deckle', bottom: 'deckle', left: 'perforated', amp: 0.7 });
+    menu.insertAdjacentHTML('beforeend', tape({ seed: 4 }));
     menu.appendChild(el('div', 'hd', 'EXPEDITION LOG'));
+    let ulN = 0;
     const btn = (label: string, icon: string, cls: string, fn: () => void) => {
-      const b = el('button', 'btn ' + cls, `<span class="ic"></span><span>${label}</span>`);
+      const b = el('button', 'btn ' + cls, `<span class="ic"></span><span>${label}</span><span class="ul">${svgInk(100, 6, [{ d: underline(100, { seed: ++ulN }), c: INK_RED, w: 1.8 }], { stretch: true, w: '100%', h: '100%' })}</span>`);
       (b.querySelector('.ic') as HTMLElement).style.setProperty('--ic', micon(icon));
       b.onclick = e => { e.stopPropagation(); audio.unlock(); fn(); };
       b.onmouseenter = () => audio.play('ui', { vol: 0.25, pitch: 1.3 });

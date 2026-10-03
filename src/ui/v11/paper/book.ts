@@ -37,6 +37,8 @@ export interface BookBlock {
   keep?: boolean;
   /** plain-text paragraph that may be split between pages at sentence ends */
   split?: boolean;
+  /** a name for the page this block lands on: goto(anchor) and ribbons can point at it */
+  anchor?: string;
 }
 
 export interface BookSection {
@@ -358,6 +360,8 @@ export function openBook(o: BookOpts): BookHandle {
 
   // ---- layout: sections -> pages (cached per size)
   const cache = new Map<string, string[]>();
+  /** anchor -> [section id, page] for laid-out sections */
+  const anchors = new Map<string, [string, number]>();
   const sectionPages = (si: number): string[] => {
     const sec = sections[si];
     if (!sec) return [];
@@ -381,7 +385,7 @@ export function openBook(o: BookOpts): BookHandle {
     let cur: { html: string; keep: boolean }[] = [];
     ct.innerHTML = '';
     const over = () => ct.scrollHeight > ct.clientHeight + 1;
-    const wrapB = (b: BookBlock, html = b.html, sq = 0) => `<div class="ppb-bk ${b.cls ?? ''}${sq ? ' ppb-sq' + sq : ''}">${html}</div>`;
+    const wrapB = (b: BookBlock, html = b.html, sq = 0) => `<div class="ppb-bk ${b.cls ?? ''}${sq ? ' ppb-sq' + sq : ''}"${b.anchor ? ` data-anchor="${b.anchor}"` : ''}>${html}</div>`;
     const push = (html: string) => { ct.insertAdjacentHTML('beforeend', html); };
     const pop = () => { ct.lastElementChild?.remove(); };
     const newPage = () => { pages.push(cur.map(c => c.html)); cur = []; ct.innerHTML = ''; };
@@ -435,7 +439,10 @@ export function openBook(o: BookOpts): BookHandle {
     for (const b of blocks) place(b, b.html);
     if (cur.length || !pages.length) newPage();
     ct.innerHTML = '';
-    return pages.map(p => p.join(''));
+    const out = pages.map(p => p.join(''));
+    // anchors: the first page carrying the anchored block
+    out.forEach((h, i) => { for (const m of h.matchAll(/data-anchor="([^"]+)"/g)) if (!anchors.has(m[1]) || anchors.get(m[1])![0] !== sec.id || anchors.get(m[1])![1] > i) anchors.set(m[1], [sec.id, i]); });
+    return out;
   }
 
   // ---- position
@@ -453,6 +460,17 @@ export function openBook(o: BookOpts): BookHandle {
     return null;
   };
   const secIndex = (id: string) => sections.findIndex(s => s.id === id);
+  /** a section id or an anchor -> where it is (laying sections out until it's found) */
+  const locate = (id: string): Pos | null => {
+    const si = secIndex(id);
+    if (si >= 0) return { s: si, p: 0 };
+    for (let i = 0; i < sections.length; i++) {
+      count(i);
+      const a = anchors.get(id);
+      if (a && a[0] === sections[i].id) return { s: i, p: a[1] };
+    }
+    return null;
+  };
 
   // ---- rendering a page into an element
   const shownOnce = new Set<string>();
@@ -536,9 +554,10 @@ export function openBook(o: BookOpts): BookHandle {
     }
     ribEl.innerHTML = '';
     for (const r of ribbons) {
-      const si = secIndex(r.section);
-      if (si < 0) continue;
-      const here = si === curS;
+      const at = locate(r.section);
+      if (!at) continue;
+      const si = at.s;
+      const here = si === curS && at.p >= pos.p && at.p < pos.p + step();
       const e = el('div', 'ppb-rib' + (here ? ' lying' : ''));
       e.style.setProperty('--c', r.color);
       if (here) {
@@ -547,7 +566,7 @@ export function openBook(o: BookOpts): BookHandle {
         e.style.top = '-0.4em';
         e.style.height = `${H * 0.42}px`;
       } else {
-        const before = si < curS;
+        const before = si < curS || (si === curS && at.p < pos.p);
         e.style.left = `${spread ? (before ? W * 0.22 : W * 1.7) : (before ? W * 0.1 : W * 0.75)}px`;
         e.style.top = `${H - 2}px`;
         e.style.height = '2.6em';
@@ -876,7 +895,7 @@ export function openBook(o: BookOpts): BookHandle {
     if (T) endTurn(false);
     const cur = sections[pos.s]?.id;
     measureLayout();
-    cache.clear();
+    cache.clear(); anchors.clear();
     const si = Math.max(0, secIndex(cur ?? ''));
     const n = count(si);
     pos = { s: si, p: Math.min(spread ? pos.p - (pos.p % 2) : pos.p, Math.max(0, spread ? n - 1 - ((n - 1) % 2) : n - 1)) };
@@ -906,8 +925,8 @@ export function openBook(o: BookOpts): BookHandle {
   async function doOpen() {
     measureLayout();
     await handReady();
-    const si = Math.max(0, o.start ? secIndex(o.start) : 0);
-    pos = { s: si, p: 0 };
+    const at = o.start ? locate(o.start) : null;
+    pos = at ? { s: at.s, p: spread ? at.p - (at.p % 2) : at.p } : { s: 0, p: 0 };
     show();
     dressCoverInside();
     const R = reduced();
@@ -985,9 +1004,10 @@ export function openBook(o: BookOpts): BookHandle {
     root: wrap,
     closed,
     async goto(id, go = {}) {
-      const si = secIndex(id);
-      if (si < 0) return;
-      let p = Math.max(0, go.page ?? 0);
+      const at = locate(id);
+      if (!at) return;
+      const si = at.s;
+      let p = Math.max(0, go.page ?? at.p);
       const n = count(si);
       p = Math.min(p, n - 1);
       if (spread) p -= p % 2;
@@ -1003,7 +1023,7 @@ export function openBook(o: BookOpts): BookHandle {
     async next() { const to = nextPos(pos); if (to) await turnTo(1, to); },
     async prev() { const to = prevPos(pos); if (to) await turnTo(-1, to); },
     refresh(id) {
-      if (id) { for (const k of [...cache.keys()]) if (k.endsWith('|' + id)) cache.delete(k); } else cache.clear();
+      if (id) { for (const k of [...cache.keys()]) if (k.endsWith('|' + id)) cache.delete(k); } else cache.clear(); anchors.clear();
       if (T) endTurn(false);
       const n = count(pos.s);
       if (pos.p >= n) pos = { s: pos.s, p: Math.max(0, spread ? n - 1 - ((n - 1) % 2) : n - 1) };
@@ -1014,7 +1034,7 @@ export function openBook(o: BookOpts): BookHandle {
       sections = s.slice();
       if (t) tabs = t;
       if (r) ribbons = r;
-      cache.clear();
+      cache.clear(); anchors.clear();
       const si = Math.max(0, secIndex(cur ?? ''));
       pos = { s: si, p: Math.min(pos.p, Math.max(0, count(si) - 1)) };
       if (spread) pos.p -= pos.p % 2;

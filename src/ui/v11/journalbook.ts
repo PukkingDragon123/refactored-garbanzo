@@ -44,7 +44,7 @@ const CSS = `
 .jb-hint { margin: 0.2em 0 0.5em 1.4em; font-size: 1.05em; line-height: 1.08; color: var(--pp-pencil); transform: rotate(-0.8deg); }
 .jb-hint b { font-weight: 700; }
 .jb-rew { display: flex; align-items: center; gap: 0.6em; margin: 0.6em 0 0.3em; font-size: 1.1em; color: var(--pp-pencil); }
-.jb-track { display: inline-block; margin: 0.5em 0 0; font-size: 1.15em; color: #26408a; cursor: pointer; }
+.jb-track { display: inline-block; margin: 0.15em 0 0; font-size: 1.15em; color: #26408a; cursor: pointer; }
 .jb-track:hover { color: #a8321e; }
 .jb-track.on { color: #a8321e; cursor: default; }
 .jb-done-st { position: absolute; right: 4%; top: 22%; z-index: 3; font-size: 1.3em; }
@@ -63,11 +63,11 @@ let styled = false;
 
 const NAMES: Record<string, string> = { story: '', rowan: 'Mori', mori: 'me', crowe: 'Captain Crowe', aroha: 'Aroha', lou: 'Lou', pip: 'Pip', jenna: 'Jenna', joshu: 'Joshu', chunk: 'Chunk' };
 const DOODLE_WORDS: [RegExp, string][] = [
-  [/fish|catch|rod|smoker/i, 'fish'], [/storm|wave|sea|boat|ship|kittiwake|engine|deck|kitten|sail|outboard|hull/i, 'boat'],
-  [/crab/i, 'crab'], [/shell|beachcomb/i, 'shell'], [/chunk|dog|pug/i, 'pug'], [/track|footprint|follow|joshu/i, 'footprints'],
-  [/photo|camera|pics/i, 'camera'], [/fire|dinner|breakfast|kitchen|cook/i, 'fire'], [/camp|tent|sleep|bed/i, 'tent'],
-  [/village|find|map|region|ground/i, 'pin'], [/feather|bird|hawk/i, 'feather'], [/flax|kawakawa|bush|forest|leaf|tea/i, 'leaf'],
-  [/fossil|rock|stone/i, 'mountain'], [/hornet|insect/i, 'magnifier'], [/rise|morning|day/i, 'sun'],
+  [/\b(fish|catch|rod|smoker)/i, 'fish'], [/\b(storm|wave|sea|boat|ship|kittiwake|engine|deck|kitten|sail|outboard|hull)\b/i, 'boat'],
+  [/\bcrab/i, 'crab'], [/\b(shell|beachcomb)/i, 'shell'], [/\b(chunk|dog|pug)\b/i, 'pug'], [/\b(track|footprint|follow|joshu)/i, 'footprints'],
+  [/\b(photo|camera|pics)/i, 'camera'], [/\b(fire|dinner|breakfast|kitchen|cook)/i, 'fire'], [/\b(camp|tent|sleep|bed)\b/i, 'tent'],
+  [/\b(village|find|map|region|ground)\b/i, 'pin'], [/\b(feather|bird|hawk)/i, 'feather'], [/\b(flax|kawakawa|bush|forest|leaf|tea)\b/i, 'leaf'],
+  [/\b(fossil|rock|stone)/i, 'mountain'], [/\b(hornet|insect)/i, 'magnifier'], [/\b(rise|morning|day)\b/i, 'sun'],
 ];
 function doodleFor(q: QuestDef): string {
   const t = `${q.title} ${q.desc}`;
@@ -90,7 +90,7 @@ function questBlocks(q: QuestDef, tracked: boolean, ink: { fresh: number }): Boo
   const pic = portrait
     ? `<div class="who"><div class="pic" style="transform:rotate(${tilt(seed, 4)})">${sketchImg(portrait, { size: 200, seed, box: ['100%', '4.6em'], wash: 0.5 })}<span class="pp-hand">${esc(who)}</span>${tape({ seed, w: '3em', style: 'left:1.3em;top:-0.55em' })}</div></div>`
     : `<div class="who" style="transform:rotate(${tilt(seed, 6)})">${doodle(doodleFor(q), { size: '5em', pencil: true, seed })}</div>`;
-  out.push({ html: `<div class="jb-top"><div class="head"><div class="jb-date pp-hand">${q.chapter !== undefined ? `chapter ${q.chapter}` : q.main ? '' : 'odd job'}</div><div class="jb-title pp-head">${esc(q.title)}</div><div class="jb-from pp-hand">${q.giver === 'story' ? (q.main ? 'the story so far' : '') : q.giver === 'mori' || q.giver === 'rowan' ? 'a note to self' : `asked by ${esc(who)}`}</div></div>${pic}${done ? `<span class="jb-done-st">${stamp('Done', { color: 'red', shape: 'round', small: 'ticked off', rot: '-14deg' })}</span>` : ''}</div>` });
+  out.push({ html: `<div class="jb-top"><div class="head"><div class="jb-date pp-hand">${q.chapter !== undefined ? `chapter ${q.chapter}` : q.main ? '' : 'odd job'}</div><div class="jb-title pp-head">${esc(q.title)}</div><div class="jb-from pp-hand">${q.giver === 'story' ? (q.main ? 'the story so far' : '') : q.giver === 'mori' || q.giver === 'rowan' ? 'a note to self' : `asked by ${esc(who)}`}</div>${done ? '' : tracked ? `<div class="jb-track on pp-hand">${doodle('star', { size: '1em', color: INK_RED })} bookmarked: on it now</div>` : `<div class="jb-track pp-hand" data-act="track" data-q="${esc(q.id)}">${doodle('star', { size: '1em', color: '#26408a' })} follow this one</div>`}</div>${pic}${done ? `<span class="jb-done-st">${stamp('Done', { color: 'red', shape: 'round', small: 'ticked off', rot: '-14deg' })}</span>` : ''}</div>` });
   out.push({ html: esc(q.desc), cls: 'pp-hand jb-p', split: true });
   // the checklist: what's done, what's now, and the next thing pencilled in
   const rows: string[] = [];
@@ -113,7 +113,6 @@ function questBlocks(q: QuestDef, tracked: boolean, ink: { fresh: number }): Boo
   if (r && (r.rp || r.text || r.items?.length)) {
     out.push({ html: `<div class="jb-rew pp-hand">${r.rp ? stamp(`+${r.rp} RP`, { color: 'blue', rot: '-4deg' }) : ''}<span>${esc(r.text ?? (r.items?.length ? 'Something for the pack.' : ''))}</span></div>` });
   }
-  if (!done) out.push({ html: tracked ? `<div class="jb-track on pp-hand">${doodle('star', { size: '1em', color: INK_RED })} bookmarked: this is what I'm on</div>` : `<div class="jb-track pp-hand" data-act="track" data-q="${esc(q.id)}">${doodle('star', { size: '1em', color: '#26408a' })} follow this one</div>` });
   return out;
 }
 
@@ -144,28 +143,31 @@ export async function openJournal(o: { quest?: string } = {}): Promise<void> {
     const done = QUESTS.filter(q => questStatus(q.id) === 'done').reverse();
     const ink = { fresh: 0 };
     const sections: BookSection[] = [{ id: 'j:inside', pages: () => insidePages(active, done.length, tracked) }];
-    for (const q of active) sections.push({
-      id: 'q:' + q.id, head: { l: q.main ? 'Story' : 'Odd jobs', r: q.title },
-      blocks: () => questBlocks(q, q === tracked, ink),
+    /** a run of quests, each starting on a fresh page (anchored, so goto('q:id') finds it) */
+    const run = (list: QuestDef[], trk: QuestDef | null) => list.flatMap(q => questBlocks(q, q === trk, ink).map((b, i) => (i === 0 ? { ...b, brk: true, anchor: 'q:' + q.id } : b)));
+    if (active.length) sections.push({
+      id: 'j:now', head: { l: 'On my list', r: 'On my list' },
+      blocks: () => run(active, tracked),
       shown: () => {
-        const cur = currentStepIndex(q);
+        let inked = false;
         const b = seenB();
-        if ((b.done[q.id] ?? 0) < cur) { b.done[q.id] = cur; game.persist(); paperSfx('pencil'); }
+        for (const q of active) { const cur = currentStepIndex(q); if ((b.done[q.id] ?? 0) < cur) { b.done[q.id] = cur; inked = true; } }
+        if (inked) { game.persist(); paperSfx('pencil'); }
       },
     });
     if (done.length) {
       sections.push({ id: 'j:done', head: { l: 'Done', r: 'Done & dusted' }, blocks: () => doneBlocks(done) });
-      for (const q of done.slice(0, 12)) sections.push({ id: 'q:' + q.id, head: { l: 'Done', r: q.title }, blocks: () => questBlocks(q, false, ink) });
+      sections.push({ id: 'j:donepages', head: { l: 'Done', r: 'Done' }, blocks: () => run(done.slice(0, 12), null) });
     }
     return { sections, ribbons: tracked ? [{ section: 'q:' + tracked.id, color: '#b8321e', label: tracked.title }] : [], tracked };
   };
   const b0 = build();
-  const start = o.quest && QUEST_BY_ID[o.quest] ? 'q:' + o.quest : b0.tracked ? 'q:' + b0.tracked.id : 'j:inside';
+  const start = o.quest && QUEST_BY_ID[o.quest] && questStatus(o.quest) === 'active' ? 'q:' + o.quest : b0.tracked ? 'q:' + b0.tracked.id : 'j:inside';
   const book = openBook({
     id: 'journal', key: 'KeyJ', cls: 'jb',
     look: { title: 'Field Journal', color: '#3c4a2c', material: 'leather', foil: '#d8c48a', band: 'linear-gradient(90deg,#1a1410,#3a2a20,#1a1410)', label: 'Mori<br><small style="font-size:0.7em">field notes</small>', inside: 'kraft', paper: 'journal' },
     sections: b0.sections, ribbons: b0.ribbons,
-    start: b0.sections.some(s => s.id === start) ? start : 'j:inside',
+    start,
     onAct: (act, el, b) => {
       if (act === 'track' && el.dataset.q) {
         game.save.tracked = el.dataset.q;

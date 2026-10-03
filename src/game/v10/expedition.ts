@@ -123,6 +123,9 @@ async function loadLocation(L: LocationDef, enter?: number) {
   const site = enter !== undefined ? { ...def, spawnX: enter } : def;
   const tod = todAt(E().hour);
   const { FieldScene } = await import('../scenes/field');
+  // V11: setting off turns the journal's page to the place you're going
+  const { setNextTransition } = await import('../../ui/v11/paper/transition');
+  setNextTransition('page', { title: L.name, sub: L.sub });
   await game.go(() => { const f = new FieldScene(site, tod); tagScene(f, L.id); return f; });
 }
 

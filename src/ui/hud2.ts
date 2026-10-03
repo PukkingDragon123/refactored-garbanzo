@@ -183,6 +183,8 @@ export class Hud2 {
   private bannerT = 0;
   private swapT: ReturnType<typeof setTimeout> | null = null;
   private dayShown = -1;
+  /** a new side quest is on the note for a moment */
+  private holdT = 0;
 
   constructor(parent: HTMLElement, o: HudOpts) {
     installPaper();
@@ -344,7 +346,8 @@ export class Hud2 {
     this.keysT -= dt;
     if ((this.keysT <= 0 || (this.moved && this.keysT < 4.5)) && !this.keys.classList.contains('gone')) this.keys.classList.add('gone');
     if (this.placeT > 0) { this.placeT -= dt; if (this.placeT <= 0) this.place.classList.remove('on'); }
-    if (this.t > 0.25) { this.t = 0; this.refresh(); }
+    if (this.holdT > 0) { this.holdT -= dt; if (this.holdT <= 0) this.lastKey = ''; }
+    if (this.t > 0.25) { this.t = 0; if (this.holdT <= 0) this.refresh(); }
     this.body?.update(dt);
   }
 
@@ -388,10 +391,13 @@ export class Hud2 {
     this.peek.classList.remove('on');
   }
   private noticeQuest(q: QuestDef) {
-    // a new quest: the note is redrawn with it (and a little NEW stamp) once the tracker picks it up
-    if (trackedQuest()?.id !== q.id) { paperSfx('pencil', 0.6); return; }
-    this.lastKey = '';
-    this.refresh();
+    // a new quest: the note shows it (with a little NEW stamp) for a moment, then goes back to the
+    // tracked one if that's a different quest
+    if (trackedQuest()?.id !== q.id) {
+      this.drawNote(q, currentStepIndex(q), true);
+      this.holdT = 5.5;
+      this.lastKey = 'held';
+    } else { this.lastKey = ''; this.refresh(); }
     this.qIn.insertAdjacentHTML('beforeend', `<span class="new-q">${stamp(q.main ? 'New' : 'New job', { color: 'red', fresh: true, rot: '10deg' })}</span>`);
     setTimeout(() => paperSfx('stamp', 0.6), 150);
     this.reveal(7);
