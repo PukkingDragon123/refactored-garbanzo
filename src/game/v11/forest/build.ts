@@ -323,8 +323,11 @@ export function buildForest(f: ForestScene) {
   const fyB = layerY(pf, 372) + 6, fyT = layerY(pf, -6);
   const occ = (s: Sprite, x: number, y: number, flip: boolean, p: number) => f.occluders.push({ mask: s.buf, x, y, ax: s.ax, ay: s.ay, sx: flip ? -1 : 1, sy: 1, p, z: 0 });
   // rising from the bottom of the frame: tree fern sprays, big leaves, fronds
+  // (never in front of the story's spots: the prints, the scrap, the boot, Joshu, the fords)
+  const keep = [FSPOT.prints, FSPOT.scrap, FSPOT.boot, FSPOT.joshu, FORD.x, GULLY.x, FSPOT.exit + 60];
   for (let x = 120; x < FOREST.W + 300; x += rng.range(160, 300)) {
     const k = rng.next(), v = rng.int(0, 2);
+    if (keep.some(q => Math.abs(q - x) < 150)) continue;
     const fr = k < 0.45 ? frameOf(`fs:${v}`, () => fgFernSpray(1500 + v, 76 + v * 14, false, 1, dark, 0.62))
       : k < 0.7 ? frameOf(`fl:${v}`, () => fgPlant('leaves', 1510 + v, 92 + v * 12, 1, dark, 0.66))
         : k < 0.88 ? frameOf(`ff:${v}`, () => fgPlant('fronds', 1520 + v, 100, 1, dark, 0.64))
@@ -355,6 +358,7 @@ export function buildForest(f: ForestScene) {
   const nyB = layerY(pn, 380) + 10;
   for (let x = 400; x < FOREST.W + 300; x += rng.range(620, 1100)) {
     const v = rng.int(0, 1);
+    if (keep.some(q => Math.abs(q - x) < 200)) continue;
     const fr = frameOf(`fn:${v}`, () => fgPlant(v ? 'fronds' : 'leaves', 1570 + v, 96, 3, dark, 0.86));
     near.add(new Prop(fr, x * pn, nyB + 24, 0, { sway: 0.3, flip: rng.chance(0.5) }));
   }
