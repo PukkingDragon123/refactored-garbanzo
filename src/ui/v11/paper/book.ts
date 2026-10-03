@@ -355,7 +355,8 @@ export function openBook(o: BookOpts): BookHandle {
     // arrows under the outer corners, the close mark on the top-right corner
     navPrev.style.left = spread ? '1.2%' : '3%';
     navNext.style.right = spread ? '1.2%' : '3%';
-    xBtn.style.right = `${-(tabs.length ? 3.3 : 1.8)}em`;
+    xBtn.style.right = spread ? `${-(tabs.length ? 3.3 : 1.8)}em` : '0';
+    xBtn.style.top = spread ? '-0.4em' : '-2.7em';
   }
 
   // ---- layout: sections -> pages (cached per size)
@@ -495,7 +496,7 @@ export function openBook(o: BookOpts): BookHandle {
     inner.style.background = paperBg(sec.paper ?? paper, seed % 9, { stains: seed % 3 === 0 ? 1 : 0, foxing: 0.25 + (seed % 5) * 0.06, edge: 0.55 });
     pgEl.className = `ppb-pg ${side} ${pgEl.classList.contains('static') ? 'static ' : ''}${sec.cls ?? ''}`;
     const body = html === BLANK ? (o.blank?.(seed) ?? blankPage(seed)) : html;
-    const head = spread ? (side === 'l' ? sec.head?.l : sec.head?.r) : [sec.head?.l, sec.head?.r].filter(Boolean).join(' · ');
+    const head = spread ? (side === 'l' ? sec.head?.l : sec.head?.r) : [...new Set([sec.head?.l, sec.head?.r].filter(Boolean))].join(' · ');
     inner.innerHTML = `<div class="ppb-hd pp-pix">${head ? `<span>${escHtml(head)}</span>` : ''}</div><div class="ppb-ct">${body}</div>`;
     pgEl.dataset.k = `${sec.id}#${idx}`;
     fillSketches(inner);
@@ -562,9 +563,9 @@ export function openBook(o: BookOpts): BookHandle {
       e.style.setProperty('--c', r.color);
       if (here) {
         // lying down the gutter of the open page
-        e.style.left = `${spread ? W - (0.6 * parseFloat(book.style.fontSize)) - 22 : W * 0.06}px`;
+        e.style.left = `${spread ? W - (0.6 * parseFloat(book.style.fontSize)) - 22 : W * 0.88}px`;
         e.style.top = '-0.4em';
-        e.style.height = `${H * 0.42}px`;
+        e.style.height = `${spread ? H * 0.42 : H * 0.1}px`;
       } else {
         const before = si < curS || (si === curS && at.p < pos.p);
         e.style.left = `${spread ? (before ? W * 0.22 : W * 1.7) : (before ? W * 0.1 : W * 0.75)}px`;
