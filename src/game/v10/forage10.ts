@@ -139,6 +139,11 @@ export function canEat(id: string): { ok: boolean; reason?: string } {
 }
 
 export type PoisonFx = 'none' | 'stomach' | 'dizzy' | 'big';
+
+type EatenFn = (id: string, fx: PoisonFx) => void;
+const eatenFns: EatenFn[] = [];
+/** V11: something was eaten through eatFood (the cooking module gives dishes their extra buffs) */
+export function onEaten(fn: EatenFn): () => void { eatenFns.push(fn); return () => { const i = eatenFns.indexOf(fn); if (i >= 0) eatenFns.splice(i, 1); }; }
 export interface EatResult { ok: boolean; id: string; energy: number; fx: PoisonFx; reason?: string }
 
 function roll(fi: FoodInfo): PoisonFx {
@@ -212,6 +217,7 @@ export function eatFood(id: string, o: { quiet?: boolean } = {}): EatResult {
     if (!o.quiet) game.ui.toast(`Ate ${icon} <b>${d.name}</b>${plus} · <b>${what}!</b>${fi.verdict === 'unknown' ? ' Analyse forage before you eat it.' : ''}`, 'POISON', 'coral', 4200);
     setTimeout(() => game.ui.bubbles.bark(m.id, pick(FX_LINES[fx]), { expr: fx === 'dizzy' ? 'surprised' : 'sad', emote: 'sweat' } as never), 400);
   }
+  for (const f of eatenFns.slice()) { try { f(id, fx); } catch (e) { console.error(e); } }
   game.persist();
   return { ok: true, id, energy: gain, fx };
 }

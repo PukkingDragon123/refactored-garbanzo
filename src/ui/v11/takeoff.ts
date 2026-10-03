@@ -84,6 +84,8 @@ export async function packOff(o: { anim?: boolean } = {}): Promise<PackOff> {
     cam.locked = true;
     await tweenCam(cam, { x: p.x, y: p.y - 22, zoom: Math.min(4, cam.zoom * 1.28) }, ms);
   }
+  // while the pack is open he kneels by it, rummaging (the frozen frame keeps that pose)
+  if (play && p && hasAnim7('backpackOpen')) p.poseOverride = 'backpackOpen';
   // freeze the world behind the screen and put the HUD away
   const backdrop = game.scene ? await snapshot() : null;
   game.covered++;

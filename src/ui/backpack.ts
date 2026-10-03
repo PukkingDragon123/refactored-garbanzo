@@ -5,6 +5,8 @@
 
 import { openBackpack11 } from './v11/backpack';
 import type { PackOpts } from './v11/backpack';
+// cooking registers the billy can's Use and the recipe notebook with the pack
+import './v11/cooking';
 
 /** Open the backpack. Resolves when it closes. (onEat is kept for old callers but not called: eating
  *  goes through v10/forage10 eatFood, as it did in the V10 pack.) */

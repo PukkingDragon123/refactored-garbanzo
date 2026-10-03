@@ -535,6 +535,9 @@ class PackScreen {
     const repack = b.appendChild(iconLabel('button', 'pbtn', 'v11shake', 'REPACK'));
     repack.title = 'Repack (T): shake it all down, biggest first';
     repack.addEventListener('click', e => { e.stopPropagation(); this.repack(); });
+    const book = b.appendChild(iconLabel('button', 'pbtn', 'v11book', ''));
+    book.title = 'Recipe notebook';
+    book.addEventListener('click', async e => { e.stopPropagation(); const { openRecipeBook } = await import('./cooking'); await openRecipeBook(); });
     const close = b.appendChild(iconLabel('button', 'pbtn', 'v11x', ''));
     close.title = 'Close (Esc / Tab)';
     close.addEventListener('click', e => { e.stopPropagation(); void this.close(); });
@@ -1087,6 +1090,10 @@ class PackScreen {
       if (d.kind !== 'key') btn('v11drop', 'drop', () => void this.act('drop'), '', inPack || stashStacks().includes(cur.s));
       btn('v11rot', 'turn', () => this.rotateInPlace(cur.s!), '', !!cur.s.p);
     }
+    if (cur.tool && this.sel?.tool === cur.tool) {
+      const u = useOf(cur.tool);
+      if (u) btn(u.icon ?? 'v11hand', u.label, () => void this.useTool(cur.tool!), 'go');
+    }
     const lo = cur.s ? this.loose.find(l => l.s === cur.s) : undefined;
     if (lo && isSel) btn('v11hand', 'take', () => this.takeLoose(lo), 'go');
     btn('v11lens', 'look', () => { card.classList.toggle('flip'); sfx('pageTurn', { vol: 0.4 }); });
@@ -1151,6 +1158,16 @@ class PackScreen {
       this.sync();
       this.renderCard();
     }
+  }
+
+  /** a tool's Use (the billy can: cook): the pack closes first */
+  private async useTool(id: string) {
+    const u = useOf(id);
+    if (!u || this.busy) return;
+    this.busy = true;
+    await this.close();
+    // (runs after the screen and the world part have finished closing)
+    setTimeout(() => { void Promise.resolve(u.fn(id)).catch(e => console.error(e)); }, 900);
   }
 
   /** put a stack down on the ground (out of the pack or the chest) */
