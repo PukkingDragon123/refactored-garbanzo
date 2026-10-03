@@ -216,10 +216,7 @@ const arohaGear = (p: Pic, m: WearMats) => {
   // pounamu on its cord over the zip, the kete's flax strap
   p.stroke([[CX + 14, 44.6], [CX + 4, 52], [CX - 8, 60]], 2, 2, col('#b08e40'), m.acc);
   p.where([m.acc], (u, v, x, y) => (x + y) % 2 === 0, col('#86692a'));
-  p.stroke([[CX - 4.6, 44.6], [CX - 2, 48.6], [CX, 49.6]], 0.8, 0.8, col('#3a2418'), m.beard);
-  p.stroke([[CX + 4.6, 44.6], [CX + 2, 48.6], [CX, 49.6]], 0.8, 0.8, col('#3a2418'), m.beard);
-  p.fill([[CX - 1.6, 49.4], [CX + 1.6, 49.4], [CX + 2, 52.8], [CX, 54.6], [CX - 2, 52.8]], col('#3a9a6a'), m.beard);
-  p.where([m.beard], (u, v) => u < CX && v > 50 && v < 52.4, col('#7ad0a0'));
+  heiMatau(p, m.beard, 44.6);
 };
 
 const MORI_W = { shell: '#4c6432', panel: '#353944', trim: '#272b33' };
@@ -329,12 +326,17 @@ const arohaShipBust = (p: Pic, m: WearMats) => {
     const a = Math.atan2(y, x);
     return Math.abs((((r - a * 0.62) / 1.9) % 1 + 1) % 1 - 0.5) < 0.16;
   }, cr);
-  // pounamu on its cord
-  p.stroke([[CX - 5, 45], [CX - 2.4, 49], [CX, 50.4]], 0.9, 0.9, col('#3a2418'), m.acc);
-  p.stroke([[CX + 5, 45], [CX + 2.4, 49], [CX, 50.4]], 0.9, 0.9, col('#3a2418'), m.acc);
-  p.fill([[CX - 1.6, 50], [CX + 1.6, 50], [CX + 2, 53.4], [CX, 55.2], [CX - 2, 53.4]], col('#3a9a6a'), m.acc);
-  p.where([m.acc], (u, v) => u < CX && v > 50.6 && v < 53, col('#7ad0a0'));
+  // the hei matau on its flax cord, a thin tāniko trim along the neckline
+  p.where([m.cloth], (u, v) => v > 47.4 && v < 49.2 && Math.abs(u - CX) > 5.8 && Math.abs(u - CX) < 14.4 && ((u + 40) % 2.4) < 1.2, col('#b4302a'));
+  heiMatau(p, m.acc, 46);
 };
+/** Aroha's pounamu hei matau (a greenstone fish hook) on a flax cord, its top at height y */
+function heiMatau(p: Pic, mat: number, y: number) {
+  p.stroke([[CX - 5.4, y], [CX - 2.8, y + 3.6], [CX - 0.6, y + 5.2]], 0.8, 0.8, col('#b08e40'), mat);
+  p.stroke([[CX + 5.4, y], [CX + 2.8, y + 3.6], [CX + 0.6, y + 5.2]], 0.8, 0.8, col('#8a6a2a'), mat);
+  p.stroke([[CX + 1.4, y + 5.2], [CX - 1.2, y + 5.8], [CX - 2.0, y + 8], [CX - 0.6, y + 10.2], [CX + 1.6, y + 9.6]], 1.5, 1.1, col('#2c8a5a'), mat);
+  p.where([mat], (u, v) => v > y + 5.4 && u < CX - 0.8 && v < y + 9, col('#7ad0a0'));
+}
 
 export const PORTRAIT_WEAR: Record<string, Record<string, PortraitWear>> = {
   // (the ship clothes are merged in below)

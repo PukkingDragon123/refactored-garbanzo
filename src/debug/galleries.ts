@@ -76,6 +76,7 @@ export function runGallery(name: string) {
   if (name === 'items11') { void import('./items11').then(m => m.items11Gallery(new URLSearchParams(location.search))); return; }
   if (name === 'camp4') { void camp4Gallery(); return; }
   if (name === 'hands') { void import('./handsgallery').then(m => m.handsGallery(new URLSearchParams(location.search))); return; }
+  if (name === 'aroha' || name === 'combat') { void import('./arohagallery').then(m => m.runArohaGallery(name)); return; }
   const items: GalleryItem[] = [];
   if (name === 'flora') {
     items.push({ name: 'treefern', buf: F.paintTreeFern(3, { height: 90 }).buf });

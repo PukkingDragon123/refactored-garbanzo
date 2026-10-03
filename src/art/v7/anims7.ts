@@ -71,7 +71,7 @@ export const ANIMS7: Record<string, AnimInfo7> = {
 
 // ------------------------------------------------------------------ gait
 
-interface Gait { stride: number; stance: number; lift: number; bob: number; lean: number; swing: number; elbow: number; elbowSwing: number; drop: number; kick: number; flight: number; hand: ArmP['hand']; sway?: number; roll?: number; armOut?: number; headBob?: number }
+export interface Gait { stride: number; stance: number; lift: number; bob: number; lean: number; swing: number; elbow: number; elbowSwing: number; drop: number; kick: number; flight: number; hand: ArmP['hand']; sway?: number; roll?: number; armOut?: number; headBob?: number }
 // personality gaits (k-scaled): each cast member moves their own way
 type GaitSet = { walk: (b: Build) => Gait; run: (b: Build) => Gait };
 const GAITS: Record<string, GaitSet> = {
@@ -122,7 +122,7 @@ function foot(b: Build, g: Gait, ph: number, base: number): LegP {
   return { f: [base + x, y], fa: -0.75 * (1 - e) + 0.25 * e * e };
 }
 
-function gait(b: Build, t: number, g: Gait): Pose {
+export function gait(b: Build, t: number, g: Gait): Pose {
   const k = K(b);
   const st = g.stance;
   // hip height: compressed through each stance, up through the swing (and the flight phase)
@@ -692,6 +692,12 @@ const splitV = (anim: string): [string, string] => { const i = anim.indexOf('~')
 export const clip7 = (anim: string): AnimInfo7 | undefined => ANIMS7[anim] ?? ANIMS7[splitV(anim)[0]];
 
 export function pose7(id: string, anim: string, b: Build, frame: number): Pose {
+  const own = OWN7[id]?.[anim];
+  if (own) {
+    const info = { ...ANIMS7[anim], ...own.info };
+    const n = info.frames;
+    return own.pose(b, n <= 1 ? 0 : info.loop ? frame / n : frame / (n - 1), frame);
+  }
   const [base, v] = splitV(anim);
   const fv = POSES7V[base];
   if (fv) {
@@ -712,6 +718,8 @@ export function pose7(id: string, anim: string, b: Build, frame: number): Pose {
 export function animInfo7(b: Build, anim: string, id = 'mori'): AnimInfo7 | null {
   const info = clip7(anim);
   if (!info) return null;
+  const own = OWN7[id]?.[anim];
+  if (own) return { ...info, ...own.info, dist: own.dist?.(b) ?? (own.info?.dist ?? info.dist) };
   const [base, v] = splitV(anim);
   if (DIST7[base]) return { ...info, dist: DIST7[base](b, id, v) };
   if (anim === 'walk') return { ...info, dist: gaitDist(WALK(b, id)) };
@@ -722,5 +730,28 @@ export function animInfo7(b: Build, anim: string, id = 'mori'): AnimInfo7 | null
 }
 
 // building blocks for the clips registered from other files (anims-life.ts, anims-hands.ts)
-export { POSES7, gait, gaitOf, shoulder, wHead, wHang, hang, bump, smooth, lerp2, add2, pulse, ease, frac, K };
-export type { Gait };
+export { POSES7, gaitOf, shoulder, wHead, wHang, hang, bump, smooth, lerp2, add2, pulse, ease, frac, K };
+// ------------------------------------------------------------------ registration (other modules)
+
+type PoseFn7 = (b: Build, t: number, id: string) => Pose;
+/**
+ * Add a clip to the cast (combat moves, handling poses...): its frame info and its pose function
+ * (t runs 0..1 over the clip; looping clips wrap). Registered clips are callable by name everywhere
+ * (Actor.setAnim / play), so other modules only need the name (see anim-contract.ts).
+ */
+export function registerAnim7(name: string, info: AnimInfo7, fn: PoseFn7) {
+  ANIMS7[name] = info;
+  POSES7[name] = fn;
+}
+/** a character's own version of a clip (Aroha's idle / walk / run, her faster combat moves): frame
+ *  info overrides, the pose (t 0..1, and the raw frame), and the distance per cycle for gaits */
+export interface OwnClip7 { info?: Partial<AnimInfo7>; pose: (b: Build, t: number, frame: number) => Pose; dist?: (b: Build) => number }
+export const OWN7: Record<string, Record<string, OwnClip7>> = {};
+/** register a character's own version of a clip (the clip must exist in ANIMS7, or be registered) */
+export function registerOwn7(id: string, anim: string, clip: OwnClip7) {
+  (OWN7[id] ??= {})[anim] = clip;
+}
+/** frame count of a clip for one character (own clips may have more frames) */
+export function framesOf7(id: string, anim: string): number {
+  return Math.max(1, OWN7[id]?.[anim]?.info?.frames ?? clip7(anim)?.frames ?? 1);
+}

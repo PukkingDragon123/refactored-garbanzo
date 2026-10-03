@@ -186,6 +186,15 @@ export function lift(ch: Char7, pose: Pose, yaw0 = YAW): J3 {
 
 const CW = 128, CH = 118, OX = 64, OY = 100;
 
+/**
+ * Held 3D props and other extra drawing registered by other modules (Aroha's slingshot, a grenade):
+ * called after both arms with the scene, the lifted skeleton, the pose and the character. It may
+ * return a finishing pass that paints over the finished layers (thin things that must not be inked,
+ * like rubber bands); the front layer is created for it if needed.
+ */
+export type Held7 = (s: Scene3D, J: J3, pose: Pose, ch: Char7) => ((back: PixelBuffer, front: PixelBuffer) => void) | void;
+export const HELD7: Held7[] = [];
+
 export interface Frame7 {
   back: PixelBuffer; front: PixelBuffer | null; ax: number; ay: number; hx: number; hy: number; hand: [number, number]; look?: 'fwd' | 'up' | 'down' | 'back'; headBehind?: boolean; hrot?: number; hflip?: boolean; hair?: number;
   /** named points on the sprite (buffer px, sub-pixel): the palms ('handN', 'handF') and the held object's own (held.ts) */
@@ -283,9 +292,12 @@ export function renderBody7(ch: Char7, pose: Pose): Frame7 {
   if (hN) pts.handN = (hN as HandFrame).palm;
   if (hF) pts.handF = (hF as HandFrame).palm;
   if (pose.held) drawHeld7(s, J, pose, ch, hN, hF, pts);
+  const posts: ((back: PixelBuffer, front: PixelBuffer) => void)[] = [];
+  for (const h of HELD7) { const f = h(s, J, pose, ch); if (f) posts.push(f); }
 
   const r = s.finish({ ink: ch.ink, inkK: HAND_INK });
   if (pose.props?.length) drawProps(ch, pose, J, r.back, r.front ?? (r.front = new PixelBuffer(CW, CH)));
+  if (posts.length) { const fr = r.front ?? (r.front = new PixelBuffer(CW, CH)); for (const f of posts) f(r.back, fr); }
   const tr = trimPair(r.back, r.front, 1);
   const nt = J.neckTop;
   return {

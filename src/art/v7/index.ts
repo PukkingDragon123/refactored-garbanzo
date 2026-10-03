@@ -10,10 +10,13 @@ import { PixelBuffer } from '../pixel';
 import { renderBody7, Frame7 } from './body';
 import { renderHead7, HeadOpts7 } from './head';
 import { CAST7, INFO7 } from './cast';
-import { ANIMS7, pose7, animInfo7, clip7 } from './anims7';
+import { ANIMS7, pose7, animInfo7, clip7, framesOf7 } from './anims7';
 // clips registered beside the core set: secondary motion for the everyday clips, hands and carrying
 import './anims-life';
 import './anims-hands';
+// Aroha's own body, head and moves, and the cast's combat set (both register into the rig on import)
+import './aroha7';
+import './combat7';
 import { dress, OUTFIT_NAMES } from './outfits';
 import { outfitOf, setOutfit, splitOutfit, wardrobeVersion } from './wardrobe';
 import { ANIME_COMMON, TRANSITIONS, AnimInfo } from '../anime/anims';
@@ -65,6 +68,11 @@ tr(['cameraCrouch', 'cameraCrouchWalk'], ['crouch', 'crouchWalk', 'idle', 'walk'
 tr(['walk'], ['idle'], 'walkStop');
 tr(['run'], ['idle'], 'runStop');
 tr(['fall', 'jump'], ['idle'], 'land');
+// the slingshot: out of the belt into the ready stance and back; drawn (from the ready stance, or
+// straight from standing) up to the held aim (combat7.ts)
+tr(['idle', 'walk', 'run', 'crouch', 'talk'], ['slingReady'], 'slingUnholster');
+tr(['slingReady', 'slingAim', 'slingRelease', 'slingshot'], ['idle', 'walk', 'run', 'talk'], 'slingHolster');
+tr(['idle', 'walk', 'run', 'slingReady', 'crouch'], ['slingAim'], 'slingDraw');
 export function transitionFor(id: string, from: string, to: string): string | null {
   if (parse(id)[0] === 'chunk') return CHUNK_TRANS[from]?.[to] ?? null;
   return TRANS7[from]?.[to] ?? TRANSITIONS[from]?.[to] ?? null;
@@ -78,7 +86,7 @@ export function renderBody(id: string, anim: string, frame: number): Frame7 {
     return renderChunkBody(a, frame % CHUNK_ANIMS[a].frames) as unknown as Frame7;
   }
   const a = clip7(anim) ? anim : 'idle';
-  const n = Math.max(1, clip7(a)!.frames);
+  const n = framesOf7(cid, a);
   const fi = ((frame % n) + n) % n;
   const key = `${cid}@${outfit}|${a}|${fi}`;
   const hit = cache.get(key);
@@ -87,7 +95,8 @@ export function renderBody(id: string, anim: string, frame: number): Frame7 {
   const pose = pose7(cid, a, ch.build, fi);
   const out = renderBody7(ch, pose);
   // hair trails while moving fast
-  out.hair = a === 'run' || a === 'carryPupRun' ? ((pose.sway ?? 0) > 0.4 ? 2 : 1) : (pose.sway ?? 0) > 0.75 ? 1 : 0;
+  // (a pose may say how hard: flags.hair 0..2, e.g. the combat moves)
+  out.hair = pose.flags?.hair !== undefined ? pose.flags.hair : a === 'run' || a === 'carryPupRun' ? ((pose.sway ?? 0) > 0.4 ? 2 : 1) : (pose.sway ?? 0) > 0.75 ? 1 : 0;
   if (cache.size > 2500) cache.clear();
   cache.set(key, out);
   return out;
