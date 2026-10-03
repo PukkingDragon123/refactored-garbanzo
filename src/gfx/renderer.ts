@@ -74,10 +74,75 @@ export interface PostState {
   fadeColor: RGB;
   flash: number;
   ca: number;
+  /** the photo viewfinder's own depth of field (focus is a layer depth, 0.5 = the gameplay plane);
+   *  while on it replaces the everyday / cinematic lens below */
   dof: boolean;
   focus: number;
   dofStrength: number;
 }
+
+/**
+ * Cinematic post FX, eased each frame by the cinematic camera (src/game/v11/cine.ts). Everything
+ * rests at the values below; the everyday lens (a gentle depth of field on the extreme layers, bloom)
+ * needs none of it.
+ */
+export interface CineFx {
+  /** parallax of the plane kept sharp (1 = the gameplay plane, < 1 further away, > 1 nearer) */
+  focus: number;
+  /** cinematic depth of field: 0 = the everyday lens, 1 = a cinematic shot, ~1.5 = long telephoto */
+  dof: number;
+  /** blur everything by at least this many art px (rack focus away for a cut-in, losing consciousness) */
+  defocus: number;
+  /** radial zoom blur 0..1 and its centre in view fractions (the subject there stays sharp) */
+  zoomBlur: number;
+  zoomX: number;
+  zoomY: number;
+  /** gain of the automatic motion blur on fast camera moves and of the zoom's dolly blur */
+  motion: number;
+  dolly: number;
+  /** added on top of the scene's own grading */
+  vignette: number;
+  bloom: number;
+  desat: number;
+  exposure: number;
+  ca: number;
+}
+
+export const restCineFx = (): CineFx => ({
+  focus: 1, dof: 0, defocus: 0, zoomBlur: 0, zoomX: 0.5, zoomY: 0.5, motion: 1, dolly: 1,
+  vignette: 0, bloom: 0, desat: 0, exposure: 0, ca: 0,
+});
+
+/** Graphics quality presets (Settings > Graphics). */
+export type GfxLevel = 'low' | 'medium' | 'high';
+export interface GfxConf {
+  /** depth of field buffer size relative to the art resolution, and its blur reach in its texels */
+  dofScale: number;
+  dofReach: number;
+  /** the gentle everyday depth of field on the extreme foreground / background layers */
+  baseDof: boolean;
+  bloomLevels: number;
+  /** taps of the automatic motion blur (0 = none) and of explicit zoom-blur punches */
+  motionTaps: number;
+  zoomTaps: number;
+  /** render resolution factor */
+  res: number;
+}
+export const GFX: Record<GfxLevel, GfxConf> = {
+  high: { dofScale: 1, dofReach: 12, baseDof: true, bloomLevels: 6, motionTaps: 12, zoomTaps: 12, res: 1 },
+  medium: { dofScale: 0.5, dofReach: 7, baseDof: true, bloomLevels: 5, motionTaps: 8, zoomTaps: 8, res: 1 },
+  low: { dofScale: 0.5, dofReach: 5, baseDof: false, bloomLevels: 4, motionTaps: 0, zoomTaps: 6, res: 0.8 },
+};
+
+// The lens: blur (art px) per unit of parallax away from the focus plane, in front / behind, outside
+// a dead zone around it. Parallax is inverse distance, so this is a real lens's circle of confusion.
+// Everyday: only the extreme layers soften (the playfield and the layers near it stay pixel-sharp).
+const LENS_BASE = { dzNear: 0.12, dzFar: 0.6, near: 8, far: 3 };
+const LENS_CINE = { dzNear: 0.03, dzFar: 0.03, near: 18, far: 5.5 };
+/** motion blur: exposure time, and the screen speed (art px/s) below which nothing smears */
+const SHUTTER = 1 / 90;
+const MOTION_V0 = 450;
+const DOLLY_V0 = 0.4;
 
 export const packColor = (r: number, g: number, b: number, a = 1) =>
   (((a * 255) & 255) << 24 | ((b * 255) & 255) << 16 | ((g * 255) & 255) << 8 | ((r * 255) & 255)) >>> 0;
@@ -161,6 +226,20 @@ export class Renderer {
   env: Env = defaultEnv();
   view: View = { x: 0, y: 0, zoom: 1, shakeX: 0, shakeY: 0 };
   post: PostState = { fade: 0, fadeColor: [0, 0, 0], flash: 0, ca: 0, dof: false, focus: 0.5, dofStrength: 3 };
+  /** cinematic post FX (see CineFx) */
+  cine: CineFx = restCineFx();
+  /** graphics quality preset and the player's grain / vignette options */
+  gfxLevel: GfxLevel = 'high';
+  gfx: GfxConf = GFX.high;
+  grainOn = true;
+  vignetteOn = true;
+  /** this frame is a parallax-layered scene (Stage.render sets it): the depth of field reads its layers */
+  layered = false;
+  /** nearest / farthest parallax drawn this frame (sizes the depth of field's reach) */
+  private pMin = Infinity;
+  private pMax = -Infinity;
+  /** what the last frame's post pipeline ran (debug overlay / tests) */
+  readonly stats = { dof: false, motion: false, coc: 0, blur: 0 };
 
   private vao: WebGLVertexArrayObject;
   private vbo: WebGLBuffer;
@@ -171,7 +250,11 @@ export class Renderer {
   private pLight: Program;
   private pFx: Program;
   private pComposite: Program;
-  private pDof: Program;
+  private pDofPre: Program;
+  private pDofBlur: Program;
+  private pVel: Program;
+  private pDofTile: Program;
+  private pDofDilate: Program;
   private pBloomPre: Program;
   private pBloomDown: Program;
   private pBloomUp: Program;
@@ -181,8 +264,18 @@ export class Renderer {
   private rtScene!: Target;
   private rtLight!: Target;
   private rtHdr!: Target;
-  private rtDof!: Target;
+  /** the motion-blurred scene (allocated the first time anything moves fast enough to smear) */
+  private rtHdr2: Target | null = null;
+  private rtFx!: Target;
+  private rtDofA!: Target;
+  private rtDofB!: Target;
+  /** widest circle of confusion per 16x16 tile of the DOF buffer, and dilated by a tile */
+  private rtTile!: Target;
+  private rtTileD!: Target;
   private bloom: Target[] = [];
+  /** camera velocity on screen (art px/s on the gameplay plane) and zoom rate (1/s), smoothed */
+  private vel = { x: 0, y: 0, z: 0, px: NaN, py: NaN, pz: NaN };
+  private rdt = 0;
 
   private scene = new QuadBatch(QUAD_CAP);
   private lights = new QuadBatch(4096);
@@ -210,7 +303,11 @@ export class Renderer {
     this.pLight = new Program(gl, S.SPRITE_VS, S.LIGHT_FS, 'light');
     this.pFx = new Program(gl, S.SPRITE_VS, S.FX_FS, 'fx');
     this.pComposite = new Program(gl, S.FULL_VS, S.COMPOSITE_FS, 'composite');
-    this.pDof = new Program(gl, S.FULL_VS, S.DOF_FS, 'dof');
+    this.pDofPre = new Program(gl, S.FULL_VS, S.DOF_PRE_FS, 'dofPre');
+    this.pDofBlur = new Program(gl, S.FULL_VS, S.DOF_BLUR_FS, 'dofBlur');
+    this.pVel = new Program(gl, S.FULL_VS, S.VELBLUR_FS, 'velocity');
+    this.pDofTile = new Program(gl, S.FULL_VS, S.DOF_TILE_FS, 'dofTile');
+    this.pDofDilate = new Program(gl, S.FULL_VS, S.DOF_DILATE_FS, 'dofDilate');
     this.pBloomPre = new Program(gl, S.FULL_VS, S.BLOOM_PRE_FS, 'bloomPre');
     this.pBloomDown = new Program(gl, S.FULL_VS, S.BLOOM_DOWN_FS, 'bloomDown');
     this.pBloomUp = new Program(gl, S.FULL_VS, S.BLOOM_UP_FS, 'bloomUp');
@@ -251,20 +348,37 @@ export class Renderer {
     this.allocTargets(2, 2);
   }
 
+  /** depth of field buffer size: the art resolution (scaled by the quality preset), never above the canvas */
+  private dofSize(w: number, h: number): [number, number] {
+    const k = this.gfx.dofScale;
+    return [Math.max(2, Math.min(w, Math.round(this.VW * k))), Math.max(2, Math.min(h, Math.round(this.VH * k)))];
+  }
+
   private allocTargets(w: number, h: number) {
     const gl = this.gl;
     const rgba8 = { internal: gl.RGBA8, format: gl.RGBA, type: gl.UNSIGNED_BYTE };
     const hdr = this.hdrFormat;
+    const [dw, dh] = this.dofSize(w, h);
     if (!this.rtScene) {
       this.rtScene = new Target(gl, w, h, [rgba8, rgba8, rgba8]);
       this.rtLight = new Target(gl, Math.max(1, w >> 1), Math.max(1, h >> 1), [hdr]);
       this.rtHdr = new Target(gl, w, h, [hdr]);
-      this.rtDof = new Target(gl, Math.max(1, w >> 1), Math.max(1, h >> 1), [hdr]);
+      this.rtFx = new Target(gl, w, h, [hdr]);
+      this.rtDofA = new Target(gl, dw, dh, [hdr]);
+      this.rtDofB = new Target(gl, dw, dh, [hdr]);
+      const tile = { ...rgba8, filter: gl.NEAREST };
+      this.rtTile = new Target(gl, Math.ceil(dw / 16), Math.ceil(dh / 16), [tile]);
+      this.rtTileD = new Target(gl, Math.ceil(dw / 16), Math.ceil(dh / 16), [tile]);
     } else {
       this.rtScene.resize(w, h);
       this.rtLight.resize(Math.max(1, w >> 1), Math.max(1, h >> 1));
       this.rtHdr.resize(w, h);
-      this.rtDof.resize(Math.max(1, w >> 1), Math.max(1, h >> 1));
+      this.rtHdr2?.resize(w, h);
+      this.rtFx.resize(w, h);
+      this.rtDofA.resize(dw, dh);
+      this.rtDofB.resize(dw, dh);
+      this.rtTile.resize(Math.ceil(dw / 16), Math.ceil(dh / 16));
+      this.rtTileD.resize(Math.ceil(dw / 16), Math.ceil(dh / 16));
     }
     let bw = w >> 1, bh = h >> 1;
     for (let i = 0; i < 6; i++) {
@@ -277,13 +391,33 @@ export class Renderer {
     }
   }
 
+  private lastSize: [number, number, number] | null = null;
+  /** Pick a graphics quality preset (and the grain / vignette options); resizes if the resolution changes. */
+  setGfx(level: GfxLevel, grain = this.grainOn, vignette = this.vignetteOn) {
+    const resChanged = GFX[level].res !== this.gfx.res, dofChanged = GFX[level].dofScale !== this.gfx.dofScale;
+    this.gfxLevel = level;
+    this.gfx = GFX[level];
+    this.grainOn = grain;
+    this.vignetteOn = vignette;
+    if (resChanged && this.lastSize) this.resize(...this.lastSize);
+    else if (dofChanged && this.rtScene) {
+      const [dw, dh] = this.dofSize(this.W, this.H);
+      this.rtDofA.resize(dw, dh);
+      this.rtDofB.resize(dw, dh);
+      this.rtTile.resize(Math.ceil(dw / 16), Math.ceil(dh / 16));
+      this.rtTileD.resize(Math.ceil(dw / 16), Math.ceil(dh / 16));
+    }
+  }
+
   /** Resize the drawing buffer. cssW/cssH are the displayed size, dpr the device pixel ratio. */
   resize(cssW: number, cssH: number, dpr: number) {
+    this.lastSize = [cssW, cssH, dpr];
     const aspect = cssW / cssH;
     this.VH = 360;
     this.VW = Math.round(Math.min(Math.max(this.VH * aspect, 540), 860));
     const maxPixels = 2560 * 1440 * this.quality * this.quality;
-    let pw = Math.round(cssW * dpr), ph = Math.round(cssH * dpr);
+    const res = this.gfx.res;
+    let pw = Math.round(cssW * dpr * res), ph = Math.round(cssH * dpr * res);
     const k = Math.sqrt(Math.min(1, maxPixels / (pw * ph)));
     pw = Math.max(2, Math.round(pw * k));
     ph = Math.max(2, Math.round(ph * k));
@@ -314,6 +448,9 @@ export class Renderer {
     L.emissive = emissive;
     L.depth = depth;
     L.aux = packColor(fog, emissive, receive, Math.min(depth, 1));
+    const pd = 1 / Math.max(depth, 0.02) - 1;
+    if (pd < this.pMin) this.pMin = pd;
+    if (pd > this.pMax) this.pMax = pd;
     return this;
   }
   /** Screen-space layer: coordinates are art pixels from the top-left of the view. */
@@ -329,6 +466,9 @@ export class Renderer {
     L.emissive = emissive;
     L.depth = depth;
     L.aux = packColor(fog, emissive, receive, Math.min(depth, 1));
+    const pd = 1 / Math.max(depth, 0.02) - 1;
+    if (pd < this.pMin) this.pMin = pd;
+    if (pd > this.pMax) this.pMax = pd;
     return this;
   }
   /** Temporarily override emissive for following draws (call with no args to restore layer value). */
@@ -552,8 +692,13 @@ export class Renderer {
   }
 
   // ---------------------------------------------------------------- frame
-  begin(dt: number) {
+  /** dt: game time (slow motion, 0 when paused); rdt: real time since the last frame (0 when paused) */
+  begin(dt: number, rdt = dt) {
     this.time += dt;
+    this.rdt = rdt;
+    this.layered = false;
+    this.pMin = Infinity;
+    this.pMax = -Infinity;
     this.scene.reset();
     this.lights.reset();
     this.fx.reset();
@@ -657,8 +802,12 @@ export class Renderer {
     c.f('u_time', this.time).v2('u_viewArt', this.VW, this.VH);
     this.fullscreen();
 
-    // 4. fx
-    if (this.fx.count) {
+    // 4. fx: their own premultiplied target, laid over the scene after depth of field
+    const fxOn = this.fx.count > 0;
+    if (fxOn) {
+      this.rtFx.bind();
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
       gl.bindVertexArray(this.vao);
       this.uploadBatch(this.fx);
       const p = this.pFx.use();
@@ -670,6 +819,7 @@ export class Renderer {
           mode = s.mode;
           if (mode === 0) gl.blendFunc(gl.ONE, gl.ONE);
           else gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+          p.f('u_add', mode === 0 ? 1 : 0);
         }
         s.tex!.bind(0);
         p.v2('u_texSize', s.tex!.w, s.tex!.h);
@@ -678,28 +828,76 @@ export class Renderer {
       gl.disable(gl.BLEND);
     }
 
-    const post = this.post;
-    // 5. depth of field (half res)
-    if (post.dof) {
-      this.rtDof.bind();
-      const d = this.pDof.use();
+    const post = this.post, cine = this.cine, q = this.gfx, st = this.stats;
+    this.trackVelocity();
+    let src = this.rtHdr;
+
+    // 5. motion blur and zoom blur (only while something moves fast enough to smear)
+    const mv = this.motionParams();
+    st.motion = !!mv;
+    st.blur = mv ? mv.len : 0;
+    if (mv) {
+      if (!this.rtHdr2) this.rtHdr2 = new Target(gl, this.W, this.H, [this.hdrFormat]);
+      this.rtHdr2.bind();
+      const v = this.pVel.use();
       this.rtHdr.tex[0].bind(0);
       this.rtScene.tex[2].bind(1);
-      d.i('u_src', 0).i('u_aux', 1).f('u_focus', post.focus).f('u_strength', post.dofStrength);
-      d.v2('u_px', 1 / this.rtDof.w, 1 / this.rtDof.h).f('u_maxR', Math.max(2, this.rtDof.h / 90));
+      v.i('u_src', 0).i('u_mat', 1).v2('u_viewArt', this.VW, this.VH).v2('u_cam', mv.cx, mv.cy).f('u_zoom', Math.max(1e-3, this.view.zoom));
+      v.f('u_dolly', mv.dolly).v3('u_radial', [cine.zoomX * this.VW, cine.zoomY * this.VH, mv.radial]).f('u_maxLen', 30).f('u_taps', mv.taps);
+      this.fullscreen();
+      src = this.rtHdr2;
+    }
+
+    // 6. depth of field at the art resolution: colour + circle of confusion, then the separable blur
+    const lens = this.lens();
+    st.dof = !!lens;
+    st.coc = lens ? lens.peak : 0;
+    const dofA = this.rtDofA, dofB = this.rtDofB;
+    if (lens) {
+      dofA.bind();
+      const d = this.pDofPre.use();
+      src.tex[0].bind(0);
+      this.rtScene.tex[2].bind(1);
+      d.i('u_src', 0).i('u_mat', 1).v2('u_px', 1 / dofA.w, 1 / dofA.h).f('u_toTex', dofA.h / this.VH);
+      d.v4('u_lens', lens.focus, lens.dzNear, lens.dzFar, lens.near).v4('u_lens2', lens.far, lens.max, lens.defocus, post.dof ? 1 : 0);
+      d.v3('u_legacy', [post.focus, post.dofStrength, 4]);
+      this.fullscreen();
+      // tiles: where nothing is out of focus the blur passes skip their gather
+      this.rtTile.bind();
+      this.pDofTile.use().i('u_src', 0);
+      dofA.tex[0].bind(0);
+      this.fullscreen();
+      this.rtTileD.bind();
+      this.pDofDilate.use().i('u_src', 0);
+      this.rtTile.tex[0].bind(0);
+      this.fullscreen();
+      // the blur only reaches as far as this frame's widest circle of confusion
+      const reach = Math.max(1, Math.min(q.dofReach, Math.ceil(lens.peak * dofA.h / this.VH + 0.5)));
+      const b = this.pDofBlur.use();
+      this.rtTileD.tex[0].bind(1);
+      b.i('u_src', 0).i('u_tile', 1).f('u_R', reach);
+      dofB.bind();
+      dofA.tex[0].bind(0);
+      b.v2('u_step', 1 / dofA.w, 0);
+      this.fullscreen();
+      dofA.bind();
+      dofB.tex[0].bind(0);
+      b.v2('u_step', 0, 1 / dofB.h);
       this.fullscreen();
     }
 
-    // 6. bloom
+    // 7. bloom (from the scene with its fx; the quality preset trims the chain)
     const bl = this.bloom;
+    const nb = Math.max(2, Math.min(bl.length, q.bloomLevels));
     bl[0].bind();
     const bp = this.pBloomPre.use();
-    this.rtHdr.tex[0].bind(0);
-    bp.i('u_src', 0).v2('u_px', 1 / this.W, 1 / this.H).f('u_threshold', env.bloomThreshold).f('u_knee', 0.35);
+    src.tex[0].bind(0);
+    this.rtFx.tex[0].bind(1);
+    bp.i('u_src', 0).i('u_fx', 1).f('u_fxOn', fxOn ? 1 : 0).v2('u_px', 1 / this.W, 1 / this.H).f('u_threshold', env.bloomThreshold).f('u_knee', 0.35);
     this.fullscreen();
     const bd = this.pBloomDown.use();
     bd.i('u_src', 0);
-    for (let i = 1; i < bl.length; i++) {
+    for (let i = 1; i < nb; i++) {
       bl[i].bind();
       bl[i - 1].tex[0].bind(0);
       bd.v2('u_px', 1 / bl[i - 1].w, 1 / bl[i - 1].h);
@@ -709,7 +907,7 @@ export class Renderer {
     bu.i('u_src', 0).f('u_weight', 1);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE);
-    for (let i = bl.length - 2; i >= 0; i--) {
+    for (let i = nb - 2; i >= 0; i--) {
       bl[i].bind();
       bl[i + 1].tex[0].bind(0);
       bu.v2('u_px', 1 / bl[i + 1].w, 1 / bl[i + 1].h);
@@ -717,21 +915,95 @@ export class Renderer {
     }
     gl.disable(gl.BLEND);
 
-    // 7. final
+    // 8. final
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, this.W, this.H);
     const f = this.pFinal.use();
-    this.rtHdr.tex[0].bind(0);
+    src.tex[0].bind(0);
     bl[0].tex[0].bind(1);
-    this.rtDof.tex[0].bind(2);
-    this.rtScene.tex[2].bind(3);
-    f.i('u_hdr', 0).i('u_bloom', 1).i('u_dof', 2).i('u_aux', 3);
-    f.f('u_bloomStr', env.bloom).f('u_exposure', env.exposure).f('u_sat', env.saturation).f('u_contrast', env.contrast);
-    f.f('u_vignette', env.vignette).f('u_grain', env.grain).f('u_time', this.time).f('u_ca', post.ca);
-    f.f('u_fade', post.fade).f('u_flash', post.flash).f('u_dofOn', post.dof ? 1 : 0).f('u_focus', post.focus).f('u_dofStr', post.dofStrength);
+    dofA.tex[0].bind(2);
+    this.rtFx.tex[0].bind(3);
+    f.i('u_hdr', 0).i('u_bloom', 1).i('u_dof', 2).i('u_fx', 3);
+    f.f('u_bloomStr', Math.max(0, env.bloom + cine.bloom)).f('u_exposure', env.exposure * Math.pow(2, cine.exposure));
+    f.f('u_sat', env.saturation * (1 - Math.min(1, Math.max(0, cine.desat)))).f('u_contrast', env.contrast);
+    f.f('u_vignette', Math.max(0, env.vignette * (this.vignetteOn ? 1 : 0.25) + cine.vignette)).f('u_grain', this.grainOn ? env.grain : 0);
+    f.f('u_time', this.time).f('u_ca', Math.max(0, post.ca + cine.ca));
+    f.f('u_fade', post.fade).f('u_flash', post.flash).f('u_dofOn', lens ? 1 : 0).f('u_dofArt', this.VH / dofA.h).f('u_fxOn', fxOn ? 1 : 0);
     f.v3('u_lift', env.lift).v3('u_gamma', env.gamma).v3('u_gain', env.gain).v3('u_fadeColor', post.fadeColor);
     f.v2('u_viewArt', this.VW, this.VH).v2('u_res', this.W, this.H);
     this.fullscreen();
+  }
+
+  /** the camera's screen velocity (gameplay plane, art px/s) and zoom rate, from the views of the last frames */
+  private trackVelocity() {
+    const v = this.view, m = this.vel, dt = this.rdt;
+    if (!Number.isFinite(m.px)) { m.px = v.x; m.py = v.y; m.pz = v.zoom; return; }
+    if (dt <= 0) return;
+    const dx = (v.x - m.px) * v.zoom, dy = (v.y - m.py) * v.zoom;
+    const dz = Math.log(Math.max(1e-4, v.zoom) / Math.max(1e-4, m.pz));
+    m.px = v.x; m.py = v.y; m.pz = v.zoom;
+    // a cut (scene change, snapped camera) never smears
+    if (Math.hypot(dx, dy) > this.VW * 0.3 || Math.abs(dz) > 0.3) { m.x = m.y = m.z = 0; return; }
+    const k = 1 - Math.exp(-dt / 0.035);
+    m.x += (dx / dt - m.x) * k;
+    m.y += (dy / dt - m.y) * k;
+    m.z += (dz / dt - m.z) * k;
+  }
+
+  /** motion / zoom blur for this frame, or null when nothing would smear by more than a fraction of a pixel */
+  private motionParams() {
+    const c = this.cine, q = this.gfx, m = this.vel;
+    let cx = 0, cy = 0, dolly = 0;
+    const gain = Math.max(0, c.motion);
+    if (q.motionTaps > 0 && gain > 0 && this.layered) {
+      const sp = Math.hypot(m.x, m.y), v0 = MOTION_V0 / Math.max(gain, 0.25);
+      if (sp > v0) {
+        const k = ((sp - v0) / sp) * SHUTTER * gain;
+        cx = m.x * k;
+        cy = m.y * k;
+      }
+      const dg = Math.max(0, c.dolly) * gain, zr = Math.abs(m.z), z0 = DOLLY_V0 / Math.max(dg, 0.25);
+      if (dg > 0 && zr > z0) dolly = Math.sign(m.z) * (zr - z0) * SHUTTER * dg;
+    }
+    const radial = c.zoomBlur > 0.002 && q.zoomTaps > 0 ? Math.min(1, c.zoomBlur) * 0.12 : 0;
+    const len = Math.hypot(cx, cy) * 1.5 + Math.abs(dolly) * this.VW * 0.75 + radial * this.VW * 0.6;
+    if (len < 0.6) return null;
+    const most = Math.max(q.motionTaps, radial > 0 ? q.zoomTaps : 0, 4);
+    return { cx, cy, dolly, radial, len, taps: Math.max(4, Math.min(most, Math.ceil(len / 1.5))) };
+  }
+
+  /** the lens for this frame, or null when nothing is out of focus */
+  private lens() {
+    const c = this.cine, q = this.gfx, post = this.post;
+    const maxCoc = q.dofReach / q.dofScale;
+    const defocus = Math.min(maxCoc, Math.max(0, c.defocus));
+    const none = { focus: 1, dzNear: 0, dzFar: 0, near: 0, far: 0, max: maxCoc, defocus };
+    if (post.dof) return { ...none, peak: 4 };
+    if (!this.layered) return defocus > 0.05 ? { ...none, peak: defocus } : null;
+    const a = Math.max(0, c.dof), b = q.baseDof ? 1 : 0;
+    let dzNear: number, dzFar: number, near: number, far: number;
+    if (a <= 1) {
+      dzNear = LENS_BASE.dzNear + (LENS_CINE.dzNear - LENS_BASE.dzNear) * a;
+      dzFar = LENS_BASE.dzFar + (LENS_CINE.dzFar - LENS_BASE.dzFar) * a;
+      near = LENS_BASE.near * b * (1 - a) + LENS_CINE.near * a;
+      far = LENS_BASE.far * b * (1 - a) + LENS_CINE.far * a;
+    } else {
+      dzNear = LENS_CINE.dzNear;
+      dzFar = LENS_CINE.dzFar;
+      near = LENS_CINE.near * a;
+      far = LENS_CINE.far * a;
+    }
+    // closer framing, shallower focus (and a wide shot keeps more of the scene sharp)
+    const zk = Math.min(1.8, Math.max(0.6, Math.sqrt(Math.max(0.01, this.view.zoom) / 1.25)));
+    near *= zk;
+    far *= zk;
+    // the everyday lens focuses on the gameplay plane; a cinematic one racks to its own plane as it comes in
+    const focus = Math.max(0, 1 + (c.focus - 1) * Math.min(1, a));
+    // the widest blur on screen: the farthest and the nearest layer drawn this frame
+    const pFar = Number.isFinite(this.pMin) ? Math.max(0, this.pMin) : 0, pNear = Number.isFinite(this.pMax) ? this.pMax : 1.5;
+    const peak = Math.max(Math.max(0, focus - pFar - dzFar) * far, Math.max(0, pNear - focus - dzNear) * near, defocus);
+    if (peak < 0.3) return null;
+    return { focus, dzNear, dzFar, near, far, max: maxCoc, defocus, peak: Math.min(peak, maxCoc) };
   }
 
   /** Create a texture from RGBA pixels. */

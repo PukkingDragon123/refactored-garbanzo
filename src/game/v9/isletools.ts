@@ -9,8 +9,8 @@ import { game } from '../game';
 import type { IsleStory } from '../v4/islestory';
 import { wait } from '../v4/islestory';
 import { audio } from '../../core/audio';
-import { el } from '../../ui/ui';
 import { SPOT, groundY } from '../../art/island4/layout';
+import { cineLook } from '../v11/cine';
 import { rand } from '../../core/math';
 
 const TRAIL: [number, string][] = [[3470, 'trg:tracks'], [4140, 'trg:seal1'], [4450, 'trg:seal2'], [5640, 'v4:shoes'], [5995, 'v9:scrap1'], [6130, 'v9:scrap2'], [SPOT.joshu, 'v4:joshuFound']];
@@ -69,17 +69,12 @@ export class IsleTools {
   }
 
   // ---------------------------------------------------------------- binoculars
+  /** look far through the binoculars: no mask, the normal scene seen through a long lens (shallow
+   *  depth of field, zoom blur on each push-in, a handheld sway) while fn pans about, then the camera
+   *  eases back to Mori */
   private async binoculars<T>(fn: () => Promise<T>): Promise<T> {
-    const ov = el('div', '', `<svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice" style="width:100%;height:100%"><path fill="#040608" fill-rule="evenodd" d="M-300 -300H460V390H-300Z M52 45m-30 0a30 30 0 1 0 60 0a30 30 0 1 0 -60 0Z M108 45m-30 0a30 30 0 1 0 60 0a30 30 0 1 0 -60 0Z"/><circle cx="52" cy="45" r="30" fill="none" stroke="#1a2228" stroke-width="2"/><circle cx="108" cy="45" r="30" fill="none" stroke="#1a2228" stroke-width="2"/></svg>`);
-    ov.className = 'binoc';
-    ov.style.cssText = 'position:absolute;inset:0;z-index:4;pointer-events:none;opacity:0;transition:opacity 0.35s';
-    game.ui.sceneLayer.appendChild(ov);
     audio.play('zoom', { vol: 0.5, pitch: 0.8 });
-    requestAnimationFrame(() => (ov.style.opacity = '1'));
-    try { return await fn(); } finally {
-      ov.style.opacity = '0';
-      setTimeout(() => ov.remove(), 400);
-    }
+    return cineLook(this.s.st, fn);
   }
 
   private async lookAhead() {

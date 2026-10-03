@@ -1,13 +1,17 @@
 // GLSL sources for the render pipeline.
 //
 // Pipeline per frame:
-//   scene pass  -> MRT {albedo, aux(fog, emissive, lightReceive, depth), mat(water)}
+//   scene pass  -> MRT {albedo, aux(fog, emissive, lightReceive, depth), mat(water, depth)}
 //   light pass  -> half-res HDR light accumulation (point lights, light cookies)
 //   composite   -> HDR = albedo * (ambient + light) (+ emissive), fog, water reflections
-//   fx pass     -> additive / alpha FX straight into HDR (glows, shafts, sparks)
-//   dof         -> half-res gather blur driven by aux depth (camera mode only)
+//   fx pass     -> additive / alpha FX into their own premultiplied target (glows, shafts, sparks
+//                  stay crisp: they are laid over the scene after depth of field)
+//   velocity    -> (only on fast camera moves / zoom punches) motion + radial zoom blur, per pixel
+//                  from the camera's motion and each layer's parallax
+//   dof         -> art-resolution prefilter (colour + signed circle of confusion from the layer's
+//                  parallax), then a separable scatter-as-gather blur (horizontal, vertical)
 //   bloom       -> dual filter down/up chain
-//   final       -> tonemap, grade, vignette, grain, chromatic aberration, dissolve fade
+//   final       -> dof blend, fx over, tonemap, grade, vignette, grain, chromatic aberration, fade
 
 const AA_FN = /* glsl */ `
 vec2 pixelAA(vec2 uv, vec2 texSize) {
@@ -102,6 +106,7 @@ export const FX_FS = /* glsl */ `#version 300 es
 precision highp float;
 uniform sampler2D u_tex;
 uniform vec2 u_texSize;
+uniform float u_add;
 in vec2 v_uv;
 in vec4 v_color;
 in vec4 v_aux;
@@ -110,7 +115,8 @@ ${AA_FN}
 void main() {
   vec4 t = texture(u_tex, pixelAA(v_uv, u_texSize));
   float k = v_color.a * (1.0 - v_aux.y);
-  o = vec4(t.rgb * v_color.rgb * (v_aux.x * 16.0) * k, t.a * k);
+  // premultiplied into the fx target: additive glows leave its coverage (alpha) alone
+  o = vec4(t.rgb * v_color.rgb * (v_aux.x * 16.0) * k, u_add > 0.5 ? 0.0 : t.a * k);
 }`;
 
 export const FULL_VS = /* glsl */ `#version 300 es
@@ -182,52 +188,181 @@ void main() {
   o = vec4(max(c, 0.0), 1.0);
 }`;
 
-export const DOF_FS = /* glsl */ `#version 300 es
+// The circle of confusion is signed (> 0 behind the focus plane, < 0 in front of it) and stored in
+// alpha as 0.5 + coc / COC_RANGE, in DOF texels, so it survives an RGBA8 fallback target too.
+const COC_FN = /* glsl */ `
+const float COC_RANGE = 128.0;
+float cocDec(float a) { return (a - 0.5) * COC_RANGE; }
+float cocEnc(float c) { return clamp(c / COC_RANGE + 0.5, 0.0, 1.0); }`;
+
+/** layer depth (premultiplied by coverage in mat.b / mat.a); nothing drawn = the far distance */
+const DEPTH_FN = /* glsl */ `
+float depthAt(sampler2D m, vec2 uv) { vec4 t = texture(m, uv); return t.a > 0.004 ? t.b / t.a : 1.0; }
+float parallaxOf(float d) { return 1.0 / max(d, 0.02) - 1.0; }`;
+
+/** full-res HDR + depth -> DOF-res colour and signed circle of confusion */
+export const DOF_PRE_FS = /* glsl */ `#version 300 es
 precision highp float;
 uniform sampler2D u_src;
-uniform sampler2D u_aux;
-uniform float u_focus;
-uniform float u_strength;
-uniform vec2 u_px;
-uniform float u_maxR;
+uniform sampler2D u_mat;
+uniform vec2 u_px;      // one DOF texel in uv
+uniform vec4 u_lens;    // focus parallax, dead zone in front, dead zone behind, art px of blur per unit parallax in front
+uniform vec4 u_lens2;   // art px of blur per unit parallax behind, max coc (art px), overall defocus (art px), legacy on
+uniform vec3 u_legacy;  // legacy (photo viewfinder) focus depth, strength per unit depth, max (art px)
+uniform float u_toTex;  // DOF texels per art px
 in vec2 v_uv;
 out vec4 o;
-float coc(float d) { return clamp(abs(d - u_focus) * u_strength, 0.0, 1.0); }
-void main() {
-  float cd = texture(u_aux, v_uv).b;
-  float cc = coc(cd);
-  vec3 acc = texture(u_src, v_uv).rgb;
-  float wsum = 1.0;
-  const int N = 40;
-  for (int i = 0; i < N; i++) {
-    float fi = float(i) + 0.5;
-    float rr = sqrt(fi / float(N));
-    float a = fi * 2.39996323;
-    float dist = rr * u_maxR;
-    vec2 suv = v_uv + vec2(cos(a), sin(a)) * dist * u_px;
-    float sd = texture(u_aux, suv).b;
-    float sc = coc(sd) * u_maxR;
-    if (sd > cd) sc = min(sc, cc * u_maxR);
-    float w = clamp(sc - dist + 0.75, 0.0, 1.0);
-    acc += texture(u_src, suv).rgb * w;
-    wsum += w;
+${COC_FN}
+${DEPTH_FN}
+float cocAt(float d) {
+  float c;
+  if (u_lens2.w > 0.5) {
+    c = clamp((d - u_legacy.x) * u_legacy.y, -1.0, 1.0) * u_legacy.z;
+  } else {
+    float dp = u_lens.x - parallaxOf(d);
+    float a = dp > 0.0 ? max(dp - u_lens.z, 0.0) * u_lens2.x : max(-dp - u_lens.y, 0.0) * u_lens.w;
+    c = (dp > 0.0 ? 1.0 : -1.0) * min(a, u_lens2.y);
   }
-  o = vec4(acc / wsum, 1.0);
+  if (u_lens2.z > 0.0) c = (c < 0.0 ? -1.0 : 1.0) * max(abs(c), u_lens2.z);
+  return c;
+}
+void main() {
+  vec2 q = u_px * 0.25;
+  vec2 a = v_uv + vec2(-q.x, -q.y), b = v_uv + vec2(q.x, -q.y), c = v_uv + vec2(-q.x, q.y), d = v_uv + vec2(q.x, q.y);
+  vec3 col = (texture(u_src, a).rgb + texture(u_src, b).rgb + texture(u_src, c).rgb + texture(u_src, d).rgb) * 0.25;
+  float coc = (cocAt(depthAt(u_mat, a)) + cocAt(depthAt(u_mat, b)) + cocAt(depthAt(u_mat, c)) + cocAt(depthAt(u_mat, d))) * 0.25;
+  o = vec4(col, cocEnc(coc * u_toTex));
+}`;
+
+/**
+ * One separable pass of a scatter-as-gather blur: every sample spreads its colour over its own
+ * circle of confusion (a smooth compact kernel, normalised, so a wide blur gives each pixel less),
+ * and a sample behind the pixel may not spread over it further than the pixel's own blur. Blurred
+ * foreground therefore bleeds softly over the sharp playfield, while the sharp playfield never
+ * haloes into the blurred background (and in-focus pixels are untouched by their neighbours). Alpha
+ * carries the weighted circle of confusion on to the next pass.
+ */
+export const DOF_BLUR_FS = /* glsl */ `#version 300 es
+precision highp float;
+uniform sampler2D u_src;
+uniform sampler2D u_tile; // the widest circle of confusion around this pixel's 16x16 tile (/ 16)
+uniform vec2 u_step;   // one DOF texel along the blur direction (uv)
+uniform float u_R;     // reach in texels
+in vec2 v_uv;
+out vec4 o;
+${COC_FN}
+const int MAXR = 16;
+// (1 - d^2/R^2)^2 over R = coc + 0.5: smooth, gaussian-like, zero beyond R; normalised by its sum over
+// the texel taps (16R/15 for a wide kernel, 1 for one narrower than a texel)
+float kern(float d2, float s) { float R = s + 0.5; float q = max(1.0 - d2 / (R * R), 0.0); return q * q / max(1.0, 1.0667 * R); }
+void main() {
+  vec4 c0 = texture(u_src, v_uv);
+  // nothing around here is out of focus (most of the playfield): no blur to gather
+  if (texelFetch(u_tile, ivec2(gl_FragCoord.xy) / 16, 0).r * 16.0 < 0.3) { o = c0; return; }
+  float cc = cocDec(c0.a);
+  float sc = abs(cc);
+  float w0 = kern(0.0, sc);
+  vec3 acc = c0.rgb * w0;
+  float ws = w0, cs = cc * w0;
+  for (int i = 1; i <= MAXR; i++) {
+    float fi = float(i);
+    if (fi > u_R) break;
+    vec4 ta = texture(u_src, v_uv + u_step * fi);
+    vec4 tb = texture(u_src, v_uv - u_step * fi);
+    float ca = cocDec(ta.a), cb = cocDec(tb.a);
+    float sa = abs(ca), sb = abs(cb);
+    if (ca > cc) sa = min(sa, sc);
+    if (cb > cc) sb = min(sb, sc);
+    float wa = kern(fi * fi, sa), wb = kern(fi * fi, sb);
+    acc += ta.rgb * wa + tb.rgb * wb;
+    ws += wa + wb;
+    cs += ca * wa + cb * wb;
+  }
+  o = vec4(acc / ws, cocEnc(cs / ws));
+}`;
+
+/** the widest circle of confusion in each 16x16 tile of the DOF buffer (stored / 16) */
+export const DOF_TILE_FS = /* glsl */ `#version 300 es
+precision highp float;
+uniform sampler2D u_src;
+out vec4 o;
+${COC_FN}
+void main() {
+  ivec2 sz = textureSize(u_src, 0) - 1;
+  ivec2 b = ivec2(gl_FragCoord.xy) * 16;
+  float m = 0.0;
+  for (int y = 0; y < 16; y++) for (int x = 0; x < 16; x++) m = max(m, abs(cocDec(texelFetch(u_src, min(b + ivec2(x, y), sz), 0).a)));
+  o = vec4(min(m / 16.0, 1.0), 0.0, 0.0, 1.0);
+}`;
+
+/** each tile takes the widest blur of its neighbours (a blur reaches at most 16 texels) */
+export const DOF_DILATE_FS = /* glsl */ `#version 300 es
+precision highp float;
+uniform sampler2D u_src;
+out vec4 o;
+void main() {
+  ivec2 sz = textureSize(u_src, 0) - 1, c = ivec2(gl_FragCoord.xy);
+  float m = 0.0;
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) m = max(m, texelFetch(u_src, clamp(c + ivec2(x, y), ivec2(0), sz), 0).r);
+  o = vec4(m, 0.0, 0.0, 1.0);
+}`;
+
+/**
+ * Camera motion blur and radial zoom blur in one pass. Each pixel's screen velocity comes from the
+ * camera's move (scaled by its layer's parallax, so the far hills hardly smear and the foreground
+ * streaks), the zoom's dolly (radial, from the view centre) and an explicit zoom-blur punch (radial,
+ * from its own centre: whatever sits there stays sharp).
+ */
+export const VELBLUR_FS = /* glsl */ `#version 300 es
+precision highp float;
+uniform sampler2D u_src;
+uniform sampler2D u_mat;
+uniform vec2 u_viewArt;
+uniform vec2 u_cam;      // camera move over the shutter on the gameplay plane, screen art px
+uniform float u_zoom;
+uniform float u_dolly;   // relative zoom change over the shutter
+uniform vec3 u_radial;   // zoom blur centre (screen art px) and strength (fraction of the distance)
+uniform float u_maxLen;  // art px
+uniform float u_taps;
+in vec2 v_uv;
+in vec2 v_scr;
+out vec4 o;
+${DEPTH_FN}
+void main() {
+  float p = parallaxOf(depthAt(u_mat, v_uv));
+  vec2 s = v_scr * u_viewArt;
+  vec2 v = u_cam * (p * pow(u_zoom, p - 1.0)) + (s - u_viewArt * 0.5) * (p * u_dolly) + (s - u_radial.xy) * u_radial.z;
+  float len = length(v);
+  if (len > u_maxLen) v *= u_maxLen / len;
+  vec2 duv = vec2(v.x, -v.y) / u_viewArt;
+  // interleaved gradient noise jitters the taps so short blurs never band
+  float j = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+  vec3 acc = vec3(0.0);
+  for (int i = 0; i < 16; i++) {
+    if (float(i) >= u_taps) break;
+    acc += texture(u_src, v_uv + duv * ((float(i) + j) / u_taps - 0.5)).rgb;
+  }
+  o = vec4(acc / u_taps, 1.0);
 }`;
 
 export const BLOOM_PRE_FS = /* glsl */ `#version 300 es
 precision highp float;
 uniform sampler2D u_src;
+uniform sampler2D u_fx;
+uniform float u_fxOn;
 uniform vec2 u_px;
 uniform float u_threshold;
 uniform float u_knee;
 in vec2 v_uv;
 out vec4 o;
+vec3 tap(vec2 uv) {
+  vec3 c = texture(u_src, uv).rgb;
+  if (u_fxOn > 0.5) { vec4 f = texture(u_fx, uv); c = c * (1.0 - f.a) + f.rgb; }
+  return c;
+}
 void main() {
-  vec3 c = texture(u_src, v_uv + vec2(-0.5, -0.5) * u_px).rgb
-         + texture(u_src, v_uv + vec2(0.5, -0.5) * u_px).rgb
-         + texture(u_src, v_uv + vec2(-0.5, 0.5) * u_px).rgb
-         + texture(u_src, v_uv + vec2(0.5, 0.5) * u_px).rgb;
+  vec3 c = tap(v_uv + vec2(-0.5, -0.5) * u_px) + tap(v_uv + vec2(0.5, -0.5) * u_px)
+         + tap(v_uv + vec2(-0.5, 0.5) * u_px) + tap(v_uv + vec2(0.5, 0.5) * u_px);
   c *= 0.25;
   float br = max(c.r, max(c.g, c.b));
   float soft = clamp(br - u_threshold + u_knee, 0.0, 2.0 * u_knee);
@@ -275,7 +410,7 @@ precision highp float;
 uniform sampler2D u_hdr;
 uniform sampler2D u_bloom;
 uniform sampler2D u_dof;
-uniform sampler2D u_aux;
+uniform sampler2D u_fx;
 uniform float u_bloomStr;
 uniform float u_exposure;
 uniform float u_sat;
@@ -287,8 +422,8 @@ uniform float u_ca;
 uniform float u_fade;
 uniform float u_flash;
 uniform float u_dofOn;
-uniform float u_focus;
-uniform float u_dofStr;
+uniform float u_dofArt;   // art px per DOF texel
+uniform float u_fxOn;
 uniform vec3 u_lift;
 uniform vec3 u_gamma;
 uniform vec3 u_gain;
@@ -298,6 +433,7 @@ uniform vec2 u_res;
 in vec2 v_uv;
 in vec2 v_scr;
 out vec4 o;
+${COC_FN}
 
 float hash(vec2 p) {
   p = fract(p * vec2(443.897, 441.423));
@@ -314,19 +450,24 @@ vec3 shoulder(vec3 x) {
   vec3 over = max(x - k, 0.0);
   return min(x, vec3(k)) + (1.0 - k) * (1.0 - exp(-over / (1.0 - k)));
 }
+/** the scene at uv: sharp HDR, blended toward its depth-of-field blur by the blur's size, fx over */
+vec3 sceneAt(vec2 uv) {
+  vec3 c = texture(u_hdr, uv).rgb;
+  if (u_dofOn > 0.5) {
+    vec4 dv = texture(u_dof, uv);
+    c = mix(c, dv.rgb, smoothstep(0.3, 1.0, abs(cocDec(dv.a)) * u_dofArt));
+  }
+  if (u_fxOn > 0.5) { vec4 f = texture(u_fx, uv); c = c * (1.0 - f.a) + f.rgb; }
+  return c;
+}
 void main() {
   vec2 uv = v_uv;
   vec3 c;
   if (u_ca > 0.0) {
     vec2 d = (uv - 0.5) * u_ca;
-    c = vec3(texture(u_hdr, uv + d).r, texture(u_hdr, uv).g, texture(u_hdr, uv - d).b);
+    c = vec3(sceneAt(uv + d).r, sceneAt(uv).g, sceneAt(uv - d).b);
   } else {
-    c = texture(u_hdr, uv).rgb;
-  }
-  if (u_dofOn > 0.5) {
-    float cd = texture(u_aux, uv).b;
-    float cc = clamp(abs(cd - u_focus) * u_dofStr, 0.0, 1.0);
-    c = mix(c, texture(u_dof, uv).rgb, smoothstep(0.04, 0.3, cc));
+    c = sceneAt(uv);
   }
   c += texture(u_bloom, uv).rgb * u_bloomStr;
   c *= u_exposure;
@@ -338,7 +479,9 @@ void main() {
   c = (c - 0.5) * u_contrast + 0.5;
   vec2 q = (uv - 0.5) * vec2(u_res.x / u_res.y, 1.0);
   c *= clamp(1.0 - dot(q, q) * u_vignette, 0.0, 1.0);
-  c += (hash(gl_FragCoord.xy + fract(u_time * 7.13) * 91.7) - 0.5) * u_grain;
+  // film grain: monochrome, strongest in the mid-tones like real stock
+  float gl = clamp(dot(c, vec3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
+  c += (hash(gl_FragCoord.xy + fract(u_time * 7.13) * 91.7) - 0.5) * u_grain * (0.45 + 2.2 * gl * (1.0 - gl));
   vec2 ap = floor(v_scr * u_viewArt);
   float th = bayer4(ap);
   float f = clamp((u_fade - th * 0.4) / 0.6, 0.0, 1.0);

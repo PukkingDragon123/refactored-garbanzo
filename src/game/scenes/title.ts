@@ -22,6 +22,7 @@ import { audio } from '../../core/audio';
 import { hasSave, newSave, clearSave } from '../save';
 import { continueV4, goShip4 } from './flow';
 import { pxIconCss, pxIconURL } from '../../ui/pxicons';
+import { GFX_HINT, GFX_LABEL, applyGfxPrefs, loadGfxPrefs, saveGfxPrefs } from '../../gfx/quality';
 
 const CSS = `
 .t3 { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
@@ -58,6 +59,12 @@ const CSS = `
 .settings { width: min(460px, 92vw); padding: 1.4em 1.6em; display: flex; flex-direction: column; gap: 1em; }
 .settings label { display: grid; grid-template-columns: 8em 1fr 3em; gap: 0.8em; align-items: center; font-family: var(--pix); }
 .settings input[type=range] { width: 100%; accent-color: #4f9a3a; }
+.settings .gfx-row { display: grid; grid-template-columns: 8em 1fr; gap: 0.8em; align-items: center; font-family: var(--pix); }
+.settings .gfx-row .seg { display: flex; gap: 0.35em; }
+.settings .gfx-row .seg .btn { flex: 1; min-width: 0; font-size: 0.88em; padding: 0.38em 0.2em; text-align: center; }
+.settings .gfx-hint { margin: -0.55em 0 0 11.3em; font-size: 0.78em; line-height: 1.3; opacity: 0.82; min-height: 2.6em; }
+.settings input[type=checkbox] { width: 1.35em; height: 1.35em; margin: 0; accent-color: #4f9a3a; justify-self: start; cursor: pointer; }
+@media (max-width: 520px) { .settings .gfx-row { grid-template-columns: 1fr; gap: 0.4em; } .settings .gfx-hint { margin-left: 0; } }
 .settings .dev-row { display: flex; flex-direction: column; gap: 0.3em; padding-top: 0.7em; background: repeating-linear-gradient(90deg, #b89a6a 0 4px, transparent 4px 8px) left top / 100% 2px no-repeat; }
 .settings .dev-row .btn { display: flex; align-items: center; gap: 0.6em; text-align: left; font-size: 0.9em; }
 .settings .dev-row .btn .ic { width: 1.4em; height: 1.4em; flex: none; image-rendering: pixelated; background: var(--ic) center / contain no-repeat; }
@@ -344,6 +351,8 @@ export class TitleScene implements Scene {
 }
 
 export function openSettings() {
+  // (also opened from the pause menu in a game that never showed the title screen)
+  if (!styled) { document.head.appendChild(el('style', '', CSS)); styled = true; }
   const s = game.save.settings;
   const box = el('div', 'settings panel', '<h2>Settings</h2>');
   const row = (label: string, v: number, on: (v: number) => void) => {
@@ -355,7 +364,40 @@ export function openSettings() {
   };
   row('Music', s.music, v => { s.music = v; audio.musicVolume = v; });
   row('Sound', s.sfx, v => { s.sfx = v; audio.sfxVolume = v; audio.play('ui', { vol: 0.6 }); });
-  row('Quality', s.quality, v => { s.quality = Math.max(0.35, v); game.r.quality = s.quality; window.dispatchEvent(new Event('resize')); });
+  row('Resolution', s.quality, v => { s.quality = Math.max(0.35, v); game.r.quality = s.quality; window.dispatchEvent(new Event('resize')); });
+  // graphics: the quality preset and the lens options (kept for this browser, whatever the save)
+  const gp = loadGfxPrefs();
+  const apply = () => { saveGfxPrefs(gp); applyGfxPrefs(game.r, gp); };
+  const gRow = el('div', 'gfx-row', '<span>Graphics</span><div class="seg" role="radiogroup" aria-label="Graphics quality"></div>');
+  const seg = gRow.querySelector('.seg') as HTMLElement;
+  const hint = el('small', 'gfx-hint');
+  const paint = () => {
+    for (const b of Array.from(seg.children) as HTMLElement[]) {
+      const on = b.dataset.l === gp.level;
+      b.className = on ? 'btn' : 'btn ghost';
+      b.setAttribute('aria-checked', String(on));
+    }
+    hint.textContent = GFX_HINT[gp.level];
+  };
+  for (const l of ['low', 'medium', 'high'] as const) {
+    const b = el('button', 'btn ghost', GFX_LABEL[l]);
+    b.dataset.l = l;
+    b.id = 'set-gfx-' + l;
+    b.setAttribute('role', 'radio');
+    b.onclick = () => { gp.level = l; apply(); audio.play('ui', { vol: 0.6 }); paint(); };
+    seg.appendChild(b);
+  }
+  paint();
+  box.append(gRow, hint);
+  const check = (label: string, on: boolean, set: (v: boolean) => void) => {
+    const l = el('label', '', `<span>${label}</span><input type="checkbox"${on ? ' checked' : ''}><span></span>`);
+    const inp = l.querySelector('input') as HTMLInputElement;
+    inp.id = 'set-' + label.toLowerCase().replace(/\s+/g, '-');
+    inp.onchange = () => { set(inp.checked); apply(); audio.play('ui', { vol: 0.5 }); };
+    box.appendChild(l);
+  };
+  check('Film grain', gp.grain, v => { gp.grain = v; });
+  check('Vignette', gp.vignette, v => { gp.vignette = v; });
   // developer / test tools (lazy-loaded: nothing of it runs unless opened)
   const dev = el('div', 'dev-row', `<button class="btn ghost"><span class="ic"></span><span>Developer tools</span></button><small>Test tool: jump to any scene, skip quests, cheats, saves. Not part of the game.</small>`);
   const devBtn = dev.querySelector('button') as HTMLButtonElement;
