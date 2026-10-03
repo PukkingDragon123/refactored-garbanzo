@@ -36,7 +36,7 @@ import { STASH, STASH_AREAS, stashStacks } from '../../game/v11/stash';
 import { pileNear, dropOnGround, takeFromPile, groundPiles } from '../../game/v11/ground';
 import type { Pile } from '../../game/v11/ground';
 import { itemArtCanvas } from '../../art/v11/itemart';
-import { itemIcon } from '../../art/itemicons';
+import { itemIcon, ICON_IDS } from '../../art/itemicons';
 import { packWeight, packCapacity, weightOf } from '../../game/v10/energy';
 import { foodInfo, canEat, eatFood, timesSick } from '../../game/v10/forage10';
 import { analysisRp } from '../../game/lab';
@@ -200,8 +200,11 @@ function picCanvas(id: string): HTMLCanvasElement {
     g.drawImage(art, 0, 0);
     return c;
   }
+  if (!HAS_ICON().has(id)) return bufCanvas(ART.paintBundle(id, ITEMS[id]?.kind ?? 'material', footprint(id)));
   return bufCanvas(itemIcon(id));
 }
+let iconSet: Set<string> | null = null;
+const HAS_ICON = () => (iconSet ??= new Set(ICON_IDS.items()));
 /** a picture scaled by whole pixels to fit a box (or shrunk crisply when it is too big) */
 function fitPic(id: string, bw: number, bh: number, up = true): HTMLCanvasElement {
   const c = picCanvas(id);
@@ -245,7 +248,9 @@ const groundKind = (): GroundKind => {
 };
 
 type Where = 'pack' | 'stash' | 'ground' | 'offer';
-interface Loose { s: Stack; where: 'ground' | 'offer'; pile?: Pile; spill?: boolean; x: number; y: number }
+interface Loose { s: Stack; where: 'ground' | 'offer'; pile?: Pile; spill?: boolean; x: number; y: number; r?: 0 | 1 }
+/** things lying about lie on their long side */
+const flatR = (id: string): 0 | 1 => { const f = footprint(id); return f.h > f.w ? 1 : 0; };
 type Target = { kind: 'grid'; cont: 'pack' | 'stash'; p: Place; ok: boolean; merge: Stack | null } | { kind: 'ground' } | null;
 interface Drag {
   s: Stack; from: Where; e: HTMLElement; pid: number;
@@ -393,9 +398,10 @@ class PackScreen {
     place(bag, this.bagX, this.bagY, L.W, L.H);
     const body = bufCanvas(ART.paintBag(L), 'abs');
     bag.appendChild(body);
-    this.cellsEl = bag.appendChild(el('div', 'cells'));
     this.toolsEl = bag.appendChild(el('div', 'tools'));
     this.itemsEl = bag.appendChild(el('div', 'items'));
+    this.cellsEl = bag.appendChild(el('div', 'cells'));
+    this.cellsEl.style.zIndex = '4';
     this.renderTools();
     // the lid, thrown back (hidden until it opens) and the flap, buckled shut
     const lid = this.lidEl = bag.appendChild(el('div', 'lid'));
@@ -416,6 +422,8 @@ class PackScreen {
       place(ch, this.chestX, this.chestY, this.CL.W, this.CL.H);
       ch.appendChild(bufCanvas(ART.paintChest(this.CL), 'abs'));
       this.chestItems = ch.appendChild(el('div', 'items'));
+      const cg = ch.appendChild(el('div', 'cells ch'));
+      cg.style.zIndex = '4';
     }
     // ---- things on the ground, the drag layer, the card
     this.looseEl = st.appendChild(el('div', 'items'));
@@ -441,7 +449,7 @@ class PackScreen {
   private fit() {
     const vw = window.innerWidth, vh = window.innerHeight;
     const L = this.L, CL = this.CL;
-    const M = 6, SCW = 44, GAP = 12, CARD_W = 112, CARD_H = 164, GROUND = 30, TOP = 10;
+    const M = 6, SCW = 44, GAP = 12, CARD_W = 112, CARD_H = 164, GROUND = 50, TOP = 10;
     const portrait = vh > vw * 1.05;
     const bagH = L.H;
     const chestW = CL ? CL.W + GAP + (this.mode === 'prep' ? 40 : 0) : 0;
@@ -530,7 +538,7 @@ class PackScreen {
     const close = b.appendChild(iconLabel('button', 'pbtn', 'v11x', ''));
     close.title = 'Close (Esc / Tab)';
     close.addEventListener('click', e => { e.stopPropagation(); void this.close(); });
-    place(b, this.bagX + L.body.x, this.groundY + 14);
+    place(b, this.bagX + L.body.x, this.groundY + 33);
     if (!this.touch && !matchMedia('(pointer: coarse)').matches) {
       const keys = b.appendChild(el('div', 'keys', '<b>drag</b> move · <b>R</b> turn · <b>shift</b> take one · <b>E</b> eat · <b>Esc</b> close'));
       keys.style.position = 'static';
@@ -773,7 +781,6 @@ class PackScreen {
       sfx('ui', { vol: 0.35, pitch: 1.15 });
       this.renderSel();
       this.renderCard(!same);
-      if (pd.loose?.where === 'offer') this.takeOffer(pd.loose);
       return;
     }
     const d = this.drag;
@@ -883,27 +890,33 @@ class PackScreen {
     // what lies in the world pile but isn't shown yet (dropped just now)
     const pile = pileNear(80);
     if (pile) for (const s of pile.stacks) if (!this.loose.some(l => l.s === s)) this.loose.push({ s, where: 'ground', pile, x: 0, y: 0 });
-    let gx = this.bagX + this.L.body.x + this.L.body.w + 4;
-    if (this.CL && this.mode !== 'pack') gx = this.bagX + this.L.W + 2;
     const gl = this.loose.filter(l => l.where === 'ground');
-    // lay the ground things out in a row along the ground, right of the bag (then left)
-    let left = this.bagX + this.L.body.x - 6;
+    // lay the ground things out along the ground in front of the bag, left to right
+    let gx = this.bagX + this.L.body.x + 46;
+    const gy = this.groundY + 8;
+    let row = 0;
+    const maxX = (this.CL ? this.chestX - 4 : this.cardDock ? this.cardX - 4 : this.W - 4);
     for (const l of gl) {
-      const [w, h] = stackDims(l.s.id, 0);
-      const roomRight = !this.CL;
-      if (roomRight && gx + w * CELL < this.cardX - 4) { l.x = gx; gx += w * CELL + 3; }
-      else { left -= w * CELL + 3; l.x = Math.max(2, left); }
-      l.y = this.groundY + 10 - h * CELL;
+      l.r = flatR(l.s.id);
+      const [w, h] = stackDims(l.s.id, l.r);
+      if (gx + w * CELL > maxX) { row++; gx = this.bagX + this.L.body.x + 46 + row * 9; }
+      l.x = gx; gx += w * CELL + 2;
+      l.y = gy + row * 6 - Math.max(0, h - 1) * 6;
     }
     for (const l of this.loose) {
       live.add(l.s);
-      const e = this.itemEl(l.s, l.where, l);
+      const e = this.itemEl(l.s, l.where, l, l.where === 'ground' ? l.r ?? flatR(l.s.id) : 0);
       e.classList.remove('hidden');
       if (e.parentElement !== this.looseEl && this.drag?.s !== l.s) this.looseEl.appendChild(e);
       if (this.drag?.s !== l.s) place(e, l.x, l.y);
     }
     for (const [s, e] of this.itemEls) if (!live.has(s) && this.drag?.s !== s) { e.remove(); this.itemEls.delete(s); }
-    if (this.sel?.s && !live.has(this.sel.s)) { this.sel = null; this.renderCard(); }
+    if (this.sel?.s && !live.has(this.sel.s)) {
+      // (a stack put down on the ground comes back as the heap's own copy)
+      const twin = this.loose.find(l => l.s.id === this.sel!.s!.id);
+      this.sel = twin ? { s: twin.s } : null;
+      this.renderCard();
+    }
     this.renderSel();
     this.renderTools();
     this.updateScale(first);
@@ -1074,6 +1087,8 @@ class PackScreen {
       if (d.kind !== 'key') btn('v11drop', 'drop', () => void this.act('drop'), '', inPack || stashStacks().includes(cur.s));
       btn('v11rot', 'turn', () => this.rotateInPlace(cur.s!), '', !!cur.s.p);
     }
+    const lo = cur.s ? this.loose.find(l => l.s === cur.s) : undefined;
+    if (lo && isSel) btn('v11hand', 'take', () => this.takeLoose(lo), 'go');
     btn('v11lens', 'look', () => { card.classList.toggle('flip'); sfx('pageTurn', { vol: 0.4 }); });
     if (!isSel && cur.s) acts.style.opacity = '0.75';
     // ---- the back: the full field notes
@@ -1196,7 +1211,7 @@ class PackScreen {
     const sr = src.getBoundingClientRect();
     const [px, py] = this.toStage(e.clientX, e.clientY);
     const el0 = this.itemEl(s, pd.from, pd.loose);
-    const r: 0 | 1 = pd.from === 'pack' || pd.from === 'stash' ? (s.p?.r ?? 0) : 0;
+    const r: 0 | 1 = pd.from === 'pack' || pd.from === 'stash' ? (s.p?.r ?? 0) : pd.loose?.r ?? 0;
     const d: Drag = {
       s, from: pd.from, e: el0, pid: pd.pid, r, orig: s.p ? { ...s.p } : undefined, loose: pd.loose,
       gx: px - (sr.left - this.stage.getBoundingClientRect().left) / this.s, gy: py - (sr.top - this.stage.getBoundingClientRect().top) / this.s,
@@ -1275,17 +1290,14 @@ class PackScreen {
   private showGhost() {
     const d = this.drag;
     this.cellsEl.innerHTML = '';
-    const ce = this.chestItems?.parentElement?.querySelector('.cells.ch') as HTMLElement | null;
+    const ce = this.chestEl?.querySelector('.cells.ch') as HTMLElement | null;
     if (ce) ce.innerHTML = '';
     if (!d?.target || d.target.kind !== 'grid') return;
     const t = d.target;
     const rr = this.areaRect(t.cont, t.p.a);
     if (!rr) return;
     let host = this.cellsEl, ox = this.bagX, oy = this.bagY;
-    if (t.cont === 'stash' && this.chestEl) {
-      host = ce ?? this.chestEl.insertBefore(el('div', 'cells ch'), this.chestItems);
-      ox = this.chestX; oy = this.chestY;
-    }
+    if (t.cont === 'stash' && ce) { host = ce; ox = this.chestX; oy = this.chestY; }
     const cls = t.merge ? 'merge' : t.ok ? 'ok' : 'bad';
     const cs = t.merge && t.merge.p ? stackCells(t.merge.id, t.merge.p.r, t.merge.p.x, t.merge.p.y) : stackCells(d.s.id, d.r, t.p.x, t.p.y);
     for (const [x, y] of cs) {
@@ -1477,15 +1489,24 @@ class PackScreen {
     this.sync();
   }
 
-  /** a tap on the lunch: straight into the pack if there's room */
-  private takeOffer(l: Loose) {
+  /** Take (the card's button): something on the ground or the lunch straight into the pack if it fits */
+  private takeLoose(l: Loose) {
     const { occ } = PACK.occ();
     const p = PACK.findSpot(occ, l.s.id);
-    if (!p) { sfx('wrong', { vol: 0.35 }); this.float(l.s, 'No room for it'); return; }
-    this.opts.prep?.tookLunch?.();
+    if (!p) {
+      sfx('wrong', { vol: 0.35 });
+      this.float(l.s, 'No room: make some');
+      const e = this.itemEls.get(l.s);
+      e?.classList.remove('nudge'); void e?.offsetWidth; e?.classList.add('nudge');
+      return;
+    }
+    if (l.where === 'offer') this.opts.prep?.tookLunch?.();
+    if (l.pile) takeFromPile(l.pile, l.s);
     l.s.p = p;
-    game.save.inv.push(l.s);
+    if (!game.save.inv.includes(l.s)) game.save.inv.push(l.s);
     this.loose = this.loose.filter(x => x !== l);
+    const e = this.itemEls.get(l.s);
+    if (e) { (e as unknown as { __k?: string }).__k = ''; this.itemsEl.appendChild(e); }
     sfx('place', { vol: 0.4 });
     this.sel = { s: l.s };
     this.afterMove();

@@ -426,33 +426,49 @@ export function paintFlap(L: BagLayout): PixelBuffer {
   return b;
 }
 
-/** the flap thrown back over the top: its underside, with the zipped mesh lid pocket */
+/** the flap thrown back over the top: its underside (dark lining inside a canvas edge, a stitched name
+ *  label or the zipped mesh lid pocket), its two straps flopped up above it with their buckles */
 export function paintLid(L: BagLayout): PixelBuffer {
   const r = L.lid;
   const b = new PixelBuffer(r.w, r.h);
-  const shape: Rect = { x: 0, y: 0, w: r.w, h: r.h };
-  roundRect(b, shape, 7, (x, y, u, v, e) => {
-    const t = 0.5 - v * 0.15 - u * 0.12 + weave(x, y) * 0.8 + (e < 2 ? -0.12 : 0);
-    return e < 4 ? rp(CV, t + 0.05, x, y) : rp(LN, 0.75 - v * 0.2 + weave(x, y) * 0.6, x, y);
-  });
-  outlineRect(b, { x: 1, y: 1, w: r.w - 2, h: r.h - 2 }, 7, OUT);
-  b.rect(4, 2, r.w - 8, 1, CV[6]);
-  stitch(b, 5, 4, r.w - 6, 4, THREAD2, 2, 2);
+  // the flap: wider at the hinge (bottom), rounded at its free edge (top)
+  for (let y = 4; y < r.h; y++) {
+    const v = (y - 4) / Math.max(1, r.h - 5);
+    const inset = Math.round((1 - v) * 4);
+    for (let x = inset; x < r.w - inset; x++) {
+      const e = Math.min(x - inset, r.w - 1 - inset - x, y - 4);
+      const cr = 6;
+      if (y - 4 < cr && (x - inset < cr || r.w - 1 - inset - x < cr)) {
+        const dx = x - inset < cr ? cr - (x - inset) : cr - (r.w - 1 - inset - x), dy = cr - (y - 4);
+        if (dx * dx + dy * dy > cr * cr) continue;
+      }
+      const t = 0.5 - v * 0.15 + weave(x, y) * 0.8;
+      b.set(x, y, e < 4 ? rp(CV, t + 0.12 - (e < 1 ? 0.2 : 0), x, y) : rp(LN, 0.78 - v * 0.25 + weave(x, y) * 0.6, x, y));
+    }
+  }
+  b.outline(OUT);
+  // the leather trim of its free edge, now at the top
+  for (let x = 8; x < r.w - 8; x++) { b.set(x, 5, LT[5]); b.set(x, 6, LT[3]); b.set(x, 7, LT[2]); }
+  stitch(b, 9, 9, r.w - 10, 9, THREAD2, 2, 2);
+  // the two straps, flopped up over the edge, buckles dangling
+  for (const k of [0.24, 0.76]) {
+    const x = Math.round(r.w * k) - 3;
+    for (let y = 0; y < 8; y++) for (let xx = 0; xx < 6; xx++) b.set(x + xx, y, xx === 0 || xx === 5 ? OUT : xx === 1 ? LT[5] : rp(LT, 0.5 + grain(x + xx, y), x + xx, y));
+    buckle(b, x - 1, 0, 8, 6);
+  }
   const g = L.areas.lid;
   if (g) {
     const gx = g.x - r.x, gy = g.y - r.y;
-    // the mesh pocket: a dark well with a net in front and a zip along the top
     for (let y = gy; y < gy + g.h; y++) for (let x = gx; x < gx + g.w; x++) b.set(x, y, rp(LN, 0.45 + weave(x, y) * 0.5, x, y));
-    for (let x = gx - 1; x <= gx + g.w; x++) { b.set(x, gy - 1, (x & 1) ? H('#8c8f7c') : H('#46483c')); }
+    for (let x = gx - 1; x <= gx + g.w; x++) b.set(x, gy - 1, (x & 1) ? H('#8c8f7c') : H('#46483c'));
     for (let y = gy; y < gy + g.h; y++) for (let x = gx; x < gx + g.w; x++) if (((x + y) % 4) === 0 && y > gy + 2) b.set(x, y, MESH[1]);
     cellStitches(b, { x: gx, y: gy, w: g.w, h: g.h }, LN[4]);
     b.rect(gx - 2, gy + g.h, g.w + 4, 1, CV[5]);
   } else {
-    // no pocket yet: a name label stitched inside the lid
-    const lx = Math.round(r.w / 2) - 14, ly = Math.round(r.h / 2) - 4;
+    // a name label stitched inside the lid: M.T. in marker
+    const lx = Math.round(r.w / 2) - 14, ly = Math.round(r.h / 2) - 1;
     b.rect(lx, ly, 28, 9, H('#e8dcb8')); b.rect(lx, ly + 8, 28, 1, H('#a8986c'));
     stitch(b, lx, ly - 1, lx + 27, ly - 1, THREAD2, 1, 1);
-    // M. T. scrawled in marker
     const ink = H('#2a2a4a');
     for (const [x, y] of [[4, 2], [4, 3], [4, 4], [4, 5], [5, 3], [6, 4], [7, 3], [8, 2], [8, 3], [8, 4], [8, 5], [10, 5], [13, 2], [14, 2], [15, 2], [16, 2], [17, 2], [15, 3], [15, 4], [15, 5], [19, 5]]) b.set(lx + x + 2, ly + y, ink);
   }
@@ -603,6 +619,31 @@ export function paintTag(w: number, h: number): PixelBuffer {
     const d = Math.hypot(x, y);
     if (d <= 5) b.set(cx + x, cy + y, d < 2.2 ? 0 : d < 3 ? H('#5a4628') : H('#c8a868'));
   }
+  return b;
+}
+
+/** something with no picture yet: a cloth bundle tied with string, sized to its footprint and tinted
+ *  by what kind of thing it is */
+export function paintBundle(id: string, kind: string, fp: { w: number; h: number }): PixelBuffer {
+  const W = fp.w * CELL, Hh = fp.h * CELL;
+  const b = new PixelBuffer(W, Hh);
+  const tint: Record<string, string[]> = {
+    food: ['#4a5a1e', '#6a7a2a', '#8a9a3a', '#aabc5a'], material: ['#4a3a24', '#6a5434', '#8a7048', '#a88c60'],
+    plant: ['#2a4a1e', '#3e6a2a', '#5a8a3a', '#7aaa52'], fungus: ['#3a2a4a', '#54406a', '#70588a', '#8c74a8'],
+    animal: ['#4a3020', '#6a4630', '#8a6044', '#a87c5a'], insect: ['#2a3a4a', '#3e566a', '#56748a', '#7494a8'],
+    shell: ['#6a5040', '#8a6c58', '#aa8c74', '#ccae94'], key: ['#5a4a1a', '#7a6626', '#9a8434', '#c0a84a'],
+  };
+  const pal = (tint[kind] ?? tint.material).map(c => H(c));
+  const r: Rect = { x: 3, y: 4, w: W - 6, h: Hh - 7 };
+  const seed = id.length * 7 + id.charCodeAt(0);
+  roundRect(b, r, 6, (x, y, u, v) => rp(pal, 0.75 - u * 0.25 - v * 0.35 + weave(x, y) + (vnoise(x, y, 5, seed) - 0.5) * 0.3, x, y));
+  outlineRect(b, r, 6, OUT);
+  // the knot and the string round it
+  const cx = Math.round(W / 2), cy = Math.round(Hh / 2);
+  for (let x = r.x; x < r.x + r.w; x++) if (b.get(x, cy) !== OUT) b.set(x, cy, H('#d8c690'));
+  for (let y = r.y; y < r.y + r.h; y++) if (b.get(cx, y) !== OUT) b.set(cx, y, H('#c8b47c'));
+  b.rect(cx - 2, cy - 2, 5, 4, H('#e8d8a8')); b.set(cx - 3, cy - 3, H('#e8d8a8')); b.set(cx + 3, cy - 3, H('#e8d8a8'));
+  b.set(cx, cy, H('#8a7a4e'));
   return b;
 }
 
