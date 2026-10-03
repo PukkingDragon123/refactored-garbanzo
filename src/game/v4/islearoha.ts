@@ -17,6 +17,7 @@ import { Custom } from '../../world/props';
 import { packColor } from '../../gfx/renderer';
 import { A } from '../assets';
 import { rand, clamp } from '../../core/math';
+import { setCarry } from '../v11/carry';
 import { groundY } from '../../art/island4/layout';
 import type { Actor } from '../../world/actor';
 import type { IsleStory } from './islestory';
@@ -123,14 +124,8 @@ export async function runStandoff(st: IsleStory) {
     st.place(j, AT.jenna, 1, 'point');
     st.place(c, ar.x, 1, 'carried');
     c.terrain = null;
-    const carry = new Custom(47, () => {
-      if (c.anim !== 'carried') return;
-      const h = ar.handPos();
-      c.x = h ? h[0] : ar.x + ar.facing * 8;
-      c.y = h ? h[1] + 10 : ar.y - 22;
-      c.facing = ar.facing;
-    });
-    s.main.add(carry);
+    // Chunk in her arms (the carry module draws him there: v11/carry.ts, { rider })
+    carryChunk(ar, c);
     p.x = AT.mori + 110; p.y = groundY(p.x); p.facing = -1;
     st.place(jo, AT.joshu + 120, -1, 'injured');
     const cam = s.st.cam;
@@ -153,7 +148,7 @@ export async function runStandoff(st: IsleStory) {
     ar.faceTo(p.x);
     await st.say([{ who: 'mori', text: 'Hey! HEY! That’s our dog!', expr: 'shocked', close: false, auto: 700 }]);
     // boxed in: she drops him (flop), and her slingshot is out and drawn before anyone can blink
-    s.main.remove(carry);
+    setCarry(ar, null);
     c.terrain = s.st.terrain;
     c.y = groundY(c.x);
     c.setAnim('flop');
@@ -419,4 +414,14 @@ async function warningShot(st: IsleStory, x0: number, y0: number, x1: number, y1
   for (let i = 0; i < 18; i++) m.particles.spawn({ frame: A.dot2, x: x1, y: y1 - 1, vx: rand.range(-70, 70), vy: rand.range(-110, -30), ay: 300, life: rand.range(0.5, 1), color: [0.9, 0.8, 0.6], alpha: 1, alpha1: 0, floorY: y1 + 3 });
   for (let i = 0; i < 6; i++) m.particles.spawn({ frame: A.soft, x: x1 + rand.range(-6, 6), y: y1 - 6, vx: rand.range(-10, 10), vy: rand.range(-20, -8), life: 1.6, color: [0.6, 0.58, 0.55], alpha: 0.5, alpha1: 0, size: 0.4, size1: 1.2 });
   await wait(300);
+}
+
+/** Aroha hugging Chunk: the shared carry (the real Chunk actor drawn in her arms); until the carry
+ *  module positions riders, he's set at her hands once */
+function carryChunk(ar: Actor, c: Actor) {
+  (setCarry as (a: Actor, k: string, o?: { rider?: Actor }) => void)(ar, 'chunk', { rider: c });
+  const h = ar.handPos();
+  c.x = h ? h[0] : ar.x + ar.facing * 8;
+  c.y = h ? h[1] + 10 : ar.y - 22;
+  c.facing = ar.facing;
 }

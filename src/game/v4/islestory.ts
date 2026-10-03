@@ -32,6 +32,7 @@ import { startForage, Forage } from '../v9/forage';
 import { IsleTools } from '../v9/isletools';
 import { campDayTime } from '../v10/day';
 import { attachBoatyard } from '../v10/boatyard';
+import { attachArohaLesson } from '../v11/arohalesson';
 
 export const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 const F = () => game.save.flags;
@@ -256,6 +257,7 @@ export class IsleStory implements IsleHooks {
     this.forage.onHaul = (cat, kind) => this.camp.gatheredCat(cat, kind);
     this.tools.setup();
     attachBoatyard(this);
+    attachArohaLesson(this);
     this.addShadowFx();
     this.migrate();
     await this.restore();
