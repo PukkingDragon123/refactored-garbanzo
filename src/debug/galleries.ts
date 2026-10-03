@@ -73,6 +73,7 @@ async function iconGallery() {
 export function runGallery(name: string) {
   if (name === 'icons') { void iconGallery(); return; }
   if (name === 'camp4') { void camp4Gallery(); return; }
+  if (name === 'aroha' || name === 'combat') { void import('./arohagallery').then(m => m.runArohaGallery(name)); return; }
   const items: GalleryItem[] = [];
   if (name === 'flora') {
     items.push({ name: 'treefern', buf: F.paintTreeFern(3, { height: 90 }).buf });

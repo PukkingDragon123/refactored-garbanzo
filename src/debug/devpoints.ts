@@ -278,6 +278,7 @@ export interface DevPoint {
 }
 export interface DevChapter { id: string; name: string; points: DevPoint[] }
 
+const dayEvent = (id: string) => (window as unknown as { zl?: { day?: { event(id: string): Promise<unknown> } } }).zl?.day?.event(id);
 const zl = () => (window as unknown as { zl?: Record<string, (...a: unknown[]) => Promise<unknown>> }).zl ?? {};
 const TODS: TimeOfDay[] = ['dawn', 'day', 'dusk', 'night'];
 const TOD_LABEL: Record<TimeOfDay, string> = { dawn: 'Dawn', day: 'Day', dusk: 'Dusk', night: 'Night' };
@@ -343,6 +344,10 @@ export async function chapters(): Promise<DevChapter[]> {
         await campLoop('out', async () => { const { arriveAtCamp } = await import('../game/v10/day'); await arriveAtCamp(how); });
       },
     })) },
+    { id: 'camp:arohaLesson', name: 'Aroha’s Lesson', sub: 'The tracks, the creep, the mānuka; the slingshot sketch after dinner', icon: 'target', variants: [
+      { label: 'Start', run: () => campLoop('morning', async () => { await dayEvent('arohaLesson'); }) },
+      { label: 'Sketch', run: () => campLoop('evening', async () => { Q([], ['arohaLesson']); F('aroha:tracks', 'aroha:quiet', 'aroha:fork'); await dayEvent('arohaBlueprint'); }) },
+    ] },
     { id: 'camp:dayN', name: 'Sleep to the next day', sub: 'No cutscene: the next morning', icon: 'moon', run: async () => {
       ensureLoop();
       const { startNextDay } = await import('../game/v10/day');
@@ -473,6 +478,7 @@ const SKIPS: Record<string, Skip[]> = {
     () => V('v4:wood', 3), () => V('v4:plants', 2), () => V('v4:food', 2), () => V('v4:minerals', 1), () => V('v4:islePhotos', 2), () => F('v4:back'),
   ],
   v4aroha: [() => F('v4:arohaJoined')],
+  arohaLesson: [() => F('aroha:tracks'), () => F('aroha:quiet'), () => F('aroha:fork'), () => { F('aroha:blueprint'); void import('../game/v11/blueprints').then(m => m.grantBlueprint('slingshot', 'quest:aroha')); }],
   v4camp: [
     () => { for (const j of JOBS) F('v4:job:' + j); V('v4:campJobs', 6); },
     () => F('v4:dinner', 'v4:campDone'),
