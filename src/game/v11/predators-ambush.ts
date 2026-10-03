@@ -312,7 +312,7 @@ export async function tigerAmbush(o: AmbushOpts): Promise<void> {
     ar.visible = true;
     ar.alpha = 1;
     ar.faceTo(T.x);
-    ar.play(anim7('flipBack', 'vault', 'jump'), anim7('landCrouch', 'crouch')).catch(() => {});
+    ar.play(anim7('vault', 'flipBack', 'jump'), anim7('landCrouch', 'crouch')).catch(() => {});
     audio.play('whoosh', { vol: 0.8, pitch: 0.9 });
     void cineTo(st, { x: (land + T.x) / 2 - dir * 10, y: gy - 40, zoom: 1.65, secs: 0.6 });
     const flipDur = 0.5;

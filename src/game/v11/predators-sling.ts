@@ -403,7 +403,7 @@ export class PlayerSling {
       lastX = x; lastY = y;
       if (i % 2 === 0) {
         const a = (1 - i / 60) * (0.35 + this.draw * 0.45);
-        r.fxDraw(A.dot, x, y, 1, 1, 0, packColor(1, 0.97, 0.85, 1), a * 1.3);
+        r.fxDraw(A.dot2, x, y, 0.8, 0.8, 0, packColor(1, 0.97, 0.85, 1), Math.min(1, a * 1.8));
       }
     }
     r.fxDraw(A.ring, lastX, lastY - 1, 0.35, 0.2, 0, packColor(1, 0.95, 0.75, 1), 0.6 + this.draw * 0.6);

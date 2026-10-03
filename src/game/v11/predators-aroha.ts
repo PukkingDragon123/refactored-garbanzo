@@ -24,6 +24,14 @@ import { PredFx, GrenadeKind } from './predators-fx';
 import { ballistic } from './predators-sling';
 import { sfx11 } from './predators-sfx';
 
+// the combat moves module (performMove: the clip with its root motion and its release / land moments).
+// Loaded if the build has it; without it the volleys and throws run on fixed timings.
+interface MovesMod { performMove(a: Actor, anim: string, o?: { then?: string; onRelease?: () => void; onLand?: () => void; minX?: number; maxX?: number; dir?: 1 | -1 }): Promise<void> }
+let moves: MovesMod | null = null;
+for (const load of Object.values(import.meta.glob<MovesMod>('./moves.ts'))) void load().then(m => { moves = m; }).catch(() => {});
+/** a move clip played through performMove, when both exist */
+const moveFor = (name: string) => (moves && ANIMS7[name] ? moves : null);
+
 const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 
 type Act = 'idle' | 'aim' | 'shoot' | 'throw' | 'flip' | 'dash';
@@ -44,6 +52,8 @@ export class ArohaCombat {
   private aimAt: Animal | null = null;
   private offs: (() => void)[] = [];
   private lastTarget = '';
+  /** a performMove clip is playing (its release moment fires the shot or the throw) */
+  private moving = false;
 
   constructor(readonly s: FieldScene, readonly fx: PredFx) {
     this.offs.push(onPredator((ev, info) => this.onEvent(ev, info)));
@@ -75,7 +85,7 @@ export class ArohaCombat {
     if (!this.engaged) return;
     if (!th.length) {
       this.calmT += dt;
-      if (this.calmT > 2.2 && this.act === 'idle') this.disengage(a);
+      if (this.calmT > 2.2 && this.act === 'idle' && !this.moving) this.disengage(a);
     } else this.calmT = 0;
     this.fight(a, th[0], dt);
   }
@@ -134,13 +144,15 @@ export class ArohaCombat {
     }
     // nothing to fight (it left): finish what she's doing and stand easy
     if (!t) {
-      if (this.act === 'dash' && a.walking) return;
+      if (this.moving || (this.act === 'dash' && a.walking)) return;
       if (this.act !== 'idle') { this.act = 'idle'; this.actT = 0; this.setPose(a, anim7('slingReady', 'slingAim'), 0); }
       return;
     }
     const st = predState(t);
     const dx = t.x - a.x, dist = Math.abs(dx);
     const toward = Math.sign(dx) || 1;
+    // a move clip is carrying her: let it finish
+    if (this.moving) return;
     // dodge: the rush is coming straight at her
     const charging = t.act === 'charge' || t.act === 'pounce' || t.act === 'swipe';
     if (charging && this.cool.flip <= 0 && Math.sign(a.x - t.x) === t.facing && dist < 78) {
@@ -176,8 +188,19 @@ export class ArohaCombat {
     if (this.act === 'idle' && this.cool.gren <= 0 && (close || (this.volleys >= 2 && st.nerve > 2.5)) && dist > 40) {
       this.act = 'throw';
       this.actT = 0;
-      a.play(anim7('grenadeThrow', 'point'), anim7('slingReady', 'slingAim')).catch(() => {});
       this.aimAt = t;
+      const mv = moveFor('grenadeThrow');
+      if (mv) {
+        // thrown on the clip's release moment
+        this.moving = true;
+        a.holdFrame = null;
+        const kind = this.nextGrenade();
+        this.cool.gren = 7;
+        void mv.performMove(a, 'grenadeThrow', { then: anim7('slingReady', 'slingAim'), minX: s.minX + 10, maxX: s.maxX - 10, onRelease: () => { if (this.aimAt && !this.aimAt.dead) this.throwAt(a, this.aimAt, kind); this.aimAt = null; } })
+          .finally(() => { this.moving = false; this.act = 'idle'; this.actT = 0; this.aimAt = null; });
+        return;
+      }
+      a.play(anim7('grenadeThrow', 'point'), anim7('slingReady', 'slingAim')).catch(() => {});
       return;
     }
     if (this.act === 'throw') {
@@ -196,10 +219,22 @@ export class ArohaCombat {
       this.act = 'aim';
       this.actT = 0;
       this.volley = 3;
-      this.setPose(a, anim7('slingDraw', 'slingAim'), 1);
+      this.setPose(a, anim7('slingDraw', 'slingAim'), anim7('slingDraw', 'slingAim') === 'slingAim' ? 1 : 99);
       return;
     }
     if (this.act === 'aim' && this.actT > 0.16) {
+      const mv = moveFor('slingRelease');
+      if (mv) {
+        // the pebble leaves on the clip's release moment
+        this.moving = true;
+        this.volley--;
+        this.act = 'shoot';
+        this.actT = 0;
+        a.holdFrame = null;
+        void mv.performMove(a, 'slingRelease', { then: anim7('slingReady', 'slingAim'), minX: s.minX + 10, maxX: s.maxX - 10, onRelease: () => { if (!t.dead && !t.gone) this.shootAt(a, t); } })
+          .finally(() => { this.moving = false; });
+        return;
+      }
       this.shootAt(a, t);
       this.volley--;
       this.act = 'shoot';
@@ -208,7 +243,7 @@ export class ArohaCombat {
       return;
     }
     if (this.act === 'shoot' && this.actT > 0.2) {
-      if (this.volley > 0 && t.hidden < 0.8) { this.act = 'aim'; this.actT = 0; this.setPose(a, anim7('slingDraw', 'slingAim'), 1); }
+      if (this.volley > 0 && t.hidden < 0.8) { this.act = 'aim'; this.actT = 0; this.setPose(a, anim7('slingDraw', 'slingAim'), anim7('slingDraw', 'slingAim') === 'slingAim' ? 1 : 99); }
       else { this.act = 'idle'; this.actT = 0; this.cool.shot = 0.9 + rand.next() * 0.5; this.volleys++; this.setPose(a, anim7('slingReady', 'slingAim'), 0); }
       return;
     }
