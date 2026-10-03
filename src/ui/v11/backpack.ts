@@ -84,7 +84,7 @@ const useOf = (id: string) => USES[id] ?? USES['kind:' + (ITEMS[id]?.kind ?? '')
 const CSS = `
 .bp11 { position: absolute; inset: 0; z-index: 36; pointer-events: auto; touch-action: none; overflow: hidden; user-select: none; -webkit-user-select: none; font-family: 'Jersey 15', 'Pixelify Sans', monospace; }
 .bp11 .bg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; image-rendering: auto !important; opacity: 0; transition: opacity 0.3s; }
-.bp11 .bg.veil { background: rgba(14, 10, 4, 0.55); }
+.bp11 .bg.veil { background: rgba(14, 10, 4, 0.5); }
 .bp11.on .bg { opacity: 1; }
 .bp11 canvas.ic { display: inline-block; vertical-align: middle; flex: none; }
 .bp11 .dim { position: absolute; inset: 0; background: radial-gradient(ellipse at 45% 55%, rgba(8,6,2,0.05) 25%, rgba(8,6,2,0.62) 100%); opacity: 0; transition: opacity 0.35s; }
@@ -381,8 +381,8 @@ class PackScreen {
     const r = this.root, L = this.L;
 
     // the frozen world, soft and dim (or just a dark veil)
+    r.appendChild(el('div', 'bg veil'));
     if (this.backdrop) { this.backdrop.className = 'bg'; r.appendChild(this.backdrop); }
-    else r.appendChild(el('div', 'bg veil'));
     r.appendChild(el('div', 'dim'));
     // ---- layout in art px
     this.fit();
@@ -462,18 +462,20 @@ class PackScreen {
       const sDock = Math.min(vw / W, vh / Hh);
       const W2 = W - CARD_W - GAP;
       const s2 = Math.min(vw / W2, vh / Hh);
-      if (CL && s2 > sDock * 1.18) { W = W2; cardDock = false; }
+      if (CL && sDock < 1.3 && s2 > sDock * 1.18) { W = W2; cardDock = false; }
     } else {
       W = Math.max(M + SCW + L.W + M, CL ? CL.W + M * 2 : 0);
       Hh = TOP + bagH + GROUND + (CL ? CL.H + 6 : 0) + CARD_H + 10;
     }
     const dpr = Math.min(3, window.devicePixelRatio || 1);
     let s = Math.min(vw / W, vh / Hh, 3.2);
-    s = Math.max(1 / dpr, Math.floor(s * dpr) / dpr);
+    // (snapped to quarter device pixels: whole-pixel snapping wastes too much room on a laptop)
+    s = Math.max(1 / dpr, Math.floor(s * dpr * 4) / (dpr * 4));
     this.s = s;
     this.W = W; this.H = Hh;
     // centre the composition
-    const ox = Math.round((vw / s - W) / 2), oy = Math.round((vh / s - Hh) / 2);
+    // (a little below centre: more of the soft world above, less bare ground below)
+    const ox = Math.round((vw / s - W) / 2), oy = Math.round(Math.max(0, vh / s - Hh) * 0.62);
     this.stage.style.transform = `scale(${s})`;
     this.stage.style.width = W + 'px'; this.stage.style.height = Hh + 'px';
     this.stage.style.left = Math.round(ox * s) + 'px'; this.stage.style.top = Math.round(oy * s) + 'px';
@@ -568,7 +570,7 @@ class PackScreen {
       let i = 0;
       for (const l of lunch) {
         if (!ITEMS[l.id]) continue;
-        this.loose.push({ s: { id: l.id, n: l.n }, where: 'offer', x: this.chestX + 12 + i * 34, y: this.chestY + 2 });
+        this.loose.push({ s: { id: l.id, n: l.n }, where: 'offer', x: this.chestX + CL.W - 40 - i * 30, y: this.chestY + 1 });
         i++;
       }
     }
@@ -577,7 +579,7 @@ class PackScreen {
     if (tip) {
       const [who, text] = tip;
       const tb = st.appendChild(el('div', 'tipb', `<b>${esc(who.toUpperCase())}</b>${esc(text)}`));
-      place(tb, this.chestX + 30, Math.max(2, this.chestY - 34));
+      place(tb, this.chestX + 6, Math.max(2, this.chestY - 30));
     }
   }
 
@@ -1586,6 +1588,8 @@ async function debugFill() {
 }
 export const BP_ZL = {
   open: (mode: PackMode = 'pack') => openBackpack11({ mode }),
+  /** the trail sign's packing at camp */
+  prep: async () => { const cd = (await import('../../game/v10/campday')).activeCamp(); if (!cd) return 'no camp'; await (await import('../v10/camppack')).openPackPrep(cd); return 'ok'; },
   fill: debugFill,
   give: async (id: string, n = 1) => (await import('../../game/inventory')).give(id, n),
   add: async (id: string, n = 1) => (await import('../../game/inventory')).add(id, n),

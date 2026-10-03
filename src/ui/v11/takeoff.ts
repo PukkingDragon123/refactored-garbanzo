@@ -48,10 +48,13 @@ function snapshot(): Promise<HTMLCanvasElement | null> {
         const src = game.r.canvas;
         const c = document.createElement('canvas');
         c.width = Math.max(2, Math.round(src.width / 7)); c.height = Math.max(2, Math.round(src.height / 7));
-        const g = c.getContext('2d')!;
+        const g = c.getContext('2d', { willReadFrequently: true })!;
         g.imageSmoothingEnabled = true;
         g.imageSmoothingQuality = 'high';
         g.drawImage(src, 0, 0, c.width, c.height);
+        // (a blank grab, the drawing buffer already gone: fall back to the plain veil)
+        const mid = g.getImageData(c.width >> 1, c.height >> 1, 1, 1).data;
+        if (mid[3] === 0 || (mid[0] + mid[1] + mid[2] === 0)) { res(null); return; }
         g.fillStyle = 'rgba(14, 10, 4, 0.22)';
         g.fillRect(0, 0, c.width, c.height);
         res(c);
