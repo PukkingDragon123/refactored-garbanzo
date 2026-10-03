@@ -23,6 +23,7 @@ import { runStandoff } from './islearoha';
 import { enableFieldLaptop, openFieldLaptop } from '../v9/research9';
 import { setOutfit } from '../../art/v7/wardrobe';
 import { setCarry } from '../v11/carry';
+import { cineBars } from '../v11/cine';
 
 /** camp layout on the landing beach */
 
@@ -231,21 +232,37 @@ export class IsleCamp {
     st.set('trg:tracks');
     this.hideAll();
     if (!F('v4:back')) {
-      // walking back with Joshu
-      st.place(s.joshu, s.player.x - 40, 1, 'injured');
+      // walking back with Joshu: out of the forest at the stream mouth, home along the beach (Chunk is
+      // still at the wreck with Jenna)
+      st.place(s.joshu, s.player.x + 36, -1, 'injured');
       s.joshu.walkAnim = 'limp';
       st.joshuF.on = true;
-      st.chunkFollow();
       st.jennaAtWreck();
-      if (s.player.x > 4100) { s.player.x = 4020; s.player.y = groundY(4020); s.joshu.x = 3990; s.snapCamera(); }
+      st.chunkStay();
+      if (s.player.x > 4100) { s.player.x = 4020; s.player.y = groundY(4020); s.joshu.x = 4060; s.snapCamera(); }
+      s.player.facing = -1;
       this.returnTriggers();
+      if (questStatus('v4return') === 'hidden') startQuest('v4return');
+      // (fresh out of the forest: Joshu has the plan)
+      if (F('v11:forestOut') && !F('trg:v11:outOfTrees')) {
+        st.set('trg:v11:outOfTrees');
+        setTimeout(() => void st.say([
+          { who: 'joshu', text: 'Sun on my face. Never thought I’d be so glad to see sand.', expr: 'happy' },
+          { who: 'joshu', text: 'Right. Lesson one: the tide line. Everything above it is dry. Everything below it is somebody’s dinner.', expr: 'teasing' },
+          { who: 'joshu', text: 'Driftwood above the line for the fire. Flax for rope. Shellfish off the rocks. And keep your eyes open for good stone.', expr: 'serious' },
+          { who: 'joshu', text: 'And you’ll want photos of whatever lives here. If we’re sharing this beach, we should know who with.', expr: 'happy' },
+        ]), 1200);
+      }
       return;
     }
     if (!F('v4:arohaJoined')) {
-      s.player.x = 2300; s.player.y = groundY(2300); s.snapCamera();
-      st.place(s.joshu, 2340, -1, 'injured');
-      st.place(s.chunk, 2270, 1, 'idle');
-      return runStandoff(st);
+      // (a reload at the dognapping: the scream again, and the run to the wreck)
+      s.player.x = 2380; s.player.y = groundY(2380); s.player.facing = -1; s.snapCamera();
+      st.place(s.joshu, 2420, -1, 'injured');
+      s.joshu.walkAnim = 'limp';
+      st.jennaAtWreck();
+      st.chunkStay();
+      return this.screamAndRun();
     }
     this.campMode();
     if (F('v4:dinner')) dressForNight();
@@ -255,47 +272,56 @@ export class IsleCamp {
     if (this.jobs() >= 6 && !F('v4:dinner')) await this.dinner();
   }
 
+  /**
+   * Back at the landing beach with Joshu and the haul: a scream from the wreck (someone is carrying
+   * Chunk off), and everyone runs for it. Mori and Joshu arrive at a run; Chunk has been with Jenna
+   * all along. Then the dognapper (islearoha.ts runStandoff).
+   */
+  async screamAndRun() {
+    const s = this.s, st = this.st, p = s.player, jo = s.joshu, j = s.jenna;
+    st.set('v4:back');
+    await st.cut(async () => {
+      s.hud?.show(false);
+      cineBars(true);
+      p.vx = 0;
+      st.joshuF.on = false;
+      jo.stopWalk();
+      // the scream, from up the beach at the wreck
+      audio.play('emoteSurprise', { vol: 0.8 });
+      s.st.shake(1.2, 0.3);
+      j.setAnim('scared');
+      p.facing = -1;
+      jo.faceTo(p.x - 200);
+      await st.say([{ who: 'jenna', text: 'HEEEEELP! MORI! DAD! SOMEBODY’S STEALING CHUNK!!!', expr: 'scared', style: 'shout', close: false }]);
+      p.body.react('jump');
+      jo.react('jump');
+      await st.say([
+        { who: 'joshu', text: 'JENNA!', expr: 'shocked', style: 'shout', close: false, auto: 700 },
+        { who: 'mori', text: 'CHUNK! Come on!', expr: 'shocked', style: 'shout', close: false, auto: 800 },
+      ]);
+      // everyone runs for the wreck: Mori flat out, Joshu forgetting all about his ankle
+      const goal = CAMP.salvage + 230;
+      jo.walkAnim = 'run';
+      void jo.walkTo(goal + 46, 96, 'run');
+      await Promise.race([p.walkTo(goal, 128), wait(Math.max(2500, Math.abs(p.x - goal) / 128 * 1000 + 1500))]);
+      if (p.state === 'script') { p.state = 'normal'; p.scriptTarget = null; }
+      p.x = Math.min(p.x, goal + 40);
+      jo.stopWalk();
+      jo.x = Math.max(jo.x, p.x + 30);
+      jo.walkAnim = 'limp';
+      jo.idleAnim = 'injured';
+      jo.setAnim('injured');
+      cineBars(false);
+      // the dognapper (her own scene: the standoff plays in place, right here)
+      await runStandoff(st);
+    });
+  }
   hideAll() {
     const s = this.s;
     for (const a of [s.jenna, s.joshu, s.aroha]) this.st.hide(a);
   }
 
   // ---------------------------------------------------------------- the walk back
-  async startReturn() {
-    const s = this.s, st = this.st, p = s.player, jo = s.joshu;
-    await st.cut(async () => {
-      await st.say([
-        { who: 'joshu', text: 'Here. Take my knife. Don’t lose it: it was my father’s.', expr: 'serious' },
-        { who: 'mori', text: 'Joshu, I can’t...', expr: 'surprised' },
-        { who: 'joshu', text: 'You can and you will. I can barely walk. You’re my hands today, lad.', expr: 'neutral' },
-        { who: 'joshu', text: 'And we are NOT walking back empty-handed. Fire, food, shelter. Starting now.', expr: 'determined' },
-      ]);
-      if (!game.save.tools.includes('knife')) game.save.tools.push('knife');
-      await st.fadeOut(1.1);
-      s.clock.set(1.85);
-      s.clock.target = 2.55;
-      s.clock.rate = 0.0032;
-      p.x = 4030; p.y = groundY(p.x); p.facing = -1;
-      st.place(jo, 4070, -1, 'injured');
-      jo.walkAnim = 'limp';
-      st.joshuF.on = true;
-      st.place(s.chunk, 4000, -1, 'idle');
-      st.chunkFollow();
-      s.snapCamera();
-      await wait(400);
-      await st.fadeIn(0.9);
-      await st.say([
-        { who: 'mori', text: 'Down the stream and out onto the beach. That shortcut cut off half the walk.', expr: 'happy' },
-        { who: 'joshu', text: 'Water always knows the way to the sea. Remember that if you ever get lost.', expr: 'neutral' },
-        { who: 'joshu', text: 'Right. Lesson one: the tide line. Everything above it is dry. Everything below it is somebody’s dinner.', expr: 'teasing' },
-        { who: 'joshu', text: 'Driftwood above the line for the fire. Flax for rope. Shellfish off the rocks. And keep your eyes open for good stone.', expr: 'serious' },
-        { who: 'joshu', text: 'And you’ll want photos of whatever lives here. If we’re sharing this beach, we should know who with.', expr: 'happy' },
-      ]);
-    });
-    this.returnTriggers();
-    if (questStatus('v4return') === 'hidden') startQuest('v4return');
-  }
-
   private returnTriggers() {
     const st = this.st, s = this.s;
     const free = () => !s.cutscene && !game.ui.blocking;
@@ -657,20 +683,34 @@ export class IsleCamp {
         { who: 'chunk', text: '*the quietest, saddest whine ever recorded*', expr: 'sad', close: false },
         { who: 'jenna', text: 'He’s so dramatic. I love him. I would die for him. He’s getting nothing.', expr: 'laugh' },
       ]);
-      const ch = await st.say([{ who: 'aroha', text: 'So. Mori. What kind of scientist gets chased down a beach by a seal?', expr: 'teasing', choices: ['A very fast one.', 'It was a STRATEGIC retreat.', 'Chunk woke it up! This is on Chunk!'] }]);
-      const reply = [
+      // (the joke depends on what kind of day Mori had: chased down the beach by a seal, or not)
+      const sealChase = !!F['v4:sealDone'];
+      const ch = await st.say([sealChase
+        ? { who: 'aroha', text: 'So. Mori. What kind of scientist gets chased down a beach by a seal?', expr: 'teasing', choices: ['A very fast one.', 'It was a STRATEGIC retreat.', 'I stepped on a shell! This is on the shell!'] }
+        : { who: 'aroha', text: 'So. Mori. What kind of scientist walks into Te Wao Nui on his own, on his first day, with no map?', expr: 'teasing', choices: ['A very brave one.', 'A lost one. Briefly.', 'Joshu’s snoring was the map!'] }]);
+      const reply = sealChase ? [
         [{ who: 'aroha', text: 'Not fast enough. I saw the prints. You tripped twice.', expr: 'laugh' }],
         [{ who: 'joshu', text: 'Strategic! Ha! That’s what I said about my first marriage proposal.', expr: 'bellyLaugh' as never }],
-        [{ who: 'jenna', text: 'CHUNK. Is this true?!', expr: 'shocked' }, { who: 'chunk', text: '*pretends to be asleep*', expr: 'sleep', close: false }],
+        [{ who: 'jenna', text: 'Blaming a SHELL. Wow. Chunk, are you hearing this?', expr: 'laugh' }, { who: 'chunk', text: '*pretends to be asleep*', expr: 'sleep', close: false }],
+      ][Math.max(0, ch)] : [
+        [{ who: 'aroha', text: 'Brave. Or very lucky. In there, those are the same thing until they aren’t.', expr: 'serious' }],
+        [{ who: 'joshu', text: 'Lost! Ha! I was the one at the bottom of a gully with a weta in my beard.', expr: 'bellyLaugh' as never }],
+        [{ who: 'jenna', text: 'It IS a very loud snore. Every boat we’ve ever had, I’ve slept in the other end of it.', expr: 'laugh' }, { who: 'joshu', text: 'Slander.', expr: 'grumpy' }],
       ][Math.max(0, ch)];
       await st.say(reply.map(l => ({ ...l, expr: l.expr === 'bellyLaugh' ? 'laugh' : l.expr })) as never);
       s.joshu.play('bellyLaugh', 'sit').catch(() => {});
       s.jenna.play('laugh', 'sit').catch(() => {});
       s.aroha.play('laugh', 'sit').catch(() => {});
-      await st.say([
+      await st.say(sealChase ? [
         { who: 'aroha', text: 'Those seals... we call them kekeno pango. The black ones. They only come ashore here, on this island.', expr: 'serious' },
         { who: 'mori', text: 'Only here? Then my photo is the first one. Ever.', expr: 'excited', emote: 'sparkle' },
         { who: 'aroha', text: 'The first photo taken by someone running away, definitely.', expr: 'teasing' },
+      ] : [
+        { who: 'aroha', text: 'Te Wao Nui. The great forest. My koro says it was old when the first canoes came. Some of those kauri were saplings when the moa still walked.', expr: 'serious' },
+        { who: 'mori', text: 'And there are things living in there nobody has ever photographed. I can feel it.', expr: 'excited', emote: 'sparkle' },
+        { who: 'aroha', text: 'There are things in there nobody should photograph. Next time, you go in with me.', expr: 'serious' },
+      ]);
+      await st.say([
         { who: 'joshu', text: 'Here’s to the Kittiwake. Best ship I ever had. She got us all here, every one of us, even the pug.', expr: 'sad' },
         { who: 'jenna', text: 'To the Kittiwake.', expr: 'sad' },
         { who: 'mori', text: 'To the Kittiwake.', expr: 'neutral' },
@@ -797,7 +837,7 @@ export class IsleCamp {
     this.nagT -= dt;
     // back at the wreck with Joshu: only once the gathering is done
     if (F['v4:joshuAwake'] && !F['v4:back'] && !s.cutscene && !game.ui.blocking && s.player.x < 2440) {
-      if (this.gatherDone()) { this.st.set('v4:back'); void runStandoff(this.st); }
+      if (this.gatherDone()) void this.screamAndRun();
       else if (this.nagT <= 0) { this.nagT = 18; s.bark('joshu', `Not yet, lad. We still need ${this.missing()}. The camp can wait five minutes.`, { expr: 'serious' }); }
     }
     // campers go about their jobs (small fidgets so camp feels alive)
@@ -835,7 +875,7 @@ async function showDayComplete() {
     </style>
     <div class="t">Day 1 Complete</div>
     <div class="s">Four castaways, one pug, one camp on the edge of a very big island.</div>
-    <div class="st"><div><b>${photos}</b>species photographed</div><div><b>${v('v4:fishCaught')}</b>fish caught</div><div><b>${v('v4:campJobs')}</b>camp jobs done</div><div><b>1</b>seal outrun (eventually)</div></div>
+    <div class="st"><div><b>${photos}</b>species photographed</div><div><b>${v('v4:fishCaught')}</b>fish caught</div><div><b>${v('v4:campJobs')}</b>camp jobs done</div><div><b>1</b>${game.save.flags['v4:sealDone'] ? 'seal outrun (eventually)' : 'skipper found (snoring)'}</div></div>
     <div><button class="btn next">Continue to Day 2</button> <button class="btn ghost title">Back to the title</button></div>`);
   game.ui.modalLayer.appendChild(card);
   game.ui.modalOpen++;

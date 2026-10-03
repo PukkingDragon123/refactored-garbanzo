@@ -22,7 +22,7 @@ export interface LocationDef {
   /** position on the region map, 0..1 */
   pos: [number, number];
   /** how it is played: a V2 FieldScene site, a stretch of the home island, the sea, or a custom scene */
-  scene: { type: 'site'; site: string; depth?: number } | { type: 'island'; x: number } | { type: 'ocean' } | { type: 'custom'; go: () => Promise<void> };
+  scene: { type: 'site'; site: string; depth?: number } | { type: 'island'; x: number } | { type: 'ocean' } | { type: 'custom'; go: (at?: number) => Promise<void> };
   /** 1..5: how hard the route is (energy, climbing, swimming, hazards) */
   difficulty: number;
   /** flags needed before it can be reached (e.g. 'v10:boat') */

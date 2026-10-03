@@ -120,6 +120,8 @@ export async function wakeUp(cd: CampDay) {
   // the day's first event (Day 2's plan, a visitor, Chunk's heist...)
   await runSlot('wake', cd);
   if (day === 2) game.ui.toast('A day at camp: <b>breakfast</b> at the fire, talk to the crew, take <b>requests</b> from the camp board, upgrade gear at <b>Jenna’s bench</b>, then pack up at the <b>trail sign</b> and set off. Be back by evening.', 'CAMP', 'teal', 9000);
+  // V11: the natural first trip is back into the forest, properly this time, with Aroha leading
+  if (day === 2) setTimeout(() => { if (!game.save.flags['v11:forestAroha']) s.bark('aroha', 'Today I take you into Te Wao Nui properly. Up the stream from the beach, or the trail sign. Stay close to me in there.', { expr: 'serious' }); }, 9500);
 }
 
 async function wakeChunk(cd: CampDay) {
