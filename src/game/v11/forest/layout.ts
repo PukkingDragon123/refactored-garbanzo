@@ -28,6 +28,9 @@ export const persp = (dd: number) => (HOR + Math.max(0, dd)) / HOR;
 export const realZ = (dd: number) => Math.max(0, dd) / (HOR + Math.max(0, dd));
 export const rowOf = (z: number) => (HOR * z) / Math.max(1e-4, 1 - z);
 
+/** where the forest trail leaves the beach (island world x: the stream mouth's east bank) */
+export const TRAILHEAD_X = 3918;
+
 export type FZone = 'edge' | 'stream' | 'giants' | 'wallows' | 'gully' | 'rata' | 'ridge';
 export const FZONES: [FZone, number, number, string, string][] = [
   ['edge', 0, 480, 'Te Tomokanga', 'The forest edge'],

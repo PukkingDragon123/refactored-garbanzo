@@ -5,9 +5,9 @@
 
 import { game } from '../../game';
 import { tagScene, expeditionHour, currentExpedition } from '../../v10/expedition';
+import { TRAILHEAD_X } from './layout';
 
-/** where the forest trail leaves the beach (island world x, the stream mouth's east bank) */
-export const TRAILHEAD_X = 3918;
+export { TRAILHEAD_X };
 
 /** the island day clock (0 morning .. 4 night) for an expedition hour */
 export function clockForHour(h: number): number {
