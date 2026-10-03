@@ -301,7 +301,7 @@ async function creep(st: IsleStory) {
       if (s.cutscene) continue;
       const near = Math.abs(p.x - ar.x) < 80;
       if (p.x > ar.x + 24 && scold <= 0) { scold = 3; s.bark('aroha', 'Behind me. I lead, you follow.', { expr: 'teasing' }); }
-      const loud = p.running || (!p.crouch && Math.abs(p.vx) > 8);
+      const loud = p.running || p.noise > 0.2;
       scold -= 0.12;
       if (loud && Math.abs(p.x - ar.x) < 120) {
         if (scold <= 0) {
