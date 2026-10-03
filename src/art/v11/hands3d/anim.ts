@@ -60,7 +60,7 @@ export function basePose(name: PoseName, o: PoseParams = {}): Pose {
 /** a cylinder across the palm, from the index knuckle toward the heel of the little finger */
 export function palmCylinder(rig: Rig, r: number): { a: V3; u: V3; r: number } {
   const s = rig.build.size;
-  return { a: [-0.2 * s, 6.25 * s, -(1.32 * s + r)], u: vnorm([1, -0.36, 0.05]), r };
+  return { a: [-0.2 * s, 6.25 * s, -(1.32 * s + r)], u: vnorm([1, -0.36, 0]), r };
 }
 
 // ------------------------------------------------------------------ chain kinematics in hand space

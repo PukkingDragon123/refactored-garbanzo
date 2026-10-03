@@ -70,8 +70,8 @@ import { HandAnim, PoseName, PoseParams, digitCapsules } from './anim';
 import { handAsset, HandAsset } from './mesh';
 import { lookFor, Look, Who, lookKey } from './looks';
 import { requestAsset } from './build';
-import { Rig, D, fdof, NB, skinDQ, B, FINGERS, LIMITS } from './rig';
-import { V3, Q, M4, m4, qlook, qrot, vnorm, vadd, vscale, vsub, DEG, clamp } from './math3';
+import { Rig, D, fdof, NB, skinDQ, B, FINGERS, LIMITS, makeRig } from './rig';
+import { V3, Q, M4, m4, qlook, qrot, qbasis, qmul, qnorm, qconj, vcross, vnorm, vadd, vscale, vsub, DEG, clamp } from './math3';
 import { outfitOf } from '../../v7/wardrobe';
 
 export type { PoseName, PoseParams } from './anim';
@@ -212,13 +212,26 @@ export class Hand {
     return this.setPose('grip', 1, { r, force });
   }
   /** wrap round a handle drawn in the scene: axis from a to b (grid points), radius in grid px */
-  hold(h: { a: Vec; b: Vec; r: number } | null, o: { occlude?: boolean; force?: number } = {}) {
+  hold(h: { a: Vec; b: Vec; r: number } | null, o: { occlude?: boolean; force?: number; approach?: Vec; follow?: number } = {}) {
     if (!h) return this.release();
     const a = this.toSolver(this.ctl.at(h.a[0], h.a[1], h.a[2])), b = this.toSolver(this.ctl.at(h.b[0], h.b[1], h.b[2]));
     const r = h.r / this.ctl.scale;
     this.anim.handle = { a, b, r };
     this.anim.gripR = r;
     this.anim.effector = 'grip';
+    // orient the hand: the palm's grip line along the handle (a = index side, b = little-finger side),
+    // the back of the hand toward where the arm comes from (or `approach`)
+    const mid = vscale(vadd(a, b), 0.5);
+    const U = vnorm(vsub(b, a));
+    let ap = o.approach ? this.dirToSolver(o.approach) : vnorm(vsub(this.anim.shoulder, mid));
+    ap = vnorm(vsub(ap, vscale(U, ap[0] * U[0] + ap[1] * U[1] + ap[2] * U[2])));
+    const uh = vnorm([1, -0.36, 0]);
+    const W = qbasis(U, vscale(ap, 1), vcross(U, ap));
+    const nh: V3 = [0, 0, 1];
+    const Hb = qbasis(uh, nh, vcross(uh, nh));
+    this.anim.handQT = qnorm(qmul(W, qconj(Hb)));
+    this.anim.wristT = mid;
+    if (o.follow !== undefined) { if (o.follow <= 0) this.anim.snap(); else this.anim.follow = o.follow; }
     if (o.force !== undefined) this.anim.squeeze = o.force;
     if (this.anim.layers.length !== 1 || (this.anim.layers[0].name !== 'grip' && this.anim.layers[0].name !== 'pour' && this.anim.layers[0].name !== 'crank')) this.setPose('grip', 1, { r, force: o.force });
     this.holdCap = o.occlude === false ? null : { a: this.ctl.at(h.a[0], h.a[1], h.a[2]), b: this.ctl.at(h.b[0], h.b[1], h.b[2]), r: r * 0.9, tag: 9 };
@@ -348,7 +361,7 @@ export class HandsController {
   async add(o: { who: Who; side: Side; outfit?: string; gloves?: boolean }): Promise<Hand> {
     const outfit = o.outfit ?? this.opts.outfit ?? (() => { try { return outfitOf(o.who); } catch { return 'casual'; } })();
     const look = lookFor(o.who, outfit, o.gloves ?? this.opts.gloves);
-    const rigOnly = (await import('./rig')).makeRig(look.build);
+    const rigOnly = makeRig(look.build);
     const h = new Hand(this, o.who, o.side, look, rigOnly);
     this.hands.push(h);
     if (o.side === 'left' && !this.left) this.left = h;
@@ -476,9 +489,12 @@ export class HandsController {
     R.render(spec);
   }
 
+  /** every hand's mesh is built and the GPU is there: draw the 3D hands (otherwise keep 2D ones) */
+  get ready3d() { return !this.destroyed && !!this.renderer && !this.renderer.lost && this.hands.length > 0 && this.hands.every(h => !!h.asset); }
   /** update and draw */
   frame(dt: number) {
     if (this.destroyed) return;
+    if (!this.canvas.isConnected) { this.destroy(); return; }
     this.update(dt);
     this.render();
   }
@@ -531,7 +547,7 @@ export function mountHands3d(container: HTMLElement, opts: Hands3dOptions = {}):
 
 /** the v6 close-ups: lay the hands over the close-up's 320x180 pixel canvas */
 export function closeupHands(cu: { wrap: HTMLElement; cv: HTMLCanvasElement; closed: boolean }, opts: Hands3dOptions = {}): HandsController {
-  const ctl = new HandsController(cu.wrap, { grid: [cu.cv.width, cu.cv.height], fitTo: cu.cv, before: cu.cv.nextSibling, scale: 3.2, pixel: 4, outline: 0, ...opts });
+  const ctl = new HandsController(cu.wrap, { grid: [cu.cv.width, cu.cv.height], fitTo: cu.cv, before: cu.cv.nextSibling, scale: 3.2, pixel: HANDS3D.pixel ?? 4, outline: 0, ...opts, ...(HANDS3D.pixel !== null ? { pixel: HANDS3D.pixel } : {}) });
   return ctl;
 }
 
@@ -544,7 +560,13 @@ export function prewarmHands3d(who: Who | Who[], sides: Side[] = ['right', 'left
 }
 
 /** global switch: false brings back the classic 2D pixel hands in the minigames */
-export const HANDS3D = { enabled: true, /** shading debug: 0 off, 1 clay, 2 regions, 3 AO, 4 normals */ debug: 0 };
+export const HANDS3D = {
+  enabled: true,
+  /** shading debug: 0 off, 1 clay, 2 regions, 3 AO, 4 normals */
+  debug: 0,
+  /** force the close-ups' render scale (null: each close-up's own choice; ?h3dpx=2 sets it) */
+  pixel: (() => { try { const v = new URLSearchParams(location.search).get('h3dpx'); return v === null ? null : +v; } catch { return null; } })() as number | null,
+};
 
 export { handAsset, LIMITS };
 export type { LightRig } from './render';
