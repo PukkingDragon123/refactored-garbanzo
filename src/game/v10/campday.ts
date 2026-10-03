@@ -277,6 +277,13 @@ export class CampDay implements CrewHost {
       enabled: free, action: () => this.atSign() } as never);
     // the fishing rock
     st.it({ x: C10.rock, y: groundY(C10.rock), w: 14, get label() { return self.fishLabel(); }, standX: C10.rock, enabled: () => free() && dayPhase() !== 'night', action: () => this.atRock() } as never);
+    // V11: the stash chest by the supply crates (the Backpack opens beside it)
+    st.it({ x: C10.storage, y: groundY(C10.storage), w: 16, label: 'The camp stash: leave or take things', standX: C10.storage + 20, enabled: free,
+      action: async () => { const { openBackpack11 } = await import('../../ui/v11/backpack'); await openBackpack11({ mode: 'stash' }); this.s.hud?.refresh(true); } });
+    // V11: cooking at the fire when it isn't mealtime (a snack, lunch tins for tomorrow)
+    st.it({ x: C10.fire + 18, y: groundY(C10.fire), w: 8, label: 'Cook something at the fire', standX: C10.fire + 30,
+      enabled: () => free() && dayPhase() !== 'out' && !this.fireDue(),
+      action: async () => { const { cookAtCamp } = await import('../../ui/v11/cooking'); await cookAtCamp(this, 'snack'); } } as never);
     // the radio in Jenna's corner (once the agency is on the line)
     st.it({ x: C10.elec, y: groundY(C10.elec), w: 16, label: 'Radio the field office', standX: C10.elec + 22, enabled: () => free() && !!game.save.flags['v10:agency'], action: () => this.atRadio() });
   }

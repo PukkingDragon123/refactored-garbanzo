@@ -296,10 +296,15 @@ export async function breakfast(cd: CampDay) {
     cd.frame(C10.fire, groundY(C10.fire) - 30, 1.7);
     await wait(250);
     await st.fadeIn(1.4);
-    const menu = BREAKFASTS[(day - 2) % BREAKFASTS.length];
+    // V11: Mori can cook it himself (the cooking close-up), or Joshu cooks (and teaches a recipe)
+    const mine = await cookOrNot(cd, 'breakfast');
     const fish = d.larder > 0;
-    await st.say([{ who: 'joshu', text: fish ? `Smoked fish from your catch, lad, with ${menu[0].charAt(0).toLowerCase() + menu[0].slice(1)}` : menu[0], expr: menu[1] }]);
-    if (fish) d.larder--;
+    if (!mine) {
+      const menu = BREAKFASTS[(day - 2) % BREAKFASTS.length];
+      await st.say([{ who: 'joshu', text: fish ? `Smoked fish from your catch, lad, with ${menu[0].charAt(0).toLowerCase() + menu[0].slice(1)}` : menu[0], expr: menu[1] }]);
+      if (fish) d.larder--;
+      await joshuTeaches(cd);
+    } else await st.say(verdict(mine.quality));
     for (const a of [s.jenna, s.joshu, s.aroha]) a.setAnim('eat');
     st.pose('eat');
     audio.play('munch', { vol: 0.4 });
@@ -311,12 +316,22 @@ export async function breakfast(cd: CampDay) {
     else await st.say([{ who: 'mori', text: 'Right. Board first, then the trail.', expr: 'determined' }]);
     for (const a of [s.jenna, s.joshu, s.aroha]) a.setAnim('sit');
     st.pose('sit');
-    restore(30);
     d.meals.breakfast = day;
-    d.buff = { id: 'hearty', day };
-    for (const who of CREW) addBond(who, 1);
-    game.persist();
-    game.ui.toast('Breakfast: <b>+30 energy</b>. Well fed: walking costs <b>10% less</b> today.', 'CAMP', 'teal', 4200);
+    for (const who of CREW) addBond(who, mine ? 2 : 1);
+    if (mine) {
+      // the crew share the pot; leftovers go in the pack as tins for the day
+      const { serveDish } = await import('../../ui/v11/cooking');
+      const sv = serveDish(mine, { eatNow: true, shared: Math.min(3, Math.max(0, mine.portions - 1)) });
+      const fed = mine.quality === 'good' || mine.quality === 'perfect';
+      if (fed) d.buff = { id: 'hearty', day };
+      game.persist();
+      game.ui.toast(`Breakfast: <b>+${sv.ate} energy</b>.${fed ? ' Well fed: walking costs <b>10% less</b> today.' : ''}${sv.packed ? ` ${sv.packed} portion${sv.packed > 1 ? 's' : ''} packed for lunch.` : ''}`, 'CAMP', 'teal', 4800);
+    } else {
+      restore(30);
+      d.buff = { id: 'hearty', day };
+      game.persist();
+      game.ui.toast('Breakfast: <b>+30 energy</b>. Well fed: walking costs <b>10% less</b> today.', 'CAMP', 'teal', 4200);
+    }
     await wait(400);
     cd.potOn = false;
     cd.camp.fire = 0.45;
@@ -325,6 +340,36 @@ export async function breakfast(cd: CampDay) {
   cd.release();
   st.chunkFollow();
   await runSlot('morning', cd);
+}
+
+// ---------------------------------------------------------------- V11: cooking the meal yourself
+type CookRes = import('../v11/cooking').CookResult;
+/** ask who cooks; Mori's cooking runs the close-up at the fire (null: Joshu cooks, or Mori gave up) */
+async function cookOrNot(cd: CampDay, meal: 'breakfast' | 'dinner'): Promise<CookRes | null> {
+  const st = cd.st;
+  const ch = await st.say([{ who: 'joshu', text: meal === 'breakfast' ? rand.pick(['Morning, lad! Your turn at the fire, or mine?', 'Who’s cooking? You or me?']) : rand.pick(['Hungry lot tonight. You cooking, Doc, or am I?', 'Pot’s free. Fancy cooking for the crew?']), expr: 'happy', choices: ['I’ll cook', 'You cook, Joshu'] }]);
+  if (ch !== 0) return null;
+  const { cookAtCamp } = await import('../../ui/v11/cooking');
+  cd.potOn = false;
+  const r = await cookAtCamp(cd as never, meal);
+  cd.potOn = true;
+  if (!r) await st.say([{ who: 'joshu', text: 'Changed your mind? Fair enough. Budge over.', expr: 'teasing' }]);
+  return r;
+}
+function verdict(q: 'raw' | 'good' | 'perfect' | 'burnt'): BubbleLine[] {
+  if (q === 'perfect') return [{ who: 'jenna', text: 'Okay, WHO taught you to cook like that?!', expr: 'excited' }, { who: 'joshu', text: 'I did. Obviously.', expr: 'smug' }];
+  if (q === 'good') return [{ who: 'aroha', text: 'Ka pai. That’s a good feed.', expr: 'happy' }];
+  if (q === 'raw') return [{ who: 'jenna', text: 'It’s... crunchy? Is it meant to be crunchy?', expr: 'thinking' }, { who: 'joshu', text: 'Bit more fire next time, lad.', expr: 'neutral' }];
+  return [{ who: 'jenna', text: 'Ooh, charcoal. Very... rustic.', expr: 'teasing' }, { who: 'chunk', text: '*eats it anyway, delighted*', expr: 'happy', close: false } as BubbleLine];
+}
+/** while he cooks, Joshu explains one of his recipes (it goes in Mori's notebook) */
+async function joshuTeaches(cd: CampDay) {
+  const ck = await import('../v11/cooking');
+  const r = ck.nextToTeach('joshu');
+  if (!r || !rand.chance(0.7)) return;
+  await cd.st.say([{ who: 'joshu', text: r.teach!.line, expr: 'happy' }, { who: 'mori', text: `${r.name}. Writing that down.`, expr: 'determined' }]);
+  ck.teachRecipe(r.id, 'joshu');
+  game.ui.toast(`New recipe in your notebook: <b>${r.name}</b>`, 'RECIPE', 'teal', 3600);
 }
 
 /** the evening meal and the day's photos round the fire */
@@ -346,10 +391,13 @@ export async function dinner(cd: CampDay) {
     audio.setMusic('camp' as never);
     await wait(300);
     await st.fadeIn(0.9);
+    const mine = await cookOrNot(cd, 'dinner');
     const fish = d.larder > 0;
     const caught = d.fishDay === day ? d.fishN : 0;
-    await st.say([{ who: 'joshu', text: caught ? `Grub’s up! Fish stew, with the ${caught > 1 ? caught + ' fish' : 'fish'} Mori caught this morning.` : fish ? 'Grub’s up! Smoked fish stew. The smoker’s earning its keep.' : rand.pick(['Grub’s up! Mussels, pipi, and a mystery root Aroha swears is food.', 'Grub’s up! Pipi chowder. Again. You’ll love it. Again.']), expr: 'happy', style: 'shout' }]);
-    if (fish && !caught) d.larder--;
+    if (mine) await st.say(verdict(mine.quality));
+    else await st.say([{ who: 'joshu', text: caught ? `Grub’s up! Fish stew, with the ${caught > 1 ? caught + ' fish' : 'fish'} Mori caught this morning.` : fish ? 'Grub’s up! Smoked fish stew. The smoker’s earning its keep.' : rand.pick(['Grub’s up! Mussels, pipi, and a mystery root Aroha swears is food.', 'Grub’s up! Pipi chowder. Again. You’ll love it. Again.']), expr: 'happy', style: 'shout' }]);
+    if (!mine && fish && !caught) d.larder--;
+    if (!mine) await joshuTeaches(cd);
     for (const a of [s.jenna, s.joshu, s.aroha]) a.setAnim('eat');
     st.pose('eat');
     audio.play('munch', { vol: 0.4 });
@@ -359,6 +407,7 @@ export async function dinner(cd: CampDay) {
     for (const a of [s.jenna, s.joshu, s.aroha]) a.setAnim('sit');
     st.pose('sit');
     restore(maxEnergy());
+    if (mine) { const { serveDish } = await import('../../ui/v11/cooking'); serveDish(mine, { eatNow: false, shared: Math.min(4, mine.portions) }); for (const who of CREW) addBond(who, 1); }
     d.meals.dinner = day;
     for (const who of CREW) addBond(who, 2);
     game.persist();
@@ -440,6 +489,14 @@ export async function sitByFire(cd: CampDay) {
         aroha: ['Listen to it. The driftwood sings when it burns.', 'Rest. Then go.'],
       };
       await st.say([{ who, text: rand.pick(pool[who]), expr: 'happy' }]);
+      // V11: by the fire the crew share a recipe now and then
+      const ck = await import('../v11/cooking');
+      const r = ck.nextToTeach(who);
+      if (r && rand.chance(0.5)) {
+        await st.say([{ who, text: r.teach!.line, expr: 'happy' }]);
+        ck.teachRecipe(r.id, who);
+        game.ui.toast(`New recipe in your notebook: <b>${r.name}</b>`, 'RECIPE', 'teal', 3600);
+      }
     } else await st.say([{ who: 'mori', text: rand.pick(['Ahh. Warm.', 'Five minutes. Then science.']), expr: 'happy' }]);
     restore(5);
     st.pose(null);
