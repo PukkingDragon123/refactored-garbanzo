@@ -187,7 +187,10 @@ export const ATLAS: AtlasLoc[] = [
     id: 'fossils', name: 'Bone Cliffs', sub: 'Te Toka Iwi', region: 'interior', kind: 'fossil', pos: P(596, 266),
     scene: { type: 'site', site: 'fossils' }, difficulty: 4, xr: [0, 2300],
     path: PATH([552, 280], [582, 272], [612, 258], [640, 246]),
-    routes: [{ from: 'falls', at: 2040, label: 'Climb the gorge above the falls', hours: 1.5, energy: 18, kind: 'climb', say: 'The rock up here is striped like a cake. Every stripe is a million years.' }],
+    routes: [
+      { from: 'falls', at: 2040, label: 'Climb the gorge above the falls', hours: 1.5, energy: 18, kind: 'climb', say: 'The rock up here is striped like a cake. Every stripe is a million years.' },
+      { from: 'hills', at: 3360, enter: 2200, label: 'Scramble down off the ridge into the gorge', hours: 1, energy: 12, kind: 'climb', say: 'Down the back of the ridge. Carefully. The gorge is right below us.' },
+    ],
     desc: 'A gorge cut through layered rock above the falls, with the bones of very old serpents in its walls.', terrain: 'Scree, cliff ledges',
   },
   {
@@ -223,10 +226,15 @@ export const ATLAS: AtlasLoc[] = [
     desc: 'The great forest inland of the beach, up the stream: kauri giants rising out of the mist, ferns taller than a man, mud wallows, a gully where Joshu was found, and things that watch you.', terrain: 'Deep forest, stream fords, mud wallows', arriveX: 92,
   },
   {
+    // (src/game/sites10/hills.ts: the scene; HILLS_SPOTS there are the anchors other modules use)
     id: 'hills', name: 'Ngā Puke Kōhatu', sub: 'The Rocky Hills', region: 'interior', kind: 'site', pos: P(572, 190),
-    scene: { type: 'custom', go: async () => { console.warn('[atlas] the rocky hills scene is not built yet'); } }, difficulty: 3, xr: [0, 3200],
-    path: PATH([528, 234], [548, 212], [574, 192], [604, 176], [628, 164]),
-    desc: 'Tors, scree and tussock above the bush line. Wind, hawks, and a long view over everything.', terrain: 'Boulders, scree, crags',
+    scene: { type: 'site', site: 'hills' }, difficulty: 3, xr: [0, 3400],
+    path: PATH([528, 234], [548, 212], [574, 192], [604, 176], [628, 164]), knots: [0, 900, 1650, 2500, 3400],
+    routes: [
+      { from: 'falls', at: 170, enter: 90, label: 'Take the goat track up out of the bush, onto the open tops', hours: 1.5, energy: 16, kind: 'climb', say: 'Up through the last of the trees. There’s sky up there. A LOT of sky.' },
+      { from: 'forest', at: 5960, enter: 90, label: 'Follow the ridge east, above the trees (a long way)', hours: 3, energy: 24, kind: 'walk', say: 'Up and out of the forest. Then along the tops all the way. My legs have filed a complaint.' },
+    ],
+    desc: 'Tors, scree and tussock above the bush line: a tarn, a bluff with a rock shelter the hunters use, and a ridge with the long view over everything. Wind, hawks and torhoppers.', terrain: 'Tussock, scree, granite tors', arriveX: 90,
   },
 ];
 

@@ -10,7 +10,8 @@ import { GEOVALLEY } from './geovalley';
 import { RUINS } from './ruins';
 import { UNKNOWN } from './unknown';
 import { VILLAGE } from './village';
+import { HILLS_SITE } from './hills';
 
 export const SITES10: Record<string, Site10> = {
-  grotto: GROTTO, fossils: FOSSILS, glowforest: GLOWFOREST, geovalley: GEOVALLEY, ruins: RUINS, unknown: UNKNOWN, village: VILLAGE,
+  grotto: GROTTO, fossils: FOSSILS, glowforest: GLOWFOREST, geovalley: GEOVALLEY, ruins: RUINS, unknown: UNKNOWN, village: VILLAGE, hills: HILLS_SITE,
 };
