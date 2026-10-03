@@ -123,6 +123,7 @@ export function runGallery(name: string) {
   if (name === 'items11') { void import('./items11').then(m => m.items11Gallery(new URLSearchParams(location.search))); return; }
   if (name === 'camp4') { void camp4Gallery(); return; }
   if (name === 'hands') { void import('./handsgallery').then(m => m.handsGallery(new URLSearchParams(location.search))); return; }
+  if (name === 'npcs') { void import('./npcgallery').then(m => m.runNpcGallery()); return; }
   if (name === 'aroha' || name === 'combat') { void import('./arohagallery').then(m => m.runArohaGallery(name)); return; }
   if (name === 'beasts') { void beastGallery(); return; }
   if (name === 'tiger') { void tigerGallery(); return; }

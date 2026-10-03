@@ -104,6 +104,9 @@ const COLORS: Record<string, string[]> = {
   chunk: ['#f0904c', '#c04a26', '#2a0e08', '#ffe0a8'],
 };
 
+/** a close-up panel palette for a character other modules add: [light, mid, dark, accent] */
+export function registerCloseupColors(id: string, c: [string, string, string, string]) { COLORS[id] = c; if (!CAST.includes(id)) CAST.push(id); }
+
 function moodOf(expr: string, style?: string): Mood {
   if (['happy', 'laugh', 'excited', 'wow', 'teasing', 'eat'].includes(expr)) return 'happy';
   if (style === 'shout' || ['angry', 'shocked', 'surprised'].includes(expr)) return 'burst';
