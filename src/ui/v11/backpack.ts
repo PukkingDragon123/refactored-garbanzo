@@ -1055,6 +1055,8 @@ class PackScreen {
     card.innerHTML = '';
     const str = card.appendChild(el('div', 'str'));
     str.style.height = Math.max(4, y + 2) + 'px';
+    // (below the pack on a tall screen the tag just lies there: no string up through the bag)
+    if (y > this.groundY) str.style.display = 'none';
     // ---- the front
     const front = card.appendChild(el('div', 'face front'));
     front.appendChild(bufCanvas(ART.paintTag(112, 164), 'paper'));

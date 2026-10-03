@@ -215,7 +215,7 @@ function logSprite(p: Px, cx: number, cy: number, rx: number, ry: number) {
 // ---------------------------------------------------------------- styles
 
 const CSS = `
-.ck11 { position: absolute; inset: 0; z-index: 37; background: #07060a; overflow: hidden; pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; font-family: 'Jersey 15', 'Pixelify Sans', monospace; animation: ck11In 0.5s ease-out both; }
+.ck11 { position: absolute; inset: 0; z-index: 37; background: radial-gradient(ellipse at 50% 60%, #2a1c10, #07060a 75%); overflow: hidden; pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; font-family: 'Jersey 15', 'Pixelify Sans', monospace; animation: ck11In 0.5s ease-out both; }
 @keyframes ck11In { from { opacity: 0; } }
 .ck11.out { animation: ck11Out 0.4s ease-in both; }
 @keyframes ck11Out { to { opacity: 0; } }
@@ -385,9 +385,9 @@ class Cook {
 
   private fit() {
     const vw = window.innerWidth, vh = window.innerHeight;
-    const portrait = vh > vw * 1.1;
-    // cover the screen in landscape (crop the edges), fit it whole on a tall phone
-    const s = portrait ? vw / CW : Math.max(vw / CW, vh / CH);
+    // cover the screen when that crops only a sliver, else fit it whole (wide and tall phones)
+    const cover = Math.max(vw / CW, vh / CH), contain = Math.min(vw / CW, vh / CH);
+    const s = cover / contain < 1.1 ? cover : contain;
     this.s = s;
     this.stage.style.transform = `scale(${s})`;
     this.stage.style.left = Math.round((vw - CW * s) / 2) + 'px';
