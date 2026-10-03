@@ -62,7 +62,7 @@ const CSS = `
 .settings .gfx-row { display: grid; grid-template-columns: 8em 1fr; gap: 0.8em; align-items: center; font-family: var(--pix); }
 .settings .gfx-row .seg { display: flex; gap: 0.35em; }
 .settings .gfx-row .seg .btn { flex: 1; min-width: 0; font-size: 0.88em; padding: 0.38em 0.2em; text-align: center; }
-.settings .gfx-hint { margin: -0.55em 0 0 8.8em; font-size: 0.78em; line-height: 1.3; opacity: 0.82; min-height: 2.6em; }
+.settings .gfx-hint { margin: -0.55em 0 0 11.3em; font-size: 0.78em; line-height: 1.3; opacity: 0.82; min-height: 2.6em; }
 .settings input[type=checkbox] { width: 1.35em; height: 1.35em; margin: 0; accent-color: #4f9a3a; justify-self: start; cursor: pointer; }
 @media (max-width: 520px) { .settings .gfx-row { grid-template-columns: 1fr; gap: 0.4em; } .settings .gfx-hint { margin-left: 0; } }
 .settings .dev-row { display: flex; flex-direction: column; gap: 0.3em; padding-top: 0.7em; background: repeating-linear-gradient(90deg, #b89a6a 0 4px, transparent 4px 8px) left top / 100% 2px no-repeat; }
