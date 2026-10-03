@@ -26,6 +26,7 @@ import { REQ_BY_ID } from '../game/v10/campquests';
 import { refill } from '../game/v10/energy';
 import { endTrip } from '../game/v10/expedition';
 import { SPOT, WRECK } from '../art/island4/layout';
+import { TRAILHEAD_X, LOG } from '../game/v11/forest/layout';
 import type { TimeOfDay } from '../world/timeofday';
 import type { SiteId } from '../game/species';
 
@@ -149,12 +150,18 @@ const CHAIN: Beat[] = [
     F('v4:jennaAwake', 'v9:kit', 'v9:shadow', 'v9:laptop'); tool('headlamp', 'trowel', 'net'); Q([], ['v9notes']); V('v9:px', WRECK.climbX - 40);
   } },
   { id: 'isle:split', apply: () => F('v4:chunkWreck') },
-  { id: 'isle:seal', apply: () => {
-    F('v4:split', 'trg:radio1', 'trg:tracks', 'trg:radio2'); tool('binoculars'); Q(['v4shore'], ['v4joshu', 'v9jenna']); V('v9:px', SPOT.sealRock - 185);
+  { id: 'isle:trail', apply: () => {
+    F('v4:split', 'trg:radio1'); tool('binoculars'); Q(['v4shore'], ['v9jenna']); V('v9:px', 3380);
   } },
-  { id: 'isle:joshu', apply: () => { F('v4:sealDone', 'trg:seal1', 'trg:seal2', 'trg:cave', 'v4:shoes'); V('v9:px', SPOT.joshu - 100); } },
+  { id: 'isle:seal', apply: () => { F('trg:tracks', 'trg:radio2'); Q([], ['v4joshu']); V('v9:px', SPOT.sealRock - 185); } },
+  // ---- Day 1 in Te Wao Nui (the forest scene: src/game/v11/forest)
+  { id: 'forest:in', apply: () => { F('v9:look1'); V('v9:px', TRAILHEAD_X - 8); V('v11:dayT', 0.7); } },
+  { id: 'forest:lookout', apply: () => { F('v11:trailIn', 'v11:inForest', 'trg:f:prints', 'v11:fprints', 'v11:scrap'); V('v11:fx', LOG.x0 - 70); V('v11:dayT', 0.9); } },
+  { id: 'forest:joshu', apply: () => { F('trg:f:log', 'v9:sawCap', 'trg:f:mud', 'v4:shoes'); V('v11:fx', 3160); V('v11:dayT', 1.2); } },
   { id: 'isle:walkBack', apply: () => {
-    F('v4:joshuFound', 'trg:joshu', 'v4:joshuChecked', 'v4:splashed', 'v4:water', 'v4:joshuAwake'); tool('knife'); Q(['v4joshu'], ['v4return']); V('v9:px', 4020);
+    F('v4:joshuFound', 'trg:f:joshu', 'trg:f:snore', 'v11:snore', 'v4:joshuChecked', 'v4:splashed', 'v4:water', 'v4:joshuAwake', 'v11:forestOut');
+    delete game.save.flags['v11:inForest'];
+    tool('knife'); Q(['v4joshu'], ['v4return']); V('v9:px', TRAILHEAD_X - 8); V('v11:dayT', 1.9);
   } },
   { id: 'isle:standoff', apply: () => {
     V('v4:wood', 3); V('v4:plants', 2); V('v4:food', 2); V('v4:minerals', 1); V('v4:islePhotos', 2); F('v4:back'); Q(['v4return'], ['v4aroha']);
@@ -287,6 +294,7 @@ export async function chapters(): Promise<DevChapter[]> {
   const { TRIPS } = await import('../game/sites10/ocean');
   const sh = (id: string, post?: (s: ShipLike) => Promise<void> | void) => async () => { stateAt(id); await goShip(post); };
   const isle = (id: string, post?: (s: IsleLike) => Promise<void> | void) => async () => { stateAt(id); await goIsle(post); };
+  const forest = (id: string) => async () => { stateAt(id); await idle(); await (await import('../game/v11/forest')).goForest({ x: game.save.vars['v11:fx'] }); };
   const out: DevChapter[] = [];
   out.push({ id: 'start', name: 'Start', points: [
     { id: 'title', name: 'Title screen', icon: 'play', run: async () => { await idle(); await (await flow()).goTitle(); } },
@@ -322,10 +330,13 @@ export async function chapters(): Promise<DevChapter[]> {
     { id: 'isle:jenna', name: 'Find Jenna', sub: 'Pink hair down the beach', icon: 'heart', run: isle('isle:jenna') },
     { id: 'isle:chunk', name: 'Find Chunk in the wreck', sub: 'Field kit found; something crunching in the dark', icon: 'heart', run: isle('isle:chunk') },
     { id: 'isle:split', name: 'Split up to search for Joshu', icon: 'map', run: isle('isle:split') },
-    { id: 'isle:seal', name: 'The seal chase', sub: 'The snoring rock across the beach', icon: 'target', run: isle('isle:seal') },
-    { id: 'isle:joshu', name: 'Joshu rescue', sub: 'Out cold by the creek', icon: 'heart', run: isle('isle:joshu') },
-    { id: 'isle:walkBack', name: 'The long walk back', sub: 'Gather with Joshu on the way', icon: 'gift', run: isle('isle:walkBack') },
-    { id: 'isle:standoff', name: 'Aroha standoff', sub: 'The dognapper', icon: 'scroll', run: isle('isle:standoff') },
+    { id: 'isle:trail', name: 'Joshu’s trail on the beach', sub: 'Chunk stays with Jenna; boot prints to the stream', icon: 'map', run: isle('isle:trail') },
+    { id: 'isle:seal', name: 'The sleeping seal (optional)', sub: 'Sneak past, or step on a shell', icon: 'target', run: isle('isle:seal') },
+    { id: 'forest:in', name: 'Into Te Wao Nui', sub: 'Up the stream into the forest', icon: 'map', run: forest('forest:in') },
+    { id: 'forest:lookout', name: 'The fallen kauri lookout', sub: 'Climb the roots, binoculars from the top', icon: 'map', run: forest('forest:lookout') },
+    { id: 'forest:joshu', name: 'Joshu rescue', sub: 'That noise in the gully...', icon: 'heart', run: forest('forest:joshu') },
+    { id: 'isle:walkBack', name: 'The walk back', sub: 'Out of the forest, gather with Joshu', icon: 'gift', run: isle('isle:walkBack') },
+    { id: 'isle:standoff', name: 'The scream and the dognapper', sub: 'Run to the wreck, Aroha standoff', icon: 'scroll', run: isle('isle:standoff') },
     { id: 'isle:camp', name: 'Camp build', sub: 'Six jobs before dark', icon: 'wrench', run: isle('isle:camp') },
     { id: 'isle:dinner', name: 'Dinner round the fire', icon: 'heart', run: isle('isle:dinner') },
     { id: 'isle:night', name: 'Night at camp', sub: 'Tidy up and get some sleep', icon: 'moon', run: isle('isle:night') },
@@ -416,6 +427,8 @@ export async function reloadScene(): Promise<boolean> {
     import('../game/v4/ship'), import('../game/v4/island'), import('../game/scenes/field'), import('../game/v10/expedition'),
   ]);
   if (sc instanceof ShipScene4) { await goShip(); return true; }
+  const { ForestScene } = await import('../game/v11/forest/scene');
+  if (sc instanceof ForestScene) { await (await import('../game/v11/forest')).goForest({ x: sc.player?.x }); return true; }
   if (sc instanceof IslandScene4) {
     if (sc.player) game.save.vars['v9:px'] = Math.round(sc.player.x);
     await goIsle();
@@ -464,9 +477,9 @@ const SKIPS: Record<string, Skip[]> = {
     () => { F('v4:split'); tool('binoculars'); },
   ],
   v4joshu: [
-    () => F('v4:sealDone', 'trg:seal1', 'trg:seal2'),
-    () => F('v4:shoes'),
-    () => F('v4:joshuFound', 'trg:joshu'),
+    () => F('trg:tracks', 'v11:trailIn'),
+    () => F('v4:shoes', 'v11:fprints', 'v11:scrap', 'trg:f:prints'),
+    () => F('v4:joshuFound', 'trg:f:joshu', 'v9:sawCap', 'v11:snore', 'trg:f:snore'),
     () => { F('v4:joshuChecked', 'v4:splashed', 'v4:water', 'v4:joshuAwake'); tool('knife'); },
   ],
   v4return: [
@@ -607,7 +620,7 @@ export function completeWhole(q: QuestDef) {
 /** where the story picks up after each main story quest (a consistent jump instead of a guess) */
 const NEXT_POINT: Record<string, string> = {
   v4morning: 'ship:engineCall', v4engine: 'ship:deck', v4deck: 'ship:storm', v4storm: 'beach:wake',
-  v4shore: 'isle:seal', v4joshu: 'isle:walkBack', v4return: 'isle:standoff', v4aroha: 'isle:camp', v4camp: 'camp:wake',
+  v4shore: 'isle:trail', v4joshu: 'isle:walkBack', v4return: 'isle:standoff', v4aroha: 'isle:camp', v4camp: 'camp:wake',
 };
 export const nextPointId = (q: QuestDef): string | null => NEXT_POINT[q.id] ?? null;
 /** finish the quest and go on to the next one; story quests jump to where the next one starts */

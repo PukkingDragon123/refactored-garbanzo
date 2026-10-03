@@ -169,6 +169,7 @@ export class ForestStory implements ForestHooks {
 
   private enterExpedition() {
     const f = this.f;
+    if (f.guide) this.set('v11:forestAroha');
     // a few things only Aroha would point out, and the forest's first ambush
     this.trigger('x:joshu', () => !this.busy && !f.cutscene && Math.abs(this.p.x - FSPOT.joshu) < 90 && !!f.guide, async () => {
       await this.say([
