@@ -1349,13 +1349,13 @@ async function features(cx: Ctx) {
       acc += seg;
     }
   }
-  for (let k = 0; k < 60; k++) {
+  for (let k = 0; k < 110; k++) {
     const x = 640 + hash2(k, 5, 114) * 250, y = 110 + hash2(k, 6, 114) * 330;
     const i = at(x, y);
     if (i < 0 || bio[i] !== B.mountain || water[i]) continue;
     const rng = new Rng(k * 104729 + 5);
     if (bw[i] < 0.35) { const w = 12 + rng.next() * 12, h = 6 + rng.next() * 5; add(x, y, () => stamp(cx, dome(rng, w, h, GROUND[B.plain]), x, y)); }
-    else { const w = 18 + rng.next() * 14, h = 14 + rng.next() * 12; add(x, y, () => stamp(cx, mountain(rng, w, h, false), x, y, { occ: 1 })); }
+    else { const w = 22 + rng.next() * 20, h = 18 + rng.next() * 18; add(x, y, () => stamp(cx, mountain(rng, w, h, h > 27), x, y, { occ: 1 })); }
   }
   // ---- landmarks
   const lm = (x: number, y: number, f: () => void, z = 0) => add(x, y, f, z);

@@ -508,7 +508,7 @@ export function openRegionMap(o: RegionMapOpts = {}): Promise<string | null> {
         pins.push({ el: e, x, y, id: targetId(t), loc: L.id, t, small: isle, min: isle ? 1.45 : 0 });
         const nm = `${esc(L.name)}${L.sub && !isle ? `<small>${esc(L.sub)}</small>` : ''}`;
         const fs = isle ? 16 : 19;
-        const l = lab(`lbl${isle ? ' sm' : ''}${isNew ? ' new' : ''}`, nm, x, y, { dy: up ? -60 : 3, min: isle ? 2.1 : 0.9, loc: L.id, pri: L.id === 'camp' ? 0 : isle ? 2 : 1, w: L.name.length * fs * 0.42 + 6, h: fs * 1.05 });
+        const l = lab(`lbl${isle ? ' sm' : ''}${isNew ? ' new' : ''}`, nm, x, y, { dy: up ? -60 : 3, min: isle ? 2.1 : 0.9, loc: L.id, pri: L.id === 'camp' ? 0 : isle ? 2 : 1, w: L.name.length * fs * 0.5 + 8, h: fs * 1.05 });
         l.sub = l.el.querySelector('small');
       } else if (isRumoured(L.id)) {
         lab('lbl q', L.secret ? '???' : `${esc(L.name)}?`, x, y, { dy: -10, loc: L.id, min: 0.9, pri: 3, w: (L.secret ? 3 : L.name.length + 1) * 8 + 6, h: 20 });
