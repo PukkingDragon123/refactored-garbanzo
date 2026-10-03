@@ -181,7 +181,7 @@ const update = (a: Actor, dt: number): void => {
     r.terrain = null;
     r.facing = a.facing;
     r.x = a.x + a.facing * (h.seat[0] - 1);
-    r.y = a.y + h.seat[1] + 8;
+    r.y = a.y + h.seat[1] + 11;
     if (r.anim !== 'carried') r.setAnim('carried');
   }
 };

@@ -238,7 +238,9 @@ export function renderBody7(ch: Char7, pose: Pose): Frame7 {
   if (ch.skirt) {
     const sk = ch.skirt, top = sk.top ?? 3.2;
     const kneeMid = vlerp(J.knN, J.knF, 0.5);
-    const hemC = vlerp(J.T(0, 0, 0), kneeMid, Math.min(1, sk.len / Math.max(1, vlen(vsub(kneeMid, J.T(0, 0, 0))))));
+    const hem0 = vlerp(J.T(0, 0, 0), kneeMid, Math.min(1, sk.len / Math.max(1, vlen(vsub(kneeMid, J.T(0, 0, 0))))));
+    // the hem trails a touch behind on the move and lifts with the bounce (follow-through)
+    const hemC = vadd(hem0, vadd(vsc(J.legFwd, -Math.min(1.4, (pose.sway ?? 0) * 0.55) * Math.min(1, sk.len / 6)), [0, Math.max(-0.6, Math.min(0.8, (pose.bounce ?? 0) * 0.5)), 0]));
     const topC = J.T(top, 0, 0);
     const ax = vsub(hemC, topC), L = vlen(ax);
     const n = Math.max(3, Math.ceil(L / 0.6));

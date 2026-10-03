@@ -459,8 +459,8 @@ function carryHeavy(b: Build, t: number, id: string): Pose {
   const k = K(b);
   p.lean = -0.16 + Math.sin(TAU * t) * 0.06;
   const s = lerp2(shoulder(b, p.hip, p.lean), shoulder(b, lagP.hip, lagP.lean), 0.6);
-  p.fa = { ik: add2(s, 4.8 * k, -7.2 * k), hand: 'flat', palm: 'up', flex: 0.2 };
-  p.ba = { ik: add2(s, 4 * k, -4.6 * k), hand: 'flat', palm: 'in' };
+  p.fa = { ik: add2(s, 4.4 * k, -10.6 * k), hand: 'flat', palm: 'up', flex: 0.2 };
+  p.ba = { ik: add2(s, 4 * k, -6.8 * k), hand: 'flat', palm: 'in' };
   p.flags = { ...(p.flags ?? {}), zN: 2.4 * k, zF: -1.2 * k };
   p.front = ['armF'];
   return p;

@@ -133,11 +133,13 @@ HELD7.crate = (s, J, P, _ch, hN, hF, pts) => {
     const q = h.q, f = h.t;
     // slats with dark gaps, a frame round each face, a stencilled mark on the near side
     const u = f === 1 ? q[0] : q[1], w = f === 2 ? q[0] : f === 1 ? q[2] : q[2];
-    const rim = Math.abs(u) > 0.82 || Math.abs(w) > 0.84;
-    if (rim) return cel(HP.crate, h.l, -0.06, true);
-    if (f !== 1 && frac((u + 1) * 1.75) < 0.12) return cel(HP.crate, h.l, -0.42);
+    const rim = Math.abs(u) > 0.8 || Math.abs(w) > 0.82;
+    // each face a touch different so the box turns its corner, a frame round it, slats across it
+    const fb = f === 2 ? -0.1 : f === 0 ? 0.04 : 0.14;
+    if (rim) return cel(HP.crate, h.l, fb - 0.22);
+    if (f !== 1 && frac((u + 1) * 1.6) < 0.16) return cel(HP.crate, h.l, fb - 0.45);
     if (f === 2 && q[2] > 0 && Math.abs(q[0]) < 0.3 && Math.abs(q[1] + 0.05) < 0.22 && Math.abs(q[0]) + Math.abs(q[1] + 0.05) > 0.18) return hex('#3a2414');
-    return cel(HP.crate, h.l, 0.02 + hash(Math.floor((u + 1) * 1.75)) * 0.08);
+    return cel(HP.crate, h.l, fb + 0.02 + hash(Math.floor((u + 1) * 1.6)) * 0.08);
   });
   pts.load = c;
 };
@@ -290,19 +292,20 @@ HELD7.flax = (s, J, P, _ch, hN, _hF, pts) => {
 /** a coil of rope over the near shoulder, hanging down the side of the arm */
 HELD7.rope = (s, J, _P, ch, _hN, _hF, pts) => {
   const T = ch.build.torso;
-  const top = J.T(T * 0.96, -0.2, ch.shW * 0.8);
-  const c = vadd(top, vsc(UP, -5.2));
-  const ax = vnorm(vadd(J.fwd, vsc(UP, 0.15)));
-  const [x, y] = frame(J.lat, ax);
-  void x;
+  // over the near shoulder, the loop hanging down the outside of the arm, opening toward the viewer
+  const top = J.T(T * 0.98, 0.1, ch.shW * 0.95);
+  const c = vadd(top, vsc(UP, -5.6));
+  const side = vnorm(vadd([1, 0, 0], vsc(J.lat, 0.25)));
   for (let turn = 0; turn < 3; turn++) {
-    const o = vsc(J.lat, (turn - 1) * 0.8), R = 5.2 - turn * 0.3;
-    for (let i = 0; i < 16; i++) {
-      const a0 = (i / 16) * Math.PI * 2, a1 = ((i + 1) / 16) * Math.PI * 2;
-      const pt = (a: number) => add3(c, o, vsc(UP, Math.cos(a) * R), vsc(y, Math.sin(a) * R * 0.8));
-      s.limb(pt(a0), pt(a1), 0.72, 0.72, GH.obj, h => cel(HP.rope, h.l, frac(h.t * 2 + i * 0.5) < 0.3 ? -0.2 : 0.05));
+    const o = add3(vsc(J.lat, 1.4 + turn * 0.7), vsc(side, (turn - 1) * 0.5)), R = 5.6 - turn * 0.35;
+    for (let i = 0; i < 18; i++) {
+      const a0 = (i / 18) * Math.PI * 2, a1 = ((i + 1) / 18) * Math.PI * 2;
+      const pt = (a: number) => add3(c, o, vsc(UP, Math.cos(a) * R), vsc(side, Math.sin(a) * R * 0.7));
+      s.limb(pt(a0), pt(a1), 0.78, 0.78, GH.obj + (turn % 2), h => cel(HP.rope, h.l, frac(h.t * 2 + i * 0.5) < 0.3 ? -0.22 : 0.06));
     }
   }
+  // a short tail hanging free
+  s.limb(add3(c, vsc(J.lat, 2.2), vsc(UP, -5.4)), add3(c, vsc(J.lat, 2.4), vsc(UP, -8.2), vsc(side, 0.6)), 0.7, 0.55, GH.obj, plain(HP.rope, 0.02));
   pts.load = c;
 };
 
@@ -495,15 +498,25 @@ HELD7.pack = (s, J, P, ch, hN, hF, pts) => {
   const tilt = u < 0.55 ? u / 0.55 : 1;
   const fw = vnorm(vadd(vsc(J.fwd, 1 - tilt), vsc(J.lat, tilt)));
   const [x, y, z] = frame(fw, UP);
+  const pc = PACK[ch.id] ?? PACK.mori;
   s.solid('box', c, vsc(x, 2.6), vsc(y, 4.4), vsc(z, 3.8), GH.obj, h => {
-    if (h.q[1] > 0.6) return cel(HP.red, h.l, 0.05);
+    if (h.q[1] > 0.6) return cel(pc.lid, h.l, 0.05);
     if (Math.abs(h.q[1] - 0.2) < 0.08) return cel(HP.black, h.l, 0.1);
-    return cel(HP.cloth, h.l, h.t === 0 && h.q[0] > 0 && Math.abs(h.q[2]) < 0.6 && h.q[1] < 0.2 && h.q[1] > -0.7 ? -0.15 : 0.02);
+    return cel(pc.body, h.l, h.t === 0 && h.q[0] > 0 && Math.abs(h.q[2]) < 0.6 && h.q[1] < 0.2 && h.q[1] > -0.7 ? -0.15 : 0.02);
   });
-  if (u > 0.95) s.ellipsoid(add3(c, vsc(y, 4.6), vsc(x, -0.5)), vsc(x, 2.2), vsc(y, 0.6), vsc(z, 3.2), GH.obj2, plain(HP.red, -0.2));
+  // the bedroll strapped on top; opened up once it's down
+  if (pc.roll) s.solid('cyl', add3(c, vsc(y, 5.4)), vsc(x, 1.3), vsc(y, 1.3), vsc(z, 4.2), GH.obj2, h => (h.t === 2 ? cel(pc.roll!, h.l, -0.3) : Math.abs(h.q[2]) > 0.4 && Math.abs(h.q[2]) < 0.55 ? cel(HP.black, h.l, 0.1) : cel(pc.roll!, h.l, 0.05)));
+  if (u > 0.95) s.ellipsoid(add3(c, vsc(y, 4.6), vsc(x, 1.2)), vsc(x, 1.4), vsc(y, 0.5), vsc(z, 3.2), GH.obj3, plain(pc.lid, -0.25));
   pts.load = c;
 };
 const smooth01 = (u: number) => { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); };
+/** each one's pack (matching the winter kit in outfits.ts) */
+const PACK: Record<string, { body: Ramp6; lid: Ramp6; roll?: Ramp6 }> = {
+  mori: { body: R6('#1a120a', '#342414', '#4c3820', '#644c2c', '#7c623a', '#98804e'), lid: R6('#2a0e06', '#5a2010', '#86321a', '#a84a26', '#c46636', '#de8a52'), roll: R6('#2a2008', '#5a4614', '#8a6c1e', '#b8922c', '#d4b044', '#ecd070') },
+  jenna: { body: R6('#0a201c', '#16443c', '#246a5c', '#3a9480', '#5ab8a0', '#8ad8c0'), lid: R6('#140e1c', '#2c2040', '#443462', '#5e4a82', '#7a64a0', '#9a86be') },
+  joshu: { body: R6('#140a06', '#301a10', '#4a2a1a', '#643a24', '#7e4e32', '#9a6646'), lid: R6('#050506', '#0c0d10', '#16181c', '#212429', '#2e3238', '#40454d') },
+  aroha: { body: R6('#2a1e0c', '#5a4418', '#86692a', '#b08e40', '#caa85a', '#e4c67c'), lid: R6('#0e0806', '#22140c', '#341e12', '#48291a', '#5c3624', '#744832') },
+};
 
 // aliases the story might use
 HELD7.wood = HELD7.firewood;
