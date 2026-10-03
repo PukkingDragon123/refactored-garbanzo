@@ -358,7 +358,7 @@ export class PlayerSling {
     if (!this.chip) {
       const c = document.createElement('div');
       c.className = 'v11-sling-chip';
-      c.style.cssText = 'position:absolute;left:50%;bottom:9%;transform:translateX(-50%);display:flex;gap:0.4em;align-items:center;padding:0.2em 0.7em;font-family:"Jersey 10","Silkscreen",monospace;font-size:1.15em;color:#fff4d8;background:rgba(20,14,10,0.72);box-shadow:0 0 0 2px #0c0806,0 3px 0 rgba(0,0,0,0.45);pointer-events:none;z-index:6;letter-spacing:0.05em';
+      c.style.cssText = 'position:fixed;left:50%;top:40%;transform:translate(-50%,-100%);display:flex;gap:0.35em;align-items:center;padding:0.1em 0.55em;font-family:"Jersey 10","Silkscreen",monospace;font-size:0.95em;color:#fff4d8;background:rgba(20,14,10,0.72);box-shadow:0 0 0 2px #0c0806,0 3px 0 rgba(0,0,0,0.45);pointer-events:none;z-index:6;letter-spacing:0.05em';
       game.ui.sceneLayer.appendChild(c);
       this.chip = c;
     }
@@ -366,6 +366,12 @@ export class PlayerSling {
     const html = `${pxIcon('pebble', { scale: 3 })}<b>${n}</b><span style="opacity:0.7">/ ${POUCH}</span>`;
     if (this.chip.dataset.h !== html) { this.chip.innerHTML = html; this.chip.dataset.h = html; }
     this.chip.style.display = '';
+    // it floats over Mori's head (clear of whatever the HUD has at the bottom)
+    const r = game.r, p = this.s.player, rc = r.canvas.getBoundingClientRect();
+    const sx = rc.left + (r.projectX(p.x, 1) / r.VW) * rc.width;
+    const sy = rc.top + (r.projectY(p.y - 66, 1) / r.VH) * rc.height;
+    this.chip.style.left = `${Math.round(sx)}px`;
+    this.chip.style.top = `${Math.round(Math.max(rc.top + 40, sy))}px`;
   }
 
   // ---------------------------------------------------------------- drawing: the band, the pouch and the arc

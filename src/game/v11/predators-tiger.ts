@@ -539,7 +539,7 @@ function strike(a: Animal, range: number) {
     knockDown(s, a, t);
     st.target = null;
     // made its point: a roar over the fallen, then a breather before the next rush
-    st.rest = st.downs >= 2 ? 40 : 3.5;
+    st.rest = st.downs >= 2 ? 40 : 7;
     if (st.downs >= 2) { st.phase = 'retreat'; emitPred('retreat', { a }); }
   }
 }

@@ -178,9 +178,10 @@ export async function tigerAmbush(o: AmbushOpts): Promise<void> {
   running = true;
   const p = s.player, st = s.st;
   const ground = (x: number) => st.terrain.groundY(x);
-  const x = clamp(o.x, s.minX + 90, s.maxX - 90);
   // which side it comes from: +1 = it is ahead to the right and charges left at the group
-  const dir: 1 | -1 = o.dir ?? (x >= p.x ? 1 : -1);
+  const dir: 1 | -1 = o.dir ?? (o.x >= p.x ? 1 : -1);
+  // it erupts 150-260 px ahead of Mori on that side, wherever exactly the caller asked
+  const x = clamp(p.x + dir * clamp((o.x - p.x) * dir, 150, 260), s.minX + 90, s.maxX - 90);
   const toGroup = -dir as 1 | -1;
   const held: Held = { guide: (s as unknown as { guide: unknown }).guide ?? null, buddyMode: null };
   const buddy = (s as unknown as { buddy?: { mode: string; release(): void } }).buddy;
@@ -239,11 +240,12 @@ export async function tigerAmbush(o: AmbushOpts): Promise<void> {
     s.main.add(new Flock(x + dir * 30, ground(x) - 170, dir));
     audio.play('wingFlap', { vol: 0.6, pitch: 0.9 });
     setTimeout(() => audio.play('wingFlap', { vol: 0.45, pitch: 1.2 }), 180);
-    game.ui.bubbles.bark(p.id, '...Hey. Why did everything just go quiet?', { style: 'whisper', expr: 'worried' } as never);
+    const withAroha = !!ar.visible;
+    game.ui.bubbles.bark(p.id, withAroha ? '...I don’t hear anything.' : '...Hey. Why did everything just go quiet?', { style: 'whisper', expr: 'worried' } as never);
     await waitGame(1.7);
     if (!spawnedAroha) {
       ar.setAnim(anim7('crouch', 'idle'));
-      game.ui.bubbles.bark('aroha', 'Shh. Nobody move.', { style: 'whisper', expr: 'serious' } as never);
+      game.ui.bubbles.bark('aroha', 'Exactly. Nobody move.', { style: 'whisper', expr: 'serious' } as never);
     } else {
       const someone = ['jenna', 'joshu'].find(id => s.actors.get(id)?.visible);
       if (someone) game.ui.bubbles.bark(someone, someone === 'jenna' ? 'Guys? The birds stopped.' : 'Something’s off. Stay close.', { style: 'whisper', expr: 'worried' } as never);

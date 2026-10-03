@@ -113,8 +113,8 @@ export class ArohaCombat {
     game.ui.bubbles.bark('aroha', text, { style, expr } as never);
   }
 
-  private fight(a: Actor, t: Animal, dt: number) {
-    const s = this.s, st = predState(t);
+  private fight(a: Actor, t: Animal | undefined, dt: number) {
+    const s = this.s;
     this.actT += dt;
     // a flip in progress
     if (this.flip) {
@@ -132,6 +132,13 @@ export class ArohaCombat {
       }
       return;
     }
+    // nothing to fight (it left): finish what she's doing and stand easy
+    if (!t) {
+      if (this.act === 'dash' && a.walking) return;
+      if (this.act !== 'idle') { this.act = 'idle'; this.actT = 0; this.setPose(a, anim7('slingReady', 'slingAim'), 0); }
+      return;
+    }
+    const st = predState(t);
     const dx = t.x - a.x, dist = Math.abs(dx);
     const toward = Math.sign(dx) || 1;
     // dodge: the rush is coming straight at her
