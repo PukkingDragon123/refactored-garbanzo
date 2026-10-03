@@ -91,7 +91,7 @@ export class Reel {
       this.el.appendChild(box);
       this.handBox = box;
       this.placeBox();
-      this.hands = m.mountHands3d(box, { who: 'mori', side: 'right', grid: [ART * 2, ART * 2], scale: 3.6, lights: 'ui', pixel: 3, fov: 34 });
+      this.hands = m.mountHands3d(box, { who: 'mori', side: 'right', grid: [ART * 2, ART * 2], scale: 3.6, lights: 'ui', pixel: 3, fov: 34, outline: 0.8, quant: 24 });
       this.hands.right?.shoulderAt(ART * 2.3, ART * 3.8, 50).setPose('crank');
     });
   }

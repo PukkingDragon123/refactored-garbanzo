@@ -14,6 +14,18 @@ export async function hands3dGallery() {
   const q = new URLSearchParams(location.search);
   HANDS3D.debug = +(q.get('dbg') ?? 0);
   document.body.innerHTML = '';
+  if (q.get('cook')) {
+    // the cooking minigame's hands, on a plain 320x180 stage (cook=chop|stir|fan|turn|add|serve|idle)
+    const { cookHandsFactory } = await import('../art/v11/hands3d/cookhands');
+    document.body.style.cssText = 'margin:0;background:#5a3e2a;overflow:hidden';
+    const host = document.createElement('div');
+    host.style.cssText = 'position:fixed;left:0;top:0;width:100vw;height:56.25vw;background:linear-gradient(#6e4a30,#3a2616)';
+    document.body.appendChild(host);
+    const ch = cookHandsFactory(host, { width: 320, height: 180 });
+    ch?.act(q.get('cook') as never, 160, 110);
+    setTimeout(() => { document.title = 'ready'; }, +(q.get('wait') ?? 12000));
+    return;
+  }
   const bg = q.get('bg') ?? '#d9d9d9';
   document.body.style.cssText = `margin:0;background:radial-gradient(ellipse at 50% 40%, ${bg} 0%, #b8b8b8 100%);overflow:hidden;font:12px monospace;color:#222;`;
   const stage = document.createElement('div');

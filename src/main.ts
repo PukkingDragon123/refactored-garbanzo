@@ -146,6 +146,8 @@ async function boot() {
     isle: null as unknown,
   };
   void import('./game/v9/islezl').then(m => { (window as unknown as { zl: { isle: unknown } }).zl.isle = m.ISLE; });
+  // Mori's 3D hands for the cooking minigame register with it (if it's in the build)
+  void import('./art/v11/hands3d/cookhands');
   // build Mori's 3D hands in the background (a worker) so the first close-up has them ready
   setTimeout(() => { void import('./art/v11/hands3d').then(m => m.prewarmHands3d('mori')); }, 3000);
   // developer panel toggles left on (noclip, overlay...): only then is the dev module loaded

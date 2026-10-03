@@ -22,9 +22,32 @@
  *   // when done
  *   hands.destroy();
  *
- * For the v6 close-ups (src/ui/v6/closeup.ts) use closeupHands(cu, opts): it sizes the canvas over the
- * close-up's pixel canvas (same zoom-in), slots it under the speech bubbles, uses the 320x180 grid and
- * cleans up when the close-up closes.
+ * CLOSE-UPS (src/ui/v6/closeup.ts): closeupHands(cu, opts) lays the canvas exactly over the close-up's
+ * 320x180 pixel canvas (same zoom-in, under the speech bubbles and hints), uses that grid, and styles
+ * the hands for pixel art (pixel 3, a 0.7 px ink outline, a 24-step dithered palette). The pattern
+ * every minigame here follows (ramen, engine, boatfix, camp):
+ *
+ *   const hands = HANDS3D.enabled ? closeupHands(cu, { who: 'mori', side: 'right', lights: 'galley', scale: 2.7 }) : null;
+ *   hands?.right?.shoulderAt(410, -90, 110);              // the arm comes in from off-screen
+ *   loop(dt => {
+ *     ...draw the scene; if (!hands?.right?.ready) draw the old pixel hand as before...
+ *     cu.present();
+ *     hands?.right?.hold({ a: [x0, y0, 0], b: [x1, y1, 0], r: 2.4 }, { follow: 0 });   // a handle in the art
+ *     hands?.frame(dt);
+ *   });
+ *   hands?.destroy();
+ *
+ * A cooking close-up, say: hold({ a, b, r }) a wooden spoon's handle and move it round the pot each
+ * frame (follow: 0 sticks to it); setPose('pinch') + reachTo(x, y, z, { with: 'pinch' }) to sprinkle
+ * salt; grip(1.2) a knife; setPose('cup') and reachTo(..., { palm: [0, -1, 0] }) to hold water; the
+ * other hand: hands.left (side: 'both'), or add({ who: 'jenna', side: 'right' }) for someone else's.
+ * Meshes build in a worker (Mori's are prewarmed at boot; prewarmHands3d(who) for others), so keep the
+ * pixel hand as the fallback until `ready`.
+ *
+ * DEBUG: ?gallery=hands3d (see src/debug/hands3dGallery.ts for its URL parameters: who, view, pose,
+ * outfit, lights, pixel, views=1, joints=..., dbg=1..4); in the game ?h3dpx=n / h3dol / h3dq force the
+ * close-ups' pixel scale, outline and palette steps; zl.hands3d() returns this module (HANDS3D.enabled =
+ * false brings back the pixel hands; HANDS3D.debug = 1 clay, 2 regions, 3 AO, 4 normals).
  *
  * COORDINATES. Every position is in the layout grid: x right, y down (grid pixels), z = depth toward
  * the viewer in grid pixels (0 is the plane the 2D art sits on). Directions use the same axes.
@@ -40,7 +63,8 @@
  *   occlude(id, a, b, r)   a depth-only capsule for an object drawn in 2D (fingers behind it are hidden)
  *   at(x, y, z) / toGrid(world)    grid <-> world (cm) helpers
  *   ready: Promise<void>   resolves when the meshes are built (they are built off the main thread
- *                          when possible; until then nothing is drawn). destroy()
+ *                          when possible; until then nothing is drawn); ready3d: all hands drawable now
+ *   keyGain                scale the key light per frame (a flickering bulb, a fire). destroy()
  *
  * HAND
  *   setPose(name, blend = 1, { r, force })   blend 0..1 toward the named pose (springs make it smooth):
@@ -62,7 +86,8 @@
  *   shoulderAt(x, y, z)                      where the arm comes from (soft: it leans in if out of reach)
  *   snap()                                   jump to the targets this frame (no easing)
  *   tip(which)                               where a fingertip is, in grid coordinates
- *   visible, life (0..1 idle tremor and breathing), follow (how fast the wrist chases its target)
+ *   visible, ready (mesh built), life (0..1 idle tremor and breathing), follow (how fast the wrist
+ *   chases its target; reachTo / hold { follow: 0 } sticks to the target this frame)
  */
 
 import { HandRenderer, LightRig, DrawHand, FrameSpec, Capsule, layoutCamera } from './render';
@@ -421,8 +446,10 @@ export class HandsController {
     const fit = this.opts.fitTo ?? this.container;
     const cr = this.container.getBoundingClientRect();
     // the close-up canvas is sized by style (it can overflow the screen); fall back to its box
-    const w = parseFloat(fit.style.width) || fit.getBoundingClientRect().width || cr.width;
-    const h = parseFloat(fit.style.height) || fit.getBoundingClientRect().height || cr.height;
+    // (a pixel style size is the untransformed one, even mid zoom-in; otherwise the element's box)
+    const px = (v: string) => (/^[\d.]+px$/.test(v) ? parseFloat(v) : 0);
+    const w = px(fit.style.width) || fit.offsetWidth || fit.getBoundingClientRect().width || cr.width;
+    const h = px(fit.style.height) || fit.offsetHeight || fit.getBoundingClientRect().height || cr.height;
     const st = this.canvas.style;
     if (fit === this.container) { st.left = '0px'; st.top = '0px'; }
     else {
@@ -552,7 +579,12 @@ export function mountHands3d(container: HTMLElement, opts: Hands3dOptions = {}):
 
 /** the v6 close-ups: lay the hands over the close-up's 320x180 pixel canvas */
 export function closeupHands(cu: { wrap: HTMLElement; cv: HTMLCanvasElement; closed: boolean }, opts: Hands3dOptions = {}): HandsController {
-  const ctl = new HandsController(cu.wrap, { grid: [cu.cv.width, cu.cv.height], fitTo: cu.cv, before: cu.cv.nextSibling, scale: 3.2, pixel: HANDS3D.pixel ?? 4, outline: 0, ...opts, ...(HANDS3D.pixel !== null ? { pixel: HANDS3D.pixel } : {}) });
+  const q = (() => { try { return new URLSearchParams(location.search); } catch { return new URLSearchParams(); } })();
+  const force: Hands3dOptions = {};
+  if (HANDS3D.pixel !== null) force.pixel = HANDS3D.pixel;
+  if (q.has('h3dol')) force.outline = +q.get('h3dol')!;
+  if (q.has('h3dq')) force.quant = +q.get('h3dq')!;
+  const ctl = new HandsController(cu.wrap, { grid: [cu.cv.width, cu.cv.height], fitTo: cu.cv, before: cu.cv.nextSibling, scale: 3.2, pixel: 3, outline: 0.7, quant: 24, ...opts, ...force });
   (window as unknown as { __hands3d?: HandsController }).__hands3d = ctl;
   return ctl;
 }
