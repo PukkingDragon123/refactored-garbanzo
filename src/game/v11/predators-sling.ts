@@ -25,9 +25,10 @@ import { anim7, isPredator, shootTargets } from './predators-core';
 import { PredFx, G_PEBBLE } from './predators-fx';
 import { sfx11 } from './predators-sfx';
 
-const POUCH = 15;
-export const pebbles = () => game.save.vars['v11:pebbles'] ?? POUCH;
-const setPebbles = (n: number) => { game.save.vars['v11:pebbles'] = Math.max(0, Math.min(POUCH, n)); };
+/** the pouch holds 15; the Pebble pouch blueprint adds to it (save.vars['v11:pouchBonus']) */
+const pouchMax = () => 15 + (game.save.vars['v11:pouchBonus'] ?? 0);
+export const pebbles = () => game.save.vars['v11:pebbles'] ?? pouchMax();
+const setPebbles = (n: number) => { game.save.vars['v11:pebbles'] = Math.max(0, Math.min(pouchMax(), n)); };
 
 // pixel icons for the HUD chip and the touch button
 if (!PX_ICONS.pebble) {
@@ -363,7 +364,7 @@ export class PlayerSling {
       this.chip = c;
     }
     const n = pebbles();
-    const html = `${pxIcon('pebble', { scale: 3 })}<b>${n}</b><span style="opacity:0.7">/ ${POUCH}</span>`;
+    const html = `${pxIcon('pebble', { scale: 3 })}<b>${n}</b><span style="opacity:0.7">/ ${pouchMax()}</span>`;
     if (this.chip.dataset.h !== html) { this.chip.innerHTML = html; this.chip.dataset.h = html; }
     this.chip.style.display = '';
     // it floats over Mori's head (clear of whatever the HUD has at the bottom)

@@ -375,7 +375,7 @@ export function tickBody(dt: number, s: FieldLike) {
     if (p.onGround && p.state === 'normal' && up > 0 && up < 30) cost += up * COST.uphill;
     if (wasGround && !p.onGround && p.vy < -80 && p.state === 'normal') cost += COST.jump;
     const walkish = activity === 'walk' || activity.startsWith('sprint') || activity.startsWith('walk');
-    spend(cost * fx10.energyMult() * (walkish ? gf?.energyMult() ?? 1 : 1) * loadCostK(enc) * routeK(), activity);
+    spend(cost * fx10.energyMult() * (walkish ? gf?.energyMult() ?? 1 : 1) * ((s as { lampOn?: boolean }).lampOn ? gf?.nightEnergyMult() ?? 1 : 1) * loadCostK(enc) * routeK(), activity);
   }
   lastX = p.x; lastY = p.y; wasGround = p.onGround;
   // ---- ailments (they run at camp too: a stomach ache doesn't care where you are)

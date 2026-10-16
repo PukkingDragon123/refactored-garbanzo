@@ -185,6 +185,8 @@ async function boot() {
     },
   };
   void import('./game/v9/islezl').then(m => { (window as unknown as { zl: { isle: unknown } }).zl.isle = m.ISLE; });
+  // V11 blueprints: research arriving overnight, Aroha's fork, smoke balls, the pouch and the line
+  void import('./game/v11/bpcraft').then(m => m.initBlueprints());
   // Mori's 3D hands for the cooking minigame register with it (if it's in the build)
   void import('./art/v11/hands3d/cookhands');
   // build Mori's 3D hands in the background (a worker) so the first close-up has them ready

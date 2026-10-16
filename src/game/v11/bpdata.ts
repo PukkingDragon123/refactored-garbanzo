@@ -281,5 +281,11 @@ export const SKILL_TO_BP: Record<string, string> = {
 };
 
 /** the gear chains in order (campgear.ts gearLevel counts the built steps) */
-export const CHAIN_STEPS = (chain: string): string[] =>
-  Object.values(BLUEPRINTS).filter(b => b.chain?.[0] === chain).sort((a, b) => a.chain![1] - b.chain![1]).map(b => b.id);
+const chainCache = new Map<string, { n: number; ids: string[] }>();
+export function CHAIN_STEPS(chain: string): string[] {
+  const n = Object.keys(BLUEPRINTS).length, hit = chainCache.get(chain);
+  if (hit && hit.n === n) return hit.ids;
+  const ids = Object.values(BLUEPRINTS).filter(b => b.chain?.[0] === chain).sort((a, b) => a.chain![1] - b.chain![1]).map(b => b.id);
+  chainCache.set(chain, { n, ids });
+  return ids;
+}
