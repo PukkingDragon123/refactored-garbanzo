@@ -175,6 +175,10 @@ async function boot() {
     /** V11 Mori's field journal (quests), the camp board */
     journal: async (id?: string) => (await import('./ui/v11/journalbook')).openJournal({ quest: id }),
     board: async () => (await import('./ui/v10/campboard')).openBoard(),
+    /** V11 blueprints: the drafting table ('bench' | 'laptop' | 'field', optionally at a sheet) */
+    folio: async (at = 'bench', focus?: string) => (await import('./ui/v11/blueprints/folio')).openFolio({ at: at as never, focus }),
+    /** V11 blueprints logic: (await zl.blueprints()).devAllBlueprints(), .devMaterials(), .finishResearch(true) */
+    blueprints: async () => { const m = await import('./game/v11/bpcraft'); const c = await import('./game/v11/blueprints'); return { ...m, ...c }; },
     /** dev: document the first n species (stand-in photos) so the encyclopedia has pages */
     devDoc: async (n = 8) => {
       const d = await import('./debug/devpoints');
