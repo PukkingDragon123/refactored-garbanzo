@@ -167,6 +167,19 @@ export interface TalkHost {
   doodled(): boolean;
 }
 
+// ---------------------------------------------------------------- extra choices (V11)
+/** other modules can add choices to the end of a crew chat (a gift, a walk): label + what it does */
+export type TalkExtra = (who: Crew, h: TalkHost) => { label: string; run: () => Promise<void> }[];
+const extras: TalkExtra[] = [];
+export function addTalkExtra(fn: TalkExtra) { extras.push(fn); }
+async function sayWithExtras(who: Crew, h: TalkHost, lines: BubbleLine[]) {
+  const opts = extras.flatMap(f => { try { return f(who, h); } catch (e) { console.warn('[camptalk] extra', e); return []; } });
+  const last = lines[lines.length - 1];
+  if (!opts.length || !last || last.choices) { await h.say(lines); return; }
+  const c = await h.say([...lines.slice(0, -1), { ...last, choices: [...opts.map(o => o.label), 'See you later.'] }]);
+  if (c >= 0 && c < opts.length) await opts[c].run();
+}
+
 /** a full conversation with a crew member at camp */
 export async function talkTo(who: Crew, h: TalkHost): Promise<void> {
   const d = dayState(), day = dayNumber();
@@ -180,7 +193,7 @@ export async function talkTo(who: Crew, h: TalkHost): Promise<void> {
   if (th) {
     markThanked(th);
     lines.push({ who, text: th.thanks, expr: 'happy' });
-    await h.say(lines);
+    await sayWithExtras(who, h, lines);
     return;
   }
   if (first) {
@@ -219,5 +232,5 @@ export async function talkTo(who: Crew, h: TalkHost): Promise<void> {
     } else await h.say([{ who, text: who === 'jenna' ? 'Fiiine. It’s on the board if you change your mind.' : 'It’s on the board, if you change your mind.', expr: 'neutral' }]);
     return;
   }
-  await h.say(lines);
+  await sayWithExtras(who, h, lines);
 }

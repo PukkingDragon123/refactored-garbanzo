@@ -16,7 +16,7 @@ function fig(id: string, anim: string, f: number, expr = 'neutral'): PixelBuffer
   return out;
 }
 
-export function runNpcGallery() {
+export async function runNpcGallery() {
   registerNpcArt();
   const q = new URLSearchParams(location.search);
   const who = q.get('who');
@@ -37,6 +37,10 @@ export function runNpcGallery() {
       for (const e of one ? ['neutral', 'happy', 'laugh', 'surprised', 'sad', 'angry', 'teasing', 'thinking'] : ['neutral', 'happy']) items.push({ name: `${id} ${e}`, buf: renderAnimePortrait(id, e) });
       for (const e of one ? ['neutral', 'happy', 'surprised'] : ['neutral']) items.push({ name: `${id} HD ${e}`, buf: renderAnimePortraitHD(id, e) });
     }
+  }
+  if (part === 'props') {
+    const Pl = await import('../art/v11/npcs/places');
+    for (const [n, sp] of [['station', Pl.station(false)], ['station fixed', Pl.station(true)], ['tree', Pl.tallTree()], ['radio', Pl.radio()], ['marge hut', Pl.margeHut()], ['helix camp', Pl.helixCamp()], ['hunters', Pl.hunterCamp()], ['log', Pl.canLog()], ['can', Pl.can()], ['stake', Pl.stake(false)], ['stake set', Pl.stake(true)], ['helix trap', Pl.helixTrap()], ['totara', Pl.fallenTotara(false)], ['totara cut', Pl.fallenTotara(true)], ['carving', Pl.carving()], ['weaving', Pl.weaving()]] as [string, { buf: import('../art/pixel').PixelBuffer }][]) items.push({ name: n, buf: sp.buf });
   }
   showGallery(items, Number(q.get('scale') ?? 2), '#6d7f86');
 }
