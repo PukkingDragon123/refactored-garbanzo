@@ -13,6 +13,7 @@ import './fauna';
 import './shore';
 import './food';
 import './finds';
+import './makes';
 
 export { artList } from './kit';
 export type { ArtEntry } from './kit';
