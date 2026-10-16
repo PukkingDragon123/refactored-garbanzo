@@ -281,3 +281,25 @@ export function drawPara(b: PixelBuffer, t: string, x: number, y: number, w: num
   });
   return lines.length * lh;
 }
+
+/** text with every font pixel drawn as an n x n block (big stamps, a question mark); returns the width */
+export function drawBig(b: PixelBuffer, t: string, x: number, y: number, n: number, st: TextStyle): number {
+  const f = st.font ?? 'caps';
+  let cx = Math.round(x);
+  for (const ch of t) {
+    const gl = glyph(ch, f);
+    const w = gl.r[0].length;
+    for (let r = 0; r < gl.r.length; r++) for (let k = 0; k < w; k++) if (gl.r[r][k] === '1') {
+      for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+        const px = cx + k * n + i, py = Math.round(y) + (gl.y + r) * n + j;
+        if (st.dropout && rnd(px, py, st.seed ?? 7) < st.dropout) continue;
+        if (st.shadow !== undefined) b.set(px + 1, py + 1, st.shadow);
+        b.set(px, py, st.color);
+      }
+    }
+    cx += (w + 1) * n;
+  }
+  return cx - Math.round(x) - n;
+}
+/** width of drawBig text */
+export const bigW = (t: string, n: number, font: FontId = 'caps') => { let w = 0; for (const ch of t) w += (glyph(ch, font).r[0].length + 1) * n; return Math.max(0, w - n); };
