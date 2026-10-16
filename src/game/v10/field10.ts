@@ -70,6 +70,8 @@ export let run: TripRun | null = null;
 export async function onFieldEnter(f: FieldScene) {
   installTranslator(translatorOn);
   run = null;
+  // V11: every place has its own atmosphere pack (grade, air, sounds, small wildlife, plants)
+  void import('../v11/regions-lookfx').then(m => m.applyRegionLook(f, m.lookLocOf(f, isIslandScene(f) ? null : locOf(f)), isIslandScene(f) ? islandLocAt : undefined)).catch(e => console.warn('region look', e));
   if (isIslandScene(f)) { const ir = new IslandRun(f); run = ir; ir.start(); return; }
   const loc = locOf(f);
   if (!loc || !location(loc)) return;
