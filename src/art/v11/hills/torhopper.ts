@@ -136,13 +136,13 @@ const EYE: EyeSpec = { r: 1.5, iris: hex('#8a5a1a'), pupil: hex('#140c06'), slit
 
 function mats(sk: Sk, juv: boolean) {
   return {
-    wool: sk.m(rmp(juv ? '#9a8664' : '#8a7c66', { n: 7, dark: 0.6, light: 0.45 })),
-    woolD: sk.m(rmp('#584a3c', { n: 6, dark: 0.6 })),
+    wool: sk.m(rmp(juv ? '#a08660' : '#927a58', { n: 7, dark: 0.62, light: 0.42, warm: 0.4 })),
+    woolD: sk.m(rmp('#4c3c2e', { n: 6, dark: 0.6 })),
     belly: sk.m(rmp('#d8ccb2', { n: 5, dark: 0.42, at: 3 })),
-    black: sk.m(rmp('#2a2422', { n: 5, dark: 0.55, light: 0.3 })),
+    black: sk.m(rmp('#221c1a', { n: 5, dark: 0.55, light: 0.25 })),
     white: sk.m(rmp('#ece6d8', { n: 5, dark: 0.35, at: 3 })),
-    horn: sk.m(rmp('#7a6448', { n: 6, dark: 0.55, light: 0.45 })),
-    scute: sk.m(rmp('#7a7670', { n: 6, dark: 0.55, light: 0.4 })),
+    horn: sk.m(rmp('#3c3834', { n: 6, dark: 0.55, light: 0.7, cool: 0.4 }), { spec: 0.4 }),
+    scute: sk.m(rmp('#5c5e62', { n: 6, dark: 0.6, light: 0.5, cool: 0.5 })),
     hoof: sk.m(rmp('#2c2420', { n: 4, dark: 0.5 }), { spec: 0.5 }),
     nose: sk.m(rmp('#3a302c', { n: 4, dark: 0.45 }), { spec: 1 }),
     inner: sk.m(rmp('#c09080', { n: 4, dark: 0.45 })),
@@ -156,12 +156,13 @@ type M = ReturnType<typeof mats>;
 function woolFill(M: M, B: Frame2, k: number) {
   return (p: Px) => {
     const lx = (p.x - B.o[0]) / k, ly = (p.y - B.o[1]) / k;
-    const up = ly / 9;
+    const up = ly / 7.5;
     if (up > 0.62) return M.belly;
     const g = hh(Math.floor(lx / 1.5), Math.floor(ly / 1.5), 31);
     if (g < 0.16) p.l -= 0.12;
     else if (g > 0.9) p.l += 0.1;
-    if (up < -0.55 && lx > -12 && lx < 10) return M.woolD;
+    if (up < -0.55 && lx > -14 && lx < 11) return M.woolD;
+    if (up > 0.3) p.l += 0.06;
     return M.wool;
   };
 }
@@ -174,13 +175,13 @@ function draw(sk: Sk, anim: string, frame: number, eye: BeastEye, juv: boolean) 
   const P = pose(anim, frame, n);
   const legK = juv ? 1.15 : 1;
   const fold = P.fold;
-  const bodyY = -25 * legK + P.by + fold * 17 * legK;
+  const bodyY = -28 * legK + P.by + fold * 20 * legK;
   const B = new Frame2([P.bx * k, bodyY * k], P.tilt - P.rear * 0.55, k);
   const WF = woolFill(M, B, k);
 
   // ---- legs: long and slender, on the tips of their cup-hooves
-  const FL: LegSpec = scaleLeg({ l1: 8.6 * legK, l2: 9.2 * legK, r1: 3.1, r2: 1.5, bend: 1 }, k);
-  const HL: LegSpec = scaleLeg({ l1: 9.4 * legK, l2: 7.6 * legK, l3: 6.2 * legK, r1: 3.9, r2: 1.7, r3: 1.3, bend: -1 }, k);
+  const FL: LegSpec = scaleLeg({ l1: 9.6 * legK, l2: 10.4 * legK, r1: 2.8, r2: 1.4, bend: 1 }, k);
+  const HL: LegSpec = scaleLeg({ l1: 10.2 * legK, l2: 8.6 * legK, l3: 7 * legK, r1: 3.6, r2: 1.6, r3: 1.2, bend: -1 }, k);
   const drawLeg = (which: number) => {
     const front = which < 2, near = which % 2 === 0;
     const z = near ? 8 : -8, bias = near ? 0 : -0.14;
@@ -190,7 +191,7 @@ function draw(sk: Sk, anim: string, frame: number, eye: BeastEye, juv: boolean) 
     if (fold) foot = B.p(front ? 14 + (near ? 2 : 0) : -6 + (near ? 2 : 0), 8.5);
     if (P.rear && !front) foot = [(-9 + P.feet[which][0]) * k, -0.8 * k];
     if (P.rear && front) foot = B.p(16, 10 - P.rear * 4);
-    if (P.leap) foot = [B.o[0] + (front ? 10 : -10) * k + P.feet[which][0] * k, B.o[1] + (16 + P.feet[which][1]) * k];
+    if (P.leap) foot = [B.o[0] + (front ? 10 : -10) * k + P.feet[which][0] * k, B.o[1] + (20 + P.feet[which][1]) * k];
     const j = leg(sk, hip, foot, front ? FL : HL, (p) => (p.t < 0.35 ? M.wool : M.woolD), z, -Math.PI / 2 - 0.3, bias);
     // knee tufts and the hoof (a dark rubbery cup, its rim pale)
     const f0 = j[j.length - 1];
@@ -212,7 +213,7 @@ function draw(sk: Sk, anim: string, frame: number, eye: BeastEye, juv: boolean) 
   // ---- body: a compact barrel of wool
   sk.np();
   const spine: V2[] = [B.p(-15, -1), B.p(-6, -2.5), B.p(4, -2), B.p(12, 0)];
-  sk.tube(spine, t => (8.4 + Math.sin(t * Math.PI) * 1.6 + P.br * 0.25) * k, WF, { z: 0, rz: 0.9 });
+  sk.tube(spine, t => (6.6 + Math.sin(t * Math.PI) * 1.3 + (t > 0.8 ? 0.6 : 0) + P.br * 0.25) * k, WF, { z: 0, rz: 0.9 });
   const bodyPart = sk.pid;
   sk.streaks(bodyPart, () => B.dir(Math.PI * 0.55, 1) as V2, { spacing: 2.5, len: 2, amp: 0.12 });
   sk.tufts(bodyPart, (_x, _y, nx, ny) => (ny > 0.4 ? [-0.3, 1] : nx < -0.6 ? [-1, 0.3] : null), { every: 2, len: 1 });
@@ -221,19 +222,19 @@ function draw(sk: Sk, anim: string, frame: number, eye: BeastEye, juv: boolean) 
   sk.np();
   for (let i = 0; i < 7; i++) {
     const t = i / 6;
-    const s = B.p(10 - t * 23, -9.6 + Math.sin(t * Math.PI) * -0.8);
+    const s = B.p(10 - t * 23, -7.6 + Math.sin(t * Math.PI) * -0.9);
     const L = (3.2 - Math.abs(t - 0.45) * 2.2) * k;
     const d = B.dir(Math.PI + 0.55, L);
-    sk.blade(s[0], s[1], s[0] + d[0], s[1] + d[1], s2 => (1 - s2) * 1.7 * k + 0.3, (p) => { if (hh(Math.floor(p.x), Math.floor(p.y), 7) > 0.85) p.l += 0.12; return M.scute; }, { z0: 9 + t, z1: 9.5 + t, bend: 0.4 });
+    sk.blade(s[0], s[1], s[0] + d[0], s[1] + d[1], s2 => (1 - s2) * 1.7 * k + 0.3, (p) => { if (p.v < -0.5) p.l += 0.18; else if (p.v > 0.6) p.l -= 0.12; return M.scute; }, { z0: 9 + t, z1: 9.5 + t, bend: 0.4 });
   }
 
   // ---- neck and head
-  const N0 = B.p(11, -4);
+  const N0 = B.p(12, -3.5);
   const nA = B.ang(P.neck);
-  const nL = 9.5 * k;
+  const nL = 12 * k;
   const N1: V2 = [N0[0] + Math.cos(nA) * nL, N0[1] + Math.sin(nA) * nL];
   sk.np();
-  sk.tube([N0, [(N0[0] + N1[0]) / 2, (N0[1] + N1[1]) / 2], N1], t => (5.2 - t * 1.6) * k, (p) => (p.v > 0.5 && P.neck < 0 ? M.belly : M.wool), { z: 2 });
+  sk.tube([N0, [(N0[0] + N1[0]) / 2, (N0[1] + N1[1]) / 2], N1], t => (4.4 - t * 1.5) * k, (p) => (p.v > 0.5 && P.neck < 0 ? M.belly : M.wool), { z: 2 });
   // a mane of longer wool along the throat
   const neckPart = sk.pid;
   sk.tufts(neckPart, (_x, _y, _nx, ny) => (ny > 0.3 ? [0, 1] : null), { every: 2, len: 2 });
@@ -242,11 +243,11 @@ function draw(sk: Sk, anim: string, frame: number, eye: BeastEye, juv: boolean) 
   // far ear and far brow-shield
   sk.np();
   const earA = -2.5 + P.ear * 0.5;
-  ear(sk, H.p(-1.5, -3.2), H.ang(earA - 0.2), 4.6 * k, 1.9 * k, M.wool, 0, hz - 6, -0.15, 1.15);
+  ear(sk, H.p(-1.5, -3.2), H.ang(earA - 0.2), 5.4 * k, 2 * k, M.wool, 0, hz - 6, -0.15, 1.15);
   if (!juv) {
     sk.np();
-    const s0 = H.p(1, -3.6), s1 = H.p(-6.5, -6.2);
-    sk.blade(s0[0], s0[1], s1[0], s1[1], s => (1 - s * 0.6) * 1.6 * k, M.horn, { z0: hz - 4, z1: hz - 4.5, bend: -1.2 * k, bias: -0.12 });
+    const s0 = H.p(1.2, -3.8), s1 = H.p(-7.8, -7.8);
+    sk.blade(s0[0], s0[1], s1[0], s1[1], s => (1 - s * 0.55) * 2 * k, M.horn, { z0: hz - 4, z1: hz - 4.5, bend: -1.2 * k, bias: -0.12 });
   }
   // the skull: short and deep, the muzzle tapering
   sk.np();
@@ -258,11 +259,12 @@ function draw(sk: Sk, anim: string, frame: number, eye: BeastEye, juv: boolean) 
     const hx = lx * c - ly * s, hy = lx * s + ly * c;
     // the mask: a black band through the eye to the nose, white cheek and muzzle patch
     if (hy > 1.6 && hx > 2) return M.white;
-    if (Math.abs(hy - (-0.6 + hx * 0.12)) < 1.3 && hx > -1.5) return M.black;
+    if (Math.abs(hy - (-0.7 + hx * 0.14)) < 1.7 && hx > -2.5) return M.black;
+    if (hy < -2.2 && hx > 0.5) return M.white;
     return M.wool;
   };
-  sk.ell(skull[0], skull[1], 4.6 * k, 4 * k, faceFill, { rot: H.a, rz: 4 * k, z: hz });
-  const m0 = H.p(4, 0.6), m1 = H.p(9.4, 1.9);
+  sk.ell(skull[0], skull[1], 5.2 * k, 4.4 * k, faceFill, { rot: H.a, rz: 4 * k, z: hz });
+  const m0 = H.p(4.2, 0.6), m1 = H.p(10.4, 2.1);
   sk.tube([m0, m1], t => (3.1 - t * 1.2) * k, faceFill, { z: hz + 1 });
   // lower jaw
   const jA = H.ang(0.28 + P.jaw * 0.5);
@@ -270,7 +272,7 @@ function draw(sk: Sk, anim: string, frame: number, eye: BeastEye, juv: boolean) 
   const j1: V2 = [j0[0] + Math.cos(jA) * 5.6 * k, j0[1] + Math.sin(jA) * 5.6 * k];
   if (P.jaw > 0.3) { const mA = H.p(4.5, 2.2); sk.poly([mA[0], mA[1], m1[0], m1[1] + 1.2 * k, j1[0], j1[1]], M.mouth, { z: hz + 1.4 }); }
   sk.tube([j0, j1], t => (1.6 - t * 0.5) * k, M.white, { z: hz + 1.6 });
-  const ns = H.p(9.6, 1.2);
+  const ns = H.p(10.6, 1.4);
   sk.ell(ns[0], ns[1], 1.1 * k, 0.9 * k, M.nose, { z: hz + 3 });
   // a mouthful of tussock while grazing
   if (anim === 'eat') {
@@ -281,8 +283,8 @@ function draw(sk: Sk, anim: string, frame: number, eye: BeastEye, juv: boolean) 
   // the near brow-shield: ridged, swept back over the skull
   if (!juv) {
     sk.np();
-    const s0 = H.p(2.4, -3.4), s1 = H.p(-7.4, -5.4);
-    sk.blade(s0[0], s0[1], s1[0], s1[1], s => (1 - s * 0.55) * 2.1 * k, (p) => (Math.floor(p.t * 7) % 2 === 0 ? (p.l += 0.1, M.horn) : M.horn), { z0: hz + 6, z1: hz + 5, bend: -1.6 * k, curl: 0.6 });
+    const s0 = H.p(2.8, -3.6), s1 = H.p(-8.8, -7.6);
+    sk.blade(s0[0], s0[1], s1[0], s1[1], s => (1 - s * 0.5) * 2.6 * k, (p) => { if (Math.floor(p.t * 8) % 2 === 0) p.l += 0.16; else p.l -= 0.06; return M.horn; }, { z0: hz + 12, z1: hz + 11, bend: -1.6 * k, curl: 0.6 });
   } else {
     sk.np();
     const nb = H.p(1.5, -3.6);
@@ -290,7 +292,7 @@ function draw(sk: Sk, anim: string, frame: number, eye: BeastEye, juv: boolean) 
   }
   // near ear and the eye in its black band
   sk.np();
-  ear(sk, H.p(-1.2, -2.6), H.ang(earA), 5 * k, 2.1 * k, M.wool, M.inner, hz + 7, 0, 1.15);
+  ear(sk, H.p(-1.2, -2.6), H.ang(earA), 6 * k, 2.3 * k, M.wool, M.inner, hz + 7, 0, 1.15);
   const ec = H.p(3, -0.8);
   const ep = drawEye(sk, ec[0], ec[1], { ...EYE, r: juv ? 1.2 : 1.5 }, eye);
   const headTop = H.p(0, -7);
@@ -304,7 +306,7 @@ function draw(sk: Sk, anim: string, frame: number, eye: BeastEye, juv: boolean) 
 export const TORHOPPER: SpeciesDef = {
   name: 'Torhopper', kind: 'mammal', len: 44, height: 40,
   anims: ANIMS,
-  canvas: (_a, juv) => (juv ? { w: 56, h: 52, ox: 26, oy: 44 } : { w: 80, h: 70, ox: 38, oy: 60 }),
+  canvas: (_a, juv) => (juv ? { w: 60, h: 58, ox: 28, oy: 50 } : { w: 84, h: 76, ox: 40, oy: 66 }),
   draw,
   eyeFor: (anim) => (anim === 'sleep' ? 'closed' : anim === 'alert' || anim === 'leap' ? 'alert' : anim === 'play' ? 'angry' : 'open'),
 };

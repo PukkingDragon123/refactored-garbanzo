@@ -192,9 +192,9 @@ export function paintBluff(w: number, h: number, seed: number, mouth: { x: numbe
         c = pick(HP.scree, 3.4 + id * 3 + (bayer(x, y) - 0.5) - smoothstep(h * 0.7, h, y));
       }
       // tussock and moss on some ledges, lichen rosettes, black seepage streaks down the faces
-      if (v > 0.06 && v < 0.14 && hp(col, bed, seed + 11) > 0.62 && !flank) c = pick(HP.tussock, 3 + (bayer(x, y) - 0.5) * 2 + (u < 0.5 ? 1 : 0));
+      if (v > 0.06 && v < 0.13 && hp(col, bed, seed + 11) > 0.7 && fbm2(x * 0.04, y * 0.1, 2, seed + 12) > 0.5 && !flank) c = pick(HP.tussock, 3 + (bayer(x, y) - 0.5) * 2 + (u < 0.5 ? 1 : 0));
       else if (fbm2(x * 0.09, y * 0.09, 3, seed + 13) > 0.72) c = mix(c, pick(HP.lichenPale, 2 + (bayer(x, y) - 0.5) * 2), 0.55);
-      else if (fbm2(x * 0.12, y * 0.12, 2, seed + 15) > 0.78 && l > 4) c = pick(HP.lichenOrange, 1 + (bayer(x, y) - 0.5) * 2);
+      else if (fbm2(x * 0.12, y * 0.12, 2, seed + 15) > 0.84 && l > 4.5) c = pick(HP.lichenOrange, 1 + (bayer(x, y) - 0.5) * 2);
       const seep = fbm2(x * 0.16, y * 0.008, 2, seed + 17);
       if (seep > 0.68 && !flank) c = mix(c, hex('#0c0e10'), (seep - 0.68) * 3);
       // the tussock fringe along the crest

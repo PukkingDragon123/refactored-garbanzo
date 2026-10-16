@@ -7,7 +7,7 @@
 
 import { PixelBuffer } from '../../pixel';
 import type { C } from '../../color';
-import { hex, mix } from '../../color';
+import { hex, mix, shade } from '../../color';
 import { bayer, clamp, fbm1, fbm2, hash2, noise1, noise2, smoothstep } from '../../../core/math';
 import { HP, pick, hp, hazeRamp } from './kit';
 import { HILLS, SCREE, BLUFF, hgroundY, hzoneAt, tarnAt, persp, realZ } from '../../../game/v11/hills/layout';
@@ -138,70 +138,86 @@ function zoneW(x: number): Record<HZone, number> {
   return w;
 }
 
-/** one ground pixel: x world, dd rows in front of the walk line, d rows below the local walk line */
+/** one ground pixel: x world, dd rows in front of the walk line (the land runs toward the camera) */
 function groundPixel(x: number, y: number, dd: number, zw: Record<HZone, number>, out: { c: C; water: boolean }) {
-  const P = persp(dd), z = realZ(dd);
-  const v = z * 260; // row coordinate in "real" depth units (evenly spaced toward the camera)
-  const u = x / P;
+  const z = realZ(dd);
+  // the row coordinate in real depth units: rows bunch up toward the walk line (far away) and spread
+  // out toward the camera, so every texture below is laid out in (x, v) and foreshortens on its own
+  const v = z * 300;
   // the trodden track along the walk line
-  const track = (1 - smoothstep(4, 12 + noise1(x / 40, 61) * 6, dd));
+  const track = 1 - smoothstep(3, 10 + noise1(x / 40, 61) * 6, dd);
   // pick the zone by weights with a dithered threshold (no muddy blending of textures)
   let r = hp(x, y, 71) * 0.6 + bayer(x, y) * 0.4, zone: HZone = 'basin';
   for (const k of Object.keys(zw) as HZone[]) { r -= zw[k]; if (r <= 0) { zone = k; break; } }
-  const shadeFar = (1 - z) * -0.35;
+  // the far ground (near the walk line) a touch hazier and darker, the near ground richer
+  const far = (1 - z) * -0.3;
+  const big = fbm2(x / 90, v / 44, 3, 81), mid = noise2(x / 11, v / 6, 82);
   let c: C;
-  const n1 = fbm2(u / 60, v / 18, 3, 81), n2 = noise2(u / 7, v / 2.4, 82);
-  // tarn
+  // the tarn
   if (zw.basin > 0.3 && tarnAt(x, dd) > 0) {
     const e = tarnAt(x, dd);
-    const shore = e < 0.12;
-    c = shore ? pick(HP.peat, 3 + n2 * 2 + dith(x, y)) : mix(hex('#30474e'), hex('#162629'), clamp(e * 1.4 + dith(x, y, 0.2)));
+    const shore = e < 0.1;
+    c = shore ? pick(HP.peat, 2.5 + mid * 2 + dith(x, y)) : mix(hex('#34505a'), hex('#14232a'), clamp(e * 1.3 + dith(x, y, 0.15)));
     out.water = !shore;
     out.c = c;
     return;
   }
   switch (zone) {
     case 'bush': {
-      // peat, moss and leaf litter under the last beech, tussock creeping in
-      const moss = n1 > 0.52;
-      c = moss ? pick(HP.beech, 3.6 + n2 * 2.4 + shadeFar + dith(x, y)) : pick(HP.peat, 4 + n2 * 2.5 + shadeFar + dith(x, y));
-      if (!moss && hp(x, y, 83) > 0.93) c = pick(HP.tussock, 3 + n2 * 2);
+      // peat and moss under the last beech, fallen leaves, tussock creeping in
+      const moss = big > 0.5;
+      c = moss ? pick(HP.beech, 3.4 + (mid - 0.5) * 2.6 + far + dith(x, y)) : pick(HP.peat, 4.2 + (mid - 0.5) * 2.4 + far + dith(x, y));
+      const lf = cell(x, v, 3.2, 2, 83, 0.3);
+      if (!moss && lf >= 0 && CL.r < 0.8) c = pick(HP.tussockRed, 2 + lf * 4 + (CL.ny < 0 ? 1 : 0));
       break;
     }
     case 'basin': case 'ridge': {
-      // tussock thatch: blades in perspective rows, red patches, herb-green hollows, peat between
-      const red = fbm2(u / 70, v / 34, 3, 84) > 0.62;
-      const herb = fbm2(u / 60, v / 28, 3, 85) < 0.3;
-      const blade = noise2(u / 1.6, v / (0.9 + z), 86);
-      let i = 4 + (blade - 0.5) * 3.4 + (n1 - 0.5) * 2 + shadeFar + dith(x, y, 0.7);
-      if (zone === 'ridge') i -= 0.6;
-      c = herb ? pick(HP.spaniard, i - 0.3) : red ? pick(HP.tussockRed, i - 0.6) : pick(HP.tussock, i);
-      if (blade < 0.2) c = pick(HP.peat, 3 + n2 * 2);
-      // ridge: wind-shorn turf with gravel scars and cushions
-      if (zone === 'ridge' && fbm2(u / 40, v / 10, 3, 87) > 0.62) c = pick(HP.scree, 4 + n2 * 3 + dith(x, y));
+      // a field of tussock clumps in perspective: each clump lit on top, striated by its blades,
+      // dark peat and herbs in the gaps; patches of red tussock and green herb field
+      const ridge = zone === 'ridge';
+      const red = big > 0.6, herb = fbm2(x / 70, v / 36, 3, 85) < 0.3;
+      const id = cell(x, v, ridge ? 7 : 10, ridge ? 4.4 : 6, ridge ? 86 : 87, ridge ? 0.7 : 0.88);
+      if (id >= 0) {
+        const top = clamp(-CL.ny * 0.5 + 0.5);
+        const blade = hash2(x, Math.floor(id * 999), 88) > 0.45 ? 0.8 : -0.6;
+        const ramp = herb ? HP.spaniard : (red || id < 0.18) ? HP.tussockRed : (id > 0.9 ? HP.tussockDry : HP.tussock);
+        c = pick(ramp, 2.4 + top * 4.4 + blade + far - (CL.r > 0.7 ? 1.4 : 0) + (ridge ? -0.4 : 0) + dith(x, y, 0.5));
+      } else {
+        c = herb ? pick(HP.spaniard, 2 + mid * 2 + far + dith(x, y)) : pick(HP.peat, 2.6 + mid * 2.4 + far + dith(x, y));
+      }
+      // the ridge: wind-shorn turf, gravel scars, cushions of moss with gentians
+      if (ridge && fbm2(x / 40, v / 14, 3, 89) > 0.64) {
+        const g = cell(x, v, 3, 2, 90, 0.6);
+        c = g >= 0 ? pick(HP.scree, 4 + (1 - CL.r) * 2 - CL.ny + far) : pick(HP.scree, 2.5 + mid * 1.5 + far + dith(x, y));
+      }
       break;
     }
     case 'scree': case 'tors': case 'bluff': {
-      const big = zone === 'scree' ? 1 : 0.7;
-      const id = cell(u, v, 7 * big, 3.4 * big, zone === 'scree' ? 91 : 93, zone === 'scree' ? 0.95 : 0.55);
-      if (id >= 0) {
+      const scree = zone === 'scree';
+      // angular stones, sorted bigger downslope on the scree, a pavement of granite among the tors
+      const id = cell(x, v, scree ? 6.5 : 9, scree ? 3.6 : 5, scree ? 91 : 93, scree ? 0.95 : 0.5);
+      const id2 = id < 0 ? cell(x + 3, v + 1.5, 3, 1.8, 94, 0.7) : -1;
+      if (id >= 0 || id2 >= 0) {
         const l = -CL.nx * 0.5 - CL.ny * 0.8;
-        const ramp = zone === 'tors' && id < 0.3 ? HP.granite : HP.scree;
-        c = pick(ramp, 5.3 + l * 1.8 + (id - 0.5) * 3 + shadeFar + dith(x, y, 0.6) - (CL.r > 0.75 ? 1.6 : 0));
+        const ramp = zone === 'tors' && (id >= 0 ? id : id2) < 0.4 ? HP.granite : HP.scree;
+        c = pick(ramp, 5 + l * 1.8 + ((id >= 0 ? id : id2) - 0.5) * 2.6 + far + dith(x, y, 0.6) - (CL.r > 0.72 ? 1.8 : 0));
+        if (zone === 'tors' && hash2(x, y, 95) < 0.04) c = pick(HP.lichenOrange, 2);
       } else {
         // between the stones: grit, and tussock where it can hold on
-        const tuft = fbm2(u / 30, v / 8, 2, 95) > (zone === 'scree' ? 0.66 : 0.48);
-        c = tuft ? pick(HP.tussock, 3.4 + n2 * 2.4 + shadeFar + dith(x, y)) : pick(HP.scree, 2 + n2 * 2 + shadeFar + dith(x, y));
+        const tuft = fbm2(x / 34, v / 12, 2, 96) > (scree ? 0.68 : 0.5);
+        c = tuft ? pick(HP.tussock, 3.2 + mid * 2.4 + far + dith(x, y)) : pick(HP.scree, 2.2 + mid * 1.6 + far + dith(x, y));
       }
-      if (zone === 'bluff' && fbm2(u / 50, v / 14, 2, 97) > 0.6) c = pick(HP.peat, 3 + n2 * 2 + dith(x, y));
+      if (zone === 'bluff' && big > 0.66 && mid > 0.35) c = pick(HP.peat, 2.8 + mid * 2.4 + dith(x, y, 1.2));
       break;
     }
   }
   // the track: bare peat and grit, stones pressed in
   if (track > 0.5 - dith(x, y, 0.5)) {
-    const st = cell(u, v, 4, 2.2, 99, 0.4);
-    c = st >= 0 ? pick(HP.scree, 4.5 - CL.ny + (st - 0.5) * 2) : pick(zone === 'scree' ? HP.scree : HP.peat, 4.2 + (n2 - 0.5) * 2.4 + dith(x, y));
+    const st = cell(x, v, 4, 2.6, 99, 0.35);
+    c = st >= 0 ? pick(HP.scree, 4.6 - CL.ny + (st - 0.5) * 2) : pick(zone === 'scree' || zone === 'tors' ? HP.scree : HP.peat, 4.4 + (mid - 0.5) * 2.2 + dith(x, y));
   }
+  // shade deepening toward the camera, under the blurred foreground
+  if (dd > 110) c = shade(c, -smoothstep(110, 170, dd) * 0.18);
   out.c = c;
   out.water = false;
 }
