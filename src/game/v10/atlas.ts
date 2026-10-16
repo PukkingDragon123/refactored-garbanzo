@@ -168,7 +168,7 @@ export const ATLAS: AtlasLoc[] = [
   },
   {
     id: 'village', name: 'Te Kāinga', sub: 'Aroha’s whānau', region: 'south', kind: 'village', pos: P(208, 356),
-    scene: { type: 'site', site: 'village' }, difficulty: 3, xr: [0, 2200],
+    scene: { type: 'site', site: 'village' }, difficulty: 3, xr: [0, 2600],
     path: PATH([172, 330], [196, 350], [222, 366], [250, 378]),
     routes: [{ from: 'mangrove', at: 2640, label: 'Follow the canoe marks upriver', hours: 1.5, energy: 14, kind: 'wade', say: 'Someone cut steps into this bank. People live up here.' }],
     desc: 'The village of the kaitiaki, the island’s guardians, on a terrace above the river. Friendly, if you mind your manners.', terrain: 'River terrace, gardens',
@@ -179,7 +179,7 @@ export const ATLAS: AtlasLoc[] = [
     path: PATH([322, 262], [312, 292], [318, 322], [332, 350]),
     routes: [
       { from: 'canopy', at: 2350, label: 'Cross the vine bridge to the stone terraces', hours: 1.5, energy: 18, kind: 'climb', say: 'Those are walls. Somebody built walls up here.' },
-      { from: 'village', at: 2120, enter: 2150, label: 'Take the old track up to the pā', hours: 1, energy: 12, kind: 'walk', flag: { id: 'v10:koroBlessing', why: 'Aroha shakes her head: not without Koro’s blessing.' }, say: 'With Koro’s blessing, then.' },
+      { from: 'village', at: 2520, enter: 2150, label: 'Take the old track up to the pā', hours: 1, energy: 12, kind: 'walk', flag: { id: 'v10:koroBlessing', why: 'Aroha shakes her head: not without Koro’s blessing.' }, say: 'With Koro’s blessing, then.' },
     ],
     desc: 'Overgrown stone terraces of an ancient pā, abandoned long ago. Its carvers knew the serpents well.', terrain: 'Terraces, crumbling stairs',
   },
