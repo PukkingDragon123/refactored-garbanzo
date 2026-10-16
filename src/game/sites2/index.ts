@@ -19,6 +19,7 @@ import * as SA from '../../art/sitesart';
 import * as FL from '../../art/flora';
 import { Rng, bayer, clamp, fbm2, rand } from '../../core/math';
 import { audio } from '../../core/audio';
+import { FERNWOOD_V11 } from '../v11/woods/fernwood';
 import { plant, deadwood } from '../../art/jungle-plants';
 import {
   sprite, mainLayer, skyAndRidge, jungleWalls, ceiling, trees, undergrowth, frontFoliage, hideBush, shafts, groundStrip, node, Ground,
@@ -29,7 +30,7 @@ type Interact = { x: number; y: number; w: number; h: number; label: string; sta
 const pushI = (f: FieldScene, it: Interact) => (f.interact as unknown as Interact[]).push(it);
 
 /** A flat water body (reflective surface) that animals and the player can wade / swim in. */
-function water(f: FieldScene, x0: number, x1: number, top: number, bottom: number, col: [number, number, number], strength = 0.8, z = -2) {
+export function water(f: FieldScene, x0: number, x1: number, top: number, bottom: number, col: [number, number, number], strength = 0.8, z = -2) {
   f.st.terrain.water.push([x0, x1, top, bottom]);
   f.main.add(new Custom(z, (rr, s) => {
     rr.water(strength, 1.2, 0.8);
@@ -127,7 +128,7 @@ function clueArt(icon: string): { buf: PixelBuffer; ax: number; ay: number } {
 }
 
 /** An inspectable animal sign that adds a Field Guide clue. */
-function clueSpot(f: FieldScene, id: string, x: number, y: number, label: string, line?: string, o: { art?: boolean; z?: number; enabled?: () => boolean } = {}) {
+export function clueSpot(f: FieldScene, id: string, x: number, y: number, label: string, line?: string, o: { art?: boolean; z?: number; enabled?: () => boolean } = {}) {
   const def = CLUE_BY_ID[id];
   if (!def) return;
   if (o.art !== false) {
@@ -160,7 +161,7 @@ function clueSpot(f: FieldScene, id: string, x: number, y: number, label: string
 }
 
 /** The first time you arrive somewhere: a title card and Aroha's whispered intro. */
-async function arrive(f: FieldScene, name: string, sub: string, aroha: string) {
+export async function arrive(f: FieldScene, name: string, sub: string, aroha: string) {
   const key = 'arrived:' + f.site.id;
   if (!game.save.flags[key]) {
     game.save.flags[key] = true;
@@ -172,7 +173,7 @@ async function arrive(f: FieldScene, name: string, sub: string, aroha: string) {
 const g0 = (fn: (x: number) => number): Ground => ({ y: fn });
 
 /** Put a trunk POI (for climbers/gliders) with branches and a perch at its crown. */
-function trunkPOI(f: FieldScene, x: number, gy: number, h: number, branches = 1) {
+export function trunkPOI(f: FieldScene, x: number, gy: number, h: number, branches = 1) {
   f.pois.push({ kind: 'trunk', x, y: gy, y1: gy - h });
   for (let i = 0; i < branches; i++) f.pois.push({ kind: 'branch', x: x + (i % 2 ? -18 : 18), y: gy - h * (0.55 + i * 0.2) });
   f.pois.push({ kind: 'perch', x, y: gy - h - 6 });
@@ -675,7 +676,9 @@ const COAST_DEEP: FieldSite = {
   onEnter: f => { f.bark('rowan', 'So quiet down here… just my own breathing.', { expr: 'worried' }); },
 };
 
-export const SITES2: Record<SiteId, FieldSite> = { fernwood: FERNWOOD, canopy: CANOPY, falls: FALLS, mangrove: MANGROVE, coast: COAST };
+// (V11: Fernwood Floor rebuilt on the Te Wao Nui kit, src/game/v11/woods; the V2 build stays below as FERNWOOD_V2)
+export const SITES2: Record<SiteId, FieldSite> = { fernwood: FERNWOOD_V11, canopy: CANOPY, falls: FALLS, mangrove: MANGROVE, coast: COAST };
+export const FERNWOOD_V2 = FERNWOOD;
 export { COAST_DEEP };
 export type { SpawnV2 };
 const _unused: C | undefined = undefined; void _unused; void shade;

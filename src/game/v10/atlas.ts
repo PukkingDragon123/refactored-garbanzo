@@ -114,8 +114,8 @@ export const ATLAS: AtlasLoc[] = [
   // ------------------------------------------------------------ the V2 expedition sites
   {
     id: 'fernwood', name: 'Fernwood Floor', sub: 'Te Ngāhere', region: 'interior', kind: 'site', pos: P(430, 198),
-    scene: { type: 'site', site: 'fernwood' }, difficulty: 2, xr: [0, 2600],
-    path: PATH([380, 162], [404, 186], [432, 200], [458, 210], [470, 214]), knots: [0, 800, 1560, 2280, 2600],
+    scene: { type: 'site', site: 'fernwood' }, difficulty: 2, xr: [0, 4400],
+    path: PATH([380, 162], [404, 186], [432, 200], [458, 210], [470, 214]), knots: [0, 1300, 2600, 3900, 4400],
     routes: [
       { from: 'isle-track', at: 6860, label: 'Follow the track deeper into the bush', hours: 1, energy: 10, kind: 'walk', say: 'The track just... keeps going. Into the ferns.' },
       { from: 'forest', at: 5890, label: 'Climb on up over the ridge into the fern gullies', hours: 1, energy: 10, kind: 'walk', say: 'Up over the ridge. The ferns on the other side are taller than the trees here.' },
@@ -126,14 +126,14 @@ export const ATLAS: AtlasLoc[] = [
     id: 'canopy', name: 'Emerald Canopy', sub: 'Te Tāhuhu o te Ngāhere', region: 'interior', kind: 'site', pos: P(392, 243),
     scene: { type: 'site', site: 'canopy' }, difficulty: 3, xr: [0, 2400],
     path: PATH([446, 230], [412, 240], [374, 246], [334, 250]),
-    routes: [{ from: 'fernwood', at: 2290, label: 'Climb the giant kauri (a long climb)', hours: 1.5, energy: 16, kind: 'climb', say: 'Okay. Don’t look down. Don’t look down. Don’t... I looked down.' }],
+    routes: [{ from: 'fernwood', at: 4060, label: 'Climb the giant kauri (a long climb)', hours: 1.5, energy: 16, kind: 'climb', say: 'Okay. Don’t look down. Don’t look down. Don’t... I looked down.' }],
     desc: 'The old forest up on the plateau: a walkway of colossal branches where the snakes fly.', terrain: 'Branches high above the ground',
   },
   {
     id: 'falls', name: 'Thunder Falls', sub: 'Te Wai Whatitiri', region: 'interior', kind: 'site', pos: P(512, 246),
     scene: { type: 'site', site: 'falls' }, difficulty: 3, xr: [0, 2100],
     path: PATH([476, 222], [500, 238], [520, 256], [538, 276]),
-    routes: [{ from: 'fernwood', at: 2560, label: 'Follow the stream uphill toward the roar', hours: 1.5, energy: 14, kind: 'walk', say: 'Hear that? That’s not thunder. That’s water.' }],
+    routes: [{ from: 'fernwood', at: 4360, label: 'Follow the stream uphill toward the roar', hours: 1.5, energy: 14, kind: 'walk', say: 'Hear that? That’s not thunder. That’s water.' }],
     desc: 'Where the river drops off the plateau. Auks nest in the cliffs; dippers walk under the water.', terrain: 'Plunge pool, cliff ledges',
   },
   {
