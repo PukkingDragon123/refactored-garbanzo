@@ -176,12 +176,12 @@ export function paintSheet(id: string, w: number, h: number, info: SheetInfo): S
   else pen.line(titleX, ry, titleX + tw + 4, ry + 1, { c: I.style === 'biro' ? I.accent : I.soft });
 
   // ---- layout
-  const wide = w >= 236;
+  const wide = w >= 220;
   const blockH = T ? 13 : 10;
   const bodyY = ry + 4, bodyB = h - blockH - 7;
   let dx = pad, dy = bodyY, dw: number, dh: number, cx: number, cy: number, cw: number;
   if (wide) {
-    dw = Math.floor((w - pad * 2) * 0.55); dh = bodyB - bodyY;
+    dw = Math.floor((w - pad * 2) * 0.5); dh = bodyB - bodyY;
     cx = dx + dw + 6; cy = bodyY; cw = w - cx - pad;
   } else {
     dw = w - pad * 2; dh = Math.max(56, Math.min(96, Math.floor((bodyB - bodyY) * 0.42)));
@@ -224,13 +224,13 @@ export function paintSheet(id: string, w: number, h: number, info: SheetInfo): S
     const lab = T ? 'MATERIALS' : 'YOU’LL NEED';
     if (T) drawText(b, lab, cx, y, softTiny); else drawText(b, lab.toLowerCase(), cx, y - 1, { ...hand, color: I.soft });
     y += T ? 7 : 9;
-    const cell = 27, per = Math.max(1, Math.floor((cw + 3) / cell));
+    const cell = 26, per = Math.max(1, Math.floor((cw + 3) / cell));
     needs.forEach(([it, n], i) => {
       const col = i % per, row = Math.floor(i / per);
       const x = cx + col * cell, yy = y + row * 34;
       // a parts-list box on the technical papers, a pencilled ring elsewhere
       const box = new SkPen(b, I.soft, I.soft, T ? 'tech' : I.style, 0, 0, 1, seed + i);
-      if (T) box.rect(x, yy, 25, 25, { c: I.soft }); else box.ellipse(x + 12.5, yy + 12.5, 13, 12, { c: I.soft });
+      if (T) box.rect(x, yy, 25, 25, { c: I.soft }); else box.ellipse(x + 12.5, yy + 12.5, 12.5, 12, { c: I.soft });
       if (!locked) blit(b, matIcon(it), x + 1, yy + 1);
       else drawText(b, '?', x + 10, yy + 9, { font: 'caps', color: I.soft });
       const have = count(it), ok = have >= n;

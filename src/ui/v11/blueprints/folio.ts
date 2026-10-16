@@ -38,9 +38,9 @@ const H = (s: string) => hex(s);
 const GROUPS: { id: string; label: string; kinds: BlueprintKind[]; col: string }[] = [
   { id: 'tools', label: 'TOOLS', kinds: ['weapon', 'tool'], col: '#e8d8a8' },
   { id: 'gear', label: 'GEAR', kinds: ['equipment'], col: '#a8c8e8' },
-  { id: 'survival', label: 'SURVIVAL', kinds: ['survival', 'camp'], col: '#c8e0a0' },
+  { id: 'survival', label: 'CAMP', kinds: ['survival', 'camp'], col: '#c8e0a0' },
   { id: 'lab', label: 'LAB', kinds: ['research'], col: '#e0b8d8' },
-  { id: 'recipes', label: 'RECIPES', kinds: ['recipe'], col: '#f0c8a0' },
+  { id: 'recipes', label: 'LURES', kinds: ['recipe'], col: '#f0c8a0' },
 ];
 const ORDER: Record<BpState, number> = { craft: 0, done: 1, lab: 2, research: 3, locked: 4 };
 const groupOf = (d: BlueprintDef) => Math.max(0, GROUPS.findIndex(g => g.kinds.includes(d.kind)));
@@ -118,10 +118,10 @@ export function openFolio(o: FolioOpts = {}): Promise<FolioResult> {
       L.lw = Math.max(118, Math.min(156, Math.round(VW * 0.3)));
       L.lx = m; L.ly = top + 12; L.lh = VH - L.ly - m;
       const aw = VW - L.lw - m * 4;
-      L.side = aw - 46 >= 216;
-      L.sw = Math.min(L.side ? aw - 46 : aw, 340);
+      L.side = aw - 52 >= 216;
+      L.sw = Math.min(L.side ? aw - 52 : aw, 340);
       L.sh = Math.min(VH - top - m - (L.side ? 0 : 40), 236);
-      L.sx = L.lx + L.lw + m * 2 + Math.max(0, Math.floor((aw - L.sw - (L.side ? 46 : 0)) / 2));
+      L.sx = L.lx + L.lw + m * 2 + Math.max(0, Math.floor((aw - L.sw - (L.side ? 52 : 0)) / 2));
       L.sy = top + Math.max(0, Math.floor((VH - top - m - L.sh - (L.side ? 0 : 40)) / 2));
       L.ax = L.side ? L.sx + L.sw + 8 : L.sx + L.sw - 120; L.ay = L.side ? L.sy + 18 : L.sy + L.sh + 4;
     } else {
@@ -296,13 +296,21 @@ export function openFolio(o: FolioOpts = {}): Promise<FolioResult> {
     }
 
     // the folio: tabs, cards, the scroll thumb
-    GROUPS.forEach((g, i) => {
-      const n = all().filter(d => g.kinds.includes(d.kind) && (bpState(d.id) === 'craft' && canCraft(d.id) && at === 'bench')).length;
-      const tb = once(`tab:${g.id}:${i === tab}:${n}`, () => paintTab(n ? `${g.label}·${n}` : g.label, H(g.col), i === tab));
-      const tx = L.lx + 4 + GROUPS.slice(0, i).reduce((a, gg, j) => a + once(`tabw:${gg.id}:${j === tab}`, () => paintTab(gg.label + (j === tab ? '' : ''), H(gg.col), j === tab)).width - 1, 0);
-      const ty = L.ly - tb.height + (i === tab ? 1 : 1);
-      if (tx + tb.width <= L.lx + L.lw) { put(tb, tx, ty); hits.push({ x: tx, y: ty, w: tb.width, h: tb.height, act: () => setTab(i), tip: [g.label] }); }
+    // file tabs: they overlap like real ones when the folio is narrow; the open one sits on top
+    const tabs = GROUPS.map((g, i) => {
+      const n = all().filter(d => g.kinds.includes(d.kind) && bpState(d.id) === 'craft' && canCraft(d.id) && at === 'bench').length;
+      return { i, g, cv: once(`tab:${g.id}:${i === tab}:${n}`, () => paintTab(g.label, H(g.col), i === tab, n)) };
     });
+    const totalW = tabs.reduce((a, t) => a + t.cv.width - 1, 0), room = L.lw - 8;
+    const squeeze = totalW > room ? (totalW - room) / (tabs.length - 1) : 0;
+    let tx0 = L.lx + 4;
+    const pos = tabs.map(t => { const x = Math.round(tx0); tx0 += t.cv.width - 1 - squeeze; return x; });
+    const order = tabs.filter(t => t.i !== tab).concat(tabs.filter(t => t.i === tab));
+    for (const t of order) {
+      const tx = pos[t.i], ty = L.ly - t.cv.height + 1;
+      put(t.cv, tx, ty);
+      hits.push({ x: tx, y: ty, w: t.cv.width - Math.ceil(squeeze), h: t.cv.height, act: () => setTab(t.i), tip: [t.g.label] });
+    }
     if (folio) put(folio, L.lx, L.ly);
     const cw = L.lw - 12;
     for (let r = 0; r < L.rows; r++) {
@@ -360,7 +368,7 @@ export function openFolio(o: FolioOpts = {}): Promise<FolioResult> {
           put(tp, L.sx - 4, L.sy + 2 + pd); put(tp, L.sx + L.sw - 14, L.sy + 2 + pd);
         } else {
           const pn = once('pin:' + pinC, () => pinBuf(pinC));
-          put(pn, L.sx + 4, L.sy + 3 + pd); put(pn, L.sx + L.sw - 9, L.sy + 3 + pd);
+          put(pn, L.sx + 3, L.sy + 2 + pd); put(pn, L.sx + L.sw - 11, L.sy + 2 + pd);
         }
         if (unroll && pinT >= 1 && now - unroll < 520) { unroll = 0; paperSfx('pin', 0.6); }
       }
@@ -419,10 +427,9 @@ export function openFolio(o: FolioOpts = {}): Promise<FolioResult> {
   const cssOf = (c: C) => `rgb(${c & 255},${(c >>> 8) & 255},${(c >>> 16) & 255})`;
   const pinBuf = (col: string) => {
     const c = H(col), dk = mix(c, H('#000000'), 0.45), hi = mix(c, H('#ffffff'), 0.5);
-    const b = new PixelBuffer(5, 7);
-    for (const [x, y] of [[1, 0], [2, 0], [3, 0], [0, 1], [1, 1], [2, 1], [3, 1], [4, 1], [0, 2], [1, 2], [2, 2], [3, 2], [4, 2], [1, 3], [2, 3], [3, 3]] as [number, number][]) b.set(x, y, c);
-    b.set(1, 1, hi); b.set(4, 2, dk); b.set(3, 3, dk);
-    b.set(2, 4, H('#8a929a')); b.set(2, 5, H('#5a6066'));
+    const rows = ['..aaa..', '.ahaaa.', 'ahhaaab', 'aaaaaab', '.aabbb.', '..bbb..', '...e...', '...f...'];
+    const b = new PixelBuffer(7, rows.length);
+    rows.forEach((r, y) => [...r].forEach((ch, x) => { const v = ch === 'a' ? c : ch === 'h' ? hi : ch === 'b' ? dk : ch === 'e' ? H('#a8b0b8') : ch === 'f' ? H('#5a6066') : 0; if (v) b.set(x, y, v); }));
     return b;
   };
 
@@ -436,19 +443,19 @@ export function openFolio(o: FolioOpts = {}): Promise<FolioResult> {
       const lift = hover?.id === 'craft' && on ? -2 : 0;
       put(tool, x + 2, y + lift);
       hits.push({ x: x + 2, y, w: tool.width, h: tool.height, id: 'craft', act: doCraft, tip: on ? ['CRAFT IT (ENTER)'] : at === 'bench' ? ['MISSING MATERIALS'] : ['CRAFT AT JENNA’S BENCH'] });
-      const sub = on ? 'PRESS TO MAKE' : at === 'bench' ? 'NEED MORE' : 'AT THE BENCH';
+      const sub = on ? 'PRESS IT' : at === 'bench' ? 'NEED MORE' : 'AT THE BENCH';
       const t = textCanvas('sub', sub, H('#e8d8b8'), 'tiny', H('#140a06'));
-      put(t, x + 2 + Math.round((tool.width - t.width) / 2), y + tool.height + 2);
+      put(t, Math.min(VW - t.width - 2, x + 2 + Math.round((tool.width - t.width) / 2)), y + tool.height + 2);
     } else if (st === 'research' || st === 'lab') {
       const lab = st === 'lab';
       const bl = lab ? ['in'] : researchBlockers(d.id);
       const on = !lab && !bl.length && at !== 'field';
       const n = researchNights(d);
-      const l1 = lab ? 'IN R&D' : 'SEND TO R&D', l2 = lab ? 'BY MORNING' : `${d.rp} RP · ${n > 1 ? n + ' NIGHTS' : 'OVERNIGHT'}`;
-      const slip = once(`slip:${l1}:${l2}:${on}`, () => paintSlip(l1, l2, on));
+      const lines = lab ? ['IN R&D', 'BACK', 'BY MORNING'] : ['SEND TO', 'R&D', `${d.rp} RP`, n > 1 ? `${n} NIGHTS` : 'OVERNIGHT'];
+      const slip = once(`slip:${lines.join('|')}:${on}`, () => paintSlip(lines, on));
       const lift = hover?.id === 'res' && on ? -2 : 0;
-      put(slip, x, y + 8 + lift);
-      hits.push({ x, y: y + 8, w: slip.width, h: slip.height, id: 'res', act: doResearch, tip: on ? ['SEND IT (ENTER)'] : [(bl[0] ?? (at === 'field' ? 'FROM THE LAPTOP OR THE BENCH' : '')).toUpperCase()] });
+      put(slip, Math.min(VW - slip.width - 2, x), y + 8 + lift);
+      hits.push({ x: Math.min(VW - slip.width - 2, x), y: y + 8, w: slip.width, h: slip.height, id: 'res', act: doResearch, tip: on ? ['SEND IT (ENTER)'] : [(bl[0] ?? (at === 'field' ? 'FROM THE LAPTOP OR THE BENCH' : '')).toUpperCase()] });
     } else if (st === 'done' && d.needs?.length && !crafting) {
       put(textCanvas('done', 'MADE', H('#e8d8b8'), 'caps', H('#140a06')), x + 6, y + 10);
     }

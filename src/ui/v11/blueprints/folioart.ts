@@ -75,8 +75,13 @@ export function paintFolio(w: number, h: number): PixelBuffer {
   return b;
 }
 
-/** a file tab sticking up from the folio */
-export function paintTab(label: string, col: C, on: boolean): PixelBuffer {
+/** a file tab sticking up from the folio (n > 0: a red dot, there's something to make in it) */
+export function paintTab(label: string, col: C, on: boolean, n = 0): PixelBuffer {
+  const b = paintTabBase(label, col, on);
+  if (n > 0) for (const [x, y] of [[1, 0], [2, 0], [0, 1], [1, 1], [2, 1], [3, 1], [1, 2], [2, 2]] as [number, number][]) b.set(b.w - 5 + x, 1 + y, x === 1 && y === 0 ? H('#ff9a8a') : H('#d8402c'));
+  return b;
+}
+function paintTabBase(label: string, col: C, on: boolean): PixelBuffer {
   const tw = textW(label, { font: 'tiny', color: 0 });
   const w = tw + 8, h = on ? 11 : 10;
   const b = new PixelBuffer(w, h);
@@ -157,9 +162,9 @@ export function paintStampTool(on: boolean): PixelBuffer {
   drawText(b, 'CRAFT', 17 - Math.floor(textW('CRAFT', { font: 'tiny', color: 0 }) / 2), 19, { font: 'tiny', color: on ? H('#f6e6c8') : H('#b0a090') });
   return b;
 }
-/** the R&D request slip (a perforated form with a paper clip) */
-export function paintSlip(l1: string, l2: string, on: boolean): PixelBuffer {
-  const w = Math.max(textW(l1, { font: 'tiny', color: 0 }), textW(l2, { font: 'tiny', color: 0 })) + 14, h = 22;
+/** the R&D request slip (a perforated form with a paper clip): heading lines in blue, the last in red */
+export function paintSlip(lines: string[], on: boolean): PixelBuffer {
+  const w = Math.max(...lines.map(l => textW(l, { font: 'tiny', color: 0 }))) + 12, h = 10 + lines.length * 7;
   const b = new PixelBuffer(w, h);
   const base = on ? H('#e8eef8') : H('#b8bcc4'), edge = on ? H('#9ab0cc') : H('#8a8e96');
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
@@ -170,8 +175,7 @@ export function paintSlip(l1: string, l2: string, on: boolean): PixelBuffer {
     b.set(x, y, c);
   }
   for (let x = 3; x < w - 2; x++) b.set(x, 2, on ? H('#3a6aa8') : edge);
-  drawText(b, l1, 6, 9, { font: 'tiny', color: on ? H('#1e3a6a') : H('#6a6e76') });
-  drawText(b, l2, 6, 15, { font: 'tiny', color: on ? H('#a8321e') : H('#6a6e76') });
+  lines.forEach((l, i) => drawText(b, l, 5, 9 + i * 7, { font: 'tiny', color: on ? (i === lines.length - 1 ? H('#a8321e') : H('#1e3a6a')) : H('#6a6e76') }));
   // the clip
   for (const [x, y] of [[w - 8, 0], [w - 8, 1], [w - 8, 2], [w - 8, 3], [w - 7, 4], [w - 6, 4], [w - 5, 3], [w - 5, 2], [w - 5, 1], [w - 6, 0]] as [number, number][]) b.set(x, y, H('#8a929a'));
   return b;

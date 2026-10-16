@@ -117,22 +117,23 @@ function pack(p: SkPen, x: number, y: number, w = 36, h = 46) {
 // ---------------------------------------------------------------- the drawings
 export const DRAWINGS: Record<string, Draw> = {
   slingshot: (p, I) => {
-    // front view: the fork, the bands, the pouch
-    stick(p, 34, 76, 34, 46, 3);
-    p.curve([[31, 46], [26, 36], [20, 22], [19, 10]]); p.curve([[37, 46], [42, 36], [48, 22], [49, 10]]);
-    p.curve([[34, 44], [27, 34], [24, 22], [23, 10]]); p.curve([[34, 44], [41, 34], [44, 22], [45, 10]]);
-    p.line(19, 10, 23, 10); p.line(45, 10, 49, 10);
-    lash(p, 34, 54, 3, 6);
-    p.line(21, 13, 31, 33, { c: I.accent }); p.line(47, 13, 37, 33, { c: I.accent });
-    p.ellipse(34, 35, 5, 3); p.circle(34, 34, 1.6, { c: p.soft });
-    p.dimV(10, 10, 76, '18CM', { side: 1, ext: 4 });
-    p.dimH(19, 49, 4, '9CM');
-    p.callout(26, 30, 6, 30, 'A'); p.callout(44, 22, 62, 16, 'B'); p.callout(38, 36, 62, 40, 'C'); p.callout(37, 58, 56, 64, 'D');
+    // front view: the fork, the bands, the pouch (set right of the height dimension)
+    const X = (x: number) => x + 10;
+    stick(p, X(34), 76, X(34), 46, 3);
+    p.curve([[X(31), 46], [X(26), 36], [X(20), 22], [X(19), 10]]); p.curve([[X(37), 46], [X(42), 36], [X(48), 22], [X(49), 10]]);
+    p.curve([[X(34), 44], [X(27), 34], [X(24), 22], [X(23), 10]]); p.curve([[X(34), 44], [X(41), 34], [X(44), 22], [X(45), 10]]);
+    p.line(X(19), 10, X(23), 10); p.line(X(45), 10, X(49), 10);
+    lash(p, X(34), 54, 3, 6);
+    p.line(X(21), 13, X(31), 33, { c: I.accent }); p.line(X(47), 13, X(37), 33, { c: I.accent });
+    p.ellipse(X(34), 35, 5, 3); p.circle(X(34), 34, 1.6, { c: p.soft });
+    p.dimV(8, 10, 76, '18CM', { side: 1, ext: 4 });
+    p.dimH(X(19), X(49), 4, '9CM');
+    p.callout(X(25), 30, 18, 24, 'A'); p.callout(X(44), 22, 70, 14, 'B'); p.callout(X(38), 36, 68, 50, 'C'); p.callout(X(37), 58, 64, 66, 'D');
     // detail: the pouch, opened flat
-    p.rect(78, 26, 26, 14); p.circle(84, 33, 1.5); p.circle(98, 33, 1.5);
-    p.line(78, 33, 72, 33, { c: I.accent }); p.line(104, 33, 110, 33, { c: I.accent });
-    p.text(91, 44, 'C · POUCH', { align: 'center' });
-    p.text(91, 18, 'LEATHER 6×3', { align: 'center', c: p.soft });
+    p.rect(80, 26, 26, 14); p.circle(86, 33, 1.5); p.circle(100, 33, 1.5);
+    p.line(80, 33, 76, 33, { c: I.accent }); p.line(106, 33, 112, 33, { c: I.accent });
+    p.text(93, 44, 'POUCH', { align: 'center' });
+    p.text(93, 18, 'LEATHER 6×3', { align: 'center', c: p.soft });
   },
   pebble_pouch: p => {
     bag(p, 30, 22, 34, 44);
