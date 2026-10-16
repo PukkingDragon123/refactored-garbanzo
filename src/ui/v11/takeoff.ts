@@ -1,15 +1,16 @@
 // V11: Mori swings his pack off before the Backpack screen opens (and back on after). In the world the
 // cast's 'backpackOff' / 'backpackOn' clips play when the sprite module has them (src/art/v7/anim-
 // contract.ts); without them he crouches to it. The camera pushes in on him while he does, then the
-// world freezes behind the screen (game.covered): the last frame is grabbed once, small, and shown
-// blown up, dimmed and soft (a cheap depth of field that costs nothing per frame), and the HUD is
-// put away.
+// world freezes behind the screen (game.covered): the last frame is grabbed once as a mosaic of big
+// soft pixels, dimmed (a pixel-art depth of field that costs nothing per frame), and the HUD is put
+// away.
 
 import { game } from '../../game/game';
 import { hasAnim7 } from '../../art/v7/anim-contract';
 import { animInfo } from '../../world/actor';
 import { audio } from '../../core/audio';
 import { reduced } from '../laptop-kit';
+import { mosaicBackdrop } from '../pxkit';
 
 interface Cam { x: number; y: number; zoom: number; tx: number; ty: number; tzoom: number; locked: boolean }
 interface SceneLike {
@@ -36,7 +37,7 @@ function tweenCam(c: Cam, to: { x: number; y: number; zoom: number }, ms: number
   });
 }
 
-/** grab the next rendered frame, small (blown back up it's soft), dimmed */
+/** grab the next rendered frame as a mosaic of big soft pixels (blocks of whole device pixels), dimmed */
 function snapshot(): Promise<HTMLCanvasElement | null> {
   return new Promise(res => {
     const t = setTimeout(() => res(null), 900);
@@ -45,18 +46,13 @@ function snapshot(): Promise<HTMLCanvasElement | null> {
       try { prev?.(); } catch (e) { console.error(e); }
       clearTimeout(t);
       try {
-        const src = game.r.canvas;
-        const c = document.createElement('canvas');
-        c.width = Math.max(2, Math.round(src.width / 7)); c.height = Math.max(2, Math.round(src.height / 7));
-        const g = c.getContext('2d', { willReadFrequently: true })!;
-        g.imageSmoothingEnabled = true;
-        g.imageSmoothingQuality = 'high';
-        g.drawImage(src, 0, 0, c.width, c.height);
-        // (a blank grab, the drawing buffer already gone: fall back to the plain veil)
-        const mid = g.getImageData(c.width >> 1, c.height >> 1, 1, 1).data;
-        if (mid[3] === 0 || (mid[0] + mid[1] + mid[2] === 0)) { res(null); return; }
-        g.fillStyle = 'rgba(14, 10, 4, 0.22)';
-        g.fillRect(0, 0, c.width, c.height);
+        const dpr = window.devicePixelRatio || 1;
+        const block = Math.max(3, Math.round(6 * dpr));
+        const w = Math.ceil(window.innerWidth * dpr / block), h = Math.ceil(window.innerHeight * dpr / block);
+        const c = mosaicBackdrop(game.r.canvas, w, h, 0.16);
+        if (!c) { res(null); return; }
+        // (a blank grab, the drawing buffer already gone: the plain veil instead)
+        c.style.width = (w * block) / dpr + 'px'; c.style.height = (h * block) / dpr + 'px';
         res(c);
       } catch { res(null); }
     };
@@ -64,7 +60,7 @@ function snapshot(): Promise<HTMLCanvasElement | null> {
 }
 
 export interface PackOff {
-  /** the frozen world, soft and dim, to put behind the screen (null if it couldn't be grabbed) */
+  /** the frozen world, in big dim pixels, to put behind the screen (null if it couldn't be grabbed) */
   backdrop: HTMLCanvasElement | null;
   /** put the pack back on (the world part of closing) */
   putOn: () => Promise<void>;

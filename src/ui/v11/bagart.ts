@@ -9,7 +9,7 @@
 //   paintScale    the brass tube spring balance the pack is weighed on (Mori weighs birds with it)
 //   paintGround / paintPeg   the patch of ground the pack sits on and the peg the scale hangs from
 //   paintChest    the camp stash: an old sea chest with its lid open
-//   paintTag      the manila specimen tag the item card is written on
+//   paintTag      the manila specimen tag the item card is written on (paintKindTape: the kind on tape)
 //   paintSign     the trail sign (Set off) for packing up at camp
 // Everything is plain PixelBuffer painting: hue-shifted ramps lit from the top left, ordered dither,
 // selective outlines.
@@ -19,6 +19,7 @@ import type { C } from '../../art/color';
 import { bayer } from '../../core/math';
 import { H, noise, stitch, drawText, textWidth } from '../laptop-kit';
 import type { Area } from '../../game/v11/backpack';
+import { pxTextBuf } from '../pxfont';
 
 export const CELL = 24;
 export interface Rect { x: number; y: number; w: number; h: number }
@@ -619,6 +620,30 @@ export function paintTag(w: number, h: number): PixelBuffer {
     const d = Math.hypot(x, y);
     if (d <= 5) b.set(cx + x, cy + y, d < 2.2 ? 0 : d < 3 ? H('#5a4628') : H('#c8a868'));
   }
+  return b;
+}
+
+const KIND_TAPE: Record<string, [string, string, string]> = {
+  food: ['#cfe09a', '#a8bc70', '#34440e'], tool: ['#b4cce4', '#8aa4c0', '#1a3048'], material: ['#e8d29c', '#c4aa70', '#4a3414'],
+  plant: ['#b4dca4', '#8ab478', '#1a4416'], fungus: ['#dcc0ec', '#b496c8', '#3a1a4a'], insect: ['#bcdce4', '#90b4c0', '#163a44'],
+  animal: ['#f0c4a4', '#cc9a78', '#4a2010'], lure: ['#f4dc7c', '#d0b04c', '#4a3006'], key: ['#f4cca4', '#d0a07a', '#5a2a10'],
+  shell: ['#f4e0d0', '#d4b8a4', '#5a3428'],
+};
+/** a strip of coloured tape with the kind of thing on it in tiny caps (torn ends) */
+export function paintKindTape(word: string, kind: string): PixelBuffer {
+  const [bg, dk, ink] = KIND_TAPE[kind] ?? KIND_TAPE.material;
+  const t = pxTextBuf(word.toUpperCase(), { font: 'tiny', color: ink });
+  const w = t.w + 8, h = 9;
+  const b = new PixelBuffer(w, h + 1);
+  const BG = H(bg), DK = H(dk), SH = H('#000000', 70);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    // torn ends: a zigzag on both sides
+    const tl = (y * 3) % 4 === 0 ? 1 : 0, tr = (y * 3 + 2) % 4 === 0 ? 1 : 0;
+    if (x < tl || x > w - 1 - tr) continue;
+    b.set(x, y, y === 0 || noise(x, y, 61) > 0.9 ? DK : BG);
+  }
+  for (let x = 1; x < w - 1; x++) b.set(x, h, SH);
+  for (let j = 0; j < t.h; j++) for (let i = 0; i < t.w; i++) { const c = t.data[j * t.w + i]; if (c) b.set(4 + i, j - 1, c); }
   return b;
 }
 

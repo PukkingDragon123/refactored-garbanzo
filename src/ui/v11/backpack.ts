@@ -1,4 +1,4 @@
-// V11 Backpack screen. Mori swings his pack off, the world blurs and freezes behind, and the pack
+// V11 Backpack screen. Mori swings his pack off, the world freezes behind (in big soft pixels), and the pack
 // drops onto the ground in front of you: an old olive canvas rucksack with leather trim, its lid
 // buckled shut. The buckles pop, the lid flips back, and the contents settle into the compartment.
 //
@@ -13,8 +13,9 @@
 //    packCapacity); its tag says the kilos in Mori's hand and the rod drops into the red when it's
 //    too heavy. Change the load and the balance bobs
 //  - pick something up (or hover it) and its specimen tag swings in: the artwork, its name in
-//    hand-lettering, a line about it, its weight, and eat / use / drop / inspect (inspect turns the
-//    tag over for the full field notes)
+//    Mori's marker (the bitmap script in ../pxfont), a line about it, its weight, and eat / use / drop /
+//    inspect (inspect turns the tag over for the full field notes). Every word on the screen is drawn
+//    in the bitmap fonts at art resolution, so it scales by whole pixels with the art
 //  - the ground: anything lying by Mori (a gift with no room, what he dropped) lies next to the bag;
 //    drag it in, or drag things out of the bag to leave them there
 //  - Repack shakes the bag and everything resettles biggest first
@@ -45,6 +46,9 @@ import { css, sfx, esc, pushKeys, reduced } from '../laptop-kit';
 import { pxIconBuf } from '../pxicons';
 import { packIcons } from './packicons';
 import { ensureHandFont, handLetter, onHandFont } from './handletter';
+import { pxTextCanvas, pxRunsFromHTML } from '../pxfont';
+import type { PxTextOpts, PxRun } from '../pxfont';
+import { paintBtn, paintBubble, paintStamp, paintHint, paintDisc, ditherVignette, bufCanvas as kitCanvas } from '../pxkit';
 import * as ART from './bagart';
 import type { BagLayout, ChestLayout, Rect, GroundKind, HolderId } from './bagart';
 import { packOff } from './takeoff';
@@ -83,11 +87,11 @@ const useOf = (id: string) => USES[id] ?? USES['kind:' + (ITEMS[id]?.kind ?? '')
 
 const CSS = `
 .bp11 { position: absolute; inset: 0; z-index: 36; pointer-events: auto; touch-action: none; overflow: hidden; user-select: none; -webkit-user-select: none; font-family: 'Jersey 15', 'Pixelify Sans', monospace; }
-.bp11 .bg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; image-rendering: auto !important; opacity: 0; transition: opacity 0.3s; }
-.bp11 .bg.veil { background: rgba(14, 10, 4, 0.5); }
+.bp11 .bg { position: absolute; left: 0; top: 0; image-rendering: pixelated; opacity: 0; transition: opacity 0.3s; }
+.bp11 .bg.veil { width: 100%; height: 100%; background: rgba(14, 10, 4, 0.5); }
 .bp11.on .bg { opacity: 1; }
 .bp11 canvas.ic { display: inline-block; vertical-align: middle; flex: none; }
-.bp11 .dim { position: absolute; inset: 0; background: radial-gradient(ellipse at 45% 55%, rgba(8,6,2,0.05) 25%, rgba(8,6,2,0.62) 100%); opacity: 0; transition: opacity 0.35s; }
+.bp11 .dim { position: absolute; left: 0; top: 0; transform-origin: 0 0; opacity: 0; transition: opacity 0.35s; }
 .bp11.on .dim { opacity: 1; }
 .bp11 canvas, .bp11 img { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
 .bp11 .gnd { position: absolute; left: 0; transform-origin: 0 0; opacity: 0; transition: opacity 0.35s; }
@@ -109,8 +113,7 @@ const CSS = `
 .bp11 .it.hov .fc { filter: brightness(1.5); opacity: 1; }
 .bp11 .it.lift .fc { opacity: 0; }
 .bp11 .it .art { position: absolute; pointer-events: none; filter: drop-shadow(0 1px 0 rgba(0,0,0,0.55)); }
-.bp11 .it .n { position: absolute; font-size: 9px; line-height: 1; color: #fff8e0; pointer-events: none; text-shadow: 1px 0 0 #120e07, -1px 0 0 #120e07, 0 1px 0 #120e07, 0 -1px 0 #120e07, 1px 1px 0 #120e07; letter-spacing: 0.02em; }
-.bp11 .it .n.max { color: #ffd24a; }
+.bp11 .it .n { position: absolute; pointer-events: none; }
 .bp11 .it.lift { cursor: grabbing; z-index: 50; }
 .bp11 .it.lift .art { filter: drop-shadow(2px 4px 0 rgba(0,0,0,0.45)); }
 .bp11 .it.settle { animation: bp11Settle 0.42s cubic-bezier(.3,1.6,.5,1) both; animation-delay: var(--d, 0s); }
@@ -141,44 +144,42 @@ const CSS = `
 @keyframes bp11Swing { 0% { transform: rotate(-14deg) translateY(-30px); opacity: 0; } 40% { opacity: 1; } 65% { transform: rotate(4deg); } }
 .bp11 .card .pic { position: absolute; left: 6px; top: 15px; width: 100px; height: 52px; display: grid; place-items: center; }
 .bp11 .card .nm { position: absolute; left: 4px; right: 4px; top: 66px; display: flex; justify-content: center; }
-.bp11 .card .note { position: absolute; left: 9px; right: 8px; top: 92px; font-size: 7.5px; line-height: 8.6px; color: #3a2e18; }
-.bp11 .card .facts { position: absolute; left: 8px; right: 8px; top: 120px; display: flex; gap: 5px; align-items: center; font-size: 7.5px; line-height: 1; color: #3a2e18; white-space: nowrap; }
+.bp11 .card .note { position: absolute; left: 9px; top: 90px; }
+.bp11 .card .facts { position: absolute; left: 8px; right: 8px; top: 121px; display: flex; gap: 4px; align-items: center; white-space: nowrap; }
 .bp11 .card .facts span { display: inline-flex; align-items: center; gap: 2px; }
-.bp11 .card .stamp { position: absolute; right: 7px; top: 56px; transform: rotate(-12deg); font-size: 7px; padding: 1px 3px 0; border: 1px solid currentColor; letter-spacing: 0.06em; opacity: 0.85; }
-.bp11 .card .stamp.safe { color: #2f6b2a; } .bp11 .card .stamp.unknown { color: #a8661a; } .bp11 .card .stamp.poison { color: #a8382a; }
-.bp11 .card .acts { position: absolute; left: 5px; right: 5px; bottom: 6px; display: flex; gap: 3px; justify-content: center; }
-.bp11 .card .acts button { all: unset; box-sizing: border-box; width: 24px; height: 22px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; cursor: pointer;
-  background: #c8a868; box-shadow: inset 0 0 0 1px #5a4628, inset 0 -2px 0 rgba(0,0,0,0.18); font-size: 5.5px; letter-spacing: 0.04em; color: #2e2414; text-transform: uppercase; }
-.bp11 .card .acts button:hover { background: #dcc080; }
-.bp11 .card .acts button:active { transform: translateY(1px); }
-.bp11 .card .acts button.red { background: #c88a6a; }
-.bp11 .card .acts button.go { background: #a8c070; }
-.bp11 .card .acts button:disabled { opacity: 0.45; cursor: default; }
-.bp11 .card .back .txt { position: absolute; left: 9px; right: 8px; top: 18px; bottom: 30px; font-size: 7px; line-height: 8.2px; color: #3a2e18; overflow: hidden; }
-.bp11 .card .back .txt b { color: #2f5a22; font-weight: normal; letter-spacing: 0.04em; }
-.bp11 .card .back .txt i { font-style: normal; color: #7a5a2a; }
-.bp11 .card .hint { position: absolute; left: 0; right: 0; top: 60px; text-align: center; font-size: 7.5px; color: #6a5634; }
+.bp11 .card .stamp { position: absolute; right: 3px; top: 50px; pointer-events: auto; }
+.bp11 .card .kind { position: absolute; right: 2px; top: 9px; }
+.bp11 .card .acts { position: absolute; left: 4px; right: 4px; bottom: 6px; display: flex; gap: 2px; justify-content: center; }
+.bp11 .card .acts button { all: unset; box-sizing: border-box; position: relative; width: 25px; height: 22px; cursor: pointer; }
+.bp11 .card .acts button > canvas { position: absolute; }
+.bp11 .card .acts button > canvas.bk { left: 0; top: 0; }
+.bp11 .card .acts button:hover { filter: brightness(1.08); }
+.bp11 .card .acts button:active > canvas:not(.bk) { transform: translateY(1px); }
+.bp11 .card .acts button:disabled { opacity: 0.45; cursor: default; filter: saturate(0.4); }
+.bp11 .card .back .txt { position: absolute; left: 9px; top: 18px; }
+.bp11 .card .hint { position: absolute; left: 0; right: 0; top: 60px; display: flex; justify-content: center; }
 .bp11 .btns { position: absolute; display: flex; gap: 4px; }
 .bp11 .pbtn { all: unset; box-sizing: border-box; height: 18px; min-width: 18px; padding: 0 4px; display: inline-flex; align-items: center; justify-content: center; gap: 3px; cursor: pointer;
-  border-style: solid; border-width: 3px; border-image: var(--sk-btn-wood) 4 fill / 3px / 0 stretch; color: #fff6dc; font-size: 7px; letter-spacing: 0.06em; text-shadow: 0 1px 0 rgba(0,0,0,0.7); }
+  border-style: solid; border-width: 3px; border-image: var(--sk-btn-wood) 4 fill / 3px / 0 stretch; image-rendering: pixelated; }
 .bp11 .pbtn:hover { filter: brightness(1.15); }
 .bp11 .pbtn:active { transform: translateY(1px); }
 .bp11 .pbtn.green { border-image-source: var(--sk-btn); }
 .bp11 .pbtn.amber { border-image-source: var(--sk-btn-amber); }
 .bp11 .pbtn[hidden] { display: none; }
-.bp11 .keys { position: absolute; font-size: 6.5px; color: rgba(255, 246, 220, 0.75); white-space: nowrap; text-shadow: 0 1px 0 #000; letter-spacing: 0.03em; }
-.bp11 .keys b { color: #ffe9a8; font-weight: normal; }
-.bp11 .tipb { position: absolute; max-width: 120px; font-size: 7.5px; line-height: 8.5px; color: #0c0a0c; background: #fff; padding: 3px 5px 4px; box-shadow: 0 0 0 1px #0c0a0c, 2px 2px 0 1px rgba(0,0,0,0.4); animation: bp11Pop 0.35s cubic-bezier(.2,1.7,.4,1) both 0.9s; }
-.bp11 .tipb b { display: block; font-size: 6px; letter-spacing: 0.1em; color: #6a5634; }
+.bp11 .keys { position: absolute; white-space: nowrap; opacity: 0.9; }
+.bp11 .tipb { position: absolute; animation: bp11Pop 0.35s cubic-bezier(.2,1.7,.4,1) both 0.9s; transform-origin: 10% 100%; }
+.bp11 .tipb > canvas { position: absolute; left: 0; top: 0; }
 @keyframes bp11Pop { 0% { transform: scale(0.3); opacity: 0; } 60% { transform: scale(1.06); opacity: 1; } }
 .bp11 .sign { position: absolute; cursor: pointer; }
 .bp11 .sign:hover { filter: brightness(1.12); }
-.bp11 .sign .lbl { position: absolute; left: 8px; top: 9px; width: 44px; text-align: center; font-size: 8px; color: #fff3cc; text-shadow: 0 1px 0 #2a1408; letter-spacing: 0.05em; pointer-events: none; }
+.bp11 .sign .lbl { position: absolute; left: 6px; top: 8px; width: 48px; display: flex; justify-content: center; pointer-events: none; }
 .bp11 .chest { position: absolute; }
 .bp11 .chest.in { animation: bp11Drop 0.5s cubic-bezier(.3,1.5,.5,1) both 0.15s; }
-.bp11 .rotb { position: absolute; width: 20px; height: 20px; display: none; place-items: center; z-index: 60; border-radius: 50%; background: rgba(20,14,6,0.75); box-shadow: 0 0 0 1px #ffd24a; }
+.bp11 .rotb { position: absolute; width: 21px; height: 22px; display: none; place-items: center; z-index: 60; }
+.bp11 .rotb > canvas { position: absolute; left: 0; top: 0; }
+.bp11 .rotb > canvas.ic { position: relative; }
 .bp11.touch .rotb.on { display: grid; }
-.bp11 .floatmsg { position: absolute; font-size: 8px; color: #fff3cc; text-shadow: 0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000; pointer-events: none; animation: bp11Float 1.1s ease-out forwards; white-space: nowrap; }
+.bp11 .floatmsg { position: absolute; pointer-events: none; animation: bp11Float 1.1s steps(12) forwards; white-space: nowrap; }
 @keyframes bp11Float { 0% { transform: translateY(4px); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(-16px); opacity: 0; } }
 `;
 
@@ -221,11 +222,18 @@ function fitPic(id: string, bw: number, bh: number, up = true): HTMLCanvasElemen
 }
 /** a painted glyph as a canvas (drawn straight from its pixels) */
 function icon(name: string): HTMLCanvasElement { return bufCanvas(pxIconBuf(name), 'ic'); }
-/** an element with an icon and a label */
-function iconLabel(tag: string, cls: string, ic: string | null, label: string): HTMLElement {
+/** bitmap text (art px) as a canvas for the stage */
+function txt(text: string | PxRun[], o: PxTextOpts = {}, cls = ''): HTMLCanvasElement {
+  const c = pxTextCanvas(text, o);
+  if (cls) c.classList.add(...cls.split(' '));
+  return c;
+}
+const INK = '#3a2e18';
+/** an element with an icon and a label (in the bitmap hand) */
+function iconLabel(tag: string, cls: string, ic: string | null, label: string, o: PxTextOpts = { font: 'bold', color: '#fff6dc', shadow: '#2a1408' }): HTMLElement {
   const e = el(tag as 'div', cls);
   if (ic) e.appendChild(icon(ic));
-  if (label) e.appendChild(el('span', '', label));
+  if (label) e.appendChild(txt(label, o));
   return e;
 }
 function bufCanvas(b: { w: number; h: number; bytes: Uint8Array }, cls = ''): HTMLCanvasElement {
@@ -382,10 +390,16 @@ class PackScreen {
 
     // the frozen world, soft and dim (or just a dark veil)
     r.appendChild(el('div', 'bg veil'));
-    if (this.backdrop) { this.backdrop.className = 'bg'; r.appendChild(this.backdrop); }
-    r.appendChild(el('div', 'dim'));
+    if (this.backdrop) { this.backdrop.classList.add('bg'); r.appendChild(this.backdrop); }
     // ---- layout in art px
     this.fit();
+    // no frozen world to show: a dithered vignette over the veil (2 art px per dot)
+    if (!this.backdrop) {
+      const vw = Math.ceil(window.innerWidth / this.s / 2) + 1, vh = Math.ceil(window.innerHeight / this.s / 2) + 1;
+      const dim = kitCanvas(ditherVignette(vw, vh, { cx: 0.45, cy: 0.55, inner: 0.3, outer: 1.15, max: 0.6 }), 'dim');
+      dim.style.transform = `scale(${this.s * 2})`;
+      r.appendChild(dim);
+    }
     // ---- the ground strip (full width, behind everything)
     const gc = this.groundCanvas();
     r.appendChild(gc);
@@ -432,6 +446,7 @@ class PackScreen {
     this.card = st.appendChild(el('div', 'card'));
     this.card.style.display = 'none';
     this.rotBtn = st.appendChild(el('div', 'rotb'));
+    this.rotBtn.appendChild(kitCanvas(paintDisc(10, 'ink')));
     this.rotBtn.appendChild(icon('v11rot'));
     this.rotBtn.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); this.rotate(); });
     this.buildButtons();
@@ -449,7 +464,7 @@ class PackScreen {
   private fit() {
     const vw = window.innerWidth, vh = window.innerHeight;
     const L = this.L, CL = this.CL;
-    const M = 6, SCW = 44, GAP = 12, CARD_W = 112, CARD_H = 164, GROUND = 50, TOP = 10;
+    const M = 6, SCW = 44, GAP = 12, CARD_W = 112, CARD_H = 164, GROUND = 50, TOP = 10, HANG = 84;
     const portrait = vh > vw * 1.05;
     const bagH = L.H;
     const chestW = CL ? CL.W + GAP + (this.mode === 'prep' ? 40 : 0) : 0;
@@ -464,13 +479,14 @@ class PackScreen {
       const s2 = Math.min(vw / W2, vh / Hh);
       if (CL && sDock < 1.3 && s2 > sDock * 1.18) { W = W2; cardDock = false; }
     } else {
-      W = Math.max(M + SCW + L.W + M, CL ? CL.W + M * 2 : 0);
-      Hh = TOP + bagH + GROUND + (CL ? CL.H + 6 : 0) + CARD_H + 10;
+      // (on a tall screen the balance hangs above the pack: a narrower stage, bigger pixels)
+      W = Math.max(M + L.W + M, CL ? CL.W + M * 2 : 0);
+      Hh = TOP + HANG + bagH + GROUND + (CL ? CL.H + 6 : 0) + CARD_H + 10;
     }
-    const dpr = Math.min(3, window.devicePixelRatio || 1);
-    let s = Math.min(vw / W, vh / Hh, 3.2);
-    // (snapped to quarter device pixels: whole-pixel snapping wastes too much room on a laptop)
-    s = Math.max(1 / dpr, Math.floor(s * dpr * 4) / (dpr * 4));
+    const dpr = window.devicePixelRatio || 1;
+    let s = Math.min(vw / W, vh / Hh, 4);
+    // whole device pixels per art pixel: every pixel of the art (and of its lettering) the same size
+    s = Math.max(1, Math.floor(s * dpr + 0.02)) / dpr;
     this.s = s;
     this.W = W; this.H = Hh;
     // centre the composition
@@ -479,7 +495,9 @@ class PackScreen {
     this.stage.style.transform = `scale(${s})`;
     this.stage.style.width = W + 'px'; this.stage.style.height = Hh + 'px';
     this.stage.style.left = Math.round(ox * s) + 'px'; this.stage.style.top = Math.round(oy * s) + 'px';
-    this.bagX = M + SCW; this.bagY = TOP;
+    this.bagX = portrait ? M : M + SCW; this.bagY = portrait ? TOP + HANG : TOP;
+    this.scaleX = portrait ? M + 30 : SCALE_X;
+    this.tagDX = portrait ? 10 : -40;
     this.groundY = this.bagY + L.body.y + L.body.h - 7;
     if (!portrait) {
       if (CL) { this.chestX = this.bagX + L.W + GAP; this.chestY = this.groundY + 9 - CL.H; }
@@ -496,6 +514,8 @@ class PackScreen {
     this.stageOX = ox; this.stageOY = oy;
   }
   stageOX = 0; stageOY = 0;
+  /** where the balance hangs (stage x of the tube) and which side its tag swings */
+  scaleX = SCALE_X; tagDX = -40;
 
   private groundCanvas(): HTMLCanvasElement {
     const vw = window.innerWidth, vh = window.innerHeight, s = this.s;
@@ -512,7 +532,7 @@ class PackScreen {
   private buildScale() {
     const st = this.stage;
     const sc = ART.paintScale();
-    const x = SCALE_X;
+    const x = this.scaleX;
     const peg = bufCanvas(ART.paintPeg(groundKind()), 'abs');
     place(peg, -10, -2);
     st.appendChild(peg);
@@ -545,7 +565,12 @@ class PackScreen {
     close.addEventListener('click', e => { e.stopPropagation(); void this.close(); });
     place(b, this.bagX + L.body.x, this.groundY + 33);
     if (!this.touch && !matchMedia('(pointer: coarse)').matches) {
-      const keys = b.appendChild(el('div', 'keys', '<b>drag</b> move · <b>R</b> turn · <b>shift</b> take one · <b>E</b> eat · <b>Esc</b> close'));
+      // as many of the key hints as fit beside the buttons
+      const all: (string | { key: string })[][] = [[{ key: 'DRAG' }, 'move'], [{ key: 'R' }, 'turn'], [{ key: 'E' }, 'eat'], [{ key: 'ESC' }, 'close'], [{ key: 'SHIFT' }, 'take one']];
+      const room = this.W - (this.bagX + L.body.x) - 128;
+      let parts: (string | { key: string })[] = [];
+      for (const pr of all) { const nx = parts.concat(pr); if (paintHint(nx).w > room) break; parts = nx; }
+      const keys = b.appendChild(kitCanvas(paintHint(parts.length ? parts : all[0]), 'keys'));
       keys.style.position = 'static';
       keys.style.marginLeft = '4px';
       this.keysEl = keys;
@@ -560,7 +585,7 @@ class PackScreen {
     // the trail sign beside the chest: set off
     const sign = st.appendChild(el('div', 'sign'));
     sign.appendChild(bufCanvas(ART.paintSign()));
-    sign.appendChild(el('div', 'lbl', 'SET OFF'));
+    sign.appendChild(el('div', 'lbl')).appendChild(txt('SET OFF', { font: 'bold', color: '#fff3cc', shadow: '#2a1408' }));
     place(sign, this.chestX + CL.W + 2, this.groundY + 9 - 70);
     sign.title = 'Set off (Enter)';
     sign.addEventListener('click', e => { e.stopPropagation(); this.result = 'go'; void this.close(); });
@@ -578,8 +603,15 @@ class PackScreen {
     const tip = p.tip?.();
     if (tip) {
       const [who, text] = tip;
-      const tb = st.appendChild(el('div', 'tipb', `<b>${esc(who.toUpperCase())}</b>${esc(text)}`));
-      place(tb, this.chestX + 6, Math.max(2, this.chestY - 30));
+      const tb = st.appendChild(el('div', 'tipb'));
+      const nmC = txt(who.toUpperCase(), { font: 'tiny', color: '#6a5634' });
+      const bodyC = txt(text, { color: '#0c0a0c', maxW: 116, lineH: 9 });
+      const bw = Math.max(nmC.width, bodyC.width) + 8, bh = nmC.height + bodyC.height + 1;
+      tb.appendChild(kitCanvas(paintBubble(bw, bh, { tail: 'down', tailX: 10 })));
+      nmC.style.cssText += ';position:absolute;left:4px;top:1px'; bodyC.style.cssText += `;position:absolute;left:4px;top:${nmC.height}px`;
+      tb.appendChild(nmC); tb.appendChild(bodyC);
+      place(tb, this.chestX + 6, Math.max(2, this.chestY - bh - 6));
+      void esc;
     }
   }
 
@@ -857,9 +889,9 @@ class PackScreen {
         // the count sits in the lowest, right-most filled cell
         const cs = fpCells(fp, !!r);
         const [bx, by] = cs.reduce((a, c) => (c[1] > a[1] || (c[1] === a[1] && c[0] > a[0]) ? c : a), cs[0]);
-        const n = e.appendChild(el('span', 'n' + (s.n >= (d?.stack ?? 1) ? ' max' : ''), String(s.n)));
-        n.style.right = (w - 1 - bx) * CELL + 2 + 'px';
-        n.style.bottom = (h - 1 - by) * CELL + 1 + 'px';
+        const n = e.appendChild(txt(String(s.n), { font: 'bold', color: s.n >= (d?.stack ?? 1) ? '#ffd24a' : '#fff8e0', outline: '#120e07' }, 'n'));
+        n.style.right = (w - 1 - bx) * CELL + 1 + 'px';
+        n.style.bottom = (h - 1 - by) * CELL - 2 + 'px';
       }
       e.title = '';
     }
@@ -1009,13 +1041,13 @@ class PackScreen {
     const sway = Math.sin(performance.now() / 900) * 0.6 + this.wVel * 1.6;
     g.style.transform = `rotate(${sway.toFixed(2)}deg)`;
     // the strap from the hook to the top of the bag
-    const hx = SCALE_X, hy = 2 + 44 + 30 + ext;
+    const hx = this.scaleX, hy = 2 + 44 + 30 + ext;
     const bx = this.bagX + this.L.body.x + 3, by = this.bagY + this.L.body.y + 2;
     const dx = bx - hx, dy = by - hy;
     const len = Math.hypot(dx, dy);
     place(this.strapEl, hx, hy, len);
     this.strapEl.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
-    place(this.gtag, hx - 40, 30);
+    place(this.gtag, hx + this.tagDX, 30);
     this.gtag.style.transform = `rotate(${(7 + Math.sin(performance.now() / 700) * 1.5).toFixed(2)}deg)`;
   }
 
@@ -1062,24 +1094,39 @@ class PackScreen {
     front.appendChild(bufCanvas(ART.paintTag(112, 164), 'paper'));
     const pic = front.appendChild(el('div', 'pic'));
     pic.appendChild(fitPic(id, 100, 50));
+    // what kind of thing, on a strip of tape over the corner
+    front.appendChild(kitCanvas(ART.paintKindTape(KIND_WORD[d.kind] ?? d.kind, d.kind), 'kind'));
     const nm = front.appendChild(el('div', 'nm'));
-    nm.appendChild(handLetter(d.name, { px: 12, maxW: 100 }));
+    const nmC = nm.appendChild(handLetter(d.name, { px: 12, maxW: 100 }));
+    const twoLines = nmC.height > 18;
     const fi = foodInfo(id);
     if (fi.edible) {
-      const st = front.appendChild(el('div', `stamp ${fi.verdict}`, fi.verdict === 'safe' ? 'EDIBLE' : fi.verdict === 'poison' ? 'POISON' : 'UNKNOWN'));
+      const word = fi.verdict === 'safe' ? 'EDIBLE' : fi.verdict === 'poison' ? 'POISON' : 'UNKNOWN';
+      const ink = fi.verdict === 'safe' ? '#2f6b2a' : fi.verdict === 'poison' ? '#a8382a' : '#a8661a';
+      const st = front.appendChild(kitCanvas(paintStamp(word, ink, -0.21, id.length + 3), 'stamp'));
       st.title = fi.verdict === 'unknown' ? 'Not researched yet: it might be poisonous' : '';
     }
-    front.appendChild(el('div', 'note', esc(firstSentence(d.desc))));
+    const note = front.appendChild(txt(firstSentence(d.desc), { color: INK, maxW: 95, maxLines: twoLines ? 2 : 3, lineH: 9 }, 'note'));
+    if (twoLines) note.style.top = '96px';
     const facts = front.appendChild(el('div', 'facts'));
     const kg = weightOf(id);
-    facts.appendChild(iconLabel('span', '', 'v11kg', `${kgText(kg)}${n > 1 ? ` ×${n}` : ''}`));
-    if (fi.edible && fi.energy) facts.appendChild(iconLabel('span', '', 'v11bolt', `+${fi.energy}`));
-    if (d.lab && analysisRp(id) > 0) facts.appendChild(iconLabel('span', '', 'v11lens', 'RP'));
-    const kw = facts.appendChild(el('span', '', KIND_WORD[d.kind] ?? d.kind));
-    kw.style.cssText = 'margin-left:auto;opacity:0.7';
+    const FACT: PxTextOpts = { color: INK };
+    facts.appendChild(iconLabel('span', '', 'v11kg', `${kgText(kg)}${n > 1 ? ` ×${n}` : ''}`, FACT));
+    if (fi.edible && fi.energy) facts.appendChild(iconLabel('span', '', 'v11bolt', `+${fi.energy}`, { color: '#2f5a22' }));
+    if (d.lab && analysisRp(id) > 0) facts.appendChild(iconLabel('span', '', 'v11lens', 'RP', { color: '#2a5a7a' }));
     const acts = front.appendChild(el('div', 'acts'));
-    const btn = (ic: string, label: string, fn: () => void, cls = '', on = true) => {
-      const b = acts.appendChild(iconLabel('button', cls, ic, label)) as HTMLButtonElement;
+    const btn = (ic: string, label: string, fn: () => void, cls = '', on = true, host = acts) => {
+      const pal = cls === 'go' ? 'green' : cls === 'red' ? 'red' : 'paper';
+      const lb = txt(label.toUpperCase(), { font: 'tiny', color: pal === 'paper' ? '#2e2414' : '#fff6dc' });
+      const bw = Math.max(25, lb.width + 4);
+      const b = host.appendChild(el('button', cls)) as HTMLButtonElement;
+      b.style.width = bw + 'px';
+      b.appendChild(kitCanvas(paintBtn(bw, 22, pal), 'bk'));
+      const ic2 = b.appendChild(icon(ic));
+      ic2.style.left = Math.round((bw - ic2.width) / 2) + 'px'; ic2.style.top = Math.max(2, 11 - ic2.height) + 'px';
+      b.appendChild(lb);
+      lb.style.left = Math.round((bw - lb.width) / 2) + 'px'; lb.style.top = '10px';
+      b.title = label;
       b.disabled = !on;
       b.addEventListener('pointerdown', e => e.stopPropagation());
       b.addEventListener('click', e => { e.stopPropagation(); fn(); });
@@ -1116,11 +1163,10 @@ class PackScreen {
       lines.push(times ? `<b>LAB</b> ${esc(d.lab.text)}` : `<b>LAB</b> <i>Not analysed yet${analysisRp(id) ? ` (+${analysisRp(id)} RP at the laptop)` : ''}.</i>`);
     }
     if (d.kind === 'tool') lines.push('<b>CARRIED</b> in its own place on the pack: tools never take room inside.');
-    back.appendChild(el('div', 'txt', lines.join('<br>')));
+    const runs = pxRunsFromHTML(lines.join('<br>'), { b: '#2f5a22', i: '#7a5a2a', base: INK }).map(r => (r.color === '#2f5a22' ? { ...r, font: 'bold' as const } : r));
+    back.appendChild(txt(runs, { color: INK, maxW: 95, lineH: 9, maxLines: 12 }, 'txt'));
     const bacts = back.appendChild(el('div', 'acts'));
-    const bb = bacts.appendChild(iconLabel('button', '', 'back', 'front')) as HTMLButtonElement;
-    bb.addEventListener('pointerdown', e => e.stopPropagation());
-    bb.addEventListener('click', e => { e.stopPropagation(); card.classList.remove('flip'); sfx('pageTurn', { vol: 0.35 }); });
+    btn('back', 'front', () => { card.classList.remove('flip'); sfx('pageTurn', { vol: 0.35 }); }, '', true, bacts);
     if (swing && !reduced()) { card.classList.add('swing'); sfx('pageTurn', { vol: 0.25, pitch: 1.3 }); }
   }
 
@@ -1189,7 +1235,7 @@ class PackScreen {
 
   private float(s: Stack | null, text: string) {
     const e = s ? this.itemEls.get(s) : null;
-    const f = this.stage.appendChild(el('div', 'floatmsg', esc(text)));
+    const f = this.stage.appendChild(txt(text, { font: 'bold', color: '#fff3cc', outline: '#120e07' }, 'floatmsg'));
     let x = this.bagX + this.L.open.x + 10, y = this.bagY + this.L.open.y;
     if (e) { const r = e.getBoundingClientRect(), sr = this.stage.getBoundingClientRect(); x = (r.left - sr.left) / this.s; y = (r.top - sr.top) / this.s - 8; }
     place(f, Math.round(x), Math.round(y));
