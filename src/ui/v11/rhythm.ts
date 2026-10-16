@@ -175,7 +175,7 @@ function paintInstrument(b: Buf) {
     const u = (x + y) / 5, v = (x - y) / 5;
     const edge = Math.abs(u - Math.round(u)) < 0.12 || Math.abs(v - Math.round(v)) < 0.12;
     const l = 3.8 - nx * 0.8 - ny * 0.9;
-    let c = C.skin[Math.max(0, Math.min(5, Math.round(l + dith(x, y) * 0.8 - 0.4 - (edge ? 1.6 : 0))))];
+    let c = C.skin[Math.max(0, Math.min(5, Math.round(l + (dith(x, y) - 0.5) * 0.35 - (edge ? 1.4 : 0))))];
     if (d > 0.9) { const k = Math.floor(Math.atan2(ny, nx) * 12 + 40) % 3; c = k === 0 ? C.ink : k === 1 ? C.ochre[3] : C.paper; }
     put(b, x, y, c);
   }
@@ -248,6 +248,8 @@ export async function runHueKiri(o: LessonOpts = {}): Promise<LessonResult | nul
   let quit = false, leaving = false;
   let pluckT = 0, pluckLane = 0, countBeat = -1;
   const speak = (s: string) => { say = { text: s, t: 0 }; };
+  const laneP: (Pop | null)[] = [null, null, null, null];
+  const popAt = (lane: number, p: Pop) => { const old = laneP[lane]; if (old) { const i = pops.indexOf(old); if (i >= 0) pops.splice(i, 1); } laneP[lane] = p; pops.push(p); };
   const win = () => diff === 'easy' ? { perf: 0.075, good: 0.16 } : diff === 'hard' ? { perf: 0.045, good: 0.1 } : { perf: 0.06, good: 0.13 };
   const lead = () => (diff === 'easy' ? 2.3 : diff === 'hard' ? 1.55 : 1.9);
 
@@ -297,7 +299,7 @@ export async function runHueKiri(o: LessonOpts = {}): Promise<LessonResult | nul
     synth.pluck(best.midi, 0, 0.55, best.hit === 'perfect' ? 1 : 0.6);
     shiver[lane] = 1;
     const [px] = proj(laneX(lane), 0);
-    pops.push({ text: best.hit === 'perfect' ? 'TINO PAI!' : 'PAI', x: px, y: HIT_Y - 16, t: 0, c: best.hit === 'perfect' ? C.gold : C.green });
+    popAt(lane, { text: best.hit === 'perfect' ? 'TINO PAI!' : 'PAI', x: px, y: HIT_Y - 16, t: 0, c: best.hit === 'perfect' ? C.gold : C.green });
     for (let i = 0; i < (best.hit === 'perfect' ? 14 : 7); i++) sparks.push({ x: px, y: HIT_Y, vx: (Math.random() - 0.5) * 90, vy: -Math.random() * 90 - 20, life: 0.5 + Math.random() * 0.4, c: Math.random() < 0.5 ? LANE[lane].l : C.white });
     if (combo >= nextPraise) { nextPraise += 15; speak(pick(T.streak)); }
   }
@@ -307,7 +309,7 @@ export async function runHueKiri(o: LessonOpts = {}): Promise<LessonResult | nul
     mana = Math.max(0, mana - 0.06);
     padBad[n.lane] = 1;
     const [px] = proj(laneX(n.lane), 0);
-    pops.push({ text: 'AUĒ', x: px, y: HIT_Y - 14, t: 0, c: C.grey });
+    popAt(n.lane, { text: 'AUĒ', x: px, y: HIT_Y - 14, t: 0, c: C.grey });
     if (streakMiss === 4) speak(pick(T.miss));
     synth.thump(synth.now() ?? 0, 0.12, 70);
   }
@@ -398,7 +400,7 @@ export async function runHueKiri(o: LessonOpts = {}): Promise<LessonResult | nul
     if (phase === 'result') drawResult(t);
     drawSay(dt);
     for (let i = sparks.length - 1; i >= 0; i--) { const s = sparks[i]; s.life -= dt; s.vy += 180 * dt; s.x += s.vx * dt; s.y += s.vy * dt; if (s.life <= 0) { sparks.splice(i, 1); continue; } put(buf, s.x, s.y, s.c); if (s.life > 0.3) put(buf, s.x + 1, s.y, s.c); }
-    for (let i = pops.length - 1; i >= 0; i--) { const p = pops[i]; p.t += dt; if (p.t > 0.7) { pops.splice(i, 1); continue; } const k = p.t < 0.1 ? 2 : 1; textC(buf, p.text, p.x, p.y - p.t * 18, p.c, { scale: k, outline: C.ink }); }
+    for (let i = pops.length - 1; i >= 0; i--) { const p = pops[i]; p.t += dt; if (p.t > 0.7) { pops.splice(i, 1); continue; } const k = p.y < 90 ? 2 : 1; textC(buf, p.text, p.x, p.y - p.t * 18, p.c, { scale: k, outline: C.ink }); }
   };
 
   function drawHighway(t: number) {
@@ -410,13 +412,15 @@ export async function runHueKiri(o: LessonOpts = {}): Promise<LessonResult | nul
       for (let x = Math.floor(xl); x <= Math.ceil(xr); x++) {
         const u = (x - xl) / Math.max(1, xr - xl);
         const lane = Math.min(3, Math.floor(u * 4));
-        const depthT = z * 4 + scroll * (song.bpm / 60) * 0.5;
-        const scale = ((Math.floor(depthT * 2) + Math.floor(u * 16)) & 1) === 0;
-        const edge = Math.abs(u * 4 - Math.round(u * 4)) < 0.035 * (1 + z * 3);
-        const fade = 1 - z * 0.7;
+        const depthT = z * 6 + scroll * (song.bpm / 60) * 0.5;
+        const lu = u * 4 - lane;
+        const sv = depthT * 2 + (lane & 1) * 0.5, su = lu * 3;
+        const net = Math.abs(((sv + su) % 1 + 1) % 1 - 0.5) < 0.06 || Math.abs(((sv - su) % 1 + 1) % 1 - 0.5) < 0.06;
+        const edge = Math.abs(u * 4 - Math.round(u * 4)) < 0.03 * (1 + z * 3);
+        const fade = 1 - z * 0.6;
         if (x === Math.floor(xl) || x === Math.ceil(xr)) { put(buf, x, y, C.ink); continue; }
-        if (edge) { dput(buf, x, y, LANE[lane].c, 0.7 * fade); continue; }
-        dput(buf, x, y, scale ? LANE[lane].d : C.ink2, (scale ? 0.7 : 0.82) * fade + 0.1);
+        if (edge) { dput(buf, x, y, LANE[lane].c, 0.75 * fade); continue; }
+        if (dith(x, y) < 0.86 * fade + 0.1) put(buf, x, y, net ? LANE[lane].d : C.ink2);
       }
     }
     // beat lines across the back
@@ -449,7 +453,7 @@ export async function runHueKiri(o: LessonOpts = {}): Promise<LessonResult | nul
         }
         if ((n.hit && n.hit !== 'miss') || z0 < -0.08) continue;
         const [x, y] = proj(laneX(n.lane), Math.max(-0.08, z0));
-        const s = 9 / (1 + Math.max(0, z0) * DEPTH);
+        const s = 12 / (1 + Math.max(0, z0) * DEPTH);
         drawScale(x, y, s, n.lane, n.hit === 'miss');
       }
     }
@@ -458,6 +462,7 @@ export async function runHueKiri(o: LessonOpts = {}): Promise<LessonResult | nul
   function drawScale(cx: number, cy: number, s: number, lane: number, dead: boolean) {
     const L = LANE[lane];
     const r = Math.max(2, s);
+    if (!dead) for (let y = -r * 0.9; y <= r * 0.9; y++) for (let x = -r * 1.4; x <= r * 1.4; x++) { const d = Math.abs(x) / (r * 1.4) + Math.abs(y) / (r * 0.9); if (d <= 1 && d > 0.75) dput(buf, cx + x, cy + y, L.l, 0.35); }
     for (let y = -r * 0.6; y <= r * 0.6; y++) for (let x = -r; x <= r; x++) {
       const d = Math.abs(x) / r + Math.abs(y) / (r * 0.6);
       if (d > 1) continue;
