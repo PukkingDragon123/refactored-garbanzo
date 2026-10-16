@@ -108,7 +108,7 @@ function fire(f: FieldScene, x: number, big: number, z: number) {
   f.main.add(new AnimProp(propAnims.flame, x, y - 1, z, 12, { emissive: 1, sx: big, sy: big }));
   f.main.add(new AnimProp(propAnims.flame, x + 4 * big, y - 2, z + 0.1, 10, { emissive: 1, sx: 0.7 * big, sy: 0.8 * big }));
   f.main.add(new AnimProp(propAnims.flame, x - 4 * big, y - 1, z + 0.1, 9, { emissive: 1, sx: 0.6 * big, sy: 0.7 * big }));
-  f.main.add(new LightSource(x, y - 12 * big, 150 * big, [1, 0.6, 0.28], 1.2, z + 1, A.glow, 0.6 * big, 0.18, 0.25));
+  f.main.add(new LightSource(x, y - 16 * big, 120 * big, [1, 0.58, 0.26], 0.62, z + 1, A.glow, 0.32 * big, 0.16, 0.06));
   f.lights.push({ x, y: y - 10, r: 150 * big, k: 0.8 });
   let t = 0;
   f.main.add(new Custom(z + 2, () => {}, dt => {
@@ -197,7 +197,7 @@ export async function buildVillage(f: FieldScene) {
   put(f, 'koroBench', () => P.bench(26), X.koroSeat, -1, { dy: 1 });
   // the fire pit on the marae, its ring of logs
   put(f, 'firepit', () => firePit(), X.fire, -1, { dy: 1 });
-  for (const dx of [-44, -80, 60, 90, 120]) put(f, `fireLog:${dx}`, () => P.logSeat(24), X.fire + dx, -1.2, { dy: 1 });
+  for (const dx of [-45, -105, 77, 97]) put(f, `fireLog:${dx}`, () => P.logSeat(dx === 97 ? 22 : 26), X.fire + dx, -1.2, { dy: 1 });
   if (night || f.tod === 'dusk') fire(f, X.fire, night ? 1.4 : 0.9, -0.6);
 
   // ---------------------------------------------------------------- the cooking
@@ -242,7 +242,7 @@ export async function buildVillage(f: FieldScene) {
       put(f, `torch:${x}`, P.torch, x, -0.5);
       const y = villageGround(x) - 33;
       main.add(new AnimProp(propAnims.flame, x, y, -0.4, 11, { emissive: 1, sx: 0.5, sy: 0.6 }));
-      main.add(new LightSource(x, y - 6, 80, [1, 0.62, 0.3], 0.8, -0.3, A.glow, 0.3, 0.2, 0.2));
+      main.add(new LightSource(x, y - 6, 70, [1, 0.62, 0.3], 0.5, -0.3, A.glow, 0.18, 0.2, 0.06));
       f.lights.push({ x, y, r: 80, k: 0.5 });
     }
   }

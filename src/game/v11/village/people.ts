@@ -45,8 +45,8 @@ interface VDef {
   /** kids: roam this range by day */
   roam?: [number, number];
 }
-const fireL = (dx: number, anim: string): Station => ({ x: X.fire - dx, anim, face: 1, stay: 999 });
-const fireR = (dx: number, anim: string): Station => ({ x: X.fire + dx, anim, face: -1, stay: 999 });
+const fireL = (dx: number, anim: string): Station => ({ x: X.fire - dx * 1.25, anim, face: 1, stay: 999 });
+const fireR = (dx: number, anim: string): Station => ({ x: X.fire + dx * 1.25, anim, face: -1, stay: 999 });
 export const VILLAGERS: VDef[] = [
   { id: 'koro', name: 'Koro Wiremu', adult: true,
     day: [{ x: X.koroSeat, anim: 'sit', face: -1, stay: 70 }, { x: X.marae[0] + 40, anim: 'armsCrossed', face: 1, stay: 18 }, { x: X.wakaBuild - 44, anim: 'talk', face: 1, stay: 22 }],
