@@ -231,7 +231,8 @@ function chamfer(m: Uint8Array): Float32Array {
 function shapeW(s: Shape, x: number, y: number, ef: EllF | null): number {
   if (ef) return 1 - ef(x, y);
   let best = 1e9;
-  const p = s.s;
+  const sp = s as { s: [number, number][]; r: number };
+  const p = sp.s;
   for (let i = 1; i < p.length; i++) {
     const [ax, ay] = p[i - 1], [bx, by] = p[i];
     const vx = bx - ax, vy = by - ay, l2 = vx * vx + vy * vy || 1;
@@ -239,7 +240,7 @@ function shapeW(s: Shape, x: number, y: number, ef: EllF | null): number {
     const ex = x - ax - vx * t, ey = y - ay - vy * t, d = ex * ex + ey * ey;
     if (d < best) best = d;
   }
-  return 1 - Math.sqrt(best) / s.r;
+  return 1 - Math.sqrt(best) / sp.r;
 }
 function shapeBox(s: Shape): [number, number, number, number] {
   if ('e' in s) { const [cx, cy, rx, ry] = s.e; const r = Math.max(rx, ry) * 1.45 + 16; return [cx - r, cy - r, cx + r, cy + r]; }
@@ -351,7 +352,7 @@ export async function buildFields(): Promise<Fields> {
           case 'dome': h += r.h * clamp(kk * (2 - kk)); break;
           case 'basin': h -= r.h * smoothstep(0, r.edge, kk); break;
           case 'rolling': if (kk > 0) h += r.h * (fbm2(x * r.f, y * r.f, 3, 35 + k) - 0.38) * smoothstep(0, 0.35, kk); break;
-          case 'terrace': case 'poly': break;
+          case 'terrace': break;
         }
       }
       // the rocky hills: tussock domes

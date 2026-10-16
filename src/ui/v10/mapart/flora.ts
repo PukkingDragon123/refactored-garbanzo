@@ -282,7 +282,7 @@ export function placeFlora(f: Fields, L: Light, l: Layer, feats: Feat[]) {
   const dry = (i: number) => i >= 0 && land[i] === 1 && wat[i] === 0 && wat[i - 1] === 0 && wat[i + 1] === 0 && wat[i - W] === 0 && wat[i + W] === 0;
   // clearings: the camp, the village, the pā's top, wallows, the falls' pool, the sinkhole
   const clear: [number, number, number][] = [
-    [LM.tent[0] + 10, LM.tent[1], 46], [LM.wreck[0], LM.wreck[1], 22], [LM.village[0], LM.village[1] - 4, 86], [LM.pa[0], LM.pa[1], 36],
+    [LM.tent[0] + 10, LM.tent[1], 52], [LM.wreck[0], LM.wreck[1], 30], [LM.village[0], LM.village[1] - 6, 136], [LM.pa[0], LM.pa[1], 44], [LM.lookout[0] + 24, LM.lookout[1] + 8, 40],
     [LM.plunge[0], LM.plunge[1], 20], [LM.sink[0], LM.sink[1], 0], [LM.boatyard[0], LM.boatyard[1], 20], [LM.signpost[0], LM.signpost[1], 8],
     [LM.whale[0], LM.whale[1], 20], ...WALLOWS.map(([x, y, r]) => [x, y, r + 8] as [number, number, number]),
   ];
@@ -427,6 +427,7 @@ export function placeFlora(f: Fields, L: Light, l: Layer, feats: Feat[]) {
           else if (r0 < 0.03 && pt < 0.5) { const rr = 2 + r1 * 1.2; add(x, y, (sx, sy, lv) => shrub(l, sx, sy, rr, MANUKA, seed, lv)); }
           break;
         }
+        case B.garden: break;
         case B.terraces: {
           if (!ok) break;
           if (r0 < 0.05) { const rr = 4 + r1 * 2; add(x, y, (sx, sy, lv) => { trunk(l, sx, sy, 3, P.trunk, 1); crown(l, sx, sy - 2 - rr * 0.8, rr, ramps('tawa', P.tawa)[seed & 7], lv, seed, 2); }); }

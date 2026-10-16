@@ -130,11 +130,11 @@ export const RANGE_E: [number, number, number, number, number] = RE([780, 262, 1
 
 /** the camp, the wreck and the other landmarks (where they stand on the ground) */
 export const LM = {
-  tent: G(170, 108), fire: G(180, 110), flag: G(164, 106), table: G(188, 107), boatyard: G(150, 109), signpost: G(196, 116),
+  tent: G(170, 115), fire: G(180, 117), flag: G(163, 113), table: G(190, 114), boatyard: G(148, 113), signpost: G(198, 121),
   wreck: G(88, 92),
   grove: G(218, 112), stream: G(248, 108), seals: G(276, 108),
   cave: G(312, 112), cove: G(340, 110), track: G(356, 128),
-  arch: G(392, 92), grotto: G(380, 100),
+  arch: G(406, 70), grotto: G(380, 100), stacks: GP([[420, 82], [372, 74], [516, 70], [530, 74], [796, 54], [930, 262], [600, 576], [356, 562], [880, 560]]),
   village: G(208, 354), wharenui: G(206, 349),
   pa: G(316, 304),
   falls: G(534, 264), plunge: G(526, 271),
@@ -142,7 +142,7 @@ export const LM = {
   bones: G(596, 264),
   volcano: G(808, 44),
   sink: G(522, 470),
-  farfall: G(470, 553),
+  farfall: G(470, 572),
   stack: G(214, 30),
   lookout: G(300, 186),
   bridge: G(336, 274),
@@ -170,7 +170,7 @@ export const SMOKES: { at: P2; kind: 'smoke' | 'steam' | 'spray' | 'ash'; rate: 
   { at: [651, 418], kind: 'steam', rate: 1.0, loc: 'geovalley' },
   { at: [636, 424], kind: 'steam', rate: 0.8, loc: 'geovalley' },
   { at: [526, 270], kind: 'spray', rate: 3.2, loc: 'falls' },
-  { at: [470, 556], kind: 'spray', rate: 2.2, loc: 'farcoast' },
+  { at: [470, 578], kind: 'spray', rate: 2.2, loc: 'farcoast' },
   { at: [522, 474], kind: 'steam', rate: 1.8, loc: 'unknown' },
 ] as { at: P2; kind: 'smoke' | 'steam' | 'spray' | 'ash'; rate: number; loc: string }[]).map(s => ({ ...s, at: G(s.at[0], s.at[1]) }));
 
@@ -213,7 +213,7 @@ export const CRITTERS = {
   colony: G(808, 44),
   waka: [GP([[96, 318], [124, 324], [146, 318]]), GP([[196, 362], [214, 368], [234, 372]])],
   kitten: G(186, 97),
-  people: GP([[177, 111], [184, 112], [182, 108]]),
+  people: GP([[177, 118], [184, 119], [182, 115]]),
 };
 
 /** how far either side of the trail Mori sees (map px) as he walks a place */
@@ -253,11 +253,11 @@ export const VISTAS: Record<string, [number, number, number, number][]> = Object
 /** extra streams (beyond atlas RIVERS): east-side torrents and the southern rivers */
 export const EXTRA_RIVERS: P2[][] = [
   GP([[836, 300], [858, 326], [878, 342], [906, 352]]),
-  GP([[502, 488], [490, 512], [478, 534], [470, 552]]),
+  GP([[502, 488], [490, 512], [478, 534], [471, 556], [470, 578]]),
   GP([[338, 418], [306, 404], [276, 392], [250, 378]]),
   GP([[734, 250], [714, 270], [698, 288], [686, 300]]),
-  GP([[760, 310], [772, 350], [780, 390], [792, 430], [812, 476], [826, 520]]),
-  GP([[160, 440], [140, 470], [122, 500], [112, 512]]),
+  GP([[760, 310], [772, 350], [780, 390], [792, 430], [812, 476], [824, 516], [826, 552]]),
+  GP([[160, 440], [140, 470], [122, 500], [100, 512], [80, 514], [60, 514]]),
 ];
 
 /** the reef, the shelf's drop-off and the Deep (sea features; ellipses in map px) */
