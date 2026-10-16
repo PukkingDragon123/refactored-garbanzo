@@ -85,175 +85,188 @@ function thatchGable(b: PixelBuffer, cx: number, top: number, half: number, h: n
 }
 
 // ------------------------------------------------------------------ the wharenui
+// (people are ~62 px tall: the porch is 90 high, the door 50)
 export function wharenui(): Sprite {
-  const W = 200, H = 160;
+  const W = 260, H = 214;
   const b = new PixelBuffer(W, H);
   const cx = W / 2, base = H - 1;
-  const roofTop = 22, roofH = 64, half = 92;
+  const roofTop = 26, roofH = 86, half = 120;
   const wallTop = roofTop + roofH - 2;
-  // the side roof behind (the long thatched body of the house going back), a darker band behind the gable
-  for (let y = roofTop + 10; y < wallTop + 6; y++) for (let x = cx - half - 4; x <= cx + half + 4; x++) {
+  // the long thatched body of the house going back, behind the gable
+  for (let y = roofTop + 12; y < wallTop + 8; y++) for (let x = cx - half - 5; x <= cx + half + 5; x++) {
     const t = (y - roofTop) / roofH;
-    if (Math.abs(x - cx) > t * (half + 4) + 2) continue;
+    if (Math.abs(x - cx) > t * (half + 5) + 2) continue;
     b.set(x, y, dpick(VP.thatch, 1.2 + Math.sin(x * 1.3) * 0.3, x, y));
   }
-  // porch: back wall (dark), floor, door and window
-  const porchL = cx - half + 18, porchR = cx + half - 18;
-  slabWall(b, porchL, wallTop, porchR - porchL, base - wallTop - 6, VP.wood, 7, 6);
-  for (let y = wallTop; y < base - 6; y++) for (let x = porchL; x < porchR; x++) b.set(x, y, mix(b.get(x, y), hex('#120a08'), 0.45));
-  // tukutuku panels alternating with carved poupou along the porch walls (left and right of the door)
-  const panels = [porchL + 2, porchL + 22, porchR - 38, porchR - 18];
-  panels.forEach((px0, i) => {
-    for (let y = wallTop + 8; y < base - 10; y++) for (let x = px0; x < px0 + 16; x++) {
+  // porch: the front wall (in shadow), the floor
+  const porchL = cx - half + 22, porchR = cx + half - 22;
+  slabWall(b, porchL, wallTop, porchR - porchL, base - wallTop - 7, VP.wood, 7, 6);
+  for (let y = wallTop; y < base - 7; y++) for (let x = porchL; x < porchR; x++) b.set(x, y, mix(b.get(x, y), hex('#120a08'), 0.42 + (bayer(x, y) < 0.25 ? 0.06 : 0)));
+  // tukutuku panels alternating with carved poupou along the porch wall, both sides of the door
+  const dw = 24, dh = 50, door0 = cx - dw / 2 - 18;
+  const panelW = 16;
+  const slots: number[] = [];
+  for (let x = porchL + 3; x + panelW < door0 - 4; x += panelW + 3) slots.push(x);
+  for (let x = porchR - 3 - panelW; x > cx + 40; x -= panelW + 3) slots.push(x);
+  slots.forEach((px0, i) => {
+    for (let y = wallTop + 8; y < base - 11; y++) for (let x = px0; x < px0 + panelW; x++) {
       const lx = x - px0, ly = y - wallTop - 8;
       if (i % 2 === 0) {
-        // poupou: a carved ancestor post, red with spiral notches and a pāua-eyed face at the top
-        const face = ly < 14;
-        let c = dpick(VP.ochre, 3.2 - lx / 16 * 1.2, x, y);
+        // poupou: an ancestor post, red with spiral notches, pāua eyes in the face at the top
+        const face = ly < 16;
+        let c = dpick(VP.ochre, 3.2 - lx / panelW * 1.2, x, y);
         if ((lx + ly) % 6 === 0 || (lx - ly + 60) % 6 === 0) c = VP.ochre[1];
         if (face && (lx === 4 || lx === 11) && ly === 6) c = VP.paua;
-        if (face && lx > 5 && lx < 10 && ly === 10) c = VP.black;
+        if (face && lx > 5 && lx < 10 && ly === 11) c = VP.black;
+        if (ly > 30 && Math.abs(lx - 8) < 3 && ly % 12 < 2) c = VP.white;
         b.set(x, y, c);
       } else {
-        // tukutuku: a cream lattice on dark slats, the pattern of stepped diamonds (poutama)
+        // tukutuku: a cream lattice on dark slats, stepped poutama and a niho taniwha band
         const step = (Math.floor(lx / 3) + Math.floor(ly / 3)) % 4 === 0;
         const cross = lx % 3 === 1 && ly % 3 === 1;
-        b.set(x, y, step ? hex('#e8d8a8') : cross ? hex('#c8a040') : (lx % 3 === 0 ? VP.wood[1] : VP.wood[2]));
+        const band = ly % 24 < 3 && (lx + ly) % 4 < 2;
+        b.set(x, y, band ? VP.ochre[3] : step ? hex('#e8d8a8') : cross ? hex('#c8a040') : (lx % 3 === 0 ? VP.wood[1] : VP.wood[2]));
       }
     }
   });
-  // the door (tatau) and window (matapihi) in the middle, carved lintel (pare) above the door
-  const dx = cx - 8;
-  b.rect(dx, base - 34, 16, 28, hex('#0c0606'));
-  for (let x = dx - 4; x < dx + 20; x++) for (let y = base - 42; y < base - 34; y++) b.set(x, y, ((x + y) % 5 === 0) ? VP.ochre[1] : dpick(VP.ochre, 3, x, y));
-  b.set(cx - 3, base - 39, VP.paua); b.set(cx + 2, base - 39, VP.paua);
-  b.rect(cx + 14, base - 32, 12, 9, hex('#0c0606'));
-  b.rect(cx + 13, base - 33, 14, 1, VP.ochre[3]); b.rect(cx + 13, base - 23, 14, 1, VP.ochre[2]);
+  // the door (tatau) with its carved lintel (pare), and the window (matapihi)
+  b.rect(door0, base - 7 - dh, dw, dh, hex('#0c0606'));
+  for (let x = door0 - 5; x < door0 + dw + 5; x++) for (let y = base - 7 - dh - 10; y < base - 7 - dh; y++) b.set(x, y, ((x + y) % 5 === 0) ? VP.ochre[1] : dpick(VP.ochre, 3, x, y));
+  b.set(door0 + 7, base - 7 - dh - 6, VP.paua); b.set(door0 + dw - 8, base - 7 - dh - 6, VP.paua);
+  for (const s of [-1, 1]) for (let y = base - 7 - dh; y < base - 7; y++) b.set(s < 0 ? door0 - 1 : door0 + dw, y, VP.ochre[2]);
+  const wx = cx + 18, wy = base - 44;
+  b.rect(wx, wy, 18, 14, hex('#0c0606'));
+  for (let x = wx - 2; x < wx + 20; x++) { b.set(x, wy - 1, VP.ochre[3]); b.set(x, wy + 14, VP.ochre[2]); }
+  // a pair of shoes left at the door: you go in barefoot
+  b.rect(door0 - 12, base - 9, 4, 2, hex('#2a2018')); b.rect(door0 - 7, base - 9, 4, 2, hex('#2a2018'));
   // porch floor and the front step (paepae)
-  for (let x = porchL - 4; x < porchR + 4; x++) { b.set(x, base - 6, VP.wood[3]); for (let y = base - 5; y <= base; y++) b.set(x, y, dpick(VP.wood, 2 - (y - base + 5) * 0.2, x, y)); }
-  // porch rafters (heke) radiating under the gable, painted with kōwhaiwhai scrolls
-  for (let y = roofTop + 8; y < wallTop; y++) {
+  for (let x = porchL - 6; x < porchR + 6; x++) { b.set(x, base - 7, VP.wood[4]); for (let y = base - 6; y <= base; y++) b.set(x, y, dpick(VP.wood, 2.2 - (y - base + 6) * 0.2, x, y)); }
+  // porch rafters (heke) radiating under the gable, painted with kōwhaiwhai: white koru on red and black
+  for (let y = roofTop + 10; y < wallTop; y++) {
     const t = (y - roofTop) / roofH, hw = t * half;
-    for (let x = -hw + 6; x <= hw - 6; x++) {
+    for (let x = -hw + 8; x <= hw - 8; x++) {
       const X = Math.round(cx + x);
-      const r = Math.floor((x / Math.max(1, hw)) * 7 + 7);
-      const inRafter = Math.abs((x / Math.max(1, hw)) * 7 - Math.round((x / Math.max(1, hw)) * 7)) < 0.16;
+      const u = (x / Math.max(1, hw)) * 8;
+      const inRafter = Math.abs(u - Math.round(u)) < 0.14;
       let c = hex('#1a0e0a');
-      if (inRafter) {
-        // a koru scroll along the rafter: white curls and black on red
-        const s = Math.sin(y * 0.7 + r * 1.3);
-        c = s > 0.55 ? VP.white : s < -0.45 ? VP.black : VP.ochre[3];
-      }
+      if (inRafter) { const s = Math.sin(y * 0.6 + Math.round(u) * 1.3); c = s > 0.55 ? VP.white : s < -0.45 ? VP.black : VP.ochre[3]; }
       b.set(X, y, c);
     }
   }
-  // the ridge pole (tāhuhu) end and the maihi: thick red bargeboards with notched carving along them
+  // the maihi: thick red bargeboards, notched carving along them, pāua eyes
   for (let y = 0; y < roofH; y++) {
     const hw = (y / roofH) * half;
-    for (const s of [-1, 1]) for (let k = 0; k < 8; k++) {
+    for (const s of [-1, 1]) for (let k = 0; k < 10; k++) {
       const X = Math.round(cx + s * (hw - k)), Y = roofTop + y;
-      let c = dpick(VP.ochre, 3.4 - k * 0.22 + (s > 0 ? -0.4 : 0.2), X, Y);
-      // carving: rhythmic notches and a spiral every so often
-      if ((k === 2 || k === 5) && y % 3 === 0) c = VP.ochre[1];
-      if (k === 3 && y % 12 === 6) c = VP.paua;
+      let c = dpick(VP.ochre, 3.4 - k * 0.18 + (s > 0 ? -0.4 : 0.2), X, Y);
+      if ((k === 2 || k === 6) && y % 3 === 0) c = VP.ochre[1];
+      if (k === 4 && y % 14 === 7) c = VP.paua;
+      if (k === 4 && y % 14 === 0) c = VP.white;
       b.set(X, Y, c);
     }
   }
   // raparapa: the carved "fingers" at the lower ends of the maihi
-  for (const s of [-1, 1]) for (let i = 0; i < 4; i++) for (let y = 0; y < 9; y++) b.set(Math.round(cx + s * (half - 2 - i * 2)), roofTop + roofH - 1 + y, i % 2 ? VP.ochre[2] : VP.ochre[4]);
+  for (const s of [-1, 1]) for (let i = 0; i < 5; i++) for (let y = 0; y < 11; y++) b.set(Math.round(cx + s * (half - 2 - i * 2)), roofTop + roofH - 1 + y, i % 2 ? VP.ochre[2] : VP.ochre[4]);
   // amo: the carved posts at the front holding up the maihi
   for (const s of [-1, 1]) {
-    const ax = Math.round(cx + s * (half - 14));
-    for (let y = wallTop - 4; y < base - 6; y++) for (let k = 0; k < 9; k++) {
-      const X = ax + k - 4, ly = y - wallTop;
-      let c = dpick(VP.ochre, 3.2 - (k / 9) * 1.4, X, y);
+    const ax = Math.round(cx + s * (half - 16));
+    for (let y = wallTop - 6; y < base - 7; y++) for (let k = 0; k < 11; k++) {
+      const X = ax + k - 5, ly = y - wallTop;
+      let c = dpick(VP.ochre, 3.2 - (k / 11) * 1.4, X, y);
       if ((ly + k * 2) % 7 === 0) c = VP.ochre[1];
-      if (ly % 26 === 6 && (k === 2 || k === 6)) c = VP.paua;
+      if (ly % 30 === 8 && (k === 3 || k === 7)) c = VP.paua;
       b.set(X, y, c);
     }
   }
-  // koruru face at the apex and the tekoteko figure standing on top
-  const ky = roofTop + 6;
-  b.ellipse(cx, ky, 7, 6, VP.ochre[3]);
-  b.set(cx - 3, ky - 1, VP.paua); b.set(cx + 3, ky - 1, VP.paua);
-  b.set(cx - 3, ky - 2, VP.black); b.set(cx + 3, ky - 2, VP.black);
-  b.rect(cx - 3, ky + 3, 7, 1, VP.black);
-  for (let y = 0; y < 18; y++) for (let x = -4; x <= 4; x++) {
-    const Y = roofTop - 18 + y;
-    const w = y < 6 ? 3.5 : y < 13 ? 4 : 2.5;
-    if (Math.abs(x) <= w) b.set(cx + x, Y, dpick(VP.ochre, 3.2 - (x + 4) / 9, cx + x, Y));
+  // koruru face at the apex, the tekoteko figure standing on top
+  const ky = roofTop + 8;
+  b.ellipse(cx, ky, 8, 7, VP.ochre[3]);
+  b.set(cx - 3, ky - 1, VP.paua); b.set(cx + 3, ky - 1, VP.paua); b.set(cx - 3, ky - 2, VP.black); b.set(cx + 3, ky - 2, VP.black);
+  b.rect(cx - 3, ky + 4, 7, 1, VP.black);
+  for (let y = 0; y < 22; y++) for (let x = -5; x <= 5; x++) {
+    const Y = roofTop - 22 + y, w = y < 7 ? 4 : y < 16 ? 5 : 3;
+    if (Math.abs(x) <= w) b.set(cx + x, Y, dpick(VP.ochre, 3.2 - (x + 5) / 11, cx + x, Y));
   }
-  b.set(cx - 1, roofTop - 15, VP.paua); b.set(cx + 1, roofTop - 15, VP.paua);
+  b.set(cx - 2, roofTop - 18, VP.paua); b.set(cx + 2, roofTop - 18, VP.paua);
   return S(b, Math.floor(cx), base);
 }
 
 // ------------------------------------------------------------------ family houses
 export function whare(variant: number, seed: number): Sprite {
-  const sizes: [number, number][] = [[72, 58], [62, 52], [80, 60], [56, 48]];
+  const sizes: [number, number][] = [[112, 104], [98, 96], [128, 108], [92, 92]];
   const [w, h] = sizes[variant % sizes.length];
-  const W = w + 24, H = h + 28;
+  const W = w + 30, H = h + 34;
   const b = new PixelBuffer(W, H);
   const cx = Math.floor(W / 2), base = H - 1;
-  const wallH = Math.round(h * 0.5), roofH = Math.round(h * 0.62);
+  const wallH = Math.round(h * 0.52), roofH = Math.round(h * 0.6);
   const wallTop = base - wallH;
   const rng = new Rng(seed);
-  // walls
-  if (variant % 2 === 0) slabWall(b, cx - w / 2, wallTop, w, wallH, VP.wood, seed, 5);
+  // walls, a low stone footing
+  if (variant % 2 === 0) slabWall(b, cx - w / 2, wallTop, w, wallH, VP.wood, seed, 6);
   else reedWall(b, cx - w / 2, wallTop, w, wallH, seed);
-  // door, a shuttered window
-  const dx = cx - 6 + (variant === 2 ? -10 : 0);
-  b.rect(dx, base - 20, 12, 20, hex('#0e0806'));
-  b.rect(dx - 1, base - 21, 14, 1, VP.wood[4]);
-  const wx = cx + (variant === 2 ? 10 : 12);
-  b.rect(wx, base - 22, 9, 8, hex('#0e0806'));
-  for (let y = base - 22; y < base - 14; y++) { b.set(wx - 3, y, VP.wood[3]); b.set(wx - 2, y, VP.wood[2]); }
-  if (variant === 2) b.rect(wx + 1, base - 21, 7, 2, hex('#e8c060'));
-  // the roof: thatch, or salvaged iron on one house with a rusty patch
+  for (let x = cx - w / 2; x < cx + w / 2; x++) for (let y = base - 3; y <= base; y++) b.set(x, y, dpick(VP.stone, 2.6 + Math.sin(x * 0.7) * 0.6, x, y));
+  // door and a shuttered window
+  const dw = 20, dh = 44;
+  const dx = cx - dw / 2 + (variant === 2 ? -18 : -8);
+  b.rect(dx, base - dh, dw, dh, hex('#0e0806'));
+  for (let x = dx - 2; x < dx + dw + 2; x++) b.set(x, base - dh - 1, VP.wood[4]);
+  for (let y = base - dh; y <= base; y++) { b.set(dx - 1, y, VP.wood[3]); b.set(dx + dw, y, VP.wood[2]); }
+  const wx = dx + dw + 12, wy = base - 38;
+  b.rect(wx, wy, 14, 12, hex('#0e0806'));
+  for (let y = wy; y < wy + 12; y++) for (let k = 0; k < 4; k++) b.set(wx - 5 + k, y, (y + k) % 4 === 0 ? VP.wood[1] : VP.wood[3]);
+  for (let x = wx - 1; x < wx + 15; x++) { b.set(x, wy - 1, VP.wood[4]); b.set(x, wy + 12, VP.wood[4]); }
+  if (variant === 2) b.rect(wx + 2, wy + 2, 10, 3, hex('#e8c060'));
+  // the roof: thatch, or salvaged iron with a rusty patch
   const top = base - wallH - roofH;
+  const half = w / 2 + 14;
   if (variant === 3) {
     for (let y = 0; y < roofH; y++) {
-      const hw = (y / roofH) * (w / 2 + 10);
+      const hw = (y / roofH) * half;
       for (let x = -hw; x <= hw; x++) {
         const X = Math.round(cx + x), Y = top + y;
-        const rib = (X - cx + 200) % 5 === 0;
-        const rusty = (x > 4 && x < hw * 0.6 && y > roofH * 0.4) || Math.sin(X * 0.3 + Y * 0.2) > 0.92;
+        const rib = (X - cx + 200) % 6 === 0;
+        const rusty = (x > 6 && x < hw * 0.6 && y > roofH * 0.4) || Math.sin(X * 0.3 + Y * 0.2) > 0.92;
         b.set(X, Y, rusty ? dpick(VP.rust, 3 - (rib ? 1 : 0), X, Y) : dpick(VP.iron, 3.2 - (rib ? 1.2 : 0) - x / hw * 0.5, X, Y));
       }
     }
-  } else thatchGable(b, cx, top, w / 2 + 10, roofH, variant === 1 ? VP.raupo : VP.thatch, seed);
+  } else thatchGable(b, cx, top, half, roofH, variant === 1 ? VP.raupo : VP.thatch, seed);
   // bargeboards: plain timber, red ochre on the bigger houses
   for (let y = 0; y < roofH; y++) {
-    const hw = (y / roofH) * (w / 2 + 10);
-    for (const s of [-1, 1]) for (let k = 0; k < 3; k++) b.set(Math.round(cx + s * (hw - k)), top + y, variant === 0 || variant === 2 ? (k === 1 ? VP.ochre[3] : VP.ochre[2]) : (k === 1 ? VP.wood[4] : VP.wood[2]));
+    const hw = (y / roofH) * half;
+    for (const s of [-1, 1]) for (let k = 0; k < 4; k++) b.set(Math.round(cx + s * (hw - k)), top + y, variant === 0 || variant === 2 ? (k === 1 || k === 2 ? VP.ochre[3] : VP.ochre[2]) : (k === 1 ? VP.wood[4] : VP.wood[2]));
   }
-  // porch clutter: gumboots, a bench, a kete, a broom
-  const clutter = rng.next();
-  if (clutter < 0.5) { b.rect(dx - 10, base - 5, 3, 5, hex('#141414')); b.rect(dx - 7, base - 4, 3, 4, hex('#141414')); b.set(dx - 10, base - 5, hex('#3a3a3a')); }
-  if (variant !== 3) { for (let x = cx + 4; x < cx + 22; x++) { b.set(x, base - 6, VP.wood[4]); } b.set(cx + 5, base - 5, VP.wood[2]); b.set(cx + 20, base - 5, VP.wood[2]); for (let y = base - 4; y <= base; y++) { b.set(cx + 5, y, VP.wood[2]); b.set(cx + 20, y, VP.wood[2]); } }
-  // a kete on the bench
-  b.ellipse(cx + 12, base - 8, 3, 2, VP.flax[3]); b.set(cx + 12, base - 11, VP.flax[2]);
-  // a broom leaning by the door
-  for (let y = 0; y < 18; y++) b.set(dx + 14 + Math.round(y * 0.15), base - 18 + y, VP.wood[3]);
-  for (let x = -2; x <= 2; x++) for (let y = 0; y < 4; y++) b.set(dx + 16 + x + Math.round(y * 0.2), base - 4 + y, VP.thatch[3 - (x & 1)]);
+  // porch clutter: gumboots, a bench, a kete, a broom, a bucket
+  if (rng.next() < 0.6) { b.rect(dx - 13, base - 9, 4, 9, hex('#141414')); b.rect(dx - 8, base - 8, 4, 8, hex('#141414')); b.set(dx - 13, base - 9, hex('#3a3a3a')); b.set(dx - 8, base - 8, hex('#3a3a3a')); }
+  if (variant !== 3) {
+    const bx0 = cx + 14, bx1 = cx + 40;
+    for (let x = bx0; x < bx1; x++) { b.set(x, base - 14, VP.wood[4]); b.set(x, base - 13, VP.wood[3]); }
+    for (const px of [bx0 + 2, bx1 - 3]) for (let y = base - 12; y <= base; y++) b.set(px, y, VP.wood[2]);
+    b.ellipse(bx0 + 10, base - 18, 4, 3, VP.flax[3]); b.set(bx0 + 10, base - 22, VP.flax[2]);
+  } else { b.ellipseFn(cx + 26, base - 6, 6, 6, (x, y, nx) => dpick(VP.iron, 3 - nx, x, y)); }
+  for (let y = 0; y < 34; y++) b.set(dx + dw + 4 + Math.round(y * 0.12), base - 34 + y, VP.wood[3]);
+  for (let x = -3; x <= 3; x++) for (let y = 0; y < 7; y++) b.set(dx + dw + 8 + x + Math.round(y * 0.2), base - 6 + y, VP.thatch[3 - (x & 1)]);
   return S(b, cx, base);
 }
 
 // ------------------------------------------------------------------ the pātaka
 export function pataka(): Sprite {
-  const W = 52, H = 86;
+  const W = 70, H = 140;
   const b = new PixelBuffer(W, H);
-  const cx = 26, base = H - 1;
-  for (let y = 40; y <= base; y++) for (let k = -2; k <= 2; k++) b.set(cx + k, y, dpick(VP.wood, 3 - k * 0.5 + (y % 9 === 0 ? -1 : 0), cx + k, y));
-  // the little house on top
-  const top = 8, bodyTop = 26;
-  slabWall(b, cx - 15, bodyTop, 30, 16, VP.wood, 33, 4);
-  for (let y = 0; y < 18; y++) { const hw = (y / 18) * 20; for (let x = -hw; x <= hw; x++) b.set(Math.round(cx + x), top + y, dpick(VP.thatch, 3 - y / 18, Math.round(cx + x), top + y)); }
-  for (let y = 0; y < 18; y++) { const hw = (y / 18) * 20; for (const s of [-1, 1]) for (let k = 0; k < 3; k++) b.set(Math.round(cx + s * (hw - k)), top + y, k === 1 ? VP.ochre[4] : VP.ochre[2]); }
-  b.disc(cx, top + 3, 3, VP.ochre[3]); b.set(cx - 1, top + 2, VP.paua); b.set(cx + 1, top + 2, VP.paua);
-  b.rect(cx - 4, bodyTop + 4, 8, 10, hex('#0c0606'));
-  for (let x = cx - 17; x <= cx + 17; x++) b.set(x, bodyTop + 16, VP.wood[4]);
-  // the notched log ladder leaning on it
-  for (let y = 0; y < 46; y++) { const X = cx + 20 - Math.round(y * 0.28), Y = base - y; b.set(X, Y, VP.wood[3]); b.set(X + 1, Y, VP.wood[2]); if (y % 7 === 0) b.set(X - 1, Y, VP.wood[1]); }
+  const cx = 35, base = H - 1;
+  // the post, carved at the top
+  for (let y = 64; y <= base; y++) for (let k = -3; k <= 3; k++) b.set(cx + k, y, dpick(VP.wood, 3 - k * 0.4 + (y % 9 === 0 ? -1 : 0), cx + k, y));
+  for (let y = 64; y < 74; y++) for (let k = -4; k <= 4; k++) b.set(cx + k, y, (y + k) % 3 === 0 ? VP.ochre[1] : VP.ochre[3]);
+  // the house on top
+  const top = 14, bodyTop = 40;
+  slabWall(b, cx - 22, bodyTop, 44, 24, VP.wood, 33, 5);
+  for (let y = 0; y < 27; y++) { const hw = (y / 27) * 30; for (let x = -hw; x <= hw; x++) b.set(Math.round(cx + x), top + y, dpick(VP.thatch, 3 - y / 27, Math.round(cx + x), top + y)); }
+  for (let y = 0; y < 27; y++) { const hw = (y / 27) * 30; for (const s of [-1, 1]) for (let k = 0; k < 4; k++) b.set(Math.round(cx + s * (hw - k)), top + y, k === 1 || k === 2 ? VP.ochre[4] : VP.ochre[2]); }
+  b.disc(cx, top + 4, 4, VP.ochre[3]); b.set(cx - 2, top + 3, VP.paua); b.set(cx + 2, top + 3, VP.paua);
+  for (let y = 0; y < 10; y++) for (let x = -2; x <= 2; x++) b.set(cx + x, top - 10 + y, dpick(VP.ochre, 3 - x * 0.3, cx + x, top - 10 + y));
+  b.rect(cx - 6, bodyTop + 6, 12, 16, hex('#0c0606'));
+  for (let x = cx - 25; x <= cx + 25; x++) { b.set(x, bodyTop + 24, VP.wood[4]); b.set(x, bodyTop + 25, VP.wood[2]); }
+  // the notched-log ladder leaning on it
+  for (let y = 0; y < 74; y++) { const X = cx + 30 - Math.round(y * 0.3), Y = base - y; b.set(X, Y, VP.wood[3]); b.set(X + 1, Y, VP.wood[2]); if (y % 8 === 0) { b.set(X - 1, Y, VP.wood[1]); b.set(X + 2, Y, VP.wood[4]); } }
   return S(b, cx, base);
 }
 
@@ -293,18 +306,19 @@ export function fence(w: number, kind: 'rail' | 'wattle', seed: number): Sprite 
 
 // ------------------------------------------------------------------ work and food
 export function dryingRack(seed: number): Sprite {
-  const W = 66, H = 46, b = new PixelBuffer(W, H), rng = new Rng(seed), base = H - 1;
-  for (const px of [4, 61]) for (let y = 3; y <= base; y++) { b.set(px, y, VP.wood[3]); b.set(px + 1, y, VP.wood[2]); }
-  for (const yy of [5, 22]) for (let x = 2; x < 64; x++) b.set(x, yy, VP.wood[4]);
+  const W = 70, H = 66, b = new PixelBuffer(W, H), rng = new Rng(seed), base = H - 1, D = 14;
+  for (const px of [4, 64]) for (let y = 3; y <= base; y++) { b.set(px, y, VP.wood[3]); b.set(px + 1, y, VP.wood[2]); }
+  for (const yy of [5, 28]) for (let x = 2; x < 68; x++) { b.set(x, yy, VP.wood[4]); b.set(x, yy + 1, VP.wood[2]); }
   // the top rail: split fish and two long eels; the lower rail: flax drying in bundles
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 10; i++) {
     const x = 8 + i * 6;
-    if (i === 3 || i === 7) { for (let y = 6; y < 20; y++) { b.set(x, y, hex('#2a2a22')); b.set(x + 1, y, hex('#44443a')); } continue; }
-    for (let y = 6; y < 14 + (i % 3); y++) { const ww = y < 9 ? 1 : 2; for (let k = -ww; k <= ww; k++) b.set(x + k, y, y < 8 ? hex('#8a8070') : k < 0 ? hex('#c89a6a') : hex('#e0b480')); }
+    if (i === 3 || i === 7) { for (let y = 7; y < 7 + D + 8; y++) { b.set(x, y, hex('#2a2a22')); b.set(x + 1, y, hex('#44443a')); } continue; }
+    for (let y = 7; y < 7 + D + (i % 3); y++) { const ww = y < 10 ? 1 : 2; for (let k = -ww; k <= ww; k++) b.set(x + k, y, y < 9 ? hex('#8a8070') : k < 0 ? hex('#c89a6a') : hex('#e0b480')); }
   }
-  for (let i = 0; i < 7; i++) { const x = 10 + i * 7 + Math.round(rng.next() * 2); for (let y = 23; y < 23 + 12 + (i % 3) * 2; y++) { b.set(x, y, VP.flax[3]); b.set(x + 1, y, VP.flax[2]); } }
-  return S(b, 33, base);
+  for (let i = 0; i < 8; i++) { const x = 10 + i * 7 + Math.round(rng.next() * 2); for (let y = 30; y < 30 + 16 + (i % 3) * 3; y++) { b.set(x, y, VP.flax[3]); b.set(x + 1, y, VP.flax[2]); } }
+  return S(b, 35, base);
 }
+
 export function woodpile(seed: number): Sprite {
   const W = 58, H = 34, b = new PixelBuffer(W, H), rng = new Rng(seed), base = H - 1;
   // stacked rounds, end on: rings and bark
@@ -363,30 +377,30 @@ export function wakaBuild(): Sprite {
   return S(b, 75, base);
 }
 export function laundry(seed: number): Sprite {
-  const W = 92, H = 50, b = new PixelBuffer(W, H), rng = new Rng(seed), base = H - 1;
-  for (const px of [2, 88]) for (let y = 6; y <= base; y++) { b.set(px, y, VP.grey[3]); b.set(px + 1, y, VP.grey[2]); }
-  const line = (x: number) => 9 + Math.round(Math.sin((x - 2) / 86 * Math.PI) * 5);
-  for (let x = 3; x < 88; x++) b.set(x, line(x), VP.cream[2]);
+  const W = 96, H = 72, b = new PixelBuffer(W, H), rng = new Rng(seed), base = H - 1;
+  for (const px of [2, 92]) for (let y = 6; y <= base; y++) { b.set(px, y, VP.grey[3]); b.set(px + 1, y, VP.grey[2]); }
+  const line = (x: number) => 9 + Math.round(Math.sin((x - 2) / 90 * Math.PI) * 6);
+  for (let x = 3; x < 92; x++) b.set(x, line(x), VP.cream[2]);
   const cols = ['#c83a2a', '#2a5a9a', '#e8dcc0', '#3a7a4a', '#d8a030', '#7a3a8a', '#f0f0e8'];
   let x = 8;
-  while (x < 80) {
+  while (x < 82) {
     const kind = Math.floor(rng.next() * 3), col = hex(cols[Math.floor(rng.next() * cols.length)]), ly = line(x);
     if (kind === 0) {
-      // a shirt
-      for (let y = 0; y < 13; y++) for (let k = -5; k <= 5; k++) { if (y < 4 || Math.abs(k) < 4) b.set(x + 5 + k, ly + 1 + y, (k + y) % 7 === 0 ? shade(col, -0.25) : col); }
-      x += 14;
+      for (let y = 0; y < 16; y++) for (let k = -6; k <= 6; k++) { if (y < 5 || Math.abs(k) < 5) b.set(x + 6 + k, ly + 1 + y, (k + y) % 7 === 0 ? shade(col, -0.25) : col); }
+      x += 16;
     } else if (kind === 1) {
-      // a towel
-      for (let y = 0; y < 16; y++) for (let k = 0; k < 8; k++) b.set(x + k, ly + 1 + y, y % 5 === 0 ? shade(col, 0.2) : col);
-      x += 11;
-    } else {
-      // a little dress
-      for (let y = 0; y < 12; y++) { const ww = 2 + Math.floor(y / 3); for (let k = -ww; k <= ww; k++) b.set(x + 4 + k, ly + 1 + y, col); }
+      for (let y = 0; y < 20; y++) for (let k = 0; k < 9; k++) b.set(x + k, ly + 1 + y, y % 5 === 0 ? shade(col, 0.2) : col);
       x += 12;
+    } else {
+      for (let y = 0; y < 14; y++) { const ww = 2 + Math.floor(y / 3); for (let k = -ww; k <= ww; k++) b.set(x + 5 + k, ly + 1 + y, col); }
+      x += 13;
     }
     b.set(x - 2, ly - 1, VP.wood[4]);
   }
-  return S(b, 45, base);
+  // a basket of pegs and folded washing under the line
+  b.ellipseFn(70, base - 4, 9, 5, (X, Y, nx) => ((X + Y) % 2 ? VP.flax[3] : VP.flax[4]));
+  b.rect(64, base - 10, 12, 3, hex('#e8dcc0'));
+  return S(b, 48, base);
 }
 
 // ------------------------------------------------------------------ small things
@@ -419,16 +433,24 @@ export function gourds(seed: number): Sprite {
   }
   return S(b, 15, base);
 }
-export function bench(w: number): Sprite {
-  const b = new PixelBuffer(w, 10), base = 9;
-  for (let x = 0; x < w; x++) { b.set(x, 2, VP.wood[4]); b.set(x, 3, VP.wood[3]); b.set(x, 4, VP.wood[2]); }
-  for (const px of [3, w - 4]) for (let y = 5; y <= base; y++) { b.set(px, y, VP.wood[2]); b.set(px + 1, y, VP.wood[1]); }
+export function bench(w: number, h = 15): Sprite {
+  const b = new PixelBuffer(w, h + 1), base = h;
+  for (let x = 0; x < w; x++) { b.set(x, 1, VP.wood[4]); b.set(x, 2, VP.wood[3]); b.set(x, 3, VP.wood[2]); }
+  for (const px of [3, w - 4]) for (let y = 4; y <= base; y++) { b.set(px, y, VP.wood[2]); b.set(px + 1, y, VP.wood[1]); }
   return S(b, Math.floor(w / 2), base);
 }
-export function logSeat(w: number): Sprite {
-  const b = new PixelBuffer(w, 9), base = 8;
-  for (let x = 0; x < w; x++) for (let y = 1; y <= base; y++) b.set(x, y, dpick(VP.bark, 4 - y * 0.4 + (x === 0 || x === w - 1 ? -1 : 0), x, y));
-  b.ellipse(1, 4, 1, 3, hex('#c8a070'));
+
+export function logSeat(w: number, h = 14): Sprite {
+  // a big log lying on its side: round, bark lit along the top, the sawn end showing its rings
+  const b = new PixelBuffer(w + 2, h + 2), base = h, r = h / 2, cy = base - r;
+  for (let x = 0; x < w; x++) for (let y = 0; y <= base; y++) {
+    const ny = (y - cy) / r;
+    if (Math.abs(ny) > 1) continue;
+    const ridge = Math.sin(x * 1.3 + y * 0.4) > 0.75 ? -0.9 : 0;
+    b.set(x + 1, y, dpick(VP.bark, 3.6 - ny * 1.8 + ridge, x, y));
+  }
+  // the cut end at the left: an ellipse of pale wood with dark rings
+  b.ellipseFn(2, cy, Math.max(2, r * 0.45), r, (x, y, nx, ny) => { const d = Math.hypot(nx, ny); return d > 0.86 ? VP.bark[1] : Math.floor(d * 4) % 2 ? hex('#c09868') : hex('#a07848'); });
   return S(b, Math.floor(w / 2), base);
 }
 export function pigPen(w: number): Sprite {
@@ -451,19 +473,20 @@ export function coop(): Sprite {
   return S(b, 20, base);
 }
 export function shelter(w: number): Sprite {
-  const H = 56, b = new PixelBuffer(w, H), base = H - 1;
+  const H = 86, b = new PixelBuffer(w, H), base = H - 1;
   for (const px of [3, w - 5]) for (let y = 12; y <= base; y++) { b.set(px, y, VP.wood[3]); b.set(px + 1, y, VP.wood[2]); }
-  // a lean-to roof of nīkau fronds
-  for (let y = 4; y < 14; y++) for (let x = 0; x < w; x++) {
+  // a lean-to roof of nīkau fronds, hanging ragged at the front
+  for (let y = 4; y < 16; y++) for (let x = 0; x < w; x++) {
     const frond = Math.sin(x * 1.2 + y) > 0.2;
-    if (y > 12 && (x % 3)) continue;
-    b.set(x, y, frond ? dpick(VP.thatch, 3 - (y - 4) * 0.15, x, y) : VP.thatch[1]);
+    b.set(x, y + Math.round(x / w * 3), frond ? dpick(VP.thatch, 3 - (y - 4) * 0.12, x, y) : VP.thatch[1]);
   }
-  for (let x = 0; x < w; x += 3) b.line(x, 14, x + 1, 17 + (x % 2), VP.thatch[2]);
-  // a flax mat on the ground
+  for (let x = 0; x < w; x += 2) b.line(x, 17 + Math.round(x / w * 3), x + 1, 21 + (x % 3) + Math.round(x / w * 3), VP.thatch[2]);
+  // flax leaves drying over the rail, a flax mat on the ground
+  for (let i = 0; i < 6; i++) for (let y = 22; y < 40 + (i % 3) * 4; y++) b.set(10 + i * 9, y, i % 2 ? VP.flax[3] : VP.flax[4]);
   for (let x = 6; x < w - 6; x++) { b.set(x, base, (x % 3) ? VP.flax[4] : VP.flax[3]); b.set(x, base - 1, (x % 3) ? VP.flax[3] : VP.flax[2]); }
   return S(b, Math.floor(w / 2), base);
 }
+
 export function jetty(w: number): Sprite {
   const H = 24, b = new PixelBuffer(w, H), base = H - 1;
   for (let x = 0; x < w; x++) for (let y = 4; y < 7; y++) b.set(x, y, dpick(VP.grey, 3.8 - (y - 4) * 0.8 + (x % 9 === 0 ? -1.4 : 0), x, y));
@@ -473,20 +496,19 @@ export function jetty(w: number): Sprite {
   return S(b, 0, 5);
 }
 export function netPoles(seed: number): Sprite {
-  const W = 50, H = 52, b = new PixelBuffer(W, H), base = H - 1;
-  for (const px of [6, 44]) for (let y = 2; y <= base; y++) b.set(px, y, VP.wood[3]);
-  // the net sagging between them
-  for (let y = 4; y < 34; y++) for (let x = 7; x < 44; x++) {
-    const sag = Math.sin((x - 7) / 37 * Math.PI) * 6;
-    const ly = y - sag;
-    if (ly < 4 || ly > 30 - Math.sin((x - 7) / 37 * Math.PI) * 4) continue;
+  const W = 54, H = 70, b = new PixelBuffer(W, H), base = H - 1;
+  for (const px of [6, 48]) for (let y = 2; y <= base; y++) { b.set(px, y, VP.wood[3]); b.set(px + 1, y, VP.wood[2]); }
+  for (let y = 4; y < 44; y++) for (let x = 8; x < 48; x++) {
+    const s0 = Math.sin((x - 8) / 40 * Math.PI);
+    const ly = y - s0 * 7;
+    if (ly < 4 || ly > 38 - s0 * 4) continue;
     if ((x + Math.round(ly)) % 4 === 0 || (x - Math.round(ly) + 100) % 4 === 0) b.set(x, y, VP.cream[2]);
   }
-  // floats
-  for (let x = 9; x < 43; x += 6) b.disc(x, 4 + Math.round(Math.sin((x - 7) / 37 * Math.PI) * 6), 1.4, VP.ochre[4]);
+  for (let x = 10; x < 47; x += 6) b.disc(x, 4 + Math.round(Math.sin((x - 8) / 40 * Math.PI) * 7), 1.4, VP.ochre[4]);
   void seed;
-  return S(b, 25, base);
+  return S(b, 27, base);
 }
+
 export function hinaki(): Sprite {
   const b = new PixelBuffer(30, 16), base = 15;
   b.ellipseFn(15, 9, 13, 6, (x, y, nx) => ((x + y) % 3 === 0 || (x - y + 30) % 3 === 0 ? dpick(VP.thatch, 3 - nx, x, y) : -1));
@@ -494,14 +516,31 @@ export function hinaki(): Sprite {
   return S(b, 15, base);
 }
 export function shed(w: number): Sprite {
-  const H = 62, b = new PixelBuffer(w, H), base = H - 1;
-  for (const px of [4, w - 6]) for (let y = 14; y <= base; y++) { b.set(px, y, VP.wood[3]); b.set(px + 1, y, VP.wood[2]); }
-  for (let y = 0; y < 16; y++) for (let x = 0; x < w; x++) { const X = x, Y = y + Math.round(x / w * 4); if (Y < H) b.set(X, Y, dpick(VP.thatch, 3.4 - y * 0.12, X, Y)); }
-  // tools hanging under the roof: an adze, a mallet, chisels
-  b.line(18, 18, 18, 30, VP.wood[3]); b.rect(16, 30, 5, 2, VP.stone[4]);
-  b.line(30, 18, 30, 28, VP.wood[3]); b.rect(28, 28, 5, 4, VP.wood[2]);
-  for (let i = 0; i < 4; i++) b.line(42 + i * 3, 18, 42 + i * 3, 25, VP.iron[3]);
+  const H = 96, b = new PixelBuffer(w, H), base = H - 1;
+  for (const px of [4, Math.floor(w / 2), w - 6]) for (let y = 14; y <= base; y++) { b.set(px, y, VP.wood[3]); b.set(px + 1, y, VP.wood[2]); }
+  for (let y = 0; y < 16; y++) for (let x = 0; x < w; x++) { const Y = y + Math.round(x / w * 5); if (Y < H) b.set(x, Y, dpick(VP.thatch, 3.4 - y * 0.12, x, Y)); }
+  for (let x = 0; x < w; x += 2) b.line(x, 16 + Math.round(x / w * 5), x, 19 + (x % 3) + Math.round(x / w * 5), VP.thatch[2]);
+  // tools hanging under the roof: an adze, a mallet, chisels, a coil of cord
+  b.line(18, 20, 18, 36, VP.wood[3]); b.rect(15, 36, 6, 3, VP.stone[4]);
+  b.line(32, 20, 32, 32, VP.wood[3]); b.rect(29, 32, 7, 5, VP.wood[2]);
+  for (let i = 0; i < 4; i++) b.line(46 + i * 3, 20, 46 + i * 3, 28, VP.iron[3]);
+  b.ellipse(w - 24, 26, 5, 4, VP.cream[2]); b.ellipse(w - 24, 26, 2, 1, VP.cream[0]);
   return S(b, Math.floor(w / 2), base);
+}
+
+export function stakes(w: number, seed: number): Sprite {
+  const H = 70, b = new PixelBuffer(w, H), base = H - 1, rng = new Rng(seed);
+  for (let x = 0; x < w; x += 6) {
+    const h = 54 + Math.floor(rng.next() * 12), lean = rng.next() < 0.2 ? (rng.next() < 0.5 ? -1 : 1) : 0;
+    for (let y = H - h; y <= base; y++) for (let k = 0; k < 5; k++) {
+      if (y < H - h + Math.abs(k - 2) * 2) continue;
+      const X = x + k + (y < H - h + 12 ? lean : 0);
+      b.set(X, y, dpick(VP.grey, 3.6 - k * 0.45 + (Math.sin(y * 0.4 + x) > 0.85 ? -1 : 0), X, y));
+    }
+  }
+  // two lashed rails of vine
+  for (const yy of [28, 46]) for (let x = 0; x < w; x++) { b.set(x, yy, VP.thatch[1]); if (x % 6 === 2) b.set(x, yy + 1, VP.thatch[2]); }
+  return S(b, 0, base);
 }
 
 // ------------------------------------------------------------------ festival lights

@@ -22,7 +22,7 @@ import { tree } from '../../../art/jungle-trees';
 import { PAL } from '../../../art/palettes';
 import { Rng, bayer, clamp, rand } from '../../../core/math';
 import { A, propAnims } from '../../assets';
-import { sprite, skyAndRidge, jungleWalls, trees, undergrowth, frontFoliage } from '../../sites2/common';
+import { sprite, skyAndRidge, jungleWalls, trees, undergrowth, frontFoliage, mainLayer } from '../../sites2/common';
 import { steam } from '../../sites10/kit';
 import type { Interactable } from '../../../world/npc';
 import { count } from '../../inventory';
@@ -138,13 +138,13 @@ export async function buildVillage(f: FieldScene) {
 
   // sky, the far bush, and the slope behind the village
   skyAndRidge(f, { seed: 61, base: 220 });
-  jungleWalls(f, G, [{ p: 0.2, fog: 0.45, depth: 1, seed: 411 }, { p: 0.4, fog: 0.28, depth: 2, seed: 412 }]);
+  jungleWalls(f, G, [{ p: 0.2, fog: 0.45, depth: 1, seed: 411, lift: 64 }, { p: 0.4, fog: 0.28, depth: 2, seed: 412, lift: 52 }]);
   const mid = st.addLayer('mid', 0.8, 0.06, 0.55, 0);
   const midG = { y: (x: number) => villageGround(x / 0.8) };
   trees(f, mid, 0, 420, [70, 120], ['rata', 'broadleaf', 'treefern'], midG, 421, { variants: 3 });
   trees(f, mid, 2260, W / 0.8 + 200, [70, 120], ['rata', 'broadleaf', 'kauri', 'treefern'], midG, 422, { variants: 3 });
   // cabbage trees and nīkau scattered over the terrace behind the houses
-  trees(f, mid, 520, 2200, [150, 260], ['nikau', 'treefern'], midG, 423, { variants: 3 });
+  trees(f, mid, 520, 2200, [280, 460], ['nikau', 'treefern'], midG, 423, { variants: 3 });
   const midTint = packColor(0.74, 0.76, 0.8, 1);
   for (const [x, v] of [[560, 1], [1180, 3], [1460, 0], [1760, 2], [2080, 1]] as [number, number][]) {
     const cc = sprite(`vil11:midwhare:${v}:${x}`, () => P.whare(v, x));
@@ -153,8 +153,9 @@ export async function buildVillage(f: FieldScene) {
   const pt2 = sprite('vil11:midpataka', P.pataka);
   if (pt2) mid.add(new Prop(pt2.f, 1300 * 0.8, villageGround(1300) + 2, 1.5, { tint: midTint }));
   const mf = sprite('vil11:midfence', () => P.fence(260, 'wattle', 9));
-  if (mf) mid.add(new Prop(mf.f, 640 * 0.8, villageGround(640) + 3, 2, { tint: midTint }));
+  if (mf) mid.add(new Prop(mf.f, 520 * 0.8, villageGround(520) + 3, 2, { tint: midTint }));
 
+  mainLayer(f);
   groundStrip(f);
   const main = f.main;
 
@@ -182,9 +183,9 @@ export async function buildVillage(f: FieldScene) {
 
   // ---------------------------------------------------------------- gardens and animals
   for (let x = X.garden[0]; x < X.garden[1] - 40; x += 92) put(f, `kumara:${x}`, () => P.kumaraRow(96, x), x + 48, -2.5, { dy: 3 });
-  put(f, 'gfence', () => P.fence(X.garden[1] - X.garden[0] + 20, 'wattle', 21), X.garden[0] - 10 + (X.garden[1] - X.garden[0] + 20) / 2, -5, { dy: 2 });
+  put(f, 'gfence', () => P.fence(X.garden[1] - X.garden[0] + 20, 'wattle', 21), X.garden[0] - 10, -5, { dy: 2 });
   put(f, 'ketek', () => P.kete(3, 7), X.kumaraKete, -1);
-  put(f, 'pen', () => P.pigPen(X.pen[1] - X.pen[0]), X.pen[0] + (X.pen[1] - X.pen[0]) / 2, 1.5, { dy: 2 });
+  put(f, 'pen', () => P.pigPen(X.pen[1] - X.pen[0]), X.pen[0], 1.5, { dy: 2 });
   put(f, 'shelter', () => P.shelter(70), X.shelter, -4);
   put(f, 'ketem', () => P.kete(2, 11), X.shelter + 24, -1);
   for (const [x, s] of [[X.flax, 30], [X.flax + 18, 26], [X.flax - 70, 24]] as [number, number][]) put(f, `flax:${x}`, () => plant('flax', 700 + x, s), x, -1.5, { sway: 0.9 });
@@ -232,7 +233,7 @@ export async function buildVillage(f: FieldScene) {
   for (const x of [X.goats[0], X.goats[1]]) put(f, `tether:${x}`, () => tether(), x, -1);
 
   // ---------------------------------------------------------------- the palisade and the gateway
-  for (let x = X.palisade[0]; x < W; x += 96) if (Math.abs(x + 48 - X.gate) > 60) put(f, `pal:${x}`, () => P.fence(100, 'rail', x), x + 48, -7, { dy: 3 });
+  for (let x = X.palisade[0]; x < W; x += 96) if (Math.abs(x + 48 - X.gate) > 70) put(f, `pal:${x}`, () => P.stakes(100, x), x, -7, { dy: 3 });
   put(f, 'gate', P.gateway, X.gate, -4, { dy: 3 });
 
   // ---------------------------------------------------------------- night: torches along the paths
