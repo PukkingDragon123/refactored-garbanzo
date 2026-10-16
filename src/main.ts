@@ -166,6 +166,8 @@ async function boot() {
     },
     /** the cinematic camera and post FX (cineTo, cinePunch, cineLook...): (await zl.cine()).cinePunch() */
     cine: () => import('./game/v11/cine'),
+    /** V11 Te Kāinga: rhythm lessons, the dance, the festival, quest stages (src/game/v11/village/debug.ts) */
+    village: () => import('./game/v11/village/debug'),
   };
   void import('./game/v9/islezl').then(m => { (window as unknown as { zl: { isle: unknown } }).zl.isle = m.ISLE; });
   // Mori's 3D hands for the cooking minigame register with it (if it's in the build)

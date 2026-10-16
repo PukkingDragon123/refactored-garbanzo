@@ -42,6 +42,8 @@ interface VDef {
   dawn?: Station[];
   dusk?: Station[];
   night: Station[];
+  /** the festival night */
+  fest?: Station;
   /** kids: roam this range by day */
   roam?: [number, number];
 }
@@ -52,33 +54,33 @@ export const VILLAGERS: VDef[] = [
     day: [{ x: X.koroSeat, anim: 'sit', face: -1, stay: 70 }, { x: X.marae[0] + 40, anim: 'armsCrossed', face: 1, stay: 18 }, { x: X.wakaBuild - 44, anim: 'talk', face: 1, stay: 22 }],
     dawn: [{ x: X.pou + 20, anim: 'bless', face: -1, stay: 999 }],
     dusk: [{ x: X.pou + 20, anim: 'armsCrossed', face: -1, stay: 999 }],
-    night: [fireL(36, 'storyTell')] },
+    night: [fireL(36, 'storyTell')], fest: { x: X.koroSeat, anim: 'sit', face: 1, stay: 999 } },
   { id: 'huia', name: 'Nanny Huia', adult: true,
     day: [{ x: X.cookFire - 10, anim: 'stir', face: 1, stay: 40 }, { x: X.hangi + 18, anim: 'kneelWork', face: -1, stay: 20 }, { x: X.foodBench - 8, anim: 'craft', face: 1, stay: 25 }],
-    night: [fireR(78, 'sit')] },
+    night: [fireR(78, 'sit')], fest: { x: X.hangi + 18, anim: 'stir', face: -1, stay: 999 } },
   { id: 'mere', name: 'Whaea Mere', adult: true,
     day: [{ x: X.shelter, anim: 'craft', face: 1, stay: 60 }, { x: X.flax + 6, anim: 'kneelWork', face: 1, stay: 16 }],
     dusk: [{ x: X.hangi - 18, anim: 'talk', face: 1, stay: 30 }, { x: X.shelter, anim: 'craft', face: 1, stay: 30 }],
-    night: [fireR(62, 'sit')] },
+    night: [fireR(62, 'sit')], fest: { x: X.fire + 30, anim: 'snakeDance', face: -1, stay: 999 } },
   { id: 'tamati', name: 'Tamati', adult: true,
     day: [{ x: X.garden[0] + 90, anim: 'dig', face: 1, stay: 34 }, { x: X.garden[0] + 200, anim: 'kneelWork', face: 1, stay: 26 }, { x: X.kumaraKete + 8, anim: 'carryIdle~crate', face: 1, stay: 6 }],
-    night: [fireR(96, 'armsCrossed')] },
+    night: [fireR(96, 'armsCrossed')], fest: { x: X.hangi - 14, anim: 'cheer', face: -1, stay: 999 } },
   { id: 'tipene', name: 'Tipene', adult: false,
     day: [{ x: X.pen[0] + 44, anim: 'pour', face: 1, stay: 24 }, { x: X.coop - 18, anim: 'kneelWork', face: 1, stay: 18 }, { x: X.goats[0] + 10, anim: 'pet', face: 1, stay: 16 }],
-    night: [fireR(48, 'sitGround')] },
+    night: [fireR(48, 'sitGround')], fest: { x: X.fire + 52, anim: 'snakeDance', face: -1, stay: 999 } },
   { id: 'rawiri', name: 'Rāwiri', adult: true,
     day: [{ x: 150, anim: 'fishWait', face: -1, stay: 60 }, { x: X.hinaki + 6, anim: 'kneelWork', face: -1, stay: 18 }, { x: X.smokeRack - 18, anim: 'craft', face: 1, stay: 22 }],
     dusk: [{ x: X.smokeRack - 18, anim: 'craft', face: 1, stay: 40 }, { x: 150, anim: 'fishWait', face: -1, stay: 40 }],
-    night: [fireL(66, 'talk')] },
+    night: [fireL(66, 'talk')], fest: { x: X.marae[0] - 8, anim: 'strum', face: 1, stay: 999 } },
   { id: 'hemi', name: 'Uncle Hēmi', adult: true,
     day: [{ x: X.wakaBuild - 26, anim: 'hammer', face: 1, stay: 50 }, { x: X.wakaBuild + 40, anim: 'hammer', face: -1, stay: 30 }, { x: X.shed - 50, anim: 'armsCrossed', face: 1, stay: 12 }],
-    night: [fireL(84, 'sit')] },
+    night: [fireL(84, 'sit')], fest: { x: X.marae[0] + 12, anim: 'cheer', face: 1, stay: 999 } },
   { id: 'ngaio', name: 'Aunty Ngaio', adult: true,
     day: [{ x: X.ngaioBench, anim: 'strumSit', face: -1, stay: 50 }, { x: X.marae[0] + 90, anim: 'snakeDance', face: 1, stay: 24 }],
-    night: [fireR(114, 'strum')] },
-  { id: 'pipi', name: 'Pīpī', adult: false, roam: [1560, 1960], day: [], night: [fireR(26, 'sitGround')] },
-  { id: 'ani', name: 'Ani', adult: false, roam: [1560, 1960], day: [{ x: X.marae[0] + 116, anim: 'snakeDance', face: -1, stay: 20 }], night: [fireR(36, 'sitGround')] },
-  { id: 'mikaere', name: 'Mikaere', adult: false, roam: [1400, 2050], day: [], night: [fireL(16, 'sitGround')] },
+    night: [fireR(114, 'strum')], fest: { x: X.fire - 30, anim: 'snakeDance', face: 1, stay: 999 } },
+  { id: 'pipi', name: 'Pīpī', adult: false, roam: [1560, 1960], day: [], night: [fireR(26, 'sitGround')], fest: { x: X.fire - 50, anim: 'snakeDance', face: 1, stay: 999 } },
+  { id: 'ani', name: 'Ani', adult: false, roam: [1560, 1960], day: [{ x: X.marae[0] + 116, anim: 'snakeDance', face: -1, stay: 20 }], night: [fireR(36, 'sitGround')], fest: { x: X.fire + 70, anim: 'snakeDance', face: -1, stay: 999 } },
+  { id: 'mikaere', name: 'Mikaere', adult: false, roam: [1400, 2050], day: [], night: [fireL(16, 'sitGround')], fest: { x: X.marae[1] + 20, anim: 'jump', face: -1, stay: 999 } },
 ];
 const NAME: Record<string, string> = Object.fromEntries(VILLAGERS.map(v => [v.id, v.name]));
 export const villagerName = (id: string) => NAME[id] ?? id;
@@ -90,6 +92,7 @@ export function defineVillagePeople() {
 
 // ------------------------------------------------------------------ spawning and routines
 export function stationsFor(v: VDef, c: VCtx): Station[] {
+  if (c.festival && v.fest) return [v.fest];
   if (c.night) return v.night;
   if (c.tod === 'dawn' && v.dawn) return v.dawn;
   if (c.tod === 'dusk' && v.dusk) return v.dusk;
@@ -99,9 +102,8 @@ export function stationsFor(v: VDef, c: VCtx): Station[] {
 export function spawnVillagers(c: VCtx) {
   const f = c.f;
   for (const v of VILLAGERS) {
-    if (c.festival) continue; // the festival places everyone itself
     const st = stationsFor(v, c);
-    const kidDay = !c.night && !!v.roam;
+    const kidDay = !c.night && !c.festival && !!v.roam;
     const s0 = st[0];
     const x0 = kidDay ? rand.range(v.roam![0], v.roam![1]) : s0.x;
     const a = f.addActor(v.id, x0, c.ground(x0), s0?.face ?? -1);

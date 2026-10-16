@@ -27,8 +27,8 @@ import { STORY, setVf, vf, startVillageQuest } from './lore';
 import { holdV, stationsFor, VILLAGERS } from './people';
 
 // ------------------------------------------------------------------ the embers draw the story
-type Show = (typeof STORY)[number]['show'] | 'none';
-class EmberVision {
+type Show = (typeof STORY)[number]['show'] | 'none' | 'dance';
+export class EmberVision {
   show: Show = 'none';
   k = 0;
   t = 0;
@@ -64,6 +64,12 @@ class EmberVision {
       case 'skin': {
         serpent(30, 70, 7, 8, -4, 1.4);
         for (let i = 0; i < 24; i++) { const u = i / 23; out.push([cx - 30 + u * 64 + Math.sin(t + u * 4) * 2, cy + 14 + Math.sin(u * 7 + t * 0.6) * 5 + ((t * 6 + i) % 10), 0.25]); }
+        break;
+      }
+      case 'dance': {
+        // Hinerua rising out of the fire, swaying with the dancers
+        for (let i = 0; i < 46; i++) { const u = i / 45; out.push([cx + Math.sin(u * 7 + t * 2.4) * (6 + u * 14), cy + 34 - u * 70, 1.2 - u * 0.6]); }
+        out.push([cx + Math.sin(7 + t * 2.4) * 20 + 3, cy - 38, 1.6]);
         break;
       }
       case 'ask': {
