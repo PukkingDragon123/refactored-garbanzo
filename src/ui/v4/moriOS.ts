@@ -1,5 +1,5 @@
-// MoriOS: Mori's field laptop, a glossy "aero" desktop. The pixel Bliss wallpaper sits under
-// drifting pixel clouds, sun rays and lens flares, with bubbles floating up off the grass (click
+// MoriOS: Mori's field laptop, an "aero" desktop drawn as pixel art (../v7/osSkin, ../v7/aeroCss). The
+// pixel Bliss wallpaper sits under drifting pixel clouds and a pixel sun, with bubbles floating up off the grass (click
 // them). Windows open, close, minimise and maximise on springs; icons hop and squash; gel buttons
 // squish with soft pops; a pug cursor leaves a sparkle trail. On touch screens fingers work directly
 // (tap, drag title bars, swipe to scroll, pinch the spreadsheet, hold for a right-click menu), with
@@ -41,6 +41,25 @@ import { VCursor } from '../v7/aeroCursor';
 import { gi, glyphURL, batteryGi } from '../v7/aeroGlyphs';
 import { UNLOCK_BY_ID, installed, unlockable, isFresh, markInstalled, markOpened } from './moriApps';
 import { bookOpen } from '../v11/paper/book';
+import { osSkinVars } from '../v7/osSkin';
+
+/** the wallpaper as true pixel art: the 800x450 Bliss drawn on a 160x90 grid (one sample from the
+ *  middle of each 5x5 block), shown at a whole number of screen px per wallpaper px */
+let blissPx: string | null = null;
+function blissPixels(img: HTMLImageElement, done: (u: string) => void) {
+  if (blissPx) { done(blissPx); return; }
+  const go = () => {
+    try {
+      const c = document.createElement('canvas'); c.width = 160; c.height = 90;
+      const g = c.getContext('2d', { willReadFrequently: true })!;
+      g.imageSmoothingEnabled = false;
+      g.drawImage(img, 2, 2, 800 - 4, 450 - 4, 0, 0, 160, 90);
+      blissPx = c.toDataURL();
+      done(blissPx);
+    } catch { /* keep the original */ }
+  };
+  if (img.complete && img.naturalWidth) go(); else img.addEventListener('load', go, { once: true });
+}
 
 let styled = false;
 
@@ -168,12 +187,20 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
       <div class="mos-menus"></div><div class="mos-focus"></div>
     </div><div class="mos-brand"><i></i>MoriBook</div></div>`;
   if (field) wrap.classList.add('field');
+  // the pixel skin: painted chrome as CSS variables
+  wrap.style.cssText += ';' + osSkinVars();
   // painted glyphs the stylesheets use (ticks on picked photos and owned skills)
   wrap.style.setProperty('--ckw', `url(${glyphURL('check', { col: '#ffffff', edge: '#1c5e0e' })})`);
   const $ = <T extends HTMLElement = HTMLElement>(s: string) => wrap.querySelector(s) as T;
   const lap = $('.mos-lap'), scr = $('.mos-scr'), bgEl = $('.mos-bg'), wins = $('.mos-wins'), tabs = $('.mos-tabs'), bar = $('.mos-bar');
   const orb = $('.mos-orb'), peek = $('.mos-peek'), clk = $('.clk'), menus = $('.mos-menus'), ring = $('.mos-focus'), iconsEl = $('.mos-icons'), gad = $('.mos-gad');
-  ($('.mos-bg img') as HTMLImageElement).src = bliss;
+  {
+    const wimg = $('.mos-bg img') as HTMLImageElement;
+    const src = new Image();
+    src.src = bliss;
+    wimg.src = bliss;
+    blissPixels(src, u => { wimg.src = u; });
+  }
   orb.appendChild(icon('pug', 1.34));
   const lid = el('div', 'gel red sm mos-lid ctl', `${gi('close')} Close lid`);
   lid.dataset.direct = '1';
@@ -207,7 +234,8 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
   let bgW = 0, bgH = 0;
   const measure = () => {
     S.w = scr.clientWidth; S.h = scr.clientHeight; S.dh = S.h - bar.offsetHeight;
-    bgW = Math.max(S.w, S.h * 16 / 9) * 1.06; bgH = bgW * 9 / 16;
+    // whole screen px per wallpaper px (the wallpaper is a 160x90 pixel grid)
+    bgW = 160 * Math.ceil(Math.max(S.w, S.h * 16 / 9) * 1.06 / 160); bgH = bgW * 9 / 16;
     bgEl.style.width = bgW + 'px'; bgEl.style.height = bgH + 'px';
     fx.resize(S.w, S.h);
   };
@@ -1433,17 +1461,17 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
       const k = Math.min(1, dt * 3.5);
       par.x += (par.tx - par.x) * k; par.y += (par.ty - par.y) * k;
       const mx = (bgW - S.w) / 2, my = (bgH - S.h) / 2;
-      setTf(bgEl, `translate(${(-mx - par.x * mx * 1.2).toFixed(1)}px,${(-my - par.y * my * 1.2).toFixed(1)}px)`);
+      setTf(bgEl, `translate(${Math.round(-mx - par.x * mx * 1.2)}px,${Math.round(-my - par.y * my * 1.2)}px)`);
       const px = bgW / 160;
       for (const c of clouds) {
         c.x += c.v * dt * 0.6;
         if (c.x > 168) c.x = -c.c.width - Math.random() * 20;
-        setTf(c.c, `translate(${(c.x * px - par.x * 26 * c.d).toFixed(1)}px,${(c.y * px - par.y * 10 * c.d).toFixed(1)}px) scale(${px.toFixed(3)})`);
+        setTf(c.c, `translate(${Math.round(c.x * px - par.x * 26 * c.d)}px,${Math.round(c.y * px - par.y * 10 * c.d)}px) scale(${px})`);
       }
       const sx0 = S.w * 0.03, sy0 = -S.h * 0.02, cx0 = S.w * (0.5 + par.x * 0.5), cy0 = S.h * (0.5 + par.y * 0.5);
       for (const f of flares) {
         const x = sx0 + (cx0 - sx0) * f.k, y = sy0 + (cy0 - sy0) * f.k;
-        setTf(f.e, `translate(${(x - f.s / 2).toFixed(1)}px,${(y - f.s / 2).toFixed(1)}px)`);
+        setTf(f.e, `translate(${Math.round(x - f.s / 2)}px,${Math.round(y - f.s / 2)}px)`);
         f.e.style.opacity = (0.55 + Math.sin(T * 0.7 + f.k * 5) * 0.25).toFixed(2);
       }
     }
