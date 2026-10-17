@@ -23,7 +23,7 @@ export async function bootNpcs() {
   window.addEventListener('keydown', e => {
     if (e.code !== 'KeyK' || e.repeat) return;
     const sc = game.scene as unknown as { cutscene?: boolean; player?: unknown } | null;
-    if (!sc?.player || sc.cutscene || game.ui.blocking) return;
+    if (!sc?.player || sc.cutscene || game.ui.blocking || game.ui.bubbles.active) return;
     void import('../../../ui/v11/social').then(m => { if (!m.peopleOpen()) void m.openPeople(); });
   });
 }

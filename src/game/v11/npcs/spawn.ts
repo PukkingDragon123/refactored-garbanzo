@@ -105,7 +105,7 @@ function person(f: FieldScene, id: string, g: Ground, o: PersonOpts): Actor {
     enabled: () => a.visible && !busy && (!o.when || o.when()),
     quest: () => a.visible && questHint(id),
     action: async () => {
-      if (f.cutscene || busy) return;
+      if (f.cutscene || busy || game.ui.bubbles.active) return;
       busy = true;
       a.stopWalk();
       a.faceTo(f.player.x);
@@ -125,7 +125,7 @@ function person(f: FieldScene, id: string, g: Ground, o: PersonOpts): Actor {
     if (o.hello && !helloed && !hasMet(id) && Math.abs(p.x - a.x) < (o.hello.r ?? 150) && free(f)) {
       helloed = true;
       a.faceTo(p.x);
-      void f.say(L(o.hello.lines));
+      void f.say(L(o.hello.lines).map(l => ({ ...l, close: false })));
     }
     if (near && !a.walking) { a.faceTo(p.x); return; }
     t -= dt;

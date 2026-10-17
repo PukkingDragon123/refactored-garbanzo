@@ -380,7 +380,7 @@ export async function chapters(): Promise<DevChapter[]> {
     await goIsle();
   };
   out.push({ id: 'people', name: 'People · Rangers, Helix, trappers, crafts', points: [
-    { id: 'n:station', name: 'Te Puni ranger station', sub: 'Hine, Doug and Rosie on the bush track (Day 3+)', icon: 'flag', run: () => people({ px: 6230 }) },
+    { id: 'n:station', name: 'Te Puni ranger station', sub: 'Hine, Doug and Rosie on the bush track (Day 3+)', icon: 'flag', run: () => people({ px: 6080 }) },
     { id: 'n:grove', name: 'Marge’s hut in the palm grove', sub: 'The naturalist hermit', icon: 'scroll', run: () => people({ px: 2960 }) },
     { id: 'n:helix', name: 'The Helix camp', sub: 'Dr Varga and Teo on the Serpent Coast', icon: 'map', run: () => people({ loc: 'coast' }) },
     { id: 'n:hills', name: 'The trappers’ camp', sub: 'Rua and Sunny in the Rocky Hills', icon: 'target', run: () => people({ loc: 'hills' }) },
