@@ -20,6 +20,8 @@ import * as FL from '../../art/flora';
 import { Rng, bayer, clamp, fbm2, rand } from '../../core/math';
 import { audio } from '../../core/audio';
 import { FERNWOOD_V11 } from '../v11/woods/fernwood';
+import { FALLS_V11 } from '../v11/woods/falls';
+import { CANOPY_V11 } from '../v11/woods/canopy';
 import { plant, deadwood } from '../../art/jungle-plants';
 import {
   sprite, mainLayer, skyAndRidge, jungleWalls, ceiling, trees, undergrowth, frontFoliage, hideBush, shafts, groundStrip, node, Ground,
@@ -676,9 +678,10 @@ const COAST_DEEP: FieldSite = {
   onEnter: f => { f.bark('rowan', 'So quiet down here… just my own breathing.', { expr: 'worried' }); },
 };
 
-// (V11: Fernwood Floor rebuilt on the Te Wao Nui kit, src/game/v11/woods; the V2 build stays below as FERNWOOD_V2)
-export const SITES2: Record<SiteId, FieldSite> = { fernwood: FERNWOOD_V11, canopy: CANOPY, falls: FALLS, mangrove: MANGROVE, coast: COAST };
-export const FERNWOOD_V2 = FERNWOOD;
+// (V11: Fernwood Floor, the Emerald Canopy and Thunder Falls are rebuilt on the Te Wao Nui kit in
+// src/game/v11/woods; their V2 builds stay exported as *_V2 for reference)
+export const SITES2: Record<SiteId, FieldSite> = { fernwood: FERNWOOD_V11, canopy: CANOPY_V11, falls: FALLS_V11, mangrove: MANGROVE, coast: COAST };
+export const FERNWOOD_V2 = FERNWOOD, FALLS_V2 = FALLS, CANOPY_V2 = CANOPY;
 export { COAST_DEEP };
 export type { SpawnV2 };
 const _unused: C | undefined = undefined; void _unused; void shade;

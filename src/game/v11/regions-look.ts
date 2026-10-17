@@ -142,7 +142,7 @@ export const LOOKS: Record<string, Look> = {
   },
   falls: {
     note: 'Thunder Falls: cool blue-green, drifting spray and fine drizzle, swifts round the cliff, fish jumping in the pool.',
-    grade: { fog: [0.72, 0.85, 0.9], fogK: 0.18, bloom: 0.12, amb: [0.95, 1, 1.04] },
+    grade: { fog: [0.72, 0.85, 0.9], fogK: 0.16, bloom: 0.03, amb: [0.95, 1, 1.04] },
     air: [{ kind: 'mist', rate: 1 }, { kind: 'drizzle', rate: 0.5 }],
     critters: [{ kind: 'swifts', n: 4, times: DAY }, { kind: 'fish', n: 1 }],
     sounds: [{ sfx: 'birdCall', every: [8, 16], vol: 0.06, pitch: [1.1, 1.4], times: LIGHT }],

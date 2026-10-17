@@ -195,8 +195,8 @@ export const POINTS10: Record<string, Point10[]> = {
   ],
   // ---- Thunder Falls
   falls: [
-    { id: 'lm:fa:falls', kind: 'landmark', name: 'Thunder Falls', x: 1180, photo: { w: 110, h: 280 }, note: 'The river drops off the plateau. Auks above, dippers behind.' },
-    { id: 'pt:fa:water', kind: 'sample', name: 'Plunge pool water', x: 860, art: () => findArt.sampleSpot('#6ab8c8'), take: { item: 'smp_falls', verb: 'Fill a sample jar at the pool', tools: ['jar'], time: 1.6 } },
+    { id: 'lm:fa:falls', kind: 'landmark', name: 'Thunder Falls', x: 1464, photo: { w: 130, h: 300 }, note: 'The river drops off the plateau. Auks above, dippers behind.' },
+    { id: 'pt:fa:water', kind: 'sample', name: 'Plunge pool water', x: 1240, art: () => findArt.sampleSpot('#6ab8c8'), take: { item: 'smp_falls', verb: 'Fill a sample jar at the pool', tools: ['jar'], time: 1.6 } },
   ],
   // ---- Blackwater Mangroves
   mangrove: [
