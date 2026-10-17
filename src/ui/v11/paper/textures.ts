@@ -1,159 +1,159 @@
-// Physical UI kit: procedural paper. Seamless tiles for every kind of paper the expedition owns
-// (Mori's journal, old parchment, kraft, index cards, telex slips, flax paper, graph paper, blueprint
-// paper, cork, marbled endpapers, book cloth and leather), non-tiling "age" overlays (stains, coffee
-// rings, foxing, folds, burnt edges) and torn / deckled edge clip-paths.
+// Physical UI kit: procedural paper, as pixel art. Seamless 128 x 128 art-pixel tiles for every kind
+// of paper the expedition owns (Mori's journal, old parchment, kraft, index cards, telex slips, flax
+// paper, graph paper, blueprint paper, cork, marbled endpapers, book cloth and leather): each is a
+// small palette (three to five tones) laid down with ordered dithering, Bresenham fibres and single-
+// pixel flecks, then stored pre-scaled to 2 CSS px per art pixel, so `/ 256px` shows it 1:1 and crisp.
+// Age is pixel art too: coffee rings, rust foxing, fold creases and toasted edges are their own small
+// layers (stepped, dithered, never blurred), and torn / deckled / perforated edges are stepped
+// clip-paths.
 //
-// Tiles are painted once into a canvas the first time they're asked for and installed as CSS custom
-// properties on :root (--pp-t-<kind>), so the big data URL lives in one place and every element
-// just references the variable.
+// Tiles are painted the first time they're asked for and installed as CSS custom properties on
+// :root (--pp-t-<kind>), so each data URL lives in one place.
 
-import { canvas2d, fbm, hash2, rng, rgbOf, clamp01, smooth, memo } from './rng';
+import { fbm, hash2, rng, rgbOf, memo } from './rng';
+import { Art, col, bayer, dith, PX, shadeC } from './px';
 
 export type PaperKind = 'journal' | 'parchment' | 'kraft' | 'card' | 'telex' | 'flax' | 'graph' | 'blueprint' | 'cork' | 'endpaper' | 'linen';
 
 interface TileDef {
-  base: string;
-  /** low-frequency mottling: [darker, lighter] colour and strength */
-  mottle: [string, string, number];
-  /** fine grain strength */
+  /** tones from darkest to lightest; `base` is the index of the main tone */
+  tones: string[];
+  base: number;
+  /** how far the mottling swings (in tones) */
+  mottle: number;
+  /** speckle: chance of a pixel jumping a tone */
   grain: number;
-  /** fibres: count, colour, alpha, length */
-  fibres?: [number, string, number, number];
-  /** flecks / granules (cork, flax) */
-  flecks?: [number, string, number, number][];
-  /** grid lines every n px (graph & blueprint paper) */
+  /** fibres: count, tone index, length */
+  fibres?: [number, number, number][];
+  /** flecks: count, colour, size */
+  flecks?: [number, string, number][];
+  /** grid lines every n art px (major every 4th): colour, alpha */
   grid?: [number, string, number];
 }
 
 const TILES: Record<Exclude<PaperKind, 'endpaper' | 'linen'>, TileDef> = {
-  journal: { base: '#f1e5c8', mottle: ['#e2cfa4', '#f8eed6', 0.55], grain: 0.05, fibres: [70, '#b89a68', 0.09, 14] },
-  parchment: { base: '#e9d3a2', mottle: ['#cfac6c', '#f4e3b8', 0.9], grain: 0.07, fibres: [50, '#a07a44', 0.08, 18] },
-  kraft: { base: '#c9a273', mottle: ['#b08654', '#d8b688', 0.6], grain: 0.09, fibres: [160, '#8a6438', 0.16, 12], flecks: [[60, '#7a5430', 0.35, 1.2], [40, '#e2c89e', 0.35, 1]] },
-  card: { base: '#f7f1e2', mottle: ['#ece2c8', '#fbf7ec', 0.35], grain: 0.035, fibres: [40, '#c8b48a', 0.06, 10] },
-  telex: { base: '#f2e7b6', mottle: ['#e0d08e', '#f8f0cc', 0.5], grain: 0.05, fibres: [40, '#b8a060', 0.07, 10] },
-  flax: { base: '#e2d6ad', mottle: ['#cbbb88', '#efe6c4', 0.6], grain: 0.06, fibres: [220, '#8a8a4a', 0.16, 26], flecks: [[50, '#6e6a38', 0.3, 1.1]] },
-  graph: { base: '#f3ead2', mottle: ['#e4d6b2', '#faf3e0', 0.4], grain: 0.04, fibres: [40, '#b8a070', 0.06, 12], grid: [16, '#6aa890', 0.22] },
-  blueprint: { base: '#21508c', mottle: ['#173e70', '#2e64a6', 0.75], grain: 0.06, fibres: [60, '#9cc0e8', 0.06, 14], grid: [32, '#d8ecff', 0.16] },
-  cork: { base: '#b98a59', mottle: ['#9c6f42', '#cfa270', 0.55], grain: 0.14, flecks: [[900, '#6e4826', 0.55, 1.4], [500, '#e0bc88', 0.5, 1.2], [160, '#4e3018', 0.6, 2]] },
+  journal: { tones: ['#d8c49a', '#e6d5ae', '#f1e5c8', '#f8efd8'], base: 2, mottle: 0.75, grain: 0.035, fibres: [[26, 1, 6], [10, 0, 4]] },
+  parchment: { tones: ['#c9a466', '#dbbd82', '#e9d3a2', '#f3e2b8'], base: 2, mottle: 1.1, grain: 0.05, fibres: [[22, 1, 7]], flecks: [[16, '#b88a4a', 1]] },
+  kraft: { tones: ['#9c7446', '#b58b5c', '#c9a273', '#d8b688'], base: 2, mottle: 0.8, grain: 0.09, fibres: [[70, 0, 5], [30, 3, 4]], flecks: [[40, '#7a5430', 1], [26, '#e2c89e', 1]] },
+  card: { tones: ['#e4d8bc', '#efe6d0', '#f7f1e2', '#fcf9f0'], base: 2, mottle: 0.5, grain: 0.02, fibres: [[14, 1, 5]] },
+  telex: { tones: ['#dccb88', '#e8daa2', '#f2e7b6', '#f8f0cc'], base: 2, mottle: 0.65, grain: 0.03, fibres: [[14, 1, 5]] },
+  flax: { tones: ['#bfae7a', '#d2c394', '#e2d6ad', '#ece4c4'], base: 2, mottle: 0.8, grain: 0.05, fibres: [[90, 0, 10], [40, 1, 8]], flecks: [[30, '#6e6a38', 1]] },
+  graph: { tones: ['#ddd0ac', '#e9dfc2', '#f3ead2', '#f9f3e2'], base: 2, mottle: 0.5, grain: 0.02, fibres: [[12, 1, 5]], grid: [8, '#6aa890', 0.42] },
+  blueprint: { tones: ['#163a68', '#1c4679', '#21508c', '#2a5e9e'], base: 2, mottle: 0.9, grain: 0.04, fibres: [[20, 3, 5]], grid: [16, '#d8ecff', 0.3] },
+  cork: { tones: ['#7e5634', '#9c6f42', '#b98a59', '#cfa270', '#e0bc88'], base: 2, mottle: 0.9, grain: 0.22, flecks: [[420, '#6e4826', 1], [260, '#e6c492', 1], [90, '#4e3018', 2]] },
 };
 
-const S = 256;
+export const TILE = 128;
 
-function paintTile(kind: PaperKind): HTMLCanvasElement {
+function paintTile(kind: PaperKind): Art {
   if (kind === 'endpaper') return paintMarble();
-  if (kind === 'linen') return paintLinen('#cfc4a4');
+  if (kind === 'linen') return paintCloth('#cfc4a4');
   const d = TILES[kind];
   const seed = kind.length * 131 + kind.charCodeAt(0);
-  const [c, g] = canvas2d(S, S);
-  const img = g.createImageData(S, S);
-  const px = img.data;
-  const [br, bg, bb] = rgbOf(d.base);
-  const [dr, dg, db] = rgbOf(d.mottle[0]);
-  const [lr, lg, lb] = rgbOf(d.mottle[1]);
-  const mk = d.mottle[2];
-  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-    // mottling: two scales of tileable noise
-    const m = fbm(x / 64, y / 64, seed, 4, 4) * 0.7 + fbm(x / 16, y / 16, seed + 5, 2, 16) * 0.3;
-    const t = (m - 0.5) * 2 * mk;
-    let r = br, gg = bg, b = bb;
-    if (t < 0) { r += (dr - br) * -t; gg += (dg - bg) * -t; b += (db - bb) * -t; }
-    else { r += (lr - br) * t; gg += (lg - bg) * t; b += (lb - bb) * t; }
-    const n = (hash2(x, y, seed + 9) - 0.5) * 2 * d.grain * 255;
-    const i = (y * S + x) * 4;
-    px[i] = r + n; px[i + 1] = gg + n; px[i + 2] = b + n * 0.9; px[i + 3] = 255;
+  const a = new Art(TILE, TILE);
+  const tones = d.tones.map(t => col(t));
+  const n = tones.length - 1;
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const m = fbm(x / 32, y / 32, seed, 3, 4) * 0.7 + fbm(x / 8, y / 8, seed + 5, 2, 16) * 0.3;
+    const tau = d.base + (m - 0.5) * 2 * d.mottle;
+    let i = Math.floor(tau + bayer(x, y) - 0.5 + 0.5);
+    const h = hash2(x, y, seed + 9);
+    if (h < d.grain * 0.5) i--; else if (h > 1 - d.grain * 0.5) i++;
+    a.put(x, y, tones[Math.max(0, Math.min(n, i))]);
   }
-  g.putImageData(img, 0, 0);
   const R = rng(seed);
-  // fibres: short curved strokes, drawn three times across the edges so the tile stays seamless
-  if (d.fibres) {
-    const [n, col, a, len] = d.fibres;
-    g.strokeStyle = col;
-    g.lineCap = 'round';
-    for (let k = 0; k < n; k++) {
-      const x0 = R() * S, y0 = R() * S, ang = R() * Math.PI * 2, l = len * (0.4 + R() * 0.9), bend = (R() - 0.5) * 0.8;
-      g.globalAlpha = a * (0.4 + R() * 0.8);
-      g.lineWidth = 0.6 + R() * 0.7;
-      for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) {
-        const sx = x0 + ox, sy = y0 + oy;
-        if (sx < -len * 2 || sx > S + len * 2 || sy < -len * 2 || sy > S + len * 2) continue;
-        g.beginPath();
-        g.moveTo(sx, sy);
-        g.quadraticCurveTo(sx + Math.cos(ang + bend) * l * 0.5, sy + Math.sin(ang + bend) * l * 0.5, sx + Math.cos(ang) * l, sy + Math.sin(ang) * l);
-        g.stroke();
-      }
+  // fibres: short pixel strokes, wrapped round the tile so it stays seamless
+  for (const [cnt, ti, len] of d.fibres ?? []) {
+    const c = tones[Math.max(0, Math.min(n, ti))];
+    for (let k = 0; k < cnt; k++) {
+      const x0 = R() * TILE, y0 = R() * TILE, ang = R() * Math.PI * 2, l = len * (0.5 + R() * 0.8);
+      const x1 = x0 + Math.cos(ang) * l, y1 = y0 + Math.sin(ang) * l;
+      a.line(x0, y0, x1, y1, c, 1, (px, py) => a.put(((px % TILE) + TILE) % TILE, ((py % TILE) + TILE) % TILE, c));
     }
-    g.globalAlpha = 1;
   }
-  if (d.flecks) for (const [n, col, a, r] of d.flecks) {
-    g.fillStyle = col;
-    for (let k = 0; k < n; k++) {
-      const x = R() * S, y = R() * S, rr = r * (0.4 + R() * 0.9);
-      g.globalAlpha = a * (0.5 + R() * 0.5);
-      g.beginPath();
-      g.ellipse(x, y, rr, rr * (0.6 + R() * 0.5), R() * 3, 0, Math.PI * 2);
-      g.fill();
+  for (const [cnt, cs, sz] of d.flecks ?? []) {
+    const c = col(cs);
+    for (let k = 0; k < cnt; k++) {
+      const x = Math.floor(R() * TILE), y = Math.floor(R() * TILE);
+      a.put(x, y, c);
+      if (sz > 1) { a.put((x + 1) % TILE, y, c); if (R() < 0.5) a.put(x, (y + 1) % TILE, shadeC(c, -0.15)); }
     }
-    g.globalAlpha = 1;
   }
   if (d.grid) {
-    const [step, col, a] = d.grid;
-    g.fillStyle = col;
-    for (let v = 0; v < S; v += step) {
+    const [step, cs, al] = d.grid;
+    const c = col(cs);
+    for (let v = 0; v < TILE; v += step) {
       const major = (v / step) % 4 === 0;
-      g.globalAlpha = a * (major ? 1.6 : 1);
-      g.fillRect(v, 0, major ? 1.4 : 0.8, S);
-      g.fillRect(0, v, S, major ? 1.4 : 0.8);
+      for (let u = 0; u < TILE; u++) {
+        const k = major ? al * 1.6 : al;
+        if (dith(v, u, k)) a.px(v, u, c);
+        if (dith(u, v, k)) a.px(u, v, c);
+      }
     }
-    g.globalAlpha = 1;
   }
-  return c;
+  return a;
 }
 
-/** marbled endpaper: domain-warped bands of deep green, teal and gold veins */
-function paintMarble(): HTMLCanvasElement {
-  const [c, g] = canvas2d(S, S);
-  const img = g.createImageData(S, S);
-  const px = img.data;
-  const cols = [rgbOf('#1f3d36'), rgbOf('#2e5e52'), rgbOf('#173029'), rgbOf('#3e6e5c')];
-  const vein = rgbOf('#d6b56a');
-  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-    const wx = fbm(x / 48, y / 48, 41, 4, S / 48 | 0) * 3.2, wy = fbm(x / 48 + 7, y / 48 + 3, 43, 4, S / 48 | 0) * 3.2;
-    const v = Math.sin((x / S) * Math.PI * 2 * 3 + wx * 2.6 + Math.sin((y / S) * Math.PI * 2 * 2 + wy * 2) * 1.4);
-    const band = (v + 1) / 2;
-    const ci = Math.min(3, Math.floor(band * 4));
-    let [r, gg, b] = cols[ci];
-    const vv = 1 - smooth(0, 0.06, Math.abs(v - 0.15));
-    r += (vein[0] - r) * vv * 0.85; gg += (vein[1] - gg) * vv * 0.85; b += (vein[2] - b) * vv * 0.85;
-    const n = (hash2(x, y, 7) - 0.5) * 14;
-    const i = (y * S + x) * 4;
-    px[i] = r + n; px[i + 1] = gg + n; px[i + 2] = b + n; px[i + 3] = 255;
+/** marbled endpaper: domain-warped bands of deep green and teal with gold veins, dithered */
+function paintMarble(): Art {
+  const a = new Art(TILE, TILE);
+  const cols = ['#173029', '#1f3d36', '#2e5e52', '#3e6e5c'].map(c => col(c));
+  const vein = col('#d6b56a'), vein2 = col('#9a8448');
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const wx = fbm(x / 24, y / 24, 41, 3, TILE / 24 | 0) * 3.2, wy = fbm(x / 24 + 7, y / 24 + 3, 43, 3, TILE / 24 | 0) * 3.2;
+    const v = Math.sin((x / TILE) * Math.PI * 2 * 3 + wx * 2.6 + Math.sin((y / TILE) * Math.PI * 2 * 2 + wy * 2) * 1.4);
+    const band = (v + 1) / 2 * 3;
+    const i = Math.max(0, Math.min(3, Math.floor(band + bayer(x, y) - 0.5)));
+    let c = cols[i];
+    const dv = Math.abs(v - 0.15);
+    if (dv < 0.05) c = vein; else if (dv < 0.1 && dith(x, y, 0.5)) c = vein2;
+    a.put(x, y, c);
   }
-  g.putImageData(img, 0, 0);
-  return c;
+  return a;
 }
 
-/** book cloth: a fine linen weave in a colour */
-function paintLinen(col: string): HTMLCanvasElement {
-  const [c, g] = canvas2d(S, S);
-  const img = g.createImageData(S, S);
-  const px = img.data;
-  const [r0, g0, b0] = rgbOf(col);
-  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-    const warp = Math.sin(x * Math.PI * 0.5) * 0.5 + 0.5, weft = Math.sin(y * Math.PI * 0.5) * 0.5 + 0.5;
-    const thread = (hash2(x, y >> 2, 3) - 0.5) * 0.25 + (hash2(x >> 2, y, 5) - 0.5) * 0.25;
-    const m = fbm(x / 64, y / 64, 11, 3, 4) - 0.5;
-    const k = 1 + (warp * 0.5 + weft * 0.5 - 0.5) * 0.16 + thread * 0.3 + m * 0.18;
-    const i = (y * S + x) * 4;
-    px[i] = r0 * k; px[i + 1] = g0 * k; px[i + 2] = b0 * k; px[i + 3] = 255;
+/** book cloth / linen: a pixel weave in a colour */
+function paintCloth(hex: string): Art {
+  const a = new Art(TILE, TILE);
+  const base = col(hex), dk = shadeC(base, -0.14), lt = shadeC(base, 0.1), dk2 = shadeC(base, -0.26);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const m = fbm(x / 32, y / 32, 11, 3, 4) - 0.5;
+    const weave = ((x >> 1) + (y >> 1)) & 1;
+    let c = weave ? base : (x & 1) ? dk : base;
+    if (!weave && (y & 1) && (x & 1)) c = lt;
+    if (m < -0.12 && dith(x, y, (-m - 0.12) * 4)) c = dk2;
+    if (m > 0.14 && dith(x, y, (m - 0.14) * 3)) c = lt;
+    if (hash2(x, y >> 2, 3) < 0.04) c = dk;
+    a.put(x, y, c);
   }
-  g.putImageData(img, 0, 0);
-  return c;
+  return a;
 }
 
-const tileURL = memo((kind: string) => paintTile(kind as PaperKind).toDataURL('image/jpeg', 0.88));
+/** pebbled leather in a colour: little lit-and-shaded bumps, worn patches */
+function paintLeather(hex: string): Art {
+  const a = new Art(TILE, TILE);
+  const base = col(hex), lt = shadeC(base, 0.12), lt2 = shadeC(base, 0.22), dk = shadeC(base, -0.18), dk2 = shadeC(base, -0.32);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const wear = fbm(x / 32, y / 32, 23, 3, 4) - 0.5;
+    // a pebble grid jittered by a hash: lit on the top-left of each cell, shaded on the bottom-right
+    const cx = x % 4, cy = y % 4, cell = hash2(x >> 2, y >> 2, 21);
+    let c = base;
+    if (cell > 0.25) {
+      if ((cx === 0 && cy < 2) || (cy === 0 && cx < 2)) c = lt;
+      else if (cx === 3 || cy === 3) c = dk;
+    }
+    if (wear > 0.12 && dith(x, y, (wear - 0.12) * 3)) c = lt2;
+    if (wear < -0.15 && dith(x, y, (-wear - 0.15) * 3)) c = dk2;
+    a.put(x, y, c);
+  }
+  return a;
+}
+
+const tileArt = memo((kind: string) => paintTile(kind as PaperKind));
+const tileURL = memo((kind: string) => tileArt(kind).url(PX));
 
 const installed = new Set<string>();
-/** install a texture as a CSS variable once and return `var(--pp-t-<kind>)` */
+/** install a texture as a CSS variable once and return `var(--pp-t-<name>)` */
 function cssVar(name: string, url: () => string): string {
   if (!installed.has(name)) {
     installed.add(name);
@@ -162,40 +162,26 @@ function cssVar(name: string, url: () => string): string {
   return `var(--pp-t-${name})`;
 }
 
-/** the seamless tile of a paper as a CSS image value (`var(--pp-t-journal)`) */
+/** the seamless tile of a paper as a CSS image value (`var(--pp-t-journal)`): show it at 256px */
 export function paperTex(kind: PaperKind): string {
   return cssVar(kind, () => tileURL(kind));
 }
-/** the raw data URL of a paper tile (for canvas drawing) */
+/** the data URL of a paper tile (256 x 256, 2 px per art pixel) */
 export function paperTileURL(kind: PaperKind): string { return tileURL(kind); }
-/** the tile canvas itself (for canvas patterns: transitions, sketches) */
-export const paperTileCanvas = memo((kind: string) => paintTile(kind as PaperKind));
+/** the tile at art resolution (128 x 128) as a canvas, for canvas patterns */
+export const paperTileCanvas = memo((kind: string) => tileArt(kind).canvas());
+/** the tile at art resolution as a paint buffer */
+export const paperTileArt = (kind: PaperKind) => tileArt(kind);
 
 // ---------------------------------------------------------------- cover materials
 
-/** a leather grain tile in a colour (book covers, the camera strap) */
-const leatherTile = memo((col: string) => {
-  const [c, g] = canvas2d(S, S);
-  const img = g.createImageData(S, S);
-  const px = img.data;
-  const [r0, g0, b0] = rgbOf(col);
-  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-    // pebbled grain: cellular-ish bumps from two noise scales, plus wear
-    const a = fbm(x / 6, y / 6, 21, 2, S / 6 | 0), b = fbm(x / 32, y / 32, 23, 3, 8);
-    const bump = smooth(0.35, 0.7, a);
-    const k = 0.82 + bump * 0.22 + (b - 0.5) * 0.3 + (hash2(x, y, 29) - 0.5) * 0.06;
-    const i = (y * S + x) * 4;
-    px[i] = r0 * k; px[i + 1] = g0 * k; px[i + 2] = b0 * k; px[i + 3] = 255;
-  }
-  g.putImageData(img, 0, 0);
-  return c.toDataURL('image/jpeg', 0.88);
-});
-const clothTile = memo((col: string) => paintLinen(col).toDataURL('image/jpeg', 0.88));
-
-/** a book-cover material as a CSS image value */
-export function coverTex(kind: 'leather' | 'cloth', col: string): string {
-  return cssVar(`${kind}-${col.replace('#', '')}`, () => (kind === 'leather' ? leatherTile(col) : clothTile(col)));
+const coverArt = memo((key: string) => { const [k, c] = key.split('|'); return k === 'leather' ? paintLeather(c) : paintCloth(c); });
+/** a book-cover material as a CSS image value (show at 256px) */
+export function coverTex(kind: 'leather' | 'cloth', colr: string): string {
+  return cssVar(`${kind}-${colr.replace('#', '')}`, () => coverArt(`${kind}|${colr}`).url(PX));
 }
+/** a cover material at art resolution */
+export const coverArtOf = (kind: 'leather' | 'cloth', colr: string) => coverArt(`${kind}|${colr}`);
 
 // ---------------------------------------------------------------- age: stains, foxing, folds, burnt edges
 
@@ -212,113 +198,125 @@ export interface AgeOpts {
   tint?: string;
 }
 
-const AW = 384, AH = 512;
-const ageURL = memo((key: string) => {
-  const [seedS, st, fx, fo, ed, tint] = key.split('|');
-  const seed = +seedS, stains = +st, foxing = +fx, folds = +fo, edge = +ed;
+/** a coffee ring or a water blot, as a pixel sprite */
+const stainURL = memo((key: string) => {
+  const [seedS, tint] = key.split('|');
+  const seed = +seedS;
   const R = rng(seed * 7919 + 13);
-  const [c, g] = canvas2d(AW, AH);
-  const img = g.createImageData(AW, AH);
-  const px = img.data;
+  const S = 44, a = new Art(S, S);
   const [tr, tg, tb] = rgbOf(tint || '#7a4a1a');
-  // toasted edges: darker toward the border, unevenly (noise on the distance)
-  for (let y = 0; y < AH; y++) for (let x = 0; x < AW; x++) {
-    const dx = Math.min(x, AW - 1 - x) / AW, dy = Math.min(y, AH - 1 - y) / AH;
-    const dd = Math.min(dx * 1.33, dy) + (fbm(x / 40, y / 40, seed, 3) - 0.5) * 0.06;
-    let a = edge * (1 - smooth(0, 0.11, dd)) * 0.55;
-    a += edge * (1 - smooth(0, 0.025, dd)) * 0.35;
-    // a faint overall unevenness
-    a += (fbm(x / 120, y / 120, seed + 3, 3) - 0.5) * 0.08 * edge;
-    const i = (y * AW + x) * 4;
-    px[i] = tr * 0.8; px[i + 1] = tg * 0.8; px[i + 2] = tb * 0.8; px[i + 3] = clamp01(a) * 255;
-  }
-  g.putImageData(img, 0, 0);
-  // coffee rings and water marks
-  for (let k = 0; k < stains; k++) {
-    const x = AW * (0.12 + R() * 0.76), y = AH * (0.1 + R() * 0.8), r = 22 + R() * 46;
-    const ring = R() < 0.65;
-    const steps = 80;
-    g.save();
-    g.translate(x, y);
-    g.rotate(R() * 6);
-    g.scale(1, 0.85 + R() * 0.25);
+  const hex = (k: number) => '#' + [tr, tg, tb].map(v => Math.round(v * k).toString(16).padStart(2, '0')).join('');
+  const rim = col(hex(1), 0.36), rim2 = col(hex(1), 0.22), wash = col(hex(1), 0.1);
+  const ring = R() < 0.65;
+  const rx = 14 + R() * 6, ry = rx * (0.82 + R() * 0.2), cx = S / 2, cy = S / 2;
+  const tilt = R() * Math.PI;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+    const u = dx * Math.cos(tilt) + dy * Math.sin(tilt), v = -dx * Math.sin(tilt) + dy * Math.cos(tilt);
+    const ang = Math.atan2(v, u);
+    const wob = 1 + (fbm(Math.cos(ang) * 1.6 + 4, Math.sin(ang) * 1.6 + 4, seed, 3) - 0.5) * (ring ? 0.12 : 0.5);
+    const r = Math.hypot(u / rx, v / ry) / wob;
     if (ring) {
-      // a ring: darker rim with a faint fill, broken in places
-      g.lineCap = 'round';
-      for (let s = 0; s < steps; s++) {
-        const a0 = (s / steps) * Math.PI * 2, a1 = ((s + 1.2) / steps) * Math.PI * 2;
-        const gap = fbm(s / 9, k, seed + 31, 2);
-        if (gap < 0.32) continue;
-        const rr = r * (1 + (fbm(s / 6, k + 3, seed + 37, 2) - 0.5) * 0.08);
-        g.strokeStyle = `rgba(${tr},${tg},${tb},${(0.1 + gap * 0.18).toFixed(3)})`;
-        g.lineWidth = 1.5 + gap * 2.5;
-        g.beginPath(); g.arc(0, 0, rr, a0, a1); g.stroke();
-      }
-      const fill = g.createRadialGradient(0, 0, r * 0.2, 0, 0, r);
-      fill.addColorStop(0, `rgba(${tr},${tg},${tb},0.035)`);
-      fill.addColorStop(0.85, `rgba(${tr},${tg},${tb},0.07)`);
-      fill.addColorStop(1, `rgba(${tr},${tg},${tb},0)`);
-      g.fillStyle = fill;
-      g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill();
+      const gap = fbm(ang * 2 + 9, seed, seed + 31, 2);
+      if (r > 0.9 && r < 1.0 && gap > 0.36) a.px(x, y, rim);
+      else if (r >= 1.0 && r < 1.07 && gap > 0.5) a.px(x, y, rim2);
+      else if (r < 0.9 && dith(x, y, 0.16)) a.px(x, y, wash);
     } else {
-      // a water blot: an irregular pale-brown tide mark
-      g.beginPath();
-      for (let s = 0; s <= steps; s++) {
-        const a = (s / steps) * Math.PI * 2;
-        const rr = r * (0.75 + fbm(Math.cos(a) * 1.5 + 4, Math.sin(a) * 1.5 + 4, seed + k * 11, 3) * 0.6);
-        if (s === 0) g.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); else g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
-      }
-      g.closePath();
-      g.fillStyle = `rgba(${tr},${tg},${tb},0.06)`;
-      g.fill();
-      g.strokeStyle = `rgba(${tr},${tg},${tb},0.16)`;
-      g.lineWidth = 1.6;
-      g.stroke();
-    }
-    g.restore();
-  }
-  // foxing: clusters of small rust specks
-  const nf = Math.round(foxing * 60);
-  for (let k = 0; k < nf; k++) {
-    const cx = AW * R(), cy = AH * R();
-    const n = 2 + Math.floor(R() * 6);
-    for (let j = 0; j < n; j++) {
-      const x = cx + (R() - 0.5) * 26, y = cy + (R() - 0.5) * 26, r = 0.6 + R() * 2.4;
-      const gr = g.createRadialGradient(x, y, 0, x, y, r * 2.2);
-      gr.addColorStop(0, `rgba(150,82,30,${(0.25 + R() * 0.35).toFixed(2)})`);
-      gr.addColorStop(1, 'rgba(150,82,30,0)');
-      g.fillStyle = gr;
-      g.beginPath(); g.arc(x, y, r * 2.2, 0, Math.PI * 2); g.fill();
+      if (r > 0.92 && r < 1.0) a.px(x, y, rim2);
+      else if (r < 0.92 && dith(x, y, 0.3)) a.px(x, y, wash);
     }
   }
-  // folds: a crease is a bright line beside a dark one, with soft shading either side
-  const fold = (x0: number, y0: number, x1: number, y1: number) => {
-    const nx = -(y1 - y0), ny = x1 - x0, l = Math.hypot(nx, ny), ux = nx / l, uy = ny / l;
-    for (const [o, col, w] of [[-1.2, 'rgba(255,250,235,0.55)', 1.4], [0.8, 'rgba(90,60,30,0.22)', 1.2]] as const) {
-      g.strokeStyle = col; g.lineWidth = w;
-      g.beginPath(); g.moveTo(x0 + ux * o, y0 + uy * o); g.lineTo(x1 + ux * o, y1 + uy * o); g.stroke();
-    }
-    const sh = g.createLinearGradient((x0 + x1) / 2 - ux * 18, (y0 + y1) / 2 - uy * 18, (x0 + x1) / 2 + ux * 18, (y0 + y1) / 2 + uy * 18);
-    sh.addColorStop(0, 'rgba(90,60,30,0)'); sh.addColorStop(0.48, 'rgba(90,60,30,0.07)'); sh.addColorStop(0.5, 'rgba(255,255,255,0.05)'); sh.addColorStop(1, 'rgba(255,255,255,0)');
-    g.save();
-    g.strokeStyle = sh; g.lineWidth = 36;
-    g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
-    g.restore();
-  };
-  if (folds >= 1) fold(0, AH * (0.48 + (R() - 0.5) * 0.06), AW, AH * (0.5 + (R() - 0.5) * 0.06));
-  if (folds >= 2) fold(AW * (0.5 + (R() - 0.5) * 0.05), 0, AW * (0.5 + (R() - 0.5) * 0.05), AH);
-  return c.toDataURL('image/png');
+  return a.url(PX);
 });
 
-/** a non-tiling age overlay (stretch it over the paper: `center / 100% 100%`) */
+/** a tile of foxing: a few clusters of rust specks on transparent paper */
+const foxURL = memo((key: string) => {
+  const [seedS, amtS] = key.split('|');
+  const R = rng(+seedS * 31 + 7);
+  const a = new Art(TILE, TILE);
+  const n = Math.round(+amtS * 14);
+  const c1 = col('#96521e', 0.5), c2 = col('#96521e', 0.28);
+  for (let k = 0; k < n; k++) {
+    const cx = R() * TILE, cy = R() * TILE, m = 2 + Math.floor(R() * 5);
+    for (let j = 0; j < m; j++) {
+      const x = Math.floor(cx + (R() - 0.5) * 12), y = Math.floor(cy + (R() - 0.5) * 12);
+      a.put((x + TILE) % TILE, (y + TILE) % TILE, R() < 0.6 ? c1 : c2);
+      if (R() < 0.3) a.put((x + 1 + TILE) % TILE, (y + TILE) % TILE, c2);
+    }
+  }
+  return a.url(PX);
+});
+
+/** a toasted edge strip (side 0 top, 1 right, 2 bottom, 3 left): darker toward the outside */
+const edgeURL = memo((key: string) => {
+  const [sideS, kS, tint] = key.split('|');
+  const side = +sideS, k = +kS;
+  const L = TILE, D = 8;
+  const horiz = side === 0 || side === 2;
+  const a = new Art(horiz ? L : D, horiz ? D : L);
+  const [tr, tg, tb] = rgbOf(tint || '#7a4a1a');
+  const c = col('#' + [tr, tg, tb].map(v => Math.round(v * 0.8).toString(16).padStart(2, '0')).join(''), 0.5);
+  const c2 = col('#' + [tr, tg, tb].map(v => Math.round(v * 0.6).toString(16).padStart(2, '0')).join(''), 0.62);
+  for (let t = 0; t < L; t++) {
+    const depth = (2.5 + fbm(t / 10, side * 7, 5, 3, L / 10) * 6) * k;
+    for (let dd = 0; dd < D; dd++) {
+      const cov = Math.max(0, 1 - dd / Math.max(0.5, depth));
+      const x = horiz ? t : side === 1 ? D - 1 - dd : dd;
+      const y = horiz ? (side === 2 ? D - 1 - dd : dd) : t;
+      if (dd === 0 && k > 0.3) { a.px(x, y, c2); continue; }
+      if (dith(x, y, cov * cov * 0.9)) a.px(x, y, c);
+    }
+  }
+  return a.url(PX);
+});
+
+/** a fold crease strip: a light ridge beside a dark valley, with dithered shade either side */
+const foldURL = memo((dir: string) => {
+  const L = TILE, D = 4;
+  const horiz = dir === 'h';
+  const a = new Art(horiz ? L : D, horiz ? D : L);
+  const hi = col('#fffaf0', 0.55), lo = col('#5a3c1e', 0.3), sh = col('#5a3c1e', 0.14);
+  for (let t = 0; t < L; t++) {
+    const put = (d: number, c: number, cov = 1) => { const x = horiz ? t : d, y = horiz ? d : t; if (cov >= 1 || dith(x, y, cov)) a.px(x, y, c); };
+    put(0, sh, 0.5); put(1, hi, 0.9); put(2, lo, 0.85); put(3, sh, 0.4);
+  }
+  return a.url(PX);
+});
+
+const even = (v: number) => Math.round(v / PX) * PX;
+
+/** the age layers alone, as background layers (each with its own position and size) */
 export function ageOverlay(seed = 1, o: AgeOpts = {}): string {
-  const key = [seed % 9, o.stains ?? 1, (o.foxing ?? 0.3).toFixed(2), o.folds ?? 0, (o.edge ?? 0.6).toFixed(2), o.tint ?? ''].join('|');
-  return cssVar('age-' + key.replace(/[^a-z0-9]/gi, '_'), () => ageURL(key));
+  const R = rng(seed * 977 + 3);
+  const layers: string[] = [];
+  const tint = o.tint ?? '';
+  const stains = o.stains ?? 1;
+  for (let k = 0; k < stains; k++) {
+    const u = cssVar(`st-${(seed + k * 13) % 11}-${tint.replace('#', '')}`, () => stainURL(`${(seed + k * 13) % 11}|${tint}`));
+    layers.push(`${u} ${Math.round(12 + R() * 70)}% ${Math.round(10 + R() * 75)}% / 88px 88px no-repeat`);
+  }
+  const fox = o.foxing ?? 0.3;
+  if (fox > 0.02) {
+    const fk = (Math.round(fox * 4) / 4).toFixed(2);
+    layers.push(`${cssVar(`fx-${seed % 5}-${fk.replace('.', '')}`, () => foxURL(`${seed % 5}|${fk}`))} ${even(seed * 53 % 256)}px ${even(seed * 29 % 256)}px / 256px 256px repeat`);
+  }
+  const folds = o.folds ?? 0;
+  if (folds >= 1) layers.push(`${cssVar('fold-h', () => foldURL('h'))} 0 ${48 + (seed % 5)}% / 256px 8px repeat-x`);
+  if (folds >= 2) layers.push(`${cssVar('fold-v', () => foldURL('v'))} ${48 + (seed % 4)}% 0 / 8px 256px repeat-y`);
+  const edge = o.edge ?? 0.6;
+  if (edge > 0.02) {
+    const ek = (Math.round(edge * 4) / 4).toFixed(2);
+    const e = (side: number) => cssVar(`ed${side}-${ek.replace('.', '')}-${tint.replace('#', '')}`, () => edgeURL(`${side}|${ek}|${tint}`));
+    layers.push(`${e(0)} ${even(seed * 17 % 256)}px 0 / 256px 16px repeat-x`, `${e(2)} ${even(seed * 41 % 256)}px 100% / 256px 16px repeat-x`,
+      `${e(3)} 0 ${even(seed * 23 % 256)}px / 16px 256px repeat-y`, `${e(1)} 100% ${even(seed * 61 % 256)}px / 16px 256px repeat-y`);
+  }
+  return layers.join(', ');
 }
 
-/** a full CSS `background` for aged paper: the age overlay over the tiled paper */
+/** a full CSS `background` for aged paper: the age layers over the tiled paper */
 export function paperBg(kind: PaperKind, seed = 1, o: AgeOpts = {}): string {
-  return `${ageOverlay(seed, o)} center / 100% 100% no-repeat, ${paperTex(kind)} ${(seed * 37) % 256}px ${(seed * 91) % 256}px / 256px 256px repeat`;
+  const age = ageOverlay(seed, o);
+  return `${age ? age + ', ' : ''}${paperTex(kind)} ${even((seed * 37) % 256)}px ${even((seed * 91) % 256)}px / 256px 256px repeat`;
 }
 
 // ---------------------------------------------------------------- edges
@@ -327,30 +325,55 @@ export type EdgeKind = 'straight' | 'deckle' | 'torn' | 'perforated';
 export interface EdgeOpts { top?: EdgeKind; right?: EdgeKind; bottom?: EdgeKind; left?: EdgeKind; amp?: number }
 
 /**
- * A clip-path polygon for ragged paper edges, in percentages (it scales with the element). Deckle
- * is the soft rough edge of handmade paper, torn a bigger ripped edge, perforated a notebook's
- * tear-off line. `amp` scales the raggedness.
+ * A clip-path polygon for ragged paper edges with pixel steps: every run along the edge sits at a
+ * whole number of art pixels in from the edge, so torn paper reads as stepped pixel art at any size.
+ * Deckle is the soft rough edge of handmade paper, torn a bigger ripped edge, perforated a
+ * notebook's tear-off line. `amp` scales the raggedness.
  */
 export function edgeClip(seed: number, o: EdgeOpts = {}): string {
   const R = rng(seed * 2654435761);
   const amp = o.amp ?? 1;
   const pts: string[] = [];
-  const side = (kind: EdgeKind | undefined, n: number, at: (t: number, off: number) => [number, number]) => {
+  const P = (v: number) => `${(v * PX).toFixed(0)}px`;
+  type At = (t: string, d: number) => string;
+  const side = (kind: EdgeKind | undefined, n: number, at: At) => {
     kind = kind ?? 'straight';
-    if (kind === 'straight') { pts.push(fmt(...at(0, 0))); return; }
-    const big = kind === 'torn' ? 2.6 : kind === 'perforated' ? 0.9 : 0.55;
-    let w = 0;
-    for (let i = 0; i < n; i++) {
-      const t = i / n;
-      if (kind === 'perforated') { w = i % 2 ? big * 0.9 : 0; }
-      else { w = Math.max(0, Math.min(big * 1.6, w * 0.55 + (R() * big) * 1.1 + (kind === 'torn' ? Math.sin(t * 9 + seed) * big * 0.35 : 0))); }
-      pts.push(fmt(...at(t, w * amp)));
+    if (kind === 'straight') { pts.push(at('0%', 0)); return; }
+    const maxD = kind === 'torn' ? 4 : kind === 'perforated' ? 1 : 2;
+    let t = 0, d = 0;
+    const segs: [number, number][] = [];
+    while (t < 100) {
+      const w = kind === 'perforated' ? 1.1 + (segs.length % 2) * 1.3 : (kind === 'torn' ? 1.4 : 2) + R() * (kind === 'torn' ? 3 : 4.5);
+      if (kind === 'perforated') d = segs.length % 2 ? 0 : maxD;
+      else {
+        const step = R() < 0.5 ? -1 : 1;
+        d = Math.max(0, Math.min(maxD, d + step * (R() < 0.75 ? 1 : 2)));
+      }
+      segs.push([t, Math.round(d * amp)]);
+      t += w * (46 / n) * 0.9;
     }
+    segs.forEach(([t0, dd], i) => {
+      const t1 = Math.min(100, segs[i + 1]?.[0] ?? 100);
+      pts.push(at(`${t0.toFixed(2)}%`, dd), at(`${t1.toFixed(2)}%`, dd));
+    });
   };
-  const fmt = (x: number, y: number) => `${x.toFixed(2)}% ${y.toFixed(2)}%`;
-  side(o.top, 46, (t, w) => [t * 100, w]);
-  side(o.right, 60, (t, w) => [100 - w * 0.75, t * 100]);
-  side(o.bottom, 46, (t, w) => [100 - t * 100, 100 - w]);
-  side(o.left, 60, (t, w) => [w * 0.75, 100 - t * 100]);
+  side(o.top, 46, (t, d) => `${t} ${P(d)}`);
+  side(o.right, 60, (t, d) => `calc(100% - ${P(d)}) ${t}`);
+  side(o.bottom, 46, (t, d) => `calc(100% - ${t}) calc(100% - ${P(d)})`);
+  side(o.left, 60, (t, d) => `${P(d)} calc(100% - ${t})`);
   return `polygon(${pts.join(', ')})`;
+}
+
+/** a CSS 4x4 dither pattern (for shadows and dimming done the pixel way): colour at 50% coverage */
+export const ditherURL = memo((key: string) => {
+  const [hex, covS] = key.split('|');
+  const a = new Art(4, 4);
+  const c = col(hex);
+  for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) if (dith(x, y, +covS)) a.put(x, y, c);
+  return a.url(PX);
+});
+/** a dither layer as a CSS background value: `${ditherBg('#000', 0.5)}` */
+export function ditherBg(hex: string, cov: number): string {
+  const k = (Math.round(cov * 16) / 16).toFixed(3);
+  return `${cssVar(`dz-${hex.replace('#', '')}-${k.replace('.', '')}`, () => ditherURL(`${hex}|${k}`))} 0 0 / 8px 8px repeat`;
 }

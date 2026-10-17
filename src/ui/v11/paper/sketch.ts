@@ -1,25 +1,29 @@
-// Physical UI kit: sketches. Turns the game's pixel sprites (and photos) into field-journal
-// drawings: a pencil contour that follows the silhouette at constant width, softer feature lines
-// inside, graphite hatching in the shadows and a loose watercolour wash that bleeds past the lines.
-// Plus a set of little ink doodles (boat, tent, palm, fish, crab, camera, Chunk...) for margins.
+// Physical UI kit: sketches, as pixel art. Turns the game's pixel sprites (and photos) into
+// field-journal drawings at pixel resolution: a pencil contour one pixel outside the silhouette
+// (broken here and there, gone over twice in places), softer feature lines where the colours change
+// inside, diagonal pixel hatching in the shadows (cross-hatched in the darkest parts) and a
+// watercolour wash quantised to a few pale tones, dithered and a pixel off-register, pooled darker
+// at its rim. Plus little ink doodles (boat, tent, palm, fish, crab, camera, Chunk...) for margins.
 //
-//   await sketchURL(src, { style: 'pencil' })   -> data URL of the drawing (cached per src + style)
-//   sketchImg(src, cls)                         -> '<img>' html that fills itself in when ready
-//   doodle('tent', { size: '3em' })             -> inline SVG of a hand-drawn doodle
+//   sketchImg(src, o, cls)          -> a canvas that draws the sketch at a whole-number scale in its box
+//   await sketchURL(src, o)         -> data URL of the drawing (2 CSS px per art pixel)
+//   sketchCanvas(img, o)            -> the drawing at art resolution, synchronously
+//   doodle('tent', { size: '3em' }) -> a hand-drawn doodle (pixel ink)
 //
 // Styles: 'pencil' (graphite + wash), 'ink' (dip-pen lines, no wash), 'blueprint' (white lines for
 // blueprint paper), 'chalk' (pale lines for dark boards).
 
-import { canvas2d, fbm, hash2, rng, clamp01, smooth, hashStr } from './rng';
+import { hash2, clamp01, hashStr, fbm } from './rng';
 import { svgInk, roughLine, roughEllipse, roughCurve, roughRect, INK, PENCIL } from './ink';
 import type { Stroke } from './ink';
+import { Art, PX, pxCanvas, keyOf, dith, packRGBA, bayer } from './px';
 
 export type SketchStyle = 'pencil' | 'ink' | 'blueprint' | 'chalk';
 export interface SketchOpts {
   style?: SketchStyle;
-  /** longest side of the output in px (default 300) */
+  /** (kept for callers: the drawing's detail now follows the source's own pixels) */
   size?: number;
-  /** watercolour wash strength 0..1 (pencil default 0.55, others 0) */
+  /** watercolour wash strength 0..1 (pencil default 0.62, others 0) */
   wash?: number;
   /** hatching strength 0..1 (default 0.6) */
   hatch?: number;
@@ -43,57 +47,62 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-const cache = new Map<string, Promise<string>>();
-const done = new Map<string, string>();
+const imgCache = new Map<string, Promise<HTMLImageElement>>();
+const artCache = new Map<string, Promise<Art | null>>();
+const urlDone = new Map<string, string>();
+const srcKey = (src: string) => `${src.length}:${hashStr(src.length > 4000 ? src.slice(0, 2000) + src.slice(-2000) : src)}`;
+function sketchKey(src: string, o: SketchOpts, maxW = 0, maxH = 0) {
+  return `${o.style ?? 'pencil'}|${o.wash ?? ''}|${o.hatch ?? ''}|${o.crop?.join(',') ?? ''}|${o.photo ? 1 : 0}|${o.seed ?? 0}|${maxW}x${maxH}|${srcKey(src)}`;
+}
+/** the sketch as an art buffer (cached), fitted under maxW x maxH art px when given */
+function sketchArt(src: string, o: SketchOpts, maxW = 0, maxH = 0): Promise<Art | null> {
+  const key = sketchKey(src, o, maxW, maxH);
+  let p = artCache.get(key);
+  if (!p) {
+    let ip = imgCache.get(src);
+    if (!ip) { ip = loadImage(src); imgCache.set(src, ip); if (imgCache.size > 300) imgCache.delete(imgCache.keys().next().value!); }
+    p = ip.then(im => sketchArtOf(im, o, maxW, maxH)).catch(() => null);
+    artCache.set(key, p);
+    if (artCache.size > 600) artCache.delete(artCache.keys().next().value!);
+  }
+  return p;
+}
 
 /** the sketch of an image as a data URL (cached; resolves '' if the image can't be read) */
 export function sketchURL(src: string, o: SketchOpts = {}): Promise<string> {
   const key = sketchKey(src, o);
-  let p = cache.get(key);
-  if (!p) {
-    p = loadImage(src).then(im => { const u = sketchCanvas(im, o).toDataURL('image/png'); done.set(key, u); return u; }).catch(() => '');
-    cache.set(key, p);
-  }
-  return p;
+  return sketchArt(src, o).then(a => { const u = a ? a.url(PX) : ''; urlDone.set(key, u); return u; });
 }
 /** a sketch that has already been made (or '') */
-export function sketchReady(src: string, o: SketchOpts = {}): string { return done.get(sketchKey(src, o)) ?? ''; }
-function sketchKey(src: string, o: SketchOpts) {
-  return `${o.style ?? 'pencil'}|${o.size ?? 300}|${o.wash ?? ''}|${o.hatch ?? ''}|${o.crop?.join(',') ?? ''}|${o.photo ? 1 : 0}|${o.seed ?? 0}|${src.length}|${hashStr(src.length > 4000 ? src.slice(0, 2000) + src.slice(-2000) : src)}`;
-}
+export function sketchReady(src: string, o: SketchOpts = {}): string { return urlDone.get(sketchKey(src, o)) ?? ''; }
 
-let imgN = 0;
-const pendingImgs = new Map<string, { src: string; o: SketchOpts }>();
-const BLANK_GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 /**
- * An <img> of a sketch for page HTML, in a fixed box so page layout never depends on when the
- * drawing is ready: `box` is [width, height] in CSS units (default full width at 4:3), the sketch is
- * fitted inside it. If it isn't drawn yet the image fills itself in (call fillSketches(root) after
- * inserting the HTML; the book does this for you).
+ * A sketch for page HTML in a fixed box, so page layout never depends on when the drawing is ready:
+ * `box` is [width, height] in CSS units (default full width at 4:3). The canvas draws the sketch at
+ * the biggest whole-number scale that fits, centred, once it's on the page.
  */
 export function sketchImg(src: string, o: SketchOpts & { box?: [string, string] } = {}, cls = '', style = ''): string {
   if (!src) return '';
   const [bw, bh] = o.box ?? ['100%', 'auto'];
   const size = `width:${bw};${bh === 'auto' ? 'aspect-ratio:4/3' : `height:${bh}`};`;
-  const ready = sketchReady(src, o);
-  if (ready) return `<img class="pp-sk ${cls}" src="${ready}" alt="" draggable="false" style="${size}${style}">`;
-  const id = 'sk' + (++imgN);
-  pendingImgs.set(id, { src, o });
-  return `<img class="pp-sk wait ${cls}" src="${BLANK_GIF}" data-sk="${id}" alt="" draggable="false" style="${size}${style}">`;
+  const key = 'sk:' + keyOf(sketchKey(src, o));
+  return pxCanvas(key, async (a, w, h) => {
+    const sk = await sketchArt(src, o, 0, 0);
+    if (!sk) return;
+    let art: Art | null = sk;
+    if (sk.w > w || sk.h > h) art = await sketchArt(src, o, w, h);
+    if (!art) return;
+    const k = Math.max(1, Math.floor(Math.min(w / art.w, h / art.h)));
+    const ox = Math.floor((w - art.w * k) / 2), oy = Math.floor((h - art.h * k) / 2);
+    for (let y = 0; y < art.h; y++) for (let x = 0; x < art.w; x++) {
+      const c = art.d[y * art.w + x];
+      if (!(c >>> 24)) continue;
+      for (let j = 0; j < k; j++) for (let i = 0; i < k; i++) a.put(ox + x * k + i, oy + y * k + j, c);
+    }
+  }, { cls: `pp-sk ${cls}`, style: size + style, async: true });
 }
-/** fill in every waiting sketch image under root */
-export function fillSketches(root: ParentNode) {
-  root.querySelectorAll<HTMLImageElement>('img.pp-sk[data-sk]').forEach(img => {
-    const job = pendingImgs.get(img.dataset.sk!);
-    if (!job) return;
-    void sketchURL(job.src, job.o).then(u => {
-      if (!u) return;
-      img.src = u;
-      img.classList.remove('wait');
-      img.removeAttribute('data-sk');
-    });
-  });
-}
+/** (sketch canvases paint themselves; kept for callers) */
+export function fillSketches(_root: ParentNode) { /* nothing to do */ }
 
 /** the size of one art pixel in a nearest-neighbour upscaled sprite (speciesSprite is 3x) */
 function pixelScale(d: Uint8ClampedArray, w: number, h: number): number {
@@ -130,173 +139,121 @@ function scale2x(src: Uint32Array, w: number, h: number): [Uint32Array, number, 
   return [out, W, H];
 }
 
-/** draw the sketch of an already-loaded image or canvas */
+/** draw the sketch of an already-loaded image or canvas (at art resolution) */
 export function sketchCanvas(src: CanvasImageSource & { width: number; height: number }, o: SketchOpts = {}): HTMLCanvasElement {
+  return sketchArtOf(src, o).canvas();
+}
+
+function sketchArtOf(src: CanvasImageSource & { width: number; height: number }, o: SketchOpts, maxW = 0, maxH = 0): Art {
   const style = o.style ?? 'pencil';
   const seed = o.seed ?? 7;
   const crop = o.crop ?? [0, 0, 1, 1];
   const sw0 = (src as HTMLImageElement).naturalWidth || src.width, sh0 = (src as HTMLImageElement).naturalHeight || src.height;
   const cx0 = Math.floor(crop[0] * sw0), cy0 = Math.floor(crop[1] * sh0);
   const cw = Math.max(2, Math.floor((crop[2] - crop[0]) * sw0)), ch = Math.max(2, Math.floor((crop[3] - crop[1]) * sh0));
-  // ---- the source: pixel art back to one pixel per art pixel and then EPX-doubled (twice for small
-  // sprites); photos scaled to a working size
+  // ---- the source at one pixel per art pixel (photos scaled to a working size)
   let w0: number, h0: number, px: Uint32Array;
+  const g0c = document.createElement('canvas');
   if (o.photo) {
-    const ks = Math.min(1, 150 / Math.max(cw, ch));
-    w0 = Math.max(2, Math.round(cw * ks)); h0 = Math.max(2, Math.round(ch * ks));
-    const [, g0] = canvas2d(w0, h0);
+    const target = maxW && maxH ? Math.min(maxW / cw, maxH / ch) : Math.min(1, 96 / Math.max(cw, ch));
+    w0 = Math.max(2, Math.round(cw * target)); h0 = Math.max(2, Math.round(ch * target));
+    g0c.width = w0; g0c.height = h0;
+    const g0 = g0c.getContext('2d', { willReadFrequently: true })!;
     g0.imageSmoothingEnabled = true;
     g0.drawImage(src, cx0, cy0, cw, ch, 0, 0, w0, h0);
     px = new Uint32Array(g0.getImageData(0, 0, w0, h0).data.slice().buffer);
   } else {
-    const [, g0] = canvas2d(cw, ch);
+    g0c.width = cw; g0c.height = ch;
+    const g0 = g0c.getContext('2d', { willReadFrequently: true })!;
     g0.imageSmoothingEnabled = false;
     g0.drawImage(src, cx0, cy0, cw, ch, 0, 0, cw, ch);
     const full = g0.getImageData(0, 0, cw, ch).data;
-    const k = pixelScale(full, cw, ch);
-    w0 = Math.round(cw / k); h0 = Math.round(ch / k);
+    let k = pixelScale(full, cw, ch);
+    // too big for the box: sample coarser (every k-th pixel)
+    if (maxW && maxH) while (Math.round(cw / k) + 6 > maxW || Math.round(ch / k) + 6 > maxH) k++;
+    w0 = Math.max(1, Math.round(cw / k)); h0 = Math.max(1, Math.round(ch / k));
     px = new Uint32Array(w0 * h0);
     const f32 = new Uint32Array(full.slice().buffer);
     for (let y = 0; y < h0; y++) for (let x = 0; x < w0; x++) {
-      const v = f32[y * k * cw + x * k];
-      // all fully transparent pixels compare equal (EPX matches colours exactly)
-      px[y * w0 + x] = (v >>> 24) < 16 ? 0 : v;
+      const v = f32[Math.min(ch - 1, y * k) * cw + Math.min(cw - 1, x * k)];
+      px[y * w0 + x] = (v >>> 24) < 128 ? 0 : (v | 0xff000000) >>> 0;
     }
-    const passes = Math.max(w0, h0) <= 90 ? 2 : 1;
-    for (let i = 0; i < passes; i++) [px, w0, h0] = scale2x(px, w0, h0);
+    // small sprites get one EPX doubling so the pencil has room for curves
+    const room = !maxW || ((w0 * 2 + 6) <= maxW && (h0 * 2 + 6) <= maxH);
+    if (Math.max(w0, h0) <= 100 && room) [px, w0, h0] = scale2x(px, w0, h0);
   }
-  const N0 = w0 * h0;
-  const A = new Float32Array(N0), Lm = new Float32Array(N0);
-  for (let i = 0; i < N0; i++) {
-    const v = px[i];
-    const r = v & 255, g = (v >>> 8) & 255, b = (v >>> 16) & 255, a = v >>> 24;
-    A[i] = o.photo ? 1 : a / 255;
-    Lm[i] = (0.3 * r + 0.59 * g + 0.11 * b) / 255;
-  }
-  // a light [1 2 1] smoothing on top of EPX (rounds what's left of the steps)
-  const soften = (F: Float32Array, edge0: boolean) => {
-    const T = new Float32Array(N0), O = new Float32Array(N0);
-    for (let y = 0; y < h0; y++) for (let x = 0; x < w0; x++) {
-      const i = y * w0 + x;
-      const l = x > 0 ? F[i - 1] : (edge0 ? 0 : F[i]), r = x < w0 - 1 ? F[i + 1] : (edge0 ? 0 : F[i]);
-      T[i] = (l + 2 * F[i] + r) / 4;
-    }
-    for (let y = 0; y < h0; y++) for (let x = 0; x < w0; x++) {
-      const i = y * w0 + x;
-      const u = y > 0 ? T[i - w0] : (edge0 ? 0 : T[i]), d = y < h0 - 1 ? T[i + w0] : (edge0 ? 0 : T[i]);
-      O[i] = (u + 2 * T[i] + d) / 4;
-    }
-    return O;
-  };
-  const As = o.photo ? A : soften(A, true), Ls = soften(Lm, false);
-  // shading is relative to the animal's own mid-tone (a dark seal and a pale crab both get shadows)
+  const N = w0 * h0;
+  const A = new Uint8Array(N), L = new Float32Array(N);
   let ls = 0, ln = 0;
-  for (let i = 0; i < N0; i++) if (A[i] > 0.5) { ls += Lm[i]; ln++; }
+  for (let i = 0; i < N; i++) {
+    const v = px[i];
+    A[i] = o.photo ? 1 : (v >>> 24) > 0 ? 1 : 0;
+    L[i] = (0.3 * (v & 255) + 0.59 * ((v >>> 8) & 255) + 0.11 * ((v >>> 16) & 255)) / 255;
+    if (A[i]) { ls += L[i]; ln++; }
+  }
   const meanL = ln ? ls / ln : 0.5;
-  const samp = (F: Float32Array, x: number, y: number, outside: number) => {
-    const fx = x - 0.5, fy = y - 0.5;
-    const xi = Math.floor(fx), yi = Math.floor(fy), tx = fx - xi, ty = fy - yi;
-    const at = (xx: number, yy: number) => (xx < 0 || yy < 0 || xx >= w0 || yy >= h0 ? (outside >= 0 ? outside : F[Math.max(0, Math.min(h0 - 1, yy)) * w0 + Math.max(0, Math.min(w0 - 1, xx))]) : F[yy * w0 + xx]);
-    const a = at(xi, yi), b = at(xi + 1, yi), c = at(xi, yi + 1), d = at(xi + 1, yi + 1);
-    return a + (b - a) * tx + (c - a) * ty + (a - b - c + d) * tx * ty;
-  };
-  // ---- output size and padding (the wash and lines spill a little)
-  const size = o.size ?? 300;
-  const k = size / Math.max(w0, h0);
-  const pad = Math.round(size * 0.07);
-  const W = Math.round(w0 * k) + pad * 2, H = Math.round(h0 * k) + pad * 2;
-  const [out, g] = canvas2d(W, H);
-  // ---- watercolour wash: pale, desaturated, a little off-register, pooled darker at its rim
+  const pad = o.photo ? 0 : 3;
+  const W = w0 + pad * 2, H = h0 + pad * 2;
+  const out = new Art(W, H);
+  const on = (x: number, y: number) => x >= 0 && y >= 0 && x < w0 && y < h0 && A[y * w0 + x] === 1;
+  const [lr, lg, lb] = LINE[style];
+  const line = packRGBA(lr, lg, lb, 255), soft = packRGBA(lr, lg, lb, 165);
+  // ---- watercolour wash: pale, desaturated, a pixel off-register, quantised and dithered
   const washK = o.wash ?? (style === 'pencil' ? 0.62 : 0);
   if (washK > 0) {
-    const [sc, sg] = canvas2d(w0, h0);
-    const sid = sg.createImageData(w0, h0);
-    new Uint32Array(sid.data.buffer).set(px);
-    sg.putImageData(sid, 0, 0);
-    // soften by drawing small then large
-    const [tc, tg] = canvas2d(Math.max(2, Math.round(w0 / 3)), Math.max(2, Math.round(h0 / 3)));
-    tg.imageSmoothingEnabled = true;
-    tg.drawImage(sc, 0, 0, tc.width, tc.height);
-    const dx = (hash2(seed, 1) - 0.5) * pad * 0.6, dy = (hash2(seed, 2) - 0.5) * pad * 0.5;
-    g.imageSmoothingEnabled = true;
-    g.drawImage(tc, pad + dx, pad + dy, W - pad * 2, H - pad * 2);
-    const wd = g.getImageData(0, 0, W, H);
-    const p = wd.data;
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      const i = (y * W + x) * 4;
-      if (!p[i + 3]) continue;
-      const r = p[i], gg = p[i + 1], b = p[i + 2];
-      const l = (r + gg + b) / 3;
-      const sat = 0.9, lift = 0.62;
-      p[i] = 255 - (255 - (l + (r - l) * sat)) * lift;
-      p[i + 1] = 255 - (255 - (l + (gg - l) * sat)) * lift;
-      p[i + 2] = 255 - (255 - (l + (b - l) * sat)) * lift;
-      const n = fbm(x / 24, y / 24, seed + 3, 3), gr = hash2(x, y, seed);
-      const a0 = p[i + 3] / 255;
-      const rim = 1 - Math.abs(a0 - 0.55) * 1.6;
-      p[i + 3] = 255 * washK * clamp01((0.4 + n * 0.7 - gr * 0.14) * (0.5 + rim * 0.65)) * smooth(0.05, 0.5, a0);
+    const dx = hash2(seed, 1) > 0.5 ? 1 : -1, dy = hash2(seed, 2) > 0.5 ? 1 : 0;
+    const q = (c: number) => Math.min(255, Math.round(c / 24) * 24);
+    for (let y = 0; y < h0; y++) for (let x = 0; x < w0; x++) {
+      if (!on(x, y)) continue;
+      const v = px[y * w0 + x];
+      let r = v & 255, g = (v >>> 8) & 255, b = (v >>> 16) & 255;
+      const l = (r + g + b) / 3;
+      r = 255 - (255 - (l + (r - l) * 0.85)) * 0.6; g = 255 - (255 - (l + (g - l) * 0.85)) * 0.6; b = 255 - (255 - (l + (b - l) * 0.85)) * 0.6;
+      const X = x + pad + dx, Y = y + pad + dy;
+      const rim = !on(x - 1, y) || !on(x + 1, y) || !on(x, y - 1) || !on(x, y + 1);
+      const n = fbm(x / 9, y / 9, seed + 3, 2);
+      const cov = washK * clamp01(0.45 + n * 0.75);
+      if (rim) out.px(X, Y, packRGBA(q(r * 0.86), q(g * 0.86), q(b * 0.86), 255));
+      else if (dith(X, Y, cov)) out.px(X, Y, packRGBA(q(r), q(g), q(b), 255));
     }
-    g.putImageData(wd, 0, 0);
   }
-  // ---- lines and hatching, per output pixel
-  const img = g.getImageData(0, 0, W, H);
-  const P = img.data;
-  const [lr, lg, lb] = LINE[style];
-  const hatchK = o.hatch ?? (style === 'blueprint' ? 0.3 : 0.55);
-  const lineW = Math.max(1.15, size / 200);
-  const hs = Math.max(4.5, size / 44), hw = Math.max(0.7, size / 300);
-  const brk = hash2(seed, 9) * 100;
-  const e = 0.6;
-  const iso = 0.5;
-  const R2 = Math.SQRT1_2;
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const sx = (x - pad) / k, sy = (y - pad) / k;
-    const a = samp(As, sx, sy, 0);
-    // nothing to draw well outside the animal
-    if (a <= 0.01 && !o.photo) continue;
-    let v = 0;
-    const nz = fbm(x / 13 + brk, y / 13, seed + 11, 2);
-    if (!o.photo && a > 0.01 && a < 0.99) {
-      // the contour: distance to the alpha iso-line from its gradient, drawn at constant width
-      const gx = (samp(As, sx + e, sy, 0) - samp(As, sx - e, sy, 0)) / (2 * e), gy = (samp(As, sx, sy + e, 0) - samp(As, sx, sy - e, 0)) / (2 * e);
-      const gm = Math.hypot(gx, gy) / k + 1e-5;
-      const dist = Math.abs(a - iso) / gm;
-      v = (1 - smooth(lineW * 0.5, lineW * 1.2, dist)) * (0.72 + nz * 0.4);
-      if (nz < 0.3) v *= 0.55;
-      // a second, lighter pass a hair off the first (a quick pencil going round twice)
-      const dist2 = Math.abs(samp(As, sx + 1.1 / k, sy - 0.8 / k, 0) - iso) / gm;
-      v = Math.max(v, (1 - smooth(lineW * 0.3, lineW * 0.85, dist2)) * 0.28);
-    }
-    if (a > 0.35) {
-      // feature lines where the colours change sharply inside the animal
-      const l = samp(Ls, sx, sy, -1);
-      const lx = (samp(Ls, sx + e, sy, -1) - samp(Ls, sx - e, sy, -1)) / (2 * e), ly = (samp(Ls, sx, sy + e, -1) - samp(Ls, sx, sy - e, -1)) / (2 * e);
-      const lgm = Math.hypot(lx, ly);
-      v = Math.max(v, smooth(o.photo ? 0.06 : 0.13, o.photo ? 0.2 : 0.34, lgm) * (o.photo ? 0.8 : 0.42) * (0.7 + nz * 0.4));
-      if (hatchK > 0) {
-        // graphite hatching in the shadows, cross-hatching in the darkest parts (anti-aliased strokes
-        // with a little wobble so they look drawn)
-        const dark = meanL - l;
-        const wob = (fbm(x / 30, y / 30, seed + 21, 2) - 0.5) * hs * 0.8;
-        const u = (x + y) * R2 + wob, w2 = (x - y) * R2 - wob;
-        const d1 = Math.abs((((u % hs) + hs) % hs) - hs / 2), d2 = Math.abs((((w2 % (hs * 1.15)) + hs * 1.15) % (hs * 1.15)) - hs * 0.575);
-        const l1 = 1 - smooth(hw * 0.4, hw * 1.2, d1), l2 = 1 - smooth(hw * 0.4, hw * 1.2, d2);
-        let h = l1 * smooth(0.02, 0.12, dark) * 0.55 + l2 * smooth(0.16, 0.28, dark) * 0.5;
-        h *= smooth(0.35, 0.6, a) * (0.6 + nz * 0.5);
-        v = Math.max(v, h * hatchK);
-      }
-    }
-    if (v <= 0.03) continue;
-    const i = (y * W + x) * 4;
-    const ga = clamp01(v) * (0.82 + hash2(x, y, seed + 2) * 0.18);
-    const pa = P[i + 3] / 255;
-    const oa = ga + pa * (1 - ga);
-    P[i] = (lr * ga + P[i] * pa * (1 - ga)) / oa;
-    P[i + 1] = (lg * ga + P[i + 1] * pa * (1 - ga)) / oa;
-    P[i + 2] = (lb * ga + P[i + 2] * pa * (1 - ga)) / oa;
-    P[i + 3] = oa * 255;
+  // ---- feature lines inside, where the colours change sharply
+  const thr = o.photo ? 0.14 : 0.16;
+  for (let y = 0; y < h0; y++) for (let x = 0; x < w0; x++) {
+    if (!on(x, y)) continue;
+    const l = L[y * w0 + x];
+    const r = on(x + 1, y) ? L[y * w0 + x + 1] : l, d = on(x, y + 1) ? L[(y + 1) * w0 + x] : l;
+    if ((l < r - thr || l < d - thr || (o.photo && (r < l - thr || d < l - thr))) && hash2(x, y, seed + 5) > 0.2) out.px(x + pad, y + pad, o.photo ? line : soft);
   }
-  g.putImageData(img, 0, 0);
+  // ---- hatching in the shadows (diagonals, crossed in the darkest parts)
+  const hatchK = o.hatch ?? (style === 'blueprint' ? 0.3 : 0.6);
+  if (hatchK > 0) for (let y = 0; y < h0; y++) for (let x = 0; x < w0; x++) {
+    if (!on(x, y)) continue;
+    const dark = meanL - L[y * w0 + x];
+    const X = x + pad, Y = y + pad;
+    const wob = Math.round((fbm(X / 14, Y / 14, seed + 21, 2) - 0.5) * 3);
+    const d1 = ((X + Y + wob) % 4 + 4) % 4 === 0, d2 = ((X - Y + wob) % 5 + 5) % 5 === 0;
+    if ((d1 && dark > 0.05 && hash2(X, Y, seed) < hatchK + 0.15) || (d2 && dark > 0.2 && hash2(X, Y, seed + 1) < hatchK)) out.px(X, Y, soft);
+  }
+  if (!o.photo) {
+    // ---- the contour: a pencil line one pixel outside the silhouette, broken now and then
+    for (let y = -1; y <= h0; y++) for (let x = -1; x <= w0; x++) {
+      if (on(x, y)) continue;
+      const nb = on(x - 1, y) || on(x + 1, y) || on(x, y - 1) || on(x, y + 1);
+      if (!nb) continue;
+      const brk = fbm((x + pad) / 7, (y + pad) / 7, seed + 11, 2);
+      if (brk < 0.26 && hash2(x, y, seed + 3) < 0.6) continue;
+      out.px(x + pad, y + pad, brk < 0.36 ? soft : line);
+      // a second pass a pixel off in places (a quick pencil going round twice)
+      if (brk > 0.7 && hash2(x, y, seed + 4) < 0.3) out.px(x + pad + 1, y + pad - 1, soft);
+    }
+  } else {
+    // photos: pencil tone from the luminance, ordered-dithered
+    for (let y = 0; y < h0; y++) for (let x = 0; x < w0; x++) {
+      const dark = clamp01((0.62 - L[y * w0 + x]) * 1.6);
+      if (dark > bayer(x, y) + 0.12) out.px(x, y, soft);
+    }
+  }
   return out;
 }
 
