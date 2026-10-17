@@ -434,6 +434,17 @@ export async function chapters(): Promise<DevChapter[]> {
     { id: 'm:review', name: 'Photo review', icon: 'film', run: async () => { await zl().review?.(); } },
     { id: 'm:journal', name: 'Field Guide', icon: 'scroll', run: async () => { (await import('../ui/journal')).openJournal(); } },
   ] });
+  // V11 Te Kāinga: the village's story, lessons and festival (src/game/v11/village/debug.ts)
+  const vil = () => import('../game/v11/village/debug');
+  out.push({ id: 'village', name: 'Te Kāinga · Hinerua, the hue kiri, the festival', points: [
+    { id: 'v:day', name: 'The village by day', sub: 'First visit: the guardian quest starts', icon: 'map', variants: TODS.map(t => ({ label: TOD_LABEL[t], run: async () => { const m = await vil(); m.stage('start'); await m.go(t); } })) },
+    { id: 'v:story', name: 'Night: Koro tells Hinerua’s story', sub: 'Asked about the pou; everyone at the fire', icon: 'moon', run: async () => { const m = await vil(); m.stage('start'); game.save.flags['v11v:askPou'] = true; await m.go('night', 1150); } },
+    { id: 'v:offering', name: 'Dusk: the offering at Hinerua’s pou', sub: 'Story heard, a skin found', icon: 'sun', run: async () => { const m = await vil(); m.stage('kiri'); await m.go('dusk', 1050); } },
+    { id: 'v:blessing', name: 'Koro’s blessing at the gateway', sub: 'The offering made', icon: 'flag', run: async () => { const m = await vil(); m.stage('kiri'); game.save.flags['v11v:offering'] = true; game.save.flags['v10:koroBlessing'] = false; await m.go('day', 1050); } },
+    { id: 'v:lesson', name: 'Hue kiri lesson (rhythm game)', sub: 'Own hue kiri; pick a song and a tier', icon: 'star', run: async () => { const m = await vil(); m.stage('festival'); await m.go('dusk', 1950); await m.rhythm('awa', 'normal', false); } },
+    { id: 'v:practice', name: 'Serpent dance practice with Aunty Hana', sub: 'The festival is being prepared', icon: 'heart', run: async () => { const m = await vil(); m.stage('kiri'); await m.go('day', 1150); await m.practice(); } },
+    { id: 'v:festival', name: 'Te Pō o Hinerua (festival night)', sub: 'Everything ready: the night plays', icon: 'star', run: async () => { await (await vil()).festival(); } },
+  ] });
   return out;
 }
 

@@ -14,6 +14,25 @@ import { setVf, registerVillageQuests } from './lore';
 
 export const ctx = () => villageCtx();
 
+/** load the village at a time of day (Mori at x) */
+export async function go(tod: 'dawn' | 'day' | 'dusk' | 'night' = 'day', x = 1000) {
+  const { FieldScene } = await import('../../scenes/field');
+  const { VILLAGE } = await import('../../sites10/village');
+  const ex = await import('../../v10/expedition');
+  await game.go(() => { const s = new FieldScene({ ...VILLAGE, spawnX: x } as never, tod); ex.tagScene(s, 'village'); return s; });
+  for (let i = 0; i < 200 && !villageCtx(); i++) await new Promise(r => setTimeout(r, 50));
+  return 'ok';
+}
+/** the dance practice with Aunty Hana (in the village) */
+export async function practice() {
+  const c = villageCtx();
+  if (!c) return 'not in the village';
+  const L = await import('./lessons');
+  c.f.cutscene = true;
+  try { await L.dancePractice(c); } finally { c.f.cutscene = false; }
+  return 'ok';
+}
+
 export function stage(to: 'start' | 'story' | 'kiri' | 'festival' | 'done') {
   registerVillageQuests();
   const order = ['start', 'story', 'kiri', 'festival', 'done'];
@@ -53,9 +72,5 @@ export const blessing = () => withCtx((m, c) => m.blessing(c));
 /** set everything up for the festival and load the village after dark: the night plays */
 export async function festival() {
   stage('festival');
-  const { FieldScene } = await import('../../scenes/field');
-  const { VILLAGE } = await import('../../sites10/village');
-  const ex = await import('../../v10/expedition');
-  await game.go(() => { const s = new FieldScene({ ...VILLAGE, spawnX: 1300 } as never, 'night'); ex.tagScene(s, 'village'); return s; });
-  return 'ok';
+  return go('night', 1300);
 }
