@@ -88,7 +88,7 @@ body.touchmode .h2 .hk { pointer-events: none; bottom: auto; top: 168px; left: 6
 body.touchmode .h2 .hr { right: 6px; top: 6px; }
 /* the controls line */
 .hm-keys { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); white-space: nowrap; transition: opacity 1.2s steps(6); opacity: 0.95;
-  font-family: var(--pp-label); font-size: 16px; line-height: 24px; color: #fff1cc; letter-spacing: 0; text-transform: uppercase;
+  font-family: var(--pp-head); font-size: 18.6667px; line-height: 24px; color: #fff1cc; letter-spacing: 1px;
   text-shadow: 2px 0 0 #140c06, -2px 0 0 #140c06, 0 2px 0 #140c06, 0 -2px 0 #140c06, 2px 2px 0 #140c06, -2px 2px 0 #140c06, 2px -2px 0 #140c06, -2px -2px 0 #140c06; }
 #ui .hm-keys, #ui .hm-keys * { font-size-adjust: none; }
 .hm-keys.gone { opacity: 0; }
@@ -450,13 +450,13 @@ export class Hud2 {
       a.ellipse(11, 13, 9, 9, OUT);
       a.ellipse(11, 13, 8, 8, col('#f4ead0'));
       a.ring(11, 13, 7, 7, col('#26408a'));
-      drawText(a, 'RP', 5, 16, col('#26408a'), { face: 'block', spacing: 0 });
+      drawText(a, 'RP', 7, 16, col('#26408a'), { face: 'block', bold: false, spacing: 0 });
       outlined(a, rpTxt, 24, 20, CREAM, OUT, { face: 'block', scale: 2, spacing: 1 });
     });
     // the sun-and-moon dial
     const hour = hudHour();
     this.dialW.el.classList.toggle('off', hour === null);
-    if (hour !== null) this.dialW.draw(64, 44, a => paintDial(a, hour, game.save.day || 1, this.t));
+    if (hour !== null) this.dialW.draw(72, 44, a => paintDial(a, hour, game.save.day || 1, this.t));
     // the quest note
     if (this.noteDirty && this.noteQ) { this.noteDirty = false; this.paintNote(); }
     // the kit
@@ -465,7 +465,7 @@ export class Hud2 {
 
   private paintBanner() {
     const name = this.placeName.toUpperCase();
-    const k = tw(name, { face: 'block', scale: 2, spacing: 1 }) > 260 ? 1 : 2;
+    const k = 1;
     const tw0 = tw(name, { face: 'block', scale: k, spacing: 1 });
     const W = tw0 + 36, H = this.placeSub ? 38 : 28;
     this.banW.draw(W, H, a => {
@@ -481,7 +481,7 @@ export class Hud2 {
       }
       plate(a, 8, 2, W - 16, 20, red, { r: 1 });
       for (let x = 10; x < W - 10; x++) { a.put(x, 4, redL); if (x % 4 === 0) a.put(x, 19, redD); }
-      outlined(a, name, Math.round(W / 2 - tw0 / 2), 9 + 7 * k - (k > 1 ? 2 : -3), CREAM, OUT, { face: 'block', scale: k, spacing: 1 });
+      outlined(a, name, Math.round(W / 2 - tw0 / 2), 16, CREAM, OUT, { face: 'block', scale: k, spacing: 1 });
       if (this.placeSub) {
         const sw = tw(this.placeSub, { face: 'block', bold: false, spacing: 1 }) + 10;
         plate(a, Math.round(W / 2 - sw / 2), 23, sw, 12, col('#3e2814'), { r: 1 });
@@ -580,7 +580,7 @@ export class Hud2 {
     const badge = lapOn ? this.lap!.badge() : 0;
     const n = game.save.inv.length, cap = Math.max(1, capacity());
     this.packFill += (n / cap - this.packFill) * 0.2;
-    const W = 30 + (lapOn ? 24 : 0) + (cam ? 46 : 0), H = 30;
+    const W = 30 + (lapOn ? 24 : 0) + (cam ? 50 : 0), H = 30;
     this.kitRegions = [];
     this.kitW.draw(W, H, a => {
       let x = 0;
@@ -614,7 +614,7 @@ export class Hud2 {
       // the instant camera, the film left, the print developing out of the top
       if (cam) {
         const dev = cam.v10 !== false ? Math.max(0, Math.min(1, cam.develop ?? 1)) : 1;
-        plate(a, x, 6, 44, 22, col('#2e2a26'), { r: 2 });
+        plate(a, x, 6, 48, 22, col('#2e2a26'), { r: 2 });
         const cx = x + 3, cy = 13;
         if (dev < 1) {
           // the print sticking out of the slot, coming up from dark brown in dithered steps
@@ -634,9 +634,9 @@ export class Hud2 {
         // the film count (and the seconds left on the print)
         const shots = Math.max(0, Math.round(cam.shots ?? 0));
         const txt = dev < 1 ? `${Math.ceil(cam.developLeft?.() ?? 0)}S` : String(shots);
-        outlined(a, txt, cx + 21, 24, dev < 1 ? col('#f4d27a') : shots <= 2 ? col('#ff8a6a') : CREAM, OUT, { face: 'block', scale: dev < 1 ? 1 : 2, spacing: 1 });
-        if (dev >= 1) drawText(a, 'FILM', cx + 21, 12, col('#a89a88'), { face: 'block', bold: false });
-        this.kitRegions.push({ id: 'cam', x0: x, x1: x + 44 });
+        outlined(a, txt, cx + 22, dev < 1 ? 22 : 24, dev < 1 ? col('#f4d27a') : shots <= 2 ? col('#ff8a6a') : CREAM, OUT, { face: 'block', scale: dev < 1 ? 1 : 2, spacing: 1 });
+        if (dev >= 1) outlined(a, 'FILM', cx + 22, 7, col('#c8baa4'), OUT, { face: 'block', bold: false });
+        this.kitRegions.push({ id: 'cam', x0: x, x1: x + 48 });
       }
     });
   }

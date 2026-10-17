@@ -65,7 +65,7 @@ export const PAPER_CSS = `
 .pp-struck { position: relative; }
 .pp-strike { position: absolute; left: -3%; width: 106%; top: calc(50% - 4px); height: 8px; pointer-events: none; }
 .pp-marked { position: relative; display: inline-block; }
-.pp-under { position: absolute; left: -2%; width: 104%; bottom: -6px; height: 8px; pointer-events: none; }
+.pp-under { position: absolute; left: -2%; width: 104%; bottom: -9px; height: 8px; pointer-events: none; }
 .pp-circ { position: absolute; left: -14%; width: 128%; top: -32%; height: 164%; pointer-events: none; }
 .pp-tallies { display: inline-flex; align-items: center; gap: 4px; vertical-align: -2px; }
 /* luggage tags */

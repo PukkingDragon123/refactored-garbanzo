@@ -866,9 +866,9 @@ export function openBook(o: BookOpts): BookHandle {
         shadeG.fillRect(ca, 0, Math.max(1, cb - ca), Hh);
       }
     };
-    const ws = W * (0.05 + 0.1 * k), wc = W * (0.025 + 0.05 * k), wf = W * (0.02 + 0.04 * k);
+    const ws = W * (0.03 + 0.06 * k), wc = W * (0.025 + 0.04 * k), wf = W * (0.015 + 0.03 * k);
     // the page underneath, in the lee of the lifted flap
-    band(fold, fold + s.side * ws, '#1e1206', 0.9, 0.62 * (0.5 + 0.5 * k), 0);
+    band(fold, fold + s.side * ws, '#2a1a08', 0.85, 0.42 * (0.5 + 0.5 * k), 0);
     // the flap: a bright roll at the fold, then a soft shade across it
     band(fold, fold - s.side * wc, '#fffbee', 0.85, 0.55, 0.05, 3);
     band(fold - s.side * wc, freeE, '#3c2808', 0.8, 0.06 + 0.1 * k, 0.16 * k, 3);
@@ -876,7 +876,7 @@ export function openBook(o: BookOpts): BookHandle {
     shadeG.fillStyle = 'rgba(40,24,6,0.55)';
     shadeG.fillRect(Math.round(cx(fold)) - (s.side > 0 ? 1 : 0), 0, 1, Hh);
     // the front, shaded where the flap's free edge lies over it
-    band(freeE, freeE - s.side * wf, '#1e1206', 0.9, 0.4 * k, 0, 3);
+    band(freeE, freeE - s.side * wf, '#2a1a08', 0.85, 0.28 * k, 0, 3);
   }
 
   function endTurn(done: boolean) {

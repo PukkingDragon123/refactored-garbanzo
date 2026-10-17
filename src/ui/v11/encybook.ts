@@ -51,93 +51,96 @@ const ROLE_COL: Record<Role, string> = { predator: '#b8321e', thief: '#c07a14', 
 const ROLE_SIDE: Record<Role, 'top' | 'bottom' | 'left' | 'right'> = { predator: 'top', thief: 'top', prey: 'bottom', victim: 'bottom', parasite: 'right', host: 'right', partner: 'left', rival: 'left' };
 
 const CSS = `
-.eb .ppb-ct { color: var(--pp-ink); }
-.eb-p { font-size: 1.22em; line-height: 1.1; margin: 0 0 0.45em; }
+.eb .ppb-ct { color: var(--pp-ink); font-size: 20px; line-height: 24px; }
+#ui .eb .ppb-ct, #ui .eb .ppb-ct * { font-size-adjust: none; }
+.eb-p { font-size: 20px; line-height: 24px; margin: 0 0 10px; }
 .eb-p.cont { margin-top: 0; }
-.eb-h { display: flex; align-items: baseline; gap: 0.5em; margin: 0.55em 0 0.2em; font-size: 0.86em; letter-spacing: 0.12em; text-transform: uppercase; color: #5a4a34; }
-.eb-h b { font-weight: 400; } .eb-h small { margin-left: auto; letter-spacing: 0.06em; color: #8a7652; }
-.eb-h .ul { flex: 1; height: 0.4em; align-self: center; }
-.eb-plate { position: relative; text-align: center; margin: 0.2em 0 0.3em; }
+#ui .eb .eb-h { display: flex; align-items: center; gap: 10px; margin: 12px 0 4px; font-family: var(--pp-label); font-size: 16px; line-height: 18px; letter-spacing: 2px; text-transform: uppercase; color: #5a4a34; }
+.eb-h b { font-weight: 400; } .eb-h small { margin-left: auto; letter-spacing: 0; color: #8a7652; font-size: 16px; }
+.eb-h .ul { flex: 1; height: 8px; align-self: center; }
+#ui .eb .eb-lab { font-family: var(--pp-label); font-size: 16px; line-height: 18px; letter-spacing: 2px; text-transform: uppercase; color: #6a5a40; }
+.eb-plate { position: relative; text-align: center; margin: 4px 0 6px; }
 .eb-plate .sk { position: relative; display: block; margin: 0 auto; }
-.eb-plate .pp-tape { top: -0.35em; }
-.eb-name { font-size: 2.05em; line-height: 0.95; color: #2a2440; margin-top: 0.25em; }
-.eb-sci { font-size: 1.15em; color: var(--pp-pencil); margin-top: 0.05em; }
-.eb-row { display: flex; gap: 0.8em; align-items: flex-start; margin: 0.4em 0 0.2em; }
+.eb-plate .pp-tape { top: -8px; }
+#ui .eb .eb-name { font-family: var(--pp-head); font-size: 37.3333px; line-height: 40px; color: #2a2440; margin-top: 6px; }
+.eb-sci { font-size: 20px; line-height: 24px; color: var(--pp-pencil); }
+.eb-row { display: flex; gap: 16px; align-items: flex-start; margin: 8px 0 4px; }
 .eb-row .pp-polaroid { flex: none; }
-.eb-vit { flex: 1; min-width: 0; font-size: 1.12em; line-height: 1.05; }
-.eb-vit div { margin: 0.1em 0 0.2em; }
-.eb-vit i { font-style: normal; font-size: 0.7em; letter-spacing: 0.1em; color: #8a7652; display: block; }
-.eb-bar { position: relative; height: 0.9em; margin: 0.2em 0; }
-.eb-bar svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.eb-new { position: absolute; right: -0.4em; top: 0.4em; z-index: 4; font-size: 0.9em; }
-.eb-list { list-style: none; margin: 0.1em 0 0.3em; padding: 0; font-size: 1.15em; line-height: 1.08; }
-.eb-list li { display: flex; gap: 0.4em; align-items: flex-start; margin: 0.18em 0; }
+.eb-vit { flex: 1; min-width: 0; font-size: 20px; line-height: 24px; }
+.eb-vit div { margin: 2px 0 6px; }
+#ui .eb .eb-vit i { font-style: normal; font-family: var(--pp-label); font-size: 16px; line-height: 18px; letter-spacing: 1px; text-transform: uppercase; color: #8a7652; display: block; }
+.eb-bar { position: relative; height: 18px; margin: 4px 0; }
+.eb-bar .pp-cv { position: absolute; inset: 0; width: 100%; height: 100%; }
+.eb-new { position: absolute; right: -8px; top: 8px; z-index: 4; }
+.eb-list { list-style: none; margin: 2px 0 6px; padding: 0; font-size: 20px; line-height: 24px; }
+.eb-list li { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0; }
 .eb-list li.no { color: #7a7060; }
-.eb-list small { font-size: 0.8em; color: var(--pp-pencil); }
+.eb-list small { font-size: 20px; color: var(--pp-pencil); }
 .eb-list b { font-weight: 700; }
-.eb-locked { position: relative; margin: 0.35em 0 0.1em; color: #8a8070; }
-.eb-locked .h { font-size: 0.8em; letter-spacing: 0.12em; text-transform: uppercase; display: flex; align-items: center; gap: 0.4em; }
-.eb-locked svg { display: block; width: 100%; height: 1.9em; opacity: 0.5; }
-.eb-nudge { font-size: 1.05em; color: var(--pp-pencil); margin: 0.35em 0; transform: rotate(-0.6deg); }
-.eb-fun { margin: 0.6em 0.2em 0.4em; }
+.eb-locked { position: relative; margin: 8px 0 2px; color: #8a8070; }
+#ui .eb .eb-locked .h { font-family: var(--pp-label); font-size: 16px; line-height: 18px; letter-spacing: 1px; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+.eb-locked .pp-cv { display: block; width: 100%; height: 28px; opacity: 0.55; }
+.eb-nudge { font-size: 20px; line-height: 24px; color: var(--pp-pencil); margin: 8px 0; }
+.eb-fun { margin: 12px 4px 8px; }
 .eb-fun .pp-sticky { width: 100%; }
-.eb-notes { margin: 0.5em 0 0.3em; }
+.eb-notes { margin: 10px 0 6px; }
 .eb-notes .pp-scrap { width: 100%; }
-.eb-notes ul { margin: 0; padding-left: 1em; font-size: 1.08em; line-height: 1.1; }
-.eb-strip { display: flex; flex-wrap: wrap; gap: 0.5em 0.35em; margin: 0.4em 0 0.5em; }
+.eb-notes ul { margin: 4px 0 0; padding-left: 20px; font-size: 20px; line-height: 24px; }
+.eb-strip { display: flex; flex-wrap: wrap; gap: 12px 10px; margin: 8px 0 10px; }
 .eb-strip .pp-polaroid { cursor: pointer; }
-.eb-strip .pp-polaroid.on { box-shadow: 0 0 0 0.16em #c8321e, 0 0.12em 0.3em rgba(40, 28, 10, 0.38); }
-.eb-web { position: relative; width: 100%; aspect-ratio: 10 / 8; margin: 0.2em 0 0.4em; }
-.eb-web svg.ln { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.eb-node { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; width: 6.5em; text-align: center; }
-.eb-node i { width: 2.7em; height: 2.7em; border-radius: 50%; background: #e8dcc0 center / cover no-repeat; box-shadow: 0 0 0 0.12em #fbf8f0, 0 0.1em 0.25em rgba(40, 28, 10, 0.45); display: grid; place-items: center; font-style: normal; color: var(--pp-pencil); font-size: 1.3em; }
-.eb-node.c i { width: 3.4em; height: 3.4em; box-shadow: 0 0 0 0.16em #fbf8f0, 0 0 0 0.3em var(--pp-ink), 0 0.15em 0.3em rgba(40, 28, 10, 0.45); }
-.eb-node.sm i { width: 2em; height: 2em; font-size: 1em; }
-.eb-node span { font-size: 0.95em; line-height: 0.95; margin-top: 0.2em; }
-.eb-node em { font-style: normal; font-size: 0.8em; display: block; }
+.eb-strip .pp-polaroid.on { box-shadow: 0 0 0 2px #d6ccb4, 0 0 0 4px #c8321e, 4px 4px 0 4px rgba(34, 22, 8, 0.3); }
+.eb-web { position: relative; width: 100%; aspect-ratio: 10 / 8; margin: 4px 0 8px; }
+.eb-web .pp-cv.ln { position: absolute; inset: 0; width: 100%; height: 100%; }
+.eb-node { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; width: 130px; text-align: center; }
+.eb-node i { width: 52px; height: 52px; background: #e8dcc0 center / cover no-repeat; image-rendering: pixelated; box-shadow: 0 0 0 2px #fbf8f0, 0 0 0 4px #5a4a34, 4px 4px 0 4px rgba(34, 22, 8, 0.3); display: grid; place-items: center; font-style: normal; color: var(--pp-pencil); font-size: 30px; }
+.eb-node.c i { width: 68px; height: 68px; box-shadow: 0 0 0 2px #fbf8f0, 0 0 0 6px var(--pp-ink), 4px 4px 0 6px rgba(34, 22, 8, 0.3); }
+.eb-node.sm i { width: 40px; height: 40px; font-size: 20px; }
+.eb-node span { font-size: 20px; line-height: 20px; margin-top: 6px; background: rgba(246, 236, 212, 0.85); padding: 0 2px; }
+.eb-node em { font-style: normal; display: block; }
 .eb-node[data-act] { cursor: pointer; }
-.eb-legend { display: flex; flex-wrap: wrap; gap: 0.25em 0.9em; font-size: 1em; margin: 0.2em 0; }
-.eb-legend span { display: inline-flex; align-items: center; gap: 0.3em; }
-.eb-legend i { width: 1.4em; height: 0.25em; border-radius: 0.2em; }
+.eb-legend { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 20px; line-height: 24px; margin: 4px 0; }
+.eb-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.eb-legend i { width: 28px; height: 4px; }
 .eb-chap { text-align: center; padding-top: 8%; }
-.eb-chap .t { font-size: 3em; line-height: 1; color: #2a2440; }
-.eb-chap .s { font-size: 1.35em; color: var(--pp-pencil); margin-top: 0.2em; }
-.eb-idx { list-style: none; padding: 0; margin: 0.2em 0; font-size: 1.15em; line-height: 1.05; }
-.eb-idx li { display: flex; align-items: baseline; gap: 0.3em; margin: 0.12em 0; }
-.eb-idx li .d { flex: 1; border-bottom: 0.12em dotted rgba(90, 74, 52, 0.45); transform: translateY(-0.2em); }
+#ui .eb .eb-chap .t { font-family: var(--pp-head); font-size: 56px; line-height: 60px; color: #2a2440; }
+.eb-chap .s { font-size: 20px; line-height: 24px; color: var(--pp-pencil); margin-top: 4px; }
+.eb-idx { list-style: none; padding: 0; margin: 4px 0; font-size: 20px; line-height: 24px; }
+.eb-idx li { display: flex; align-items: baseline; gap: 6px; margin: 2px 0; }
+.eb-idx li .d { flex: 1; height: 2px; align-self: flex-end; margin-bottom: 6px; background: repeating-linear-gradient(90deg, rgba(90, 74, 52, 0.5) 0 2px, transparent 2px 6px); }
 .eb-idx li[data-act] { cursor: pointer; }
 .eb-idx li[data-act]:hover b { color: #a8321e; }
 .eb-idx li.unk { color: #9a9080; }
 .eb-idx li b { font-weight: 700; }
-.eb-unk { display: grid; grid-template-columns: repeat(auto-fill, minmax(4.6em, 1fr)); gap: 0.5em; margin: 0.4em 0; }
-.eb-unk div { position: relative; aspect-ratio: 1; display: grid; place-items: center; color: #9a9080; font-size: 0.95em; text-align: center; line-height: 0.95; }
-.eb-unk div svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.eb-unk div b { font-size: 1.8em; font-weight: 700; display: block; color: #8a8070; }
-.eb-tag { display: inline-block; padding: 0.5em 0.7em; margin: 0.3em 0; font-size: 0.82em; line-height: 1.25; color: #2a2620; box-shadow: 0 0.1em 0.2em rgba(40, 28, 10, 0.3); max-width: 100%; }
-.eb-tag b { display: block; font-weight: 400; letter-spacing: 0.06em; }
+.eb-unk { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; margin: 8px 0; }
+.eb-unk div { position: relative; aspect-ratio: 1; display: grid; place-items: center; color: #9a9080; font-size: 20px; text-align: center; line-height: 20px; }
+.eb-unk div .pp-cv { position: absolute; inset: 0; width: 100%; height: 100%; }
+.eb-unk div b { font-size: 40px; line-height: 40px; font-weight: 700; display: block; color: #8a8070; }
+.eb-tag { display: inline-block; padding: 10px 14px; margin: 6px 0; font-size: 16px; line-height: 20px; color: #2a2620; max-width: 100%; }
+.eb-tag b { display: block; font-weight: 400; letter-spacing: 1px; }
 .eb-front { text-align: center; }
-.eb-front .plate { margin: 9% 6% 0; padding: 1.2em 1em 1.4em; border: 0.14em solid rgba(42, 36, 64, 0.5); outline: 0.08em solid rgba(42, 36, 64, 0.35); outline-offset: 0.25em; }
-.eb-front .plate .t { font-size: 1.9em; line-height: 1; color: #2a2440; }
-.eb-front .plate .s { font-size: 1.25em; color: var(--pp-pencil); margin-top: 0.4em; }
-.eb-front .pct { font-size: 4.2em; color: #2a2440; margin-top: 0.3em; line-height: 1; }
-.eb-cont { list-style: none; padding: 0; margin: 0.4em 0; }
-.eb-cont li { display: flex; align-items: center; gap: 0.5em; margin: 0.45em 0; cursor: pointer; font-size: 1.25em; }
-.eb-cont li img { width: 1.5em; height: 1.5em; image-rendering: pixelated; }
+.eb-front .plate { margin: 9% 6% 0; padding: 24px 20px 28px; border: 2px solid rgba(42, 36, 64, 0.5); outline: 2px solid rgba(42, 36, 64, 0.35); outline-offset: 4px; }
+#ui .eb .eb-front .plate .t { font-family: var(--pp-head); font-size: 37.3333px; line-height: 40px; color: #2a2440; }
+.eb-front .plate .s { font-size: 20px; line-height: 24px; color: var(--pp-pencil); margin-top: 8px; }
+#ui .eb .eb-front .pct { font-family: var(--pp-head); font-size: 74.6667px; line-height: 76px; color: #2a2440; margin-top: 6px; }
+.eb-cont { list-style: none; padding: 0; margin: 8px 0; }
+.eb-cont li { display: flex; align-items: center; gap: 10px; margin: 10px 0; cursor: pointer; font-size: 20px; line-height: 24px; }
+.eb-cont li img { width: 32px; height: 32px; image-rendering: pixelated; }
 .eb-cont li b { font-weight: 700; flex: none; }
-.eb-cont li .bar { flex: 1; height: 0.8em; position: relative; }
-.eb-cont li em { font-style: normal; font-size: 0.85em; color: var(--pp-pencil); min-width: 2.6em; text-align: right; }
+.eb-cont li .bar { flex: 1; height: 16px; position: relative; }
+.eb-cont li .bar .pp-cv { position: absolute; inset: 0; width: 100%; height: 100%; }
+.eb-cont li em { font-style: normal; color: var(--pp-pencil); min-width: 50px; text-align: right; }
 .eb-cont li:hover b { color: #a8321e; }
-.eb-ln { color: #26408a; cursor: pointer; text-decoration: underline; text-decoration-style: wavy; text-decoration-thickness: 0.06em; text-underline-offset: 0.18em; }
-.eb-ln.off { color: inherit; text-decoration: none; cursor: default; }
-.eb-zoom { position: absolute; inset: 0; z-index: 40; display: grid; place-items: center; background: rgba(10, 6, 2, 0.55); animation: ebZ 0.25s ease-out both; }
+.eb-ln { color: #26408a; cursor: pointer; padding-bottom: 2px; background: repeating-linear-gradient(90deg, #26408a 0 4px, transparent 4px 6px) 0 100% / 100% 2px no-repeat; }
+.eb-ln.off { color: inherit; background: none; cursor: default; }
+.eb-zoom { position: absolute; inset: 0; z-index: 40; display: grid; place-items: center; background: rgba(10, 6, 2, 0.62); animation: ebZ 0.25s steps(4) both; }
 @keyframes ebZ { from { opacity: 0; } }
-.eb-zoom .pp-polaroid { width: min(78vw, 34em); animation: ebZp 0.35s cubic-bezier(.2, 1.3, .4, 1) both; }
-@keyframes ebZp { from { transform: translateY(30%) rotate(-8deg) scale(0.7); opacity: 0; } }
+.eb-zoom .pp-polaroid { width: min(78vw, 680px); animation: ebZp 0.35s steps(6) both; }
+@keyframes ebZp { from { transform: translateY(30%); opacity: 0; } }
 .eb-zoom .pp-polaroid .ph { aspect-ratio: 16 / 9; }
-.eb-zoom .acts { position: absolute; bottom: 4%; left: 0; right: 0; display: flex; justify-content: center; gap: 1.2em; }
-.eb-zoom .acts span { cursor: pointer; font-size: 1.4em; color: #fbf3dc; padding: 0.2em 0.6em; }
+.eb-zoom .acts { position: absolute; bottom: 4%; left: 0; right: 0; display: flex; justify-content: center; gap: 24px; }
+.eb-zoom .acts span { cursor: pointer; font-size: 30px; line-height: 36px; color: #fbf3dc; padding: 4px 12px; text-shadow: 2px 2px 0 #140c06; }
 .eb-zoom .acts span:hover { color: #ffd890; }
-.eb-teaser { margin: 0.3em 0; }
+.eb-teaser { margin: 6px 0; }
 `;
 let styled = false;
 
@@ -159,7 +162,7 @@ function bar(k: number, seed: number, col = INK_BLUE): string {
     ...(fill > 1 ? [{ d: scribble(fill, h - 5, seed + 3, Math.max(3, Math.round(fill / 3))), c: col, w: 1.6, opacity: 0.85 }] : []),
   ], { stretch: true });
 }
-const heading = (t: string, right = '', seed = 1) => `<div class="eb-h pp-pix"><b>${esc(t)}</b><span class="ul">${svgInk(100, 6, [{ d: underline(100, { seed }), c: PENCIL, w: 1, opacity: 0.6 }], { stretch: true, w: '100%', h: '100%' })}</span>${right ? `<small>${right}</small>` : ''}</div>`;
+const heading = (t: string, right = '', seed = 1) => `<div class="eb-h"><b>${esc(t)}</b><span class="ul">${svgInk(100, 6, [{ d: underline(100, { seed }), c: PENCIL, w: 1, opacity: 0.6 }], { stretch: true, w: '100%', h: '100%' })}</span>${right ? `<small>${right}</small>` : ''}</div>`;
 const H = (t: string, right = '', seed = 1): BookBlock => ({ html: heading(t, right, seed), keep: true });
 const P = (t: string, cls = ''): BookBlock => ({ html: esc(t), cls: `pp-hand eb-p ${cls}`, split: true });
 
@@ -212,11 +215,11 @@ function speciesBlocks(id: string, e0: EncEntry): BookBlock[] {
   const n = Math.min(secs.length, secOf(sp.id));
   secs.forEach((s, i) => {
     if (i >= n) {
-      out.push({ html: `<div class="eb-locked"><div class="h pp-pix">${pxIcon('lock')} ${esc(s.title)}</div>${svgInk(100, 14, [{ d: scribble(96, 10, seed + i * 7, 14), c: PENCIL, w: 0.9 }], { stretch: true })}</div>` });
+      out.push({ html: `<div class="eb-locked"><div class="h">${pxIcon('lock')} ${esc(s.title)}</div>${svgInk(100, 14, [{ d: scribble(96, 10, seed + i * 7, 14), c: PENCIL, w: 1.2 }], { stretch: true, h: '28px' })}</div>` });
       return;
     }
     if (s.fun) { out.push({ html: `<div class="eb-fun">${sticky(`<b>Fun fact!</b> ${esc(s.text ?? '')}`, { color: 'yellow', rot: tilt(seed + 9, 2), w: '100%' })}</div>` }); return; }
-    if (s.key === 'notes' && s.list) { out.push({ html: `<div class="eb-notes">${scrap(`<div class="pp-pix" style="font-size:0.75em;letter-spacing:0.12em;color:#6a5a40">MORI'S FIELD NOTES</div><ul class="pp-hand">${s.list.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`, { kind: 'graph', w: '100%', seed: seed + 4, rot: tilt(seed + 4, 1.5) })}</div>` }); return; }
+    if (s.key === 'notes' && s.list) { out.push({ html: `<div class="eb-notes">${scrap(`<div class="eb-lab">Mori's field notes</div><ul class="pp-hand">${s.list.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`, { kind: 'graph', w: '100%', seed: seed + 4, rot: tilt(seed + 4, 1.5) })}</div>` }); return; }
     out.push(H(s.title, '', seed + 10 + i));
     if (s.text) out.push(P(s.text));
     if (s.list) out.push({ html: `<ul class="eb-list pp-hand">${s.list.map(x => `<li>- ${esc(x)}</li>`).join('')}</ul>` });
@@ -293,13 +296,13 @@ function miniWeb(id: string): string {
     return [{ d: roughLine(a[0], a[1], a[2], a[3], { seed: i + 3 }), c, w: 1.3, opacity: dash }];
   });
   const known = ties.filter(t => entry(t.other)).length;
-  return `<div class="eb-web">${svgInk(100, 80, strokes, { cls: 'ln', stretch: true })}${node(id, 50, 50, 'c')}${nodes.map(n => node(n.t.other, n.x, n.y, 'sm', n.t.label && entry(n.t.other) ? ROLE_NAME[n.t.role] : '', n.t.role)).join('')}</div><div class="pp-hand" style="font-size:1em;color:var(--pp-pencil);text-align:right">${known} of ${ties.length} connection${ties.length === 1 ? '' : 's'} documented</div>`;
+  return `<div class="eb-web">${svgInk(100, 80, strokes, { cls: 'ln', stretch: true })}${node(id, 50, 50, 'c')}${nodes.map(n => node(n.t.other, n.x, n.y, 'sm', n.t.label && entry(n.t.other) ? ROLE_NAME[n.t.role] : '', n.t.role)).join('')}</div><div class="pp-hand" style="color:var(--pp-pencil);text-align:right">${known} of ${ties.length} connection${ties.length === 1 ? '' : 's'} documented</div>`;
 }
 
 /** every documented species and the links between them (spring layout), on a page of its own */
 function bigWebPage(): string {
   const ids = faunaPool().map(s => s.id).filter(id => !!entry(id));
-  const intro = `<div class="eb-chap" style="padding-top:0"><div class="t pp-head" style="font-size:2.2em">Food web</div><div class="s pp-hand">Who eats whom, who lives on whom, who tags along.</div></div>`;
+  const intro = `<div class="eb-chap" style="padding-top:0"><div class="t pp-head">Food web</div><div class="s pp-hand">Who eats whom, who lives on whom, who tags along.</div></div>`;
   if (!fx10.ecoLinks()) return intro + webTeaser(linksAmong(new Set(ids)).length);
   if (ids.length < 2) return intro + `<p class="pp-hand eb-p" style="margin-top:1em">Not enough species yet. Document a few animals that eat, host or follow each other and the web starts to draw itself.</p>`;
   const set = new Set(ids);
@@ -364,7 +367,7 @@ function itemBlocks(id: string, e: EncEntry): BookBlock[] {
   // the lab's tag, typed on a slip and tied on
   if (rec) out.push({ html: `<div style="text-align:center">${scrap(`<div class="eb-tag pp-type" style="box-shadow:none;margin:0;padding:0"><b>${esc(rec.lines[0] ?? 'CATALOGUED')}</b>${rec.lines.slice(1).map(l => esc(l)).join('<br>')}<br>FIRST ANALYSED DAY ${rec.day}${rec.generic ? '<br>(BEST GUESS)' : ''}</div>`, { kind: 'telex', w: '86%', seed, rot: tilt(seed + 2, 2), edges: { top: 'perforated', bottom: 'perforated' } })}</div>` });
   const status = back ? `Gone home to its people (day ${back}).` : inCrate ? `In the research crate at camp${inCrate > 1 ? ` (${inCrate})` : ''}.` : inPack ? `In my backpack${inPack > 1 ? ` (${inPack})` : ''}.` : '';
-  if (taonga || status) out.push({ html: `<div style="display:flex;gap:0.6em;align-items:center;justify-content:center;margin:0.3em 0">${taonga ? stamp('Taonga', { color: 'red', shape: 'round', small: 'treasure', rot: '-8deg' }) : ''}${status ? `<span class="pp-hand" style="font-size:1.15em">${esc(status)}</span>` : ''}</div>` });
+  if (taonga || status) out.push({ html: `<div style="display:flex;gap:0.6em;align-items:center;justify-content:center;margin:0.3em 0">${taonga ? stamp('Taonga', { color: 'red', shape: 'round', small: 'treasure', rot: '-8deg' }) : ''}${status ? `<span class="pp-hand">${esc(status)}</span>` : ''}</div>` });
   out.push(P(d.desc));
   if (rec) {
     out.push(H(taonga ? 'Documentation' : 'Analysis results', '', seed + 3));
@@ -385,7 +388,7 @@ function itemBlocks(id: string, e: EncEntry): BookBlock[] {
     const fi = foodInfo(id);
     const txt = !fi.known ? 'Not identified yet: eating it is a gamble. Hand one in at camp and the lab will tell you.'
       : fi.tox === 0 ? `Safe to eat${fi.energy ? `: about ${fi.energy} energy` : ''}.` : fi.tox === 1 ? 'Mildly poisonous: a stomach ache at best. Better left alone.' : 'Poisonous. Do not eat it, whatever Chunk thinks.';
-    out.push({ html: `<div style="display:flex;gap:0.6em;align-items:center;margin:0.4em 0">${stamp(!fi.known ? 'Edible?' : fi.tox ? 'Not safe to eat' : 'Safe to eat', { color: !fi.known ? 'black' : fi.tox ? 'red' : 'green', rot: '-4deg' })}<span class="pp-hand" style="font-size:1.1em;flex:1">${esc(txt)}</span></div>` });
+    out.push({ html: `<div style="display:flex;gap:0.6em;align-items:center;margin:0.4em 0">${stamp(!fi.known ? 'Edible?' : fi.tox ? 'Not safe to eat' : 'Safe to eat', { color: !fi.known ? 'black' : fi.tox ? 'red' : 'green', rot: '-4deg' })}<span class="pp-hand" style="flex:1">${esc(txt)}</span></div>` });
   }
   if (c === 'artifact') out.push(cultureNote(d.name, taonga, !!back, seed));
   if (d.where || where) { out.push(H('Where it was found', '', seed + 6)); out.push(P(`${where ?? d.where ?? ''}${where && d.where ? ` · ${d.where}` : ''}`)); }
@@ -397,7 +400,7 @@ function cultureNote(name: string, taonga: boolean, back: boolean, seed: number,
   const body = taonga
     ? `<b>Care &amp; respect.</b> This is a taonga: a treasure that belongs to the people whose ancestors made it, not a specimen. ${back ? 'It has gone home to its village.' : inPlace ? `The ${esc(name)} stays exactly where it was found.` : `The ${esc(name)} is kept wrapped and safe at camp, to be returned to the village.`} It was documented by photographs and measurements only: not cleaned, not sampled, not altered. Its name, its maker and its story are for its people to tell. Aroha says the right thing to do is ask, and to listen.`
     : `<b>Heritage.</b> Made and used by people, so it carries their history as well as its own. Recorded where it was found, handled as little as possible, and kept with the rest of the expedition's finds until the right people can be asked about it.`;
-  return { html: `<div style="margin:0.5em 0">${scrap(`<div class="pp-hand" style="font-size:1.08em;line-height:1.1">${body}</div>`, { kind: 'flax', w: '100%', seed: seed + 8, rot: tilt(seed + 8, 1.2) })}</div>` };
+  return { html: `<div style="margin:0.5em 0">${scrap(`<div class="pp-hand">${body}</div>`, { kind: 'flax', w: '100%', seed: seed + 8, rot: tilt(seed + 8, 1.2) })}</div>` };
 }
 
 // ---------------------------------------------------------------- places and field notes
@@ -412,7 +415,7 @@ function locBlocks(l: LocationDef, e: EncEntry): BookBlock[] {
   const hills = Math.max(1, Math.min(5, l.difficulty));
   const out: BookBlock[] = [];
   out.push({ html: `<div class="eb-plate"><div class="sk">${ic ? sketchImg(ic, { size: 240, seed, box: ['40%', '5.5em'] }) : doodle('pin', { size: '5em', pencil: true })}</div>${e.fresh ? `<span class="eb-new" data-new="1">${stamp('New place', { color: 'red', rot: '8deg' })}</span>` : ''}<div class="eb-name pp-head">${esc(l.name)}</div><div class="eb-sci pp-hand">${esc(kindLabel(l.kind))} · ${esc(regionName(l.region))}</div></div>` });
-  out.push({ html: `<div class="pp-hand" style="display:flex;align-items:center;justify-content:center;gap:0.4em;font-size:1.1em;margin:0.2em 0">route: ${Array.from({ length: hills }, (_, i) => doodle('mountain', { size: '1.6em', seed: seed + i })).join('')}</div>` });
+  out.push({ html: `<div class="pp-hand" style="display:flex;align-items:center;justify-content:center;gap:8px;margin:4px 0">route: ${Array.from({ length: hills }, (_, i) => doodle('mountain', { size: '1.6em', seed: seed + i })).join('')}</div>` });
   if (l.desc) out.push(P(l.desc));
   if (ups.length) {
     out.push(H('Photos taken here', String(ups.length), seed + 2));
@@ -432,7 +435,7 @@ function discBlocks(d: Discovery, e: EncEntry): BookBlock[] {
   const ic = c === 'places' ? placeIconURL(d.kind) : icon10URL(c === 'fossils' ? 'c_fossils' : c === 'culture' ? 'c_culture' : c === 'flora' ? 'c_flora' : 'c_samples');
   const out: BookBlock[] = [];
   out.push({ html: `<div class="eb-plate"><div class="sk">${ic ? sketchImg(ic, { size: 240, seed, box: ['40%', '5.5em'] }) : ''}</div>${e.fresh ? `<span class="eb-new" data-new="1">${stamp('New entry', { color: 'red', rot: '8deg' })}</span>` : ''}<div class="eb-name pp-head">${esc(d.name)}</div><div class="eb-sci pp-hand">${esc(kindLabel(d.kind))}${loc ? ` · ${esc(loc.name)}` : ''} · found day ${d.day}</div></div>` });
-  if (d.note) out.push({ html: `<div class="eb-notes">${scrap(`<div class="pp-pix" style="font-size:0.75em;letter-spacing:0.12em;color:#6a5a40">MORI'S FIELD NOTE</div><div class="pp-hand" style="font-size:1.15em;line-height:1.1">${esc(d.note)}</div>`, { kind: 'graph', w: '100%', seed, rot: tilt(seed, 1.5) })}</div>` });
+  if (d.note) out.push({ html: `<div class="eb-notes">${scrap(`<div class="eb-lab">Mori's field note</div><div class="pp-hand">${esc(d.note)}</div>`, { kind: 'graph', w: '100%', seed, rot: tilt(seed, 1.5) })}</div>` });
   if (d.kind === 'artifact') {
     const taonga = /\b(taonga|village|marae|pounamu)\b/i.test(`${d.name} ${d.note ?? ''}`) || LOCATIONS.find(l => l.id === d.loc)?.kind === 'village';
     out.push(cultureNote(d.name, taonga, false, seed, true));
@@ -465,18 +468,18 @@ function unknownBlocks(cat: Cat): BookBlock[] {
   if (!list.length) return [];
   const c = CATS.find(x => x.id === cat)!;
   return [
-    { html: `<div class="eb-chap" style="padding-top:2%"><div class="t pp-head" style="font-size:2em">Still to find</div><div class="s pp-hand">${list.length} ${c.name.toLowerCase()} entr${list.length === 1 ? 'y' : 'ies'} nobody has filled in</div></div>` },
+    { html: `<div class="eb-chap" style="padding-top:2%"><div class="t pp-head">Still to find</div><div class="s pp-hand">${list.length} ${c.name.toLowerCase()} entr${list.length === 1 ? 'y' : 'ies'} nobody has filled in</div></div>` },
     { html: `<div class="eb-unk pp-hand">${list.map((e, i) => `<div>${svgInk(40, 40, [{ d: roughRect(2, 2, 36, 36, { seed: i + 3, double: false }), c: PENCIL, w: 1, opacity: 0.6 }], { stretch: true })}<span><b>?</b>${esc(e.sub)}</span></div>`).join('')}</div>` },
   ];
 }
 
 function frontPages(): string[] {
   const ov = overall();
-  const left = `<div class="eb-front"><div class="plate"><div class="pp-pix" style="font-size:0.8em;letter-spacing:0.3em;color:#6a5a40">EX LIBRIS</div><div class="t pp-head">Zealandia Encyclopedia</div><div class="s pp-hand">field edition, issued to</div><div class="pp-hand" style="font-size:2em;margin-top:0.2em">Dr. Mori</div><div style="margin-top:0.8em">${stamp('Halcyon', { color: 'blue', shape: 'round', small: 'field office', rot: '-12deg' })}</div></div><div class="pct pp-head">${Math.floor(ov.pct)}%</div><div class="pp-hand" style="font-size:1.2em;color:var(--pp-pencil)">of the encyclopedia filled in</div></div>`;
-  const right = `<div class="eb-h pp-pix" style="font-size:1em"><b>Contents</b></div><ul class="eb-cont pp-hand">${CATS.map((c, i) => {
+  const left = `<div class="eb-front"><div class="plate"><div class="eb-lab">Ex libris</div><div class="t pp-head">Zealandia Encyclopedia</div><div class="s pp-hand">field edition, issued to</div><div class="pp-hand" style="font-size:40px;line-height:48px;margin-top:4px"><b>Dr. Mori</b></div><div style="margin-top:16px">${stamp('Halcyon', { color: 'blue', shape: 'round', small: 'field office', rot: '-12deg' })}</div></div><div class="pct pp-head">${Math.floor(ov.pct)}%</div><div class="pp-hand" style="color:var(--pp-pencil)">of the encyclopedia filled in</div></div>`;
+  const right = `<div class="eb-h"><b>Contents</b></div><ul class="eb-cont pp-hand">${CATS.map((c, i) => {
     const st = ov.stats.find(s => s.cat === c.id)!;
     return `<li data-act="goto" data-k="cat:${c.id}"><img src="${icon10URL(c.icon)}" alt=""><b>${esc(c.name)}</b><span class="bar">${bar(st.pct / 100, i + 11)}</span><em>${Math.floor(st.pct)}%</em>${st.fresh ? stamp(`${st.fresh} new`, { color: 'red', rot: '-5deg', style: 'font-size:0.55em' }) : ''}</li>`;
-  }).join('')}</ul><div class="pp-hand" style="font-size:1.05em;color:var(--pp-pencil);margin-top:1em;transform:rotate(-1deg)">Every photo, sample and field note uploaded at camp is filed in here. Tabs on the edge jump to a chapter; drag a corner to turn.</div>${doodle('compass', { size: '4em', pencil: true, style: 'position:absolute;right:6%;bottom:4%;opacity:0.5' })}`;
+  }).join('')}</ul><div class="pp-hand" style="color:var(--pp-pencil);margin-top:20px">Every photo, sample and field note uploaded at camp is filed in here. Tabs on the edge jump to a chapter; drag a corner to turn.</div>${doodle('compass', { size: '4em', pencil: true, style: 'position:absolute;right:6%;bottom:4%;opacity:0.5' })}`;
   return [left, right];
 }
 

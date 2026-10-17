@@ -38,15 +38,15 @@ export function clockLabel(h: number): string {
 
 const OUT = col('#140c06'), CREAM = col('#fff1cc'), BRASS = col('#c8962e'), BRASS_L = col('#f4d27a'), BRASS_D = col('#7a5414');
 
-/** the sun-and-moon dial, 64 x 44 art px */
+/** the sun-and-moon dial, 72 x 44 art px */
 export function paintDial(a: Art, hour: number, day: number, t: number) {
-  const cx = 32, cy = 30, R = 25;
+  const cx = 36, cy = 30, R = 25;
   // a hard shadow, the brass half-ring, the sky inside
   for (let y = 0; y < a.h; y++) for (let x = 0; x < a.w; x++) {
     const dx = x + 0.5 - cx, dy = y + 0.5 - cy, d = Math.hypot(dx, dy);
-    const inDial = dy <= 0 ? d <= R + 2 : x >= cx - R - 2 && x < cx + R + 2 && y < cy + 13;
+    const inDial = dy <= 0 ? d <= R + 2 : x >= 0 && x < a.w - 2 && y < cy + 13;
     const sx = x - 2, sy = y - 2, sdx = sx + 0.5 - cx, sdy = sy + 0.5 - cy;
-    const inS = sdy <= 0 ? Math.hypot(sdx, sdy) <= R + 2 : sx >= cx - R - 2 && sx < cx + R + 2 && sy < cy + 13;
+    const inS = sdy <= 0 ? Math.hypot(sdx, sdy) <= R + 2 : sx >= 0 && sx < a.w - 2 && sy < cy + 13;
     if (!inDial) { if (inS && dith(x, y, 0.6)) a.px(x, y, col('#000000', 0.42)); continue; }
     a.put(x, y, OUT);
   }
@@ -94,9 +94,9 @@ export function paintDial(a: Art, hour: number, day: number, t: number) {
   }
   // the plate underneath: the time and the day
   const ty = cy + 1;
-  for (let y = ty; y < ty + 11; y++) for (let x = cx - R; x < cx + R; x++) a.put(x, y, y === ty ? BRASS_D : y === ty + 1 ? col('#4a3018') : col('#3e2814'));
+  for (let y = ty; y < ty + 11; y++) for (let x = 1; x < a.w - 3; x++) a.put(x, y, y === ty ? BRASS_D : y === ty + 1 ? col('#4a3018') : col('#3e2814'));
   const time = clockLabel(hour);
-  outlined(a, time, cx - R + 4, ty + 9, CREAM, OUT, { face: 'block', spacing: 1 });
+  outlined(a, time, 4, ty + 9, CREAM, OUT, { face: 'block', spacing: 0 });
   const ds = `DAY ${day}`;
-  outlined(a, ds, cx + R - 3 - tw(ds, { face: 'block', bold: false, spacing: 1 }), ty + 9, col('#f4d27a'), OUT, { face: 'block', bold: false, spacing: 1 });
+  outlined(a, ds, a.w - 6 - tw(ds, { face: 'block', bold: false, spacing: 0 }), ty + 9, col('#f4d27a'), OUT, { face: 'block', bold: false, spacing: 0 });
 }

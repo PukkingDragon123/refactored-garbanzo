@@ -191,7 +191,7 @@ function paintFlask(a: Art, x0: number, y0: number, st: FlaskSt, frac: number, l
 
 function paintTag(a: Art, x: number, y: number, value: number, low: boolean, blinkOn: boolean, label: string) {
   const txt = String(Math.max(0, Math.round(value)));
-  const w = Math.max(30, tw(txt, { face: 'block', scale: 2, spacing: 1 }) + 10);
+  const w = Math.max(30, tw(txt, { face: 'block', scale: 2, spacing: 1 }) + 10, tw('ENERGY', { face: 'block', bold: false, spacing: 1 }) + 4);
   plate(a, x, y, w, 21, low && blinkOn ? col('#8a1e14') : WOOD, { r: 2 });
   outlined(a, txt, Math.round(x + w / 2 - tw(txt, { face: 'block', scale: 2, spacing: 1 }) / 2), y + 17, low ? col('#ffb0a0') : CREAM, OUT, { face: 'block', scale: 2, spacing: 1 });
   const lw = tw(label, { face: 'block', bold: false, spacing: 1 });
@@ -326,7 +326,9 @@ export function mountBodyHud(root: HTMLElement, _who?: HTMLElement): BodyHud {
       const lowNow = on && f < 0.25;
       const hour = hudHour() ?? 12;
       const id = playerId();
-      const wPlate = on ? 112 : 46;
+      const tagTxt = String(Math.max(0, Math.round(shownVal)));
+      const tagW = Math.max(30, tw(tagTxt, { face: 'block', scale: 2, spacing: 1 }) + 10, tw('ENERGY', { face: 'block', bold: false, spacing: 1 }) + 4);
+      const wPlate = on ? 78 + tagW + 2 : 46;
       plateW.draw(wPlate, 54, a => {
         paintMedallion(a, 23, 23, id, expr, blink > 0, hour, lowNow && blinkOn);
         paintRibbon(a, 23, 41, 'MORI');
