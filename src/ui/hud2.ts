@@ -86,6 +86,11 @@ const CSS = `
 .h2 .hk.bump { animation: hxPop 0.36s steps(6); }
 body.touchmode .h2 .hk { pointer-events: none; bottom: auto; top: 168px; left: 6px; }
 body.touchmode .h2 .hr { right: 6px; top: 6px; }
+@media (max-width: 560px) {
+  .h2 .hr { right: 6px; top: 6px; }
+  .h2 .hr .row { flex-direction: column; align-items: flex-end; gap: 4px; }
+  .h2 .hq { position: absolute; right: 0; top: 156px; }
+}
 /* the controls line */
 .hm-keys { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); white-space: nowrap; transition: opacity 1.2s steps(6); opacity: 0.95;
   font-family: var(--pp-head); font-size: 18.6667px; line-height: 24px; color: #fff1cc; letter-spacing: 1px;
@@ -494,7 +499,7 @@ export class Hud2 {
     const q = this.noteQ;
     if (!q) return;
     const open = this.openT > 0 || this.hover;
-    const W = 124, pad = 7;
+    const W = window.innerWidth < 560 ? 100 : 124, pad = 7;
     const title = q.title.toUpperCase();
     let tl = title;
     while (tw(tl, { face: 'block', bold: false, spacing: 1 }) > W - 30 && tl.length > 4) tl = tl.slice(0, -2);
