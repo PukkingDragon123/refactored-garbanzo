@@ -114,8 +114,8 @@ export const ATLAS: AtlasLoc[] = [
   // ------------------------------------------------------------ the V2 expedition sites
   {
     id: 'fernwood', name: 'Fernwood Floor', sub: 'Te Ngāhere', region: 'interior', kind: 'site', pos: P(430, 198),
-    scene: { type: 'site', site: 'fernwood' }, difficulty: 2, xr: [0, 2600],
-    path: PATH([380, 162], [404, 186], [432, 200], [458, 210], [470, 214]), knots: [0, 800, 1560, 2280, 2600],
+    scene: { type: 'site', site: 'fernwood' }, difficulty: 2, xr: [0, 4400],
+    path: PATH([380, 162], [404, 186], [432, 200], [458, 210], [470, 214]), knots: [0, 1300, 2600, 3900, 4400],
     routes: [
       { from: 'isle-track', at: 6860, label: 'Follow the track deeper into the bush', hours: 1, energy: 10, kind: 'walk', say: 'The track just... keeps going. Into the ferns.' },
       { from: 'forest', at: 5890, label: 'Climb on up over the ridge into the fern gullies', hours: 1, energy: 10, kind: 'walk', say: 'Up over the ridge. The ferns on the other side are taller than the trees here.' },
@@ -124,16 +124,16 @@ export const ATLAS: AtlasLoc[] = [
   },
   {
     id: 'canopy', name: 'Emerald Canopy', sub: 'Te Tāhuhu o te Ngāhere', region: 'interior', kind: 'site', pos: P(392, 243),
-    scene: { type: 'site', site: 'canopy' }, difficulty: 3, xr: [0, 2400],
+    scene: { type: 'site', site: 'canopy' }, difficulty: 3, xr: [0, 3800],
     path: PATH([446, 230], [412, 240], [374, 246], [334, 250]),
-    routes: [{ from: 'fernwood', at: 2290, label: 'Climb the giant kauri (a long climb)', hours: 1.5, energy: 16, kind: 'climb', say: 'Okay. Don’t look down. Don’t look down. Don’t... I looked down.' }],
+    routes: [{ from: 'fernwood', at: 4060, label: 'Climb the giant kauri (a long climb)', hours: 1.5, energy: 16, kind: 'climb', say: 'Okay. Don’t look down. Don’t look down. Don’t... I looked down.' }],
     desc: 'The old forest up on the plateau: a walkway of colossal branches where the snakes fly.', terrain: 'Branches high above the ground',
   },
   {
     id: 'falls', name: 'Thunder Falls', sub: 'Te Wai Whatitiri', region: 'interior', kind: 'site', pos: P(512, 246),
-    scene: { type: 'site', site: 'falls' }, difficulty: 3, xr: [0, 2100],
+    scene: { type: 'site', site: 'falls' }, difficulty: 3, xr: [0, 3300],
     path: PATH([476, 222], [500, 238], [520, 256], [538, 276]),
-    routes: [{ from: 'fernwood', at: 2560, label: 'Follow the stream uphill toward the roar', hours: 1.5, energy: 14, kind: 'walk', say: 'Hear that? That’s not thunder. That’s water.' }],
+    routes: [{ from: 'fernwood', at: 4360, label: 'Follow the stream uphill toward the roar', hours: 1.5, energy: 14, kind: 'walk', say: 'Hear that? That’s not thunder. That’s water.' }],
     desc: 'Where the river drops off the plateau. Auks nest in the cliffs; dippers walk under the water.', terrain: 'Plunge pool, cliff ledges',
   },
   {
@@ -178,7 +178,7 @@ export const ATLAS: AtlasLoc[] = [
     scene: { type: 'site', site: 'ruins' }, difficulty: 4, xr: [0, 2300],
     path: PATH([322, 262], [312, 292], [318, 322], [332, 350]),
     routes: [
-      { from: 'canopy', at: 2350, label: 'Cross the vine bridge to the stone terraces', hours: 1.5, energy: 18, kind: 'climb', say: 'Those are walls. Somebody built walls up here.' },
+      { from: 'canopy', at: 3720, label: 'Cross the vine bridge to the stone terraces', hours: 1.5, energy: 18, kind: 'climb', say: 'Those are walls. Somebody built walls up here.' },
       { from: 'village', at: 2120, enter: 2150, label: 'Take the old track up to the pā', hours: 1, energy: 12, kind: 'walk', flag: { id: 'v10:koroBlessing', why: 'Aroha shakes her head: not without Koro’s blessing.' }, say: 'With Koro’s blessing, then.' },
     ],
     desc: 'Overgrown stone terraces of an ancient pā, abandoned long ago. Its carvers knew the serpents well.', terrain: 'Terraces, crumbling stairs',
@@ -187,7 +187,10 @@ export const ATLAS: AtlasLoc[] = [
     id: 'fossils', name: 'Bone Cliffs', sub: 'Te Toka Iwi', region: 'interior', kind: 'fossil', pos: P(596, 266),
     scene: { type: 'site', site: 'fossils' }, difficulty: 4, xr: [0, 2300],
     path: PATH([552, 280], [582, 272], [612, 258], [640, 246]),
-    routes: [{ from: 'falls', at: 2040, label: 'Climb the gorge above the falls', hours: 1.5, energy: 18, kind: 'climb', say: 'The rock up here is striped like a cake. Every stripe is a million years.' }],
+    routes: [
+      { from: 'falls', at: 3200, label: 'Climb the gorge above the falls', hours: 1.5, energy: 18, kind: 'climb', say: 'The rock up here is striped like a cake. Every stripe is a million years.' },
+      { from: 'hills', at: 3360, enter: 2200, label: 'Scramble down off the ridge into the gorge', hours: 1, energy: 12, kind: 'climb', say: 'Down the back of the ridge. Carefully. The gorge is right below us.' },
+    ],
     desc: 'A gorge cut through layered rock above the falls, with the bones of very old serpents in its walls.', terrain: 'Scree, cliff ledges',
   },
   {
@@ -223,10 +226,15 @@ export const ATLAS: AtlasLoc[] = [
     desc: 'The great forest inland of the beach, up the stream: kauri giants rising out of the mist, ferns taller than a man, mud wallows, a gully where Joshu was found, and things that watch you.', terrain: 'Deep forest, stream fords, mud wallows', arriveX: 92,
   },
   {
+    // (src/game/sites10/hills.ts: the scene; HILLS_SPOTS there are the anchors other modules use)
     id: 'hills', name: 'Ngā Puke Kōhatu', sub: 'The Rocky Hills', region: 'interior', kind: 'site', pos: P(572, 190),
-    scene: { type: 'custom', go: async () => { console.warn('[atlas] the rocky hills scene is not built yet'); } }, difficulty: 3, xr: [0, 3200],
-    path: PATH([528, 234], [548, 212], [574, 192], [604, 176], [628, 164]),
-    desc: 'Tors, scree and tussock above the bush line. Wind, hawks, and a long view over everything.', terrain: 'Boulders, scree, crags',
+    scene: { type: 'site', site: 'hills' }, difficulty: 3, xr: [0, 3400],
+    path: PATH([528, 234], [548, 212], [574, 192], [604, 176], [628, 164]), knots: [0, 900, 1650, 2500, 3400],
+    routes: [
+      { from: 'falls', at: 620, enter: 90, label: 'Take the goat track up out of the bush, onto the open tops', hours: 1.5, energy: 16, kind: 'climb', say: 'Up through the last of the trees. There’s sky up there. A LOT of sky.' },
+      { from: 'forest', at: 5960, enter: 90, label: 'Follow the ridge east, above the trees (a long way)', hours: 3, energy: 24, kind: 'walk', say: 'Up and out of the forest. Then along the tops all the way. My legs have filed a complaint.' },
+    ],
+    desc: 'Tors, scree and tussock above the bush line: a tarn, a bluff with a rock shelter the hunters use, and a ridge with the long view over everything. Wind, hawks and torhoppers.', terrain: 'Tussock, scree, granite tors', arriveX: 90,
   },
 ];
 

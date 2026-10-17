@@ -183,9 +183,9 @@ export const POINTS10: Record<string, Point10[]> = {
   ],
   // ---- Fernwood Floor
   fernwood: [
-    { id: 'lm:fw:kauri', kind: 'landmark', name: 'The giant kauri', x: 2280, photo: { w: 90, h: 260 }, note: 'The biggest tree I have ever seen. You can climb it to the canopy.' },
+    { id: 'lm:fw:kauri', kind: 'landmark', name: 'The giant kauri', x: 4000, photo: { w: 200, h: 300 }, note: 'The biggest tree I have ever seen. You can climb it to the canopy.' },
     { id: 'pt:fw:soil', kind: 'sample', name: 'Forest soil', x: 1060, art: () => findArt.dig('#2a1c12'), note: 'Soil laced with fungal threads.', take: { item: 'smp_soil', verb: 'Take a soil core', tools: ['trowel'], time: 1.8, line: 'Look at all these white threads. The whole floor is wired together.' } },
-    { id: 'eco:fw:gully', kind: 'ecosystem', name: 'The frog gully', x: 1570, photo: { w: 170, h: 50 }, note: 'Moss frogs breed in the stream gully.' },
+    { id: 'eco:fw:gully', kind: 'ecosystem', name: 'The frog gully', x: 2040, photo: { w: 200, h: 60 }, note: 'Moss frogs breed in the stream gully.' },
   ],
   // ---- Emerald Canopy
   canopy: [
@@ -195,8 +195,8 @@ export const POINTS10: Record<string, Point10[]> = {
   ],
   // ---- Thunder Falls
   falls: [
-    { id: 'lm:fa:falls', kind: 'landmark', name: 'Thunder Falls', x: 1180, photo: { w: 110, h: 280 }, note: 'The river drops off the plateau. Auks above, dippers behind.' },
-    { id: 'pt:fa:water', kind: 'sample', name: 'Plunge pool water', x: 860, art: () => findArt.sampleSpot('#6ab8c8'), take: { item: 'smp_falls', verb: 'Fill a sample jar at the pool', tools: ['jar'], time: 1.6 } },
+    { id: 'lm:fa:falls', kind: 'landmark', name: 'Thunder Falls', x: 1464, photo: { w: 130, h: 300 }, note: 'The river drops off the plateau. Auks above, dippers behind.' },
+    { id: 'pt:fa:water', kind: 'sample', name: 'Plunge pool water', x: 1240, art: () => findArt.sampleSpot('#6ab8c8'), take: { item: 'smp_falls', verb: 'Fill a sample jar at the pool', tools: ['jar'], time: 1.6 } },
   ],
   // ---- Blackwater Mangroves
   mangrove: [

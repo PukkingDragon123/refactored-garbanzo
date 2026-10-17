@@ -117,6 +117,7 @@ async function tigerGallery() {
 }
 
 export function runGallery(name: string) {
+  if (name === 'frames') { void import('./framesGallery').then(m => m.framesGallery(new URLSearchParams(location.search))); return; }
   if (name === 'hands3d') { void import('./hands3dGallery').then(m => m.hands3dGallery()); return; }
   if (name === 'icons') { void iconGallery(); return; }
   // V11 illustrated item art on its Backpack footprints (src/debug/items11.ts)
