@@ -527,6 +527,13 @@ export function openRegionMap(o: RegionMapOpts = {}): Promise<string | null> {
     const ux = unrollX();
     const ds = scale * dpr;
     const taken: [number, number, number, number][] = [];
+    // the furniture around the map: nothing is written under it
+    const rr = root.getBoundingClientRect();
+    for (const e of [top, leg, hint, card, root.querySelector('.tools'), root.querySelector('.x')] as (HTMLElement | null)[]) {
+      if (!e || e.offsetParent === null || getComputedStyle(e).opacity === '0') continue;
+      const b = e.getBoundingClientRect();
+      if (b.width && b.height) taken.push([b.left - rr.left - 2 * u, b.top - rr.top - 2 * u, b.right - rr.left + 2 * u, b.bottom - rr.top + 2 * u]);
+    }
     // pins first: they are never hidden by a label; they claim their space
     const pk = scale < 0.42 ? 0.5 : 1;
     const pinU = u * pk;
@@ -650,12 +657,13 @@ export function openRegionMap(o: RegionMapOpts = {}): Promise<string | null> {
     const tp0 = performance.now();
     if (live) {
       live.update(dt);
+      // (a far view animates less often: the whole sheet is in the window)
       const far = scale * dpr < 0.7;
       renderAcc += dt;
-      if (renderAcc >= (far ? 1 / 10 : 1 / 30)) {
+      if (renderAcc >= (far ? 1 / 8 : 1 / 30)) {
         renderAcc = 0;
         const m = 4;
-        live.render(-ox / scale - m, -oy / scale - m, (vw - ox) / scale + m, (vh - oy) / scale + m, far);
+        live.render(-ox / scale - m, -oy / scale - m, (vw - ox) / scale + m, (vh - oy) / scale + m);
         dirty = true;
       }
     }
