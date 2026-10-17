@@ -45,11 +45,20 @@ function sampleG(g: Float32Array, x: number, y: number): number {
   return (a + (b - a) * u) * (1 - v) + (c + (d - c) * u) * v;
 }
 
+const PROTECT: [number, number, number, number][] = ([[40, 60, 460, 150], [600, 56, 770, 124], [370, 530, 620, 610], [90, 280, 190, 360]] as [number, number, number, number][]).map(b => b.map(v => v * 2.75) as [number, number, number, number]);
+/** 0 on the shores places are pinned to, rising to 1 a little away from them */
+function protect(x: number, y: number): number {
+  let m = 1;
+  for (const [x0, y0, x1, y1] of PROTECT) { const dx = Math.max(x0 - x, 0, x - x1), dy = Math.max(y0 - y, 0, y - y1); m = Math.min(m, clamp(Math.hypot(dx, dy) / 110)); }
+  return m;
+}
 let warpX: Float32Array | null = null, warpY: Float32Array | null = null, patchG: Float32Array | null = null, bioG: Float32Array | null = null;
 function grids() {
   if (warpX) return;
-  warpX = grid((x, y) => (fbm2(x * 0.0102, y * 0.0102, 4, 11) - 0.5) * 34);
-  warpY = grid((x, y) => (fbm2(x * 0.0102 + 7.3, y * 0.0102 + 3.1, 4, 12) - 0.5) * 34);
+  // a fine warp everywhere, and long bays and capes bent into the coast away from the shores whose
+  // places are pinned to it (the home beach, the Serpent Coast, the far coast, the estuary)
+  warpX = grid((x, y) => (fbm2(x * 0.0102, y * 0.0102, 4, 11) - 0.5) * 34 + (fbm2(x * 0.0032 + 11, y * 0.0032, 3, 13) - 0.5) * 170 * protect(x, y));
+  warpY = grid((x, y) => (fbm2(x * 0.0102 + 7.3, y * 0.0102 + 3.1, 4, 12) - 0.5) * 34 + (fbm2(x * 0.0032 + 5, y * 0.0032 + 9, 3, 14) - 0.5) * 170 * protect(x, y));
   patchG = grid((x, y) => fbm2(x * 0.0075, y * 0.0075, 3, 21));
   bioG = grid((x, y) => fbm2(x * 0.0118, y * 0.0118, 3, 23));
 }
@@ -358,9 +367,9 @@ export async function buildFields(): Promise<Fields> {
         const kk = 1 - reliefF[k](x, y) + wn * 0.12;
         if (kk <= 0 && r.k !== 'rolling') continue;
         switch (r.k) {
-          case 'plateau': h += r.h * smoothstep(0, r.edge, kk); break;
+          case 'plateau': { const kn = kk + (sampleG(warpY!, x * 1.7, y * 1.7) / 34) * 0.08; h += r.h * (0.86 + 0.14 * sampleG(patchG!, x * 2, y * 2)) * smoothstep(0, r.edge, kn); break; }
           case 'dome': h += r.h * clamp(kk * (2 - kk)); break;
-          case 'basin': h -= r.h * smoothstep(0, r.edge, kk); break;
+          case 'basin': { const kn = kk + (sampleG(warpY!, x * 1.9, y * 1.9) / 34) * 0.3; h -= r.h * smoothstep(0, r.edge, kn); break; }
           case 'rolling': if (kk > 0) h += r.h * (fbm2(x * r.f, y * r.f, 3, 35 + k) - 0.38) * smoothstep(0, 0.35, kk); break;
           case 'terrace': break;
         }
@@ -378,11 +387,11 @@ export async function buildFields(): Promise<Fields> {
           const wv = rg.w * (0.8 + noise2(x * 0.01, y * 0.01, 41) * 0.5);
           if (dd > wv * 2.2) continue;
           const hp = along(rg.h, t);
-          spine = Math.max(spine, hp * Math.pow(Math.max(0, 1 - dd / (wv * 2.2)), 1.25));
+          spine = Math.max(spine, hp * Math.max(0, 1 - dd / (wv * 2.2)));
         }
         const rn = ridged(x * 0.0062 + 3, y * 0.0052);
         const mask = smoothstep(-0.1, 0.25, rk);
-        h += (spine * (0.48 + 0.62 * rn) + rn * 22 * smoothstep(0, 0.4, rk)) * mask;
+        h += (spine * (0.4 + 0.75 * rn) + rn * 22 * smoothstep(0, 0.4, rk)) * mask;
       }
       // the terraces of the pā
       for (let k = 0; k < RELIEF.length; k++) if (RELIEF[k].k === 'terrace') {
@@ -512,6 +521,7 @@ function lakes(land: Uint8Array, hgt: Float32Array, wat: Uint8Array, bio: Uint8A
   lake(792 * 2.75, 266 * 2.75, 10, 6, WK.lake);
   lake(822 * 2.75, 330 * 2.75, 9, 5, WK.lake);
   lake(586 * 2.75, 170 * 2.75, 9, 6, WK.lake);    // a pond among the hills
+  lake(452 * 2.75, 346 * 2.75, 58, 26, WK.lake);  // Roto, the lake in the middle of the island
   const [sx, sy] = LM.sink;
   lake(sx, sy + 10, 62, 22, WK.lake);             // the lake at the bottom of Te Korokoro
   for (const [x, y, r, k] of POOLS) lake(x, y, r, r * 0.66, k === 2 ? WK.pool : WK.hot);

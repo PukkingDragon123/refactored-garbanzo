@@ -341,7 +341,7 @@ export function placeFlora(f: Fields, L: Light, l: Layer, feats: Feat[]) {
           if (b === B.mountain && h > 132) {
             // above the bush line: tussock, then bare rock and boulders
             if (h < 168 && r0 < 0.16) add(x, y, (sx, sy) => tussock(l, sx, sy, 0.6 + r1, seed, P.alpine));
-            else if (r0 < 0.03) { const rr = 1.6 + r1 * 2.2; add(x, y, (sx, sy, lv) => boulder(l, sx, sy, rr, P.granite, seed, lv)); }
+            else if (r0 < 0.03 && h < 172) { const rr = 1.6 + r1 * 2.2; add(x, y, (sx, sy, lv) => boulder(l, sx, sy, rr, P.granite, seed, lv)); }
             break;
           }
           const line = clamp((132 - h) / 30);
@@ -397,7 +397,7 @@ export function placeFlora(f: Fields, L: Light, l: Layer, feats: Feat[]) {
         }
         case B.glow: {
           if (!ok || !accept(6.8)) break;
-          if (r1 < 0.62) { const rr = 4.5 + r2 * 2.5; add(x, y, (sx, sy, lv) => { trunk(l, sx, sy, 3, P.trunk, 1); crown(l, sx, sy - 2 - rr * 0.8, rr, P.glowc, lv * 0.6, seed, 2, { glow: 0.025 }); }); }
+          if (r1 < 0.94) { const rr = 4.5 + r2 * 2.5; add(x, y, (sx, sy, lv) => { trunk(l, sx, sy, 3, P.trunk, 1); crown(l, sx, sy - 2 - rr * 0.8, rr, P.glowc, lv * 0.6, seed, 2, { glow: 0.012 }); }); }
           else { const rr = 1.6 + r2 * 2.2; add(x, y, (sx, sy) => mushroom(l, sx, sy, rr, seed)); }
           break;
         }
@@ -436,6 +436,20 @@ export function placeFlora(f: Fields, L: Light, l: Layer, feats: Feat[]) {
         }
         case B.meadow: case B.scrub: default: {
           if (!ok) break;
+          // the open country is a mosaic: groves, mānuka scrub, grass
+          const gv = noise2(x * 0.0085, y * 0.0085, 541) * 0.7 + noise2(x * 0.02, y * 0.02, 542) * 0.3;
+          if (gv > 0.62) {
+            if (!accept(7.4)) break;
+            if (r1 < 0.12) { const th = 6 + Math.floor(r2 * 5); add(x, y, (sx, sy, lv) => cabbageTree(l, sx, sy, th, seed, lv)); break; }
+            const rr = 4.4 + r2 * 2.2, sp = r1 < 0.2 ? 'kowhai' as const : speciesAt(x, y, r2);
+            add(x, y, (sx, sy, lv) => { trunk(l, sx, sy, 3, P.trunk, 1); crown(l, sx, sy - 2 - rr * 0.8, rr, sp === 'kowhai' ? P.kowhai : ramps(sp, P[sp])[seed & 7], lv, seed, 2, { lift: 0.04 }); });
+            break;
+          }
+          if (gv > 0.53) {
+            if (!accept(5.2)) break;
+            const rr = 2.2 + r2 * 1.4; add(x, y, (sx, sy, lv) => shrub(l, sx, sy, rr, MANUKA, seed, lv, r1 < 0.25 ? hex('#f4f2e8') : undefined));
+            break;
+          }
           // scrubland in patches, lone trees, cabbage trees and flax near water
           const scrub = clamp((pt - 0.35) * 3);
           if (r0 < 0.03 + scrub * 0.12) { const rr = 2.2 + r1 * 1.6; add(x, y, (sx, sy, lv) => shrub(l, sx, sy, rr, MANUKA, seed, lv, r2 < 0.3 ? hex('#f4f2e8') : undefined)); }

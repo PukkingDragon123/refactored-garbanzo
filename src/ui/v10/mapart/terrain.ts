@@ -82,9 +82,12 @@ const GUANO = hex('#e8e4d4');
 /** how much snow lies at a height on a slope (0..1) */
 const snowAt = (x: number, y: number, h: number, slope: number) => clamp((h - 178 + (noise2(x * 0.03, y * 0.03, 77) - 0.5) * 40) / 14) * (slope > 2.2 ? 0.25 : slope > 1.4 ? 0.65 : 1);
 
+/** light for the pixel being drawn when a steep slope stretches one ground cell over several rows
+ *  (interpolated toward the cell in front, so a slope shades smoothly instead of in streaks) */
+let vOver = -1;
 function surface(f: Fields, L: Light, x: number, r: number, gy: number, i: number, slope: number): C {
   const b = f.bio[i] as B, h = f.hgt[i];
-  let v = L.lit[i] / 255;
+  let v = vOver >= 0 ? vOver : L.lit[i] / 255;
   const tx = noise2(x * 0.21, r * 0.21, 81), hh = hash2(x, r, 82);
   switch (b) {
     case B.beach: {
@@ -132,13 +135,15 @@ function surface(f: Fields, L: Light, x: number, r: number, gy: number, i: numbe
       return band(P.tuss, v * 0.9 + (tx - 0.5) * 0.2, x, r);
     }
     case B.thermal: {
-      // pale sinter crusts, orange and ochre mats where the hot water runs, sulphur round the vents
-      const s = fbm2(x * 0.016 + 3, gy * 0.016, 3, 63), run = Math.abs(noise2(x * 0.03, gy * 0.05, 64) - 0.5);
-      if (run < 0.04) return band(P.ochre, 0.55 + v * 0.3 + (tx - 0.5) * 0.2, x, r);
-      if (run < 0.07) return band(P.ochre, 0.82 + (tx - 0.5) * 0.2, x, r);
-      if (s < 0.34) return band(P.sulphur, 0.5 + v * 0.3 + (tx - 0.5) * 0.3, x, r);
+      // warm bare ground; pale sinter crusts, orange mats where the hot water runs, sulphur round the
+      // vents, scorched tussock at the edges
+      const s = fbm2(x * 0.016 + 3, gy * 0.016, 3, 63), run = Math.abs(noise2(x * 0.024, gy * 0.04, 64) - 0.5);
+      if (run < 0.016 && s < 0.62) return band(P.ochre, 0.5 + v * 0.3 + (tx - 0.5) * 0.2, x, r);
+      if (run < 0.03 && s < 0.62) return band(P.ochre, 0.8 + (tx - 0.5) * 0.2, x, r);
+      if (s < 0.3) return band(P.sulphur, 0.4 + v * 0.3 + (tx - 0.5) * 0.3, x, r);
       if (s > 0.6) return band(P.tuss, v * 0.75 + (tx - 0.5) * 0.25, x, r);
-      return band(P.silica, v * 0.55 + 0.3 + (tx - 0.5) * 0.2, x, r);
+      if (s > 0.47) return band(P.silica, v * 0.5 + 0.3 + (tx - 0.5) * 0.2, x, r);
+      return band(P.dune, v * 0.75 + 0.05 + (tx - 0.5) * 0.25, x, r);
     }
     case B.garden: return garden(x, r, gy, v, tx);
     case B.terraces: case B.plain: case B.meadow: case B.scrub: case B.coastal: default: {
@@ -154,14 +159,14 @@ function surface(f: Fields, L: Light, x: number, r: number, gy: number, i: numbe
 }
 function mountainGround(x: number, r: number, gy: number, h: number, slope: number, v: number, tx: number, hh: number): C {
   const sn = snowAt(x, gy, h, slope);
-  if (sn > bayer(x, r) * 0.9 + 0.05) {
-    if (hh > 0.995) return hex('#ffffff');
-    return band(P.snow, 0.15 + v * 0.95, x, r);
+  if (sn > 0.5) {
+    if (hh > 0.996) return hex('#ffffff');
+    return band(P.snow, 0.05 + v * 1.12, x, r, 1.4);
   }
   if (h > 150 || slope > 1.4) {
     const cr = noise2(x * 0.18, r * 0.12, 86);
     if (Math.abs(cr - 0.5) < 0.025) return P.granite[0];
-    return band(P.granite, v * 0.95 + (tx - 0.5) * 0.25, x, r);
+    return band(P.granite, v * 1.05 - 0.05 + (tx - 0.5) * 0.2, x, r, 1.6);
   }
   if (h > 112) return band(P.alpine, v + (tx - 0.5) * 0.25 + (hh > 0.9 ? 0.1 : 0), x, r);
   return band(P.floor, v * 0.9 + (tx - 0.5) * 0.3, x, r);
@@ -289,7 +294,9 @@ export async function project(f: Fields, L: Light, scr: Scr) {
           scr.kind[j] = 2; scr.wat[j] = wk; scr.flow[j] = f.flow[i];
           continue;
         }
+        vOver = k >= 1 && n > 1 && gy + 1 < H ? (L.lit[i] * (n - k) + L.lit[i + W] * k) / n / 255 : -1;
         scr.col[j] = surface(f, L, x, rr, gy, i, slope);
+        vOver = -1;
         scr.kind[j] = 0;
         if (tagOut) scr.tag[j] = tagOut;
       }
@@ -397,9 +404,15 @@ function sea(f: Fields, L: Light, x: number, y: number, i: number, sd: number): 
   const ro = 1 - reefOF(x, y);
   if (ro > 0 && rf <= 0 && cdv > 30) c = mix(c, SEA.lagoon[4], 0.35 * clamp(ro * 3));
   const shf = 1 - shelfF(x + (nA - 0.5) * 80, y + (nA - 0.5) * 30);
-  if (shf > 0 && y < SEAFLOOR.shelf[1] + Math.sin(x / 22) * 7) c = band(SEA.abyss, 0.3 + (nA - 0.5), x, y);
+  if (shf > -0.2) {
+    // the shelf's edge: the sea floor drops away north of a ragged line (a dithered step, a pale lip)
+    const line = SEAFLOOR.shelf[1] + Math.sin(x / 22) * 7 + (nB - 0.5) * 16;
+    const k = clamp((line - y) / 18) * clamp((shf + 0.2) * 3);
+    if (k > bayer(x, y)) c = band(SEA.abyss, 0.3 + (nA - 0.5), x, y);
+    else if (k > 0 && line - y > -3 && line - y < 0) c = SEA.mid[0];
+  }
   const dp = 1 - deepF(x + (nA - 0.5) * 140, y + (nB - 0.5) * 30);
-  if (dp > 0) c = mix(c, band(SEA.abyss, 0.2 + dp * 0.6 + (nB - 0.5) * 0.3, x, y), smoothstep(0, 0.35, dp));
+  if (dp > -0.05 && smoothstep(-0.05, 0.4, dp) > bayer(x, y)) c = band(SEA.abyss, 0.12 + dp * 0.7 + (nB - 0.5) * 0.3, x, y);
   const kp = 1 - kelpF(x, y);
   if (kp > 0 && noise2(x * 0.05, y * 0.05, 117) > 0.5) c = band(SEA.kelp, 0.3 + nB * 0.5, x, y);
   // waves on the open water: little light chevrons

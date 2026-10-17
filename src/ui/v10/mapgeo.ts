@@ -57,7 +57,8 @@ export const SHAPES: Shape[] = [
   E(B.hills, 576, 192, 74, 46, -8), E(B.hills, 528, 214, 30, 18), E(B.plain, 596, 292, 54, 24, -10), E(B.plain, 520, 350, 82, 46),
   E(B.mountain, 770, 224, 120, 108, 12), E(B.mountain, 848, 388, 40, 70),
   L(B.gorge, 12, [540, 262], [580, 254], [612, 246], [646, 238]),
-  E(B.glow, 676, 302, 30, 50, 6), E(B.thermal, 648, 408, 66, 38, -6), E(B.sink, 522, 470, 62, 32),
+  E(B.glow, 676, 300, 42, 60, 6), E(B.thermal, 648, 408, 66, 38, -6), E(B.sink, 522, 470, 62, 32),
+  E(B.wetland, 452, 346, 34, 17),
 ];
 
 /** the kind of shore along the coast: anchor points (grid) blended between neighbours, so beaches
@@ -68,11 +69,11 @@ export const SHORE_PTS: { x: number; y: number; k: Shore; p: number }[] = ([
   [306, 90, 'cliff', 26], [334, 106, 'beach', 12], [360, 96, 'cliff', 30], [392, 78, 'cliff', 38], [430, 97, 'rock', 14], [470, 86, 'rock', 16],
   [510, 77, 'cliff', 30], [560, 92, 'rock', 12], [596, 100, 'beach', 22], [650, 89, 'beach', 36], [700, 89, 'beach', 34], [740, 76, 'cliff', 30],
   [790, 61, 'cliff', 40], [840, 92, 'cliff', 50], [890, 140, 'cliff', 56], [920, 212, 'cliff', 60], [930, 240, 'cliff', 50], [886, 300, 'beach', 14],
-  [910, 330, 'cliff', 52], [904, 390, 'cliff', 56], [866, 450, 'beach', 16], [868, 500, 'rock', 14], [876, 546, 'cliff', 30], [820, 548, 'rock', 10],
-  [760, 556, 'beach', 34], [690, 561, 'beach', 38], [630, 565, 'beach', 24], [600, 563, 'cliff', 50], [540, 568, 'cliff', 66], [470, 574, 'cliff', 70],
+  [910, 330, 'cliff', 52], [904, 390, 'cliff', 56], [866, 450, 'beach', 16], [868, 500, 'rock', 14], [880, 540, 'cliff', 30], [826, 540, 'rock', 10],
+  [766, 520, 'beach', 34], [700, 536, 'beach', 38], [636, 562, 'beach', 24], [884, 580, 'cliff', 26], [600, 563, 'cliff', 50], [540, 568, 'cliff', 66], [470, 574, 'cliff', 70],
   [400, 564, 'cliff', 60], [372, 552, 'rock', 20], [330, 542, 'beach', 40], [260, 546, 'beach', 40], [200, 532, 'beach', 34], [150, 540, 'beach', 26],
-  [100, 570, 'beach', 24], [64, 566, 'rock', 12], [66, 520, 'rock', 10], [56, 460, 'beach', 26], [62, 400, 'beach', 22], [90, 354, 'mangrove', 0],
-  [150, 320, 'mangrove', 0], [100, 296, 'mangrove', 0], [64, 262, 'beach', 20], [54, 206, 'beach', 14], [42, 160, 'beach', 24], [42, 124, 'rock', 8],
+  [110, 582, 'beach', 26], [66, 596, 'rock', 12], [66, 520, 'rock', 10], [56, 460, 'beach', 26], [62, 400, 'beach', 22], [90, 354, 'mangrove', 0],
+  [150, 320, 'mangrove', 0], [100, 296, 'mangrove', 0], [64, 262, 'beach', 20], [90, 206, 'beach', 22], [42, 160, 'beach', 24], [42, 124, 'rock', 8],
   [132, 44, 'beach', 16], [214, 30, 'rock', 18], [808, 44, 'cliff', 20], [920, 600, 'rock', 8], [38, 560, 'rock', 8],
 ] as [number, number, Shore, number][]).map(([x, y, k, p]) => ({ x: x * S, y: y * S, k, p }));
 
@@ -110,8 +111,8 @@ export const RELIEF: Relief[] = [
   { k: 'plateau', e: RE([566, 196, 88, 54, -8]), h: 34, edge: 0.4 },  // the rocky hills rise out of it
   { k: 'dome', e: RE([316, 304, 23, 30]), h: 34 },                     // the pā hill
   { k: 'terrace', e: RE([316, 304, 20, 27]), h: 0, step: 7 },
-  { k: 'basin', e: RE([676, 302, 27, 46, 6]), h: 46, edge: 0.1 },     // the sunken glowing valley
-  { k: 'basin', e: RE([648, 408, 60, 34, -6]), h: 18, edge: 0.45 },   // the hot valley
+  { k: 'basin', e: RE([676, 302, 21, 38, 6]), h: 40, edge: 0.14 },     // the sunken glowing valley
+  { k: 'basin', e: RE([648, 408, 56, 30, -6]), h: 12, edge: 0.7 },   // the hot valley
   { k: 'basin', e: RE([522, 470, 38, 17]), h: 84, edge: 0.05 },       // Te Korokoro
   { k: 'rolling', e: RE([526, 360, 100, 60]), h: 26, f: 0.014 },
   { k: 'dome', e: RE([212, 356, 34, 20, 8]), h: 10 },                 // the village terrace
@@ -258,6 +259,8 @@ export const EXTRA_RIVERS: P2[][] = [
   GP([[734, 250], [714, 270], [698, 288], [686, 300]]),
   GP([[760, 310], [772, 350], [780, 390], [792, 430], [812, 476], [824, 516], [826, 552]]),
   GP([[160, 440], [140, 470], [122, 500], [100, 512], [80, 514], [60, 514]]),
+  GP([[566, 330], [536, 338], [504, 342], [474, 346]]),
+  GP([[430, 352], [404, 370], [376, 390], [352, 410], [338, 418]]),
 ];
 
 /** the reef, the shelf's drop-off and the Deep (sea features; ellipses in map px) */
