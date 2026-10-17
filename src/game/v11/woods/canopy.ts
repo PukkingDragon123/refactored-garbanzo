@@ -65,12 +65,21 @@ function build(f: FieldScene) {
   clock.set(clockForTod(f.tod, currentExpedition() ? expeditionHour() : undefined));
   const frameOf = (key: string, gen: () => Sprite) => { const s = sprite('cn11:' + key, gen)!; return Object.assign(s.f, { sprite: s.s }) as Frame & { sprite: Sprite }; };
   // the far giants seen across at crown height, their floors lost far below in the mist
-  woodsFar(f, clock, { seed: 211, fog: hex('#9cbcb2'), open: 0.8, shift: 230, skip: ['ceil'], backdrop: { top: hex('#3c6a78'), mid: hex('#d2e6dc'), low: hex('#9ec2b0'), ghost: hex('#a8c8b8') } });
+  woodsFar(f, clock, { seed: 211, fog: hex('#9cbcb2'), open: 0.8, shift: 330, skip: ['ceil'], backdrop: { top: hex('#3c6a78'), mid: hex('#d2e6dc'), low: hex('#9ec2b0'), ghost: hex('#a8c8b8') } });
   // the mist in the depths below the walkway, drifting
   const depth = st.addLayer('depthmist', 0.9, 0.3, 0.85, 0, 0.9);
   // (a bank of cloud filling the depths, so the far ranks dissolve into it instead of ending)
   const fill = packColor(0.8, 0.88, 0.85, 1);
-  depth.add(new Custom(-1, rr => { const x0 = rr.visibleX0(8), x1 = rr.visibleX1(8); rr.rect(x0, 214 + 64, x1 - x0, 700, fill); }));
+  const fill2 = packColor(0.86, 0.92, 0.89, 1);
+  depth.add(new Custom(-1, (rr, st2) => {
+    // a billowing top edge, drifting slowly
+    const x0 = Math.floor(rr.visibleX0(8) / 3) * 3, x1 = rr.visibleX1(8);
+    for (let x = x0; x < x1; x += 3) {
+      const t = 214 + 58 + (noise1((x + st2.time * 3) / 34, 77) - 0.5) * 22 + (noise1((x - st2.time * 2) / 11, 78) - 0.5) * 6;
+      rr.rect(x, t, 3, 3, fill2);
+      rr.rect(x, t + 3, 3, 700, fill);
+    }
+  }));
   for (let i = 0; i < 4; i++) depth.add(new ForestMist(i, 214 + 10 + i * 22, 3 + i * 2, clock, 0.6 - i * 0.04, 71 + i, 700, 110, i >= 2 ? '#d0e0d8' : '#cfe2d8'));
   const main = st.addLayer('main', 1, 0, 1, 0);
   f.main = main;

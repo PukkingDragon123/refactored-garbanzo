@@ -103,7 +103,7 @@ function emit(kind: string, f: FieldScene, L: Layer, x: number, y: number, st: S
   switch (kind) {
     case 'pollen': L.glowParticles.spawn({ frame: A.dot, x, y, vx: rand.range(-3, 3) + w * 4, vy: rand.range(-3, 2), life: rand.range(4, 8), color: [1, 0.9, 0.55], alpha: 0.75, alpha1: 0, fadeIn: 0.3, glow: true, intensity: 1, wobble: 4, wobbleF: 0.7, size: 0.8 }); break;
     case 'spores': L.glowParticles.spawn({ frame: A.dot, x, y, vx: rand.range(-2, 2) + w * 2, vy: rand.range(-4, 1), life: rand.range(5, 9), color: [0.86, 1, 0.82], alpha: 0.55, alpha1: 0, fadeIn: 0.4, glow: true, intensity: night ? 1.4 : 0.8, wobble: 5, wobbleF: 0.5, size: 0.7 }); break;
-    case 'glowspores': { const c: RGB = rand.chance(0.5) ? [0.4, 1, 0.85] : [0.7, 0.6, 1]; L.glowParticles.spawn({ frame: A.dot, x, y: y + 60, vx: rand.range(-3, 3), vy: rand.range(-12, -5), life: rand.range(5, 10), color: c, alpha: 1, alpha1: 0, fadeIn: 0.3, glow: true, intensity: 2.2, wobble: 6, wobbleF: 0.6, size: rand.range(0.6, 1.2) }); break; }
+    case 'glowspores': { const c: RGB = rand.chance(0.5) ? [0.4, 1, 0.85] : [0.7, 0.6, 1]; L.glowParticles.spawn({ frame: A.dot, x, y: y + 60, vx: rand.range(-3, 3), vy: rand.range(-12, -5), life: rand.range(5, 10), color: c, alpha: 1, alpha1: 0, fadeIn: 0.3, glow: true, intensity: 3, wobble: 6, wobbleF: 0.6, size: rand.range(0.9, 1.6) }); break; }
     case 'motes': L.glowParticles.spawn({ frame: A.dot, x, y, vx: rand.range(-1.5, 1.5), vy: rand.range(-1.5, 1.5), life: rand.range(4, 8), color: [1, 0.96, 0.85], alpha: 0.6, alpha1: 0, fadeIn: 0.4, glow: true, intensity: 0.9, wobble: 3, wobbleF: 0.6, size: 0.6 }); break;
     case 'dust': L.glowParticles.spawn({ frame: A.dot, x, y, vx: rand.range(-2, 2), vy: rand.range(-1, 1.5), life: rand.range(5, 9), color: [0.95, 0.92, 0.85], alpha: 0.4, alpha1: 0, fadeIn: 0.4, glow: true, intensity: 0.6, wobble: 2, wobbleF: 0.4, size: 0.5 }); break;
     case 'grit': L.particles.spawn({ frame: A.dot2, x: x - 300, y: groundAt(f, x, y) - rand.range(2, 60), vx: 90 + w * 60, vy: rand.range(-6, 4), life: rand.range(2, 4), color: [0.78, 0.66, 0.5], alpha: 0.6, alpha1: 0, size: 0.6 }); break;
@@ -421,6 +421,13 @@ function insertLayer(st: Stage, name: string, p: number): Layer {
   if (at < 0) at = st.layers.length;
   st.layers.splice(at, 0, lay);
   return lay;
+}
+
+/** FieldScene.enter(): find the scene's place (the home island follows Mori along the shore) and apply its look */
+export async function attachRegionLook(f: FieldScene) {
+  const [{ locOf }, { isIslandScene }, { islandLocAt }] = await Promise.all([import('../v10/field10'), import('../v10/expedition'), import('../v10/regions')]);
+  if (isIslandScene(f)) applyRegionLook(f, null, islandLocAt);
+  else applyRegionLook(f, lookLocOf(f, locOf(f)));
 }
 
 /** (tests / the developer panel: forget which scenes have a look) */

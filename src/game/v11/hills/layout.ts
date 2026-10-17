@@ -60,10 +60,12 @@ export const HSPOT = {
   /** foot of the scramble up the big tor, and its summit */
   torClimb: TORS[0][0] - 54,
   torTop: TORS[0][0],
-  /** the hunters' camp under the overhang: fire ring, lean-to, drying rack */
-  fire: 2640,
-  leanTo: 2716,
-  rack: 2580,
+  /** the hunters' camp under the overhang: the camp's own spot (a tarp camp ~130 px wide, anchored
+   *  56 px from its left, fits from here), its fire ring, the lean-to and the drying rack */
+  camp: 2620,
+  fire: 2678,
+  leanTo: 2752,
+  rack: 2505,
   /** the lookout on the ridge top, and the ways on */
   lookout: 3180,
   /** the way on down into the Bone Cliffs gorge (east end) */

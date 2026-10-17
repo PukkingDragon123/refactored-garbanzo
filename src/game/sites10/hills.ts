@@ -48,19 +48,20 @@ const fy = (p: number, sy: number) => sy + 60 * p;
 
 /**
  * Named anchors for other modules. The hunters' camp under the overhang is left empty for the
- * hunters (another module adds them via onFieldEnter when the location is 'hills'): stand them by
- * the fire ring, sit them in the lean-to, hang the day's meat on the rack. All world coordinates on
+ * hunters: the NPC module (src/game/v11/npcs) finds `HILLS_SPOTS.huntersCamp` (x = the camp's spot) when
+ * the 'hills' location opens and puts the trappers and their tarp camp there; the fire ring (lit by
+ * that camp), the lean-to against the rock and the drying rack are around it. All world coordinates on
  * the gameplay plane (y = the walk line there).
  */
 export const HILLS_SPOTS = {
   enter: { x: HSPOT.enter, y: hgroundY(HSPOT.enter) },
   huntersCamp: {
-    x: HSPOT.fire, y: hgroundY(HSPOT.fire),
+    x: HSPOT.camp, y: hgroundY(HSPOT.camp),
     fire: { x: HSPOT.fire, y: hgroundY(HSPOT.fire) },
     leanTo: { x: HSPOT.leanTo, y: hgroundY(HSPOT.leanTo) },
     rack: { x: HSPOT.rack, y: hgroundY(HSPOT.rack) },
     /** where people stand / sit around the fire (world x) */
-    seats: [HSPOT.fire - 34, HSPOT.fire + 30, HSPOT.leanTo + 4],
+    seats: [HSPOT.fire - 30, HSPOT.fire + 34, HSPOT.leanTo + 4],
     /** the shelter's mouth (world x range) */
     shelter: [BLUFF.mouthX, BLUFF.mouthX + BLUFF.mouthW] as [number, number],
   },
@@ -246,8 +247,10 @@ function build(f: FieldScene) {
     const cx = HSPOT.fire;
     propAt(f, 'hl:rack', () => paintDryingRack(901), HSPOT.rack, hgroundY(HSPOT.rack) - 2, -5.5);
     propAt(f, 'hl:leanto', () => paintLeanTo(902), HSPOT.leanTo, hgroundY(HSPOT.leanTo) - 3, -5.6);
-    propAt(f, 'hl:wood', () => paintWoodpile(903), HSPOT.leanTo + 46, hgroundY(HSPOT.leanTo + 46) - 2, -5.4);
-    propAt(f, 'hl:fire', () => paintFireRing(904), cx, hgroundY(cx) + 2, -2.5);
+    propAt(f, 'hl:wood', () => paintWoodpile(903), HSPOT.leanTo + 44, hgroundY(HSPOT.leanTo + 44) - 2, -5.4);
+    // (with the NPC module in the build, its trappers' camp brings its own stone ring and a live fire
+    // to this spot; without it the cold fire ring sits here waiting)
+    if (!NPC_CAMP) propAt(f, 'hl:fire', () => paintFireRing(904), cx, hgroundY(cx) + 2, -2.5);
     campFire = { on: false };
     const cf = campFire;
     main.add(new Custom(-2.4, (rr, s) => {
@@ -287,7 +290,7 @@ function build(f: FieldScene) {
   const dsy = () => { const v = rng.int(0, 2); return frameOf(`ds:${v}`, () => paintDaisy(1200 + v, 16 + v * 3)); };
   const heb = () => { const v = rng.int(0, 2); return frameOf(`hb:${v}`, () => paintHebe(1300 + v, 30 + v * 8, 18 + v * 5)); };
   const cush = () => { const v = rng.int(0, 2); return frameOf(`cu:${v}`, () => paintCushion(1400 + v, 16 + v * 6)); };
-  const near = (x: number, r: number) => Math.abs(x - HSPOT.fire) < 70 + r || Math.abs(x - HSPOT.leanTo) < 50 + r || Math.abs(x - HSPOT.rack) < 40 + r || Math.abs(x - (HILLS_CLIMB.x || -999)) < 18 + r;
+  const near = (x: number, r: number) => (x > HSPOT.camp - 70 - r && x < HSPOT.camp + 90 + r) || Math.abs(x - HSPOT.leanTo) < 50 + r || Math.abs(x - HSPOT.rack) < 40 + r || Math.abs(x - (HILLS_CLIMB.x || -999)) < 18 + r;
   for (let x = 20; x < W - 10; x += rng.range(9, 20)) {
     const z = hzoneAt(x);
     if (near(x, 0)) continue;
@@ -380,6 +383,8 @@ function build(f: FieldScene) {
 }
 
 const HILLS_CLIMB = { x: 0 };
+/** the NPC module (the trappers and their camp) is in the build */
+const NPC_CAMP = Object.keys(import.meta.glob('../v11/npcs/spawn.ts')).length > 0;
 const HIDES: { x: number; w: number; y: number; cover: number }[] = [];
 const GUST: { k: number; ref: Gusts | null } = { k: 0, ref: null };
 

@@ -227,6 +227,8 @@ export class FieldScene extends WorldScene implements WildHost {
     await super.enter();
     // V11: predators, Mori's slingshot and Aroha's combat AI in every field scene
     void import('../v11/predators-scene').then(m => m.attachPredators(this));
+    // V11: every place has its own atmosphere pack (grade, air, sounds, small wildlife, plants)
+    void import('../v11/regions-lookfx').then(m => m.attachRegionLook(this)).catch(e => console.warn('region look', e));
     // V10: the expedition runtime (map reveal, ways deeper, finds, events) for every field scene
     await (await import('../v10/field10')).onFieldEnter(this);
     await this.site.onEnter?.(this);

@@ -189,7 +189,7 @@ export const LOOKS: Record<string, Look> = {
   },
   glowforest: {
     note: 'The Glowing Forest: violet-cyan dusk all day, glowing spores rising, glowing moths, strange clicks.',
-    grade: { amb: [0.8, 0.86, 1.06], fog: [0.12, 0.2, 0.26], fogK: 0.25, bloom: 0.2, sat: 1.08 },
+    grade: { amb: [0.98, 0.98, 1.12], fog: [0.2, 0.3, 0.38], fogK: 0.12, bloom: 0.25, sat: 1.1, exposure: 1.06 },
     air: [{ kind: 'glowspores', rate: 1.4 }],
     insects: [{ kind: 'skymoth', n: 5 }, { kind: 'firefly', n: 14 }],
     sounds: [{ sfx: 'callClick', every: [5, 12], vol: 0.06, pitch: [0.7, 1] }, { sfx: 'drip', every: [3, 7], vol: 0.06, pitch: [0.6, 0.9] }],
