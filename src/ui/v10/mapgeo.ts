@@ -17,7 +17,7 @@
 //   the south       the glowing valley under the range, the hot valley, the sinkhole (Te Korokoro),
 //                   the southern bush and the sea cliffs of the Far Coast
 
-import { GRID_K } from '../../game/v10/atlas';
+import { GRID_K } from '../../game/v10/atlasgeo';
 
 /** design grid -> map pixels */
 export const S = GRID_K;

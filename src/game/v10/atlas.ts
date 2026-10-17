@@ -4,14 +4,11 @@
 
 import type { LocationDef } from './regions';
 
-/** the design grid the place table below is written in (positions are stored 0..1 of it) */
-export const GRID_W = 960, GRID_H = 640;
-/** map size in map pixels (the pixel-art map is painted at this resolution, 2.75 x the grid) */
-export const MAP_W = 2640, MAP_H = 1760;
-/** design grid -> map pixels */
-export const GRID_K = MAP_W / GRID_W;
+import { GRID_W, GRID_H } from './atlasgeo';
+// (the map's size and geometry live in atlasgeo.ts, free of the game, so the map painter's worker can use them)
+export { GRID_W, GRID_H, MAP_W, MAP_H, GRID_K, COAST, ISLETS, ZONES10, RIVERS } from './atlasgeo';
+export type { Zone10 } from './atlasgeo';
 const P = (x: number, y: number): [number, number] => [x / GRID_W, y / GRID_H];
-const SC = (pts: [number, number][]): [number, number][] => pts.map(([x, y]) => [x * GRID_K, y * GRID_K]);
 const PATH = (...pts: [number, number][]) => pts.map(([x, y]) => P(x, y));
 
 /** the home island scene's width (src/art/island4/layout.ts ISL.W) */
@@ -234,44 +231,3 @@ export const ATLAS: AtlasLoc[] = [
     desc: 'Tors, scree and tussock above the bush line. Wind, hawks, and a long view over everything.', terrain: 'Boulders, scree, crags',
   },
 ];
-
-// ------------------------------------------------------------------ the region's shape (always visible)
-
-/** coarse coastline of the main land, clockwise from the north-west (map pixels; written in the grid) */
-export const COAST: [number, number][] = SC([
-  [40, 118], [42, 102], [50, 90], [62, 82], [76, 84], [88, 90], [100, 96], [116, 100], [136, 103], [156, 105], [176, 106], [198, 105],
-  [220, 103], [242, 101], [262, 100], [280, 99], [292, 96], [300, 91], [308, 88], [316, 92], [322, 99], [328, 104], [336, 108], [344, 111],
-  [352, 108], [358, 100], [364, 92], [372, 84], [382, 78], [394, 76], [404, 80], [412, 88], [420, 94], [432, 98], [446, 98], [458, 94],
-  [468, 88], [480, 82], [494, 78], [510, 76], [524, 80], [536, 86], [550, 90], [566, 94], [582, 98], [596, 100], [610, 96], [624, 90],
-  [640, 88], [660, 90], [680, 91], [700, 89], [718, 85], [734, 79], [748, 72], [764, 64], [780, 60], [796, 62], [806, 68], [812, 78],
-  [826, 86], [844, 92], [862, 104], [876, 120], [890, 140], [902, 164], [910, 188], [918, 210], [930, 226], [932, 242], [922, 252], [912, 262],
-  [908, 276], [896, 290], [884, 298], [878, 306], [886, 312], [900, 316], [912, 326], [914, 344], [906, 360], [902, 378], [906, 396], [900, 414],
-  [890, 428], [880, 438], [868, 444], [860, 454], [866, 466], [874, 478], [870, 494], [860, 508], [866, 520], [876, 534], [880, 548], [872, 560],
-  [856, 562], [838, 554], [820, 546], [802, 544], [786, 546], [770, 552], [752, 558], [734, 562], [714, 562], [694, 560], [676, 562], [656, 566],
-  [636, 566], [618, 562], [602, 562], [588, 566], [574, 562], [560, 566], [544, 568], [526, 566], [508, 568], [490, 572], [470, 574], [452, 572],
-  [434, 568], [418, 566], [402, 564], [388, 560], [374, 554], [360, 548], [346, 544], [330, 542], [314, 544], [298, 548], [282, 550], [266, 548],
-  [250, 544], [234, 540], [218, 536], [204, 532], [190, 530], [176, 530], [162, 534], [148, 540], [134, 548], [120, 558], [106, 568], [92, 576],
-  [78, 580], [66, 578], [58, 568], [60, 554], [68, 540], [72, 524], [68, 508], [60, 492], [54, 474], [52, 456], [54, 438], [58, 420],
-  [62, 402], [64, 386], [70, 372], [80, 360], [94, 352], [108, 346], [120, 342], [130, 338], [140, 332], [148, 326], [152, 320], [148, 314],
-  [140, 308], [128, 302], [114, 298], [100, 296], [86, 292], [74, 284], [66, 272], [60, 258], [56, 244], [60, 232], [66, 222], [62, 210],
-  [52, 204], [46, 194], [44, 178], [42, 160], [40, 140], [40, 126],
-]);
-/** small islands off the coast (centre, radius; map pixels) */
-export const ISLETS: [number, number, number][] = ([[132, 44, 22], [214, 30, 7], [920, 600, 9], [38, 560, 6], [808, 44, 11]] as [number, number, number][]).map(([x, y, r]) => [x * GRID_K, y * GRID_K, r * GRID_K]);
-
-/** terrain zones painted on the map where explored: kind, centre, radii */
-export type Zone10 = 'forest' | 'plateau' | 'swamp' | 'garden' | 'glow' | 'thermal' | 'gorge' | 'sink' | 'terraces' | 'cave' | 'dunes' | 'peaks';
-export const ZONES10: [Zone10, number, number, number, number][] = ([
-  ['dunes', 210, 122, 150, 14], ['forest', 420, 196, 70, 42], ['forest', 360, 150, 40, 28], ['plateau', 380, 250, 90, 34], ['forest', 380, 246, 80, 26],
-  ['swamp', 196, 246, 52, 84], ['garden', 214, 362, 52, 26], ['terraces', 318, 306, 30, 56], ['gorge', 596, 266, 62, 24], ['peaks', 600, 210, 70, 30],
-  ['glow', 676, 302, 34, 56], ['thermal', 648, 404, 64, 40], ['sink', 522, 470, 70, 26], ['cave', 372, 112, 64, 12], ['peaks', 760, 230, 70, 60],
-  ['forest', 760, 360, 60, 80], ['plateau', 520, 330, 70, 40], ['forest', 300, 420, 120, 60], ['forest', 560, 160, 60, 40], ['forest', 700, 150, 60, 40],
-] as [Zone10, number, number, number, number][]).map(([k, x, y, rx, ry]) => [k, x * GRID_K, y * GRID_K, rx * GRID_K, ry * GRID_K]);
-/** rivers (polylines, map pixels): the home stream, the Awa Pango through the swamp, the falls river */
-export const RIVERS: [number, number][][] = ([
-  [[248, 108], [244, 130], [236, 152], [228, 172]],
-  [[228, 172], [206, 214], [184, 254], [168, 294], [150, 318]],
-  [[700, 200], [640, 236], [580, 252], [541, 261], [527, 268], [510, 263], [492, 248], [474, 228], [452, 208], [430, 198], [404, 188], [380, 166], [362, 140], [348, 118]],
-  [[256, 392], [228, 384], [200, 376], [176, 356], [160, 334], [152, 320]],
-  [[602, 440], [560, 462], [522, 470]],
-] as [number, number][][]).map(SC);

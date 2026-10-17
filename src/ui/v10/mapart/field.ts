@@ -7,7 +7,7 @@
 // built at half resolution and refined where it matters.
 
 import { fbm2, noise2, hash2, clamp, smoothstep } from '../../../core/math';
-import { COAST, ISLETS, RIVERS } from '../../../game/v10/atlas';
+import { COAST, ISLETS, RIVERS } from '../../../game/v10/atlasgeo';
 import { B, SHAPES, SHORE_PTS, COAST_EDITS, RELIEF, RANGE, RANGE_E, EXTRA_RIVERS, LM, WALLOWS, POOLS } from '../mapgeo';
 import type { Shape, Shore } from '../mapgeo';
 import { W, H, N, WK, slice } from './kit';

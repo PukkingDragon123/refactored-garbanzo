@@ -4,9 +4,12 @@
 
 import { C, hex, mix, rgba, R, G, B as BL, A } from '../../../art/color';
 import { bayer, clamp } from '../../../core/math';
-import { MAP_W, MAP_H } from '../../../game/v10/atlas';
+import { MAP_W, MAP_H } from '../../../game/v10/atlasgeo';
 
 export const W = MAP_W, H = MAP_H, N = W * H;
+
+/** the pen's inks (the paper sketch, notes, marks) */
+export const INK = hex('#3a2614'), INK2 = hex('#5e4026'), INK3 = hex('#8a6c48'), INK_RED = hex('#a8382a'), INK_BLUE = hex('#2e5a78');
 
 /** pixel tags: what the live map animates */
 export const TAG = { gust: 1, glow: 2, crown: 3, lava: 4, fall: 5, fungi: 6, lights: 7, ember: 8 } as const;
@@ -103,9 +106,12 @@ export function band(ramp: C[], v: number, x: number, y: number, seam = 2.4): C 
 /** plain nearest ramp entry */
 export const pickR = (ramp: C[], v: number) => ramp[clamp(Math.round(clamp(v) * (ramp.length - 1)), 0, ramp.length - 1)];
 
-let tSlice = 0;
+let tSlice = 0, noYield = false;
+/** in a worker: never yield (nothing else needs the thread) */
+export const setNoYield = (v: boolean) => { noYield = v; };
 /** yield to the browser when this slice has run long enough */
 export async function slice(budget = 12) {
+  if (noYield) return;
   const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
   if (now - tSlice < budget) return;
   await new Promise<void>(res => setTimeout(res, 0));
