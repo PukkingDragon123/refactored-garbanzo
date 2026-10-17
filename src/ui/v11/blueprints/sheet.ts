@@ -48,7 +48,7 @@ export function paintStamp(text: string, c: C, o: { small?: string; ang?: number
   const w = Math.max(tw, sw) + 10, h = (o.big ? 18 : 11) + (o.small ? 7 : 0) + 6;
   const b = new PixelBuffer(w, h);
   const seed = o.seed ?? text.length * 7;
-  const st: TextStyle = { font: 'caps', color: c, bold: !o.big, dropout: 0.14, seed };
+  const st: TextStyle = { font: 'caps', color: c, bold: !o.big, dropout: o.big ? 0.05 : 0.12, seed };
   for (let x = 0; x < w; x++) for (const y of [0, 1, h - 1, h - 2]) if (rnd(x, y, seed) > 0.06) b.set(x, y, c);
   for (let y = 0; y < h; y++) for (const x of [0, 1, w - 1, w - 2]) if (rnd(x, y, seed) > 0.06) b.set(x, y, c);
   for (let x = 3; x < w - 3; x++) { b.set(x, 3, c); b.set(x, h - 4, c); }
@@ -174,18 +174,17 @@ export function paintSheet(id: string, w: number, h: number, info: SheetInfo): S
   if (T) { pen.line(pad, ry, w - pad, ry, { c: I.soft, wobble: 0 }); if (I.paper === 'blueprint') pen.line(pad, ry + 1, w - pad, ry + 1, { c: I.soft, wobble: 0, dash: [1, 1] }); }
   else pen.line(titleX, ry, titleX + tw + 4, ry + 1, { c: I.style === 'biro' ? I.accent : I.soft });
 
-  // ---- layout
-  const wide = w >= 220;
+  // ---- layout: the drawing across the top; below it the notes (left) and the materials and what it
+  // does (right), or all stacked on a narrow sheet
+  const wide = w >= 200;
   const blockH = T ? 13 : 10;
   const bodyY = ry + 4, bodyB = h - blockH - 7;
-  let dx = pad, dy = bodyY, dw: number, dh: number, cx: number, cy: number, cw: number;
-  if (wide) {
-    dw = Math.floor((w - pad * 2) * 0.5); dh = bodyB - bodyY;
-    cx = dx + dw + 6; cy = bodyY; cw = w - cx - pad;
-  } else {
-    dw = w - pad * 2; dh = Math.max(56, Math.min(96, Math.floor((bodyB - bodyY) * 0.42)));
-    cx = pad; cy = dy + dh + 3; cw = w - pad * 2;
-  }
+  const dx = pad, dy = bodyY, dw = w - pad * 2;
+  const dh = Math.max(56, Math.min(Math.round(dw * 0.62), Math.floor((bodyB - bodyY) * (wide ? 0.5 : 0.4))));
+  const cy = dy + dh + 3;
+  // notes column (nx, nw) and the materials / effect column (cx, cw)
+  const nx = pad, nw = wide ? Math.floor((w - pad * 2) * 0.42) : w - pad * 2;
+  const cx = wide ? nx + nw + 6 : pad, cw = wide ? w - pad - cx : w - pad * 2;
   if (I.paper === 'form') {
     const fp = new SkPen(b, I.soft, I.soft, 'tech');
     fp.rect(dx - 2, dy - 1, dw + 3, dh + 2, { c: H('#9ab89e') });
@@ -203,21 +202,23 @@ export function paintSheet(id: string, w: number, h: number, info: SheetInfo): S
     if (!known) ghost(b, I, dx, dy, dw, dh, paperAt);
   }
 
-  // ---- notes, materials, effect (the column)
+  // ---- notes (left column, or first when stacked)
   let y = cy;
   const colSt: TextStyle = T ? { ...hand, color: I.c } : hand;
+  const noteRoom = Math.max(1, Math.floor((bodyB - cy) / 10));
   if (known && d.notes?.length) {
-    for (const n of d.notes.slice(0, wide ? 3 : 2)) {
-      const used = drawPara(b, (T ? '- ' : '') + n, cx, y, cw, colSt, { maxLines: 2 });
-      y += used;
+    for (const n of d.notes.slice(0, 3)) {
+      if (y > bodyB - 10 - (wide ? 0 : 50)) break;
+      y += drawPara(b, (T ? '- ' : '') + n, nx, y, nw, colSt, { maxLines: 2 });
     }
     y += 2;
   } else if (locked) {
-    y += drawPara(b, SOURCE_HINT(d), cx, y, cw, { ...colSt, color: I.soft }, { maxLines: 3 }) + 2;
+    y += drawPara(b, SOURCE_HINT(d), nx, y, nw, { ...colSt, color: I.soft }, { maxLines: Math.min(4, noteRoom) }) + 2;
   } else if (!known && d.rp) {
-    y += drawPara(b, info.state === 'lab' ? 'With the agency’s R&D office. The sheet comes back by morning.' : 'A proposal. The R&D office can draw it up overnight.', cx, y, cw, { ...colSt, color: I.soft }, { maxLines: 3 }) + 2;
+    y += drawPara(b, info.state === 'lab' ? 'With the agency’s R&D office. The sheet comes back by morning.' : 'A proposal. The R&D office can draw it up overnight.', nx, y, nw, { ...colSt, color: I.soft }, { maxLines: Math.min(4, noteRoom) }) + 2;
   }
-  // materials
+  if (wide) y = cy;
+  // ---- materials
   const needs = d.needs ?? [];
   if (needs.length) {
     const lab = T ? 'MATERIALS' : 'YOU’LL NEED';

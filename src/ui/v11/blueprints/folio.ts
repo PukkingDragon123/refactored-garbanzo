@@ -467,8 +467,7 @@ export function openFolio(o: FolioOpts = {}): Promise<FolioResult> {
     const c = crafting!;
     const t = (now - c.t0) / 1000;
     // dim the table (a 50% checker, no blending)
-    ctx.fillStyle = '#0c0604';
-    for (let y = 0; y < VH; y += 2) ctx.fillRect(0, y, VW, 1);
+    ctx.drawImage(once(`veil:${VW}x${VH}`, () => { const v = new PixelBuffer(VW, VH); const c = H('#0c0604'); for (let y = 0; y < VH; y++) for (let x = (y & 1); x < VW; x += 2) v.data[y * VW + x] = c; return v; }), 0, 0);
     const mw = Math.min(VW - 20, 240), mh = Math.min(VH - 30, 150), mx = Math.round((VW - mw) / 2), my = Math.round((VH - mh) / 2);
     put(once(`mat:${mw}x${mh}`, () => paintMat(mw, mh)), mx, my);
     const ccx = mx + mw / 2, ccy = my + mh / 2 - 6;
@@ -507,7 +506,7 @@ export function openFolio(o: FolioOpts = {}): Promise<FolioResult> {
       const d = BLUEPRINTS[c.id];
       const art = d.out ? itemArtBuffer(d.out[0]) : null;
       const big = once('made:' + c.id, () => {
-        if (art) { const a = hardAlpha(art), k = Math.max(1, Math.min(3, Math.floor(Math.min(90 / a.w, 70 / a.h)))); const b = new PixelBuffer(a.w * k, a.h * k); for (let y = 0; y < b.h; y++) for (let x = 0; x < b.w; x++) b.set(x, y, a.get(Math.floor(x / k), Math.floor(y / k))); return b; }
+        if (art) { const a = hardAlpha(art), k = Math.max(1, Math.min(3, Math.floor(Math.min(110 / a.w, 96 / a.h)))); const b = new PixelBuffer(a.w * k, a.h * k); for (let y = 0; y < b.h; y++) for (let x = 0; x < b.w; x++) b.set(x, y, a.get(Math.floor(x / k), Math.floor(y / k))); return b; }
         const s = getSheet(c.id).s.buf, w = Math.min(120, s.w), h = Math.min(80, s.h), b = new PixelBuffer(w, h);
         const ox = Math.max(0, Math.round(L.sw * 0.27 - w / 2)), oy = Math.max(0, Math.round(L.sh * 0.42 - h / 2));
         for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) b.set(x, y, s.get(ox + x, oy + y));
@@ -521,7 +520,7 @@ export function openFolio(o: FolioOpts = {}): Promise<FolioResult> {
       const sub = textCanvas('ms', `${where} · ${(d.effect ?? '').toUpperCase()}`.slice(0, Math.floor((mw - 10) / 4)), H('#bfe8c8'));
       put(sub, ccx - sub.width / 2, my + mh - 18);
       if (t > pop + 0.25) {
-        const stp = once('madestamp', () => paintStamp('MADE!', H('#e85a48'), { big: true, ang: -0.2 }));
+        const stp = once('madestamp', () => paintStamp('MADE!', H('#e85a48'), { big: true, ang: -0.12 }));
         put(stp, mx + mw - stp.width - 8, my + 8);
       }
       if (t > pop + 0.6) {
