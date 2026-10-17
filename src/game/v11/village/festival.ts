@@ -104,7 +104,7 @@ export async function stageFestival(c: VCtx) {
     }
   }
   // the bonfire, bigger tonight, and the streamer poles
-  f.main.add(new AnimProp(propAnims.flame, X.fire, g(X.fire) - 6, -0.5, 13, { emissive: 1, sx: 1.6, sy: 2 }));
+  f.main.add(new AnimProp(propAnims.flame, X.fire, g(X.fire) - 4, -0.7, 13, { emissive: 0.6, sx: 1.2, sy: 1.5 }));
   f.lights.push({ x: X.fire, y: g(X.fire) - 20, r: 220, k: 0.9 });
   // the partner arrives for the night if they are not one of the village (the crew come up the river)
   const pid = festivalPartnerChoice();

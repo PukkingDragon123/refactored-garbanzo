@@ -10,7 +10,7 @@
 import type { Site10 } from './kit';
 import { arrive10, game } from './kit';
 import { discover } from '../v10/regions';
-import { buildVillage, enterVillage, villageGround, W, G, X } from '../v11/village/scene';
+import { buildVillage, enterVillage, villageGround, villageCtx, W, G, X } from '../v11/village/scene';
 
 export { villageGround };
 const F = () => game.save.flags;
@@ -32,7 +32,7 @@ export const VILLAGE: Site10 = {
     { kind: 'firefly', x: [0, W], y: [190, 280], n: 16, times: ['dusk', 'night'] },
   ],
   onEnter: async f => {
-    await arrive10(f, 'Te Kāinga', 'Aroha’s whānau', 'Welcome to my home, Mori. Take your shoes off at the wharenui, and let Koro speak first.');
+    if (!villageCtx()?.festival) await arrive10(f, 'Te Kāinga', 'Aroha’s whānau', 'Welcome to my home, Mori. Take your shoes off at the wharenui, and let Koro speak first.');
     if (!F()['v10:villageMet']) {
       F()['v10:villageMet'] = true;
       game.persist();

@@ -108,7 +108,7 @@ function fire(f: FieldScene, x: number, big: number, z: number) {
   f.main.add(new AnimProp(propAnims.flame, x, y - 1, z, 12, { emissive: 1, sx: big, sy: big }));
   f.main.add(new AnimProp(propAnims.flame, x + 4 * big, y - 2, z + 0.1, 10, { emissive: 1, sx: 0.7 * big, sy: 0.8 * big }));
   f.main.add(new AnimProp(propAnims.flame, x - 4 * big, y - 1, z + 0.1, 9, { emissive: 1, sx: 0.6 * big, sy: 0.7 * big }));
-  f.main.add(new LightSource(x, y - 16 * big, 120 * big, [1, 0.58, 0.26], 0.62, z + 1, A.glow, 0.32 * big, 0.16, 0.06));
+  f.main.add(new LightSource(x, y - 16 * big, 120 * big, [1, 0.58, 0.26], 0.46, z + 1, A.glow, 0.22 * big, 0.16, 0.03));
   f.lights.push({ x, y: y - 10, r: 150 * big, k: 0.8 });
   let t = 0;
   f.main.add(new Custom(z + 2, () => {}, dt => {

@@ -50,11 +50,12 @@ const withCtx = async (fn: (m: typeof import('./ritual'), c: NonNullable<ReturnT
 export const story = () => withCtx((m, c) => m.storyByFire(c));
 export const offering = () => withCtx((m, c) => m.offering(c));
 export const blessing = () => withCtx((m, c) => m.blessing(c));
+/** set everything up for the festival and load the village after dark: the night plays */
 export async function festival() {
-  const c = villageCtx();
-  if (!c) return 'not in the village';
   stage('festival');
-  const m = await import('./festival');
-  await m.runFestival(c);
+  const { FieldScene } = await import('../../scenes/field');
+  const { VILLAGE } = await import('../../sites10/village');
+  const ex = await import('../../v10/expedition');
+  await game.go(() => { const s = new FieldScene({ ...VILLAGE, spawnX: 1300 } as never, 'night'); ex.tagScene(s, 'village'); return s; });
   return 'ok';
 }
