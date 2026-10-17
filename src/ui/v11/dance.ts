@@ -106,10 +106,10 @@ export async function runDance(o: DanceOpts): Promise<DanceResult> {
   cv.width = AW; cv.height = AH;
   wrap.appendChild(cv);
   const fit = () => {
-    const s = Math.max(2, Math.min(5, Math.floor(Math.min(window.innerWidth * 0.62 / AW, window.innerHeight * 0.24 / AH))));
+    const s = Math.max(2, Math.min(5, Math.floor(Math.min(window.innerWidth * 0.72 / AW, window.innerHeight * 0.3 / AH))));
     const w = AW * s, h = AH * s;
     Object.assign(cv.style, { width: w + 'px', height: h + 'px', imageRendering: 'pixelated', display: 'block' });
-    Object.assign(wrap.style, { position: 'absolute', left: Math.round((window.innerWidth - w) / 2) + 'px', top: Math.round(window.innerHeight - h - Math.max(8, window.innerHeight * 0.05)) + 'px', zIndex: '33', pointerEvents: 'auto', touchAction: 'none' });
+    Object.assign(wrap.style, { position: 'absolute', left: Math.round((window.innerWidth - w) / 2) + 'px', top: Math.round(window.innerHeight - h - Math.max(96, window.innerHeight * 0.14)) + 'px', zIndex: '33', pointerEvents: 'auto', touchAction: 'none' });
   };
   fit();
   window.addEventListener('resize', fit);
