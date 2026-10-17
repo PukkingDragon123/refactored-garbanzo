@@ -91,8 +91,8 @@ export class PromptView {
       this.el.dataset.t = text;
     }
     this.el.style.display = '';
-    this.el.style.left = cssX + 'px';
-    this.el.style.top = cssY + 'px';
+    this.el.style.left = Math.round(cssX / 2) * 2 + 'px';
+    this.el.style.top = Math.round(cssY / 2) * 2 + 'px';
   }
   hide() {
     this.el.style.display = 'none';

@@ -26,21 +26,21 @@ export interface CardOpts {
 
 const CSS = `
 .ccards { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
-.ccard { position: absolute; left: 0; top: 0; pointer-events: auto; max-width: min(15.5em, 36vw); min-width: 7em; text-align: left; cursor: pointer;
-  font-family: 'Jersey 15', 'Pixelify Sans', monospace; font-size: clamp(11px, 1.42vw, 15px); line-height: 1.2; color: #2a1a10;
-  background: #f4e6c6; border: 0; padding: 0.34em 0.6em 0.36em 1.75em; border-radius: 0;
-  box-shadow: 0 0 0 2px #3a2614, 3px 4px 0 2px rgba(10, 6, 2, 0.38); transform-origin: 50% 100%;
-  background-image: linear-gradient(transparent 92%, rgba(120, 80, 30, 0.12) 92%); background-size: 100% 1.2em; }
-.ccard .k { position: absolute; left: 0.32em; top: 0.38em; font-family: 'Jersey 10', 'Silkscreen', monospace; font-size: 0.9em; line-height: 1;
-  color: #f4e6c6; background: #3a2614; padding: 0.08em 0.28em 0.04em; }
-.ccard .who { display: block; font-family: 'Jersey 10', 'Silkscreen', monospace; font-size: 0.68em; letter-spacing: 0.1em; text-transform: uppercase; color: var(--c, #4a6a2a); margin-bottom: 0.08em; }
-.ccard.in { animation: ccIn 0.3s cubic-bezier(.2, 1.7, .4, 1) both; }
-.ccard:hover, .ccard.sel { background-color: #fffaec; }
-.ccard.pick { animation: ccPick 0.32s ease-out both; }
-.ccard.gone { animation: ccGone 0.18s ease-in both; pointer-events: none; }
-@keyframes ccIn { from { opacity: 0; translate: 0 10px; scale: 0.7; } }
-@keyframes ccPick { 30% { scale: 1.08; } to { opacity: 0; translate: 0 -14px; } }
-@keyframes ccGone { to { opacity: 0; translate: 0 6px; scale: 0.9; } }
+#ui .ccard, #ui .ccard * { font-size-adjust: none; }
+.ccard { position: absolute; left: 0; top: 0; pointer-events: auto; max-width: min(300px, 40vw); min-width: 140px; text-align: left; cursor: pointer;
+  font-family: var(--pp-hand); font-size: 20px; line-height: 24px; color: #2a1a10;
+  background: #f4e6c6; border: 0; padding: 6px 12px 8px 40px; border-radius: 0; image-rendering: pixelated;
+  box-shadow: 0 0 0 2px #3a2614, 6px 6px 0 2px rgba(10, 6, 2, 0.38);
+  background-image: repeating-linear-gradient(180deg, transparent 0 22px, rgba(120, 80, 30, 0.16) 22px 24px); background-position: 0 6px; }
+.ccard .k { position: absolute; left: 8px; top: 8px; font-family: var(--pp-label); font-size: 16px; line-height: 16px; color: #f4e6c6; background: #3a2614; padding: 2px 5px 4px; }
+.ccard .who { display: block; font-family: var(--pp-label); font-size: 16px; line-height: 18px; letter-spacing: 1px; text-transform: uppercase; color: var(--c, #4a6a2a); margin-bottom: 2px; }
+.ccard.in { animation: ccIn 0.3s steps(5) both; }
+.ccard:hover, .ccard.sel { background-color: #fffaec; box-shadow: 0 0 0 2px #3a2614, 0 0 0 4px #ffd84a, 6px 6px 0 4px rgba(10, 6, 2, 0.38); }
+.ccard.pick { animation: ccPick 0.32s steps(5) both; }
+.ccard.gone { animation: ccGone 0.18s steps(3) both; pointer-events: none; }
+@keyframes ccIn { from { opacity: 0; translate: 0 12px; } }
+@keyframes ccPick { 30% { translate: 0 -6px; } to { opacity: 0; translate: 0 -16px; } }
+@keyframes ccGone { to { opacity: 0; translate: 0 8px; } }
 @media (prefers-reduced-motion: reduce) { .ccard.in, .ccard.pick, .ccard.gone { animation: none; } }
 `;
 let styled = false;
@@ -53,7 +53,7 @@ export function choiceCards(cards: ChoiceCard[], o: CardOpts = {}): Promise<numb
   const els = cards.map((c, i) => {
     const b = el('button', 'ccard in', `<span class="k">${i + 1}</span><span class="who">${c.name}</span>${c.text}`);
     b.style.setProperty('--c', c.color);
-    b.style.rotate = `${((i * 37) % 5) - 2}deg`;
+    b.style.marginTop = `${((i * 37) % 3) * 2}px`;
     b.style.animationDelay = `${i * 0.07}s`;
     b.style.visibility = 'hidden';
     root.appendChild(b);

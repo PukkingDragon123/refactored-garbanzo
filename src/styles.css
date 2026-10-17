@@ -112,7 +112,7 @@ body { font-family: var(--body); color: var(--paper); -webkit-font-smoothing: an
 /* ------------------------------------------------ Dialogue */
 .dialogue { position: absolute; left: 50%; bottom: 3.5%; transform: translateX(-50%) translateY(20px); width: min(900px, 92vw); display: flex; gap: 14px; padding: 14px 18px 14px 14px; opacity: 0; transition: opacity 0.2s, transform 0.2s; cursor: pointer; }
 .dialogue.on { opacity: 1; transform: translateX(-50%) translateY(0); }
-.dialogue .portrait { width: 7.2em; height: 7.2em; flex: none; background: radial-gradient(circle at 50% 40%, #35574c, #182d27); border: 2px solid rgba(241, 232, 208, 0.2); display: flex; align-items: flex-end; justify-content: center; overflow: hidden; }
+.dialogue .portrait { width: 7.2em; height: 7.2em; flex: none; background: #24413a; border: 2px solid rgba(241, 232, 208, 0.2); display: flex; align-items: flex-end; justify-content: center; overflow: hidden; }
 .dialogue .portrait img { width: 100%; image-rendering: pixelated; transform-origin: bottom; }
 .dialogue .portrait img.talking { animation: talk 0.26s steps(2) infinite; }
 @keyframes talk { 50% { transform: translateY(-2px); } }

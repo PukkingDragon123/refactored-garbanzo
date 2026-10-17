@@ -150,10 +150,11 @@ export interface BubbleLine {
 const CSS = `
 .bubbles { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
 .bub { position: absolute; left: 0; top: 0; max-width: min(30em, 46vw); min-width: 5em; transform-origin: 50% 100%; pointer-events: none; will-change: transform; }
-.bub .box { position: relative; color: #0c0a0c; font-family: 'Jersey 15', 'Pixelify Sans', 'Silkscreen', monospace; font-size: 1.05em; line-height: 1.32;
+#ui .bub, #ui .bub * { font-size-adjust: none; }
+.bub .box { position: relative; color: #0c0a0c; font-family: 'Jersey 15', 'Pixelify Sans', 'Silkscreen', monospace; font-size: 27px; line-height: 30px;
   border-style: solid; border-width: 9px; border-image: var(--bub-img) 3 fill / 9px / 0 stretch; image-rendering: pixelated; padding: 0.15em 0.35em 0.2em;
   filter: drop-shadow(0 4px 0 rgba(0,0,0,0.45)); -webkit-font-smoothing: none; }
-.bub .nm { position: absolute; left: -2px; top: -1.75em; font-family: 'Jersey 10', 'Silkscreen', 'Pixelify Sans', monospace; font-weight: 700; font-size: 0.72em; padding: 0.15em 0.6em 0.1em 0.5em;
+.bub .nm { position: absolute; left: -2px; top: -30px; font-family: 'Jersey 10', 'Silkscreen', 'Pixelify Sans', monospace; font-weight: 400; font-size: 18.6667px; line-height: 20px; padding: 2px 12px 2px 14px;
   color: #fff; background: #0c0a0c; white-space: nowrap; letter-spacing: 0.06em; text-transform: uppercase; box-shadow: inset 0.35em 0 0 var(--c, #3fbca6), 0 3px 0 rgba(0,0,0,0.4); }
 .bub .inner { position: relative; isolation: isolate; }
 .bub .tx { position: relative; }
@@ -167,7 +168,7 @@ const CSS = `
 .bub .tx em { font-style: normal; color: #d0301e; }
 .bub .tx em .c.on { animation: chPop 0.18s cubic-bezier(.2,1.9,.4,1) both, chShake 0.25s steps(2) infinite 0.2s; }
 .bub .tx mark { background: none; color: #0c0a0c; }
-.bub .tx mark .c.on { background: linear-gradient(transparent 40%, #ffe45a 40%, #ffe45a 92%, transparent 92%); }
+.bub .tx mark .c.on { background: linear-gradient(transparent 0 12px, #ffe45a 12px 28px, transparent 28px); }
 .bub .tx mark .c.on { animation: chPop 0.18s cubic-bezier(.2,1.9,.4,1) both, chWave 1.2s ease-in-out infinite; animation-delay: 0s, calc(var(--i, 0) * 0.07s); }
 .bub .tx i { font-style: normal; color: #6a6a78; }
 @keyframes chShake { 0% { transform: translate(0, 0); } 50% { transform: translate(1px, -1px); } }
@@ -183,10 +184,11 @@ const CSS = `
 .bub.done .caret { display: none; }
 @keyframes caret { 50% { opacity: 0; } }
 .bub .tail { position: absolute; bottom: -12px; width: 18px; height: 14px; left: var(--tx, 50%); transform: translateX(-50%); background: var(--tail-img) 0 0 / 100% 100% no-repeat; image-rendering: pixelated; }
-.bub .more { position: absolute; right: 2px; bottom: -3px; width: 0.8em; height: 0.55em; background: #0c0a0c; clip-path: polygon(0 0, 100% 0, 50% 100%); animation: bubNext 0.6s steps(2) infinite; opacity: 0; }
+.bub .more { position: absolute; right: 2px; bottom: -4px; width: 14px; height: 8px; animation: bubNext 0.6s steps(2) infinite; opacity: 0;
+  background: linear-gradient(90deg, #0c0a0c 0 14px) 0 0 / 14px 2px no-repeat, linear-gradient(90deg, #0c0a0c 0 10px) 2px 2px / 10px 2px no-repeat, linear-gradient(90deg, #0c0a0c 0 6px) 4px 4px / 6px 2px no-repeat, linear-gradient(90deg, #0c0a0c 0 2px) 6px 6px / 2px 2px no-repeat; }
 .bub.done .more { opacity: 1; }
 .bub .chs { display: flex; flex-direction: column; gap: 0.3em; margin-top: 0.45em; pointer-events: auto; }
-.bub .chs button { text-align: left; font-family: 'Jersey 15', 'Pixelify Sans', monospace; font-size: 0.95em; background: #fff; color: #0c0a0c; border: 0; box-shadow: 0 0 0 3px #0c0a0c;
+.bub .chs button { text-align: left; font-family: 'Jersey 15', 'Pixelify Sans', monospace; font-size: 27px; line-height: 30px; background: #fff; color: #0c0a0c; border: 0; box-shadow: 0 0 0 3px #0c0a0c;
   padding: 0.25em 0.6em; margin: 3px; cursor: pointer; }
 .bub .chs button:hover, .bub .chs button.sel { background: #0c0a0c; color: #fff; transform: translateX(4px); }
 .bub .chs button.sel::before { content: ${pxIconCss('play', 2)}; margin-right: 0.35em; vertical-align: -0.05em; }
@@ -194,26 +196,26 @@ const CSS = `
 .bub .chs button.sel .key { background: #fff !important; color: #0c0a0c !important; }
 /* shout marks (no line bursts) */
 .bub .fx { position: absolute; pointer-events: none; }
-.bub .fx.marks { right: -0.9em; top: -1.4em; font-family: 'Jersey 10', 'Silkscreen', monospace; font-weight: 700; font-size: 1.3em; color: #0c0a0c; display: none; text-shadow: 2px 2px 0 #fff, -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff; transform: rotate(12deg); }
+.bub .fx.marks { right: -20px; top: -32px; font-family: 'Jersey 10', 'Silkscreen', monospace; font-weight: 400; font-size: 37.3333px; line-height: 40px; color: #0c0a0c; display: none; text-shadow: 2px 2px 0 #fff, -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff; }
 .bub.shout .fx.marks { display: block; animation: marksPop 0.35s cubic-bezier(.2,1.9,.4,1) both; }
-@keyframes marksPop { from { transform: rotate(12deg) scale(0); } }
-.bub.shout .box { font-size: 1.2em; font-weight: 700; --bub-img: var(--bub-shout); }
+@keyframes marksPop { from { transform: scale(0); } }
+.bub.shout .box { font-size: 27px; font-weight: 400; --bub-img: var(--bub-shout); letter-spacing: 1px; }
 .bub.shout .inner { animation: bubShake 0.1s steps(2) infinite; }
-.bub.whisper .box { --bub-img: var(--bub-dash); color: #55555f; font-size: 0.95em; }
+.bub.whisper .box { --bub-img: var(--bub-dash); color: #55555f; }
 .bub.whisper .fx.marks { display: block; content: ''; }
 .bub.think .box { --bub-img: var(--bub-cloud); color: #3a3a48; }
 .bub.think .tail { background-image: var(--think-img); width: 16px; height: 18px; bottom: -18px; }
-.bub.phone .box { --bub-img: var(--bub-phone); color: #9dffd8; font-family: 'Jersey 10', 'Silkscreen', monospace; font-size: 0.95em; letter-spacing: 0.02em; }
-.bub.phone .box::before { content: ${pxIconCss('live', 2)} ' TRANSLATE.EXE'; display: block; font-size: 0.7em; color: #3fbca6; margin-bottom: 0.25em; animation: caret 1s steps(1) infinite; }
+.bub.phone .box { --bub-img: var(--bub-phone); color: #9dffd8; font-family: 'Jersey 10', 'Silkscreen', monospace; font-size: 18.6667px; line-height: 22px; letter-spacing: 1px; }
+.bub.phone .box::before { content: ${pxIconCss('live', 2)} ' TRANSLATE.EXE'; display: block; font-family: 'Silkscreen', monospace; font-size: 16px; color: #3fbca6; margin-bottom: 4px; animation: caret 1s steps(1) infinite; }
 .bub.phone .tail { background-image: var(--tail-phone); }
 .bub.phone .nm, .bub.phone .typing b, .bub.phone .caret { background: #9dffd8; color: #0c0a0c; }
 .bub.phone .tx mark { background: none; color: #ffe45a; }
-.bub.bark .box { font-size: 0.9em; }
+.bub.bark .box { font-size: 27px; }
 .bub.bark .nm { display: none; }
 .bub.edge .tail { display: none; }
 /* docked beside a close-up bust: the tail points left at the speaker, the bubble pops from that side */
 .bub.side { transform-origin: 0 50%; }
-.bub.side .box { font-size: 1.12em; }
+.bub.side .box { font-size: 27px; }
 .bub.side .nm { display: none; }
 .bub.side .tail { bottom: auto; left: -14px; top: var(--ty, 50%); transform: translateY(-50%) rotate(90deg); }
 .bub.side .pp { transform-origin: 0 var(--ty, 50%); }
@@ -224,6 +226,7 @@ const CSS = `
 @keyframes bubOut { to { transform: scale(1.25, 0.2); opacity: 0; } }
 @keyframes bubNext { 50% { transform: translateY(3px); } }
 @keyframes bubShake { 0% { transform: translate(0, 0); } 50% { transform: translate(2px, -1px); } 100% { transform: translate(-1px, 1px); } }
+@media (max-width: 720px), (max-height: 520px) { .bub .box, .bub.bark .box, .bub.side .box, .bub.shout .box, .bub .chs button { font-size: 20.25px; line-height: 24px; } }
 @media (prefers-reduced-motion: reduce) { .bub.shout .inner, .bub .tx .c.on { animation: none !important; } }
 `;
 
