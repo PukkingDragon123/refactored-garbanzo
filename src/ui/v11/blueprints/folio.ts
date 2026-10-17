@@ -365,7 +365,7 @@ export function openFolio(o: FolioOpts = {}): Promise<FolioResult> {
         const pinC = d.by === 'agency' ? '#d8402c' : d.by === 'jenna' ? '#3a8ad8' : d.by === 'aroha' || d.by === 'village' ? '#e8c048' : '#40a050';
         if (d.by === 'jenna' || d.by === 'ranger') {
           const tp = once('tape', () => paintTape(18));
-          put(tp, L.sx - 4, L.sy + 2 + pd); put(tp, L.sx + L.sw - 14, L.sy + 2 + pd);
+          put(tp, L.sx - 5, L.sy - 3 + pd); put(tp, L.sx + L.sw - 13, L.sy - 3 + pd);
         } else {
           const pn = once('pin:' + pinC, () => pinBuf(pinC));
           put(pn, L.sx + 3, L.sy + 2 + pd); put(pn, L.sx + L.sw - 11, L.sy + 2 + pd);

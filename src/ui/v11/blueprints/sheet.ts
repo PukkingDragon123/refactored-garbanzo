@@ -166,7 +166,7 @@ export function paintSheet(id: string, w: number, h: number, info: SheetInfo): S
   const tw = textW(title, titleSt) <= maxTW ? drawText(b, title, titleX, top, titleSt) : drawText(b, title, titleX, top + 2, { font: 'tiny', color: I.c });
   // number / kind at the right of the header
   const noTxt = `No.${String(info.no).padStart(2, '0')}`;
-  drawText(b, noTxt, w - pad - textW(noTxt, tiny), top + 1, softTiny);
+  drawText(b, noTxt, w - pad - 6 - textW(noTxt, tiny), top + 1, softTiny);
   drawText(b, kindL, w - pad - textW(kindL, tiny), top + 8, { font: 'tiny', color: I.accent });
   // the rule under the title
   const ry = top + 11;
@@ -177,10 +177,10 @@ export function paintSheet(id: string, w: number, h: number, info: SheetInfo): S
   // ---- layout: the drawing across the top; below it the notes (left) and the materials and what it
   // does (right), or all stacked on a narrow sheet
   const wide = w >= 200;
-  const blockH = T ? 13 : 10;
+  const blockH = T ? 13 : I.paper === 'village' ? 17 : 10;
   const bodyY = ry + 4, bodyB = h - blockH - 7;
   const dx = pad, dy = bodyY, dw = w - pad * 2;
-  const dh = Math.max(56, Math.min(Math.round(dw * 0.62), Math.floor((bodyB - bodyY) * (wide ? 0.5 : 0.4))));
+  const dh = Math.max(56, Math.min(Math.round(dw * 0.62), bodyB - bodyY - (wide ? 76 : 124)));
   const cy = dy + dh + 3;
   // notes column (nx, nw) and the materials / effect column (cx, cw)
   const nx = pad, nw = wide ? Math.floor((w - pad * 2) * 0.42) : w - pad * 2;
@@ -260,7 +260,7 @@ export function paintSheet(id: string, w: number, h: number, info: SheetInfo): S
   if (T) {
     const bp = new SkPen(b, I.soft, I.soft, 'tech');
     bp.rect(pad - 2, by, w - pad * 2 + 3, blockH, { c: I.soft });
-    const cells = [`DRAWN ${I.sig.toUpperCase()}`, `KIND ${kindL}`, `SHEET ${String(info.no).padStart(2, '0')}/${info.of}`, `SCALE 1:${d.kind === 'research' ? 1 : 4}`];
+    const cells = [`BY ${I.sig.toUpperCase()}`, `KIND ${kindL}`, `SHEET ${String(info.no).padStart(2, '0')}/${info.of}`, `SCALE 1:${d.kind === 'research' ? 1 : 4}`];
     let x = pad + 1;
     const cwid = Math.floor((w - pad * 2) / cells.length);
     cells.forEach((t, i) => {
@@ -285,8 +285,8 @@ export function paintSheet(id: string, w: number, h: number, info: SheetInfo): S
   const red = I.paper === 'blueprint' ? H('#ff8a6a') : H('#b8322a'), blue = I.paper === 'blueprint' ? H('#d8f0ff') : H('#2a4a9a');
   let st: PixelBuffer | null = null;
   if (info.state === 'done' && !info.noStamp) st = paintStamp(d.repeat ? 'MADE' : 'MADE', red, { big: true, small: d.chain ? 'FITTED' : d.out && ITEMS[d.out[0]]?.kind === 'tool' ? 'ON YOUR BELT' : 'WORKS', seed });
-  else if (info.state === 'lab') st = paintStamp('IN R&D', blue, { small: info.labDay ? `BACK BY DAY ${info.labDay}` : 'BACK BY MORNING', seed, ang: 0.1 });
-  else if (info.state === 'research') st = paintStamp('PROPOSAL', blue, { small: `${d.rp} RP`, seed, ang: -0.08 });
+  else if (info.state === 'lab') st = paintStamp('IN R&D', blue, { small: info.labDay ? `BACK BY DAY ${info.labDay}` : 'BACK BY MORNING', seed, ang: 0 });
+  else if (info.state === 'research') st = paintStamp('PROPOSAL', blue, { small: `${d.rp} RP`, seed, ang: 0 });
   if (st) blit(b, st, Math.min(w - st.w - 6, stampAt[0] - (st.w >> 1)), Math.min(h - st.h - 6, stampAt[1] - (st.h >> 1)));
   // keep everything on the paper
   for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (!inside(i, j)) b.set(i, j, 0);
