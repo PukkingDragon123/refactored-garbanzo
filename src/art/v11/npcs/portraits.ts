@@ -239,8 +239,8 @@ const CELESTE: PortraitDesign = {
 // ================================================================== Teo: Helix's field tech
 const TEO: PortraitDesign = {
   skin: T('#f2c0a0', { sh: 0.12, deep: 0.26, hi: 0.05 }),
-  eyes: 'young', iris: ['#10203a', '#3a6aa8', '#8ab8e8'], lash: '#3a2a20', brow: '#b08a50', browH: 2, browBias: 0.6,
-  blush: '#f09080', blushK: 0.9, lip: '#b8705a', stubble: '#c8a060',
+  eyes: 'man', iris: ['#10203a', '#3a6aa8', '#8ab8e8'], lash: '#3a2a20', brow: '#a07a40', browH: 2, browBias: 0.6, browDrop: 0.4,
+  blush: '#f09080', blushK: 0.45, lip: '#b48a74', stubble: '#c8a060', noseBridge: true,
   faceW: 1.08, chin: 0.8, eyeX: 17, eyeY: 26, mouthY: 38, neck: [6.4, 7.6], adam: true,
   cheek: [CX - 8.6, 31, 3.4, 1.8],
   back(p, m) {
