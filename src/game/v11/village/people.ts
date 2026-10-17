@@ -7,10 +7,10 @@
 //   Nanny Huia    his sister, the kuia: the hāngī and the cooking fire; fried bread; the boil-up
 //   Whaea Mere    the weaver, under the shelter by the pig pen; a kete for Mori, bread for the road
 //   Tamati        her husband, in the kūmara gardens
-//   Tipene        their son (15): the pigs, the hens, the goats, the dogs
+//   Manu        their son (15): the pigs, the hens, the goats, the dogs
 //   Rāwiri        the fisher: the landing, the eel traps, the smoking rack
 //   Uncle Hēmi    his father, the carver: the waka on its trestles in the carving shed
-//   Aunty Ngaio   Aroha's aunty, the musician: the hue kiri on her bench, the dance practice
+//   Aunty Hana   Aroha's aunty, the musician: the hue kiri on her bench, the dance practice
 //   Pīpī, Ani, Mikaere   the kids: running, the ball, the rooster, the mud
 
 import type { Actor } from '../../../world/actor';
@@ -65,7 +65,7 @@ export const VILLAGERS: VDef[] = [
   { id: 'tamati', name: 'Tamati', adult: true,
     day: [{ x: X.garden[0] + 90, anim: 'dig', face: 1, stay: 34 }, { x: X.garden[0] + 200, anim: 'kneelWork', face: 1, stay: 26 }, { x: X.kumaraKete + 8, anim: 'carryIdle~crate', face: 1, stay: 6 }],
     night: [fireR(96, 'armsCrossed')], fest: { x: X.hangi - 14, anim: 'cheer', face: -1, stay: 999 } },
-  { id: 'tipene', name: 'Tipene', adult: false,
+  { id: 'manu', name: 'Manu', adult: false,
     day: [{ x: X.pen[0] + 44, anim: 'pour', face: 1, stay: 24 }, { x: X.coop - 18, anim: 'kneelWork', face: 1, stay: 18 }, { x: X.goats[0] + 10, anim: 'pet', face: 1, stay: 16 }],
     night: [fireR(48, 'sitGround')], fest: { x: X.fire + 52, anim: 'snakeDance', face: -1, stay: 999 } },
   { id: 'rawiri', name: 'Rāwiri', adult: true,
@@ -75,8 +75,8 @@ export const VILLAGERS: VDef[] = [
   { id: 'hemi', name: 'Uncle Hēmi', adult: true,
     day: [{ x: X.wakaBuild - 26, anim: 'hammer', face: 1, stay: 50 }, { x: X.wakaBuild + 40, anim: 'hammer', face: -1, stay: 30 }, { x: X.shed - 50, anim: 'armsCrossed', face: 1, stay: 12 }],
     night: [fireL(84, 'sit')], fest: { x: X.marae[0] + 12, anim: 'cheer', face: 1, stay: 999 } },
-  { id: 'ngaio', name: 'Aunty Ngaio', adult: true,
-    day: [{ x: X.ngaioBench, anim: 'strumSit', face: -1, stay: 50 }, { x: X.marae[0] + 90, anim: 'snakeDance', face: 1, stay: 24 }],
+  { id: 'hana', name: 'Aunty Hana', adult: true,
+    day: [{ x: X.hanaBench, anim: 'strumSit', face: -1, stay: 50 }, { x: X.marae[0] + 90, anim: 'snakeDance', face: 1, stay: 24 }],
     night: [fireR(114, 'strum')], fest: { x: X.fire - 30, anim: 'snakeDance', face: 1, stay: 999 } },
   { id: 'pipi', name: 'Pīpī', adult: false, roam: [1560, 1960], day: [], night: [fireR(26, 'sitGround')], fest: { x: X.fire - 50, anim: 'snakeDance', face: 1, stay: 999 } },
   { id: 'ani', name: 'Ani', adult: false, roam: [1560, 1960], day: [{ x: X.marae[0] + 116, anim: 'snakeDance', face: -1, stay: 20 }], night: [fireR(36, 'sitGround')], fest: { x: X.fire + 70, anim: 'snakeDance', face: -1, stay: 999 } },
@@ -86,8 +86,27 @@ const NAME: Record<string, string> = Object.fromEntries(VILLAGERS.map(v => [v.id
 export const villagerName = (id: string) => NAME[id] ?? id;
 
 /** the relationships registry knows everyone here (the social module owns what it does with them) */
+/** who they are for the people book (the relationships module reads age, role, blurb and gift tastes) */
+const BOOK: Record<string, { age: number; role: string; blurb: string; loves: string[]; likes: string[]; dislikes?: string[]; color: string }> = {
+  koro: { age: 78, role: 'Elder of Te Kāinga, Aroha’s grandfather', blurb: 'Keeps the story of Hinerua, the river’s guardian, and gives the blessing for the old track. Sits on the paepae of the wharenui and misses nothing.', loves: ['taonga_toggle', 'taonga_toki', 'taonga_matau', 'vil_tea'], likes: ['vil_rewena', 'kawakawa', 'tea'], color: '#6a5e4c' },
+  huia: { age: 74, role: 'Kuia, Koro’s older sister, keeper of the hāngī', blurb: 'Everybody’s nanny. Feeds anyone who stands still long enough. Teaches the boil-up.', loves: ['v10_fish', 'vil_tuna'], likes: ['vil_kumara', 'kawakawa', 'berry_gold'], color: '#78242c' },
+  mere: { age: 52, role: 'Weaver, Aroha’s aunt', blurb: 'Weaves under the shelter by the pig pen, fingers never still. Made Mori his kete. Has words for Jenna’s translator.', loves: ['flax', 'rope'], likes: ['vil_tea', 'berry_dusk'], color: '#a8342c' },
+  tamati: { age: 46, role: 'Gardener, Whaea Mere’s husband', blurb: 'Grows the kūmara. Knows every mound by name. Thinks scientists walk like people who have never weeded.', loves: ['vil_kumara'], likes: ['vil_rewena', 'grub'], color: '#8a2016' },
+  manu: { age: 15, role: 'Mere and Tamati’s son, keeps the animals', blurb: 'Pigs, hens, goats, dogs, and Captain the rooster, who hates everyone. Polite when his mum is watching.', loves: ['berry_ember'], likes: ['vil_paraoa', 'ration'], color: '#464c54' },
+  rawiri: { age: 27, role: 'Fisher, Aroha’s cousin', blurb: 'Sets the hīnaki and smokes the tuna. Saw strange boat lights off the east coast.', loves: ['v10_fish', 'mussel'], likes: ['vil_tuna', 'vil_kumara'], color: '#386c3c' },
+  hemi: { age: 56, role: 'Carver, Rāwiri’s father', blurb: 'Carving a waka out of a single tōtara in the shed. Says little, carves a lot.', loves: ['wood', 'driftwood'], likes: ['vil_hangi', 'tea'], color: '#5a3418' },
+  hana: { age: 34, role: 'Musician, Aroha’s aunty', blurb: 'Plays the hue kiri and leads the serpent dance. Teaches anyone who brings her a shed skin from the reeds.', loves: ['vil_kiri'], likes: ['berry_gold', 'moonfruit', 'vil_paraoa'], color: '#1e5c68' },
+  pipi: { age: 8, role: 'Aroha’s little cousin', blurb: 'Wants her photo taken. Does her scary face. It is not scary.', loves: ['berry_gold'], likes: ['vil_paraoa', 'moonfruit'], color: '#c49428' },
+  ani: { age: 10, role: 'Pīpī’s best friend and rival', blurb: 'Dances like water, she says. Dares visitors to catch the rooster.', loves: ['berry_ember'], likes: ['vil_paraoa'], color: '#682a84' },
+  mikaere: { age: 7, role: 'A small boy, always running', blurb: 'The fastest in the whole village, if you weren’t watching. Often muddy.', loves: ['moonfruit'], likes: ['berry_dusk'], color: '#1c468a' },
+};
 export function defineVillagePeople() {
-  for (const v of VILLAGERS) if (!PEOPLE[v.id]) definePerson({ id: v.id, name: v.name, group: 'village', adult: v.adult });
+  for (const v of VILLAGERS) {
+    const b = BOOK[v.id];
+    // extended fields the relationships module knows (a plain object, so it stays compatible with any version of the registry)
+    const d = { id: v.id, name: v.name, group: 'village', adult: v.adult, home: 'village', where: 'Te Kāinga, up the river from the mangroves', ...(b ?? {}) };
+    definePerson(d);
+  }
 }
 
 // ------------------------------------------------------------------ spawning and routines
@@ -236,10 +255,10 @@ function questMark(id: string): boolean {
   if (questStatus('v11_hinerua') === 'active') {
     if (id === 'koro' && (!vf('askPou') || (vf('askPou') && !vf('story')) || (vf('skinFound') && !vf('offering')) || (vf('offering') && !blessed()))) return true;
   }
-  if (questStatus('v11_huekiri') === 'active' && id === 'ngaio' && (!vf('heardNgaio') || (!vf('kiriGiven') && count('vil_kiri') > 0) || (vf('kiriGiven') && !vf('song:awa')))) return true;
+  if (questStatus('v11_huekiri') === 'active' && id === 'hana' && (!vf('heardHana') || (!vf('kiriGiven') && count('vil_kiri') > 0) || (vf('kiriGiven') && !vf('song:awa')))) return true;
   if (questStatus('v11_festival') === 'active') {
     if (id === 'huia' && (!vf('prep:kai') && count('v10_fish') + count('vil_tuna') >= 2)) return true;
-    if (id === 'ngaio' && !vf('prep:dance')) return true;
+    if (id === 'hana' && !vf('prep:dance')) return true;
   }
   return false;
 }
@@ -424,11 +443,11 @@ async function talkTamati(c: VCtx) {
   if (k === 0) await (await import('./chores')).digChore(c);
 }
 
-// ---------------------------------------------------------------- Tipene
-async function talkTipene(c: VCtx) {
+// ---------------------------------------------------------------- Manu
+async function talkManu(c: VCtx) {
   const k = await say(c.f, [
-    { who: 'tipene', text: rand.pick(['Don’t look the big pig in the eye. She thinks it’s a challenge.', 'The rooster’s called Captain. He hates everyone. Respect.', 'Mum says I have to be polite to you. So. Hello. Politely.']), expr: 'teasing' },
-    think('Tipene has hay in his hair.', ['Can I help feed the animals?', 'Collect eggs with you?', 'Goodbye']),
+    { who: 'manu', text: rand.pick(['Don’t look the big pig in the eye. She thinks it’s a challenge.', 'The rooster’s called Captain. He hates everyone. Respect.', 'Mum says I have to be polite to you. So. Hello. Politely.']), expr: 'teasing' },
+    think('Manu has hay in his hair.', ['Can I help feed the animals?', 'Collect eggs with you?', 'Goodbye']),
   ]);
   const ch = await import('./chores');
   if (k === 0) await ch.feedPigs(c);
@@ -487,19 +506,19 @@ async function talkHemi(c: VCtx) {
   if (k === 0) await (await import('./chores')).adzeChore(c);
 }
 
-// ---------------------------------------------------------------- Ngaio
-async function talkNgaio(c: VCtx) {
+// ---------------------------------------------------------------- Hana
+async function talkHana(c: VCtx) {
   const f = c.f;
   const L = await import('./lessons');
-  if (!vf('heardNgaio')) {
-    setVf('heardNgaio');
+  if (!vf('heardHana')) {
+    setVf('heardHana');
     startVillageQuest('v11_huekiri', false);
-    await L.listenToNgaio(c);
+    await L.listenToHana(c);
     return;
   }
   if (!vf('kiriGiven')) {
     if (count('vil_kiri') > 0) { await L.makeHueKiri(c); return; }
-    await say(f, [{ who: 'ngaio', text: 'Bring me a skin from the reeds and I’ll make you your own. Hinerua gives them away free, but only to people who go and look.', expr: 'teasing' }]);
+    await say(f, [{ who: 'hana', text: 'Bring me a skin from the reeds and I’ll make you your own. Hinerua gives them away free, but only to people who go and look.', expr: 'teasing' }]);
     return;
   }
   const opts: string[] = [];
@@ -508,7 +527,7 @@ async function talkNgaio(c: VCtx) {
   if (questStatus('v11_festival') === 'active' && !vf('prep:dance')) { opts.push('Teach me the serpent dance'); acts.push(() => L.dancePractice(c)); }
   else if (vf('prep:dance')) { opts.push('Practise the dance again'); acts.push(() => L.dancePractice(c)); }
   opts.push('Goodbye'); acts.push(async () => {});
-  const k = await say(f, [think('Aunty Ngaio taps the gourd’s skin. It answers with a soft boom.', opts)]);
+  const k = await say(f, [think('Aunty Hana taps the gourd’s skin. It answers with a soft boom.', opts)]);
   await acts[k]?.();
 }
 
@@ -531,7 +550,7 @@ async function talkPipi(c: VCtx, a: Actor) {
 }
 async function talkAni(c: VCtx) {
   const k = await say(c.f, [
-    { who: 'ani', text: rand.pick(['Pīpī says you’re a wizard. Are you a wizard?', 'Aunty Ngaio says I dance like water. Pīpī dances like a goat.', 'Can you catch the rooster? Nobody can catch the rooster.']), expr: 'teasing' },
+    { who: 'ani', text: rand.pick(['Pīpī says you’re a wizard. Are you a wizard?', 'Aunty Hana says I dance like water. Pīpī dances like a goat.', 'Can you catch the rooster? Nobody can catch the rooster.']), expr: 'teasing' },
     think('Ani looks at you like she is measuring you.', ['I bet I can catch the rooster', 'Goodbye']),
   ]);
   if (k === 0) await (await import('./chores')).roosterChase(c);
@@ -542,8 +561,8 @@ async function talkMikaere(c: VCtx, a: Actor) {
 }
 
 const TALK: Record<string, Talk> = {
-  koro: talkKoro, huia: talkHuia, mere: talkMere, tamati: talkTamati, tipene: talkTipene, rawiri: talkRawiri,
-  hemi: talkHemi, ngaio: talkNgaio, pipi: talkPipi, ani: talkAni, mikaere: talkMikaere,
+  koro: talkKoro, huia: talkHuia, mere: talkMere, tamati: talkTamati, manu: talkManu, rawiri: talkRawiri,
+  hemi: talkHemi, hana: talkHana, pipi: talkPipi, ani: talkAni, mikaere: talkMikaere,
 };
 
 /** Koro's welcome the first time, and Aroha's reminders about manners */

@@ -1,6 +1,6 @@
 // V11 Te Kāinga items: village food you can taste or pack (a hāngī parcel, smoked tuna, parāoa
 // parai, boiled eggs), the shed serpent skin (Hinerua's gift, washed into the reeds by the river),
-// the hue kiri (Mori's own, made by Aunty Ngaio), Hēmi's bone pendant of Hinerua, and the two dishes
+// the hue kiri (Mori's own, made by Aunty Hana), Hēmi's bone pendant of Hinerua, and the two dishes
 // the village teaches (Nanny Huia's boil-up, Rāwiri's eel stew) with their recipes.
 
 import { ITEMS, defineItem } from '../../items';
@@ -17,7 +17,7 @@ const DEFS: Def[] = [
   { id: 'vil_paraoa', name: 'Parāoa parai', kind: 'food', stack: 6, kg: 0.15, energy: 20, fp: [1, 1], desc: 'Nanny Huia’s fried bread with a drip of golden syrup. Still warm. Gone in three bites.' },
   { id: 'vil_egg', name: 'Boiled eggs', kind: 'food', stack: 6, kg: 0.2, energy: 12, fp: [1, 1], desc: 'Three brown eggs from the village hens, boiled in the pot by the hāngī.' },
   { id: 'vil_kiri', name: 'Shed serpent skin', kind: 'material', stack: 3, kg: 0.05, fp: [2, 1], desc: 'A papery, translucent moult, every scale printed in it. The river leaves them in the reeds when the serpents shed: Hinerua’s gift, the village says. Nobody was harmed for it.' },
-  { id: 'vil_huekiri', name: 'Hue kiri', kind: 'key', stack: 1, kg: 1.2, fp: [2, 3], desc: 'Your own hue kiri, made by Aunty Ngaio: a gourd body with a shed serpent skin stretched over its face, a neck ending in a carved serpent head, two strings of muka. It hums when the wind blows.' },
+  { id: 'vil_huekiri', name: 'Hue kiri', kind: 'key', stack: 1, kg: 1.2, fp: [2, 3], desc: 'Your own hue kiri, made by Aunty Hana: a gourd body with a shed serpent skin stretched over its face, a neck ending in a carved serpent head, two strings of muka. It hums when the wind blows.' },
   { id: 'vil_hei', name: 'Hinerua pendant', kind: 'key', stack: 1, kg: 0.05, fp: [1, 1], desc: 'A small bone carving of Hinerua coiled on herself, on a flax cord. Uncle Hēmi carved it for you after the festival. “So she knows you.”' },
 ];
 for (const d of DEFS) {

@@ -21,7 +21,7 @@ export function stage(to: 'start' | 'story' | 'kiri' | 'festival' | 'done') {
   game.save.flags['v10:villageMet'] = true;
   game.save.flags['aroha:met'] = true;
   if (questStatus('v11_hinerua') === 'hidden') startQuest('v11_hinerua', true);
-  if (k >= 1) { setVf('askPou'); setVf('story'); setVf('heardNgaio'); if (questStatus('v11_festival') === 'hidden') startQuest('v11_festival', true); if (questStatus('v11_huekiri') === 'hidden') startQuest('v11_huekiri', true); }
+  if (k >= 1) { setVf('askPou'); setVf('story'); setVf('heardHana'); if (questStatus('v11_festival') === 'hidden') startQuest('v11_festival', true); if (questStatus('v11_huekiri') === 'hidden') startQuest('v11_huekiri', true); }
   if (k >= 2) { setVf('skinFound'); setVf('kiriGiven'); if (!count('vil_huekiri')) give('vil_huekiri', 1); }
   if (k >= 3) { setVf('prep:wood'); setVf('prep:kai'); setVf('prep:dance'); setVf('song:awa'); }
   if (k >= 4) { setVf('offering'); game.save.flags['v10:koroBlessing'] = true; setVf('festival'); }

@@ -3,13 +3,13 @@
 // at runtime so actors, bubbles and the pose library treat them like anyone else.
 //   Hēmi     - Rāwiri's father, the carver: big and broad, a grey crop and goatee, a black singlet,
 //              canvas shorts, a carver's leather apron, bare feet
-//   Ngaio    - Aroha's aunty (her mother's younger sister), the musician who keeps the hue kiri songs:
+//   Hana    - Aroha's aunty (her mother's younger sister), the musician who keeps the hue kiri songs:
 //              long braid, a tāniko headband, a deep teal wrap top, a long striped skirt
 //   Nanny Huia - Koro's sister, the kuia who runs the hāngī: silver hair in a bun under a scarf, a
 //              black dress with little flowers, a maroon cardigan, slippers
 //   Tamati   - Whaea Mere's husband, the gardener: black curls, a red-checked bush shirt, dark work
 //              trousers and black gumboots
-//   Tipene   - Mere and Tamati's son, fifteen, who looks after the animals: a backwards cap, a grey
+//   Manu   - Mere and Tamati's son, fifteen, who looks after the animals: a backwards cap, a grey
 //              hoodie, board shorts, jandals
 //   Mikaere  - a small boy, always running: blue t-shirt, shorts, bare feet
 //   Ani      - a girl of ten, Pīpī's best friend and rival: two puffs of hair, a purple dress
@@ -60,11 +60,11 @@ const HEMI: Char7 = {
   skirt: { len: 9, flare: 1.4, top: 3, mat: p => (p.f > 0.6 ? cel(APRON, L(p), Math.sin(p.z * 2) > 0.8 ? -0.25 : 0) : cel(CANVAS, L(p), -0.1)) },
 };
 
-// ------------------------------------------------------------------ Ngaio, the musician
+// ------------------------------------------------------------------ Hana, the musician
 const TEAL = R6('#04141a', '#0a2a34', '#14424e', '#1e5c68', '#2c7a84', '#46a0a4');
 const STRIPE = R6('#0c0806', '#1e1410', '#30201a', '#442e24', '#5a3e30', '#725040');
-const NGAIO: Char7 = {
-  ...AROHA7, id: 'ngaio',
+const HANA: Char7 = {
+  ...AROHA7, id: 'hana',
   build: { ...AROHA7.build, torso: 18.4 },
   chest: [3.5, 4.4], waist: [2.8, 3.4], pelvis: [3.3, 4.0],
   skin: SKIN_A, ink: hex('#120806'),
@@ -136,11 +136,11 @@ const TAMATI: Char7 = {
   skirt: { len: 4, flare: 0.6, mat: p => check(p, -0.1) },
 };
 
-// ------------------------------------------------------------------ Tipene, the teenager
+// ------------------------------------------------------------------ Manu, the teenager
 const HOODIE = R6('#14161a', '#2c3036', '#464c54', '#626a72', '#808892', '#a0a8b0');
 const BOARD = R6('#04081a', '#0a1434', '#12224e', '#1c3268', '#2a4686', '#3e5ea4');
-const TIPENE: Char7 = {
-  ...MORI7, id: 'tipene',
+const MANU: Char7 = {
+  ...MORI7, id: 'manu',
   build: { ...MORI7.build, hipH: 24.6, thigh: 11.8, shin: 11.4, torso: 16.6, upArm: 8.6, foreArm: 7.8 },
   shW: 4.8, hipW: 2.5, chest: [2.9, 4.1], waist: [2.5, 3.2], pelvis: [2.7, 3.2],
   armR: [1.7, 1.45, 1.25], legR: [2.1, 1.7, 1.4], neckR: 1.5, hand: 1.02,
@@ -217,7 +217,7 @@ const longBraid: Lock[] = [
   { a: [-5.4, 4.4, 0.4], b: [-6.0, -2.4, 0.8], r0: 1.4, r1: 1.0, sway: 1 },
   { a: [-6.0, -2.4, 0.8], b: [-5.8, -8.0, 1.0], r0: 1.0, r1: 0.5, sway: 1 },
 ];
-const ngaioHead: HeadDef7 = {
+const hanaHead: HeadDef7 = {
   ...HEADS7.aroha, skin: SKIN_A, hair: BLACK, ink: hex('#120806'),
   locks: [...HEADS7.aroha.locks.slice(0, 5), ...longBraid],
   // a red and black tāniko headband across the crown
@@ -242,7 +242,7 @@ const tamatiHead: HeadDef7 = {
     { a: [-3.4, 11.6, 1.8], b: [-4.4, 11.4, 2.4], r0: 1.8, r1: 1.2 }, { a: [-3.6, 10, -1.6], b: [-4.6, 9.4, -2.2], r0: 1.8, r1: 1.2 },
   ],
 };
-const tipeneHead: HeadDef7 = {
+const manuHead: HeadDef7 = {
   ...HEADS7.mori, skin: SKIN_KID, hair: BLACK, ink: hex('#120806'),
   locks: HEADS7.mori.locks.slice(0, 4).map(l => ({ ...l, b: [l.b[0] - 0.6, l.b[1] + 0.6, l.b[2]] as Lock['b'] })),
   // a cap on backwards: the crown and the peak over the nape
@@ -278,10 +278,10 @@ const aniHead: HeadDef7 = {
 /** everyone at Te Kāinga: id -> name, look, and how they are described (the village module reads it) */
 export const VILLAGERS2: Record<string, { name: string; age: string; role: string }> = {
   hemi: { name: 'Uncle Hēmi', age: 'fifties', role: 'the carver, Rāwiri’s father' },
-  ngaio: { name: 'Aunty Ngaio', age: 'thirties', role: 'the musician, Aroha’s aunty' },
+  hana: { name: 'Aunty Hana', age: 'thirties', role: 'the musician, Aroha’s aunty' },
   huia: { name: 'Nanny Huia', age: 'seventies', role: 'the kuia, Koro’s sister, keeper of the hāngī' },
   tamati: { name: 'Tamati', age: 'forties', role: 'the gardener, Whaea Mere’s husband' },
-  tipene: { name: 'Tipene', age: '15', role: 'Mere and Tamati’s son, keeps the animals' },
+  manu: { name: 'Manu', age: '15', role: 'Mere and Tamati’s son, keeps the animals' },
   mikaere: { name: 'Mikaere', age: '7', role: 'a small boy, always running' },
   ani: { name: 'Ani', age: '10', role: 'Pīpī’s best friend and rival' },
 };
@@ -304,10 +304,10 @@ export function registerAllVillagers() {
     CHAR_VOICE[id] = voice;
   };
   add('hemi', HEMI, hemiHead, 'Uncle Hēmi', 68, 0.66, '#5a3418', 'joshu');
-  add('ngaio', NGAIO, ngaioHead, 'Aunty Ngaio', 61, 1.05, '#1e5c68', 'aroha');
+  add('hana', HANA, hanaHead, 'Aunty Hana', 61, 1.05, '#1e5c68', 'aroha');
   add('huia', HUIA, huiaHead, 'Nanny Huia', 55, 0.92, '#78242c', 'aroha');
   add('tamati', TAMATI, tamatiHead, 'Tamati', 63, 0.8, '#8a2016', 'mori');
-  add('tipene', TIPENE, tipeneHead, 'Tipene', 56, 1.05, '#464c54', 'mori');
+  add('manu', MANU, manuHead, 'Manu', 56, 1.05, '#464c54', 'mori');
   add('mikaere', MIKAERE, mikaereHead, 'Mikaere', 38, 1.8, '#1c468a', 'jenna');
   add('ani', ANI, aniHead, 'Ani', 42, 1.65, '#682a84', 'jenna');
   // the anims registered after the cast tables were built join every human's list

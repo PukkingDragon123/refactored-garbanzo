@@ -2,7 +2,7 @@
 // the river and the landing, Hinerua's pou in the reeds, the eel traps and the smoking rack, the
 // kūmara gardens, the pig pen, the weaving shelter, the wharenui and the marae in front of it (the
 // dance ground, the night fire), the hāngī and the cooking fire, the woodpile, the carving shed with
-// the waka on its trestles, the family houses with the laundry and the kids' things, Ngaio's bench,
+// the waka on its trestles, the family houses with the laundry and the kids' things, Hana's bench,
 // the pātaka, the hens' house, the goats, and the palisade with the carved gateway to the old track.
 
 export const W = 2600;
@@ -38,7 +38,7 @@ export const X = {
   laundry: 1786,
   whare2: 1890,
   whare3: 2066,
-  ngaioBench: 1984,
+  hanaBench: 1984,
   pataka: 2176,
   coop: 2246,
   goats: [2286, 2340] as [number, number],

@@ -2,9 +2,9 @@
 // instrument across his knees under the evening sky of Te Kāinga; the notes come down a serpent's
 // back toward the neck as gleaming scales, one lane per place on the neck. Hit them as they reach the
 // pāua pads (D F J K, the arrow keys, 1-4, or tap the lanes): his real (3D) hands fret and pluck, the
-// strings shiver, and the melody plays only when he hits it, over Ngaio's band (a slit drum, bone
+// strings shiver, and the melody plays only when he hits it, over Hana's band (a slit drum, bone
 // clappers, a drone). Timing windows (tino pai / pai / auē), a combo and a multiplier, held notes,
-// three difficulties, four songs unlocked over time, and Aunty Ngaio's comments as he plays.
+// three difficulties, four songs unlocked over time, and Aunty Hana's comments as he plays.
 // Everything on screen is pixel art: painted into the close-up's 320x180 buffer, text in the Kiri
 // bitmap font (pxfont.ts).
 //
@@ -25,7 +25,7 @@ import type { Song, Diff, Chart, Note } from './rhythm-songs';
 
 export interface LessonResult { song: string; diff: Diff; score: number; stars: number; acc: number; perfect: number; good: number; miss: number; maxCombo: number; newBest: boolean }
 export interface LessonOpts {
-  /** who teaches (their comments): 'ngaio' by default */
+  /** who teaches (their comments): 'hana' by default */
   teacher?: string;
   teacherName?: string;
   /** start straight into a song (skips the song choice) */
@@ -216,7 +216,7 @@ interface Pop { text: string; x: number; y: number; t: number; c: number }
 export async function runHueKiri(o: LessonOpts = {}): Promise<LessonResult | null> {
   const cu: Closeup = openCloseup();
   cu.cv.style.animation = 'none';
-  const teacherName = (o.teacherName ?? 'Aunty Ngaio').toUpperCase();
+  const teacherName = (o.teacherName ?? 'Aunty Hana').toUpperCase();
   const prevMusic = o.music;
   audio.setMusic('none');
   const synth = new KiriSynth();

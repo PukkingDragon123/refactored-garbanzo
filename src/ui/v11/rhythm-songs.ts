@@ -1,4 +1,4 @@
-// V11 hue kiri songs: the tunes Aunty Ngaio teaches, written as melodies (one character per eighth
+// V11 hue kiri songs: the tunes Aunty Hana teaches, written as melodies (one character per eighth
 // note: 1-9 the degrees of the song's scale, '-' holds the note on, '.' a rest; a bar is 8), and the
 // charts the lessons are played from, made from the melody per difficulty:
 //   easy    the notes on the beat, on three lanes, no holds shorter than a beat
@@ -30,7 +30,7 @@ export interface Song {
   /** shown before it is unlocked */
   lockText: string;
   unlocked: () => boolean;
-  /** Ngaio introducing it */
+  /** Hana introducing it */
   intro: string;
 }
 
@@ -48,7 +48,7 @@ export const SONGS: Song[] = [
       '8-6-5-3-', '5-3-2---', '1-2-3-2-', '1-------',
     ],
     groove: [2, 0, 1, 0, 2, 0, 1, 1],
-    lockText: 'Ngaio teaches it first.',
+    lockText: 'Hana teaches it first.',
     unlocked: () => f('kiriGiven'),
     intro: 'Te Awa. The first song every child here learns: the river going down to the sea. Slow, like water. Let it carry you.',
   },

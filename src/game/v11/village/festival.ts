@@ -6,7 +6,7 @@
 // (the call-and-response dance game: src/ui/v11/dance.ts). The village is very kind about it.
 //
 // Hook for the relationships module: festivalPartnerChoice() is who dances with Mori (the partner
-// he has chosen if they could be here, else Aroha, else Ngaio), and onFestivalDance(fn) lets it play
+// he has chosen if they could be here, else Aroha, else Hana), and onFestivalDance(fn) lets it play
 // its own moment with that partner right after the dance (fn gets the partner id and the result).
 
 import { game } from '../../game';
@@ -17,6 +17,7 @@ import { A, propAnims } from '../../assets';
 import { sprite } from '../../sites2/common';
 import { peopleArt } from '../../../world/actor';
 import type { Actor } from '../../../world/actor';
+import * as social from '../social';
 import { partner, addAffinity, meet } from '../social';
 import { addBond } from '../../v10/day';
 import { give, count } from '../../inventory';
@@ -41,12 +42,16 @@ const hooks: DanceHook[] = [];
 /** the relationships module can play its own moment with the partner right after the festival dance */
 export function onFestivalDance(fn: DanceHook): () => void { hooks.push(fn); return () => { const i = hooks.indexOf(fn); if (i >= 0) hooks.splice(i, 1); }; }
 const ADULT_VILLAGERS = new Set(VILLAGERS.filter(v => v.adult).map(v => v.id));
-/** who dances with Mori at the festival: his chosen partner if they can be here, else Aroha, else Ngaio */
+/** who dances with Mori at the festival: his chosen partner if they can be here, else Aroha, else Hana */
 export function festivalPartnerChoice(): string {
-  const p = partner();
   const known = (id: string) => !!peopleArt()?.CHAR_INFO?.[id];
-  if (p && p !== 'mori' && (ADULT_VILLAGERS.has(p) || p === 'aroha' || known(p))) return p;
-  return game.save.flags['aroha:met'] || game.save.flags['v4:arohaJoined'] ? 'aroha' : 'ngaio';
+  const ok = (id: string | null | undefined): id is string => !!id && id !== 'mori' && id !== 'chunk' && (ADULT_VILLAGERS.has(id) || id === 'aroha' || known(id));
+  // the relationships module's choice (the partner, else whoever Mori is closest to), when it has one
+  const dp = (social as unknown as { dancePartner?: () => string | null }).dancePartner?.();
+  const p = partner();
+  if (ok(p)) return p;
+  if (ok(dp)) return dp;
+  return game.save.flags['aroha:met'] || game.save.flags['v4:arohaJoined'] ? 'aroha' : 'hana';
 }
 const nameOf = (id: string) => (id === 'aroha' ? 'Aroha' : villagerName(id) !== id ? villagerName(id) : peopleArt()?.CHAR_INFO?.[id]?.name ?? id);
 
@@ -162,7 +167,7 @@ export async function runFestival(c: VCtx) {
     ]);
     p.poseOverride = null;
     // the serpent dance: a line of dancers winding across the marae with streamers
-    const dancers = ['ngaio', 'mere', 'tipene', 'ani', 'pipi'].map(id => actorOf(c, id)).filter((a): a is Actor => !!a);
+    const dancers = ['hana', 'mere', 'manu', 'ani', 'pipi'].map(id => actorOf(c, id)).filter((a): a is Actor => !!a);
     const hist: number[] = [];
     let lead = 0, dir = 1;
     dancing = true;
@@ -185,14 +190,14 @@ export async function runFestival(c: VCtx) {
     for (const a of dancers) a.setAnim('snakeDance');
     await cineTo(f.st, { x: X.fire, y: g(X.fire) - 46, zoom: 1.55, secs: 2.4 });
     await sleep(2200);
-    await say(f, [{ who: 'aroha', text: 'Watch Aunty Ngaio. She’s Hinerua’s head. Everyone else is the body. The body follows the head, all the way across the land.', expr: 'happy', close: false }]);
+    await say(f, [{ who: 'aroha', text: 'Watch Aunty Hana. She’s Hinerua’s head. Everyone else is the body. The body follows the head, all the way across the land.', expr: 'happy', close: false }]);
     await sleep(5000);
     bark('ani', 'Look! Over the fire! It’s her!', { expr: 'excited' });
     await sleep(3200);
     // Mori with the band, if he can play the festival song
     if (count('vil_huekiri') > 0 && SONG_BY_ID.po.unlocked()) {
       const k = await say(f, [
-        { who: 'ngaio', text: 'Mori! You’ve got your hue kiri. Play Te Pō with us!', expr: 'excited' },
+        { who: 'hana', text: 'Mori! You’ve got your hue kiri. Play Te Pō with us!', expr: 'excited' },
         { who: 'mori', text: '(Play the festival song with the band?)', style: 'think', choices: ['Play with the band', 'Just watch'] },
       ]);
       if (k === 0) {
@@ -200,7 +205,7 @@ export async function runFestival(c: VCtx) {
         dancing = false;
         const { runHueKiri } = await import('../../../ui/v11/rhythm');
         const r = await runHueKiri({ song: 'po', diff: bestStars('po', 'normal') >= 1 ? 'normal' : 'easy', once: true });
-        if (r) { addAffinity('ngaio', 4 + r.stars * 3, 'played at the festival'); for (const v of VILLAGERS) addAffinity(v.id, r.stars, 'festival song'); }
+        if (r) { addAffinity('hana', 4 + r.stars * 3, 'played at the festival'); for (const v of VILLAGERS) addAffinity(v.id, r.stars, 'festival song'); }
         bark('koro', r && r.stars >= 2 ? 'Ka pai! Hinerua will sleep for a hundred years after that.' : 'Ha! She is awake now, for sure.', { expr: 'laugh' });
         band.start();
         dancing = true;
@@ -224,7 +229,7 @@ export async function runFestival(c: VCtx) {
     await cineTo(f.st, { x: (spotM + spotP) / 2, y: g(spotM) - 40, zoom: 1.9, secs: 1.4 });
     meet(pid);
     await say(f, [
-      { who: pid, text: pid === 'aroha' ? 'Come on, scientist. You can’t watch the whole night through a lens.' : pid === 'ngaio' ? 'Up! Nobody sits out the serpent dance. I’ll call, you answer.' : 'Dance with me? Everyone’s watching anyway.', expr: 'happy' },
+      { who: pid, text: pid === 'aroha' ? 'Come on, scientist. You can’t watch the whole night through a lens.' : pid === 'hana' ? 'Up! Nobody sits out the serpent dance. I’ll call, you answer.' : 'Dance with me? Everyone’s watching anyway.', expr: 'happy' },
       { who: 'mori', text: 'I... don’t really dance. My feet are mostly for walking. And falling.', expr: 'worried' },
       { who: pid, text: 'Watch my steps, then do the same. Four of mine, four of yours. Like the river and the bank.', expr: 'teasing' },
     ]);

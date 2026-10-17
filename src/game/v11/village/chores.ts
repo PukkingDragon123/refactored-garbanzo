@@ -1,7 +1,7 @@
 // V11 Te Kāinga: things to do and taste. Chores with the villagers (each takes a few seconds of
 // work with Mori's own hands and earns their affinity; most pay something once a day): split
 // firewood and carry it to the hāngī, fetch water for Nanny Huia, strip flax with Whaea Mere, dig
-// kūmara with Tamati, feed the pigs and collect eggs with Tipene, pull in the eel traps with Rāwiri,
+// kūmara with Tamati, feed the pigs and collect eggs with Manu, pull in the eel traps with Rāwiri,
 // take a turn with Uncle Hēmi's adze on the waka, and Ani's dare: catch Captain the rooster.
 // Food to taste or pack: rēwena on the bench, smoked tuna off the rack, the hāngī once it is lifted.
 
@@ -101,8 +101,8 @@ export async function feedPigs(c: VCtx) {
   f.sfx('callGrunt', trough, 0.5, 1.5);
   const ok = await work(c, 'pour', 2.6, 'callGrunt', 0.6, 1.6);
   if (!ok) return;
-  addAffinity('tipene', 4, 'fed the pigs');
-  await say(f, [{ who: 'tipene', text: rand.pick(['See the big one shoving? That’s Kuini. She’s the boss of everything.', 'You fed them, so now they think you’re their mum. Sorry.']), expr: 'laugh' }]);
+  addAffinity('manu', 4, 'fed the pigs');
+  await say(f, [{ who: 'manu', text: rand.pick(['See the big one shoving? That’s Kuini. She’s the boss of everything.', 'You fed them, so now they think you’re their mum. Sorry.']), expr: 'laugh' }]);
 }
 
 export async function eggChore(c: VCtx) {
@@ -111,11 +111,11 @@ export async function eggChore(c: VCtx) {
   f.player.facing = 1;
   const ok = await work(c, 'kneelWork', 2.4, 'rustle', 0.5, 1.5);
   if (!ok) return;
-  addAffinity('tipene', 3, 'collected eggs');
+  addAffinity('manu', 3, 'collected eggs');
   if (onceToday('eggs')) {
     fly(c, 'vil_egg', 1, f.player.x, f.player.y);
-    await say(f, [{ who: 'tipene', text: 'Nanny boils them in the morning pot. Take those, they’re done. The rooster saw you, by the way. He’ll remember.', expr: 'teasing' }]);
-  } else await say(f, [{ who: 'tipene', text: 'All gone today. The hens are on strike.', expr: 'neutral' }]);
+    await say(f, [{ who: 'manu', text: 'Nanny boils them in the morning pot. Take those, they’re done. The rooster saw you, by the way. He’ll remember.', expr: 'teasing' }]);
+  } else await say(f, [{ who: 'manu', text: 'All gone today. The hens are on strike.', expr: 'neutral' }]);
 }
 
 export async function hinakiChore(c: VCtx) {
@@ -298,7 +298,7 @@ export function placeChores(c: VCtx) {
     f.player.body.play('pet', 'idle').catch(() => {});
     f.sfx('callBark', a.x, 0.2, 1.6);
     await sleep(1400);
-    if (rand.next() < 0.4) bark('tipene', rand.pick(['That’s Rua. She likes you.', 'Don’t let him lick you, he ate something.']), { expr: 'laugh' });
+    if (rand.next() < 0.4) bark('manu', rand.pick(['That’s Moko. She likes you.', 'Don’t let him lick you, he ate something.']), { expr: 'laugh' });
   }));
 }
 void sleep;

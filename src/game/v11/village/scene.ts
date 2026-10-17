@@ -224,7 +224,7 @@ export async function buildVillage(f: FieldScene) {
   put(f, 'toyBall', () => P.toy('ball'), X.whare1 + 70, -1);
   put(f, 'toyWaka', () => P.toy('waka'), X.whare2 + 46, -1);
   put(f, 'toyHoop', () => P.toy('hoop'), X.whare2 - 40, -1, { dy: 1 });
-  put(f, 'ngaioBench', () => P.bench(28), X.ngaioBench, -1);
+  put(f, 'hanaBench', () => P.bench(28), X.hanaBench, -1);
   put(f, 'ketew', () => P.kete(2, 31), X.whare3 + 30, -1);
   put(f, 'gourdsw', () => P.gourds(9), X.whare1 - 34, -1);
   put(f, 'pataka', P.pataka, X.pataka, -5, { dy: 3 });
