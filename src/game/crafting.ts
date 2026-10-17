@@ -2,6 +2,7 @@
 
 import { game } from './game';
 import { hasSkill } from './skills';
+import { hasBlueprint } from './v11/blueprints';
 import { ITEMS } from './items';
 import { add, count, fits, hasTool, remove } from './inventory';
 
@@ -41,8 +42,11 @@ export const RECIPES: Recipe[] = [
 
 export const RECIPE_BY_ID: Record<string, Recipe> = Object.fromEntries(RECIPES.map(r => [r.id, r]));
 
+/** V11: recipes a blueprint teaches (owning the sheet counts as knowing the skill) */
+const BP_FOR: Record<string, string> = { grublure: 'grub_lure', fishbait: 'grub_lure', glowlure: 'glow_lure', scentlure: 'glow_lure', trap: 'trap', fruitlure: 'fruit_lure' };
+
 export function recipeKnown(r: Recipe) {
-  if (r.skill && !hasSkill(r.skill)) return false;
+  if (r.skill && !hasSkill(r.skill) && !(BP_FOR[r.id] && hasBlueprint(BP_FOR[r.id]))) return false;
   if (r.flag && !game.save.flags[r.flag]) return false;
   return true;
 }

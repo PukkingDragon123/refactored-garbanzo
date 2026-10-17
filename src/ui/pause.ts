@@ -50,6 +50,7 @@ export function openPause(opts: { onReturn?: () => void } = {}) {
   add('Back to it', 'footprints', () => close(), 'Esc');
   add('Field journal', 'pin', () => { close(); void import('./v11/journalbook').then(m => m.openJournal()); }, 'J');
   add('Encyclopedia', 'magnifier', () => { close(); void import('./v11/encybook').then(m => m.openEncyclopedia()); }, 'G');
+  add('Blueprints', 'compass', () => { close(); void import('./v11/blueprints/folio').then(m => m.openFolio({ at: 'field' })); });
   add('Settings', 'compass', () => openSettings());
   box.appendChild(el('div', 'sep'));
   if (opts.onReturn) add('End the expedition', 'tent', () => { close(); opts.onReturn!(); }, '', 'red');
