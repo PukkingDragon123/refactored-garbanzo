@@ -333,7 +333,8 @@ export function pxTextBuf(text: string | PxRun[], o: PxTextOpts = {}): PixelBuff
   const ring = o.outline ? 1 : 0, sh = o.shadow ? 1 : 0;
   const pad = (o.pad ?? 0) + ring;
   const markTop = 2;
-  const widths = lines.map(L => runsW(L, base));
+  const sp = o.spacing ?? 0;
+  const widths = lines.map(L => runsW(L, base) + sp * Math.max(0, [...L.map(r => r.text).join('')].length - 1));
   const W = Math.max(1, Math.max(0, ...widths) + (f.script ? 3 : 0)) + pad * 2 + sh;
   const Hh = Math.max(1, (lines.length - 1) * lh + f.cap + f.desc + markTop) + pad * 2 + sh;
   const ink = new PixelBuffer(W, Hh);

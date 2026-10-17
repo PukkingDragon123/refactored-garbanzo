@@ -36,8 +36,8 @@ import { packIcons } from './packicons';
 import { handLetter, ensureHandFont } from './handletter';
 import { pxTextCanvas, pxBigCanvas, warmBigFonts } from '../pxfont';
 import type { PxTextOpts } from '../pxfont';
-import { paintBubble, paintStamp, ditherVignette, bufCanvas as kitCanvas, H as KH } from '../pxkit';
-import { paintRecipeSpread, BOOK_W, BOOK_H } from './recipebook';
+import { paintBubble, paintStamp, bufCanvas as kitCanvas, H as KH } from '../pxkit';
+import { paintRecipeSpread, paintDishBuf, BOOK_W, BOOK_H, PER_PAGE } from './recipebook';
 import type { RecipeEntry } from './recipebook';
 import { PixelBuffer } from '../../art/pixel';
 import { paintBundle, paintTag } from './bagart';
@@ -295,6 +295,9 @@ const CSS = `
 @keyframes ck11Book { from { transform: translateY(14px); opacity: 0; } }
 .ck11 .book .spread > canvas { position: absolute; left: 0; top: 0; }
 .ck11 .book .x { position: absolute; right: -2px; top: -4px; z-index: 2; }
+.ck11 .book .pg { top: auto; bottom: -6px; z-index: 2; }
+.ck11 .book .pg.prev { left: 8px; }
+.ck11 .book .pg.next { right: 8px; }
 `;
 
 // ---------------------------------------------------------------- the close-up
@@ -379,6 +382,7 @@ class Cook {
   constructor(readonly o: CookOpts) {
     css('ck11', CSS);
     void ensureHandFont();
+    warmBigFonts();
     this.method = o.method ?? null;
     this.root = el('div', 'ck11');
     this.stage = this.root.appendChild(el('div', 'stage'));
@@ -476,7 +480,6 @@ class Cook {
 
   private pickMethod() {
     const pk = this.stage.appendChild(el('div', 'pick'));
-    pk.appendChild(kitCanvas(ditherVignette(CW / 2, CH / 2, { cx: 0.5, cy: 0.62, inner: 0.35, outer: 1.05, max: 0.55, color: '#000000' }), 'vig', 2));
     const ttl = pk.appendChild(el('div', 'ttl'));
     ttl.appendChild(handLetter(this.o.title ?? 'What are we cooking with?', { px: 13, color: '#fff3cc', bleed: '#3a2a14', maxW: 220 }));
     const opts: [Method, string][] = [['pot', 'v11pot'], ['pan', 'v11fire'], ['skewer', 'v11knife']];
@@ -1079,7 +1082,9 @@ class Cook {
     box.appendChild(el('div', 'word')).appendChild(pxBigCanvas(word, { color: bad ? '#e8f2ff' : '#fff7d8', outline: bad ? '#0a1428' : '#3a1408', depth: 3, depthColor: bad ? '#2a4a8a' : '#c8341e', spacing: 1 }));
     const tag = box.appendChild(el('div', 'tag'));
     tag.appendChild(bufURLCanvas(paintTag(112, 120)));
-    const sp = spriteOf(res.dish);
+    // (a dish with no artwork of its own is painted the way it was cooked)
+    const hasArt = !!itemArtCanvas(res.dish) || ICON_IDS.items().includes(res.dish);
+    const sp = hasArt ? spriteOf(res.dish) : (() => { const d = paintDishBuf(this.method!, this.pot.map(q => ({ sprite: spriteOf(q.id), n: 1 }))); return { w: d.w, h: d.h, d: new Uint32Array(d.data) }; })();
     const pc = spriteCanvas(sp);
     const k = Math.max(1, Math.floor(Math.min(80 / sp.w, 44 / sp.h)));
     pc.style.width = sp.w * k + 'px'; pc.style.height = sp.h * k + 'px';
@@ -1139,17 +1144,19 @@ class Cook {
   }
 }
 
-/** the recipe notebook: what Mori knows (how, from what, how well he's done it) and hints at the rest */
+/** the recipe notebook: what Mori knows (how, from what, how well he's done it) and hints at the rest,
+ *  painted as one pixel-art spread (./recipebook) */
 export function openRecipeBook(host?: HTMLElement): Promise<void> {
   css('ck11', CSS);
   return new Promise(res => {
     let own: HTMLElement | null = null;
     if (!host) {
-      // standalone (from the Backpack): a small scaled stage of its own
+      // standalone (from the Backpack): a small stage of its own, whole device pixels per art pixel
       own = el('div', 'ck11');
       own.style.background = 'transparent';
       const st = own.appendChild(el('div', 'stage'));
-      const s = Math.max(1, Math.min(window.innerWidth / CW, window.innerHeight / CH));
+      const dpr = window.devicePixelRatio || 1;
+      const s = Math.max(1, Math.floor(Math.min(window.innerWidth / CW, window.innerHeight / CH) * dpr + 0.02)) / dpr;
       st.style.transform = `scale(${s})`;
       st.style.left = Math.round((window.innerWidth - CW * s) / 2) + 'px';
       st.style.top = Math.round((window.innerHeight - CH * s) / 2) + 'px';
@@ -1157,35 +1164,54 @@ export function openRecipeBook(host?: HTMLElement): Promise<void> {
       host = st;
     }
     const bk = host.appendChild(el('div', 'book'));
-    const page = bk.appendChild(el('div', 'page'));
-    for (const r of CK.RECIPES) {
-      const known = CK.knowsRecipe(r.id);
-      const rc = page.appendChild(el('div', 'rc' + (known ? '' : ' unk')));
-      if (known) {
-        const h = handLetter(r.name, { px: 9, maxW: 100, color: '#2a2414' });
-        rc.appendChild(h);
-        const ings = rc.appendChild(el('div', 'ings'));
-        ings.appendChild(icon(r.method === 'pot' ? 'v11pot' : r.method === 'pan' ? 'v11fire' : 'v11knife'));
-        for (const n of r.needs) {
-          const sp = el('span', '');
-          const id = n.id ?? Object.keys(CK.INGREDIENTS).find(k => CK.INGREDIENTS[k].tags.includes(n.tag!)) ?? '';
-          if (id) { const s = spriteOf(id); const c = spriteCanvas(s); c.style.width = '10px'; c.style.height = '10px'; sp.appendChild(c); }
-          sp.appendChild(document.createTextNode(`${n.n}${n.tag ? ' ' + n.tag : ''}`));
-          ings.appendChild(sp);
-        }
-        const best = CK.bestQuality(r.id);
-        if (best) rc.appendChild(el('div', 'st', best === 'perfect' ? 'cooked perfectly' : `cooked ×${CK.timesCooked(r.id)}`));
-      } else {
-        rc.appendChild(el('div', '', '? ? ?'));
-        rc.appendChild(el('div', '', esc(r.hint)));
-      }
-    }
-    const x = page.appendChild(el('button', 'btn11 x'));
+    const spread = bk.appendChild(el('div', 'spread'));
+    const entries: RecipeEntry[] = CK.RECIPES.map(r => ({
+      known: CK.knowsRecipe(r.id),
+      name: r.name,
+      hint: r.hint,
+      method: r.method,
+      needs: r.needs.map(n => {
+        const id = n.id ?? Object.keys(CK.INGREDIENTS).find(k => CK.INGREDIENTS[k].tags.includes(n.tag!)) ?? '';
+        return { sprite: id ? spriteOf(id) : null, n: n.n };
+      }),
+      dish: itemArtCanvas(r.dish) || ICON_IDS.items().includes(r.dish) ? spriteOf(r.dish) : null,
+      best: CK.bestQuality(r.id),
+      times: CK.timesCooked(r.id),
+    }));
+    const pages = Math.max(1, Math.ceil(entries.length / (PER_PAGE * 2)));
+    let at = 0;
+    const page = spread.appendChild(kitCanvas(paintRecipeSpread(entries, 0)));
+    spread.style.width = BOOK_W + 'px'; spread.style.height = BOOK_H + 'px';
+    const turn = (d: number) => {
+      const n = Math.max(0, Math.min(pages - 1, at + d));
+      if (n === at) return;
+      at = n;
+      sfx('pageTurn', { vol: 0.45 });
+      const c = kitCanvas(paintRecipeSpread(entries, at));
+      page.getContext('2d')?.drawImage(c, 0, 0);
+      prev.hidden = at === 0; next.hidden = at === pages - 1;
+    };
+    const prev = spread.appendChild(el('button', 'btn11 pg prev'));
+    prev.appendChild(icon('back'));
+    prev.title = 'Previous page (Left)';
+    const next = spread.appendChild(el('button', 'btn11 pg next'));
+    next.appendChild(txt('MORE', BTN_T));
+    next.title = 'Next page (Right)';
+    prev.hidden = true; next.hidden = pages < 2;
+    prev.addEventListener('click', e => { e.stopPropagation(); turn(-1); });
+    next.addEventListener('click', e => { e.stopPropagation(); turn(1); });
+    const x = spread.appendChild(el('button', 'btn11 x'));
     x.appendChild(icon('v11x'));
+    x.title = 'Close (Esc)';
     const close = () => { bk.remove(); own?.remove(); offk(); res(); };
     x.addEventListener('click', e => { e.stopPropagation(); close(); });
     bk.addEventListener('pointerdown', e => { e.stopPropagation(); if (e.target === bk) close(); });
-    const offk = pushKeys(e => { if (e.code === 'Escape' || e.code === 'Enter' || e.code === 'KeyB') { close(); return true; } return !own ? undefined : true; }, !!own);
+    const offk = pushKeys(e => {
+      if (e.code === 'Escape' || e.code === 'Enter' || e.code === 'KeyB') { close(); return true; }
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') { turn(1); return true; }
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') { turn(-1); return true; }
+      return !own ? undefined : true;
+    }, !!own);
   });
 }
 

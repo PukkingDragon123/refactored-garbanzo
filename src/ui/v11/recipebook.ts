@@ -1,8 +1,8 @@
 // V11 recipe notebook, painted as pixel art: Mori's spiral-bound camp cookbook lying open, a green cloth
 // cover round the pages, blue rules and a red margin, grease spots and a mug ring, the spiral down the
-// gutter. Five recipes a page: what he knows has a snapshot of the dish taped in, its name in his marker
+// gutter. Four recipes a page: what he knows has a snapshot of the dish taped in, its name in his marker
 // hand, the pot / pan / skewer and what goes in, a tally of how often he's cooked it and a gold star
-// once it came out perfect. What he doesn't know yet is a smudged silhouette, "? ? ?" and the hint.
+// once it came out perfect. What he doesn't know yet is a pencilled box, a smudged silhouette and the hint.
 
 import { PixelBuffer } from '../../art/pixel';
 import type { C } from '../../art/color';
@@ -78,6 +78,39 @@ function star(b: PixelBuffer, cx: number, cy: number) {
   S.forEach((r, y) => { for (let x = 0; x < 7; x++) if (r[x] === '#') for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const xx = cx - 3 + x + dx, yy = cy - 4 + y + dy; const ry = S[y + dy], ch = ry ? ry[x + dx] : '.'; if (ch !== '#') b.set(xx, yy, G[0]); } });
 }
 
+/** a plain dish when the recipe has no artwork: a bowl of stew, a plate of fritters, a skewer */
+function genericDish(b: PixelBuffer, cx: number, cy: number, e: RecipeEntry, sil: C | null) {
+  // the food's colour: the average of what goes in
+  let r = 0, g = 0, bl = 0, n = 0;
+  for (const nd of e.needs) if (nd.sprite) for (let i = 0; i < nd.sprite.d.length; i += 3) { const c = nd.sprite.d[i]; if ((c >>> 24) > 100) { r += c & 255; g += (c >>> 8) & 255; bl += (c >>> 16) & 255; n++; } }
+  const avg = n ? [r / n, g / n, bl / n] : [180, 140, 90];
+  const food = (k: number) => sil ?? (((255 << 24) | (Math.min(255, avg[2] * k) << 16) | (Math.min(255, avg[1] * k) << 8) | Math.min(255, avg[0] * k)) >>> 0);
+  const o = sil ?? H('#2a1a0e');
+  if (e.method === 'pot') {
+    // a wooden bowl, steaming
+    for (let y = 0; y < 7; y++) { const hw = 8 - Math.floor(y * y / 9); for (let x = -hw; x <= hw; x++) b.set(cx + x, cy + y, Math.abs(x) === hw || y === 6 ? o : sil ?? (x < -hw + 3 ? H('#a8743c') : H('#7a4e24'))); }
+    for (let x = -7; x <= 7; x++) { b.set(cx + x, cy - 1, food(x % 3 === 0 ? 1.15 : 0.95)); b.set(cx + x, cy, food(0.8)); }
+    for (let x = -8; x <= 8; x++) b.set(cx + x, cy - 2, o);
+    if (!sil) for (const sx of [-3, 2]) for (let y = 0; y < 5; y++) b.set(cx + sx + (y % 2), cy - 4 - y, H('#e8e4dc', 160));
+  } else if (e.method === 'pan') {
+    // a tin plate with three fritters
+    for (let x = -9; x <= 9; x++) { b.set(cx + x, cy + 4, sil ?? H('#c8ccd0')); b.set(cx + x, cy + 5, o); }
+    b.set(cx - 10, cy + 4, o); b.set(cx + 10, cy + 4, o);
+    for (const [fx, fy] of [[-5, 1], [1, 2], [5, 0]]) for (let y = -2; y <= 1; y++) for (let x = -3; x <= 3; x++) if (Math.abs(x) + Math.abs(y) < 4) b.set(cx + fx + x, cy + fy + y, Math.abs(x) + Math.abs(y) === 3 ? o : food(y < 0 ? 1.2 : 0.85));
+  } else {
+    // a green stick with chunks on it
+    for (let i = -10; i <= 10; i++) b.set(cx + i, cy + 3 - Math.floor(i / 5), sil ?? H('#6a8a3a'));
+    for (const k of [-6, -1, 4]) for (let y = -3; y <= 2; y++) for (let x = -2; x <= 2; x++) b.set(cx + k + x, cy + 2 - Math.floor(k / 5) + y, Math.abs(x) === 2 || Math.abs(y) === 3 || y === 2 ? o : food(y < 0 ? 1.15 : 0.9));
+  }
+}
+
+/** a dish with no artwork of its own, painted the way it's cooked (24 x 20, for the result tag) */
+export function paintDishBuf(method: 'pot' | 'pan' | 'skewer', needs: { sprite: SpriteLike | null; n: number }[]): PixelBuffer {
+  const b = new PixelBuffer(24, 20);
+  genericDish(b, 12, 10, { known: true, name: '', hint: '', method, needs, dish: null, best: null, times: 0 }, null);
+  return b;
+}
+
 /** a snapshot of the dish taped onto the page (or a smudge for what's unknown) */
 function snapshot(b: PixelBuffer, x: number, y: number, e: RecipeEntry, seed: number) {
   const W = 24, Hh = 24;
@@ -92,6 +125,7 @@ function snapshot(b: PixelBuffer, x: number, y: number, e: RecipeEntry, seed: nu
       b.set(xx, yy, j < 12 ? (dither(xx, yy) > 0.6 ? H('#5a4a3a') : H('#4a3a2c')) : (dither(xx, yy) > 0.5 ? H('#7a5a36') : H('#6a4c2c')));
     }
     if (e.dish) sprite(b, e.dish, x + W / 2, y + 10, 18);
+    else genericDish(b, x + W / 2, y + 10, e, null);
     // a piece of tape over the top
     for (let i = 0; i < 12; i++) for (let j = 0; j < 4; j++) b.blend(x + 6 + i, y - 2 + j, H('#f0e4a8', 190));
   } else {
@@ -100,7 +134,8 @@ function snapshot(b: PixelBuffer, x: number, y: number, e: RecipeEntry, seed: nu
       const edge = (i === 0 || j === 0 || i === W - 1 || j === Hh - 1) && hash(i, j, seed) > 0.25;
       if (edge) b.set(x + i, y + j, PENCIL);
     }
-    if (e.dish) sprite(b, e.dish, x + W / 2, y + Hh / 2, 18, H('#b8a47e'));
+    if (e.dish) sprite(b, e.dish, x + W / 2, y + Hh / 2, 18, H('#c8b48a'));
+    else genericDish(b, x + W / 2, y + Hh / 2, e, H('#c8b48a'));
     over(b, pxTextBuf('?', { font: 'script', color: '#7a6a50' }), x + 9, y + 5);
   }
 }
@@ -108,13 +143,14 @@ function snapshot(b: PixelBuffer, x: number, y: number, e: RecipeEntry, seed: nu
 const METHOD_ICON = { pot: 'v11pot', pan: 'v11fire', skewer: 'v11knife' } as const;
 
 function entry(b: PixelBuffer, x: number, y: number, w: number, e: RecipeEntry, seed: number) {
-  snapshot(b, x, y + 2, e, seed);
+  snapshot(b, x, y + 3, e, seed);
   const tx = x + 30;
   if (e.known) {
-    over(b, pxTextBuf(e.name, { font: 'script', color: '#2a2414', bleed: '#4a3a20', maxW: w - 34, maxLines: 1 }), tx, y);
+    const nm = pxTextBuf(e.name, { font: 'script', color: '#2a2414', bleed: '#4a3a20', maxW: w - 30, maxLines: 2, lineH: 10 });
+    over(b, nm, tx, y);
     // what goes in: the pot / pan / skewer, then each ingredient and how many
     let ix = tx;
-    const iy = y + 14;
+    const iy = y + Math.max(13, nm.h - 1);
     const mic = pxIconBuf(METHOD_ICON[e.method]);
     over(b, mic, ix, iy + Math.floor((10 - mic.h) / 2));
     ix += mic.w + 2;
@@ -127,16 +163,16 @@ function entry(b: PixelBuffer, x: number, y: number, w: number, e: RecipeEntry, 
       ix += t.w + 3;
     }
     // how often, how well
-    if (e.times) tally(b, x + w - 30, y + 3, e.times);
-    if (e.best === 'perfect') star(b, x + w - 6, y + 18);
+    if (e.best === 'perfect') star(b, x + 4, y + 5);
+    if (e.times) tally(b, Math.max(ix + 2, x + w - 22), iy + 3, e.times);
   } else {
-    over(b, pxTextBuf('? ? ?', { font: 'script', color: '#8a7650', bleed: '#9a8660' }), tx, y);
-    over(b, pxTextBuf(e.hint, { color: '#6a5a40', maxW: w - 32, maxLines: 2, lineH: 9 }), tx, y + 12);
+    over(b, pxTextBuf(e.hint, { color: '#6a5a40', maxW: w - 30, maxLines: 3, lineH: 9 }), tx, y + 2);
   }
 }
 
-/** the open notebook with all the recipes (two pages of five) */
-export function paintRecipeSpread(entries: RecipeEntry[]): PixelBuffer {
+export const PER_PAGE = 4;
+/** the open notebook at a spread (two pages of four recipes) */
+export function paintRecipeSpread(entries: RecipeEntry[], spread = 0): PixelBuffer {
   const W = BOOK_W, Hh = BOOK_H;
   const b = new PixelBuffer(W, Hh);
   // a hard shadow under the book
@@ -181,11 +217,24 @@ export function paintRecipeSpread(entries: RecipeEntry[]): PixelBuffer {
     if (y >= Hh - 2 && (x === 1 || x === 2)) continue;
     b.set(RX + 70 + x, y, x === 0 ? H('#6a1408') : x === 3 ? H('#8a2010') : H('#c8341e'));
   }
-  // the entries
-  entries.forEach((e, i) => {
-    const left = i < 5;
-    const x = (left ? LX + 20 : RX + 16), y = PY + 19 + (i % 5) * 28;
-    entry(b, x, y, PW - 26, e, i + 1);
+  // the entries on this spread
+  const first = spread * PER_PAGE * 2;
+  const shown = entries.slice(first, first + PER_PAGE * 2);
+  shown.forEach((e, i) => {
+    const left = i < PER_PAGE;
+    const x = (left ? LX + 20 : RX + 16), y = PY + 21 + (i % PER_PAGE) * 34;
+    entry(b, x, y, PW - 26, e, first + i + 1);
   });
+  // an empty page: a pencil doodle of the fire and a note to self
+  if (shown.length <= PER_PAGE) {
+    const cx = RX + 70, cy = PY + 80;
+    for (let k = 0; k < 7; k++) { const a = k / 7 * Math.PI * 2; for (let r = 0; r < 3; r++) b.set(Math.round(cx + Math.cos(a) * (16 + r * 0.3)), Math.round(cy + 14 + Math.sin(a) * 4), PENCIL); }
+    for (let i = -9; i <= 9; i++) { b.set(cx + i, cy + 10 - Math.floor(Math.abs(i) / 3), PENCIL); }
+    for (const [fx, fh] of [[-5, 14], [0, 20], [5, 12]]) for (let j = 0; j < fh; j++) b.set(cx + fx + Math.round(Math.sin(j * 0.5) * 2), cy + 8 - j, PENCIL);
+    over(b, pxTextBuf('More to learn: ask Joshu, ask Aroha, try things.', { font: 'script', color: '#7a6a50', maxW: PW - 30, lineH: 12, align: 'center' }), RX + 14, cy + 30);
+  }
+  // page numbers
+  const pn = (n: number, x: number) => over(b, pxTextBuf(String(n), { font: 'tiny', color: '#9a8a6a' }), x, PY + PH - 8);
+  pn(spread * 2 + 1, LX + PW / 2 - 2); pn(spread * 2 + 2, RX + PW / 2 - 2);
   return b;
 }
