@@ -366,6 +366,26 @@ export async function chapters(): Promise<DevChapter[]> {
       await goIsle();
     } },
   ] });
+  // V11: the new people (src/game/v11/npcs)
+  const people = async (o: { px?: number; loc?: string; day?: number; flags?: string[]; meet?: string[] }) => {
+    ensureLoop();
+    if ((game.save.day ?? 1) < (o.day ?? 4)) game.save.day = o.day ?? 4;
+    for (const f of o.flags ?? []) game.save.flags[f] = true;
+    if (o.meet?.length) { const S = await import('../game/v11/social'); for (const id of o.meet) S.meet(id); }
+    if (o.loc) { await goLocation(o.loc); return; }
+    const d = dayState();
+    d.phase = 'morning'; d.woke = dayNumber(); d.meals.breakfast = dayNumber(); d.arrive = null; d.clock = 0.6;
+    V('v9:px', o.px ?? 2000);
+    game.persist();
+    await goIsle();
+  };
+  out.push({ id: 'people', name: 'People · Rangers, Helix, trappers, crafts', points: [
+    { id: 'n:station', name: 'Te Puni ranger station', sub: 'Hine, Doug and Rosie on the bush track (Day 3+)', icon: 'flag', run: () => people({ px: 6080 }) },
+    { id: 'n:grove', name: 'Marge’s hut in the palm grove', sub: 'The naturalist hermit', icon: 'scroll', run: () => people({ px: 2960 }) },
+    { id: 'n:helix', name: 'The Helix camp', sub: 'Dr Varga and Teo on the Serpent Coast', icon: 'map', run: () => people({ loc: 'coast' }) },
+    { id: 'n:hills', name: 'The trappers’ camp', sub: 'Rua and Sunny in the Rocky Hills', icon: 'target', run: () => people({ loc: 'hills' }) },
+    { id: 'n:visit', name: 'Camp: the craftspeople visit', sub: 'Tīpene and Ngaio at camp (met)', icon: 'wrench', run: () => people({ px: 2300, day: 5, flags: ['n:tipeneMet', 'n:ngaioMet'], meet: ['tipene', 'ngaio'] }) },
+  ] });
   // the Region Map
   const order = ['home', 'interior', 'south', 'east', 'ocean', 'isle2'];
   const locs = [...LOCATIONS].filter(l => !l.trip).sort((a, b) => order.indexOf(a.region) - order.indexOf(b.region));

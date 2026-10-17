@@ -52,6 +52,8 @@ async function boot() {
   game.r.post.fade = 1;
   game.fadeTo(1);
   game.start();
+  // V11: the people of Zealandia (relationships, NPCs, their quests); K opens the people book
+  try { await (await import('./game/v11/npcs')).bootNpcs(); } catch (e) { console.warn('[npcs] boot', e); }
   const scene = params.get('scene');
   const flow = await import('./game/scenes/flow');
   if (params.has('flags')) for (const f of params.get('flags')!.split(',')) game.save.flags[f] = true;
@@ -184,6 +186,7 @@ async function boot() {
       return n;
     },
   };
+  void import('./game/v11/npcs').then(m => { (window as unknown as { zl: Record<string, unknown> }).zl.social = m.NPC_ZL; });
   void import('./game/v9/islezl').then(m => { (window as unknown as { zl: { isle: unknown } }).zl.isle = m.ISLE; });
   // Mori's 3D hands for the cooking minigame register with it (if it's in the build)
   void import('./art/v11/hands3d/cookhands');

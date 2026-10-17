@@ -71,6 +71,8 @@ const TINT: Record<string, [string, string, string]> = {
 const ALIAS: Record<string, string> = { rowan: 'mori', pip: 'jenna', crowe: 'joshu', lou: 'joshu' };
 
 export const hasPortrait = (id: string) => (ALIAS[id] ?? id) in TINT;
+/** give a character a portrait in the dialogue box (its well colours: light, mid, dark) */
+export function registerPortraitTint(id: string, t: [string, string, string]) { TINT[id] = t; }
 
 let styled = false;
 

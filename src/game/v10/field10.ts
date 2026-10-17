@@ -70,12 +70,22 @@ export let run: TripRun | null = null;
 export async function onFieldEnter(f: FieldScene) {
   installTranslator(translatorOn);
   run = null;
-  if (isIslandScene(f)) { const ir = new IslandRun(f); run = ir; ir.start(); return; }
+  if (isIslandScene(f)) { const ir = new IslandRun(f); run = ir; ir.start(); fireLocEnter(f, 'island', ir); return; }
   const loc = locOf(f);
-  if (!loc || !location(loc)) return;
+  if (!loc || !location(loc)) { fireLocEnter(f, loc, null); return; }
   const r = new SiteRun(f, loc);
   run = r;
   await r.start();
+  fireLocEnter(f, loc, r);
+}
+
+/** V11: modules that put people or things into a scene by its location id ('island' for the home
+ *  shore scene, which spans camp and the shore stretches; null for a scene with no location) */
+export type LocEnterFn = (f: FieldScene, loc: string | null, r: TripRun | null) => void | Promise<void>;
+const locEnterFns: LocEnterFn[] = [];
+export function onLocEnter(fn: LocEnterFn) { locEnterFns.push(fn); }
+function fireLocEnter(f: FieldScene, loc: string | null, r: TripRun | null) {
+  for (const fn of locEnterFns.slice()) { try { void Promise.resolve(fn(f, loc, r)).catch(e => console.warn('[field10] onLocEnter', e)); } catch (e) { console.warn('[field10] onLocEnter', e); } }
 }
 
 // ================================================================== shared runtime

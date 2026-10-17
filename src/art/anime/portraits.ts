@@ -744,6 +744,12 @@ function chunkPortrait(e: string, talk: 0 | 1 | 2, blink: boolean): PixelBuffer 
 // ------------------------------------------------------------------ render
 
 const DESIGNS: Record<string, Design> = { mori: MORI, jenna: JENNA, joshu: JOSHU, aroha: AROHA };
+/** a portrait design other modules can build (the NPCs of src/art/v11/npcs): the same kit as the cast */
+export type PortraitDesign = Design;
+export type PortraitMats = Mats;
+export type PortraitExpr = ExprDef;
+/** add (or replace) a character's dialogue portrait and HD close-up bust */
+export function registerPortraitDesign(id: string, d: Design) { DESIGNS[id] = d; }
 
 export function renderAnimePortrait(id: string, expr: string, talk: 0 | 1 | 2 = 0, blink = false, outfit = outfitOf(id)): PixelBuffer {
   if (id === 'chunk') return chunkPortrait(expr, talk, blink);
