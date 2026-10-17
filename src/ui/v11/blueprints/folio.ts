@@ -68,7 +68,7 @@ export function openFolio(o: FolioOpts = {}): Promise<FolioResult> {
   // ---- DOM: one canvas over everything
   const wrap = document.createElement('div');
   wrap.className = 'bpf';
-  wrap.style.cssText = 'position:absolute;inset:0;z-index:45;background:#1a100a;display:grid;place-items:center;pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none';
+  wrap.style.cssText = 'position:absolute;inset:0;z-index:64;background:#1a100a;display:grid;place-items:center;pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none';
   const cv = document.createElement('canvas');
   cv.style.cssText = 'image-rendering:pixelated;image-rendering:crisp-edges;display:block;cursor:default';
   wrap.appendChild(cv);

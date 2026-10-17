@@ -13,7 +13,7 @@
 // V10 research loop (see ../v10): Upload Everything (photos, the backpack's specimens into the research
 // crate with a lab analysis each, field notes, then the day report), the Zealandia Encyclopedia
 // (replaces the Research Log), ZEA Mail (the agency that pays Research Points: targets, praise and
-// snark) and the Skill Tree (spend RP). The tray shows the RP balance and unread agency mail.
+// snark) and the Blueprints (research with RP). The tray shows the RP balance and unread agency mail.
 // A fresh laptop only has the Report, the Spreadsheet and Upload Everything: every other app unlocks
 // with progress and downloads itself through the installer toast (./moriApps).
 // Performance: while open, the world behind is frozen (game.covered); the wallpaper stops animating
@@ -164,7 +164,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
       <div class="mos-flare f2"></div><div class="mos-flare f0"></div><div class="mos-flare f1"></div><div class="mos-flare f3"></div>
       <div class="mos-icons"></div><div class="mos-gad"></div><div class="mos-wins"></div>
       <div class="mos-bar"><div class="mos-orb ctl" title="Start"></div><div class="mos-tabs"></div>
-        <div class="mos-tray"><span class="tp ctl" data-direct="1" title="Touch mode"></span><span class="rpc ctl" title="Research Points (Skill Tree)"></span><span class="ml ctl" title="ZEA Mail"></span><span class="cm ctl" title="Camera connected"></span><span class="wf" title="${field ? 'No internet: shipwrecked' : 'No internet: middle of the ocean'}">${gi('wifix')} Wi-Fi</span><span class="bt${batt < 25 ? ' lo' : ''}" title="${field ? 'Charged off the wreck’s battery. Mostly.' : 'Battery'}">${batteryGi(batt)} ${batt}%</span><span class="clk"></span></div><div class="mos-peek ctl" title="Show desktop"></div></div>
+        <div class="mos-tray"><span class="tp ctl" data-direct="1" title="Touch mode"></span><span class="rpc ctl" title="Research Points (Blueprints)"></span><span class="ml ctl" title="ZEA Mail"></span><span class="cm ctl" title="Camera connected"></span><span class="wf" title="${field ? 'No internet: shipwrecked' : 'No internet: middle of the ocean'}">${gi('wifix')} Wi-Fi</span><span class="bt${batt < 25 ? ' lo' : ''}" title="${field ? 'Charged off the wreck’s battery. Mostly.' : 'Battery'}">${batteryGi(batt)} ${batt}%</span><span class="clk"></span></div><div class="mos-peek ctl" title="Show desktop"></div></div>
       <div class="mos-menus"></div><div class="mos-focus"></div>
     </div><div class="mos-brand"><i></i>MoriBook</div></div>`;
   if (field) wrap.classList.add('field');
@@ -1087,11 +1087,11 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
 
   // ---- desktop icons
   const desk: [string, string, string, boolean?][] = field ? [
-    ['upall', 'Upload All', 'upall'], ['cam', 'Camera', 'cam'], ['enc', 'Encyclo-pedia', 'enc'], ['mail', 'ZEA Mail', 'mail'], ['skills', 'Skill Tree', 'skills'], ['photos', 'Photos', 'photo'],
+    ['upall', 'Upload All', 'upall'], ['cam', 'Camera', 'cam'], ['enc', 'Encyclo-pedia', 'enc'], ['mail', 'ZEA Mail', 'mail'], ['skills', 'Blue-prints', 'skills'], ['photos', 'Photos', 'photo'],
     ['report', 'Reports', 'report'], ['sheet', 'Spread-sheets', 'sheet'], ['files', 'Files', 'folder'], ['plankton', 'Plankton Sort', 'game'], ['bubbles', 'Bubble Pop', 'bubbles'], ['bin', 'Recycle Bin', 'bin'], ['term', 'Jenna-Shell', 'term'],
   ] : [
     ['report', 'Reports', 'report', o.report && !game.save.flags['v4:report']], ['sheet', 'Spread-sheets', 'sheet'], ['cam', 'Camera', 'cam'], ['photos', 'Photos', 'photo'],
-    ['enc', 'Encyclo-pedia', 'enc'], ['mail', 'ZEA Mail', 'mail'], ['skills', 'Skill Tree', 'skills'], ['upall', 'Upload All', 'upall'],
+    ['enc', 'Encyclo-pedia', 'enc'], ['mail', 'ZEA Mail', 'mail'], ['skills', 'Blue-prints', 'skills'], ['upall', 'Upload All', 'upall'],
     ['files', 'Files', 'folder'], ['plankton', 'Plankton Sort', 'game'], ['bubbles', 'Bubble Pop', 'bubbles'], ['term', 'JennaShell', 'term'], ['bin', 'Recycle Bin', 'bin'],
   ];
   const launch = (id: string, from?: Element) => {

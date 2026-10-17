@@ -181,7 +181,7 @@ export class FieldCamera {
         if (this.recording) this.stopRecording();
         this.mode = this.mode === 'photo' ? 'video' : 'photo';
         audio.play('ui');
-      } else game.ui.toast('Learn <b>Video mode</b> in the Camera skill tree first.', 'CAMERA', 'coral');
+      } else game.ui.toast('Craft the <b>Video rig</b> from its blueprint at Jenna’s bench first.', 'CAMERA', 'coral');
     }
     // hold breath (Shift) to steady the shot for a few seconds
     this.holding = inp.down('run') && this.breath > 0.02;

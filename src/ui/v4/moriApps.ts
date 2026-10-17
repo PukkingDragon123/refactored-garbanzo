@@ -7,6 +7,7 @@ import { game } from '../../game/game';
 import { bucket } from '../../game/v10/store';
 import { dayNumber } from '../../game/v10/day';
 import { r10 } from '../../game/v9/research9';
+import { ownedBlueprints } from '../../game/v11/blueprints';
 
 /** always on the desktop */
 export const BASE_APPS = ['report', 'sheet', 'upall'];
@@ -35,7 +36,7 @@ export const UNLOCKS: AppUnlock[] = [
   { id: 'enc', name: 'Zealandia Encyclopedia', why: 'Your first research is in. The agency sent its encyclopedia.', when: documented, hint: 'It downloads after your first upload with something new in it.' },
   { id: 'photos', name: 'Photos', why: 'Your first photo is uploaded.', when: uploaded, hint: 'It downloads once your first photo is uploaded.' },
   { id: 'cam', name: 'Camera Import', why: 'Pick and choose photos off the ZX-7.', when: uploaded, hint: 'For now, Upload All takes everything off the camera.' },
-  { id: 'skills', name: 'Skill Tree', why: 'You have Research Points to spend.', when: () => (game.save.rp ?? 0) > 0 || (game.save.totalRp ?? 0) > 0, hint: 'It downloads when you earn your first Research Points.' },
+  { id: 'skills', name: 'Blueprints', why: 'The agency’s R&D office will draw up blueprints for your Research Points.', when: () => (game.save.rp ?? 0) > 0 || (game.save.totalRp ?? 0) > 0 || ownedBlueprints().length > 0, hint: 'It downloads when you earn your first Research Points, or get your first blueprint.' },
   { id: 'mail', name: 'ZEA Mail', why: 'The agency is on the line.', when: () => !!game.save.flags['v10:agency'] || (laterDays() && uploaded()), hint: 'It downloads once the agency gets in touch.' },
   { id: 'files', name: 'Files', why: 'Every file survived.', when: () => !!game.save.flags['v9:laptop'] || laterDays() },
   { id: 'plankton', name: 'Plankton Sort', why: 'Something for the long evenings at camp.', when: laterDays },
