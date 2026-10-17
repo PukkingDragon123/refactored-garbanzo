@@ -662,6 +662,8 @@ export function openRegionMap(o: RegionMapOpts = {}): Promise<string | null> {
       renderAcc += dt;
       if (renderAcc >= (far ? 1 / 8 : 1 / 30)) {
         renderAcc = 0;
+        // clouds from afar; close in, only their shadows drift over the land
+        live.cloudK = clamp((1.25 - scale * dpr) / 0.7);
         const m = 4;
         live.render(-ox / scale - m, -oy / scale - m, (vw - ox) / scale + m, (vh - oy) / scale + m);
         dirty = true;
@@ -813,15 +815,14 @@ export function openRegionMap(o: RegionMapOpts = {}): Promise<string | null> {
     const lines: ((b: PixelBuffer, y: number) => number)[] = [];
     const inner = CW - 16;
     const title = (t: string) => lines.push((b, y) => {
-      const big = measure(t, { bold: true }) * 2 <= inner;
+      const big = measure(t, { bold: true }) * 2 <= inner - 14;
       if (big) {
         const tb = new PixelBuffer(measure(t, { bold: true }) + 2, GH + 1);
         drawText(tb, t, 0, 0, UI.ink, { bold: true });
         for (let yy = 0; yy < tb.h; yy++) for (let xx = 0; xx < tb.w; xx++) { const c = tb.data[yy * tb.w + xx]; if (c >>> 24) for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) b.set(8 + xx * 2 + i, y + yy * 2 + j, c); }
         return y + GH * 2 - 2;
       }
-      drawText(b, t, 8, y, UI.ink, { bold: true });
-      return y + GH + 1;
+      return para(b, t, 8, y, inner - 14, UI.ink, GH, { bold: true }) + 1;
     });
     const sub = (t: string) => lines.push((b, y) => para(b, t, 8, y, inner, UI.ink2) + 2);
     const text = (t: string, c = UI.ink) => lines.push((b, y) => para(b, t, 8, y, inner, c) + 1);
@@ -830,6 +831,12 @@ export function openRegionMap(o: RegionMapOpts = {}): Promise<string | null> {
       const kw = measure(k);
       if (typeof v === 'string') {
         const vw2 = measure(v, { bold: true });
+        if (8 + kw + 8 + vw2 > CW - 8) {
+          // too long for one line: the value goes on its own line(s), right-aligned
+          let yy = y + GH - 1;
+          for (const ln of wrap(v, CW - 24, { bold: true })) { const lw = measure(ln, { bold: true }); drawText(b, ln, CW - 8 - lw, yy, vc, { bold: true }); yy += GH - 1; }
+          return yy + 1;
+        }
         drawText(b, v, CW - 8 - vw2, y, vc, { bold: true });
         for (let x = 8 + kw + 3; x < CW - 8 - vw2 - 3; x += 2) b.set(x, y + 8, UI.ink3);
       } else v(b, CW - 8, y);

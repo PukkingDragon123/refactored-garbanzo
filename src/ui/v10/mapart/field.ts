@@ -363,7 +363,13 @@ export async function buildFields(): Promise<Fields> {
         const bx = reliefBox[k];
         if (x < bx[0] || x > bx[2] || y < bx[1] || y > bx[3]) continue;
         const r = RELIEF[k];
-        if (r.k === 'poly') { polySigned(r.pts, r.edge, x, y); if (PS.d > -3) h += r.h * smoothstep(0, PS.edge, PS.d + wn * 4); continue; }
+        if (r.k === 'poly') {
+          polySigned(r.pts, r.edge, x, y);
+          // buttresses and bays along the edge, the top a little uneven
+          const wig = (sampleG(warpY!, x * 2.3, y * 2.3) / 34) * 22 + wn * 6;
+          if (PS.d > -30) h += r.h * (0.84 + 0.3 * sampleG(patchG!, x * 1.6, y * 1.6)) * smoothstep(0, PS.edge, PS.d + wig);
+          continue;
+        }
         const kk = 1 - reliefF[k](x, y) + wn * 0.12;
         if (kk <= 0 && r.k !== 'rolling') continue;
         switch (r.k) {

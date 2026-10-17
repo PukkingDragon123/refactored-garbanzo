@@ -285,6 +285,8 @@ export class LiveMap {
   private marks: { s: Spr; x: number; y: number }[] = [];
   private emitters: { x: number; y: number; kind: Particle['kind']; rate: number }[] = [];
   t = 0;
+  /** how much of the clouds themselves shows (1 from afar, 0 close in: only their shadows) */
+  cloudK = 1;
   private emitT = new Map<number, number>();
   private flockT = 4;
 
@@ -912,6 +914,7 @@ export class LiveMap {
         if (gx < 0 || gx >= W) continue;
         const i = gy * W + gx;
         if (this.state[i] !== 3 || this.cov[i] < 6 * S * bayer(gx, gy)) continue;
+        if (!shadow && bayer(gx, gy) >= this.cloudK) continue;
         this.px[i] = shadow ? mix(this.px[i], c, 0.32) : c | 0xff000000;
       }
     }

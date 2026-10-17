@@ -200,14 +200,16 @@ function cookShelter(l: Layer, x: number, y: number) {
   for (const [dx, c] of [[-1, '#f0902e'], [0, '#ffd060'], [1, '#e05a20']] as [number, string][]) l.px(x + dx, y - 1, hex(c), 1, TAG.ember);
 }
 function palisade(l: Layer, cx: number, cy: number, rx: number, ry: number, gap: [number, number], broken = 0) {
-  for (let a = 0; a < 360; a += 2.2) {
+  for (let a = 0; a < 360; a += 1.3) {
     const t = (a * Math.PI) / 180;
     if (t > gap[0] && t < gap[1]) continue;
     if (broken && hash2(a | 0, 3, 77) < broken) continue;
     const x = Math.round(cx + Math.cos(t) * rx), y = Math.round(cy + Math.sin(t) * ry);
-    const h = 4 + ((a * 7) % 3 === 0 ? 1 : 0) - (broken && hash2(a | 0, 4, 77) < 0.5 ? 2 : 0);
+    const h = 7 + ((a * 7) % 3 === 0 ? 1 : 0) - (broken && hash2(a | 0, 4, 77) < 0.5 ? 3 : 0);
     l.begin(Math.round(y));
-    for (let z = 0; z < h; z++) l.px(x, y - z, z === h - 1 ? P.wood[5] : P.wood[z % 2 ? 2 : 3], z);
+    for (let z = 0; z < h; z++) { l.px(x, y - z, z >= h - 1 ? P.wood[5] : P.wood[3], z); l.px(x + 1, y - z, z >= h - 1 ? P.wood[3] : P.wood[1], z); }
+    l.px(x, y - h, P.wood[4], h);
+    if (!broken || hash2(a | 0, 5, 77) > 0.4) { l.px(x - 1, y - 2, P.wood[2], 2); l.px(x - 1, y - 5, P.wood[2], 5); }
   }
 }
 function waka(l: Layer, x: number, y: number, len: number) {
@@ -415,7 +417,7 @@ export function placeLandmarks(f: Fields, L: Light, l: Layer, feats: Feat[]) {
   add(vx - 36, vy - 52, (x, y) => cookShelter(l, x, y));
   add(vx + 44, vy + 46, (x, y) => rack(l, x, y));
   add(vx - 60, vy + 52, (x, y) => rack(l, x, y));
-  feats.push({ gy: vy - 72, gx: vx, f: () => palisade(l, vx, Math.round(vy - 6 - hAt(vx, vy)), 128, 74, [Math.PI * 0.35, Math.PI * 0.62]) });
+  feats.push({ gy: vy - 72, gx: vx, f: () => palisade(l, vx + 10, Math.round(vy - 6 - hAt(vx, vy)), 116, 72, [Math.PI * 0.35, Math.PI * 0.62]) });
   for (const [wx, wy] of CRITTERS.waka[1].slice(0, 1)) add(wx - 30, wy + 12, (x, y) => waka(l, x, y, 14));
   add(vx - 44, vy + 70, (x, y) => waka(l, x, y, 12));
   // ---- the old pā

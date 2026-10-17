@@ -173,7 +173,10 @@ function mountainGround(x: number, r: number, gy: number, h: number, slope: numb
 }
 function garden(x: number, r: number, gy: number, v: number, tx: number): C {
   const [vx, vy] = LM.village;
-  if (Math.hypot(x - vx, (gy - vy) * 1.4) < 30 * 2.75) return band(P.marae, v * 0.9 + (tx - 0.5) * 0.25, x, r);
+  const md = Math.hypot(x - vx, (gy - vy + 6) * 1.5);
+  if (md < 50) return band(P.marae, v * 0.9 + 0.08 + (tx - 0.5) * 0.25, x, r);
+  if (md < 92 && (Math.abs(x - vx) < 2 || hash2(x >> 1, gy >> 1, 122) > 0.985)) return band(P.marae, v * 0.8, x, r);
+  if (md < 96) return band(P.grass, v * 0.9 + (tx - 0.5) * 0.2, x, r);
   const px = Math.floor((x + gy * 0.14) / 26), py = Math.floor(gy / 18);
   const kind = Math.floor(hash2(px, py, 121) * 4);
   const lx = (x + gy * 0.14) % 26, lyy = gy % 18;
@@ -228,19 +231,38 @@ function face(f: Fields, L: Light, x: number, r: number, gy: number, i: number, 
     // riverbanks: earth, roots, a grass lip
     if (k === 0) return MOSS[2];
     if (k === 1 && hash2(x, 2, 96) > 0.5) return MOSS[1];
-    return band(P.earth, v * 0.95 + (col - 0.5) * 0.3, x, r);
+    return rockFace(x, r, z, v, P.earth, true);
   }
   const hz = f.hgt[i];
   if (hz > 150) {
     const sn = snowAt(x, gy, z, 0.8) * (k < 3 ? 1 : 0.35);
     if (sn > 0.5 && ns > 0.45) return band(P.snow, 0.3 + v * 0.7, x, r);
-    return band(P.granite, v * 0.85 + (col - 0.5) * 0.3 + (Math.floor(z / 6) % 2 ? 0.05 : 0), x, r);
+    return rockFace(x, r, z, v, P.granite, false);
   }
-  // inland scarps: grey rock, moss on the ledges, ferns hanging from the lip
+  // inland scarps: layered rock, moss and ferns on the ledges, a grass lip
   if (k === 0) return MOSS[2];
-  if (k < 3 && hash2(x, 5, 97) > 0.45) return MOSS[1];
-  if (ns > 0.72) return MOSS[0];
-  return band(P.rock, v * 0.9 + (col - 0.5) * 0.3 + (Math.floor(z / 5) % 2 ? 0.05 : -0.03), x, r);
+  if (k < 2 && hash2(x, 5, 97) > 0.45) return MOSS[1];
+  return rockFace(x, r, z, v, P.rock, true);
+}
+/** a rock face in courses: wavy ledges lit on top and shadowed under, blotches, cracks, plants on
+ *  the ledges, warmer and cooler stone in patches */
+function rockFace(x: number, r: number, z: number, v: number, ramp: C[], green: boolean): C {
+  const ledge = 7 + Math.floor(hash2(x >> 4, 0, 98) * 4);
+  const zz = z + (noise2(x * 0.06, 0.5, 99) - 0.5) * 8;
+  const fz = zz - Math.floor(zz / ledge) * ledge;
+  let t = v * 0.85 + 0.05 + (noise2(x * 0.12, zz * 0.09, 100) - 0.5) * 0.32;
+  // gullies running down the face, darker and greener
+  const gully = noise2(x * 0.07, 7.5, 106);
+  if (gully > 0.66) { t -= 0.16; if (green && noise2(x * 0.2, zz * 0.12, 107) > 0.55) return MOSS[noise2(x * 0.3, zz * 0.2, 108) > 0.5 ? 1 : 0]; }
+  if (fz > ledge - 1.3) {
+    t += 0.22;
+    if (green && hash2(x, Math.floor(zz / ledge), 101) > 0.42) return MOSS[hash2(x, 3, 102) > 0.5 ? 2 : 1];
+  } else if (fz < 1.2) t -= 0.28;
+  if (Math.abs(noise2(x * 0.3, zz * 0.035, 103) - 0.5) < 0.022) t -= 0.35;
+  if (green && fz > ledge - 3 && hash2(x, Math.floor(zz), 104) > 0.9) return MOSS[0];
+  const c = band(ramp, t, x, r, 1.5);
+  const warm = noise2(x * 0.02, zz * 0.02, 105);
+  return warm > 0.62 ? mix(c, hex('#8a6a4a'), 0.16) : warm < 0.36 ? mix(c, hex('#4a5a6a'), 0.14) : c;
 }
 
 function water(f: Fields, L: Light, x: number, r: number, i: number): C {
