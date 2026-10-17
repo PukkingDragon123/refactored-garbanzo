@@ -409,3 +409,97 @@ export function pxRunsFromHTML(html: string, colors: { b?: string; i?: string; b
   push(html.slice(last));
   return out;
 }
+
+// ---------------------------------------------------------------- big words from the web pixel fonts
+// Jersey 15 and Silkscreen sit exactly on the pixel grid at their native sizes (Jersey 15 at 27px:
+// 15px caps; Silkscreen at 8px steps: 5px caps per 8px), so rasterised there and thresholded they are
+// true pixel glyphs. Used for splash words (PERFECT!, CAUGHT!) inside pixel stages. Without the web
+// font (offline) the bold bitmap face stands in at 2x.
+
+export type PxBigFace = 'jersey' | 'silk' | 'silk2';
+const BIG: Record<PxBigFace, { css: string; asc: number; h: number }> = {
+  jersey: { css: "27px 'Jersey 15'", asc: 21, h: 28 },
+  silk: { css: "16px 'Silkscreen'", asc: 12, h: 16 },
+  silk2: { css: "700 16px 'Silkscreen'", asc: 12, h: 16 },
+};
+export interface PxBigOpts {
+  face?: PxBigFace;
+  color?: string;
+  /** 1px ring */
+  outline?: string | null;
+  /** an extruded shadow this many pixels down-right */
+  depth?: number;
+  depthColor?: string;
+  /** letter spacing in px */
+  spacing?: number;
+}
+export function bigFontReady(face: PxBigFace = 'jersey'): boolean {
+  try {
+    const fs = (document as Document & { fonts?: FontFaceSet }).fonts;
+    if (!fs) return false;
+    const fam = face === 'jersey' ? 'Jersey 15' : 'Silkscreen';
+    let found = false;
+    fs.forEach(ff => { if (ff.family.replace(/["']/g, '') === fam && ff.status === 'loaded') found = true; });
+    return found;
+  } catch { return false; }
+}
+/** ask for the web pixel fonts early (so a splash word has them when it is needed) */
+export function warmBigFonts() {
+  try { const fs = (document as Document & { fonts?: FontFaceSet }).fonts; for (const k of Object.keys(BIG) as PxBigFace[]) void fs?.load(BIG[k].css); } catch { /* */ }
+}
+/** a splash word as a pixel buffer (1 px per art px) */
+export function pxBigBuf(text: string, o: PxBigOpts = {}): PixelBuffer {
+  const face = o.face ?? 'jersey';
+  const f = BIG[face];
+  const ink = col(o.color, hex('#fff7d8'));
+  let mask: PixelBuffer;
+  if (bigFontReady(face)) {
+    const m = document.createElement('canvas').getContext('2d')!;
+    m.font = f.css;
+    const sp = o.spacing ?? 0;
+    const chars = [...text];
+    const widths = chars.map(ch => Math.round(m.measureText(ch).width));
+    const W = widths.reduce((a, b) => a + b + sp, 0) + 4, Hh = f.h + 4;
+    const c = document.createElement('canvas');
+    c.width = W; c.height = Hh;
+    const g = c.getContext('2d', { willReadFrequently: true })!;
+    g.font = f.css; g.fillStyle = '#fff'; g.textBaseline = 'alphabetic';
+    let x = 2;
+    chars.forEach((ch, i) => { g.fillText(ch, x, 2 + f.asc); x += widths[i] + sp; });
+    const d = g.getImageData(0, 0, W, Hh).data;
+    mask = new PixelBuffer(W, Hh);
+    for (let i = 0; i < W * Hh; i++) if (d[i * 4 + 3] > 127) mask.data[i] = ink;
+  } else {
+    // the bold bitmap face, doubled
+    const t = pxTextBuf(text, { font: 'bold', color: ink, spacing: o.spacing ? 1 : 0 });
+    mask = new PixelBuffer(t.w * 2 + 4, t.h * 2 + 4);
+    for (let y = 0; y < t.h; y++) for (let x = 0; x < t.w; x++) { const c = t.data[y * t.w + x]; if (c) mask.rect(2 + x * 2, y * 2, 2, 2, c); }
+  }
+  const dep = o.depth ?? 0, ring = o.outline ? 1 : 0;
+  const out = new PixelBuffer(mask.w + dep + ring * 2, mask.h + dep + ring * 2);
+  const oc = o.outline ? hex(o.outline) : 0, dc = hex(o.depthColor ?? o.outline ?? '#000000');
+  const on = (x: number, y: number) => x >= 0 && y >= 0 && x < mask.w && y < mask.h && mask.data[y * mask.w + x] !== 0;
+  const N8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]];
+  // the extruded shadow (of the outlined shape), then the ring, then the letters
+  for (let y = 0; y < mask.h; y++) for (let x = 0; x < mask.w; x++) {
+    if (!on(x, y)) continue;
+    for (let k = dep; k >= 1; k--) {
+      out.set(x + ring + k, y + ring + k, dc);
+      if (ring) for (const [dx, dy] of N8) out.set(x + ring + dx + k, y + ring + dy + k, dc);
+    }
+  }
+  if (ring) for (let y = 0; y < mask.h; y++) for (let x = 0; x < mask.w; x++) if (on(x, y)) for (const [dx, dy] of N8) out.set(x + ring + dx, y + ring + dy, oc);
+  for (let y = 0; y < mask.h; y++) for (let x = 0; x < mask.w; x++) if (on(x, y)) out.set(x + ring, y + ring, mask.data[y * mask.w + x]);
+  return out;
+}
+export function pxBigCanvas(text: string, o: PxBigOpts & { scale?: number; cls?: string } = {}): HTMLCanvasElement {
+  const b = pxBigBuf(text, o);
+  const c = document.createElement('canvas');
+  c.width = b.w; c.height = b.h;
+  if (o.cls) c.className = o.cls;
+  c.getContext('2d', { willReadFrequently: true })?.putImageData(new ImageData(new Uint8ClampedArray(b.bytes), b.w, b.h), 0, 0);
+  const k = o.scale ?? 1;
+  c.style.width = b.w * k + 'px'; c.style.height = b.h * k + 'px';
+  c.style.imageRendering = 'pixelated';
+  return c;
+}

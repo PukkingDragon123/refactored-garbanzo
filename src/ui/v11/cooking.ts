@@ -34,6 +34,12 @@ import { el } from '../ui';
 import { css, sfx, esc, pushKeys, reduced } from '../laptop-kit';
 import { packIcons } from './packicons';
 import { handLetter, ensureHandFont } from './handletter';
+import { pxTextCanvas, pxBigCanvas, warmBigFonts } from '../pxfont';
+import type { PxTextOpts } from '../pxfont';
+import { paintBubble, paintStamp, ditherVignette, bufCanvas as kitCanvas, H as KH } from '../pxkit';
+import { paintRecipeSpread, BOOK_W, BOOK_H } from './recipebook';
+import type { RecipeEntry } from './recipebook';
+import { PixelBuffer } from '../../art/pixel';
 import { paintBundle, paintTag } from './bagart';
 import { footprint } from '../../game/v11/footprints';
 import { CookSound } from './cooksfx';
@@ -144,6 +150,28 @@ function bufURLCanvas(b: { w: number; h: number; bytes: Uint8Array }, scale = 1)
   return c;
 }
 const icon = (n: string) => { const c = bufURLCanvas(pxIconBuf(n)); c.className = 'ic'; return c; };
+/** bitmap text for the stage (art px) */
+function txt(text: string, o: PxTextOpts = {}, cls = ''): HTMLCanvasElement {
+  const c = pxTextCanvas(text, o);
+  if (cls) c.classList.add(cls);
+  return c;
+}
+const BTN_T: PxTextOpts = { font: 'bold', color: '#fff6dc', shadow: '#1e1008' };
+let weave: string | null = null;
+/** the woven flax mat the food is laid out on (a repeating 8x8 tile) */
+function matWeave(): string {
+  if (weave) return weave;
+  const b = new PixelBuffer(8, 8);
+  const L = [KH('#6a5a32'), KH('#8a7a44'), KH('#a8945a'), KH('#c0ac70')];
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+    // over-under: horizontal strands on one checker, vertical on the other
+    const horiz = ((x >> 2) + (y >> 2)) % 2 === 0;
+    const u = horiz ? y % 4 : x % 4;
+    b.set(x, y, u === 0 ? L[0] : u === 1 ? L[3] : u === 2 ? L[2] : L[1]);
+  }
+  weave = kitCanvas(b).toDataURL();
+  return weave;
+}
 
 // ---------------------------------------------------------------- scenery
 
@@ -215,64 +243,58 @@ function logSprite(p: Px, cx: number, cy: number, rx: number, ry: number) {
 // ---------------------------------------------------------------- styles
 
 const CSS = `
-.ck11 { position: absolute; inset: 0; z-index: 37; background: radial-gradient(ellipse at 50% 60%, #2a1c10, #07060a 75%); overflow: hidden; pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; font-family: 'Jersey 15', 'Pixelify Sans', monospace; animation: ck11In 0.5s ease-out both; }
+.ck11 { position: absolute; inset: 0; z-index: 37; background: #07060a; overflow: hidden; pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; font-family: 'Jersey 15', 'Pixelify Sans', monospace; animation: ck11In 0.5s steps(6) both; }
 @keyframes ck11In { from { opacity: 0; } }
-.ck11.out { animation: ck11Out 0.4s ease-in both; }
+.ck11.out { animation: ck11Out 0.4s steps(5) both; }
 @keyframes ck11Out { to { opacity: 0; } }
 .ck11 .stage { position: absolute; left: 0; top: 0; width: ${CW}px; height: ${CH}px; transform-origin: 0 0; }
 .ck11 canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
-.ck11 .stage > canvas.main { position: absolute; left: 0; top: 0; animation: ck11Zoom 0.9s cubic-bezier(.2,.8,.3,1) both; }
-@keyframes ck11Zoom { from { transform: scale(1.3); filter: brightness(0.3) blur(3px); } }
+.ck11 .stage > canvas.main { position: absolute; left: 0; top: 0; animation: ck11Zoom 0.9s steps(9) both; }
+@keyframes ck11Zoom { from { transform: scale(1.25); filter: brightness(0.3); } }
 .ck11 canvas.ic { display: inline-block; vertical-align: middle; flex: none; }
 .ck11 .mat { position: absolute; left: 50px; top: 3px; width: 220px; height: 26px; display: flex; gap: 2px; align-items: center; padding: 0 4px; box-sizing: border-box;
-  background: repeating-linear-gradient(90deg, #8a7a44 0 2px, #a8945a 2px 4px, #6a5a32 4px 5px); box-shadow: 0 0 0 1px #2a2010, 0 2px 0 rgba(0,0,0,0.5); overflow-x: auto; scrollbar-width: none; }
+  background-repeat: repeat; image-rendering: pixelated; overflow-x: auto; scrollbar-width: none; }
+.ck11 .mat::-webkit-scrollbar { display: none; }
 .ck11 .chip { position: relative; flex: none; width: 22px; height: 22px; display: grid; place-items: center; cursor: grab; touch-action: none; }
-.ck11 .chip canvas { max-width: 22px; max-height: 22px; filter: drop-shadow(0 1px 0 rgba(0,0,0,0.6)); }
-.ck11 .chip b { position: absolute; right: 0; bottom: -1px; font-weight: normal; font-size: 7px; color: #fff8e0; text-shadow: 1px 0 0 #120e07, -1px 0 0 #120e07, 0 1px 0 #120e07, 0 -1px 0 #120e07; }
+.ck11 .chip > canvas:first-child { max-width: 22px; max-height: 22px; filter: drop-shadow(0 1px 0 rgba(0,0,0,0.6)); }
+.ck11 .chip .cnt { position: absolute; right: -1px; bottom: -3px; }
 .ck11 .chip.stash::after { content: ''; position: absolute; left: 1px; top: 1px; width: 3px; height: 3px; background: #c8a070; box-shadow: 0 0 0 1px #3a2614; }
 .ck11 .chip:hover { filter: brightness(1.2); }
-.ck11 .mat .none { font-size: 7px; color: #2a2010; padding-left: 4px; white-space: nowrap; }
+.ck11 .mat .none { padding-left: 4px; }
 .ck11 .drag { position: absolute; pointer-events: none; z-index: 20; filter: drop-shadow(2px 3px 0 rgba(0,0,0,0.45)); }
-.ck11 .btn11 { all: unset; box-sizing: border-box; position: absolute; height: 18px; min-width: 18px; padding: 0 5px; display: inline-flex; align-items: center; justify-content: center; gap: 3px; cursor: pointer;
-  border-style: solid; border-width: 3px; border-image: var(--sk-btn-wood) 4 fill / 3px / 0 stretch; color: #fff6dc; font-size: 7px; letter-spacing: 0.06em; text-shadow: 0 1px 0 rgba(0,0,0,0.7); z-index: 5; }
+.ck11 .btn11 { all: unset; box-sizing: border-box; position: absolute; height: 18px; min-width: 18px; padding: 0 4px; display: inline-flex; align-items: center; justify-content: center; gap: 3px; cursor: pointer;
+  border-style: solid; border-width: 3px; border-image: var(--sk-btn-wood) 4 fill / 3px / 0 stretch; image-rendering: pixelated; z-index: 5; }
 .ck11 .btn11.green { border-image-source: var(--sk-btn); }
 .ck11 .btn11.amber { border-image-source: var(--sk-btn-amber); }
 .ck11 .btn11:hover { filter: brightness(1.15); }
+.ck11 .btn11:active { transform: translateY(1px); }
 .ck11 .btn11[hidden] { display: none; }
-.ck11 .btn11.pulse { animation: ck11Pulse 0.9s steps(4) infinite; }
-@keyframes ck11Pulse { 50% { filter: brightness(1.35) drop-shadow(0 0 3px #ffe070); } }
-.ck11 .say { position: absolute; left: 6px; top: 34px; max-width: 150px; font-size: 7.5px; line-height: 8.5px; color: #0c0a0c; background: #fff; padding: 3px 5px 4px; box-shadow: 0 0 0 1px #0c0a0c, 2px 2px 0 1px rgba(0,0,0,0.4); transform-origin: 10% 0; animation: ck11Pop 0.3s cubic-bezier(.2,1.7,.4,1) both; z-index: 6; }
-.ck11 .say b { display: block; font-weight: normal; font-size: 5.5px; letter-spacing: 0.12em; color: #fff; background: #0c0a0c; margin: -3px -5px 2px; padding: 1px 4px; box-shadow: inset 3px 0 0 var(--c, #3fbca6); }
-.ck11 .say.shout { animation: ck11Pop 0.3s cubic-bezier(.2,1.7,.4,1) both, ck11Shk 0.12s steps(2) 3 0.3s; }
-@keyframes ck11Pop { 0% { transform: scale(0.3); opacity: 0; } 60% { transform: scale(1.06); opacity: 1; } }
+.ck11 .btn11.pulse { animation: ck11Pulse 0.9s steps(2) infinite; }
+@keyframes ck11Pulse { 50% { filter: brightness(1.35); transform: translateY(-1px); } }
+.ck11 .say { position: absolute; left: 6px; top: 34px; transform-origin: 10% 0; animation: ck11Pop 0.3s steps(4) both; z-index: 6; }
+.ck11 .say > canvas { position: absolute; left: 0; top: 0; }
+.ck11 .say.shout { animation: ck11Pop 0.3s steps(4) both, ck11Shk 0.12s steps(2) 3 0.3s; }
+@keyframes ck11Pop { 0% { transform: scale(0.4); opacity: 0; } 60% { transform: scale(1.08); opacity: 1; } }
 @keyframes ck11Shk { 50% { transform: translate(1px, -1px); } }
-.ck11 .hint { position: absolute; left: 0; right: 0; bottom: 3px; text-align: center; font-size: 7px; color: rgba(255,246,228,0.9); text-shadow: 0 1px 0 #000; pointer-events: none; transition: opacity 0.5s; z-index: 5; }
-.ck11 .hint .ic { margin: 0 2px; }
-.ck11 .pick { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; gap: 14px; padding-bottom: 40px; z-index: 8; background: radial-gradient(ellipse at 50% 70%, rgba(0,0,0,0) 30%, rgba(0,0,0,0.45)); }
-.ck11 .pick button { all: unset; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 7px; color: #fff3cc; text-shadow: 0 1px 0 #000; padding: 3px; }
+.ck11 .hint { position: absolute; left: 0; right: 0; bottom: 3px; display: flex; justify-content: center; pointer-events: none; transition: opacity 0.5s steps(4); z-index: 5; }
+.ck11 .pick { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; gap: 14px; padding-bottom: 40px; z-index: 8; }
+.ck11 .pick > canvas.vig { position: absolute; left: 0; top: 0; pointer-events: none; }
+.ck11 .pick button { all: unset; position: relative; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 3px; }
 .ck11 .pick button:hover { filter: brightness(1.25); transform: translateY(-2px); }
 .ck11 .pick button canvas { filter: drop-shadow(0 2px 0 rgba(0,0,0,0.5)); }
-.ck11 .pick .ttl { position: absolute; left: 0; right: 0; top: 52px; display: flex; justify-content: center; pointer-events: none; }
-.ck11 .res { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 9; background: rgba(6,4,2,0.55); animation: ck11In 0.3s both; }
-.ck11 .res .word { position: absolute; top: 18px; left: 0; right: 0; text-align: center; font-family: 'Jersey 10', 'Silkscreen', monospace; font-size: 26px; letter-spacing: 0.06em; color: #fff7d8;
-  text-shadow: 3px 3px 0 #c8341e, -1px -1px 0 #3a1408, 1px -1px 0 #3a1408, -1px 1px 0 #3a1408; transform: rotate(-4deg); animation: ck11Word 0.5s cubic-bezier(.25,1.8,.45,1) both; }
-.ck11 .res .word.bad { color: #e8f2ff; text-shadow: 3px 3px 0 #2a4a8a, -1px -1px 0 #0a1428, 1px -1px 0 #0a1428, -1px 1px 0 #0a1428; }
-@keyframes ck11Word { 0% { transform: rotate(-4deg) scale(2.4); opacity: 0; } 100% { transform: rotate(-4deg) scale(1); opacity: 1; } }
-.ck11 .res .tag { position: relative; width: 112px; height: 120px; margin-top: 30px; animation: ck11Pop 0.45s cubic-bezier(.2,1.6,.4,1) both 0.25s; }
+.ck11 .pick .ttl { position: absolute; left: 0; right: 0; top: 50px; display: flex; justify-content: center; pointer-events: none; }
+.ck11 .res { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 9; background: rgba(6,4,2,0.55); animation: ck11In 0.3s steps(4) both; }
+.ck11 .res .word { position: absolute; top: 12px; left: 0; right: 0; display: flex; justify-content: center; animation: ck11Word 0.5s steps(6) both; }
+@keyframes ck11Word { 0% { transform: scale(2.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+.ck11 .res .tag { position: relative; width: 112px; height: 120px; margin-top: 30px; animation: ck11Pop 0.45s steps(5) both 0.25s; }
 .ck11 .res .tag > * { position: absolute; }
-.ck11 .res .new { right: -10px; top: 6px; transform: rotate(14deg); font-size: 7px; color: #a8281a; border: 1px solid #a8281a; padding: 1px 3px 0; background: rgba(255,240,200,0.6); letter-spacing: 0.08em; }
-.ck11 .res .tag .n { left: 0; right: 0; top: 88px; text-align: center; font-size: 7.5px; color: #3a2e18; }
+.ck11 .res .new { right: -12px; top: 4px; }
 .ck11 .res .go { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); }
-.ck11 .book { position: absolute; inset: 0; z-index: 10; background: rgba(4,3,2,0.6); display: grid; place-items: center; animation: ck11In 0.25s both; }
-.ck11 .book .page { position: relative; width: 236px; height: 168px; background: #e8d6a6; box-shadow: 0 0 0 1px #4a3818, 3px 3px 0 1px rgba(0,0,0,0.4), inset 0 0 18px rgba(120,80,30,0.35);
-  background-image: repeating-linear-gradient(0deg, transparent 0 10px, rgba(90,110,140,0.18) 10px 11px); padding: 6px 8px; box-sizing: border-box; display: grid; grid-template-columns: 1fr 1fr; gap: 3px 8px; align-content: start; overflow: hidden; }
-.ck11 .book .page::before { content: ''; position: absolute; left: 50%; top: 4px; bottom: 4px; width: 1px; background: rgba(90,60,20,0.35); }
-.ck11 .book .rc { min-height: 28px; font-size: 6.5px; line-height: 7.5px; color: #3a2e18; }
-.ck11 .book .rc .ings { display: flex; gap: 1px; align-items: center; flex-wrap: wrap; margin-top: 1px; }
-.ck11 .book .rc .ings span { display: inline-flex; align-items: center; font-size: 6px; }
-.ck11 .book .rc.unk { color: #8a7650; }
-.ck11 .book .rc .st { color: #2f6b2a; }
-.ck11 .book .x { position: absolute; right: -6px; top: -6px; z-index: 2; }
+.ck11 .book { position: absolute; inset: 0; z-index: 10; background: rgba(4,3,2,0.6); display: grid; place-items: center; animation: ck11In 0.25s steps(3) both; }
+.ck11 .book .spread { position: relative; width: 300px; height: 172px; animation: ck11Book 0.3s steps(4) both; }
+@keyframes ck11Book { from { transform: translateY(14px); opacity: 0; } }
+.ck11 .book .spread > canvas { position: absolute; left: 0; top: 0; }
+.ck11 .book .x { position: absolute; right: -2px; top: -4px; z-index: 2; }
 `;
 
 // ---------------------------------------------------------------- the close-up
@@ -387,7 +409,10 @@ class Cook {
     const vw = window.innerWidth, vh = window.innerHeight;
     // cover the screen when that crops only a sliver, else fit it whole (wide and tall phones)
     const cover = Math.max(vw / CW, vh / CH), contain = Math.min(vw / CW, vh / CH);
-    const s = cover / contain < 1.1 ? cover : contain;
+    // whole device pixels per art pixel (cover when that crops a sliver, else fit it whole)
+    const dpr = window.devicePixelRatio || 1;
+    const sc = Math.ceil(cover * dpr - 0.02) / dpr, sf = Math.max(1, Math.floor(contain * dpr + 0.02)) / dpr;
+    const s = cover / contain < 1.1 && (sc * CW - vw) / vw < 0.12 && (sc * CH - vh) / vh < 0.12 ? sc : sf;
     this.s = s;
     this.stage.style.transform = `scale(${s})`;
     this.stage.style.left = Math.round((vw - CW * s) / 2) + 'px';
@@ -398,6 +423,8 @@ class Cook {
     const st = this.stage;
     // the mat with the food on it
     this.mat = st.appendChild(el('div', 'mat'));
+    this.mat.style.backgroundImage = `url(${matWeave()})`;
+    this.mat.style.boxShadow = '0 0 0 1px #2a2010, 0 2px 0 rgba(0,0,0,0.5)';
     this.fillMat();
     // the notebook, leave
     const bk = st.appendChild(el('button', 'btn11'));
@@ -413,7 +440,7 @@ class Cook {
     // serve
     this.serveBtn = st.appendChild(el('button', 'btn11 green'));
     this.serveBtn.appendChild(icon('v11eat'));
-    this.serveBtn.appendChild(el('span', '', 'SERVE'));
+    this.serveBtn.appendChild(txt('SERVE', BTN_T));
     this.serveBtn.style.left = '254px'; this.serveBtn.style.top = '120px';
     this.serveBtn.hidden = true;
     this.serveBtn.addEventListener('click', e => { e.stopPropagation(); this.serve(); });
@@ -435,13 +462,13 @@ class Cook {
   fillMat() {
     this.mat.innerHTML = '';
     const l = this.larder();
-    if (!l.length) { this.mat.appendChild(el('span', 'none', 'Nothing to cook in the pack. Berries, shellfish, fish, roots...')); return; }
+    if (!l.length) { this.mat.appendChild(txt('Nothing to cook in the pack. Berries, shellfish, fish, roots...', { color: '#2a2010' }, 'none')); return; }
     for (const f of l) {
       const c = this.mat.appendChild(el('div', 'chip' + (f.from === 'stash' ? ' stash' : '')));
       const sp = spriteOf(f.id);
       const cv = spriteCanvas(sp);
       c.appendChild(cv);
-      c.appendChild(el('b', '', String(f.n)));
+      c.appendChild(txt(String(f.n), { font: 'bold', color: '#fff8e0', outline: '#120e07' }, 'cnt'));
       c.title = `${ITEMS[f.id]?.name ?? f.id}${f.from === 'stash' ? ' (from the stash)' : ''}`;
       (c as unknown as { __f: typeof f }).__f = f;
     }
@@ -449,6 +476,7 @@ class Cook {
 
   private pickMethod() {
     const pk = this.stage.appendChild(el('div', 'pick'));
+    pk.appendChild(kitCanvas(ditherVignette(CW / 2, CH / 2, { cx: 0.5, cy: 0.62, inner: 0.35, outer: 1.05, max: 0.55, color: '#000000' }), 'vig', 2));
     const ttl = pk.appendChild(el('div', 'ttl'));
     ttl.appendChild(handLetter(this.o.title ?? 'What are we cooking with?', { px: 13, color: '#fff3cc', bleed: '#3a2a14', maxW: 220 }));
     const opts: [Method, string][] = [['pot', 'v11pot'], ['pan', 'v11fire'], ['skewer', 'v11knife']];
@@ -465,7 +493,7 @@ class Cook {
       const tmp = document.createElement('canvas'); tmp.width = CW; tmp.height = CH; tmp.getContext('2d')!.putImageData(id, 0, 0);
       cv.getContext('2d')!.drawImage(tmp, 0, 0, 64, 40, 0, 0, 64, 40);
       b.appendChild(cv);
-      b.appendChild(el('span', '', m === 'pot' ? 'POT' : m === 'pan' ? 'PAN' : 'SKEWERS'));
+      b.appendChild(txt(m === 'pot' ? 'POT' : m === 'pan' ? 'PAN' : 'SKEWERS', { font: 'bold', color: '#fff3cc', outline: '#120e07', spacing: 1 }));
       b.addEventListener('click', e => { e.stopPropagation(); this.method = m; pk.remove(); sfx('place', { vol: 0.5, pitch: 0.8 }); this.begin(); });
     }
   }
@@ -673,9 +701,18 @@ class Cook {
     const nm = who === 'mori' ? 'MORI' : who.toUpperCase();
     const c = who === 'joshu' ? '#2c3a5a' : who === 'aroha' ? '#8a4b2a' : '#4a6a2a';
     const b = this.stage.appendChild(el('div', 'say' + (shout ? ' shout' : '')));
-    b.style.setProperty('--c', c);
-    b.appendChild(el('b', '', nm));
-    b.appendChild(document.createTextNode(text));
+    // a white bubble with the speaker on a coloured tab across the top
+    const name = txt(nm, { font: 'tiny', color: '#ffffff', spacing: 1 });
+    const body = txt(text, { color: '#0c0a0c', maxW: 140, lineH: 9 });
+    const bw = Math.max(name.width + 10, body.width + 8), bh = body.height + 10;
+    const bub = paintBubble(bw, bh, { tail: 'up', tailX: 8 });
+    const tab = KH(c);
+    for (let y = 0; y < 8; y++) for (let x = 1; x < bw - 1; x++) if (y > 0 || (x > 1 && x < bw - 2)) bub.set(x, 5 + y, x < 4 ? KH('#ffd24a') : tab);
+    b.appendChild(kitCanvas(bub));
+    name.style.cssText += ';position:absolute;left:6px;top:4px';
+    body.style.cssText += ';position:absolute;left:4px;top:13px';
+    b.appendChild(name); b.appendChild(body);
+    b.style.width = bub.w + 'px'; b.style.height = bub.h + 'px';
     this.sayEl = b;
     this.sayT = 3.6;
   }
@@ -691,7 +728,11 @@ class Cook {
     if (pl.recipe && !CK.knowsRecipe(pl.recipe.id) && this.o.coach === 'joshu' && pl.recipe.teach?.who === 'joshu') this.tip('rec', ['Oh, now that’s the start of something. Keep going.'], 20);
     if (CK.riskyIn([ids[ids.length - 1]]).length) this.tip('risky', ['You sure about that one? Fire doesn’t make a bad mushroom good.', 'Cooking it won’t make it safe, you know.'], 30);
   }
-  hint(t: string) { this.hintEl.textContent = t; this.hintEl.style.opacity = '1'; }
+  hint(t: string) {
+    this.hintEl.innerHTML = '';
+    this.hintEl.appendChild(txt(t, { color: '#fff6e4', outline: '#0a0806' }));
+    this.hintEl.style.opacity = '1';
+  }
 
   // ------------------------------------------------------------ the simulation
   private frame(now: number) {
@@ -1033,8 +1074,9 @@ class Cook {
     const res = CK.finishCook(this.method, ids, this.method === 'pot' ? this.done : Math.max(this.sideA, this.sideB) > 1.18 ? Math.max(this.sideA, this.sideB) : (this.sideA + this.sideB) / 2, care);
     sfx(res.quality === 'burnt' ? 'wrong' : 'catchJingle', { vol: 0.5 });
     const box = this.stage.appendChild(el('div', 'res'));
-    const word = { perfect: 'PERFECT!', good: 'GOOD', raw: 'UNDERCOOKED', burnt: 'BURNT' }[res.quality];
-    box.appendChild(el('div', 'word' + (res.quality === 'burnt' || res.quality === 'raw' ? ' bad' : ''), word));
+    const word = { perfect: 'PERFECT!', good: 'GOOD!', raw: 'UNDERCOOKED', burnt: 'BURNT' }[res.quality];
+    const bad = res.quality === 'burnt' || res.quality === 'raw';
+    box.appendChild(el('div', 'word')).appendChild(pxBigCanvas(word, { color: bad ? '#e8f2ff' : '#fff7d8', outline: bad ? '#0a1428' : '#3a1408', depth: 3, depthColor: bad ? '#2a4a8a' : '#c8341e', spacing: 1 }));
     const tag = box.appendChild(el('div', 'tag'));
     tag.appendChild(bufURLCanvas(paintTag(112, 120)));
     const sp = spriteOf(res.dish);
@@ -1046,11 +1088,12 @@ class Cook {
     const nm = handLetter(ITEMS[res.dish]?.name ?? res.dish, { px: 12, maxW: 100 });
     nm.style.left = Math.round(56 - nm.width / 2) + 'px'; nm.style.top = '62px';
     tag.appendChild(nm);
-    tag.appendChild(el('div', 'n', `${res.portions} portion${res.portions > 1 ? 's' : ''}`));
-    if (res.learned) { tag.appendChild(el('div', 'new', 'NEW RECIPE')); sfx('discover', { vol: 0.5 }); }
+    const por = tag.appendChild(txt(`${res.portions} portion${res.portions > 1 ? 's' : ''}`, { color: '#3a2e18' }));
+    por.style.left = Math.round(56 - por.width / 2) + 'px'; por.style.top = '86px';
+    if (res.learned) { tag.appendChild(kitCanvas(paintStamp('NEW RECIPE', '#a8281a', 0.22, 5), 'new')); sfx('discover', { vol: 0.5 }); }
     const go = box.appendChild(el('button', 'btn11 green go'));
     go.appendChild(icon('v11eat'));
-    go.appendChild(el('span', '', 'TUCK IN'));
+    go.appendChild(txt('TUCK IN', BTN_T));
     const end = () => { if (this.closed) return; this.closeUp({ result: res, ids }); };
     go.addEventListener('click', e => { e.stopPropagation(); end(); });
     const offk = pushKeys(e => { if (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape') { end(); return true; } return true; });
