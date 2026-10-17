@@ -179,6 +179,20 @@ async function boot() {
     folio: async (at = 'bench', focus?: string) => (await import('./ui/v11/blueprints/folio')).openFolio({ at: at as never, focus }),
     /** V11 blueprints logic: (await zl.blueprints()).devAllBlueprints(), .devMaterials(), .finishResearch(true) */
     blueprints: async () => { const m = await import('./game/v11/bpcraft'); const c = await import('./game/v11/blueprints'); return { ...m, ...c }; },
+    /** dev: time painting one blueprint sheet (and the table) in ms */
+    bpTime: async (id = 'slingshot', w = 227, h = 215) => {
+      const s = await import('./ui/v11/blueprints/sheet'), a = await import('./ui/v11/blueprints/folioart');
+      const t0 = performance.now(); s.paintSheet(id, w, h, { state: 'craft', no: 1, of: 1 });
+      const t1 = performance.now(); a.paintTable(426, 240);
+      const t2 = performance.now(); a.paintFolio(127, 200);
+      return { sheet: t1 - t0, table: t2 - t1, folio: performance.now() - t2 };
+    },
+    artTime: async (id: string) => {
+      const a = await import('./art/v11/itemart'), s = await import('./ui/v11/blueprints/pxdraw');
+      const t0 = performance.now(); const cv = a.itemArtCanvas(id);
+      const t1 = performance.now(); if (cv) s.bufOf(cv);
+      return { paint: t1 - t0, read: performance.now() - t1 };
+    },
     /** dev: document the first n species (stand-in photos) so the encyclopedia has pages */
     devDoc: async (n = 8) => {
       const d = await import('./debug/devpoints');

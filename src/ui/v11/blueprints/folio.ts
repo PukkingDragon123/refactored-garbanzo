@@ -543,7 +543,14 @@ export function openFolio(o: FolioOpts = {}): Promise<FolioResult> {
     for (let i = sparks.length - 1; i >= 0; i--) if (sparks[i].life <= 0) sparks.splice(i, 1);
     if (shake && now - shake < 160) dirty = true;
     if (msg) dirty = true;
-    if (dirty) { dirty = false; render(now); }
+    if (dirty) {
+      dirty = false;
+      const t0 = performance.now();
+      render(now);
+      // (tests: how long a frame of the table takes)
+      const st = ((window as unknown as { __bpf?: { n: number; ms: number; max: number } }).__bpf ??= { n: 0, ms: 0, max: 0 });
+      st.n++; st.ms = performance.now() - t0; st.max = Math.max(st.max, st.ms);
+    }
     requestAnimationFrame(frame);
   };
 
