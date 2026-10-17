@@ -297,7 +297,20 @@ export function blit(dst: PixelBuffer, src: PixelBuffer, x: number, y: number, t
     }
   }
 }
-/** a canvas (item artwork) as a PixelBuffer */
+/**
+ * A copy with hard alpha: opaque stays, half-transparent pixels (the art's soft drop shadows) become a
+ * 50% checker of the same colour made opaque, faint ones vanish. Safe to draw with drawImage: no blending.
+ */
+export function hardAlpha(src: PixelBuffer): PixelBuffer {
+  const out = new PixelBuffer(src.w, src.h);
+  for (let y = 0; y < src.h; y++) for (let x = 0; x < src.w; x++) {
+    const v = src.data[y * src.w + x], a = v >>> 24;
+    if (a >= 200 || (a >= 40 && ((x + y) & 1) === 0)) out.data[y * src.w + x] = (v | 0xff000000) >>> 0;
+  }
+  return out;
+}
+
+/** a canvas (item artwork) as a PixelBuffer (reads the canvas back: slow on a GPU canvas, avoid) */
 export function bufOf(cv: HTMLCanvasElement): PixelBuffer {
   const b = new PixelBuffer(cv.width, cv.height);
   const ctx = cv.getContext('2d');

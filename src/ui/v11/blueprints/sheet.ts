@@ -12,12 +12,12 @@ import type { BlueprintDef, BlueprintKind } from '../../../game/v11/blueprints';
 import type { BpState } from '../../../game/v11/bpcraft';
 import { count } from '../../../game/inventory';
 import { ITEMS } from '../../../game/items';
-import { itemArtCanvas } from '../../../art/v11/itemart';
+import { itemArtBuffer } from '../../../art/v11/itemart';
 import { itemIcon } from '../../../art/itemicons';
 import { rotateNN } from '../../laptop-kit';
 import { INKS, paintPaper } from './pxpaper';
 import type { Ink } from './pxpaper';
-import { SkPen, blit, bufOf, dith, traceArt, rnd } from './pxdraw';
+import { SkPen, blit, dith, traceArt, rnd, hardAlpha } from './pxdraw';
 import { drawText, drawPara, textW, drawBig, bigW, wrapText } from './pxfont';
 import type { TextStyle } from './pxfont';
 import { DRAWINGS } from './drawings';
@@ -68,9 +68,8 @@ export function matIcon(id: string): PixelBuffer {
   const hit = iconCache.get(id);
   if (hit) return hit;
   let b: PixelBuffer | null = null;
-  const cv = itemArtCanvas(id);
-  if (cv) {
-    const a = bufOf(cv);
+  const a = itemArtBuffer(id);
+  if (a) {
     if (a.w <= 24 && a.h <= 24) b = a;
     else {
       // too big for a cell: halve it (nearest), centred in 24 x 24
@@ -80,7 +79,7 @@ export function matIcon(id: string): PixelBuffer {
       for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) b.set(ox + x, oy + y, a.get(x * k, y * k));
     }
   }
-  if (!b) b = itemIcon(id);
+  b = hardAlpha(b ?? itemIcon(id));
   iconCache.set(id, b);
   return b;
 }
@@ -93,14 +92,14 @@ function drawInto(b: PixelBuffer, d: BlueprintDef, I: Ink, x: number, y: number,
   const fn = DRAWINGS[d.id];
   if (fn) { fn(p, I); return; }
   // no drawing: trace the painted item art, enlarged by whole pixels, with its overall dimensions
-  const art = d.out ? itemArtCanvas(d.out[0]) : null;
+  const art = d.out ? itemArtBuffer(d.out[0]) : null;
   if (art) {
-    const s = Math.max(1, Math.floor(Math.min((w - 20) / art.width, (h - 16) / art.height)));
+    const s = Math.max(1, Math.floor(Math.min((w - 20) / art.w, (h - 16) / art.h)));
     const t = traceArt(art, s, I.c, I.soft, { tone: 0.3 });
     const tx = Math.round(x + (w - t.w) / 2), ty = Math.round(y + (h - t.h) / 2);
     blit(b, t, tx, ty);
     const q = new SkPen(b, I.c, I.soft, I.style, 0, 0, 1, seed);
-    q.dimH(tx, tx + t.w, ty + t.h + 4, `${art.width}`);
+    q.dimH(tx, tx + t.w, ty + t.h + 4, `${art.w}`);
     return;
   }
   p.rect(30, 14, 60, 52, { dash: [3, 2], c: I.soft });

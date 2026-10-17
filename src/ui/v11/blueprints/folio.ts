@@ -23,10 +23,10 @@ import type { BlueprintDef, BlueprintKind } from '../../../game/v11/blueprints';
 import { bpState, canCraft, craft, craftBlockers, missingMaterials, researchBlockers, startResearch, labStatus, finishResearch, researchNights } from '../../../game/v11/bpcraft';
 import type { BpState } from '../../../game/v11/bpcraft';
 import { ITEMS } from '../../../game/items';
-import { itemArtCanvas } from '../../../art/v11/itemart';
+import { itemArtBuffer } from '../../../art/v11/itemart';
 import { paintSheet, matIcon, paintStamp } from './sheet';
 import type { Sheet } from './sheet';
-import { blit, bufOf, dith, rnd } from './pxdraw';
+import { blit, dith, rnd, hardAlpha } from './pxdraw';
 import { drawText, textW, wrapText } from './pxfont';
 import { paintTable, paintFolio, paintTab, paintCard, KIND_ICON, MARK, paintTape, paintStampTool, paintSlip, paintTag, paintNote, paintMat, paintHammer, spr } from './folioart';
 
@@ -485,9 +485,8 @@ export function openFolio(o: FolioOpts = {}): Promise<FolioResult> {
       });
       // the hammer: raised, then down on each tap
       if (t > phase1) {
-        const hammer = once('hammer', () => paintHammer());
         const down = taps.some(tp => t > tp - 0.06 && t < tp + 0.05);
-        const hb = once('hammer:' + down, () => rotateNN(bufOf(hammer), down ? 0.2 : -0.9));
+        const hb = once('hammer:' + down, () => rotateNN(paintHammer(), down ? 0.2 : -0.9));
         put(hb, ccx + (down ? -2 : 6), ccy - (down ? 18 : 26));
         for (const tp of taps) if (t > tp && !(c as unknown as Record<string, boolean>)['tap' + tp]) {
           (c as unknown as Record<string, boolean>)['tap' + tp] = true;
@@ -506,9 +505,9 @@ export function openFolio(o: FolioOpts = {}): Promise<FolioResult> {
         for (let a = 0; a < 48; a++) { const an = (a / 48) * Math.PI * 2; ctx.fillRect(Math.round(ccx + Math.cos(an) * r), Math.round(ccy + Math.sin(an) * r * 0.75), 1, 1); }
       }
       const d = BLUEPRINTS[c.id];
-      const art = d.out ? itemArtCanvas(d.out[0]) : null;
+      const art = d.out ? itemArtBuffer(d.out[0]) : null;
       const big = once('made:' + c.id, () => {
-        if (art) { const a = bufOf(art), k = Math.max(1, Math.min(3, Math.floor(Math.min(90 / a.w, 70 / a.h)))); const b = new PixelBuffer(a.w * k, a.h * k); for (let y = 0; y < b.h; y++) for (let x = 0; x < b.w; x++) b.set(x, y, a.get(Math.floor(x / k), Math.floor(y / k))); return b; }
+        if (art) { const a = hardAlpha(art), k = Math.max(1, Math.min(3, Math.floor(Math.min(90 / a.w, 70 / a.h)))); const b = new PixelBuffer(a.w * k, a.h * k); for (let y = 0; y < b.h; y++) for (let x = 0; x < b.w; x++) b.set(x, y, a.get(Math.floor(x / k), Math.floor(y / k))); return b; }
         const s = getSheet(c.id).s.buf, w = Math.min(120, s.w), h = Math.min(80, s.h), b = new PixelBuffer(w, h);
         const ox = Math.max(0, Math.round(L.sw * 0.27 - w / 2)), oy = Math.max(0, Math.round(L.sh * 0.42 - h / 2));
         for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) b.set(x, y, s.get(ox + x, oy + y));
@@ -631,6 +630,6 @@ export function openFolio(o: FolioOpts = {}): Promise<FolioResult> {
   requestAnimationFrame(frame);
   // first visit at the bench: a note from Jenna
   if (at === 'bench' && !game.save.flags['v11:folioTip']) { game.save.flags['v11:folioTip'] = true; say(['Pick a sheet, then press the CRAFT stamp.', 'Missing bits? Hover them to see where they are. - J'], 6000); }
-  void spr; void bufOf;
+  void spr; void blit;
   return done;
 }
