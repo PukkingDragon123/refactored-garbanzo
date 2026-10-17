@@ -512,14 +512,14 @@ export async function runHueKiri(o: LessonOpts = {}): Promise<LessonResult | nul
     disc(buf, 70, 19, 8, C.ink); disc(buf, 70, 19, 7, mult > 1 ? C.paua : C.wood[2]);
     textC(buf, 'x' + mult, 70, 16, C.white, { shadow: C.ink });
     if (combo >= 2) { text(buf, String(combo), 9, 36, C.gold, { outline: C.ink, scale: combo >= 10 ? 2 : 1 }); text(buf, 'COMBO', 12 + pxWidth(String(combo), combo >= 10 ? 2 : 1), combo >= 10 ? 43 : 38, C.paper, { outline: C.ink }); }
-    // the mana gauge down the left: a carved frame, pounamu filling it
+    // the flow gauge down the left: a carved frame, pounamu filling it as the song flows
     const gx = 8, gy = 58, gh = 64;
     rect(buf, gx - 1, gy - 1, 10, gh + 2, C.ink);
     rect(buf, gx, gy, 8, gh, C.wood[2]);
     const fill = Math.round(gh * mana);
     for (let y = 0; y < fill; y++) for (let x = 1; x < 7; x++) put(buf, gx + x, gy + gh - 1 - y, (x + y) % 5 === 0 ? hx('#9af0b8') : y > fill - 3 ? hx('#b8ffd0') : x < 3 ? hx('#5ad08a') : C.pounamu);
     for (let y = 0; y < gh; y += 8) put(buf, gx + 7, gy + y, C.wood[4]);
-    text(buf, 'MANA', 3, gy + gh + 4, C.paper, { outline: C.ink });
+    text(buf, 'FLOW', 3, gy + gh + 4, C.paper, { outline: C.ink });
     // the song plate, top right, with its progress: a little serpent travelling along a cord
     plaque(buf, 214, 6, 100, 24, { paper: true });
     text(buf, song.name, 219, 9, C.ink);

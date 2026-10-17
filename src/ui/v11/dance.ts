@@ -214,7 +214,7 @@ export async function runDance(o: DanceOpts): Promise<DanceResult> {
     const mw = 54, mx = AW - mw - 8, my = 6;
     b.rect(mx - 1, my - 1, mw + 2, 6, P.ink);
     for (let x = 0; x < mw; x++) for (let y = 0; y < 4; y++) b.set(mx + x, my + y, x < mw * mood ? (((x + y) % 4 < 2) ? P.ochre2 : P.gold) : P.dark);
-    drawPx(b, 'IWI', mx - 18, my - 1, P.paper, { outline: P.ink });
+    drawPx(b, 'CROWD', mx - 30, my - 1, P.paper, { outline: P.ink });
     // the score, the combo
     const sc = String(score).padStart(5, '0');
     drawPx(b, sc, AW - 8 - pxWidth(sc), 14, P.paper, { outline: P.ink });
