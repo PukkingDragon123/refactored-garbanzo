@@ -356,9 +356,16 @@ function screenSeaDist(scr: Scr): Float32Array {
 
 const reefF = ellOf(SEAFLOOR.reef), reefOF = ellOf(SEAFLOOR.reefOuter), shelfF = ellOf(SEAFLOOR.shelf), deepF = ellOf(SEAFLOOR.deep), kelpF = ellOf(SEAFLOOR.kelp);
 
+let seaG: Float32Array | null = null;
+const SG = 8, SGW = Math.ceil(W / SG) + 2;
+function seaNoise(x: number, y: number): number {
+  if (!seaG) { const gh = Math.ceil(H / SG) + 2; seaG = new Float32Array(SGW * gh); for (let j = 0; j < gh; j++) for (let i = 0; i < SGW; i++) seaG[j * SGW + i] = fbm2(i * SG * 0.008, j * SG * 0.008, 3, 111); }
+  const fx = x / SG, fy = y / SG, i = Math.floor(fx), j = Math.floor(fy), u = fx - i, v = fy - j, k = j * SGW + i, g = seaG;
+  return (g[k] + (g[k + 1] - g[k]) * u) * (1 - v) + (g[k + SGW] + (g[k + SGW + 1] - g[k + SGW]) * u) * v;
+}
 function sea(f: Fields, L: Light, x: number, y: number, i: number, sd: number): C {
   const cdv = f.cd[i], shore = f.shore[i];
-  const nA = fbm2(x * 0.008, y * 0.008, 3, 111), nB = noise2(x * 0.05, y * 0.05, 112);
+  const nA = seaNoise(x, y), nB = noise2(x * 0.05, y * 0.05, 112);
   const sw = shelfAt(x, y) * (0.75 + nA * 0.6);
   let c: C;
   const dep = cdv / sw;
@@ -394,7 +401,7 @@ function sea(f: Fields, L: Light, x: number, y: number, i: number, sd: number): 
   const dp = 1 - deepF(x + (nA - 0.5) * 140, y + (nB - 0.5) * 30);
   if (dp > 0) c = mix(c, band(SEA.abyss, 0.2 + dp * 0.6 + (nB - 0.5) * 0.3, x, y), smoothstep(0, 0.35, dp));
   const kp = 1 - kelpF(x, y);
-  if (kp > 0 && fbm2(x * 0.05, y * 0.05, 2, 117) > 0.5) c = band(SEA.kelp, 0.3 + nB * 0.5, x, y);
+  if (kp > 0 && noise2(x * 0.05, y * 0.05, 117) > 0.5) c = band(SEA.kelp, 0.3 + nB * 0.5, x, y);
   // waves on the open water: little light chevrons
   if (cdv > 60 && dp <= 0) {
     const gx = Math.floor(x / 23), gy = Math.floor(y / 13), hh = hash2(gx, gy, 118);
@@ -407,7 +414,7 @@ function sea(f: Fields, L: Light, x: number, y: number, i: number, sd: number): 
   // the land's shadow on the water
   if (L.sh[i] > 40) c = shadowed(c, 1 - (L.sh[i] / 255) * 0.32);
   // foam: the swash line, the broken white water, a second line further out on the beaches
-  const fn = noise2(x * 0.12, y * 0.12, 121);
+  const fn = sd < 12 ? noise2(x * 0.12, y * 0.12, 121) : 0;
   if (sd <= 1.2) c = fn > 0.25 ? SEA.foam[2] : SEA.foam[1];
   else if (sd <= 2.4) c = fn > 0.45 ? SEA.foam[1] : mix(c, SEA.foam[0], 0.5);
   else if (sd <= 4 && fn > 0.62) c = mix(c, SEA.foam[1], 0.7);

@@ -106,20 +106,32 @@ const PAPER = [hex('#c4a670'), hex('#d0b47e'), hex('#dbc18e'), hex('#e5cd9d'), h
 const PAPER_SEA = [hex('#b8ae8a'), hex('#c4b994'), hex('#cfc39f'), hex('#d9cdab')];
 const dith = (x: number, y: number, ramp: C[], t: number) => ramp[clamp(Math.floor(t * (ramp.length - 1) + bayer(x, y)), 0, ramp.length - 1)];
 
+/** a smooth field sampled from a grid of `cell` px (bilinear) */
+function coarse(cell: number, fn: (x: number, y: number) => number): (x: number, y: number) => number {
+  const gw = Math.ceil(W / cell) + 2, gh = Math.ceil(H / cell) + 2, g = new Float32Array(gw * gh);
+  for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) g[j * gw + i] = fn(i * cell, j * cell);
+  return (x, y) => {
+    const fx = x / cell, fy = y / cell, i = Math.floor(fx), j = Math.floor(fy), u = fx - i, v = fy - j, k = j * gw + i;
+    return (g[k] + (g[k + 1] - g[k]) * u) * (1 - v) + (g[k + gw] + (g[k + gw + 1] - g[k + gw]) * u) * v;
+  };
+}
+
 /** the parchment with Joshu's chart on it */
 export async function buildPaper(): Promise<Uint32Array> {
   const { land: m, cd: d } = await landAndCoast();
   const out = new Uint32Array(N);
   // the torn, deckled edge of the sheet
   const edgeIn = (x: number, y: number) => { const t = x + y * 0.7; return 6 + fbm2(t * 0.022, 3.3, 3, 71) * 19 + (hash2(Math.floor(t / 8), 1, 72) > 0.93 ? 5 : 0); };
+  // (the paper's slow noise on coarse grids)
+  const nG = coarse(6, (x, y) => fbm2(x * 0.011, y * 0.011, 4, 5)), stG = coarse(16, (x, y) => fbm2(x * 0.0033 + 4, y * 0.0033, 3, 9)), foxG = coarse(4, (x, y) => fbm2(x * 0.03, y * 0.03, 2, 44));
   for (let y = 0; y < H; y++) {
     if ((y & 15) === 0) await slice();
     for (let x = 0; x < W; x++) {
       const i = y * W + x;
       const e = Math.min(x, y, W - 1 - x, H - 1 - y);
-      const ei = edgeIn(x < W / 2 ? x : W - x, y < H / 2 ? y : H - y);
+      const ei = e < 120 ? edgeIn(x < W / 2 ? x : W - x, y < H / 2 ? y : H - y) : 0;
       if (e < ei - 3) { out[i] = 0; continue; }
-      const n = fbm2(x * 0.011, y * 0.011, 4, 5), st = fbm2(x * 0.0033 + 4, y * 0.0033, 3, 9), gr = hash2(x, y, 33);
+      const n = nG(x, y), st = stG(x, y), gr = hash2(x, y, 33);
       const burn = clamp(1 - (e - ei) / 70) ** 2;
       const t = 0.66 + (n - 0.5) * 0.55 - burn * 0.75 - (st > 0.66 ? (st - 0.66) * 1.6 : 0) + (gr - 0.5) * 0.12;
       const sea = !m[i];
@@ -127,7 +139,7 @@ export async function buildPaper(): Promise<Uint32Array> {
       if (e < ei + 1.6) c = mix(c, hex('#6e4a26'), 0.55);
       else if (burn > 0.5 && hash2(x >> 2, y >> 2, 3) < burn * 0.18) c = mix(c, hex('#7a5430'), 0.4);
       // foxing and the odd fleck
-      const fox = fbm2(x * 0.03, y * 0.03, 2, 44);
+      const fox = foxG(x, y);
       if (fox > 0.74 && hash2(x >> 1, y >> 1, 45) < (fox - 0.74) * 5) c = mix(c, hex('#a07848'), 0.45);
       if (hash2(x, y, 77) > 0.9996) c = INK2;
       // creases where it has been folded

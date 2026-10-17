@@ -299,13 +299,13 @@ export async function buildFields(): Promise<Fields> {
   const boxes = SHAPES.map(shapeBox);
   const sign = SHAPES.map((s, k) => (hash2(k, s.b, 9) < 0.5 ? -1 : 1));
   const shapeF = SHAPES.map(s => ('e' in s ? ellOf(s.e) : null));
-  for (let y = 0; y < H; y++) {
-    if ((y & 15) === 0) await slice();
-    for (let x = 0; x < W; x++) {
-      const i = y * W + x;
-      patch[i] = sampleG(patchG!, x, y);
-      if (cd[i] < 90) shore[i] = SHORE_ID[shoreAt(x, y)];
-      if (!land[i]) { bio[i] = B.sea; continue; }
+  // the biomes are worked out at half resolution (their edges are ragged noise anyway)
+  const BW2 = W >> 1, BH2 = H >> 1, bh = new Uint8Array(BW2 * BH2);
+  for (let j = 0; j < BH2; j++) {
+    if ((j & 15) === 0) await slice();
+    for (let i2 = 0; i2 < BW2; i2++) {
+      const x = i2 * 2, y = j * 2;
+      if (!land[y * W + x] && !land[y * W + x + 1] && !land[(y + 1) * W + x]) continue;
       const a = sampleG(bioG!, x, y), b = noise2(x * 0.06, y * 0.06, 22);
       let best = 0, bb: B = B.meadow;
       for (let k = 0; k < SHAPES.length; k++) {
@@ -314,7 +314,17 @@ export async function buildFields(): Promise<Fields> {
         const w = shapeW(SHAPES[k], x, y, shapeF[k]) + (a - 0.5) * 0.62 * sign[k] + (b - 0.5) * 0.12;
         if (w > best) { best = w; bb = SHAPES[k].b; }
       }
-      bio[i] = bb;
+      bh[j * BW2 + i2] = bb;
+    }
+  }
+  for (let y = 0; y < H; y++) {
+    if ((y & 31) === 0) await slice();
+    const row = Math.min(BH2 - 1, y >> 1) * BW2;
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x;
+      patch[i] = sampleG(patchG!, x, y);
+      if (cd[i] < 90) shore[i] = SHORE_ID[shoreAt(x, y)];
+      bio[i] = land[i] ? bh[row + Math.min(BW2 - 1, x >> 1)] : B.sea;
     }
   }
   shoreGrids();
@@ -507,10 +517,11 @@ function lakes(land: Uint8Array, hgt: Float32Array, wat: Uint8Array, bio: Uint8A
   for (const [x, y, r, k] of POOLS) lake(x, y, r, r * 0.66, k === 2 ? WK.pool : WK.hot);
   for (const [x, y, r] of WALLOWS) lake(x, y, r, r * 0.62, WK.pool);
   // the mangroves: black water channels winding through the mud
+  const chG = grid((x, y) => fbm2(x * 0.022, y * 0.022, 3, 64)), poolG = grid((x, y) => fbm2(x * 0.018 + 9, y * 0.018, 2, 65));
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const i = y * W + x;
     if (bio[i] !== B.swamp || wat[i]) continue;
-    const ch = Math.abs(fbm2(x * 0.022, y * 0.022, 3, 64) - 0.5);
-    if (ch < 0.028 || fbm2(x * 0.018 + 9, y * 0.018, 2, 65) > 0.69) { wat[i] = WK.channel; hgt[i] = Math.max(0.3, hgt[i] - 0.6); }
+    const ch = Math.abs(sampleG(chG, x, y) + (noise2(x * 0.15, y * 0.15, 66) - 0.5) * 0.02 - 0.5);
+    if (ch < 0.026 || sampleG(poolG, x, y) > 0.69) { wat[i] = WK.channel; hgt[i] = Math.max(0.3, hgt[i] - 0.6); }
   }
 }

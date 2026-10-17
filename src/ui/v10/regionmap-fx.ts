@@ -255,6 +255,8 @@ export class LiveMap {
   readonly state = new Uint8Array(W * H);
   private target = new Uint8Array(W * H);
   private cov = new Float32Array(W * H).fill(-160);
+  /** the reveal's ragged edge (fixed noise, worked out once) */
+  private edgeN: Int8Array | null = null;
   private art: MapArt | null = null;
   // the reveal
   private rq: Int32Array | null = null;
@@ -347,10 +349,11 @@ export class LiveMap {
     let bx0 = W, by0 = H, bx1 = 0, by1 = 0;
     let tmin = 1e9, tmax = -1e9;
     const SK = 15 * S;
+    const en = this.edgeNoise();
     for (let i = 0; i < N; i++) {
       if (!this.paper[i]) { tgt[i] = 0; continue; }
       const x = i % W, y = (i / W) | 0;
-      const n = (fbm2(x * 0.026, y * 0.026, 2, 301) - 0.5) * 9 * S + (hash2(x >> 2, y >> 2, 302) - 0.5) * 4;
+      const n = en[i];
       const sea = land ? !land[i] : false;
       const c = f[i] + n + (sea ? 5 * S : 0);
       cov[i] = c;
@@ -387,6 +390,18 @@ export class LiveMap {
       this.revealBox = bx1 >= bx0 ? [bx0, by0, bx1, by1] : null;
     } else { this.rq = null; this.revealBox = null; }
     this.recompose();
+  }
+  private edgeNoise(): Int8Array {
+    if (this.edgeN) return this.edgeN;
+    const e = new Int8Array(W * H), C8 = 8, gw = Math.ceil(W / C8) + 2, gh = Math.ceil(H / C8) + 2, g = new Float32Array(gw * gh);
+    for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) g[j * gw + i] = fbm2(i * C8 * 0.026, j * C8 * 0.026, 2, 301);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const fx = x / C8, fy = y / C8, i = Math.floor(fx), j = Math.floor(fy), u = fx - i, v = fy - j, k = j * gw + i;
+      const nv = (g[k] + (g[k + 1] - g[k]) * u) * (1 - v) + (g[k + gw] + (g[k + gw + 1] - g[k + gw]) * u) * v;
+      e[y * W + x] = Math.round((nv - 0.5) * 9 * S + (hash2(x >> 2, y >> 2, 302) - 0.5) * 4);
+    }
+    this.edgeN = e;
+    return e;
   }
   /** debug: colour in the whole sheet (to look at the painting) */
   revealEverything() {
