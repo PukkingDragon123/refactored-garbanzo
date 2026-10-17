@@ -23,7 +23,8 @@ export const PAPER_CSS = `
   --pp-fs-j15: 27px; --pp-fs-j15x2: 54px;
   --pp-fs-silk: 16px; --pp-fs-silk3: 24px;
 }
-#ui .pp-hand, #ui .pp-hand * { font-family: var(--pp-hand); font-size-adjust: none; -webkit-font-smoothing: none; font-weight: 400; font-synthesis: none; letter-spacing: 0; }
+#ui .pp-hand, #ui .pp-hand * { font-family: var(--pp-hand); font-size-adjust: none; -webkit-font-smoothing: none; font-synthesis: none; letter-spacing: 0; }
+#ui .pp-hand { font-weight: 400; }
 #ui .pp-hand b, #ui .pp-hand strong, #ui .pp-hand .bold { font-weight: 700; }
 #ui .pp-hand i, #ui .pp-hand em { font-style: normal; }
 #ui .pp-pix, #ui .pp-pix * { font-family: var(--pp-pix); font-size-adjust: 0.62; -webkit-font-smoothing: none; font-weight: 400; }

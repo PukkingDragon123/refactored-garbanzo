@@ -92,7 +92,7 @@ body.touchmode .h2 .hr { right: 6px; top: 6px; }
   .h2 .hq { position: absolute; right: 0; top: 156px; }
 }
 /* the controls line */
-.hm-keys { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); white-space: nowrap; transition: opacity 1.2s steps(6); opacity: 0.95;
+.hm-keys { position: absolute; right: 14px; bottom: 12px; white-space: nowrap; transition: opacity 1.2s steps(6); opacity: 0.95;
   font-family: var(--pp-head); font-size: 18.6667px; line-height: 24px; color: #fff1cc; letter-spacing: 1px;
   text-shadow: 2px 0 0 #140c06, -2px 0 0 #140c06, 0 2px 0 #140c06, 0 -2px 0 #140c06, 2px 2px 0 #140c06, -2px 2px 0 #140c06, 2px -2px 0 #140c06, -2px -2px 0 #140c06; }
 #ui .hm-keys, #ui .hm-keys * { font-size-adjust: none; }
@@ -317,7 +317,7 @@ export class Hud2 {
     const r = this.kitW.el.getBoundingClientRect(), p = game.ui.root.getBoundingClientRect();
     if (!r.width) return [p.width * 0.06, p.height * 0.92];
     const s = this.kitW.s || hudScale();
-    return [r.left - p.left + 11 * s, r.top - p.top + 18 * s];
+    return [r.left - p.left + 11 * s, r.top - p.top + 20 * s];
   }
   bumpPack() {
     this.bump = 0.3;
@@ -585,33 +585,34 @@ export class Hud2 {
     const badge = lapOn ? this.lap!.badge() : 0;
     const n = game.save.inv.length, cap = Math.max(1, capacity());
     this.packFill += (n / cap - this.packFill) * 0.2;
-    const W = 30 + (lapOn ? 24 : 0) + (cam ? 50 : 0), H = 30;
+    const W = 30 + (lapOn ? 24 : 0) + (cam ? 58 : 0), H = 36;
     this.kitRegions = [];
     this.kitW.draw(W, H, a => {
       let x = 0;
+      const top = 6, ph = 28;
       // the backpack and its fill gauge
       const pk = imgArt(uiIconURL('pack', 1));
       const by = this.bump > 0 ? -1 : 0;
-      plate(a, x, 6, 28, 22, col('#3e2814'), { r: 2 });
-      if (pk) a.blit(pk, x + 3, 9 + by);
+      plate(a, x, top, 28, ph, col('#3e2814'), { r: 2 });
+      if (pk) a.blit(pk, x + 3, top + 6 + by);
       const f = Math.min(1, this.packFill);
-      const gx = x + 21, gh = 16;
-      a.rect(gx, 9, 4, gh + 2, OUT);
+      const gx = x + 21, gh = 20;
+      a.rect(gx, top + 3, 4, gh + 2, OUT);
       const fill = Math.round(f * gh);
       const gc = f >= 1 ? col('#e83a2a') : f > 0.8 ? col('#f0a03a') : col('#8ccf4a');
-      for (let i = 0; i < fill; i++) a.rect(gx + 1, 9 + gh - i, 2, 1, i === fill - 1 ? shadeC(gc, 0.3) : gc);
-      if (f >= 0.8) outlined(a, `${n}/${cap}`, x + 1, 6, f >= 1 ? col('#ff9a80') : CREAM, OUT, { face: 'block', bold: false });
+      for (let i = 0; i < fill; i++) a.rect(gx + 1, top + 3 + gh - i, 2, 1, i === fill - 1 ? shadeC(gc, 0.3) : gc);
+      if (f >= 0.8) outlined(a, `${n}/${cap}`, x + 1, 5, f >= 1 ? col('#ff9a80') : CREAM, OUT, { face: 'block', bold: false });
       this.kitRegions.push({ id: 'pack', x0: x, x1: x + 28 });
       x += 30;
       // the field laptop with its badge
       if (lapOn) {
-        plate(a, x, 6, 22, 22, col('#2a3442'), { r: 2 });
-        a.blit(laptopArt(), x + 3, 9);
+        plate(a, x, top, 22, ph, col('#2a3442'), { r: 2 });
+        a.blit(laptopArt(), x + 3, top + 6);
         if (badge > 0) {
           const t = String(Math.min(99, badge));
           const bw = tw(t, { face: 'block' }) + 6;
-          plate(a, x + 22 - bw + 2, 1, bw, 11, col('#c8321e'), { r: 2, shadow: false });
-          drawText(a, t, x + 22 - bw + 5, 10, CREAM, { face: 'block' });
+          plate(a, x + 22 - bw + 2, 0, bw, 11, col('#c8321e'), { r: 2, shadow: false });
+          drawText(a, t, x + 22 - bw + 5, 9, CREAM, { face: 'block' });
         }
         this.kitRegions.push({ id: 'lap', x0: x, x1: x + 22 });
         x += 24;
@@ -619,14 +620,14 @@ export class Hud2 {
       // the instant camera, the film left, the print developing out of the top
       if (cam) {
         const dev = cam.v10 !== false ? Math.max(0, Math.min(1, cam.develop ?? 1)) : 1;
-        plate(a, x, 6, 48, 22, col('#2e2a26'), { r: 2 });
-        const cx = x + 3, cy = 13;
+        plate(a, x, top, 56, ph, col('#2e2a26'), { r: 2 });
+        const cx = x + 3, cy = top + 10;
         if (dev < 1) {
           // the print sticking out of the slot, coming up from dark brown in dithered steps
           const pr = new Art(10, 11);
           pr.rect(0, 0, 10, 11, col('#f6f0e2')); pr.rect(0, 0, 10, 1, OUT); pr.rect(0, 0, 1, 11, OUT); pr.rect(9, 0, 1, 11, OUT);
           for (let yy = 1; yy < 8; yy++) for (let xx = 1; xx < 9; xx++) pr.put(xx, yy, dith(xx, yy, dev) ? (yy < 4 ? col('#7ab8e8') : col('#5a9a3a')) : col('#3a2a1a'));
-          a.blit(pr, cx + 4, cy - 9 + Math.round((1 - Math.min(1, dev * 3)) * 6));
+          a.blit(pr, cx + 4, cy - 10 + Math.round((1 - Math.min(1, dev * 3)) * 6));
         }
         // the camera body
         a.rect(cx, cy, 18, 12, OUT);
@@ -636,12 +637,17 @@ export class Hud2 {
         a.ellipse(cx + 9, cy + 6.5, 4, 4, OUT); a.ellipse(cx + 9, cy + 6.5, 3, 3, col('#3a5a7a')); a.put(cx + 8, cy + 5, col('#bfe0ff'));
         a.rect(cx + 2, cy + 2, 3, 2, col('#2a2a2a')); a.rect(cx + 14, cy - 1, 3, 2, col('#c8321e'));
         for (let i = 0; i < 5; i++) a.put(cx + 3 + i * 3, cy + 10, (i & 1) ? col('#e83a8a') : col('#3ac8e8'));
-        // the film count (and the seconds left on the print)
+        // the film count (or the seconds left on the print)
         const shots = Math.max(0, Math.round(cam.shots ?? 0));
-        const txt = dev < 1 ? `${Math.ceil(cam.developLeft?.() ?? 0)}S` : String(shots);
-        outlined(a, txt, cx + 22, dev < 1 ? 22 : 24, dev < 1 ? col('#f4d27a') : shots <= 2 ? col('#ff8a6a') : CREAM, OUT, { face: 'block', scale: dev < 1 ? 1 : 2, spacing: 1 });
-        if (dev >= 1) outlined(a, 'FILM', cx + 22, 7, col('#c8baa4'), OUT, { face: 'block', bold: false });
-        this.kitRegions.push({ id: 'cam', x0: x, x1: x + 48 });
+        const lx = cx + 22;
+        if (dev < 1) {
+          outlined(a, 'DRY', lx, top + 10, col('#c8baa4'), OUT, { face: 'block', bold: false });
+          outlined(a, `${Math.ceil(cam.developLeft?.() ?? 0)}S`, lx, top + 23, col('#f4d27a'), OUT, { face: 'block', scale: 1, spacing: 1 });
+        } else {
+          outlined(a, 'FILM', lx, top + 10, col('#c8baa4'), OUT, { face: 'block', bold: false });
+          outlined(a, String(shots), lx, top + 25, shots <= 2 ? col('#ff8a6a') : CREAM, OUT, { face: 'block', scale: 2, spacing: 1 });
+        }
+        this.kitRegions.push({ id: 'cam', x0: x, x1: x + 56 });
       }
     });
   }
