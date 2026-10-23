@@ -18,7 +18,7 @@
 import { game } from '../game';
 import { addLocation, findLocation, location as locDef } from '../v10/regions';
 import type { LocationDef } from '../v10/regions';
-import { MAP_W, MAP_H } from '../v10/atlas';
+import { GRID_W, GRID_H } from '../v10/atlas';
 import { BOAT_FLAG, boatReady, boatSave, setBoatAway } from '../v10/boat';
 import { el } from '../../ui/ui';
 import { audio } from '../../core/audio';
@@ -79,8 +79,8 @@ export const TRIPS: Record<string, TripPlan> = {
 };
 export const tripPlan = (id: string) => TRIPS[id] ?? null;
 
-/** region-map pixels (atlas.ts MAP_W x MAP_H) to 0..1 */
-const MP = (x: number, y: number): [number, number] => [x / MAP_W, y / MAP_H];
+/** region-map design grid (atlas.ts GRID_W x GRID_H) to 0..1 */
+const MP = (x: number, y: number): [number, number] => [x / GRID_W, y / GRID_H];
 const LOCS: LocationDef[] = [
   { id: 'fishgrounds', name: 'The Shelf', region: 'ocean', kind: 'ocean', pos: MP(300, 40), difficulty: 1, needs: [BOAT_FLAG], trip: { hours: 1, energy: 3 }, terrain: 'Open sea, the shelf edge',
     desc: 'Fishing grounds where the sea floor drops off past the reef. Fish from the boat; vanebills, gulls and porpoises follow the boats.', scene: { type: 'custom', go: () => goBoatTrip('fishgrounds') } },

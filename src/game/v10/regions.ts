@@ -336,3 +336,7 @@ export function islandLocAt(x: number): string {
   }
   return x < 0 ? 'isle-wreck' : 'isle-track';
 }
+
+// the Region Map paints itself in a background worker: start it a little after boot so the first
+// time the map is opened it is already painted
+if (typeof window !== 'undefined') window.setTimeout(() => { void import('../../ui/v10/regionmap-art').then(m => m.prewarmMap()).catch(() => {}); }, 25000);

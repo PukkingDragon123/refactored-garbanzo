@@ -4,9 +4,11 @@
 
 import type { LocationDef } from './regions';
 
-/** map size in map pixels (the pixel-art map is painted at this resolution) */
-export const MAP_W = 960, MAP_H = 640;
-const P = (x: number, y: number): [number, number] => [x / MAP_W, y / MAP_H];
+import { GRID_W, GRID_H } from './atlasgeo';
+// (the map's size and geometry live in atlasgeo.ts, free of the game, so the map painter's worker can use them)
+export { GRID_W, GRID_H, MAP_W, MAP_H, GRID_K, COAST, ISLETS, ZONES10, RIVERS } from './atlasgeo';
+export type { Zone10 } from './atlasgeo';
+const P = (x: number, y: number): [number, number] => [x / GRID_W, y / GRID_H];
 const PATH = (...pts: [number, number][]) => pts.map(([x, y]) => P(x, y));
 
 /** the home island scene's width (src/art/island4/layout.ts ISL.W) */
@@ -236,33 +238,4 @@ export const ATLAS: AtlasLoc[] = [
     ],
     desc: 'Tors, scree and tussock above the bush line: a tarn, a bluff with a rock shelter the hunters use, and a ridge with the long view over everything. Wind, hawks and torhoppers.', terrain: 'Tussock, scree, granite tors', arriveX: 90,
   },
-];
-
-// ------------------------------------------------------------------ the region's shape (always visible)
-
-/** coarse coastline of the main land, clockwise from the north-west (map pixels) */
-export const COAST: [number, number][] = [
-  [56, 128], [70, 104], [118, 100], [176, 102], [238, 98], [300, 106], [352, 112], [372, 102], [404, 94], [462, 90], [522, 94], [586, 86],
-  [634, 82], [700, 78], [752, 80], [806, 98], [852, 128], [890, 180], [906, 240], [902, 320], [884, 400], [862, 466], [822, 514], [764, 542],
-  [684, 552], [602, 556], [522, 550], [440, 556], [360, 552], [282, 544], [204, 532], [134, 512], [84, 474], [58, 420], [60, 372], [96, 346],
-  [138, 330], [150, 318], [128, 300], [80, 290], [54, 244], [48, 186],
-];
-/** small islands off the coast (centre, radius) */
-export const ISLETS: [number, number, number][] = [[132, 44, 22], [214, 30, 7], [920, 600, 9], [38, 560, 6], [808, 44, 11]];
-
-/** terrain zones painted on the map where explored: kind, centre, radii */
-export type Zone10 = 'forest' | 'plateau' | 'swamp' | 'garden' | 'glow' | 'thermal' | 'gorge' | 'sink' | 'terraces' | 'cave' | 'dunes' | 'peaks';
-export const ZONES10: [Zone10, number, number, number, number][] = [
-  ['dunes', 210, 122, 150, 14], ['forest', 420, 196, 70, 42], ['forest', 360, 150, 40, 28], ['plateau', 380, 250, 90, 34], ['forest', 380, 246, 80, 26],
-  ['swamp', 196, 246, 52, 84], ['garden', 214, 362, 52, 26], ['terraces', 318, 306, 30, 56], ['gorge', 596, 266, 62, 24], ['peaks', 600, 210, 70, 30],
-  ['glow', 676, 302, 34, 56], ['thermal', 648, 404, 64, 40], ['sink', 522, 470, 70, 26], ['cave', 372, 112, 64, 12], ['peaks', 760, 230, 70, 60],
-  ['forest', 760, 360, 60, 80], ['plateau', 520, 330, 70, 40], ['forest', 300, 420, 120, 60], ['forest', 560, 160, 60, 40], ['forest', 700, 150, 60, 40],
-];
-/** rivers (polylines, map pixels): the home stream, the Awa Pango through the swamp, the falls river */
-export const RIVERS: [number, number][][] = [
-  [[248, 108], [244, 130], [236, 152], [228, 172]],
-  [[228, 172], [206, 214], [184, 254], [168, 294], [150, 318]],
-  [[700, 200], [640, 236], [580, 252], [538, 262], [522, 256], [500, 240], [470, 218], [440, 202], [404, 188], [380, 166], [362, 140], [348, 118]],
-  [[250, 378], [222, 366], [196, 350], [172, 330], [152, 320]],
-  [[602, 440], [560, 462], [522, 470]],
 ];
