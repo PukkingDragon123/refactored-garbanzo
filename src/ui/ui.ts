@@ -7,6 +7,55 @@ import { guardInput } from '../core/input';
 import { Bubbles } from './bubbles';
 import { iconize, pxIcon } from './pxicons';
 import { portraitURL as v2Portrait, peopleArt } from '../world/actor';
+import { Art, col, dith } from './v11/paper/px';
+import { drawText, textWidth } from './v11/paper/pxfont';
+import { outlined, hudScale } from './v11/hudpx';
+
+/**
+ * A chapter / arrival title card as pixel art: the chapter word in small caps on a dark tab, the
+ * name in big blocky caps with a hard outline and drop, a brass rule with diamond ends, the subtitle
+ * in Mori's pixel hand, all on a dithered dark band. Bitmap text only: crisp at any size.
+ */
+function titleCardArt(ch: string, name: string, sub: string, maxW: number): Art {
+  const NM = name.toUpperCase(), CH = ch.toUpperCase();
+  let k = 3;
+  while (k > 1 && textWidth(NM, { face: 'block', scale: k, spacing: 1 }) > maxW - 40) k--;
+  const nw = textWidth(NM, { face: 'block', scale: k, spacing: 1 });
+  const cw = CH ? textWidth(CH, { face: 'block', bold: false, spacing: 3 }) : 0;
+  const sk = 2;
+  const sw = sub ? textWidth(sub, { scale: sk }) : 0;
+  const W = Math.max(nw, cw, sw) + 80;
+  const H = (CH ? 16 : 4) + 7 * k + 10 + (sub ? 11 * sk + 8 : 4) + 10;
+  const a = new Art(W, H);
+  const out = col('#1a0e06'), cream = col('#f6ead0'), teal = col('#9ff0dc'), brass = col('#e0b048'), brassD = col('#7a5414'), amber = col('#ffd57a');
+  // the band: dithered darkness, thicker in the middle, ragged ends
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const ex = Math.min(x, W - 1 - x) / 40, ey = Math.min(y, H - 1 - y) / 10;
+    const cov = Math.min(1, Math.min(ex, 1) * 0.75) * Math.min(1, ey + 0.35);
+    if (dith(x, y, cov * 0.8)) a.put(x, y, col('#06080a', 0.78));
+  }
+  let y = 4;
+  if (CH) {
+    const tx = Math.round(W / 2 - cw / 2);
+    a.rect(tx - 6, y, cw + 12, 11, out); a.rect(tx - 5, y + 1, cw + 10, 9, col('#21403a'));
+    drawText(a, CH, tx, y + 9, teal, { face: 'block', bold: false, spacing: 3 });
+    y += 16;
+  }
+  const nx = Math.round(W / 2 - nw / 2), ny = y + 7 * k;
+  drawText(a, NM, nx + k, ny + k, col('#000000', 0.55), { face: 'block', scale: k, spacing: 1 });
+  outlined(a, NM, nx, ny, (px, py) => (py - (ny - 7 * k) < k ? col('#fffaf0') : cream), out, { face: 'block', scale: k, spacing: 1 });
+  y = ny + 6;
+  // the rule
+  const rw = Math.round(Math.max(nw, sw) * 0.8), rx = Math.round(W / 2 - rw / 2);
+  a.rect(rx, y, rw, 1, brass); a.rect(rx, y + 1, rw, 1, brassD);
+  for (const dx of [rx - 3, rx + rw + 1]) { a.put(dx + 1, y - 1, brass); a.rect(dx, y, 3, 1, brass); a.put(dx + 1, y + 1, brassD); }
+  y += 4;
+  if (sub) {
+    const sx = Math.round(W / 2 - sw / 2);
+    outlined(a, sub, sx, y + 8 * sk, amber, out, { scale: sk });
+  }
+  return a;
+}
 
 export function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', html = ''): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -220,7 +269,16 @@ export class UI {
   }
 
   async titleCard(ch: string, name: string, sub = '', ms = 3200) {
-    this.card.innerHTML = `<div class="ch">${ch}</div><div class="nm">${name}</div>${sub ? `<div class="sub">${sub}</div>` : ''}`;
+    const plain = (s: string) => s.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&middot;/g, '\u00b7').replace(/&[a-z]+;/g, '');
+    const s = hudScale();
+    const art = titleCardArt(plain(ch), plain(name), plain(sub), Math.floor((window.innerWidth * 0.92) / s));
+    const cv = art.canvas();
+    cv.className = 'tc-px';
+    cv.style.width = art.w * s + 'px';
+    cv.style.height = art.h * s + 'px';
+    this.card.innerHTML = '';
+    this.card.appendChild(cv);
+    this.card.setAttribute('aria-label', plain(`${ch} ${name} ${sub}`));
     this.card.classList.add('on');
     await new Promise(r => setTimeout(r, ms));
     this.card.classList.remove('on');

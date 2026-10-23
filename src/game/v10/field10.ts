@@ -655,10 +655,11 @@ function signpostSprite() {
 
 const BTN_CSS = `
 .v10-mapb { position: absolute; left: 16px; top: 6.3em; display: flex; align-items: center; gap: 0.45em; padding: 4px 0.7em 4px 4px; cursor: pointer; pointer-events: auto;
-  background: linear-gradient(#6a3e1c, #4a2a12); box-shadow: 0 0 0 2px #1a0e06, 0 0 0 4px #e0a818, 0 0 0 6px #1a0e06, 0 5px 0 5px rgba(0,0,0,0.3); transition: transform 0.12s; z-index: 2; }
+  background: #5a3418; box-shadow: inset 0 -4px 0 #4a2a12, 0 0 0 2px #1a0e06, 0 0 0 4px #e0a818, 0 0 0 6px #1a0e06, 6px 6px 0 6px rgba(0,0,0,0.3); transition: transform 0.12s steps(2); z-index: 2; }
 .v10-mapb:hover { transform: translateY(-2px); filter: brightness(1.1); }
 .v10-mapb i { width: 2.6em; height: 2.6em; background: var(--sk-slot) center / 100% 100%; image-rendering: pixelated; display: grid; place-items: center; }
 .v10-mapb i img { width: 1.9em; height: 1.9em; image-rendering: pixelated; filter: drop-shadow(0 2px 0 rgba(0,0,0,0.45)); }
-.v10-mapb .k { position: absolute; left: 3px; top: 0; font-family: var(--head); font-size: 0.72em; color: #ffe9a8; text-shadow: 0 2px 0 #1a0e06, 1px 0 0 #1a0e06, -1px 0 0 #1a0e06; }
-.v10-mapb .t { font-family: var(--head); font-size: 0.95em; color: #ffe9a8; letter-spacing: 0.05em; text-shadow: 0 2px 0 #1a0e06; min-width: 2.6em; }
+#ui .v10-mapb .k, #ui .v10-mapb .t { font-size-adjust: none; }
+.v10-mapb .k { position: absolute; left: 3px; top: 0; font-family: 'Silkscreen', var(--head); font-size: 16px; line-height: 16px; color: #ffe9a8; text-shadow: 2px 2px 0 #1a0e06; }
+.v10-mapb .t { font-family: var(--head); font-size: 18.6667px; line-height: 20px; color: #ffe9a8; letter-spacing: 1px; text-shadow: 2px 2px 0 #1a0e06; min-width: 2.6em; }
 `;

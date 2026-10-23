@@ -74,7 +74,7 @@ function knobImg() {
 }
 
 const CSS = `
-.touch { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 30; touch-action: none; --tu: clamp(3px, 0.62vmin, 6px);
+.touch { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 30; touch-action: none; --tu: clamp(3px, 0.62vmin, 6px); --tu: round(down, clamp(3px, 0.62vmin, 6px), 1px);
   font-family: 'Jersey 10', 'Silkscreen', 'Pixelify Sans', monospace; image-rendering: pixelated; -webkit-user-select: none; user-select: none; }
 .touch.on { display: block; }
 .touch.hide .tc-l, .touch.hide .tc-r, .touch.hide .tc-top { opacity: 0; pointer-events: none !important; }
@@ -86,7 +86,7 @@ const CSS = `
 .tc-l.act .tc-stick { opacity: 1; }
 .tc-knob { position: absolute; left: 50%; top: 50%; width: calc(var(--tu) * 13); height: calc(var(--tu) * 13); margin: calc(var(--tu) * -6.5) 0 0 calc(var(--tu) * -6.5);
   background: var(--tc-knob) center / 100% 100% no-repeat; image-rendering: pixelated; filter: drop-shadow(0 calc(var(--tu) * 1.2) 0 rgba(0,0,0,0.45)); }
-.tc-l.run .tc-knob { filter: drop-shadow(0 calc(var(--tu) * 1.2) 0 rgba(0,0,0,0.45)) drop-shadow(0 0 calc(var(--tu) * 2) #ffd060); }
+.tc-l.run .tc-knob { filter: drop-shadow(var(--tu) 0 0 #ffd060) drop-shadow(calc(var(--tu) * -1) 0 0 #ffd060) drop-shadow(0 var(--tu) 0 #ffd060) drop-shadow(0 calc(var(--tu) * -1) 0 #ffd060); }
 .tc-l .tc-lab { position: absolute; left: 50%; bottom: calc(var(--tu) * -5); transform: translateX(-50%); font-size: calc(var(--tu) * 2.4); color: #fff4d0;
   text-shadow: 0 2px 0 #000; white-space: nowrap; opacity: 0.8; }
 /* action buttons */
@@ -106,7 +106,7 @@ const CSS = `
 .tc-b.sm { width: calc(var(--tu) * 11); height: calc(var(--tu) * 11); font-size: calc(var(--tu) * 1.7); }
 .tc-b.sm i { width: calc(var(--tu) * 4.6); height: calc(var(--tu) * 4.6); }
 .tc-b.pulse { animation: tcPulse 0.9s steps(4) infinite; }
-@keyframes tcPulse { 50% { filter: drop-shadow(0 calc(var(--tu) * 1.2) 0 rgba(0,0,0,0.45)) drop-shadow(0 0 calc(var(--tu) * 2.4) #ffe070); } }
+@keyframes tcPulse { 50% { filter: drop-shadow(var(--tu) 0 0 #ffe070) drop-shadow(calc(var(--tu) * -1) 0 0 #ffe070) drop-shadow(0 var(--tu) 0 #ffe070) drop-shadow(0 calc(var(--tu) * -1) 0 #ffe070); } }
 .tc-b.off { opacity: 0.45; }
 .tc-b[hidden] { display: none; }
 .tc-b .tc-cap { position: absolute; bottom: calc(100% + var(--tu) * 1.2); right: 0; max-width: calc(var(--tu) * 44); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -127,7 +127,7 @@ const CSS = `
 .tc-breath b { display: block; height: 100%; width: var(--v, 100%); background: linear-gradient(#bfe8ff 0 40%, #3a8ad8 40%); }
 .touch.cam .tc-breath { display: block; }
 @media (orientation: portrait) {
-  .touch { --tu: clamp(3px, 0.9vmin, 6px); }
+  .touch { --tu: clamp(3px, 0.9vmin, 6px); --tu: round(down, clamp(3px, 0.9vmin, 6px), 1px); }
   .tc-top { top: auto; bottom: calc(var(--tu) * 52); }
 }
 body.touchmode, body.touchmode #app { touch-action: none; overscroll-behavior: none; -webkit-touch-callout: none; }

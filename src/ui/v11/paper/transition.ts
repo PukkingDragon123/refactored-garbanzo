@@ -7,11 +7,16 @@
 // It runs on a canvas between the WebGL canvas and the DOM UI, driven by the same fade value as the
 // renderer's fade (game.r.post.fade), so every existing fadeTo / go call works unchanged: game.go
 // picks a style (setNextTransition overrides it once), the overlay draws while that fade runs, and
-// the renderer's dissolve is switched off for its duration. Ink and iris draw at a quarter of the
-// screen resolution and are scaled up crisp, so they match the pixel art.
+// the renderer's dissolve is switched off for its duration. Everything is pixel art: ink and iris
+// are threshold fields at a quarter of the screen resolution with dithered (never soft) edges, and
+// the page is painted at the UI's art resolution with a stepped edge, a dithered curl and shadow,
+// ruled lines and the destination written in Mori's pixel hand.
 
-import { fbm, rng, clamp01, hash2 } from './rng';
-import { paperTileCanvas } from './textures';
+import { fbm, rng, hash2 } from './rng';
+import { paperTileArt } from './textures';
+import { Art, PX, col, dith, bayer, mixC } from './px';
+import { drawText, textWidth } from './pxfont';
+import { rasterStrokes, underline } from './ink';
 
 export type TransitionStyle = 'dissolve' | 'ink' | 'page' | 'iris';
 export interface TransitionOpts {
@@ -95,9 +100,9 @@ function startPhase(p: 'cover' | 'reveal') {
   if (!cv) return;
   const W = Math.max(1, window.innerWidth), H = Math.max(1, window.innerHeight);
   if (style === 'page') {
-    const k = Math.min(1.5, window.devicePixelRatio || 1);
-    cv.width = Math.round(W * k); cv.height = Math.round(H * k);
-    cv.style.imageRendering = 'auto';
+    cv.width = Math.max(32, Math.round(W / PX)); cv.height = Math.max(24, Math.round(H / PX));
+    cv.style.imageRendering = 'pixelated';
+    sheet = null;
     return;
   }
   // ink and iris: a threshold field at a quarter resolution
@@ -179,18 +184,20 @@ function drawField(fade: number, color: [number, number, number]) {
   for (let i = 0, n = field.length; i < n; i++) {
     const v = field[i];
     let a = 0, dark = 1;
+    const x = i % fw, y = (i / fw) | 0;
     if (iris) {
-      // covered outside the circle (radius 1 - fade); an inked rim on the edge
+      // covered outside the circle (radius 1 - fade); an inked rim on the edge, a dithered fringe
       const rr = 1 - fade * 1.02;
       if (v > rr) { a = 1; dark = v < rr + edge * 1.6 ? 0.55 : 1; }
-      else if (v > rr - edge) { a = 0.9; dark = 0.45; }
+      else if (v > rr - edge) { a = 1; dark = 0.45; }
+      else if (v > rr - edge * 2.2 && dith(x, y, 0.5)) { a = 1; dark = 0.45; }
     } else if (phase === 'cover') {
       if (v < t) { a = 1; dark = t - v < edge ? 0.62 : 1; }
-      else if (v < t + 0.025) a = clamp01(1 - (v - t) / 0.025) * (hash2(i, 0, seed) > 0.5 ? 0.85 : 0.3);
+      else if (v < t + 0.025 && dith(x, y, (1 - (v - t) / 0.025) * (hash2(i, 0, seed) > 0.5 ? 0.9 : 0.4))) a = 1;
     } else {
       const u = 1 - t;
       if (v > u) { a = 1; dark = v - u < edge ? 0.62 : 1; }
-      else if (v > u - 0.025) a = clamp01(1 - (u - v) / 0.025) * (hash2(i, 1, seed) > 0.5 ? 0.85 : 0.3);
+      else if (v > u - 0.025 && dith(x, y, (1 - (u - v) / 0.025) * (hash2(i, 1, seed) > 0.5 ? 0.9 : 0.4))) a = 1;
     }
     const j = i * 4;
     // dark here means the wet edge: pigment pools darker at the rim of a blot
@@ -199,77 +206,98 @@ function drawField(fade: number, color: [number, number, number]) {
   g.putImageData(img, 0, 0);
 }
 
+/** the journal page that sweeps across, painted once per phase at art resolution */
+let sheet: HTMLCanvasElement | null = null;
+function paintSheetCanvas(W: number, H: number): HTMLCanvasElement {
+  const a = new Art(W, H);
+  const tile = paperTileArt('journal');
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) a.put(x, y, tile.d[(y % 128) * 128 + (x % 128)]);
+  // ruled lines and a red margin, like Mori's journal
+  const lh = Math.max(9, Math.round(H / 26));
+  const rule = col('#5078aa'), marg = col('#c0463a');
+  for (let y = lh * 3; y < H; y += lh) for (let x = 0; x < W; x++) if (dith(x, y, 0.45)) a.put(x, y, mixC(a.get(x, y), rule, 0.35));
+  const mx = Math.round(W * 0.1);
+  for (let y = 0; y < H; y++) a.put(mx, y, mixC(a.get(mx, y), marg, 0.4));
+  // the caption: where we're going, in Mori's hand
+  if (opts.title) {
+    const ink = col('#2a2440'), pencil = col('#5c574e');
+    const t1 = textWidth(opts.title);
+    const k = Math.max(2, Math.min(7, Math.floor(Math.min((W * 0.7) / Math.max(1, t1), H / 7 / 9))));
+    const tw = textWidth(opts.title, { scale: k });
+    const by = Math.round(H * 0.46 + 3.5 * k);
+    drawText(a, opts.title, Math.round(W / 2 - tw / 2), by, ink, { scale: k });
+    let uy = by + 2 * k + 2;
+    if (opts.sub) {
+      const k2 = Math.max(1, Math.round(k * 0.45));
+      const sw = textWidth(opts.sub, { scale: k2 });
+      drawText(a, opts.sub, Math.round(W / 2 - sw / 2), by + 11 * k2 + 2 * k, pencil, { scale: k2 });
+      uy = by + 11 * k2 + 2 * k + 3 * k2;
+    }
+    // a hand-drawn red underline
+    const uw = Math.min(W * 0.62, tw + 4 * k);
+    const ua = new Art(Math.round(uw), Math.max(4, k + 3));
+    rasterStrokes(ua, 100, 6, [{ d: underline(100, { seed: opts.title.length }), c: '#a8321e', w: 1.6 + k * 0.4 }], true);
+    a.blit(ua, Math.round(W / 2 - uw / 2), Math.round(uy));
+  }
+  return a.canvas();
+}
+
+const PAT = new Map<string, CanvasPattern | null>();
+function pat(gx: CanvasRenderingContext2D, rgba: string, cov: number): CanvasPattern | null {
+  const lv = Math.max(1, Math.min(16, Math.round(cov * 16)));
+  const k = rgba + lv;
+  let p = PAT.get(k);
+  if (p === undefined) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 4;
+    const x = c.getContext('2d')!;
+    x.fillStyle = rgba;
+    for (let yy = 0; yy < 4; yy++) for (let xx = 0; xx < 4; xx++) if (lv / 16 > bayer(xx, yy)) x.fillRect(xx, yy, 1, 1);
+    p = gx.createPattern(c, 'repeat');
+    PAT.set(k, p);
+  }
+  return p;
+}
+
 function drawPage(fade: number, color: [number, number, number]) {
   if (!g || !cv) return;
   void color;
   const W = cv.width, H = cv.height;
+  if (!sheet) sheet = paintSheetCanvas(W, H);
   g.clearRect(0, 0, W, H);
+  g.imageSmoothingEnabled = false;
   const e = fade < 1 ? fade * fade * (3 - 2 * fade) : 1;
-  // the sheet's moving edge (tilted: the top corner leads), the curl width
-  const curl = W * 0.07;
-  const skew = W * 0.05;
+  // the sheet's moving edge leans (the top corner leads); it moves in whole art pixels
+  const curl = Math.round(W * 0.06), skew = Math.round(W * 0.05);
   const span = W + skew * 2 + curl;
-  // cover: the sheet's left edge sweeps in from the right; reveal: its right edge sweeps off to the left
-  let x0: number, x1: number;
-  if (phase === 'cover') { x0 = W + skew + curl - e * span; x1 = W + skew * 2 + curl; }
-  else { x0 = -skew * 2 - curl; x1 = -skew - curl + e * span; }
-  // the sheet: a polygon with the moving edge tilted
-  g.save();
-  g.beginPath();
-  if (phase === 'cover') { g.moveTo(x0 - skew, 0); g.lineTo(x1, 0); g.lineTo(x1, H); g.lineTo(x0 + skew, H); }
-  else { g.moveTo(x0, 0); g.lineTo(x1 + skew, 0); g.lineTo(x1 - skew, H); g.lineTo(x0, H); }
-  g.closePath();
-  // shadow cast on the scene by the lifted sheet
-  g.shadowColor = 'rgba(10,6,2,0.45)';
-  g.shadowBlur = W * 0.03;
-  g.shadowOffsetX = phase === 'cover' ? -W * 0.012 : W * 0.012;
-  const tile = paperTileCanvas('journal');
-  const pat = g.createPattern(tile, 'repeat');
-  g.fillStyle = pat ?? '#f1e5c8';
-  g.fill();
-  g.shadowColor = 'transparent';
-  g.clip();
-  // ruled lines and a margin, like Mori's journal
-  const lh = Math.max(18, H / 26);
-  g.fillStyle = 'rgba(80,120,170,0.18)';
-  for (let y = lh * 3; y < H; y += lh) g.fillRect(0, Math.round(y), W, Math.max(1, H / 720));
-  g.fillStyle = 'rgba(190,60,50,0.25)';
-  g.fillRect(W * 0.1, 0, Math.max(1, W / 900), H);
-  // the caption: where we're going
-  if (opts.title && e > 0.35) {
-    const a = clamp01((e - 0.35) / 0.3);
-    g.globalAlpha = a;
-    g.fillStyle = '#2a2440';
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    const fs = Math.round(Math.min(W / 11, H / 7));
-    g.font = `600 ${fs}px Caveat, 'Segoe Print', cursive`;
-    g.fillText(opts.title, W / 2, H * 0.46);
-    if (opts.sub) { g.font = `500 ${Math.round(fs * 0.42)}px Caveat, 'Segoe Print', cursive`; g.fillStyle = '#5c574e'; g.fillText(opts.sub, W / 2, H * 0.46 + fs * 0.72); }
-    // a hand-drawn underline
-    const tw = Math.min(W * 0.6, g.measureText(opts.title).width + fs);
-    g.strokeStyle = '#a8321e';
-    g.lineWidth = Math.max(2, fs / 18);
-    g.lineCap = 'round';
-    g.beginPath();
-    const uy = H * 0.46 + fs * (opts.sub ? 1.05 : 0.55);
-    g.moveTo(W / 2 - tw / 2, uy + 3);
-    g.quadraticCurveTo(W / 2, uy - 4, W / 2 + tw / 2, uy + 1);
-    g.stroke();
-    g.globalAlpha = 1;
+  const cover = phase === 'cover';
+  const lead = cover ? Math.round(W + skew + curl - e * span) : Math.round(-skew - curl + e * span);
+  const edgeAt = (y: number) => Math.round(lead + (cover ? -skew : skew) * (1 - (2 * y) / H));
+  const sh1 = pat(g, 'rgba(10,6,2,0.55)', 0.5), sh2 = pat(g, 'rgba(10,6,2,0.55)', 0.25);
+  const hi = pat(g, 'rgba(255,251,236,0.9)', 0.55), lo = pat(g, 'rgba(60,40,15,0.85)', 0.4);
+  const cw1 = Math.max(1, Math.round(curl * 0.3)), cw2 = Math.max(1, Math.round(curl * 0.35));
+  for (let y = 0; y < H; y++) {
+    const ex = edgeAt(y);
+    if (cover) {
+      // the sheet from the edge rightwards; its shadow on the scene to the left; the curl at the edge
+      const x0 = Math.max(0, ex);
+      if (x0 < W) g.drawImage(sheet, x0, y, W - x0, 1, x0, y, W - x0, 1);
+      if (sh1) { g.fillStyle = sh1; g.fillRect(ex - 4, y, 4, 1); }
+      if (sh2) { g.fillStyle = sh2; g.fillRect(ex - 9, y, 5, 1); }
+      if (hi) { g.fillStyle = hi; g.fillRect(ex + 1, y, cw1, 1); }
+      if (lo) { g.fillStyle = lo; g.fillRect(ex + 1 + cw1, y, cw2, 1); }
+      g.fillStyle = 'rgba(40,24,6,0.7)'; g.fillRect(ex, y, 1, 1);
+    } else {
+      // the reveal: the sheet's right edge sweeps off to the left
+      const x1 = Math.min(W, ex);
+      if (x1 > 0) g.drawImage(sheet, 0, y, x1, 1, 0, y, x1, 1);
+      if (sh1) { g.fillStyle = sh1; g.fillRect(ex, y, 4, 1); }
+      if (sh2) { g.fillStyle = sh2; g.fillRect(ex + 4, y, 5, 1); }
+      if (hi) { g.fillStyle = hi; g.fillRect(ex - 1 - cw1, y, cw1, 1); }
+      if (lo) { g.fillStyle = lo; g.fillRect(ex - 1 - cw1 - cw2, y, cw2, 1); }
+      g.fillStyle = 'rgba(40,24,6,0.7)'; g.fillRect(ex - 1, y, 1, 1);
+    }
   }
-  // the curl along the moving (tilted) edge: a bright roll then shade, aligned with the edge
-  const ex = phase === 'cover' ? x0 : x1;
-  const len = Math.hypot(H, skew * 2);
-  const ux = (phase === 'cover' ? H : -H) / len, uy = (phase === 'cover' ? -skew * 2 : -skew * 2) / len;
-  const gr = g.createLinearGradient(ex, H / 2, ex + ux * curl, H / 2 + uy * curl);
-  gr.addColorStop(0, 'rgba(60,40,15,0.35)');
-  gr.addColorStop(0.18, 'rgba(255,250,235,0.55)');
-  gr.addColorStop(0.45, 'rgba(255,250,235,0.12)');
-  gr.addColorStop(1, 'rgba(60,40,15,0)');
-  g.fillStyle = gr;
-  g.fillRect(0, 0, W, H);
-  g.restore();
 }
 
 /** the overlay's current style (for tests / the dev panel) */

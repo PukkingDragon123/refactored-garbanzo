@@ -6,6 +6,10 @@
 import { el } from './ui';
 import { peopleArt } from '../world/actor';
 import { pxIconCss } from './pxicons';
+import { spriteURL, col, ditherBg } from './v11/paper';
+
+/** the "more" arrow: a little amber triangle in pixels */
+const moreURL = () => spriteURL('dbxMore', 9, 6, a => { for (let y = 0; y < 5; y++) for (let x = y; x < 9 - y; x++) a.put(x, y, x === y || x === 8 - y || y === 0 ? col('#3a2614') : col('#e8a43a')); a.put(4, 5, col('#3a2614')); });
 
 const CSS = `
 .dbx-wrap { position: absolute; left: 0; right: 0; bottom: max(6px, 1.6vh); display: flex; justify-content: center; pointer-events: none; z-index: 6;
@@ -14,8 +18,9 @@ const CSS = `
 .dbx { display: flex; align-items: stretch; gap: 6px; width: min(97vw, 1000px); }
 .dbx .dtx, .dbx .dpt { border-style: solid; border-width: calc(var(--sk-u, 3px) * 6); border-image: var(--sk-frame) 6 fill / calc(var(--sk-u, 3px) * 6) / 0 round;
   image-rendering: pixelated; filter: drop-shadow(0 5px 0 rgba(0,0,0,0.35)); }
+#ui .dbx, #ui .dbx * { font-size-adjust: none; }
 .dbx .dtx { position: relative; flex: 1; min-height: calc(60px * var(--ps) + 1.6em); color: #3a2614; font-family: 'Jersey 15', 'Pixelify Sans', 'Silkscreen', monospace;
-  font-size: clamp(15px, 2.05vw, 23px); line-height: 1.38; padding: 0.15em 0.45em; -webkit-font-smoothing: none; }
+  font-size: 27px; line-height: 32px; padding: 2px 10px; -webkit-font-smoothing: none; }
 .dbx .dtx .tx .w { white-space: nowrap; }
 .dbx .dtx .tx .c { opacity: 0; }
 .dbx .dtx .tx .c.on { opacity: 1; display: inline-block; white-space: pre; animation: dbxCh 0.14s steps(2) both; }
@@ -24,13 +29,12 @@ const CSS = `
 .dbx .dtx .tx em { font-style: normal; color: #b8301e; }
 .dbx .dtx .tx em .c.on { animation: dbxCh 0.14s steps(2) both, dbxShake 0.25s steps(2) infinite 0.2s; }
 .dbx .dtx .tx mark { background: none; color: #2f6b2a; }
-.dbx .dtx .tx mark .c.on { background: linear-gradient(transparent 55%, rgba(255,214,70,0.75) 55%, rgba(255,214,70,0.75) 92%, transparent 92%); }
+.dbx .dtx .tx mark .c.on { background: linear-gradient(transparent 0 16px, rgba(255,214,70,0.75) 16px 28px, transparent 28px); }
 .dbx .dtx .tx i { font-style: normal; color: #7a6a58; }
 @keyframes dbxShake { 50% { transform: translate(1px, -1px); } }
 .dbx .dtx .caret { display: inline-block; width: 0.42em; height: 0.85em; background: #3a2614; vertical-align: -0.08em; margin-left: 1px; animation: dbxCaret 0.5s steps(1) infinite; }
 @keyframes dbxCaret { 50% { opacity: 0; } }
-.dbx .dtx .more { position: absolute; right: 0.2em; bottom: 0.05em; width: 0.9em; height: 0.6em; background: #c8841c; box-shadow: 0 0 0 2px #3a2614;
-  clip-path: polygon(0 0, 100% 0, 50% 100%); opacity: 0; animation: dbxMore 0.6s steps(2) infinite; }
+.dbx .dtx .more { position: absolute; right: 6px; bottom: 4px; width: 20px; height: 14px; background: ${'${MORE}'} center / 100% 100% no-repeat; image-rendering: pixelated; opacity: 0; animation: dbxMore 0.6s steps(2) infinite; }
 .dbx.done .dtx .more { opacity: 1; }
 @keyframes dbxMore { 50% { transform: translateY(3px); } }
 .dbx .dtx .chs { display: flex; flex-direction: column; gap: 0.2em; margin-top: 0.35em; pointer-events: auto; }
@@ -39,25 +43,25 @@ const CSS = `
 .dbx .dtx .chs button.sel, .dbx .dtx .chs button:hover { background: rgba(90,164,71,0.3); box-shadow: inset 0 0 0 2px #3f7a34; }
 .dbx .dtx .chs button.sel::before { content: ${pxIconCss('play', 2)}; margin-right: 0.35em; vertical-align: -0.05em; }
 .dbx .dtx .chs .key { margin: 0 0.35em 0 0 !important; }
-.dbx .dtx .nmx { font-family: 'Jersey 10', 'Silkscreen', monospace; font-size: 0.62em; color: #6a4a2a; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.1em; display: none; }
+.dbx .dtx .nmx { font-family: 'Jersey 10', 'Silkscreen', monospace; font-size: 18.6667px; line-height: 20px; color: #6a4a2a; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 2px; display: none; }
 .dbx.noport .dtx .nmx { display: block; }
 .dbx .dpt { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding: 0; background: none; }
 .dbx.noport .dpt { display: none; }
-.dbx .dpt .well { position: relative; width: calc(56px * var(--ps)); height: calc(60px * var(--ps)); background: radial-gradient(circle at 50% 42%, var(--pc1, #f4e0b0), var(--pc2, #c89a5a));
+.dbx .dpt .well { position: relative; width: calc(56px * var(--ps)); height: calc(60px * var(--ps)); background: ${'${WELL}'} 0 0 / 8px 8px repeat, var(--pc1, #f4e0b0);
   box-shadow: inset 0 0 0 2px rgba(58,38,20,0.45); overflow: hidden; }
 .dbx .dpt canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; transform-origin: 50% 100%; }
 .dbx.bob .dpt canvas { animation: dbxBob 0.32s cubic-bezier(.2,1.8,.4,1); }
 @keyframes dbxBob { 30% { transform: translateY(-4%) scale(1.03, 0.98); } }
 .dbx.shake .dpt canvas, .dbx.shout .dtx { animation: dbxShakeBox 0.1s steps(2) infinite; }
 @keyframes dbxShakeBox { 50% { transform: translate(2px, -1px); } }
-.dbx .dpt .plate { margin-top: 4px; font-family: 'Jersey 10', 'Silkscreen', 'Pixelify Sans', monospace; font-weight: 700; font-size: clamp(11px, 1.35vw, 16px); letter-spacing: 0.08em;
+.dbx .dpt .plate { margin-top: 4px; font-family: 'Jersey 10', 'Silkscreen', 'Pixelify Sans', monospace; font-weight: 400; font-size: 18.6667px; line-height: 20px; letter-spacing: 2px;
   text-transform: uppercase; color: #fff; background: var(--pc3, #2f6b2a); padding: 0.18em 0.8em 0.12em; box-shadow: 0 0 0 2px #2a1a10, 0 3px 0 2px #2a1a10; white-space: nowrap; }
 .dbx.shout .dtx { font-weight: 700; }
 .dbx.whisper .dtx .tx { color: #7a6a58; }
 .dbx.think .dtx .tx { color: #5a4a6a; font-style: italic; }
 @media (max-width: 720px), (max-height: 620px) { .dbx-wrap { --ps: 2; } }
-@media (max-height: 520px) { .dbx-wrap { --ps: 1.5; --sk-u: 2px; bottom: 4px; } .dbx .dtx { font-size: 14px; min-height: calc(60px * var(--ps) + 1.2em); } .dbx .dpt .plate { font-size: 10px; } }
-@media (max-width: 460px) { .dbx .dtx { font-size: 14px; } }
+@media (max-height: 520px) { .dbx-wrap { --ps: 1.5; --sk-u: 2px; bottom: 4px; } .dbx .dtx { font-size: 20.25px; line-height: 24px; min-height: calc(60px * var(--ps) + 1.2em); } .dbx .dpt .plate { font-size: 18.6667px; } }
+@media (max-width: 460px) { .dbx .dtx { font-size: 20.25px; line-height: 24px; } }
 `;
 
 /** portrait well colours per character */
@@ -97,7 +101,7 @@ export class PortraitBox {
 
   constructor(parent: HTMLElement) {
     if (!styled) {
-      document.head.appendChild(el('style', '', CSS));
+      document.head.appendChild(el('style', '', CSS.replace('${MORE}', `url(${moreURL()})`).replace('${WELL}', ditherBg('#c89a5a', 0.38))));
       styled = true;
     }
     this.root = parent.appendChild(el('div', 'dbx-wrap'));

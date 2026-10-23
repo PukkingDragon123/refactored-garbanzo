@@ -1,11 +1,15 @@
-// Physical UI kit: ink and pencil, drawn by hand. Rough SVG paths that wobble like a real pen line
-// (lines, boxes, circles, arrows, underlines, ticks, crosses, scribbles, tally marks), an inline-SVG
-// builder that can "draw itself" on (stroke-dash animation), and the shared SVG filters (pencil grain,
-// ink bleed) that make strokes look like graphite and wet ink rather than vectors.
+// Physical UI kit: ink and pencil, drawn by hand, as pixel art. Rough paths that wobble like a real
+// pen line (lines, boxes, circles, arrows, underlines, ticks, crosses, scribbles, tally marks) are
+// built as path data in a viewBox, then rasterised onto the pixel grid with Bresenham lines (1-3 art
+// pixels wide, never anti-aliased): ink is solid, pencil is grainy (broken pixels), faint strokes are
+// dithered. svgInk() keeps its old signature but returns a pixel canvas that paints itself at its real
+// size, and can draw itself on, pixel by pixel along the stroke.
 //
-// All coordinates are in the SVG's own viewBox units; every path is deterministic for its seed.
+// All coordinates are in the drawing's own viewBox units; every path is deterministic for its seed.
 
 import { rng } from './rng';
+import { Art, pxCanvas, keyOf, dith, col, PX } from './px';
+import { hash2 } from './rng';
 
 export interface RoughOpts {
   /** wobble amount in units (default 1.2) */
@@ -153,7 +157,7 @@ export function tally(n: number, h = 16, seed = 1): { d: string; w: number } {
   return { d, w: x + 2 };
 }
 
-// ---------------------------------------------------------------- inline SVG
+// ---------------------------------------------------------------- pixel ink
 
 export interface Stroke {
   d: string;
@@ -162,7 +166,7 @@ export interface Stroke {
   /** stroke width in viewBox units */
   w?: number;
   fill?: string;
-  /** 'pencil' grain or 'ink' bleed filter */
+  /** 'pencil' grain (broken, lighter pixels) or solid 'ink' */
   tex?: 'pencil' | 'ink' | 'none';
   /** animate drawing on (seconds; 0 = drawn already) */
   draw?: number;
@@ -176,48 +180,131 @@ export const INK_RED = '#a8321e';
 export const PENCIL = '#5c574e';
 export const INK_GREEN = '#2f6b3a';
 
-/** an inline SVG of hand-drawn strokes; size in CSS (e.g. '100%' or '3em') */
-export function svgInk(vw: number, vh: number, strokes: Stroke[], o: { cls?: string; w?: string; h?: string; style?: string; stretch?: boolean } = {}): string {
-  ensureDefs();
-  const body = strokes.map(s => {
-    const anim = s.draw ? ` pathLength="1" class="pp-draw" style="animation-duration:${s.draw}s;animation-delay:${s.delay ?? 0}s"` : '';
-    const filt = s.tex === 'pencil' ? ' filter="url(#pp-pencil)"' : s.tex === 'ink' ? ' filter="url(#pp-ink)"' : '';
-    return `<path d="${s.d}" fill="${s.fill ?? 'none'}" stroke="${s.c ?? INK}" stroke-width="${s.w ?? 1.6}" stroke-linecap="round" stroke-linejoin="round"${s.opacity !== undefined ? ` opacity="${s.opacity}"` : ''}${filt}${anim}/>`;
-  }).join('');
-  const size = `${o.w ? ` width="${o.w}"` : ''}${o.h ? ` height="${o.h}"` : ''}`;
-  return `<svg class="pp-svg ${o.cls ?? ''}" viewBox="0 0 ${vw} ${vh}"${size}${o.stretch ? ' preserveAspectRatio="none"' : ''}${o.style ? ` style="${o.style}"` : ''} aria-hidden="true">${body}</svg>`;
+/** a CSS colour ('#hex', 'rgb()', 'rgba()', 'none') as a packed pixel colour (null for none) */
+export function parseColor(c: string | undefined, alpha = 1): number | null {
+  if (!c || c === 'none' || c === 'transparent') return null;
+  const m = /^rgba?\(([^)]+)\)/.exec(c);
+  if (m) {
+    const p = m[1].split(',').map(v => parseFloat(v));
+    const hex = '#' + p.slice(0, 3).map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+    return col(hex, (p[3] ?? 1) * alpha);
+  }
+  if (c[0] === '#') return col(c, alpha);
+  return col(INK, alpha);
 }
 
-let defs = false;
-/** the shared SVG filters: graphite grain for pencil strokes, a soft bleed for wet ink */
-export function ensureDefs() {
-  if (defs || typeof document === 'undefined') return;
-  defs = true;
-  const d = document.createElement('div');
-  d.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
-  d.setAttribute('aria-hidden', 'true');
-  d.innerHTML = `<svg width="0" height="0" style="position:absolute"><defs>
-    <filter id="pp-pencil" x="-5%" y="-20%" width="110%" height="140%">
-      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3" result="n"/>
-      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.6 1.25" result="holes"/>
-      <feComposite in="SourceGraphic" in2="holes" operator="in" result="grain"/>
-      <feDisplacementMap in="grain" in2="n" scale="0.9" xChannelSelector="R" yChannelSelector="G"/>
-    </filter>
-    <filter id="pp-ink" x="-5%" y="-20%" width="110%" height="140%">
-      <feTurbulence type="fractalNoise" baseFrequency="0.06" numOctaves="2" seed="8" result="w"/>
-      <feDisplacementMap in="SourceGraphic" in2="w" scale="1.4" xChannelSelector="R" yChannelSelector="G" result="d"/>
-      <feGaussianBlur in="d" stdDeviation="0.25" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="d"/></feMerge>
-    </filter>
-    <filter id="pp-rough-edge">
-      <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="3" seed="2" result="t"/>
-      <feDisplacementMap in="SourceGraphic" in2="t" scale="5" xChannelSelector="R" yChannelSelector="G"/>
-    </filter>
-    <filter id="pp-stamp" x="-5%" y="-5%" width="110%" height="110%">
-      <feTurbulence type="fractalNoise" baseFrequency="0.55" numOctaves="2" seed="11" result="n"/>
-      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.4 1.7" result="m"/>
-      <feComposite in="SourceGraphic" in2="m" operator="in"/>
-    </filter>
-  </defs></svg>`;
-  document.body.appendChild(d);
+type Sub = { pts: [number, number][]; closed: boolean };
+const pathCache = new Map<string, Sub[]>();
+/** path data (M L H V C S Q T A Z, absolute and relative) flattened into polylines */
+export function flattenPath(d: string): Sub[] {
+  const hit = pathCache.get(d);
+  if (hit) return hit;
+  const toks = d.match(/[MmLlHhVvCcSsQqTtAaZz]|[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?/g) ?? [];
+  const subs: Sub[] = [];
+  let cur: Sub | null = null;
+  let x = 0, y = 0, sx = 0, sy = 0, cmd = '', lcx = 0, lcy = 0, lq = false;
+  let i = 0;
+  const num = () => parseFloat(toks[i++]);
+  const isNum = () => i < toks.length && !/^[A-Za-z]$/.test(toks[i]);
+  const lineTo = (nx: number, ny: number) => { if (!cur) { cur = { pts: [[x, y]], closed: false }; subs.push(cur); } cur.pts.push([nx, ny]); x = nx; y = ny; };
+  const cubic = (x1: number, y1: number, x2: number, y2: number, x3: number, y3: number) => {
+    const n = 14, x0 = x, y0 = y;
+    for (let k = 1; k <= n; k++) {
+      const t = k / n, u = 1 - t;
+      lineTo(u * u * u * x0 + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3, u * u * u * y0 + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3);
+    }
+  };
+  const quad = (x1: number, y1: number, x2: number, y2: number) => {
+    const n = 10, x0 = x, y0 = y;
+    for (let k = 1; k <= n; k++) { const t = k / n, u = 1 - t; lineTo(u * u * x0 + 2 * u * t * x1 + t * t * x2, u * u * y0 + 2 * u * t * y1 + t * t * y2); }
+  };
+  while (i < toks.length) {
+    if (!isNum()) cmd = toks[i++];
+    const rel = cmd === cmd.toLowerCase();
+    const C = cmd.toUpperCase();
+    const ox = rel ? x : 0, oy = rel ? y : 0;
+    if (C === 'Z') { if (cur) { cur.closed = true; cur.pts.push([sx, sy]); } x = sx; y = sy; cur = null; continue; }
+    if (!isNum()) break;
+    if (C === 'M') { x = num() + ox; y = num() + oy; sx = x; sy = y; cur = { pts: [[x, y]], closed: false }; subs.push(cur); cmd = rel ? 'l' : 'L'; lq = false; continue; }
+    if (C === 'L') { lineTo(num() + ox, num() + oy); lq = false; continue; }
+    if (C === 'H') { lineTo(num() + ox, y); lq = false; continue; }
+    if (C === 'V') { lineTo(x, num() + oy); lq = false; continue; }
+    if (C === 'C') { const a = num() + ox, b = num() + oy, c = num() + ox, e = num() + oy, f = num() + ox, g = num() + oy; cubic(a, b, c, e, f, g); lcx = c; lcy = e; lq = false; continue; }
+    if (C === 'S') { const c = num() + ox, e = num() + oy, f = num() + ox, g = num() + oy; cubic(2 * x - lcx, 2 * y - lcy, c, e, f, g); lcx = c; lcy = e; continue; }
+    if (C === 'Q') { const a = num() + ox, b = num() + oy, f = num() + ox, g = num() + oy; quad(a, b, f, g); lcx = a; lcy = b; lq = true; continue; }
+    if (C === 'T') { const a = lq ? 2 * x - lcx : x, b = lq ? 2 * y - lcy : y, f = num() + ox, g = num() + oy; quad(a, b, f, g); lcx = a; lcy = b; lq = true; continue; }
+    if (C === 'A') { num(); num(); num(); num(); num(); lineTo(num() + ox, num() + oy); continue; }
+    i++;
+  }
+  pathCache.set(d, subs);
+  if (pathCache.size > 4000) pathCache.clear();
+  return subs;
 }
+
+/** rasterise strokes into an art buffer; t (0..1) of `total` seconds for drawing on */
+export function rasterStrokes(a: Art, vw: number, vh: number, strokes: Stroke[], stretch: boolean, t = 1, inset = 0.5) {
+  const W = a.w, H = a.h;
+  let kx: number, ky: number, ox: number, oy: number;
+  if (stretch) { kx = (W - inset * 2) / vw; ky = (H - inset * 2) / vh; ox = inset; oy = inset; }
+  else { const k = Math.min((W - inset * 2) / vw, (H - inset * 2) / vh); kx = ky = k; ox = (W - vw * k) / 2; oy = (H - vh * k) / 2; }
+  const ks = Math.sqrt(kx * ky);
+  const total = Math.max(0.001, ...strokes.map(s => (s.draw ? (s.delay ?? 0) + s.draw : 0)));
+  const T = t * total;
+  for (const s of strokes) {
+    const subs = flattenPath(s.d);
+    const op = s.opacity ?? 1;
+    const fill = parseColor(s.fill);
+    if (fill !== null) for (const sp of subs) if (sp.pts.length > 2) a.poly(sp.pts.map(([x, y]) => [x * kx + ox, y * ky + oy] as [number, number]), (x, y) => (op >= 1 || dith(x, y, op) ? fill : 0));
+    const c = parseColor(s.c ?? INK);
+    if (c === null || (s.w ?? 1.6) <= 0) continue;
+    const bw = Math.max(1, Math.min(4, Math.round((s.w ?? 1.6) * ks * 0.9)));
+    const pencil = s.tex === 'pencil';
+    // the pixels of the stroke in drawing order
+    const order: [number, number][] = [];
+    const seen = new Set<number>();
+    for (const sp of subs) {
+      for (let k = 1; k < sp.pts.length; k++) {
+        const [x0, y0] = sp.pts[k - 1], [x1, y1] = sp.pts[k];
+        a.line(x0 * kx + ox - 0.5, y0 * ky + oy - 0.5, x1 * kx + ox - 0.5, y1 * ky + oy - 0.5, 0, 1, (px, py) => {
+          const key = py * 4096 + px;
+          if (seen.has(key)) return;
+          seen.add(key);
+          order.push([px, py]);
+        });
+      }
+    }
+    let n = order.length;
+    if (s.draw) n = Math.floor(order.length * Math.max(0, Math.min(1, (T - (s.delay ?? 0)) / s.draw)));
+    const seed = s.d.length * 31 + (s.w ?? 1) * 7;
+    for (let k = 0; k < n; k++) {
+      const [px, py] = order[k];
+      for (let j = 0; j < bw; j++) for (let i = 0; i < bw; i++) {
+        const X = px + i - ((bw - 1) >> 1), Y = py + j - ((bw - 1) >> 1);
+        if (X < 0 || Y < 0 || X >= W || Y >= H) continue;
+        if (op < 1 && !dith(X, Y, op)) continue;
+        if (pencil && hash2(X, Y, seed) < 0.22) continue;
+        a.px(X, Y, c);
+      }
+    }
+  }
+}
+
+/**
+ * Hand-drawn strokes as a pixel canvas (the drop-in for the old inline SVG). Size it with o.w / o.h
+ * (any CSS length) or a class; with neither it fills its container's width at the viewBox's aspect
+ * (or the whole container when stretched).
+ */
+export function svgInk(vw: number, vh: number, strokes: Stroke[], o: { cls?: string; w?: string; h?: string; style?: string; stretch?: boolean } = {}): string {
+  const key = 'ink:' + keyOf(vw, vh, strokes, !!o.stretch);
+  const anim = Math.max(0, ...strokes.map(s => (s.draw ? (s.delay ?? 0) + s.draw : 0)));
+  const size = o.w || o.h
+    ? `${o.w ? `width:${o.w};` : ''}${o.h ? `height:${o.h};` : ''}${o.w && !o.h ? `aspect-ratio:${vw}/${vh};` : ''}${o.h && !o.w ? `aspect-ratio:${vw}/${vh};` : ''}`
+    : o.stretch ? 'width:100%;height:100%;' : `width:100%;aspect-ratio:${vw}/${vh};`;
+  return pxCanvas(key, (a, _w, _h, t) => rasterStrokes(a, vw, vh, strokes, !!o.stretch, t), { cls: `pp-svg pp-ink ${o.cls ?? ''}`, style: size + (o.style ?? ''), anim });
+}
+
+/** (the SVG filters are gone: pixel ink needs none) */
+export function ensureDefs() { /* nothing to install */ }
+
+/** the size of one art pixel in CSS px (re-exported for modules that lay ink out) */
+export const INK_PX = PX;
