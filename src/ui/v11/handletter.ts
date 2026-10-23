@@ -1,80 +1,67 @@
 // V11 hand-lettering: item names written on the specimen tags in Mori's marker, as pixel art. The
-// text is drawn from the paper kit's bitmap handwriting (src/ui/v11/paper/pxfont.ts): every pixel is
-// placed, nothing is rasterised from a smooth font, a little ink bleed gives it weight, and a slight
-// upward slant is done by stepping whole columns. It needs no font loading, so ensureHandFont()
-// resolves straight away (the API is kept for its callers).
+// letters come from the bitmap marker script in ../pxfont (slanted print-script, heavy downstrokes, a
+// little bounce on the baseline), drawn 1 canvas pixel per art pixel so they scale by whole pixels with
+// the art around them. No web font is involved, so it is the same online and off.
 
-import { Art, col } from './paper/px';
-import { drawText, textWidth, installPixelFonts } from './paper/pxfont';
+import { pxTextCanvas, pxMeasure } from '../pxfont';
+import type { PxFontId } from '../pxfont';
 
-/** (the hand is drawn in code: always ready) resolves true */
-export function ensureHandFont(): Promise<boolean> {
-  void installPixelFonts();
-  return Promise.resolve(true);
-}
-/** call fn once the face is in (it always is) */
-export function onHandFont(fn: () => void) { try { fn(); } catch (e) { console.error(e); } }
+/** (kept for callers: the hand is a bitmap font, always ready) */
+export function ensureHandFont(): Promise<boolean> { return Promise.resolve(true); }
+/** call fn once the face is in (immediately: nothing to load) */
+export function onHandFont(fn: () => void) { void fn; }
 export const handReady = () => true;
 
 const cache = new Map<string, HTMLCanvasElement>();
 
 export interface HandOpts {
-  /** cap height-ish size in art pixels (11 and up writes at double size) */
+  /** roughly how big (art px): 10 and up is the marker script, smaller is the bold print hand */
   px?: number;
   color?: string;
-  /** a darker edge for weight */
+  /** the heavy side of the strokes (dark ink), or, for light ink, the dark edge round it */
   bleed?: string;
-  /** wrap / shrink to this width (art px) */
+  /** wrap / fit to this width (art px) */
   maxW?: number;
-  /** slight upward slant, radians */
+  /** (ignored: the script has its own slant) */
   tilt?: number;
 }
 
+const lum = (h: string) => { const n = parseInt(h.slice(1, 7), 16); return ((n >> 16) & 255) * 0.3 + ((n >> 8) & 255) * 0.59 + (n & 255) * 0.11; };
+
 /** the text hand-lettered as pixel art (1 canvas pixel per art pixel) */
 export function handLetter(text: string, o: HandOpts = {}): HTMLCanvasElement {
-  const px = o.px ?? 15, color = o.color ?? '#2a2414', bleed = o.bleed ?? '#5a4a2a', maxW = o.maxW ?? 200, tilt = o.tilt ?? -0.03;
-  const key = [text, px, color, bleed, maxW, tilt].join('|');
+  const px = o.px ?? 15, color = o.color ?? '#2a2414', maxW = o.maxW ?? 200;
+  const bleed = o.bleed ?? (lum(color) > 140 ? '#3a2a14' : '#4a3a20');
+  const key = [text, px, color, bleed, maxW].join('|');
   const hit = cache.get(key);
-  if (hit) return hit;
-  let k = px >= 11 ? 2 : 1;
-  const bold = px >= 14;
-  // wrap into at most two lines (balanced), dropping to the small size if it still doesn't fit
-  const lay = (scale: number) => {
+  if (hit) return copy(hit);
+  // light ink (on a dark scene): an outline in the dark colour; dark ink (on paper): heavy strokes
+  const light = lum(color) > 140 && lum(bleed) < lum(color);
+  let font: PxFontId = px >= 10 ? 'script' : 'bold';
+  // too long for two lines of script: the print hand
+  if (font === 'script') {
     const words = text.split(/\s+/);
-    let lines = [text];
-    if (textWidth(text, { scale, bold }) > maxW && words.length > 1) {
-      let best = 1, bestW = Infinity;
-      for (let i = 1; i < words.length; i++) {
-        const w = Math.max(textWidth(words.slice(0, i).join(' '), { scale, bold }), textWidth(words.slice(i).join(' '), { scale, bold }));
-        if (w < bestW) { bestW = w; best = i; }
-      }
-      lines = [words.slice(0, best).join(' '), words.slice(best).join(' ')];
-    }
-    return lines;
-  };
-  let lines = lay(k);
-  if (k > 1 && Math.max(...lines.map(l => textWidth(l, { scale: k, bold }))) > maxW) { k = 1; lines = lay(1); }
-  const widest = Math.max(...lines.map(l => textWidth(l, { scale: k, bold })));
-  const lh = 11 * k;
-  const slant = Math.abs(tilt) * widest;
-  const W = Math.ceil(widest) + 4, H = Math.ceil(lh * lines.length + slant) + 4;
-  const a = new Art(W, H);
-  const ink = col(color), bl = col(bleed);
-  lines.forEach((l, i) => drawText(a, l, 1, Math.round(1 + slant + 8 * k + lh * i), ink, { scale: k, bold }));
-  // the slant: shift whole columns up by tilt (pixel steps, nothing resampled)
-  const out = new Art(W, H);
-  for (let x = 0; x < W; x++) {
-    const dy = Math.round(x * tilt);
-    for (let y = 0; y < H; y++) { const c = a.get(x, y); if (c >>> 24) out.put(x, y + dy, c); }
+    const longest = Math.max(...words.map(w => pxMeasure(w, 'script')));
+    if (longest > maxW - 4 || pxMeasure(text, 'script') > (maxW - 4) * 2) font = 'bold';
   }
-  // bleed: a darker pixel to the right and below the strokes, where there is none
-  const src = out.d.slice();
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    if (src[y * W + x] >>> 24) continue;
-    const l = x > 0 && (src[y * W + x - 1] >>> 24) > 0, u = y > 0 && (src[(y - 1) * W + x] >>> 24) > 0;
-    if (l && u) out.put(x, y, bl);
-  }
-  const c = out.canvas();
+  const c = pxTextCanvas(text, {
+    font, color, maxW, maxLines: 2, align: 'center',
+    bleed: light ? undefined : bleed,
+    outline: light ? bleed : null,
+    shadow: light ? bleed : null,
+    lineH: font === 'script' ? 11 : 9,
+  });
+  c.style.width = ''; c.style.height = '';
   cache.set(key, c);
+  return copy(c);
+}
+
+/** a fresh canvas with the same pixels (one sprite may be shown in several places) */
+function copy(src: HTMLCanvasElement): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = src.width; c.height = src.height;
+  c.className = src.className;
+  c.style.imageRendering = 'pixelated';
+  c.getContext('2d')?.drawImage(src, 0, 0);
   return c;
 }
