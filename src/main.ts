@@ -185,6 +185,8 @@ async function boot() {
       game.persist();
       return n;
     },
+    /** V11 Te Kāinga: rhythm lessons, the dance, the festival, quest stages (src/game/v11/village/debug.ts) */
+    village: () => import('./game/v11/village/debug'),
   };
   void import('./game/v11/npcs').then(m => { (window as unknown as { zl: Record<string, unknown> }).zl.social = m.NPC_ZL; });
   void import('./game/v9/islezl').then(m => { (window as unknown as { zl: { isle: unknown } }).zl.isle = m.ISLE; });

@@ -14,6 +14,8 @@ import '../art/v9/shore';
 import '../art/v9/wild/register';
 // V11 illustrated item art and footprints for every item (painted lazily on first use)
 import '../art/v11/items';
+// V11 Te Kāinga: the village's items, dishes and recipes (and their art)
+import './v11/village/items';
 import { bindBeastArt, BeastArt } from './wild/bodies';
 import { bindInsectArt, InsectArt } from './wild/insects';
 import { bindCampArt } from './scenes/camp2';
