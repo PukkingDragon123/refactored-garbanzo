@@ -1,11 +1,16 @@
-// V10 skill tree: Data Analysis, Camera, Research, Field Skills, bought with Research Points.
-// The tree is plain data (SKILL_TREE10, BRANCHES10) for the MoriOS skill-tree UI; what is owned lives
-// in the 'skills10' save bucket. Gameplay never reads the tree directly: it reads the fx10 getters,
-// which turn the owned skills into numbers (the base values are what an untrained Mori gets).
+// V10 skill tree, replaced in V11 by Blueprints (src/game/v11/blueprints.ts, bpdata.ts). The old tree's
+// data (SKILL_TREE10, BRANCHES10) stays for old saves and old callers, but nothing buys skills any
+// more: every skill now maps to a blueprint (SKILL_TO_BP) and owned10(skill) is true when that
+// blueprint is active (owned, and crafted / built if it needs building). Gameplay still reads the fx10
+// getters, unchanged, so their numbers now come from blueprints and crafted equipment.
+//
+// Old saves: skills bought before V11 are moved over once (the matching blueprints granted and built).
 
 import { game } from '../game';
 import { bucket } from './store';
 import { perks, hasSkill } from '../skills';
+import { isActive, bpSave, BLUEPRINTS } from '../v11/blueprints';
+import { SKILL_TO_BP } from '../v11/bpdata';
 
 export type Branch10 = 'data' | 'camera' | 'research' | 'field';
 export interface Skill10 {
@@ -102,9 +107,30 @@ export const branch10 = (b: Branch10): Skill10[] => SKILL_TREE10.filter(s => s.b
 /** owned skills: id -> the day it was learned */
 const state = () => bucket('skills10', () => ({ owned: {} as Record<string, number> }));
 
+/** move skills bought before V11 into their blueprints (once per save) */
+const migrated = new WeakSet<object>();
+export function migrateSkills10() {
+  const sv = game.save as unknown as object;
+  if (!sv || migrated.has(sv)) return;
+  migrated.add(sv);
+  const bp = bpSave();
+  const old = (game.save as unknown as { v10?: Record<string, { owned?: Record<string, number> }> }).v10?.['skills10']?.owned;
+  if (!old) return;
+  let any = false;
+  for (const sk of Object.keys(old)) {
+    const id = SKILL_TO_BP[sk];
+    if (!id || !BLUEPRINTS[id]) continue;
+    if (!bp.owned[id]) { bp.owned[id] = { from: 'skill:' + sk, t: Date.now(), seen: true, day: old[sk] }; any = true; }
+    if (BLUEPRINTS[id].needs?.length && !bp.made[id]) { bp.made[id] = 1; any = true; }
+  }
+  if (any) game.persist();
+}
+
 export function owned10(id: string): boolean {
-  // (testing: ?flags=v10:allSkills owns the whole tree)
-  return !!state().owned[id] || !!game.save.flags['v10:allSkills'];
+  migrateSkills10();
+  // (testing: ?flags=v10:allSkills owns and builds every blueprint)
+  const bp = SKILL_TO_BP[id];
+  return bp ? isActive(bp) : !!state().owned[id] || !!game.save.flags['v10:allSkills'];
 }
 
 export function skillState10(id: string): 'owned' | 'available' | 'locked' {
@@ -129,7 +155,7 @@ const listeners: Listener[] = [];
 /** called after a skill is bought (HUD refreshes, camera stats...) */
 export function onSkill10(fn: Listener) { listeners.push(fn); }
 
-/** spend RP on a skill; true on success */
+/** (pre-V11) spend RP on a skill; true on success. Blueprints replaced buying skills. */
 export function buy10(id: string): boolean {
   if (!canBuy10(id).ok) return false;
   const s = SKILL10_BY_ID[id];
@@ -140,16 +166,24 @@ export function buy10(id: string): boolean {
   return true;
 }
 
-/** debug / tests: own every skill (or a list), free */
+/** debug / tests: own every skill (or a list), free: their blueprints granted and built */
 export function grantAll10(ids: string[] = SKILL_TREE10.map(s => s.id)) {
-  for (const id of ids) if (SKILL10_BY_ID[id]) state().owned[id] = game.save.day || 1;
+  const bp = bpSave();
+  for (const id of ids) {
+    const b = SKILL_TO_BP[id];
+    if (!b) continue;
+    if (!bp.owned[b]) bp.owned[b] = { from: 'dev', t: Date.now(), seen: true, day: game.save.day || 1 };
+    if (BLUEPRINTS[b]?.needs?.length) bp.made[b] = Math.max(1, bp.made[b] ?? 0);
+  }
   game.persist();
   for (const id of ids) for (const f of listeners) { try { f(id); } catch (e) { console.error(e); } }
 }
 
 const o = owned10;
+/** a blueprint's effect is on (owned, and built if it needs building) */
+const a = isActive;
 
-/** what gameplay reads (base values without upgrades) */
+/** what gameplay reads (base values without upgrades); since V11 the values come from blueprints */
 export const fx10 = {
   // ---------------------------------------------------------------- camera
   /** seconds the camera must be held steady to capture a research photo */
@@ -195,7 +229,7 @@ export const fx10 = {
 
   // ---------------------------------------------------------------- field skills
   /** multiplier on all energy costs */
-  energyMult: (): number => (o('fld_legs') ? 0.85 : 1),
+  energyMult: (): number => (o('fld_legs') ? 0.85 : 1) * (a('rain_catcher') ? 0.95 : 1),
   /** extra pack capacity in kg */
   packBonus: (): number => (o('fld_pack') ? 4 : 0) + (o('fld_frame') ? 8 : 0),
   /** extra backpack pockets (slots) */
@@ -203,7 +237,7 @@ export const fx10 = {
   /** 0..1: how much less a heavy pack slows you down */
   loadTolerance: (): number => (o('fld_frame') ? 0.3 : 0),
   /** extra maximum energy */
-  maxEnergyBonus: (): number => (o('fld_frame') ? 20 : 0),
+  maxEnergyBonus: (): number => (o('fld_frame') ? 10 : 0) + (a('canteen') ? 10 : 0) + (a('shelter') ? 10 : 0),
   /** multipliers on the energy cost of climbing, swimming and sprinting */
   climbMult: (): number => (o('fld_climb') ? 0.65 : 1),
   swimMult: (): number => (o('fld_climb') ? 0.65 : 1),

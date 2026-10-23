@@ -25,6 +25,8 @@ export const PX_M = 34.4;
 export const REEL_M = 1.1;
 /** line on the reel, metres */
 export const LINE_MAX = 22;
+/** V11 blueprints tune the line (src/game/v11/bpcraft.ts): lineK > 1 takes longer to snap */
+export const fightTune: { lineK: () => number } = { lineK: () => 1 };
 
 export interface FightWorld {
   /** rod tip, world px */
@@ -146,7 +148,7 @@ export class FightSim {
     if (this.ten < 0.55) this.warned = false;
     if (this.ten >= 1) {
       this.over += dt * (this.ten >= 1.22 ? 3 : 1);
-      if (this.over > (this.t < 3 ? 0.7 : 0.38)) { this.end = 'snap'; ev.push('snap'); return ev; }
+      if (this.over > (this.t < 3 ? 0.7 : 0.38) * fightTune.lineK()) { this.end = 'snap'; ev.push('snap'); return ev; }
     } else this.over = Math.max(0, this.over - dt * 2);
     // ---------------------------------------------------------------- motion
     if (this.leap < 0) {

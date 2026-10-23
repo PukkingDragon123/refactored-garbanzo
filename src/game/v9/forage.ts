@@ -25,6 +25,7 @@ import { groundY, zoneAt } from '../../art/island4/layout';
 import { rand } from '../../core/math';
 import { nestUnder, hornetAmbush } from './hornets';
 import * as FA from '../../art/v9/forage-art';
+import * as SV from '../../art/v11/salvage';
 import { startQuest, questStatus } from '../quests';
 import type { ForageSprite } from '../../art/v9/forage-art';
 
@@ -89,6 +90,10 @@ export const KINDS: Record<string, Kind> = {
   flax: { item: 'flaxleaf', n: [1, 2], verb: 'Cut harakeke (flax)', tool: 'knife', how: 'kneel', time: 1.2, respawn: 200, art: 'flax', sfx: 'pluck', fx: LEAFFX, cat: 'plants' },
   kawakawa: { item: 'kawakawa', n: [1, 2], verb: 'Pick kawakawa leaves', how: 'pick', time: 0.9, respawn: 200, art: 'kawakawa', sfx: 'pluck', fx: LEAFFX, cat: 'plants' },
   mussels: { item: 'mussel', n: [1, 2], verb: 'Pick mussels off the rocks', how: 'kneel', time: 1.1, respawn: 200, art: 'mussels', sfx: 'pluck', fx: WATERFX, cat: 'food' },
+  // V11 salvage from the wreck (blueprint materials: the slingshot's band and pouch, scrap fittings)
+  tube: { item: 'rubber_band', n: [1, 1], verb: 'Cut a strip off the burst life ring', tool: 'knife', how: 'kneel', time: 1.3, respawn: 540, art: 'lifering', sfx: 'pluck', fx: [0.3, 0.3, 0.32], first: 'Inner tube from the life ring. Stretchy. Aroha said this is the band. One strip, then.' },
+  bag: { item: 'leather_scrap', n: [1, 1], verb: 'Cut leather from the ruined boat bag', tool: 'knife', how: 'kneel', time: 1.4, respawn: 480, art: 'boatbag', sfx: 'rustle', fx: [0.55, 0.35, 0.2], first: 'Joshu’s old boat bag. It’s had it... but the bottom is still good leather.' },
+  scrap: { item: 'scrap', n: [1, 1], verb: 'Pull a bent fitting off the wreckage', how: 'kneel', time: 1.2, respawn: 420, art: 'scrapheap', sfx: 'jarClink', fx: [0.7, 0.72, 0.74], first: 'A cleat, a plate, half a stanchion. Jenna will call this treasure.' },
   warm: { item: 'stone', n: [1, 1], verb: 'Pick up the odd warm stone', how: 'kneel', time: 1, respawn: 0, art: 'warm', sfx: 'pluck', fx: [1, 0.6, 0.3], cat: 'minerals' },
 };
 
@@ -97,7 +102,7 @@ const PLACES: [string, number, number][] = [
   // west point: rock pools and spray-zone ferns
   ['saltfern', 60, 1], ['opal', 120, 6], ['saltfern', 190, 1], ['opal', 250, 6], ['kelp', 300, 5], ['opal', 335, 6], ['glass', 395, 4],
   // in front of the wreck
-  ['glass', 940, 4], ['drift', 1000, 4], ['stones', 1050, 5], ['kelp', 1110, 6], ['feather', 1180, 5], ['drift', 1240, 4], ['dig', 1290, 2], ['glass', 1330, 4],
+  ['glass', 940, 4], ['scrap', 968, 5], ['drift', 1000, 4], ['stones', 1050, 5], ['kelp', 1110, 6], ['tube', 1142, 5], ['feather', 1180, 5], ['bag', 1210, 5], ['drift', 1240, 4], ['dig', 1290, 2], ['glass', 1330, 4],
   // the landing beach (camp goes up here)
   ['sunwhorl', 1505, 4], ['hopper', 1565, 7], ['holly', 1640, 9], ['dig', 1700, 2], ['sunwhorl', 1800, 4], ['fan', 1845, 5], ['lily', 1885, 9],
   ['feather', 1950, 5], ['fan', 2125, 5], ['dig', 2160, 2], ['sunwhorl', 2215, 4], ['hopper', 2315, 7], ['holly', 2345, 9], ['sunwhorl', 2445, 4],
@@ -114,7 +119,7 @@ const PLACES: [string, number, number][] = [
   ['stones', 4720, 5], ['saltfern', 4780, 1], ['feather', 4860, 5], ['saltfern', 4930, 1], ['glass', 4980, 4],
   ['glowmoss', 5140, 2], ['opal', 5232, 5], ['glowmoss', 5330, 2], ['glowmoss', 5410, 2],
   // the hidden cove
-  ['kelp', 5480, 6], ['fan', 5505, 5], ['dig', 5545, 2], ['sunwhorl', 5705, 4], ['glass', 5760, 4], ['drift', 5850, 4],
+  ['kelp', 5480, 6], ['fan', 5505, 5], ['dig', 5545, 2], ['tube', 5640, 5], ['sunwhorl', 5705, 4], ['glass', 5760, 4], ['scrap', 5800, 5], ['drift', 5850, 4],
   // the bush track (ember bushes at 6045, 6290, 6470, 6790)
   ['dusk', 5940, 7], ['moth', 6085, 0], ['beetle', 6210, 6], ['kawakawa', 6350, 6], ['moth', 6410, 0], ['dusk', 6720, 7], ['moth', 6850, 0],
 ];
@@ -129,6 +134,7 @@ const ARTS: Record<string, () => ForageSprite> = {
   drift: () => FA.driftwood(1), stones: FA.stones, flax: FA.flaxClump, kawakawa: FA.kawakawaShrub, mussels: FA.musselRock, warm: FA.warmStone,
   beetle0: () => FA.jewelBeetle(0), beetle1: () => FA.jewelBeetle(1), hopperbug: FA.sandHopper, moth0: () => FA.lanternMoth(0), moth1: () => FA.lanternMoth(1),
   net: FA.bugNet, jar: FA.specimenJar,
+  lifering: SV.lifeRing, boatbag: SV.boatBag, scrapheap: SV.scrapHeap,
 };
 
 const TOOL_LINE: Record<string, string> = {

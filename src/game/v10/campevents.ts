@@ -170,7 +170,7 @@ addCampEvent({
       setF('v10:radio');
       for (const r of REQUESTS) if (r.giver === 'agency' && reqState(r) === 'open') { acceptReq(r.id); break; }
     });
-    game.ui.toast('The field office is on the radio. Uploads earn <b>Research Points</b>: spend them on the laptop’s <b>skill tree</b> and on gear at <b>Jenna’s bench</b>. The agency’s requests go up on the <b>camp board</b>.', 'AGENCY', 'teal', 9000);
+    game.ui.toast('The field office is on the radio. Uploads earn <b>Research Points</b>: spend them on <b>blueprints</b> (the laptop or <b>Jenna’s bench</b>), then craft them at the bench. The agency’s requests go up on the <b>camp board</b>.', 'AGENCY', 'teal', 9000);
   },
 });
 
@@ -202,7 +202,7 @@ export async function radioOffice(cd: CampDay) {
     const bank = game.save.rp;
     await st.say([
       radio(`Marlow here. ${OFFICE_NEWS[k % OFFICE_NEWS.length]}`, 'neutral'),
-      radio(bank > 0 ? `You have ${bank} Research Points banked. Spend them on the laptop’s skill tree, or have your engineer fit some gear.` : 'Your Research Points account is empty. Upload something remarkable.', 'neutral'),
+      radio(bank > 0 ? `You have ${bank} Research Points banked. Spend them on blueprints: the R&amp;D office draws them up overnight, and your engineer builds them.` : 'Your Research Points account is empty. Upload something remarkable.', 'neutral'),
     ]);
     const open = REQUESTS.filter(r => r.giver === 'agency' && reqState(r) === 'open');
     if (open.length) {

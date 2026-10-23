@@ -20,7 +20,7 @@ import { PixelBuffer } from '../../pixel';
 import { hex, shade, withAlpha, A as AL, R as CR, G as CG, B as CB, rgbToHsl, hslToRgb } from '../../color';
 import type { C } from '../../color';
 import { bayer, noise2, fbm2, noise1 } from '../../../core/math';
-import { ITEM_CELL, registerItemArt } from '../itemart';
+import { ITEM_CELL, registerItemArt, registerItemArtBuffer, itemArtBuffer } from '../itemart';
 import type { Footprint } from '../../../game/v11/footprints';
 
 export { Pen, RAMP, rp, H, hash, alpha, tone, clamp, mix, frame, curve, bez, lens, ring, halo, sparkle, wisp, hex, shade, withAlpha, bayer, noise2, fbm2, noise1 };
@@ -549,6 +549,8 @@ export const fp = (w: number, h: number, ...mask: string[]): Footprint => (mask.
 export function artGroup(group: string) {
   return (id: string, f: Footprint, draw: (p: IP) => void, o?: ArtOpts) => {
     LIST.push({ id, group, fp: f });
-    registerItemArt(id, () => paintArt(f, draw, o).toCanvas(1), f);
+    // one painting serves both: the buffer (for pixel painters) and the canvas made from it
+    registerItemArtBuffer(id, () => paintArt(f, draw, o));
+    registerItemArt(id, () => (itemArtBuffer(id) ?? paintArt(f, draw, o)).toCanvas(1), f);
   };
 }

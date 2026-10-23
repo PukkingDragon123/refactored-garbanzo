@@ -131,6 +131,8 @@ function maxBatch(r: Recipe) {
 
 /** Open a crafting station. onCraft is awaited (the game plays its animation) before items change hands. */
 export function openCrafting(station: Station, o: { onCraft?: (recipeId: string, seconds: number) => Promise<void> | void } = {}): Promise<void> {
+  // V11: the workbench crafts from blueprint sheets on the drafting table (src/ui/v11/blueprints/folio.ts)
+  if (station === 'bench') return import('./v11/blueprints/folio').then(m => m.openFolio({ at: 'bench' })).then(() => undefined);
   css('craft', CSS);
   sfx('uiOpen');
   const st = STATION[station];
@@ -261,7 +263,7 @@ export function openCrafting(station: Station, o: { onCraft?: (recipeId: string,
         bar.style.width = (k * 100).toFixed(1) + '%';
         if (!o.onCraft && performance.now() - tick > 420) {
           tick = performance.now();
-          sfx(station === 'bench' ? 'hammer' : station === 'fire' ? 'fireLight' : 'rope', { vol: 0.35, pitch: 0.9 + Math.random() * 0.2 });
+          sfx(station === 'fire' ? 'fireLight' : 'rope', { vol: 0.35, pitch: 0.9 + Math.random() * 0.2 });
         }
         if (k < 1) raf = requestAnimationFrame(anim);
       };

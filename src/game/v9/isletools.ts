@@ -13,6 +13,9 @@ import { SPOT, groundY } from '../../art/island4/layout';
 import { cineLook } from '../v11/cine';
 import { rand } from '../../core/math';
 import { TRAILHEAD_X } from '../v11/forest/layout';
+import type * as GearMod from '../v10/campgear';
+let gearMod: typeof GearMod | null = null;
+void import('../v10/campgear').then(m => { gearMod = m; }).catch(() => {});
 
 // (V11: the trail turns inland at the stream mouth; inside Te Wao Nui the forest story marks the way)
 const TRAIL: [number, string][] = [[3470, 'trg:tracks'], [TRAILHEAD_X, 'v11:trailIn']];
@@ -35,7 +38,9 @@ export class IsleTools {
     s.st.envHook = (env, dt) => {
       base?.(env, dt);
       const lamp = s.lampOn ? 1 : 0;
-      const dim = Math.max(s.inside * (lamp ? 0.3 : 0.62), s.caveK * (lamp ? 0.12 : 0.3));
+      // (a better lens / the storm lantern throw more light: blueprints, campgear.ts gearFx.lampRange)
+      const lr = lamp ? gearMod?.gearFx.lampRange() ?? 1 : 1;
+      const dim = Math.max(s.inside * (lamp ? 0.3 / lr : 0.62), s.caveK * (lamp ? 0.12 / lr : 0.3));
       if (dim <= 0) return;
       const k = 1 - dim;
       env.ambientTop = [env.ambientTop[0] * k, env.ambientTop[1] * k, env.ambientTop[2] * (k + dim * 0.08)];

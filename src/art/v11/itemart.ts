@@ -4,6 +4,7 @@
 // to the old 16 px icons when an item has no artwork yet.
 import { registerFootprint } from '../../game/v11/footprints';
 import type { Footprint } from '../../game/v11/footprints';
+import type { PixelBuffer } from '../pixel';
 
 export const ITEM_CELL = 24;
 type Painter = () => HTMLCanvasElement;
@@ -24,6 +25,22 @@ export function itemArtCanvas(id: string): HTMLCanvasElement | null {
   if (!c) { c = p(); cache.set(id, c); }
   return c;
 }
+// The artwork as a PixelBuffer, for code that paints pixels itself (the blueprint papers): reading a
+// canvas back with getImageData stalls on a GPU canvas (seconds under software GL), so painters that
+// can also hand over their buffer register it here (src/art/v11/items/kit.ts does).
+type BufPainter = () => PixelBuffer;
+const bufPainters: Record<string, BufPainter> = {};
+const bufCache = new Map<string, PixelBuffer>();
+export function registerItemArtBuffer(id: string, paint: BufPainter): void { bufPainters[id] = paint; }
+/** the painted artwork at 1x as a PixelBuffer (cached), or null when only a canvas painter exists */
+export function itemArtBuffer(id: string): PixelBuffer | null {
+  const p = bufPainters[id];
+  if (!p) return null;
+  let b = bufCache.get(id);
+  if (!b) { b = p(); bufCache.set(id, b); }
+  return b;
+}
+
 /** a data URL of the artwork scaled by whole pixels (nearest), or null */
 export function itemArtURL(id: string, scale = 2): string | null {
   const key = id + '@' + scale;
