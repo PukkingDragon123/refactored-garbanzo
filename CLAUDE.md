@@ -21,6 +21,32 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
   - Nothing should look like a rectangle pasted into the world. No cropped sprites.
   - Sprites stand on the ground they belong to; trunks and canopy run out of frame.
 
+## V12 design: zero traditional UI and a clear loop (always)
+
+- **No HUD, no panels, no menu boxes.** Everything the player needs is in the world or on objects:
+  - **Text:** all text floats in the world. Dialogue is simple floating text by the speaker, with
+    lively per-letter animation: shouts shake and grow, whispers waver, scared text trembles. The same
+    goes for barks, prompts and notices. No dialogue boxes, no toasts.
+  - **Mori:** click or tap Mori (or press Tab) to inspect him. The camera eases in close, and three
+    things on him can be picked: the camera (equip or unequip), the backpack (a detailed
+    first-person backpack scene with a 5×3 grid; items can be rotated) and the note paper (pulled
+    out as a detailed notebook with real page flips; quests are ticked with an animated pen; you can
+    draw on it; it also holds the field guide and people).
+  - **Main menu:** a cinematic scene of the boat sailing with Mori on deck. The title is a cloud
+    formation in the sky and the options are floating text. The pause and settings menus also use
+    floating text over the scene.
+- **No stamina, no sprint, no fast travel.**
+  - **Hunger:** Mori's stomach growls (a sound and an animation). When he's too hungry he refuses to
+    take photos until he eats.
+  - **Travel:** you walk everywhere. Trails link the areas, with signposted crossroads where paths
+    split. Camp is the hub.
+- **The loop:** wake at camp; talk, eat and check the notebook; walk out along the trails; explore,
+  photograph wildlife and collect samples; walk back before dark; develop and research the photos;
+  cook; sleep. Research unlocks blueprints, and the gear you craft from them opens new trails.
+- **Hard-won progress:** nothing comes all at once. Rare animals need patience and skill. Gathering
+  and tricky moments use short QTE minigames. The model is how Dave the Diver polishes its loop.
+- Features that clutter the loop are hidden rather than deleted, so they can return.
+
 ## Working notes
 
 - The user reviews gameplay themselves. Verify with `npx tsc --noEmit` and
