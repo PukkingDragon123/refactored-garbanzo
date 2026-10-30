@@ -31,6 +31,7 @@ import type { InkStroke } from './ink';
 import { prewarmNotebookMap } from './map';
 import { hasAnim7 } from '../../../art/v7/anim-contract';
 import { animInfo } from '../../../world/actor';
+import { softenScene } from '../soften';
 
 const SMAX = 4, BR = 3;
 const SHADE = col('#2a1808'), WHITE = col('#fffaf0'), EDGE = col('#8a6a40'), DIM = col('#0c0806');
@@ -142,6 +143,8 @@ class Notebook {
     this.target = null;
     game.ui.modalLayer.appendChild(this.root);
     game.ui.modalOpen++;
+    // the world racks out of focus behind (before it freezes, so the still frame is the soft one)
+    softenScene(true); this.softOn = true;
     // Mori takes the notebook out of his pocket in the world first (the pullNote clip), then it comes
     // up into view and the world freezes behind it
     const sc = game.scene as unknown as { player?: Holder; cutscene?: boolean } | null;
@@ -191,7 +194,7 @@ class Notebook {
   /** the dimmed, dithered scene behind (darker towards the edges, in quantised steps) */
   private paintBackdrop() {
     const a = new Art(this.CW, this.CH);
-    const on = col('#0c0806', 0.82), off = col('#0c0806', 0.34);
+    const on = col('#0c0806', 0.7), off = col('#0c0806', 0.24);
     const cx = this.CW / 2, cy = this.CH * 0.46, R = Math.hypot(cx, cy);
     for (let y = 0; y < this.CH; y++) for (let x = 0; x < this.CW; x++) {
       const d = Math.hypot(x - cx, y - cy) / R;
@@ -352,6 +355,7 @@ class Notebook {
 
   private openT = 0;
   private pullEnd = 0;
+  private softOn = false;
   private errs = 0;
   private shown = false;
   private coveredOn = false;
@@ -389,6 +393,7 @@ class Notebook {
         // the world comes back as the notebook goes down, and Mori puts it away (the putNote clip)
         this.putting = true;
         if (this.coveredOn) { this.coveredOn = false; game.covered = Math.max(0, game.covered - 1); }
+        if (this.softOn) { this.softOn = false; softenScene(false); }
         const w = this.who;
         if (w && hasAnim7('putNote') && !R) {
           w.p.poseOverride = 'putNote';
@@ -1102,6 +1107,7 @@ class Notebook {
     this.root.remove();
     game.ui.modalOpen = Math.max(0, game.ui.modalOpen - 1);
     if (this.coveredOn) { this.coveredOn = false; game.covered = Math.max(0, game.covered - 1); }
+    if (this.softOn) { this.softOn = false; softenScene(false); }
     const w = this.who;
     if (w && !this.putting && (w.p.poseOverride === 'noteRead' || w.p.poseOverride === 'pullNote')) w.p.poseOverride = w.prev;
     guardInput(300);
