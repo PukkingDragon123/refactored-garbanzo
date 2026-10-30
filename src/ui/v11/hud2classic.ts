@@ -24,12 +24,13 @@ import { audio } from '../../core/audio';
 import { trackedQuest, currentStepIndex, setQuestNotice } from '../../game/quests';
 import type { QuestDef } from '../../game/quests';
 import { capacity } from '../../game/inventory';
-import { itemIconURL, uiIconURL } from '../../art/itemicons';
+import { itemIconURL } from '../../art/itemicons';
 import { mountBodyHud, BodyHud } from '../v10/bodyhud';
 import { installPaper, scrap, stamp, paperSfx, escHtml as esc, setTransitionFocus, rasterStrokes, tick, strike, paperTileArt } from './paper';
 import { Art, col, dith, shadeC, mixC, spriteURL, PX } from './paper/px';
 import { drawText, wrapText } from './paper/pxfont';
-import { PxW, outlined, tw, plate, hudScale } from './hudpx';
+import { PxW, outlined, tw, plate, hudScale, hudText, hudTextW, hnoise, leatherAt, paperAt, rivet } from './hudpx';
+import { paintPack, paintLaptop, paintCamera } from './kitart';
 import { hudHour } from './hudclock';
 import { drawWatch, watchSize } from '../v12/watch';
 
@@ -154,28 +155,44 @@ interface HudLaptop {
   open: () => void;
 }
 
-/** 16x16 pixel laptop (lid up, aqua screen) */
-const LAP_ROWS = [
-  '................', '................', '..kkkkkkkkkkkk..', '..kTTTTTTTTTTk..', '..kTjCCCCCCcTk..', '..kTCjCCCCCcTk..', '..kTCCCCCCccTk..', '..kTCCGGCcccTk..',
-  '..kTGGGGGGGGTk..', '..kTTTTTTTTTTk..', '.kkkkkkkkkkkkkk.', 'kqqqqqqqqqqqqqqk', 'kTqTqTqTqTqTqTqk', 'kTTTTTTKKTTTTTTk', '.kkkkkkkkkkkkkk.', '................',
-];
-const LAP_COL: Record<string, string> = { k: '#0b0f12', T: '#7a8189', q: '#b9c0c4', K: '#454b53', C: '#3fd1c1', c: '#138a86', j: '#eafffb', G: '#6fb150' };
-let lapArt: Art | null = null;
-function laptopArt(): Art {
-  if (lapArt) return lapArt;
-  const a = new Art(16, 16);
-  LAP_ROWS.forEach((r, y) => { for (let x = 0; x < 16; x++) { const v = LAP_COL[r[x]]; if (v) a.put(x, y, col(v)); } });
-  return (lapArt = a);
+/** a kit tile: a riveted plate (leather, enamel or bakelite by its colour) with a stitched inner edge */
+function kitTile(a: Art, x: number, y: number, w: number, h: number, base: number) {
+  plate(a, x, y, w, h, base, { r: 3 });
+  for (let j = 3; j < h - 3; j++) for (let i = 3; i < w - 3; i++) a.put(x + i, y + j, leatherAt(x + i, y + j, a.get(x + i, y + j)));
+  for (let i = 4; i < w - 4; i++) if (i % 3) { a.put(x + i, y + 3, shadeC(base, 0.35)); a.put(x + i, y + h - 4, shadeC(base, 0.18)); }
+  for (let j = 5; j < h - 5; j++) if (j % 3) { a.put(x + 3, y + j, shadeC(base, 0.3)); a.put(x + w - 4, y + j, shadeC(base, 0.15)); }
 }
-/** an image URL loaded into a paint buffer (null until it's loaded) */
-const imgArts = new Map<string, Art | null>();
-function imgArt(url: string): Art | null {
-  if (imgArts.has(url)) return imgArts.get(url)!;
-  imgArts.set(url, null);
-  const im = new Image();
-  im.onload = () => imgArts.set(url, Art.from(im));
-  im.src = url;
-  return null;
+
+/** a pushpin seen from above and a little to the side: domed head, catch-light, rim, needle, shadow */
+function paintPin(a: Art, x: number, y: number, c: number) {
+  const ROWS = ['..kkkk...', '.kLHhhk..', 'kLHhhhdk.', 'khhhhhdk.', 'khhhhddk.', '.kddddk..', '..kkkk...', '....n....', '....n....'];
+  const P: Record<string, number> = { k: OUT, H: col('#ffffff'), L: shadeC(c, 0.45), h: c, d: shadeC(c, -0.35), n: col('#b8bcc0') };
+  for (let j = 0; j < ROWS.length; j++) for (let i = 0; i < 9; i++) if (ROWS[j][i] !== '.' && dith(x + i + 2, y + j + 3, 0.7)) a.px(x + i + 2, y + j + 3, col('#000000', 0.32));
+  ROWS.forEach((r, j) => { for (let i = 0; i < 9; i++) if (r[i] !== '.') a.put(x + i, y + j, P[r[i]]); });
+}
+
+/** the research counter: an enamel plate, a rubber-stamped seal, the count, a label */
+function paintRpPlate(a: Art, w: number, txt: string, t: number) {
+  const navy = col('#26324a'), ink = col('#26408a');
+  plate(a, 0, 3, w - 3, 34, navy, { r: 3 });
+  for (let j = 6; j < 34; j++) for (let i = 3; i < w - 6; i++) if (hnoise(i >> 2, j, 9) > 0.86) a.put(i, j, shadeC(navy, 0.06));
+  for (const [sx, sy] of [[4, 7], [w - 8, 7], [w - 8, 32]]) { a.put(sx, sy, col('#8a96b0')); a.put(sx + 1, sy, col('#4a5670')); a.put(sx, sy - 1, col('#4a5670')); }
+  // the seal: a cream paper disc stamped with a double ink ring, dots between, RP in the middle
+  const cx = 20, cy = 20;
+  for (let y = cy - 16; y <= cy + 16; y++) for (let x = cx - 16; x <= cx + 16; x++) {
+    const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+    if (d > 15.5) continue;
+    let c = d > 14.6 ? OUT : paperAt(x, y, col('#f4ead0'));
+    if (d <= 14.6 && d > 11.8 && hnoise(x, y, 41) > 0.12) c = d > 13.7 || d < 12.7 ? ink : mixC(ink, col('#f4ead0'), 0.15);
+    if (d <= 9.6 && d > 8.6 && hnoise(x, y, 43) > 0.2) c = ink;
+    a.put(x, y, c);
+  }
+  for (let i = 0; i < 12; i++) { const an = (i / 12) * Math.PI * 2 + 0.26; a.put(Math.round(cx - 0.5 + Math.cos(an) * 11), Math.round(cy - 0.5 + Math.sin(an) * 11), mixC(ink, col('#f4ead0'), 0.1)); }
+  hudText(a, 'RP', cx - 6, cy - 4, { face: 'caps', c: ink, ring: null });
+  // the count and its label
+  hudText(a, txt, 40, 7, { face: 'num', c: [col('#fffaea'), CREAM, col('#e8c890')], drop: 1 });
+  outlined(a, 'RESEARCH', 40, 31, col('#9fc8ff'), OUT, { face: 'block', bold: false, spacing: 1 });
+  void t;
 }
 
 interface HudOpts {
@@ -323,7 +340,7 @@ export class Hud2Classic {
     const r = this.kitW.el.getBoundingClientRect(), p = game.ui.root.getBoundingClientRect();
     if (!r.width) return [p.width * 0.06, p.height * 0.92];
     const s = this.kitW.s || hudScale();
-    return [r.left - p.left + 11 * s, r.top - p.top + 20 * s];
+    return [r.left - p.left + 15 * s, r.top - p.top + 30 * s];
   }
   bumpPack() {
     this.bump = 0.3;
@@ -452,24 +469,16 @@ export class Hud2Classic {
     this.paintT += dt;
     if (!force && this.paintT < 1 / 30) return;
     this.paintT = 0;
-    // the stamp counter
+    // the stamp counter: an enamel plate with a rubber-stamped ink seal and the count in numerals
     const rpTxt = String(Math.max(0, Math.round(this.rpShown)));
-    const rw = 30 + tw(rpTxt, { face: 'block', scale: 2, spacing: 1 });
-    this.rpW.draw(rw, 26, a => {
-      plate(a, 0, 2, rw - 2, 22, col('#2e3a52'), { r: 2 });
-      // the stamp: a round blue ink seal with RP in it
-      a.ellipse(11, 13, 9, 9, OUT);
-      a.ellipse(11, 13, 8, 8, col('#f4ead0'));
-      a.ring(11, 13, 7, 7, col('#26408a'));
-      drawText(a, 'RP', 7, 16, col('#26408a'), { face: 'block', bold: false, spacing: 0 });
-      outlined(a, rpTxt, 24, 20, CREAM, OUT, { face: 'block', scale: 2, spacing: 1 });
-    });
-    // the sun-and-moon dial
+    const nw = hudTextW(rpTxt, 'num', 1);
+    const rw = Math.max(44 + nw + 10, 44 + tw('RESEARCH', { face: 'block', bold: false, spacing: 1 }) + 8);
+    this.rpW.draw(rw, 40, a => paintRpPlate(a, rw, rpTxt, this.t));
     // the pocket watch: brass case, cream dial, blued hands on the time of day
     const hour = hudHour();
     this.watchCv.classList.toggle('off', hour === null);
     if (hour !== null) {
-      const S = 30, ws = watchSize(S), sc = hudScale();
+      const S = 46, ws = watchSize(S), sc = hudScale();
       if (this.watchCv.width !== ws.w) { this.watchCv.width = ws.w; this.watchCv.height = ws.h; }
       this.watchCv.style.width = ws.w * sc + 'px';
       this.watchCv.style.height = ws.h * sc + 'px';
@@ -485,27 +494,41 @@ export class Hud2Classic {
 
   private paintBanner() {
     const name = this.placeName.toUpperCase();
-    const k = 1;
-    const tw0 = tw(name, { face: 'block', scale: k, spacing: 1 });
-    const W = tw0 + 36, H = this.placeSub ? 38 : 28;
+    const tw0 = hudTextW(name, 'caps', 1);
+    const W = tw0 + 58, H = this.placeSub ? 60 : 44;
     this.banW.draw(W, H, a => {
-      const red = col('#a8321e'), redD = col('#6e1a10'), redL = col('#d0503a');
-      // the folded ends behind
+      const red = col('#a8321e'), redD = col('#6e1a10'), redDD = col('#4a0e06'), redL = col('#d0503a');
+      // the folded tails behind, V-notched, with a fold shadow
       for (const s of [-1, 1]) {
-        const x0 = s < 0 ? 0 : W - 14;
-        for (let y = 6; y < 24; y++) for (let x = 0; x < 14; x++) {
-          const ox = s < 0 ? x : 13 - x;
-          if (ox < Math.abs(y - 15) - 5) continue;
-          a.put(x0 + x, y, ox === Math.max(0, Math.abs(y - 15) - 5) || y === 6 || y === 23 ? OUT : redD);
+        const x0 = s < 0 ? 0 : W - 20;
+        for (let y = 9; y < 36; y++) for (let x = 0; x < 20; x++) {
+          const ox = s < 0 ? x : 19 - x;
+          const notch = Math.abs(y - 22.5) * 0.55 - 3;
+          if (ox < notch) continue;
+          const edge = ox <= notch + 1 || y === 9 || y === 35;
+          a.put(x0 + x, y, edge ? OUT : y === 10 ? red : (x + y) % 9 === 0 ? redDD : redD);
         }
+        const fx = s < 0 ? 13 : W - 14;
+        for (let y = 30; y < 36; y++) a.put(fx, y, redDD);
       }
-      plate(a, 8, 2, W - 16, 20, red, { r: 1 });
-      for (let x = 10; x < W - 10; x++) { a.put(x, 4, redL); if (x % 4 === 0) a.put(x, 19, redD); }
-      outlined(a, name, Math.round(W / 2 - tw0 / 2), 16, CREAM, OUT, { face: 'block', scale: k, spacing: 1 });
+      // the band: cloth with a lit top hem, a shaded lower hem, stitching along both and a weave
+      plate(a, 12, 3, W - 24, 30, red, { r: 2 });
+      for (let y = 5; y < 31; y++) for (let x = 14; x < W - 14; x++) if (hnoise(x, y, 17) > 0.9) a.put(x, y, shadeC(red, -0.1));
+      for (let x = 14; x < W - 14; x++) {
+        a.put(x, 5, redL);
+        if (x % 3) { a.put(x, 7, col('#f0d0a0')); a.put(x, 28, col('#d8a888')); }
+        a.put(x, 30, redD);
+      }
+      hudText(a, name, Math.round(W / 2 - tw0 / 2), 13, { face: 'caps', c: [col('#fffaea'), CREAM, col('#e8c890')], ring: OUT, drop: 1 });
       if (this.placeSub) {
-        const sw = tw(this.placeSub, { face: 'block', bold: false, spacing: 1 }) + 10;
-        plate(a, Math.round(W / 2 - sw / 2), 23, sw, 12, col('#3e2814'), { r: 1 });
-        outlined(a, this.placeSub, Math.round(W / 2 - sw / 2) + 5, 32, col('#f4d27a'), OUT, { face: 'block', bold: false, spacing: 1 });
+        // the day on a small wooden plaque hung from the banner by two cords
+        const sw = hudTextW(this.placeSub, 'caps', 1) + 14;
+        const px0 = Math.round(W / 2 - sw / 2);
+        for (let y = 33; y < 40; y++) { a.put(px0 + 4, y, col('#d8c8a0')); a.put(px0 + sw - 5, y, col('#d8c8a0')); }
+        plate(a, px0, 39, sw, 17, col('#5a3818'), { r: 2 });
+        for (let y = 41; y < 54; y++) for (let x = px0 + 2; x < px0 + sw - 2; x++) if (hnoise(x >> 2, y, 23) > 0.8) a.put(x, y, col('#4a2c12'));
+        rivet(a, px0 + 4, 42); rivet(a, px0 + sw - 5, 42);
+        hudText(a, this.placeSub, px0 + 7, 43, { face: 'caps', c: [col('#fff4b0'), col('#f4d27a'), col('#c89a3a')], ring: OUT, drop: 1 });
       }
     });
   }
@@ -514,80 +537,93 @@ export class Hud2Classic {
     const q = this.noteQ;
     if (!q) return;
     const open = this.openT > 0 || this.hover;
-    const W = window.innerWidth < 560 ? 100 : 124, pad = 7;
+    const W = window.innerWidth < 560 ? 150 : 186, pad = 12, LH = 12;
     const title = q.title.toUpperCase();
     let tl = title;
-    while (tw(tl, { face: 'block', bold: false, spacing: 1 }) > W - 30 && tl.length > 4) tl = tl.slice(0, -2);
+    while (tw(tl, { face: 'block', bold: true, spacing: 1 }) > W - 50 && tl.length > 4) tl = tl.slice(0, -2);
     if (tl !== title) tl = tl.replace(/\s*\S?$/, '') + '...';
     // lay the rows out
-    const lines: { row: NoteRow; lines: string[] }[] = this.rows.map(r => ({ row: r, lines: wrapText(r.text, W - pad * 2 - 12) }));
+    const lines: { row: NoteRow; lines: string[] }[] = this.rows.map(r => ({ row: r, lines: wrapText(r.text, W - pad * 2 - 16) }));
     const step = q.steps[currentStepIndex(q)];
     const pr = step?.progress?.();
-    let H = 22;
-    if (open) { for (const l of lines) H += l.lines.length * 11 + 3; if (pr) H += 10; H += 6; }
-    else H = 22;
-    this.noteW.draw(W + 2, H + 2, a => {
-      // the paper: journal stock, a perforated top, a torn bottom, a hard shadow
+    let H = 32;
+    if (open) { for (const l of lines) H += l.lines.length * LH + 4; if (pr) H += 14; H += 8; }
+    this.noteW.draw(W + 3, H + 3, a => {
+      // the paper: journal stock with fibres, a perforated top, a torn bottom, a fold, a hard shadow
       const tile = paperTileArt('journal');
-      const torn = (x: number) => Math.round((Math.sin(x * 1.7) + Math.sin(x * 0.53 + 2)) * 0.8 + 1.5);
-      const inside = (x: number, y: number) => x >= 0 && x < W && y >= ((x % 6) < 2 ? 1 : 0) && y < H - torn(x);
-      for (let y = 2; y < H + 2; y++) for (let x = 2; x < W + 2; x++) if (!inside(x, y) && inside(x - 2, y - 2) && dith(x, y, 0.6)) a.px(x, y, col('#000000', 0.4));
+      const torn = (x: number) => Math.round((Math.sin(x * 1.7) + Math.sin(x * 0.53 + 2) + Math.sin(x * 3.1) * 0.5) * 0.8 + 2);
+      const inside = (x: number, y: number) => x >= 0 && x < W && y >= ((x % 7) < 2 ? 1 : 0) && y < H - torn(x);
+      for (let y = 3; y < H + 3; y++) for (let x = 3; x < W + 3; x++) if (!inside(x, y) && inside(x - 3, y - 3) && dith(x, y, 0.6)) a.px(x, y, col('#000000', 0.42));
+      const fold = Math.round(W * 0.64);
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         if (!inside(x, y)) continue;
-        let c = tile.d[(y % 128) * 128 + (x % 128)];
-        if (y > 18 && (y - 18) % 11 === 10) c = mixC(c, col('#5078aa'), 0.25);
-        if (x === 5) c = mixC(c, col('#c0463a'), 0.3);
+        let c = paperAt(x, y, tile.d[(y % 128) * 128 + (x % 128)]);
+        if (y > 28 && (y - 28) % LH === LH - 1) c = mixC(c, col('#5078aa'), 0.28);
+        if (x === 8) c = mixC(c, col('#c0463a'), 0.32);
+        if (x === fold) c = shadeC(c, -0.08); else if (x === fold + 1) c = shadeC(c, 0.08);
+        if (y < 3 && (x % 7) === 3) c = shadeC(c, -0.2);
         const edge = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y + 1) || !inside(x, y - 1);
-        if (edge) c = mixC(c, col('#7a4a1a'), 0.45);
+        if (edge) c = mixC(c, col('#7a4a1a'), 0.5);
+        else if (!inside(x, y + 2) && dith(x, y, 0.5)) c = mixC(c, col('#c8a878'), 0.4);
         a.put(x, y, c);
       }
-      // the pin
-      const px = Math.round(W / 2);
-      a.ellipse(px + 1.5, 4.5, 3.4, 3.4, col('#000000', 0.3));
-      a.ellipse(px, 3, 3.4, 3.4, OUT);
-      a.ellipse(px, 3, 2.6, 2.6, q.main ? col('#e2533a') : col('#4a7ad8'));
-      a.put(px - 1, 2, col('#ffe2d8'));
+      // a coffee ring in the corner
+      for (let i = 0; i < 40; i++) {
+        const an = (i / 40) * Math.PI * 2;
+        if (i % 9 === 4) continue;
+        const X = Math.round(W - 22 + Math.cos(an) * 9), Y = Math.round(H - 14 + Math.sin(an) * 7);
+        if (inside(X, Y)) a.put(X, Y, mixC(a.get(X, Y), col('#8a5a2a'), 0.22));
+      }
+      // the pushpin: a domed head with a catch-light, its rim, the needle and a shadow
+      paintPin(a, Math.round(W / 2) - 4, 0, q.main ? col('#d8402a') : col('#3a68c8'));
       // the title strip
-      outlined(a, tl, pad + 2, 16, q.main ? col('#a8321e') : col('#26408a'), col('#fff8e8'), { face: 'block', bold: false, spacing: 1 });
+      outlined(a, tl, pad + 4, 22, q.main ? col('#a8321e') : col('#26408a'), col('#fff8e8'), { face: 'block', bold: true, spacing: 1 });
       if (!open) {
-        // rolled up: how far along, and a little arrow to unroll it
+        // rolled up: how far along
         const n = currentStepIndex(q), tot = q.steps.length;
         const st = `${Math.min(n + 1, tot)}/${tot}`;
-        drawText(a, st, W - 8 - tw(st, { face: 'block', bold: false }), 16, PENC, { face: 'block', bold: false });
+        drawText(a, st, W - 10 - tw(st, { face: 'block', bold: false }), 22, PENC, { face: 'block', bold: false });
         return;
       }
-      let y = 22;
+      let y = 29;
       for (const { row, lines: ls } of lines) {
-        // the checkbox, the tick drawn on, the text written in, the strike drawn through
-        const bx = pad, by = y + 1;
+        // the checkbox (drawn by hand, a little crooked), the tick drawn on, the text written in, the strike
+        const bx = pad, by = y + 2;
         const boxC = row.state === 'done' ? INKC : PENC;
-        a.rect(bx, by, 8, 1, boxC); a.rect(bx, by + 7, 8, 1, boxC); a.rect(bx, by, 1, 8, boxC); a.rect(bx + 7, by, 1, 8, boxC);
+        for (let i = 0; i < 9; i++) {
+          a.put(bx + i, by + (i > 6 ? 1 : 0), boxC); a.put(bx + i, by + 8, boxC);
+          a.put(bx, by + i, boxC); a.put(bx + 8 + (i < 2 ? 1 : 0), by + i, boxC);
+        }
         if (row.state === 'done') {
-          const ta = new Art(12, 12);
-          rasterStrokes(ta, 24, 24, [{ d: tick(24, row.seed), c: '#26408a', w: 3, draw: 1 }], false, row.tick, 0);
-          a.blit(ta, bx - 1, by - 3);
+          const ta = new Art(16, 16);
+          rasterStrokes(ta, 32, 32, [{ d: tick(32, row.seed), c: '#26408a', w: 3, draw: 1 }], false, row.tick, 0);
+          a.blit(ta, bx - 1, by - 5);
         }
         const total = row.text.length;
         let shown = Math.floor(total * row.reveal);
-        let ly = y + 9;
+        let ly = y + 10;
         for (const l of ls) {
           const part = l.slice(0, Math.max(0, shown));
           shown -= l.length + 1;
-          drawText(a, part, bx + 12, ly, row.old ? PENC : INKC);
+          drawText(a, part, bx + 15, ly, row.old ? PENC : INKC);
           if (row.state === 'done' && row.strike > 0) {
             const sw = Math.round(tw(l) * row.strike);
-            for (let x = 0; x < sw; x++) a.put(bx + 11 + x, ly - 3 - (x > sw * 0.6 ? 1 : 0), col('#2a2440'));
+            for (let x = 0; x < sw; x++) a.put(bx + 14 + x, ly - 3 - (x > sw * 0.6 ? 1 : 0) + (x % 11 === 5 ? 1 : 0), col('#2a2440'));
           }
-          ly += 11;
+          ly += LH;
         }
-        y += ls.length * 11 + 3;
+        y += ls.length * LH + 4;
       }
       if (pr) {
-        // progress as pips
+        // progress as inked pips
         const n = Math.min(pr[1], 12);
         const done = Math.round((pr[0] / Math.max(1, pr[1])) * n);
-        for (let i = 0; i < n; i++) { a.rect(pad + 12 + i * 5, y + 2, 4, 4, OUT); a.rect(pad + 13 + i * 5, y + 3, 2, 2, i < done ? col('#26408a') : col('#f4ead0')); }
-        drawText(a, `${pr[0]}/${pr[1]}`, pad + 16 + n * 5, y + 7, PENC, { face: 'block', bold: false });
+        for (let i = 0; i < n; i++) {
+          const px = pad + 15 + i * 7;
+          a.rect(px, y + 2, 6, 6, OUT); a.rect(px + 1, y + 3, 4, 4, i < done ? col('#26408a') : col('#f4ead0'));
+          if (i < done) a.put(px + 1, y + 3, col('#4a68b8'));
+        }
+        drawText(a, `${pr[0]}/${pr[1]}`, pad + 20 + n * 7, y + 9, PENC, { face: 'block', bold: false });
       }
       void strike;
     });
@@ -600,69 +636,71 @@ export class Hud2Classic {
     const badge = lapOn ? this.lap!.badge() : 0;
     const n = game.save.inv.length, cap = Math.max(1, capacity());
     this.packFill += (n / cap - this.packFill) * 0.2;
-    const W = 30 + (lapOn ? 24 : 0) + (cam ? 58 : 0), H = 36;
+    const PW = 42, LW = 36, CWd = 86, H = 54, top = 9, ph = 42;
+    const W = PW + 3 + (lapOn ? LW + 3 : 0) + (cam ? CWd : 0);
     this.kitRegions = [];
     this.kitW.draw(W, H, a => {
       let x = 0;
-      const top = 6, ph = 28;
-      // the backpack and its fill gauge
-      const pk = imgArt(uiIconURL('pack', 1));
+      // the backpack on a leather tile, its fill gauge a little glass tube beside it
       const by = this.bump > 0 ? -1 : 0;
-      plate(a, x, top, 28, ph, col('#3e2814'), { r: 2 });
-      if (pk) a.blit(pk, x + 3, top + 6 + by);
+      kitTile(a, x, top, PW, ph, col('#4a2c16'));
+      paintPack(a, x + 3, top + 8 + by, this.packFill);
       const f = Math.min(1, this.packFill);
-      const gx = x + 21, gh = 20;
-      a.rect(gx, top + 3, 4, gh + 2, OUT);
+      const gx = x + PW - 10, gh = 30;
+      a.rect(gx, top + 5, 6, gh + 4, OUT);
+      a.rect(gx + 1, top + 6, 4, gh + 2, col('#1a2426'));
       const fill = Math.round(f * gh);
       const gc = f >= 1 ? col('#e83a2a') : f > 0.8 ? col('#f0a03a') : col('#8ccf4a');
-      for (let i = 0; i < fill; i++) a.rect(gx + 1, top + 3 + gh - i, 2, 1, i === fill - 1 ? shadeC(gc, 0.3) : gc);
-      if (f >= 0.8) outlined(a, `${n}/${cap}`, x + 1, 5, f >= 1 ? col('#ff9a80') : CREAM, OUT, { face: 'block', bold: false });
-      this.kitRegions.push({ id: 'pack', x0: x, x1: x + 28 });
-      x += 30;
-      // the field laptop with its badge
+      for (let i = 0; i < fill; i++) { const yy = top + 6 + gh + 1 - i; a.put(gx + 1, yy, shadeC(gc, 0.3)); a.put(gx + 2, yy, gc); a.put(gx + 3, yy, gc); a.put(gx + 4, yy, shadeC(gc, -0.3)); }
+      for (let i = 0; i < 4; i++) a.put(gx + 4, top + 8 + i * 8, col('#c8ccd0'));
+      a.put(gx + 1, top + 7, col('#ffffff', 0.6));
+      if (f >= 0.8) outlined(a, `${n}/${cap}`, x + 2, 7, f >= 1 ? col('#ff9a80') : CREAM, OUT, { face: 'block', bold: false });
+      this.kitRegions.push({ id: 'pack', x0: x, x1: x + PW });
+      x += PW + 3;
+      // the field laptop with its upload badge
       if (lapOn) {
-        plate(a, x, top, 22, ph, col('#2a3442'), { r: 2 });
-        a.blit(laptopArt(), x + 3, top + 6);
+        kitTile(a, x, top, LW, ph, col('#2a3442'));
+        paintLaptop(a, x + 5, top + 12, this.t);
         if (badge > 0) {
           const t = String(Math.min(99, badge));
-          const bw = tw(t, { face: 'block' }) + 6;
-          plate(a, x + 22 - bw + 2, 0, bw, 11, col('#c8321e'), { r: 2, shadow: false });
-          drawText(a, t, x + 22 - bw + 5, 9, CREAM, { face: 'block' });
+          const bw = hudTextW(t, 'caps', 1) + 8;
+          plate(a, x + LW - bw + 3, 0, bw, 15, col('#c8321e'), { r: 3, shadow: false });
+          hudText(a, t, x + LW - bw + 7, 3, { face: 'caps', c: [col('#fffaea'), CREAM, col('#f0c8a0')], ring: col('#6e1208'), drop: 0 });
         }
-        this.kitRegions.push({ id: 'lap', x0: x, x1: x + 22 });
-        x += 24;
+        this.kitRegions.push({ id: 'lap', x0: x, x1: x + LW });
+        x += LW + 3;
       }
       // the instant camera, the film left, the print developing out of the top
       if (cam) {
         const dev = cam.v10 !== false ? Math.max(0, Math.min(1, cam.develop ?? 1)) : 1;
-        plate(a, x, top, 56, ph, col('#2e2a26'), { r: 2 });
-        const cx = x + 3, cy = top + 10;
+        kitTile(a, x, top, CWd, ph, col('#2e2a26'));
+        const cx = x + 5, cy = top + 15;
         if (dev < 1) {
           // the print sticking out of the slot, coming up from dark brown in dithered steps
-          const pr = new Art(10, 11);
-          pr.rect(0, 0, 10, 11, col('#f6f0e2')); pr.rect(0, 0, 10, 1, OUT); pr.rect(0, 0, 1, 11, OUT); pr.rect(9, 0, 1, 11, OUT);
-          for (let yy = 1; yy < 8; yy++) for (let xx = 1; xx < 9; xx++) pr.put(xx, yy, dith(xx, yy, dev) ? (yy < 4 ? col('#7ab8e8') : col('#5a9a3a')) : col('#3a2a1a'));
-          a.blit(pr, cx + 4, cy - 10 + Math.round((1 - Math.min(1, dev * 3)) * 6));
+          const pr = new Art(16, 17);
+          for (let yy = 0; yy < 17; yy++) for (let xx = 0; xx < 16; xx++) pr.put(xx, yy, yy === 0 || xx === 0 || xx === 15 ? OUT : col('#f6f0e2'));
+          for (let yy = 2; yy < 12; yy++) for (let xx = 2; xx < 14; xx++) pr.put(xx, yy, dith(xx, yy, dev) ? (yy < 6 ? col('#7ab8e8') : yy < 8 ? col('#e8f0d0') : col('#5a9a3a')) : col('#3a2a1a'));
+          a.blit(pr, cx + 6, cy - 15 + Math.round((1 - Math.min(1, dev * 3)) * 9));
         }
-        // the camera body
-        a.rect(cx, cy, 18, 12, OUT);
-        a.rect(cx + 1, cy + 1, 16, 10, col('#e8e0d0'));
-        a.rect(cx + 1, cy + 7, 16, 4, col('#4a4440'));
-        a.rect(cx + 1, cy + 1, 16, 1, col('#ffffff'));
-        a.ellipse(cx + 9, cy + 6.5, 4, 4, OUT); a.ellipse(cx + 9, cy + 6.5, 3, 3, col('#3a5a7a')); a.put(cx + 8, cy + 5, col('#bfe0ff'));
-        a.rect(cx + 2, cy + 2, 3, 2, col('#2a2a2a')); a.rect(cx + 14, cy - 1, 3, 2, col('#c8321e'));
-        for (let i = 0; i < 5; i++) a.put(cx + 3 + i * 3, cy + 10, (i & 1) ? col('#e83a8a') : col('#3ac8e8'));
-        // the film count (or the seconds left on the print)
+        paintCamera(a, cx, cy);
+        // the film count (or the seconds left on the print) on a little counter window
         const shots = Math.max(0, Math.round(cam.shots ?? 0));
-        const lx = cx + 22;
+        const lx = cx + 33;
         if (dev < 1) {
-          outlined(a, 'DRY', lx, top + 10, col('#c8baa4'), OUT, { face: 'block', bold: false });
-          outlined(a, `${Math.ceil(cam.developLeft?.() ?? 0)}S`, lx, top + 23, col('#f4d27a'), OUT, { face: 'block', scale: 1, spacing: 1 });
+          outlined(a, 'DRYING', lx, top + 13, col('#c8baa4'), OUT, { face: 'block', bold: false });
+          hudText(a, `${Math.ceil(cam.developLeft?.() ?? 0)}`, lx + 2, top + 19, { face: 'num', c: [col('#fff4b0'), col('#f4d27a'), col('#c89a3a')] });
         } else {
-          outlined(a, 'FILM', lx, top + 10, col('#c8baa4'), OUT, { face: 'block', bold: false });
-          outlined(a, String(shots), lx, top + 25, shots <= 2 ? col('#ff8a6a') : CREAM, OUT, { face: 'block', scale: 2, spacing: 1 });
+          outlined(a, 'FILM', lx, top + 13, col('#c8baa4'), OUT, { face: 'block', bold: false });
+          // the counter window: a dark recess with the number on a white wheel
+          const st = String(shots), sw = hudTextW(st, 'num', 1);
+          a.rect(lx - 1, top + 16, sw + 8, 18, OUT);
+          a.rect(lx, top + 17, sw + 6, 16, col('#e8e2d4'));
+          a.rect(lx, top + 17, sw + 6, 1, col('#9a948a'));
+          a.rect(lx, top + 32, sw + 6, 1, col('#c8c0b0'));
+          hudText(a, st, lx + 3, top + 20, { face: 'num', c: shots <= 2 ? [col('#e8432a'), col('#c8321e'), col('#8a1e10')] : [col('#3a3430'), col('#1a1410'), col('#1a1410')], ring: null });
+          for (let i = 0; i < 5; i++) a.put(lx + sw + 9, top + 18 + i * 3, i < Math.min(5, shots) ? col('#f4d27a') : col('#4a4440'));
         }
-        this.kitRegions.push({ id: 'cam', x0: x, x1: x + 56 });
+        this.kitRegions.push({ id: 'cam', x0: x, x1: x + CWd });
       }
     });
   }
