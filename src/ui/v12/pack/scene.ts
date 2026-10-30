@@ -301,8 +301,8 @@ export class PackScene {
     st.style.width = this.SW + 'px'; st.style.height = this.SH + 'px';
     st.innerHTML = '';
     // ---- the world behind, dimmed by a dither (lighter round Mori and the pack)
-    const spots: { x: number; y: number; r: number }[] = [{ x: this.PX + L.W / 2, y: this.PY + L.H / 2, r: Math.max(L.W, L.H) * 0.75 }];
-    if (this.from) spots.push({ x: this.from[0], y: this.from[1] + 10, r: this.SH * 0.32 });
+    const spots: { x: number; y: number; r: number }[] = [];
+    if (this.from) spots.push({ x: this.from[0], y: this.from[1] + 6, r: this.SH * 0.42 });
     this.dim = cv(ART.paintDim(this.SW, this.SH, spots), 'dim');
     st.appendChild(this.dim);
     // ---- the shadow the floating pack (and chest) cast down on the world
@@ -931,7 +931,9 @@ export class PackScene {
     if (box) {
       const [bx0, by0] = this.toWords(box.x, box.y), [bx1] = this.toWords(box.x + box.w, box.y + box.h);
       const leftRoom = bx0 - 10, rightRoom = WW - bx1 - 10;
-      const preferLeft = icx < (bx0 + bx1) / 2;
+      // (away from Mori when he stands beside it, else on the item's own side)
+      const away = this.from ? this.from[0] > box.x + box.w / 2 : null;
+      const preferLeft = away !== null && (this.from![0] < box.x || this.from![0] > box.x + box.w) ? away : icx < (bx0 + bx1) / 2;
       const side = preferLeft ? (leftRoom >= bw ? 'L' : rightRoom >= bw ? 'R' : '') : rightRoom >= bw ? 'R' : leftRoom >= bw ? 'L' : '';
       if (side) {
         beside = true;

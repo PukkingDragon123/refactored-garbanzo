@@ -246,7 +246,7 @@ class Inspection {
     sc.main.add(pr); sc.main.add(fr);
     this.drawables = [pr, fr];
     // he turns to the camera
-    if (hasAnim7('inspectFace')) { p.poseOverride = 'inspectFace'; this.poseSet = true; }
+    if (hasAnim7('inspect')) { p.poseOverride = 'inspect'; this.poseSet = true; }
     else { p.body.setExpr('happy', 1.4); p.body.react('nod'); }
     audio.play('whoosh', { vol: 0.18, pitch: 0.7 });
     // the camera eases in close, the lens on him
@@ -274,20 +274,26 @@ class Inspection {
     const p = this.p, b = p.body, f = b.facing || p.facing || 1;
     const named = b.point(s === 'camera' ? 'gearCam' : s === 'backpack' ? 'gearPack' : 'gearNote');
     if (named) return named;
+    // presenting the camera, it is in his hands
+    if (s === 'camera' && this.inHands()) { const l = b.point('load'); if (l) return [l[0], l[1] - 4]; }
     const y = b.y, x = b.x;
     if (this.poseSet) {
-      // facing the camera: the pack behind his shoulders, the camera on his chest, the note in a pocket
-      if (s === 'backpack') return [x - f * 2, y - 41];
-      if (s === 'camera') return [x + f * 1, y - 31];
-      return [x + f * 4, y - 43];
+      // square to the viewer: the pack behind his shoulders, the camera on his chest, the note in the
+      // pocket on his hip
+      if (s === 'backpack') return [x - f * 1, y - 43];
+      if (s === 'camera') return [x + f * 0.5, y - 40];
+      return [x + f * 4, y - 30];
     }
     if (s === 'backpack') return [x - f * 7, y - 38];
     if (s === 'camera') return [x + f * 3, y - 30];
     return [x + f * 2, y - 44];
   }
   private onSprite(s: Spot): boolean {
+    if (s === 'camera' && this.inHands()) return true;
     return !!this.p.body.point(s === 'camera' ? 'gearCam' : s === 'backpack' ? 'gearPack' : 'gearNote');
   }
+  /** his own sprite has the camera in his hands (presenting it, raising it) */
+  private inHands(): boolean { const a = this.p.body.anim; return a === 'inspectCamera' || a === 'cameraRaise' || a === 'cameraLower'; }
   private frames(s: Spot, a: Art): [Frame, Frame] {
     return s === 'camera' ? [a.cam, a.camH] : s === 'backpack' ? [a.pack, a.packH] : [a.note, a.noteH];
   }
@@ -306,11 +312,16 @@ class Inspection {
       const [fr, halo] = this.frames(s, a);
       const hov = this.hover === s;
       const bob = hov ? -1 : 0;
-      if (!this.onSprite(s)) r.draw(fr, Math.round(x), Math.round(y) + bob + fr.h / 2, f, 1, 0, packColor(1, 1, 1, this.alpha));
       // the soft outline: a slow pulse, brighter and quicker on the one under the pointer
       const pulse = hov ? 0.75 + Math.sin(this.pulseT * 9) * 0.25 : 0.35 + Math.sin(this.pulseT * 3 + ORDER.indexOf(s)) * 0.18;
       const hx = Math.round(x), hy = Math.round(y) + bob + fr.h / 2 + 2;
-      r.fxDraw(halo, hx, hy, f, 1, 0, packColor(1, 0.86, 0.5, this.alpha * pulse), hov ? 2.2 : 1.4, true);
+      if (s === 'backpack') {
+        // (behind him: its glow stays behind him too, an unlit ring drawn before his sprite)
+        r.emissive(1);
+        r.draw(halo, hx, hy, f, 1, 0, packColor(1, 0.9, 0.6, Math.min(1, this.alpha * (0.45 + pulse * 0.6))));
+        r.emissive();
+      } else r.fxDraw(halo, hx, hy, f, 1, 0, packColor(1, 0.86, 0.5, this.alpha * pulse), hov ? 2.2 : 1.4, true);
+      if (!this.onSprite(s)) r.draw(fr, Math.round(x), Math.round(y) + bob + fr.h / 2, f, 1, 0, packColor(1, 1, 1, this.alpha));
     }
   }
 
@@ -391,6 +402,14 @@ class Inspection {
     this.hover = s;
     if (s) { const w = this.labels.get(s); if (w) wordAnim(w, 'wave'); audio.play('ui', { vol: 0.12, pitch: 1.6 }); }
     this.layer.style.cursor = s ? 'pointer' : 'default';
+    // he shows off the thing under the pointer (the camera lifted off his chest, thumbs in the pack
+    // straps, a pat on the pocket)
+    this.present(s);
+  }
+  private present(s: Spot | null) {
+    if (!this.poseSet || this.busy || this.done) return;
+    const clip = s === 'camera' ? 'inspectCamera' : s === 'backpack' ? 'inspectPack' : s === 'note' ? 'inspectNote' : 'inspect';
+    this.p.poseOverride = hasAnim7(clip) ? clip : 'inspect';
   }
   private listen() {
     const L = this.layer;
@@ -443,7 +462,7 @@ class Inspection {
     const ms = reduced() ? 60 : Math.max(250, Math.min(1600, (i.frames / Math.max(1, i.fps)) * 1000));
     p.poseOverride = anim;
     await wait(ms);
-    p.poseOverride = this.poseSet ? 'inspectFace' : null;
+    p.poseOverride = this.poseSet && !this.done ? 'inspect' : null;
   }
 
   private async camera() {
@@ -460,15 +479,14 @@ class Inspection {
       this.camWasUp = false;
       audio.play('rustle', { vol: 0.3, pitch: 1.2 });
       await this.leave();
-      await this.clip('cameraLower');
+      // (it went down when the inspection began: the player's camera mode played cameraLower then)
       return;
     }
     if (tooHungryForPhotos()) {
       // too hungry to hold it steady: his stomach answers for him
       audio.play('tummy', { vol: 0.7, pitch: 0.9 });
-      p.body.react('shake');
+      p.body.react(hasAnim7('growl') ? 'growl' : 'shake');
       p.body.setExpr('sad', 2);
-      if (hasAnim7('growl')) void this.clip('growl');
       this.shake('camera');
       void floatText({ actor: p.body, text: 'Too hungry to hold it steady... food first.', style: 'sad', ms: 2400 });
       return;
@@ -476,16 +494,19 @@ class Inspection {
     // equip: he raises it and the photo mode comes up
     audio.play('focus', { vol: 0.3 });
     await this.leave();
-    await this.clip('cameraRaise');
+    // (raising it, the player's camera mode plays cameraRaise through its own transition)
     if (game.scene === (sc as unknown) && !sc.cutscene) cam.raise(true);
   }
 
   private async backpack() {
     this.hideLabels();
-    // the pack lifts off his back and hangs open in the air beside him (the camera makes room)
+    // a hitch of his shoulders, thumbs under the straps, and the pack lifts off his back and hangs
+    // open in the air beside him (the camera makes room)
+    if (this.poseSet && hasAnim7('inspectPack')) { this.p.poseOverride = 'inspectPack'; await wait(reduced() ? 0 : 380); }
     this.hide.backpack = true;
     audio.play('rustle', { vol: 0.3, pitch: 1.3 });
     const { openBackpack } = await import('../backpack');
+    if (this.poseSet) this.p.poseOverride = 'inspect';
     await openBackpack({ fromInspect: true });
     if (this.done) return;
     // back on his back, the camera back on him
@@ -496,14 +517,21 @@ class Inspection {
 
   private async note() {
     this.hideLabels();
-    await this.clip('pullNote', 120);
-    this.hide.note = true;
+    // the note paper out of his pocket, opened in both hands (his sprite holds it now)
+    const p = this.p;
+    if (hasAnim7('noteRead')) {
+      this.hide.note = true;
+      p.poseOverride = 'noteRead';
+      const i = animInfo('pullNote', 'mori');
+      await wait(reduced() ? 60 : Math.min(1600, (i.frames / Math.max(1, i.fps)) * 1000));
+    } else { await this.clip('pullNote', 120); this.hide.note = true; }
     audio.play('paperSlide' as never, { vol: 0.35 });
     const { openNotebook } = await import('./notebook');
     await openNotebook({});
     if (this.done) return;
-    this.hide.note = false;
     await this.clip('putNote');
+    this.hide.note = false;
+    if (this.poseSet) p.poseOverride = 'inspect';
     this.showLabels();
   }
 
@@ -523,7 +551,7 @@ class Inspection {
     this.offs = [];
     this.layer.remove();
     this.alphaTo = 0;
-    if (this.poseSet && this.p.poseOverride === 'inspectFace') this.p.poseOverride = null;
+    if (this.poseSet && this.p.poseOverride && /^(inspect|pullNote|putNote|noteRead)/.test(this.p.poseOverride)) this.p.poseOverride = null;
     for (const [i, h] of [game.ui.sceneLayer, game.ui.prompts, game.ui.hud].entries()) h.style.opacity = this.hudWas[i] ?? '';
     game.ui.modalOpen = Math.max(0, game.ui.modalOpen - 1);
     cineSlowmo(1, 0.35);

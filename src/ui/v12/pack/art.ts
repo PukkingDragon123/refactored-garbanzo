@@ -1,19 +1,19 @@
-// V12 Backpack scene artwork. First person: Mori kneels and looks down at his old canvas rucksack
-// lying open on the ground of wherever he is. Everything is painted here at 1x art px (24 px per grid
-// cell, the item art's own scale) and stacked up by the scene (src/ui/v12/pack/scene.ts):
-//   paintGround    the ground filling the view, by biome: sand, shells and wrack on the beach; roots,
-//                  leaf litter and moss in the forest; the trodden camp ground in the fire's glow; rock
-//                  slabs, gravel and tussock in the hills; planks aboard; wet rock in a cave
-//   paintPack      the open pack from above: the side panels flopped out, the rolled canvas collar with
-//                  its leather binding, the 5x3 compartments sewn into the lining, the front wall with
-//                  the strap receivers, the haul loop, a luggage tag. paintLoops is the webbing that
-//                  goes over the tools hanging in the side loops
-//   paintLidOpen / paintLidShut   the lid flap thrown back (its underside, the mesh pocket, the straps)
-//                  and buckled shut over the opening (fern patch, scuffs, the straps clipped in)
+
+// V12 Backpack artwork: Mori's old canvas rucksack, open and floating in the air beside him over the
+// world. Painted at 1x art px (24 px per grid cell, the item art's own scale) and stacked up by the
+// scene (src/ui/v12/pack/scene.ts):
+//   paintPack      the open pack, face up: the padded shoulder straps hanging down behind, the rolled
+//                  canvas collar with its leather binding, the 5x3 compartments sewn into the lining
+//                  (brass eyelets where the seams cross, a zip round the opening), the front wall with
+//                  the strap receivers, the haul loop, a luggage tag, wear and a sewn-on patch
+//   paintLidOpen   the flap thrown open above it: its underside, a sewn pad behind each tool loop, the
+//                  straps down its edges with their clips; paintLoops the webbing over the tools
+//   paintLidShut   the flap buckled shut (fern patch burned into leather, scuffs, a scorch mark)
 //   paintTurn      the brass swivel on its strap tab (the turn button)
 //   paintChest     the camp stash: the old sea chest, open, its floor chalked into a grid
-//   paintKnee / paintHand   Mori's knees and hands at the edges of the view
 //   paintSign      the trail marker plank (Set off) when packing up at camp
+//   paintDim / paintFloatShadow   the world behind dimmed by an ordered dither (never blurred), and
+//                  the dithered shadow the floating pack casts
 // Plain PixelBuffer painting: ramps lit from the top left, ordered dither, selective outlines. No
 // smooth gradients anywhere: light and shade are bands with dithered edges.
 
@@ -27,12 +27,9 @@ import { pxTextBuf } from '../../pxfont';
 const H = (s: string, a = 255): C => hex(s, a);
 export const CELL = 24;
 export interface Rect { x: number; y: number; w: number; h: number }
-export type Biome = 'beach' | 'forest' | 'camp' | 'hills' | 'deck' | 'cave';
-export type Tod = 'dawn' | 'day' | 'dusk' | 'night';
 
 // ---------------------------------------------------------------- palettes
 const CV = [H('#16150b'), H('#2b2c17'), H('#3f4223'), H('#53572f'), H('#686d3d'), H('#80854f'), H('#9a9e66'), H('#b3b67f')]; // olive canvas
-const FADE = [H('#2c2d1b'), H('#3c3d26'), H('#56583a'), H('#6e714c'), H('#868a61'), H('#a0a37b')]; // sun-faded canvas
 const LT = [H('#170b04'), H('#311809'), H('#4f2a12'), H('#6d3d1b'), H('#8b5427'), H('#a86f38'), H('#c48d50')]; // leather
 const BR = [H('#2a1804'), H('#5e3c06'), H('#9a6a10'), H('#d29c1c'), H('#f6cc48'), H('#fff0a0')]; // brass
 const LN = [H('#0d0c07'), H('#16150d'), H('#1e1d13'), H('#27261a'), H('#323022'), H('#3e3c2b'), H('#4a4734')]; // lining
