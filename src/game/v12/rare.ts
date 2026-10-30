@@ -24,15 +24,17 @@ export interface RareSpot {
   goal: string;
   /** what Aroha whispers (or Mori remembers) when you reach the spot */
   hint: string;
+  /** V12 harder wilds: without this tool it's too dangerous: it comes, but it comes for Mori */
+  needs?: 'hide_cloak' | 'slingshot';
 }
 
 export const RARE: RareSpot[] = [
-  { loc: 'fernwood', species: 'boneface', x: 2760, times: ['dawn', 'day', 'dusk'], still: 14, goal: 'hide in the black tree ferns and keep very still', hint: 'Something big pushes through the thorn scrub here. Hide, and let the forest forget you.' },
+  { loc: 'fernwood', species: 'boneface', x: 2760, times: ['dawn', 'day', 'dusk'], still: 14, goal: 'hide in the black tree ferns and keep very still', hint: 'Something big pushes through the thorn scrub here. Hide, and let the forest forget you.', needs: 'hide_cloak' },
   { loc: 'fernwood', species: 'sprinter', x: 1500, times: ['dusk', 'night'], still: 12, goal: 'at dusk in the fern grove, crouch and wait', hint: 'Sprint vipers hunt this grove at dusk. Get low. Don’t move. They hunt what moves.' },
   { loc: 'canopy', species: 'lurevip', x: 2200, times: ['dusk', 'night'], still: 15, goal: 'after dusk on the high branches, wait in the dark', hint: 'After dark a little light dangles up here. Don’t chase it. Wait for it.' },
-  { loc: 'falls', species: 'cragviper', x: 2480, times: ['day', 'dusk'], still: 12, goal: 'below the nesting cliff, crouch out of sight', hint: 'The crag vipers steal eggs from the auks up there. Keep low and still, they come down.' },
+  { loc: 'falls', species: 'cragviper', x: 2480, times: ['day', 'dusk'], still: 12, goal: 'below the nesting cliff, crouch out of sight', hint: 'The crag vipers steal eggs from the auks up there. Keep low and still, they come down.', needs: 'slingshot' },
   { loc: 'falls', species: 'torrentdipper', x: 1300, times: ['dawn', 'day'], still: 10, goal: 'early, by the plunge pool, sit very still', hint: 'A dipper walks under the water here, early. Be a rock.' },
-  { loc: 'mangrove', species: 'titan', x: 1800, times: ['dawn', 'day', 'dusk', 'night'], still: 18, goal: 'deep in the channels, hidden in cover, for a long time', hint: 'Something enormous moves under this water. If you want to see it, you hide. For a long time.' },
+  { loc: 'mangrove', species: 'titan', x: 1800, times: ['dawn', 'day', 'dusk', 'night'], still: 18, goal: 'deep in the channels, hidden in cover, for a long time', hint: 'Something enormous moves under this water. If you want to see it, you hide. For a long time.', needs: 'hide_cloak' },
 ];
 
 const locOf = (f: FieldScene) => sceneTag(f) ?? sceneTag(f.site) ?? (f.site as unknown as { loc?: string }).loc ?? f.site.id;
@@ -54,7 +56,8 @@ export function installRare(f: FieldScene) {
       if (!s.hinted && d < 260) {
         s.hinted = true;
         const g = f.guide?.a;
-        const text = right ? s.r.hint : `${SPECIES_BY_ID[s.r.species]?.name ?? 'It'}? Not at this time of day. Come back ${s.r.times.includes('dusk') ? 'at dusk' : s.r.times.includes('dawn') ? 'early, at dawn' : 'in daylight'}.`;
+        const missing = s.r.needs && !game.save.tools.includes(s.r.needs) ? (s.r.needs === 'hide_cloak' ? ' But not without a hide cloak. It would smell you a mile off.' : ' And bring a sling. It bites back.') : '';
+        const text = right ? s.r.hint + missing : `${SPECIES_BY_ID[s.r.species]?.name ?? 'It'}? Not at this time of day. Come back ${s.r.times.includes('dusk') ? 'at dusk' : s.r.times.includes('dawn') ? 'early, at dawn' : 'in daylight'}.`;
         void floatText(g ? { actor: g, text, style: 'whisper', ms: 3600 } : { text, style: 'think', ms: 3400 });
       }
       if (!right || d > 140) { s.t = Math.max(0, s.t - dt * 2); continue; }
@@ -71,6 +74,14 @@ export function installRare(f: FieldScene) {
         const side = p.facing >= 0 ? 1 : -1;
         const sx = Math.max(60, Math.min(f.site.width - 60, s.r.x + side * 210));
         f.spawnRule({ species: s.r.species, n: [1, 1], x: [sx - 10, sx + 10], chance: 1 }, false);
+        // without the right kit it was never going to be a quiet sighting: it has smelled him, and it's angry
+        if (s.r.needs && !game.save.tools.includes(s.r.needs)) {
+          const a = f.animals[f.animals.length - 1];
+          if (a && a.species === s.r.species) { a.aw = 1.2; a.noticed = true; a.anger = 1; a.threat = { kind: 'player', x: p.x, y: p.y }; a.setAct('attack', 6); }
+          const g = f.guide?.a;
+          const why = s.r.needs === 'hide_cloak' ? 'It smelled you! Without a hide cloak it was always going to!' : 'It’s coming for you! You need a sling for this one!';
+          void floatText(g ? { actor: g, text: why, style: 'shout', ms: 2800 } : { text: 'It’s seen me. It’s seen me!', style: 'scared', ms: 2400 });
+        }
         audio.play('discover', { vol: 0.3, pitch: 0.8 });
         game.save.flags['v12:rare:' + s.r.species] = true;
         game.persist();

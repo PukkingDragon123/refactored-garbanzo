@@ -24,6 +24,10 @@ import { PX_ICONS, pxIcon, pxIconURL } from '../../ui/pxicons';
 import { anim7, isPredator, shootTargets } from './predators-core';
 import { PredFx, G_PEBBLE } from './predators-fx';
 import { sfx11 } from './predators-sfx';
+import { isActive } from './blueprints';
+
+/** the kahu band (the Thunderbird hunt's upgrade): harder hits, a quicker draw */
+const kahu = () => isActive('sling_kahu');
 
 /** the pouch holds 15; the Pebble pouch blueprint adds to it (save.vars['v11:pouchBonus']) */
 const pouchMax = () => 15 + (game.save.vars['v11:pouchBonus'] ?? 0);
@@ -149,7 +153,7 @@ export class PlayerSling {
     if (inp.hit('jump') && !this.drawing) { this.lower(); return; }
     // the draw
     if (this.drawing) {
-      this.draw = Math.min(1, this.draw + dt / 0.55);
+      this.draw = Math.min(1, this.draw + dt / (kahu() ? 0.42 : 0.55));
       this.creakT -= dt;
       if (this.creakT <= 0 && this.draw < 0.98) { this.creakT = 0.3; sfx11('bandStretch', { vol: 0.6 + this.draw * 0.5, pitch: 0.9 + this.draw * 0.4 }); }
       this.aim();
@@ -263,7 +267,7 @@ export class PlayerSling {
     if (this.draw < 0.08) this.draw = 0.25;
     this.aim();
     const [ox, oy] = this.origin();
-    const k = 0.6 + this.draw * 0.5;
+    const k = (0.6 + this.draw * 0.5) * (kahu() ? 1.35 : 1);
     this.fx.firePebble(ox, oy, this.vel[0], this.vel[1], 'mori', k);
     setPebbles(pebbles() - 1);
     sfx11('bandSnap', { x: p.x, pitch: 0.95 + this.draw * 0.15 });
