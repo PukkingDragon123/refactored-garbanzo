@@ -5,7 +5,7 @@
 // dark valley that glows (the way deeper, to the Glowing Forest).
 
 import type { Site10 } from './kit';
-import { climbSpot, ledge, arrive10, boulder, propAt, bump, sprite, Rng, hex, mix, PAL, bayer, fbm2, game, layerSpan, bigFrame, clamp, wallLayer } from './kit';
+import { climbSpot, arrive10, boulder, propAt, bump, sprite, Rng, hex, PAL, bayer, fbm2, game, layerSpan, bigFrame, clamp } from './kit';
 import { groundStrip, mainLayer, skyAndRidge, undergrowth, hideBush, frontFoliage, trees } from '../sites2/common';
 import { Prop, Custom } from '../../world/props';
 import { packColor } from '../../gfx/renderer';
@@ -13,6 +13,11 @@ import { PixelBuffer } from '../../art/pixel';
 import type { C } from '../../art/color';
 import { findArt } from '../v10/finds';
 import { A } from '../assets';
+import { paintStrataCliff, paintLedgeBed } from '../../art/strata';
+import { paintDigSite } from '../../art/digsite';
+import type { Sprite } from '../../art/jungle-core';
+import { rand } from '../../core/math';
+import type { FieldScene } from '../scenes/field';
 
 const W = 2300, G = 290, TERRACE = 206, HIGH = 138;
 export const fossilGround = (x: number) => G + Math.sin(x * 0.011) * 3 + Math.sin(x * 0.043) * 1.5 - bump(x, 430, 930, 44) - bump(x, 1700, 2250, 16);
@@ -101,6 +106,34 @@ export function skeleton(): { buf: PixelBuffer; ax: number; ay: number } {
   return { buf: b, ax: 0, ay: h - 1 };
 }
 
+const GRASS: C[] = ['#1e2a14', '#2e3e1c', '#425624', '#58702e', '#6e8a38', '#88a446'].map(c => hex(c));
+
+/** add a wide buffer to a layer as <= 2048 px props (top-left at x, y) */
+function addWide(lay: { add: (d: Prop) => unknown }, buf: PixelBuffer, x: number, y: number, z = 0, tint?: number) {
+  const CH = 2048;
+  for (let cx = 0; cx < buf.w; cx += CH) {
+    const w = Math.min(CH, buf.w - cx);
+    let sub = buf;
+    if (buf.w > CH) {
+      sub = new PixelBuffer(w, buf.h);
+      for (let yy = 0; yy < buf.h; yy++) sub.data.set(buf.data.subarray(yy * buf.w + cx, yy * buf.w + cx + w), yy * w);
+    }
+    lay.add(new Prop({ ...bigFrame(game.r, sub), ax: 0, ay: 0 }, x + cx, y, z, { tint }));
+  }
+}
+
+/** a hard sandstone bed standing out of the cliff as a ledge (a one-way platform), same geometry as kit's ledge */
+function bedLedge(f: FieldScene, x0: number, x1: number, y: number, seed: number, th: number) {
+  f.st.terrain.addPlatform([[x0, y], [x1, y]], 'rock');
+  const w = Math.round(x1 - x0) + 8;
+  const c = sprite(`fo:ledge:${seed}:${w}`, () => ({ buf: paintLedgeBed(w, th, seed), ax: 0, ay: 1 } as Sprite));
+  if (c) f.main.add(new Prop(c.f, x0 - 4, y, -3, { tint: packColor(0.86, 0.82, 0.8, 1) }));
+}
+
+/** stones in the river, sand falls off the ledges (x, y) */
+const RIVER_STONES = [210, 470, 690, 1040, 1390, 1820, 2130];
+const SAND_FALLS: [number, number][] = [[1010, TERRACE + 12], [1230, TERRACE + 12], [1450, TERRACE + 12], [1640, HIGH + 14], [1900, HIGH + 14], [2150, HIGH + 14], [1100, 56]];
+
 export const FOSSILS: Site10 = {
   id: 'fossils', loc: 'fossils', name: 'Bone Cliffs', width: W, camY: 176, spawnX: 80, exitX: 30, waterY: G + 8,
   ambience: 'falls', music: 'wonder', ground: 'grass',
@@ -109,26 +142,39 @@ export const FOSSILS: Site10 = {
     const rng = new Rng(404);
     skyAndRidge(f, { seed: 31, base: 200 });
     // the far wall of the gorge and a nearer one, banded
-    wallLayer(f, 'gorgeFar', 0.22, 0.45, 40, 300, 41, BAND.map(c => mix(c, hex('#8aa0b8'), 0.35)), { strata: 0.22, tint: packColor(0.85, 0.88, 0.95, 1) });
+    {
+      // the far wall of the gorge: finer beds, hazed blue with distance, its rim stepping back bed by bed
+      const fs = layerSpan(st, 0.22);
+      const far = st.addLayer('gorgeFar', 0.22, 0.45, 0.35, 0);
+      addWide(far, paintStrataCliff(fs.w, 300, 41, { top: 40, amp: 30, scale: 0.55, dip: 0.012, fold: 5, fog: hex('#8aa0b8'), haze: 0.16, grass: GRASS }), fs.x0, 40, 0, packColor(0.85, 0.88, 0.95, 1));
+    }
     const near = st.addLayer('gorgeNear', 0.55, 0.15, 0.5, 0);
     const span = layerSpan(st, 0.55, 80);
-    for (let x = span.x0, i = 0; x < span.x0 + span.w; x += 300, i++) {
-      const c = sprite(`fo:crag:${i % 4}`, () => boulder(50 + i, 280, 230, BAND, { strata: STRATA, moss: 0.1 }));
-      if (c) near.add(new Prop(c.f, x + rng.range(0, 80), G + 4, 0, { tint: packColor(0.78, 0.76, 0.78, 1) }));
+    // the nearer wall: banded buttresses and stacks, their soft beds weathered back under the hard ones
+    for (let x = span.x0, i = 0; x < span.x0 + span.w; x += 240 + rng.range(0, 120), i++) {
+      const v = i % 4, bw = 200 + v * 40, bh = 210 + (v % 2) * 30;
+      const c = sprite(`fo:butte:${v}`, () => ({ buf: paintStrataCliff(bw, bh, 50 + v, { top: 18 + v * 14, amp: 30, taperL: bw * (0.12 + (v % 3) * 0.05), taperR: bw * (0.18 - (v % 2) * 0.06), talus: 70 + v * 8, scale: 0.8, fossils: 0.3, grass: GRASS }), ax: Math.round(bw / 2), ay: bh - 1 } as Sprite));
+      if (c) near.add(new Prop(c.f, x + rng.range(0, 60), G + 4, 0, { tint: packColor(0.8, 0.78, 0.8, 1) }));
     }
     const mid = st.addLayer('mid', 0.8, 0.06, 0.55, 0);
     trees(f, mid, 0, W / 0.8 + 200, [180, 320], ['rata', 'treefern', 'broadleaf'], { y: x => fossilGround(x / 0.8) }, 61, { variants: 2 });
     const main = mainLayer(f);
     // the cliff behind the terraces, banded, with the skeleton in it
-    const cliff = new PixelBuffer(1500, 230);
-    for (let y = 0; y < 230; y++) for (let x = 0; x < 1500; x++) {
-      const edge = 6 + fbm2(x * 0.01, 0.2, 3, 7) * 24;
-      if (y < edge) continue;
-      const s = Math.floor((y + Math.sin(x * 0.012) * 9 + fbm2(x * 0.02, y * 0.02, 2, 3) * 8) / 7) % STRATA.length;
-      const n = fbm2(x * 0.05, y * 0.08, 3, 11);
-      cliff.set(x, y, mix(BAND[clamp(Math.round(n * 6 + (bayer(x, y) - 0.5)), 0, 6)], STRATA[s], 0.35));
+    const cliff = paintStrataCliff(1500, 230, 7, { top: 24, amp: 20, taperL: 70, talus: 40, fossils: 0.9, dip: 0.018, fold: 6, grass: GRASS });
+    // the cleft at the gorge head: a jagged black crack with a lit lip, a green glow far down in it
+    {
+      const cx = 2230 - 820, y0 = HIGH - 40 - 78, y1 = HIGH - 40;
+      for (let y = Math.max(0, y0); y < y1; y++) {
+        const t = (y - y0) / (y1 - y0), half = 1 + t * 6 + (fbm2(y * 0.2, 0.5, 2, 9) - 0.5) * 4, mid = cx + Math.sin(y * 0.15) * 2;
+        for (let x = Math.floor(mid - half); x <= Math.ceil(mid + half); x++) {
+          const e = Math.min(x - (mid - half), mid + half - x);
+          cliff.set(x, y, e < 1 ? hex('#4a3a30') : t > 0.8 && e > 2 && bayer(x, y) < (t - 0.8) * 3 ? hex('#1e4a2a') : hex('#080706'));
+        }
+        cliff.set(Math.floor(mid - half) - 1, y, hex('#c8a07a'));
+      }
     }
-    main.add(new Prop({ ...bigFrame(r, cliff), ax: 0, ay: 0 }, 820, 40, -9, { tint: packColor(0.82, 0.8, 0.8, 1) }));
+    main.add(new Prop({ ...bigFrame(r, cliff), ax: 0, ay: 0 }, 820, 40, -9, { tint: packColor(0.84, 0.8, 0.8, 1) }));
+    main.add(new Custom(-8.9, rr => rr.light(2230, HIGH - 22, 70, 0.4, 1, 0.6, 0.35, 0.1)));
     const sk = sprite('fo:skeleton', skeleton);
     if (sk) main.add(new Prop(sk.f, 960, TERRACE - 6, -8.5));
     groundStrip(f, W, G0, [PAL.stoneWarm[6], PAL.stoneWarm[5], hex('#8a7058'), hex('#6e5a48')], PAL.stoneWarm[1], 23, 120);
@@ -138,10 +184,34 @@ export const FOSSILS: Site10 = {
       rr.rect(0, G + 8, W, 26, packColor(0.12, 0.28, 0.32, 1));
       rr.water(0);
       for (let i = 0; i < 40; i++) { const gx = (i * 61.7 + s2.time * 40) % W; rr.fxDraw(A.dot2, gx, G + 9, 1.6, 0.4, 0, packColor(1, 1, 1, 1), 0.4); }
+      // ripples running downstream in rows, and foam curling round the stones
+      const x0 = rr.visibleX0(20), x1 = rr.visibleX1(20);
+      for (let row = 0; row < 4; row++) {
+        const y = G + 12 + row * 5, sp = 34 + row * 9;
+        for (let x = Math.floor(x0 / sp) * sp; x < x1; x += sp) {
+          const gx = x + ((s2.time * (30 + row * 8) + row * 13) % sp), a = 0.18 + 0.14 * Math.sin(s2.time * 2 + x * 0.1 + row);
+          rr.rect(Math.round(gx), y, 3 + (row & 1) * 2, 1, packColor(0.75, 0.9, 0.92, a));
+        }
+      }
+      for (const sx of RIVER_STONES) {
+        if (sx < x0 || sx > x1) continue;
+        const k = Math.sin(s2.time * 5 + sx);
+        rr.rect(sx + 6, G + 13, 2 + Math.round(k + 1), 1, packColor(0.92, 0.96, 0.95, 0.7));
+        rr.rect(sx - 7, G + 14, 2, 1, packColor(0.92, 0.96, 0.95, 0.4 + 0.2 * k));
+      }
     }));
+    for (const sx of RIVER_STONES) propAt(f, `fo:rs:${sx % 3}`, () => boulder(sx % 3 + 60, 14 + (sx % 3) * 3, 7 + (sx % 2) * 2, BAND, { moss: 0.4 }), sx, G + 16, -1.9);
     // the terrace and the high ledge, and the ropes up
-    ledge(f, 900, 1500, TERRACE, BAND, 71, 14);
-    ledge(f, 1420, 2290, HIGH, BAND, 72, 16);
+    bedLedge(f, 900, 1500, TERRACE, 71, 14);
+    bedLedge(f, 1420, 2290, HIGH, 72, 16);
+    // the dig on the bone terrace, beyond the loose vertebra
+    propAt(f, 'fo:dig', () => paintDigSite(3), 1318, TERRACE, -2.6);
+    // sand trickling off the ledges and the rim, and dust hanging in the light of the gorge
+    f.main.add(new Custom(-2.8, () => {}, dt => {
+      for (const [x, y] of SAND_FALLS) if (rand.chance(dt * 2.2)) f.main.particles.spawn({ frame: A.dot2, x: x + rand.range(-2, 2), y, vx: rand.range(-3, 3), vy: rand.range(4, 12), ay: 140, life: rand.range(0.9, 1.6), color: [0.82, 0.68, 0.5], alpha: 0.9, alpha1: 0.2, size: 0.6 });
+      const cx = f.st.cam.x;
+      if (rand.chance(dt * 3)) f.main.glowParticles.spawn({ frame: A.dot, x: cx + rand.range(-260, 260), y: rand.range(120, 280), vx: rand.range(2, 8) + f.st.wind * 3, vy: rand.range(-3, 3), life: rand.range(5, 9), color: [1, 0.9, 0.7], alpha: 0.35, alpha1: 0, fadeIn: 0.3, glow: true, intensity: 0.4, wobble: 4, wobbleF: 0.8, size: 0.6 });
+    }));
     climbSpot(f, 922, TERRACE, fossilGround(922), 'rope', 'Climb the rope to the bone terrace', 'Climb down to the gorge floor');
     climbSpot(f, 1470, HIGH, TERRACE, 'rope', 'Climb up to the high ledge', 'Climb down to the terrace');
     // cliff birds nest on the ledges
@@ -155,6 +225,12 @@ export const FOSSILS: Site10 = {
     undergrowth(f, main, 940, 2280, 0.4, G0, 82, { plants: ['moss', 'grass', 'astelia'], wood: ['rock', 'litter'] });
     for (const x of [260, 1900]) hideBush(f, x, G0, x, 0.75);
     frontFoliage(f, 260, W, [260, 420], ['grass', 'flax', 'fronds'], 1.35, G + 110, 91);
+    // dark banded rock in the near foreground, running out of the bottom of the frame
+    const fg = st.addLayer('fgRock', 1.4, 0, 0.3, 0, 1.4);
+    for (const [x, v] of [[120, 0], [980, 1], [1760, 0], [2300, 1]] as const) {
+      const c = sprite(`fo:fgr:${v}`, () => ({ buf: paintStrataCliff(240 + v * 60, 150, 90 + v, { top: 26 + v * 10, amp: 24, taperL: 50, taperR: 60, talus: 50, scale: 1.3, grass: GRASS }), ax: 120 + v * 30, ay: 149 } as Sprite));
+      if (c) fg.add(new Prop(c.f, x * 1.4, G + 175, 0, { tint: packColor(0.26, 0.22, 0.24, 1) }));
+    }
   },
   spawns: [
     { species: 'cragauk', n: [4, 7], x: [1000, 2150], poi: 'nest', herd: true, juveniles: 0.3, chance: 1 },
