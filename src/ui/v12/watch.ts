@@ -230,7 +230,7 @@ function css() {
   if (cssOn) return;
   cssOn = true;
   const st = document.createElement('style');
-  st.textContent = `.v12-watch { position: absolute; z-index: 30; pointer-events: none; image-rendering: pixelated; image-rendering: crisp-edges; transform: translate(-50%, -50%); }
+  st.textContent = `.v12-watch { position: absolute; z-index: 45; pointer-events: none; image-rendering: pixelated; image-rendering: crisp-edges; transform: translate(-50%, -50%); }
 .v12-watch.in { animation: v12-watch-in 0.24s steps(4) both; }
 .v12-watch.out { animation: v12-watch-out 0.2s steps(3) both; }
 @keyframes v12-watch-in { from { transform: translate(-50%, -30%); opacity: 0; } to { transform: translate(-50%, -50%); opacity: 1; } }
@@ -240,7 +240,7 @@ function css() {
 
 /** whole-number scale of an art pixel on screen (at least 2) */
 function pixelScale(): number {
-  const root = game.ui.sceneLayer.parentElement ?? document.body;
+  const root = game.ui.root;
   const w = root.getBoundingClientRect().width || window.innerWidth;
   return Math.max(2, Math.round(w / Math.max(1, game.r.VW)));
 }
@@ -264,12 +264,16 @@ export function showWatch(o: ShowWatchOpts = {}): WatchHandle {
   cv.className = 'v12-watch in';
   const g = cv.getContext('2d')!;
   g.imageSmoothingEnabled = false;
-  game.ui.sceneLayer.appendChild(cv);
+  // (on the UI root above the prompt and marker layers, so nothing paints over it)
+  game.ui.root.appendChild(cv);
+  const scene = game.scene;
   let left = 1, hour = o.hour ?? 12, closed = false, ended = false;
   const t0 = performance.now();
   let lastTick = -1;
   const frame = () => {
     if (closed) return;
+    // (the scene changed under it: it goes with the scene)
+    if (game.scene !== scene) { close(); return; }
     const now = performance.now(), el = (now - t0) / 1000;
     if (!o.manual && o.secs && o.mode !== 'clock') left = Math.max(0, 1 - el / o.secs);
     // a tick each second of a countdown (and in the last seconds, louder)
