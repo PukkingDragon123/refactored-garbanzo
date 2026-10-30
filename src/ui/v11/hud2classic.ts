@@ -48,6 +48,25 @@ const CSS = `
 @keyframes hxSlide { from { transform: translateY(-30px); opacity: 0; } }
 .h2 .hk { position: absolute; left: 12px; bottom: 8px; display: flex; align-items: flex-end; gap: 4px; }
 .h2 .hk canvas { pointer-events: auto; cursor: pointer; }
+.h2 .hk .kw { position: relative; display: flex; flex-direction: column; align-items: center; }
+.h2 .hk .kw.off { display: none; }
+.h2 .hk canvas.kit { transform-origin: 50% 100%; }
+.h2 .hk canvas.kl { position: absolute; bottom: 100%; left: 50%; pointer-events: none; opacity: 0; transform: translate(-50%, 6px); image-rendering: pixelated; }
+.h2 .hk .kw.hov canvas.kl { opacity: 1; transform: translate(-50%, 0); animation: klPop 0.24s steps(4), klBob 1.8s steps(6) 0.24s infinite; }
+@keyframes klPop { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes klBob { 50% { transform: translate(-50%, -2px); } }
+.h2 .hk canvas.kit.press { transform: translateY(2px) scale(1.07, 0.9); }
+.h2 .hk canvas.kit.pack.hov { animation: kHop 0.5s steps(5); }
+@keyframes kHop { 30% { transform: translateY(-5px) scale(0.96, 1.05); } 60% { transform: translateY(0) scale(1.05, 0.95); } }
+.h2 .hk canvas.kit.guide.hov { animation: kWig 0.45s steps(6); }
+@keyframes kWig { 20% { transform: translateX(-2px) translateY(-2px); } 45% { transform: translateX(2px) translateY(-2px); } 70% { transform: translateX(-1px); } }
+.h2 .hk canvas.kit.lap.hov { animation: kBoot 0.6s steps(6); filter: brightness(1.12); }
+@keyframes kBoot { 0% { filter: brightness(0.6); } 35% { filter: brightness(1.45); } 55% { filter: brightness(0.9); } 100% { filter: brightness(1.12); } }
+.h2 .hk canvas.kit.cam.hov { animation: kHop 0.4s steps(4); }
+.h2 .hk canvas.kit.use { animation: kUse 0.32s steps(4); }
+.h2 .hk canvas.kit.cam.use { animation: kFlash 0.4s steps(4); }
+@keyframes kUse { 0% { transform: translateY(2px) scale(1.08, 0.88); } 50% { transform: translateY(-4px) scale(0.95, 1.06); } }
+@keyframes kFlash { 0% { filter: brightness(3); transform: scale(1.06); } 100% { filter: brightness(1); } }
 .h2 .hk canvas.off { display: none; }
 body.touchmode .h2 .hk { bottom: auto; top: 8px; left: 8px; }
 body.touchmode .h2 .hr { right: 8px; top: 6px; }
@@ -74,7 +93,7 @@ interface NoteRow { text: string; state: 'todo' | 'done'; tick: number; strike: 
 
 // ---------------------------------------------------------------- resolution
 /** the kit's icons are drawn this much larger than their 52-unit design box */
-const KIT_K = 1.3;
+const KIT_K = 1.6;
 /** CSS px per design unit: 1 at 1280 x 720, in proportion to the screen above and below that (a phone
  *  in landscape about 0.72, 1080p 1.5) */
 function hudUi(): number {
@@ -85,25 +104,33 @@ const dprOf = () => window.devicePixelRatio || 1;
 /** device px per design unit */
 const hudK = () => dprOf() * hudUi();
 
+/** device px per art pixel for the kit icons (user: "not that high resolution"): every screen gets the
+ *  same ~34 px icon art, shown at a whole number of device pixels */
+const kitPx = () => Math.max(2, Math.round(hudK() * 2));
+const KIT_NAMES: Record<KitKind, string> = { pack: 'Backpack', guide: 'Field guide', lap: 'Laptop', cam: 'Camera' };
+
 /** a canvas painted at device resolution: w x h design units */
 class HdCanvas {
   readonly el: HTMLCanvasElement;
   private g: CanvasRenderingContext2D;
   art: Art | null = null;
   k = 1;
+  private px = 1;
   constructor(parent: HTMLElement, cls: string) {
     this.el = parent.appendChild(document.createElement('canvas'));
     this.el.className = 'hd ' + cls;
     this.g = this.el.getContext('2d')!;
   }
-  draw(wu: number, hu: number, paint: (a: Art, k: number) => void) {
-    const k = hudK(), dpr = dprOf();
+  /** paint at w x h design units; px = device px per art pixel (1 = full resolution, 2+ = chunkier) */
+  draw(wu: number, hu: number, paint: (a: Art, k: number) => void, px = 1) {
+    const k = hudK() / px, dpr = dprOf();
     const W = Math.max(1, Math.ceil(wu * k)), H = Math.max(1, Math.ceil(hu * k));
-    if (!this.art || this.art.w !== W || this.art.h !== H) {
+    if (!this.art || this.art.w !== W || this.art.h !== H || this.px !== px) {
       this.art = new Art(W, H);
+      this.px = px;
       this.el.width = W; this.el.height = H;
-      this.el.style.width = W / dpr + 'px';
-      this.el.style.height = H / dpr + 'px';
+      this.el.style.width = (W * px) / dpr + 'px';
+      this.el.style.height = (H * px) / dpr + 'px';
     } else this.art.d.fill(0);
     this.k = k;
     paint(this.art, k);
@@ -131,6 +158,24 @@ function inkText(a: Art, text: string, x: number, y: number, gp: number, font: P
   }
   void n;
   return (w - 4) * gp;
+}
+
+/** a kit button's name, floating over it on hover: the menus' bold bitmap face, cream with a dark drop */
+function paintKitLabel(cv: HTMLCanvasElement, text: string) {
+  const px = kitPx(), dpr = dprOf();
+  const W = pxMeasure(text, 'bold') + 6, H = 16;
+  if (cv.width === W && cv.dataset.t === text && cv.dataset.px === String(px)) return;
+  const a = new Art(W, H);
+  inkText(a, text, 2, 2, 1, 'bold', col('#140c06'));
+  inkText(a, text, 1, 3, 1, 'bold', col('#140c06'));
+  inkText(a, text, 3, 3, 1, 'bold', col('#140c06'));
+  inkText(a, text, 2, 4, 1, 'bold', col('#140c06'));
+  inkText(a, text, 2, 3, 1, 'bold', row => (row < 6 ? col('#fff6dc') : col('#f0c868')));
+  cv.width = W; cv.height = H;
+  cv.style.width = (W * px) / dpr + 'px';
+  cv.style.height = (H * px) / dpr + 'px';
+  cv.dataset.t = text; cv.dataset.px = String(px);
+  cv.getContext('2d')!.putImageData(a.img, 0, 0);
 }
 
 export class Hud2Classic {
@@ -190,13 +235,28 @@ export class Hud2Classic {
     // bottom left: the kit, each object its own button
     this.kitBox = this.root.appendChild(el('div', 'hk'));
     const mk = (id: KitKind, key: string, title: string) => {
-      const c = new HdCanvas(this.kitBox, 'kit ' + id);
+      const wrap = this.kitBox.appendChild(el('div', 'kw ' + id));
+      const lab = wrap.appendChild(document.createElement('canvas'));
+      lab.className = 'kl';
+      const c = new HdCanvas(wrap, 'kit ' + id);
       c.el.title = title;
       const st = { hover: false, press: false, lift: 0, glint: -1, key };
-      c.el.addEventListener('pointerenter', () => { st.hover = true; st.glint = 0; audio.play('ui', { vol: 0.05, pitch: 1.6 }); });
-      c.el.addEventListener('pointerleave', () => { st.hover = false; st.press = false; });
-      c.el.addEventListener('pointerdown', e => { e.stopPropagation(); st.press = true; });
-      c.el.addEventListener('pointerup', e => { e.stopPropagation(); if (st.press) this.useKit(id); st.press = false; });
+      const react = (cls: string) => { c.el.classList.remove(cls); void c.el.offsetWidth; c.el.classList.add(cls); };
+      c.el.addEventListener('pointerenter', () => {
+        st.hover = true; st.glint = 0;
+        paintKitLabel(lab, KIT_NAMES[id]);
+        wrap.classList.add('hov');
+        react('hov');
+        audio.play('ui', { vol: 0.06, pitch: id === 'pack' ? 1.3 : id === 'guide' ? 1.5 : id === 'lap' ? 1.9 : 1.7 });
+      });
+      c.el.addEventListener('pointerleave', () => { st.hover = false; st.press = false; wrap.classList.remove('hov'); c.el.classList.remove('press', 'hov'); });
+      c.el.addEventListener('pointerdown', e => { e.stopPropagation(); st.press = true; c.el.classList.add('press'); });
+      c.el.addEventListener('pointerup', e => {
+        e.stopPropagation();
+        c.el.classList.remove('press');
+        if (st.press) { react('use'); this.useKit(id); }
+        st.press = false;
+      });
       return [c, st] as const;
     };
     const [pk, ps] = mk('pack', 'I', 'Backpack (I)');
@@ -482,20 +542,20 @@ export class Hud2Classic {
     const dev = cam && cam.v10 !== false ? Math.max(0, Math.min(1, cam.develop ?? 1)) : 1;
     const shots = Math.max(0, Math.round(cam?.shots ?? 0));
     const k = hudK();
-    const states = Object.values(this.kitSt).map(s => `${s.lift.toFixed(2)},${s.glint.toFixed(2)}`).join('|');
-    const key = `${k}|${lapOn}|${badge}|${!!cam}|${shots}|${Math.round(dev * 12)}|${Math.round(this.packFill * 8)}|${this.bump > 0}|${touch}|${slingOwnsG()}|${states}`;
+    const states = Object.values(this.kitSt).map(s => `${s.lift.toFixed(2)},${s.glint.toFixed(2)},${s.hover}`).join('|');
+    const key = `${k}|${kitPx()}|${lapOn}|${badge}|${!!cam}|${shots}|${Math.round(dev * 12)}|${Math.round(this.packFill * 8)}|${this.bump > 0}|${touch}|${slingOwnsG()}|${states}`;
     if (key === this.kitKey) return;
     this.kitKey = key;
-    this.kit.lap.el.classList.toggle('off', !lapOn);
-    this.kit.cam.el.classList.toggle('off', !cam);
+    this.kit.lap.el.parentElement!.classList.toggle('off', !lapOn);
+    this.kit.cam.el.parentElement!.classList.toggle('off', !cam);
     const draw = (id: KitKind, info: Parameters<typeof paintKitIcon>[2], extra: { badge?: number } = {}) => {
       const st = this.kitSt[id];
-      const hint = touch ? '' : id === 'guide' && slingOwnsG() ? '' : st.key;
+      const hint = touch || !st.hover ? '' : id === 'guide' && slingOwnsG() ? '' : st.key;
       this.kit[id].draw(KIT_SIZE * KIT_K, (KIT_SIZE + 10) * KIT_K, (a, kk) => {
         const ik = kk * KIT_K;
         const icon = paintKitIcon(id, ik, info);
         paintKitButton(a, icon, ik, { lift: st.lift + (id === 'pack' && this.bump > 0 ? 1.5 : 0), glint: st.glint, key: hint || undefined, keyGp: Math.max(1, Math.round(kk)), badge: extra.badge });
-      });
+      }, kitPx());
     };
     draw('pack', { fill: this.packFill });
     draw('guide', {});
@@ -509,6 +569,10 @@ export class Hud2Classic {
     if (id === 'pack') this.onBackpack?.();
     else if (id === 'lap') this.lap?.open();
     else if (id === 'guide') { audio.play('pageTurn' as never, { vol: 0.4 }); void this.openEncyclopedia(); }
+    else if (id === 'cam') {
+      const sc = game.scene as unknown as { cam?: { active: boolean; raise(on: boolean): void }; cutscene?: boolean } | null;
+      if (sc?.cam && !sc.cutscene) { audio.play('shutter', { vol: 0.25 }); sc.cam.raise(!sc.cam.active); }
+    }
   }
 
   // ---------------------------------------------------------------- the note

@@ -39,9 +39,11 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
   and the kit as real icon buttons (backpack, field guide, laptop, camera). No decoration-only UI.
 - The user likes the floating-word menu style (title, pause, settings). Use that style for any text
   the HUD still needs (place names, prompts), not plates or boxes.
-- **UI resolution (user, latest):** "super detailed like real icon super polish no blocky effect".
-  UI art and icons are high-density pixel art, about 1 device pixel per art pixel. They read as
-  polished, richly shaded illustrated icons, never chunky blocks. There are still no dialogue boxes or menu boxes; everything else is in the
+- **UI resolution (user, latest):** full resolution was "too high"; the user wants "not that high
+  resolution ... polish cool interactive". Icons are pixel art at about 2 device px per art pixel
+  at 1280×720, scaled with the screen (`kitPx()` in `hud2classic.ts`). That's crisp, visible
+  pixels, neither the old chunky 3 px nor full resolution. Buttons are interactive: a hover label in
+  the menu font, a per-icon reaction, a press squash and a click effect. There are still no dialogue boxes or menu boxes; everything else is in the
   world or on objects:
   - **Text:** all text floats in the world. Dialogue is simple floating text by the speaker, with
     lively per-letter animation: shouts shake and grow, whispers waver, scared text trembles. The same
