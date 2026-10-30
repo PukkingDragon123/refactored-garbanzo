@@ -7,7 +7,7 @@
 
 import type { FieldScene } from '../scenes/field';
 import type { Site10, Swim10 } from './kit';
-import { swimWater, SWIM_DEPTH, arrive10, boulder, propAt, bump, steam, sprite, Rng, hex, mix, PAL, bayer, fbm2, game, layerSpan, bigFrame, clamp } from './kit';
+import { swimWater, SWIM_DEPTH, arrive10, boulder, propAt, bump, steam, sprite, Rng, hex, PAL, fbm2, game, layerSpan, bigFrame } from './kit';
 import { groundStrip, mainLayer, skyAndRidge, undergrowth, hideBush, frontFoliage } from '../sites2/common';
 import { Prop, Custom } from '../../world/props';
 import { packColor } from '../../gfx/renderer';
@@ -20,6 +20,8 @@ import { A } from '../assets';
 import { audio } from '../../core/audio';
 import { rand } from '../../core/math';
 import type { Interactable } from '../../world/npc';
+import { paintSinterTerraces, paintMudPool, paintFumarole, paintMicrobeMat, paintOldStair } from '../../art/geothermal';
+import { paintRock } from '../../art/flora';
 
 const W = 2400, G = 286, UP = G - 58;
 const SPRING: Swim10 = { x0: 1470, x1: 1610, top: UP + 4, bottom: UP + 40, col: [0.18, 0.62, 0.66] };
@@ -46,37 +48,17 @@ export const geoGround = (x: number) => {
   return dip(x, SPRING, y);
 };
 
-const SINTER: C[] = [hex('#b8a888'), hex('#d0c4a4'), hex('#e6dcc4'), hex('#f6f0e2')];
 const OCHRE: C[] = [hex('#5a3420'), hex('#7a4a2a'), hex('#9a6436'), hex('#b8804a'), hex('#d09a62'), hex('#e4b884')];
 
-/** silica terrace step faces: white sinter streaked with microbe bands (orange, green, rust) */
+/** the silica terraces: rimstone pools on the treads, flowstone curtains and microbe streams down the risers */
 function terraceArt(): { buf: PixelBuffer; ax: number; ay: number } {
-  const w = 420, h = 90, b = new PixelBuffer(w, h);
-  const band = [hex('#e87a2a'), hex('#d8a030'), hex('#7aa040'), hex('#a8482a')];
-  for (let x = 0; x < w; x++) {
-    const t = x / w, top = Math.round(geoGround(880 + x) - G - 5 + h);
-    for (let y = Math.max(0, top); y < h; y++) {
-      const d = y - top;
-      let c = SINTER[clamp(Math.round(3 - d * 0.05 + (bayer(x, y) - 0.5)), 0, 3)];
-      if (d < 3) c = SINTER[3];
-      const step = Math.floor(t * 6);
-      if ((x + Math.floor(y * 0.3)) % 9 === 0 && d > 3) c = mix(c, band[step % 4], 0.6);
-      if (d > 6 && d < 10) c = mix(c, band[(step + 1) % 4], 0.45);
-      b.set(x, y, c);
-    }
-  }
-  return { buf: b, ax: 0, ay: h - 1 };
+  const w = 420, h = 90;
+  return { buf: paintSinterTerraces(w, h, x => geoGround(880 + x) - G - 5 + h, 6, 33), ax: 0, ay: h - 1 };
 }
-
-/** a steam vent: a crusted cone of rock with yellow sulfur round its mouth */
+/** a steam vent: a fumarole crusted with silica, iron and sulfur crystals round its throat */
 function ventArt(seed: number) {
-  const s = boulder(seed, 30, 18, OCHRE, { moss: 0 });
-  const b = s.buf;
-  for (let x = 11; x < 19; x++) { b.set(x, 2, hex('#e8d040')); if (x % 2) b.set(x, 3, hex('#c8b030')); }
-  b.rect(13, 0, 4, 2, hex('#1a1210'));
-  return s;
+  return paintFumarole(seed);
 }
-
 export const GEOVALLEY: Site10 = {
   id: 'geovalley', loc: 'geovalley', name: 'The Hot Valley', width: W, camY: 172, spawnX: 80, exitX: 30, waterY: UP + 4,
   ambience: 'falls', music: 'tension', ground: 'grass',
@@ -88,8 +70,8 @@ export const GEOVALLEY: Site10 = {
     const prev = st.envHook;
     st.envHook = (env, dt) => {
       prev?.(env, dt);
-      env.fogTop = mix3(env.fogTop, [0.92, 0.84, 0.72], 0.45);
-      env.fogBottom = mix3(env.fogBottom, [0.96, 0.9, 0.8], 0.5);
+      env.fogTop = mix3(env.fogTop, [0.92, 0.84, 0.72], 0.34);
+      env.fogBottom = mix3(env.fogBottom, [0.96, 0.9, 0.8], 0.38);
       env.ambientTop = [env.ambientTop[0] * 1.04, env.ambientTop[1] * 0.98, env.ambientTop[2] * 0.9];
       env.bloom += 0.15;
     };
@@ -110,8 +92,15 @@ export const GEOVALLEY: Site10 = {
     // dead trees and scrub in the mid ground
     const mid = st.addLayer('mid', 0.75, 0.1, 0.5, 0);
     for (let x = 30; x < W * 0.75 + 200; x += rng.range(70, 150)) {
-      const dead = rng.chance(0.5);
-      const c = sprite(`gv:mid:${dead ? 'd' : 's'}${rng.int(0, 2)}`, () => (dead ? deadwood('stump', rng.int(1, 999), 40) : plant('shrub', rng.int(1, 999), 36)));
+      const k = rng.next(), v = rng.int(0, 2);
+      if (k < 0.35) {
+        // a cut outcrop of altered volcanic rock, steaming from its cracks now and then
+        const c = sprite(`gv:mid:r${v}`, () => { const s = paintRock(700 + v, 40 + v * 18, 26 + v * 12, OCHRE.concat([hex('#f0d0a0')]), 0, { verts: 9 + v * 2, facets: 6 + v * 2 }); return { buf: s.buf, ax: Math.round(s.ax), ay: s.ay - 1 }; });
+        if (c) mid.add(new Prop(c.f, x, geoGround(x / 0.75) + 3, 0, { tint: packColor(0.8, 0.72, 0.64, 1) }));
+        continue;
+      }
+      const dead = k < 0.75;
+      const c = sprite(`gv:mid:${dead ? 'd' : 's'}${v}`, () => (dead ? deadwood('stump', 300 + v * 17, 40) : plant('shrub', 400 + v * 13, 36)));
       if (c) mid.add(new Prop(c.f, x, geoGround(x / 0.75) + 2, 0, { tint: dead ? packColor(0.7, 0.62, 0.55, 1) : packColor(0.72, 0.75, 0.55, 1) }));
     }
     const main = mainLayer(f);
@@ -121,12 +110,22 @@ export const GEOVALLEY: Site10 = {
     if (ta) main.add(new Prop(ta.f, 880, G + 4, -2));
     // boiling mud: grey pools with bubbles that plop
     for (const [a, b] of MUD) {
+      const mp = sprite(`gv:mud:${a}`, () => paintMudPool(b - a + 8, a));
+      if (mp) main.add(new Prop(mp.f, a - 4, G + 1, -1.6));
+      // bubbles swell into domes, burst into a ring, and spatter
       main.add(new Custom(-1.5, (rr, s2) => {
-        rr.rect(a, G + 1, b - a, 10, packColor(0.42, 0.4, 0.38, 1));
-        rr.rect(a + 2, G, b - a - 4, 2, packColor(0.55, 0.52, 0.48, 1));
-        for (let i = 0; i < (b - a) / 10; i++) {
-          const k = (s2.time * 0.7 + i * 0.37) % 1, x = a + 5 + ((i * 17.3) % (b - a - 10));
-          rr.fxDraw(A.dot2, x, G + 1 - k * 3, 1.2 + k, 1.2 + k, 0, packColor(0.6, 0.58, 0.55, 1), 0.8 * (1 - k));
+        const mc = packColor(0.5, 0.47, 0.43, 1), hi = packColor(0.7, 0.66, 0.6, 1), dk = packColor(0.2, 0.18, 0.17, 1);
+        for (let i = 0; i < (b - a) / 12; i++) {
+          const k = (s2.time * (0.45 + (i % 3) * 0.12) + i * 0.37) % 1, x = Math.round(a + 8 + ((i * 17.3) % (b - a - 16))), y = G + 1;
+          if (k < 0.7) {
+            const rad = Math.floor(k / 0.7 * 3);
+            rr.rect(x - rad, y - rad, rad * 2 + 1, rad + 1, mc);
+            rr.rect(x - rad + 1, y - rad, 1, 1, hi);
+            if (rad > 0) rr.rect(x - rad, y, rad * 2 + 1, 1, dk);
+          } else if (k < 0.85) {
+            const s = Math.round((k - 0.7) / 0.15 * 4) + 2;
+            rr.rect(x - s, y, 1, 1, hi); rr.rect(x + s, y, 1, 1, hi); rr.rect(x - 1, y - 1 - s, 1, 1, mc); rr.rect(x + 1, y - s, 1, 1, mc);
+          }
         }
       }, dt => { if (rand.chance(dt * 1.5)) f.sfx('bubble' as never, a + (b - a) / 2, 0.25, 0.5); }));
       steam(f, (a + b) / 2, G - 2, (b - a) / 2, 0.6);
@@ -135,14 +134,15 @@ export const GEOVALLEY: Site10 = {
     for (const x of VENTS) { propAt(f, `gv:vent:${x}`, () => ventArt(x), x, geoGround(x) + 3, -1); steam(f, x, geoGround(x) - 14, 3, 0.8); }
     swimWater(f, SPRING);
     steam(f, (SPRING.x0 + SPRING.x1) / 2, SPRING.top - 2, 60, 1.2);
-    main.add(new Custom(-2, rr => {
-      const bands = [packColor(0.9, 0.45, 0.15, 1), packColor(0.85, 0.65, 0.2, 1), packColor(0.45, 0.62, 0.25, 1)];
-      for (let i = 0; i < 3; i++) { rr.rect(SPRING.x0 - 22 + i * 6, geoGround(SPRING.x0 - 22) + 1 + i, 18 - i * 4, 2, bands[i]); rr.rect(SPRING.x1 + 4 + i * 4, geoGround(SPRING.x1 + 4) + 1 + i, 18 - i * 4, 2, bands[2 - i]); }
-    }));
+    // microbe mats in rainbow bands where the hot water runs off the spring's edges
+    {
+      const ml = sprite('gv:mat:l', () => ({ buf: paintMicrobeMat(30, 5, true), ax: 30, ay: 4 } as never));
+      const mr = sprite('gv:mat:r', () => ({ buf: paintMicrobeMat(30, 6, false), ax: 0, ay: 4 } as never));
+      if (ml) main.add(new Prop(ml.f, SPRING.x0 + 2, geoGround(SPRING.x0 - 4) + 2, -2));
+      if (mr) main.add(new Prop(mr.f, SPRING.x1 - 2, geoGround(SPRING.x1 + 4) + 2, -2));
+    }
     // the old stair down into the steam
-    const stair = new PixelBuffer(120, 70);
-    for (let i = 0; i < 9; i++) for (let x = i * 12; x < 120; x++) for (let y = i * 7; y < i * 7 + 7; y++) stair.set(x, y, y === i * 7 ? hex('#c8b89a') : mix(hex('#8a7a62'), hex('#5a4c3c'), (y - i * 7) / 7 + (bayer(x, y) - 0.5) * 0.2));
-    stair.outline(hex('#1a1410'));
+    const stair = paintOldStair(120, 70, 9, 12, 7, 2270);
     main.add(new Prop({ ...bigFrame(r, stair), ax: 0, ay: 0 }, 2270, geoGround(2270) - 2, -3));
     steam(f, 2340, geoGround(2340) + 10, 40, 1.6);
     for (const [x, w, h] of [[200, 60, 30], [800, 40, 22], [1350, 70, 34], [2150, 56, 30]] as const) propAt(f, `gv:b:${x}`, () => boulder(x, w, h, OCHRE, { moss: 0 }), x, geoGround(x) + 4, -3);
