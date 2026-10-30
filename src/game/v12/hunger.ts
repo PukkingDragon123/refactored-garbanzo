@@ -154,8 +154,9 @@ export function growl(level = levelOf(hunger()), withLine = false): void {
   const b = sc?.player?.body;
   if (b) {
     b.setExpr(lv >= 3 ? 'sad' : 'surprised', 1.6);
+    // the growl clip: a lurch, hands to the belly, an embarrassed glance (one-shot over his stance)
     void import('../../art/v7/anim-contract').then(m => {
-      if (m.hasAnim7('growl') && b.play && sc?.player?.state === 'normal') b.play('growl', 'idle').catch(() => {});
+      if (m.hasAnim7('growl')) b.react('growl');
       else { b.react('shrink'); b.showEmote('sweat', 1.4); }
     }).catch(() => { b.react('shrink'); });
   }

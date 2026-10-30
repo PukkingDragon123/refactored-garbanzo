@@ -156,12 +156,13 @@ export class FieldCamera {
     const now = performance.now();
     if (now - this.refuseT < 2500) return;
     this.refuseT = now;
-    const p = this.host.player as unknown as { body?: { play?(a: string, then?: string): Promise<void>; setExpr(e: string, d?: number): void; showEmote(k: string, d?: number): void } } | undefined;
+    const p = this.host.player as unknown as { body?: { react(k: string): void; setExpr(e: string, d?: number): void; showEmote(k: string, d?: number): void } } | undefined;
     const b = p?.body;
     if (b) {
       b.setExpr('sad', 2);
       void import('../art/v7/anim-contract').then(m => {
-        if (m.hasAnim7('cameraLower') && b.play) b.play('cameraLower').catch(() => {});
+        // he starts to lift it, his stomach growls, and down it goes again
+        if (m.hasAnim7('cameraRaise') && m.hasAnim7('cameraLower')) { b.react('cameraRaise'); setTimeout(() => { b.react('cameraLower'); }, 420); setTimeout(() => b.react('growl'), 1100); }
         else b.showEmote('sweat', 1.6);
       }).catch(() => {});
     }
