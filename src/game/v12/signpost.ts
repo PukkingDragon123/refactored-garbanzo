@@ -130,7 +130,7 @@ export function paintSignpost(arms: ArmSpec[], seed = 1): SignArt {
         cx += pxWidth(a.text) + 2;
       }
     }
-    boxes.push({ x0: x - px - 2, y0: y - gy, x1: x + len - px - 2, y1: y + PLANK_H - gy });
+    boxes.push({ x0: x - (px + 2), y0: y - (gy + 1), x1: x + len - (px + 2), y1: y + PLANK_H - (gy + 1) });
   });
   // ---- the cairn and the tussock at its foot
   const stones: [number, number, number, number][] = [[-7, 0, 5, 3], [3, 0, 6, 3], [-3, -2, 6, 3], [-1, 1, 4, 2], [6, -1, 3, 2]];

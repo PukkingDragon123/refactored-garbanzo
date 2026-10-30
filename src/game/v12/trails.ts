@@ -213,9 +213,13 @@ export function installTrails(f: FieldScene, loc: string | 'island') {
 
 function armSpecFor(S: SceneTrails, j: Junction, r: EndRef): ArmSpec {
   const to = r.t[other(r.side)];
-  const deeper = depthOf(to.loc) > depthOf(r.end.loc);
+  const deeper = depthOf(to.loc) >= depthOf(r.end.loc);
   const shut = deeper && !gateOk(r.t.gate);
-  const dir: 'left' | 'right' = r.end.arm ? (j.x < S.W / 2 ? 'right' : 'left') : r.end.at === 'W' ? 'left' : 'right';
+  // the planks balance the post: at an edge the branches point away from the edge plank; in the
+  // middle of a scene the up branch points one way and the down branch the other
+  const dir: 'left' | 'right' = !r.end.arm ? (r.end.at === 'W' ? 'left' : 'right')
+    : j.edge === 'W' ? 'right' : j.edge === 'E' ? 'left' : r.end.arm === 'up' ? 'right' : 'left';
+  void S;
   return { text: SIGN[to.loc] ?? (location(to.loc)?.name ?? to.loc).toUpperCase(), dir, mark: r.end.arm, lock: shut && r.t.gate ? GATES[r.t.gate].icon : null };
 }
 
@@ -258,7 +262,7 @@ function buildSign(S: SceneTrails, j: Junction, i: number, under: boolean) {
 
 function armLabel(r: EndRef): string {
   const to = r.t[other(r.side)];
-  const deeper = depthOf(to.loc) > depthOf(r.end.loc);
+  const deeper = depthOf(to.loc) >= depthOf(r.end.loc);
   const shut = deeper && r.t.gate && !gateOk(r.t.gate) ? ` <span style="opacity:.75">(needs ${GATES[r.t.gate].gear})</span>` : '';
   return `${VERB[r.t.kind]} ${placeName(to.loc)} <span style="opacity:.75">· ${hoursText(r.t.hours)}</span>${shut}`;
 }
@@ -269,7 +273,7 @@ function readSign(S: SceneTrails, j: Junction) {
     if ('info' in s) { parts.push(`${s.dir === 'left' ? 'West' : 'East'}: ${s.info.toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}`); continue; }
     const to = s.t[other(s.side)];
     const way = s.end.arm === 'up' ? 'Up' : s.end.arm === 'down' ? 'Down' : s.end.at === 'W' ? 'West' : 'East';
-    const deeper = depthOf(to.loc) > depthOf(s.end.loc);
+    const deeper = depthOf(to.loc) >= depthOf(s.end.loc);
     const shut = deeper && s.t.gate && !gateOk(s.t.gate) ? ` (needs ${GATES[s.t.gate].gear})` : '';
     parts.push(`${way}: ${placeName(to.loc)}, ${hoursText(s.t.hours)}${shut}`);
   }
@@ -382,9 +386,11 @@ export async function takeTrail(f: FieldScene, t: TrailDef, side: 'a' | 'b'): Pr
   if (busy || f.cutscene || game.ui.blocking) return;
   const here = t[side], there = t[other(side)];
   const deeper = depthOf(there.loc) > depthOf(here.loc);
-  if (deeper) {
+  // (gear gates hold going deeper or across; only the way back toward camp is always open)
+  const away = depthOf(there.loc) >= depthOf(here.loc);
+  if (away) {
     if (t.gate && !gateOk(t.gate)) { refuse(f, GATES[t.gate].why); return; }
-    if (hourNow(f) >= LATE_HOUR) { refuse(f, hourNow(f) >= 18.5 ? 'It’s getting dark. Camp. Now.' : 'The sun’s getting low. Not today: I need to be home before dark.'); return; }
+    if (deeper && hourNow(f) >= LATE_HOUR) { refuse(f, hourNow(f) >= 18.5 ? 'It’s getting dark. Camp. Now.' : 'The sun’s getting low. Not today: I need to be home before dark.'); return; }
     // the first time over a cliff or under the water is a tricky moment (a QTE); after that he knows the way
     const hard = t.kind === 'climb' || t.kind === 'tunnel' || t.kind === 'swim' || t.kind === 'dive';
     if (hard && !game.save.flags['v12:crossed:' + t.id]) {

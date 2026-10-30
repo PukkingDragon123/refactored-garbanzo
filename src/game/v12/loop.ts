@@ -37,7 +37,7 @@ import { RARE, installRare } from './rare';
 import { setDayGoal } from '../v10/campquests';
 
 /** camp, on the beach (world x): walking past these is leaving camp */
-export const CAMP_X0 = 1330, CAMP_X1 = 2680;
+export const CAMP_X0 = 1080, CAMP_X1 = 2680; // (the boatyard and the fishing rock count as camp)
 
 interface LoopState {
   day: number;
@@ -306,6 +306,8 @@ export const LOOP_ZL = {
   reroll: () => { S().goal = null; cache = null; return todayGoal()?.text ?? null; },
   hunger: HUNGER_ZL,
   trails: TRAILS_ZL,
+  /** zl.loop.qte('ring' | 'mash' | 'hold' | 'seq') */
+  qte: (k: 'ring' | 'mash' | 'hold' | 'seq' = 'ring', d = 0.4) => import('./qte').then(m => m.QTE_ZL(k, d)),
   state: () => ({ ...S(), hour: hourNow(), phase: dayPhase(), exp: currentExpedition() }),
 };
 function hookZl() {
