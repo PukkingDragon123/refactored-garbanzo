@@ -276,7 +276,7 @@ class Inspection {
     if (this.poseSet) {
       // square to the viewer: the pack behind his shoulders, the camera on his chest, the note in the
       // pocket on his hip
-      if (s === 'backpack') return [x - f * 1, y - 43];
+      if (s === 'backpack') return [x - f * 4, y - 43];
       if (s === 'camera') return [x + f * 0.5, y - 40];
       return [x + f * 4, y - 30];
     }
@@ -316,7 +316,7 @@ class Inspection {
         r.emissive(1);
         r.draw(halo, hx, hy, f, 1, 0, packColor(1, 0.9, 0.6, Math.min(1, this.alpha * (0.45 + pulse * 0.6))));
         r.emissive();
-      } else r.fxDraw(halo, hx, hy, f, 1, 0, packColor(1, 0.86, 0.5, this.alpha * pulse), hov ? 2.2 : 1.4, true);
+      } else r.fxDraw(halo, hx, hy, f, 1, 0, packColor(1, 0.86, 0.5, this.alpha * pulse), hov ? 1.15 : 0.7, true);
       if (!this.onSprite(s)) r.draw(fr, Math.round(x), Math.round(y) + bob + fr.h / 2, f, 1, 0, packColor(1, 1, 1, this.alpha));
     }
   }
@@ -374,8 +374,9 @@ class Inspection {
     for (const s of this.spots()) {
       if (this.hide[s]) continue;
       const [x, y] = this.where(s);
-      const [sx, sy] = this.toCss(x, y);
-      const rad = (s === 'backpack' ? 12 : 8) * z;
+      // (the pack is mostly behind him: the part that peeks out past his shoulder is what you pick)
+      const [sx, sy] = this.toCss(s === 'backpack' && this.poseSet ? x - (this.p.body.facing || 1) * 4 : x, s === 'backpack' && this.poseSet ? y - 3 : y);
+      const rad = (s === 'backpack' ? 9 : 7) * z;
       const d = Math.hypot(cx - sx, cy - sy);
       if (d < rad && d < bd) { bd = d; best = s; }
       // the word itself

@@ -32,7 +32,7 @@ import type { Pile } from '../../../game/v11/ground';
 import { itemArtCanvas, itemArtBuffer } from '../../../art/v11/itemart';
 import { itemIcon, ICON_IDS } from '../../../art/itemicons';
 import { foodInfo, canEat, eatFood } from '../../../game/v10/forage10';
-import { feed } from '../../../game/v12/hunger';
+
 import { PixelBuffer } from '../../../art/pixel';
 import { css, sfx, pushKeys, reduced } from '../../laptop-kit';
 import { pxWrap } from '../../pxfont';
@@ -883,6 +883,8 @@ export class PackScene {
       if (ref.tool === 'camera') note = 'Equip it from Mori himself: click him and pick the camera.';
       const maxW = Math.max(90, Math.min(150, Math.round((this.SW * this.s) / this.ws * 0.5)));
       pxWrap(note, maxW, 'body').slice(0, 3).forEach((ln, i) => lines.push({ w: pxWord(ln, { font: 'body', color: '#e8dcbc', outline: '#1a0e06', delay: 120 + i * 60, step: 10 }), gap: 0 }));
+      // food: how much it fills him (V12 hunger), in words and a row of little bowls
+      if (fi.edible && fi.energy > 0) lines.push({ w: fillGauge(fi.energy / 100), gap: 1 });
       if (!ref.tool) {
         const inPack = ref.where === 'pack';
         if (fi.edible && inPack) acts.push({ label: 'EAT', color: fi.verdict === 'poison' ? '#ff8a6a' : '#b4f080', fn: () => void this.eat(ref) });
@@ -1272,8 +1274,7 @@ export class PackScene {
     let r: ReturnType<typeof eatFood> | null = null;
     try { r = eatFood(id, { quiet: true }); } catch (e) { console.error(e); }
     if (r?.ok) {
-      // V12 hunger (src/game/v12/hunger.ts): food fills him up by what it's worth
-      try { feed(Math.max(0.05, Math.min(1, fi.energy / 40))); } catch (e) { console.error(e); }
+      // (eatFood fills him up: V12 hunger.feed by what the food is worth, through energy.restore)
       const line = r.fx === 'none' ? (fi.verdict === 'unknown' ? 'Tastes fine. I think.' : fi.energy >= 20 ? 'Mmm. That hit the spot.' : 'Mm. A bite.') : r.fx === 'dizzy' ? 'Whoa... the ground tilts...' : r.fx === 'big' ? 'Oh no. Oh no no no.' : 'Urgh. My stomach...';
       this.say(rr, line, r.fx === 'none' ? '#c8f0a0' : '#ffb08a', r.fx === 'none' ? 'wave' : 'shake', 2000);
     } else this.say(rr, r?.reason?.replace(/’/g, "'") ?? 'Not now', '#ffb08a', 'shake');
@@ -1340,6 +1341,39 @@ export class PackScene {
     });
     setTimeout(() => { for (const e of els) void wordOut(e); }, 7000);
   }
+}
+
+/** how much a food fills him (hunger units: a snack ~0.15, a packed lunch ~0.35, a hot meal 0.6+):
+ *  a word and a row of little bowls, filled amber up to what it's worth */
+function fillGauge(fill: number): Word {
+  const word = fill < 0.08 ? 'A BITE' : fill < 0.2 ? 'A SNACK' : fill < 0.45 ? 'A GOOD FEED' : 'A PROPER MEAL';
+  const e = document.createElement('div') as unknown as Word;
+  e.className = 'pw12';
+  const w = pxWord('FILLS: ' + word, { font: 'tiny', color: '#ffd27a', outline: '#1a0e06', delay: 260, step: 12 });
+  w.style.position = 'absolute';
+  e.appendChild(w);
+  const n = 6, on = Math.max(1, Math.min(n, Math.round(fill / 0.1)));
+  const b = new PixelBuffer(n * 8, 7);
+  for (let i = 0; i < n; i++) {
+    const x = i * 8;
+    // a little bowl: a rim, a round belly, filled with stew up to the rim when it counts
+    for (let yy = 0; yy < 6; yy++) for (let xx = 0; xx < 7; xx++) {
+      const dx = xx - 3, dy = yy - 1;
+      const inBowl = yy >= 1 && dx * dx * 0.7 + dy * dy * 0.45 <= 5.5;
+      if (!inBowl) continue;
+      const edge = dx * dx * 0.7 + dy * dy * 0.45 > 3.2 || yy === 1;
+      b.set(x + xx, yy, edge ? 0xff06101a : i < on ? (yy <= 2 ? 0xff5ab4f0 : 0xff2a78d0) : 0xff283444);
+    }
+    if (i < on) b.set(x + 2, 2, 0xffb0e8ff);
+    b.set(x + 3, 6, 0xff06101a);
+  }
+  const c = cv(b);
+  at(c, w.wW + 3, Math.round((w.wH - 7) / 2));
+  c.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, delay: 320, fill: 'backwards', easing: 'steps(2)' });
+  e.appendChild(c);
+  e.wW = w.wW + 3 + b.w; e.wH = Math.max(w.wH, 7);
+  e.style.width = e.wW + 'px'; e.style.height = e.wH + 'px';
+  return e;
 }
 
 /** things lying about lie on their long side */
