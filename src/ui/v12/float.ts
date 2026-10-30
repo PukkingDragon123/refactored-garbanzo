@@ -305,7 +305,7 @@ function lookFor(style: FloatStyle | 'prompt' | 'caption' | 'option', speaker: s
   switch (style) {
     case 'say': if (tint) L.fill = tint; break;
     case 'shout':
-      L.font = 'bold'; L.k = plainLen <= 30 ? 2 : 1; L.speed = 62; L.maxW = L.k === 2 ? 132 : 176;
+      L.font = 'bold'; L.k = plainLen <= 30 ? 2 : 1; L.speed = 62; L.maxW = L.k === 2 ? 200 : 176;
       L.fill = tint ? mixHex(tint, '#ffffff', 0.35) : '#ffffff'; L.em = '#ff5a3a';
       break;
     case 'whisper': L.fill = '#aeb6c6'; L.out = '#1a1c26'; L.em = '#d8a090'; L.kw = '#d8cc90'; L.aside = '#7e8494'; L.speed = 34; L.maxW = 150; break;
@@ -469,7 +469,9 @@ function make(o: MakeOpts): Item {
   const L = { ...lookFor(o.style, o.speaker, plainOf(toks).length), ...(o.look ?? {}) };
   if (o.speed) L.speed *= o.speed;
   const lead = (o.style === 'radio' ? 12 : 0) + (o.keyLabel ? keySpr(o.keyLabel).w + 3 : 0) + (o.icon ? o.icon.w + 2 : 0);
-  const maxW = Math.max(60, Math.min(L.maxW, Math.floor((CW || 400) * (o.kind === 'sky' ? 0.92 : 0.66)) - lead));
+  // (docked beside a close-up there's the whole right of the band to use)
+  const room = o.place === 'right' ? Math.max(L.maxW, Math.floor((CW || 400) * 0.5)) : L.maxW;
+  const maxW = Math.max(60, Math.min(room, Math.floor((CW || 400) * (o.kind === 'sky' ? 0.92 : 0.66)) - lead));
   const lay = layoutToks(toks, L, maxW);
   const [fm0, fm1, fm2] = FM[L.font];
   const lh = fm2 * L.k;
@@ -873,7 +875,8 @@ function drawItem(it: Item, t: number) {
   const ty = by + it.nameH + 1;
   // the name, small and in the speaker's colour
   if (it.name) {
-    const nx = bx + (it.align === 'center' ? Math.floor((it.W - it.nameW) / 2) : it.lead);
+    // over where the typing starts
+    const nx = Math.min(bx + it.W - it.nameW, bx + rowOff(0));
     const NL: Look = { ...L, font: 'tiny', k: 1, track: 1 };
     for (const q of it.name) if (q.born < 0) q.born = it.t0;
     for (const pass of [0, 1] as const) drawGlyphs(it, it.name, nx, by + 1, NL, () => 0, t, pass, () => it.nameCol, false);
@@ -1197,7 +1200,7 @@ function placeOptions(set: OptionSet, placed: Rect[], top: number, bot: number) 
   const over = right - 8 - (CW - 4);
   if (over > 0) for (const c of cols) c.x = Math.max(4, c.x - over);
   for (const c of cols) {
-    let y = Math.max(top, Math.min(bot - c.h, Math.round(c.ay - 8 - c.h)));
+    let y = Math.max(top, Math.min(bot - c.h, Math.round(c.ay - 4 - c.h)));
     if (c.gr.name) y += 9;
     for (const it of c.its) {
       it.px = c.x + 6;
@@ -1206,7 +1209,7 @@ function placeOptions(set: OptionSet, placed: Rect[], top: number, bot: number) 
       it.placed = true;
       y += it.H + 3;
     }
-    placed.push({ x: c.x, y: Math.max(top, Math.round(c.ay - 8 - c.h)), w: c.w, h: c.h });
+    placed.push({ x: c.x, y: Math.max(top, Math.round(c.ay - 4 - c.h)), w: c.w, h: c.h });
   }
 }
 

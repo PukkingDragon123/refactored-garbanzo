@@ -166,7 +166,7 @@ export class Bubbles {
     const anchor = close
       ? () => (this.cu.active ? this.cu.anchor() : sp?.anchor() ?? null)
       : narr ? () => { const r = game.ui.root.getBoundingClientRect(); return [r.width / 2, r.height * 0.84] as [number, number]; }
-      : sp ? () => sp.anchor() : () => null;
+      : sp ? () => sp.anchor() ?? this.edge(line.who) : () => this.edge(line.who);
     return floatLine({
       text: this.fmt(line.text), kind: 'line', hold: true,
       style: narr && !line.style ? 'think' : floatStyleOf(line.style, line.expr, line.text),
@@ -175,6 +175,17 @@ export class Bubbles {
       name: name && (turn || !sp || !sp.anchor()) ? name : undefined,
       color: sp?.color, voice: sp?.voice ?? 1, speed: line.speed, pre: 0.14, lost: 'top',
     });
+  }
+
+  /** a voice from off screen comes from the edge on the speaker's side */
+  private edge(who: string): [number, number] | null {
+    try {
+      const sc = game.scene as { actor?(id: string): { x: number } | undefined; st?: { cam: { x: number } } } | null;
+      const a = sc?.actor?.(who), cx = sc?.st?.cam.x;
+      if (!a || cx === undefined || !Number.isFinite(a.x)) return null;
+      const r = game.ui.root.getBoundingClientRect();
+      return [a.x < cx ? 0 : r.width, r.height * 0.3];
+    } catch { return null; }
   }
 
   private endCurrent() {

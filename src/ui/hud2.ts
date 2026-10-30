@@ -45,6 +45,8 @@ type SceneLike = { player?: { x: number; y: number }; cutscene?: boolean; st?: {
 let lastPlace = '';
 let lastDay = -1;
 const namedAt = new Map<string, number>();
+/** the controls, once per session on a keyboard: keycaps floating near Mori, then gone */
+let hinted = false;
 
 export class Hud2 {
   /** an empty, never-shown element (kept for the V2 API) */
@@ -74,6 +76,16 @@ export class Hud2 {
     this.lastRp = game.save.rp;
     this.setPlace(o.place, o.sub);
     this.refresh(true);
+    if (!hinted) {
+      hinted = true;
+      const show = (n: number) => setTimeout(() => {
+        if (document.body.classList.contains('touchmode')) return;
+        const sc = game.scene as SceneLike;
+        if (game.ui.blocking || sc?.cutscene) { if (n < 20) show(n + 1); return; }
+        floatNotice('<span class="key">A</span><span class="key">D</span> walk  <span class="key">E</span> use  <span class="key">Tab</span> or click Mori: his kit', 5200);
+      }, 2600);
+      show(0);
+    }
   }
 
   // ---------------------------------------------------------------- API
