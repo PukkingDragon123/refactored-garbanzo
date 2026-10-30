@@ -120,7 +120,7 @@ export function rotateArt(src: Art, deg: number): Art {
 }
 
 /** the art of a stamp (before rotation), its text in blocky caps */
-function stampArt(text: string, small: string, round: boolean, hex: string, size: 'sm' | 'md' | 'lg', seed: number): Art {
+export function stampArt(text: string, small: string, round: boolean, hex: string, size: 'sm' | 'md' | 'lg', seed: number): Art {
   const k = size === 'lg' ? 2 : 1;
   const T = text.toUpperCase(), S = small.toUpperCase();
   const tw = textWidth(T, { face: 'block', scale: k, spacing: 1 }), sw = S ? textWidth(S, { face: 'block', scale: 1, bold: false, spacing: 1 }) : 0;

@@ -58,7 +58,7 @@ export function routeEnds(from: string, to: string): [[number, number], [number,
 }
 
 /** seeds of a recorded state; `fresh` (not in `old`) seeds get increasing times in the order walked */
-function seedsOf(s: SeedState, old: SeedState | null): Seed[] {
+export function seedsOf(s: SeedState, old: SeedState | null): Seed[] {
   const out: Seed[] = [];
   const trail = tripTrail();
   const order = (loc: string) => { const k = trail.indexOf(loc); return k < 0 ? trail.length + 1 : k; };
