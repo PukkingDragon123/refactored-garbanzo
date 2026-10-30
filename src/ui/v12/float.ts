@@ -162,20 +162,28 @@ const fillSpr = (font: PxFontId, ch: string, col: string) => sprite(`f|${font}|$
 /** the glyph's dark ring and drop pixel, same origin */
 const silSpr = (font: PxFontId, ch: string, col: string) => sprite(`o|${font}|${ch}|${col}`, () => bufSpr(pxTextBuf(ch, { font, color: col, outline: col, shadow: col, bounce: false })));
 const iconSpr = (name: string) => sprite('i|' + name, () => bufSpr(pxIconBuf(name)));
-/** a keycap with its label in the tiny caps */
+/** a little ivory keycap, like a typewriter key: dished top face with a lit rim, shaded sides, a
+ *  deep front skirt and a hard shadow, its letter pressed into the face */
 const keySpr = (label: string) => sprite('k|' + label, () => {
   const lab = label.toUpperCase();
   const tw = Math.max(5, pxMeasure(lab, 'tiny'));
-  const w = tw + 6, h = 11;
+  const w = tw + 7, h = 12;
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
   const x = c.getContext('2d')!;
-  x.fillStyle = OUT; x.fillRect(1, 0, w - 2, h); x.fillRect(0, 1, w, h - 2);
-  x.fillStyle = '#8a7048'; x.fillRect(1, 1, w - 2, h - 2);
-  x.fillStyle = '#f2e4bc'; x.fillRect(1, 1, w - 2, h - 4);
-  x.fillStyle = '#fffaea'; x.fillRect(2, 1, w - 4, 1);
+  const R = (col: string, a: number, b: number, cw: number, ch: number) => { x.fillStyle = col; x.fillRect(a, b, cw, ch); };
+  // hard shadow, then the outline with cut corners
+  R('rgba(0,0,0,0.45)', 2, 2, w - 2, h - 2);
+  R(OUT, 1, 0, w - 3, h - 1); R(OUT, 0, 1, w - 1, h - 3);
+  // the skirt (front and sides of the key), darker toward the bottom
+  R('#9a7e4e', 1, 1, w - 3, h - 3); R('#7a6038', 1, h - 4, w - 3, 2);
+  // the top face, its lit back rim and left edge, its shaded right edge
+  R('#efe0b4', 1, 1, w - 3, h - 5); R('#fffaea', 2, 1, w - 5, 1); R('#fff4d6', 1, 2, 1, h - 7);
+  R('#d8c48e', w - 3, 2, 1, h - 6);
+  // two worn specks
+  R('#e2d0a0', 3, h - 6, 1, 1); R('#e2d0a0', w - 5, 3, 1, 1);
   const t = pxTextBuf(lab, { font: 'tiny', color: '#3a2614' }).toCanvas(1);
-  x.drawImage(t, Math.floor((w - tw) / 2), 0);
+  x.drawImage(t, Math.floor((w - 1 - tw) / 2), 0);
   return { c, w, h };
 });
 /** an item icon from a pixel buffer (pickups) */
@@ -378,6 +386,8 @@ interface Item {
   sel?: boolean;
   dim?: boolean;
   keyLabel?: string;
+  /** a notice waiting for room near Mori (hidden, its clock stopped) */
+  waitRoom?: boolean;
   /** fixed placement (sky, caption) */
   fixed?: () => [number, number];
   /** sky pieces share one exit time */
@@ -613,6 +623,7 @@ function tick(t: number, dt: number) {
   for (const it of items) {
     if (it.gone) continue;
     if (t < it.t0) continue;
+    if (it.waitRoom) { it.t0 += dt; if (it.typedAt >= 0) it.typedAt += dt; for (const q of it.gl) if (q.born >= 0) q.born += dt; continue; }
     // typing
     if (!it.isTyped) {
       if (it.pre > 0) { it.pre -= dt; continue; }
@@ -703,15 +714,29 @@ function placeAll(t: number, dt: number) {
         if (!down && up >= top) y = up;
         else { down = true; y = r.y + r.h + 2; }
       }
+      // a notice with no room over Mori's head waits its turn (its clock stops) rather than crowd him
+      if (down && (it.kind === 'notice' || it.kind === 'pickup') && it.outAt < 0) { it.vis = false; it.waitRoom = true; continue; }
     }
+    it.waitRoom = false;
     const off = y - ny;
     if (!it.placed || it.kind === 'sky') { it.off = off; it.placed = true; }
     else { it.off += (off - it.off) * Math.min(1, dt * 14); if (Math.abs(off - it.off) < 0.5) it.off = off; }
     it.px = x;
     it.py = Math.max(top, Math.min(bot - it.H, Math.round(ny + it.off)));
     it.vis = true;
-    // (the sky words are scenery: lines near the heads don't make way for them)
+    // (the sky words are scenery: lines near the heads don't make way for them, see below)
     if (it.kind !== 'sky' && it.outAt < 0) placed.push({ x: it.px, y: it.py, w: it.W, h: it.H });
+  }
+  // the words in the sky give way: someone speaking (or answers) under them sends them off early;
+  // a notice that would sit under them waits until they're gone
+  const sky = items.filter(it => it.kind === 'sky' && it.vis && !it.gone && it.outAt < 0 && t >= it.t0);
+  if (!sky.length) return;
+  for (const it of items) {
+    if (it.kind === 'sky' || !it.vis || it.gone || it.outAt >= 0) continue;
+    const over = sky.some(k => hit({ x: k.px, y: k.py, w: k.W, h: k.H }, it.px, it.py, it.W, it.H, 1));
+    if (!over) continue;
+    if (it.kind === 'notice' || it.kind === 'pickup') { it.vis = false; it.waitRoom = true; }
+    else if (it.kind !== 'prompt') { for (const k of sky) leave(k, true); break; }
   }
 }
 
