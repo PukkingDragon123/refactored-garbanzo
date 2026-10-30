@@ -32,6 +32,7 @@ import { drawText, wrapText } from './paper/pxfont';
 import { PxW, outlined, tw, plate, hudScale } from './hudpx';
 import { hudHour } from './hudclock';
 import { drawWatch, watchSize } from '../v12/watch';
+import { slingOwnsG } from '../../game/v11/predators';
 
 const OUT = col('#140c06'), CREAM = col('#fff1cc'), INKC = col('#2a2440'), PENC = col('#6a6458');
 
@@ -167,6 +168,24 @@ function laptopArt(): Art {
   LAP_ROWS.forEach((r, y) => { for (let x = 0; x < 16; x++) { const v = LAP_COL[r[x]]; if (v) a.put(x, y, col(v)); } });
   return (lapArt = a);
 }
+// the field guide in the kit: a little strapped leather notebook with a gold koru on the cover
+const GUIDE_ROWS = [
+  '.oooooooooooooo.', 'oKhhhhhhhhhhhkpo', 'oKhkkkkkkkkkkdpo', 'oKkkkkgggkkkkdqo', 'oKkkkgkkkgkkkdpo',
+  'oKkkgkkgkkgkkdqo', 'oKkkgkgGkkgkkdpo', 'oKkkgkkkkgkkkdqo', 'oKkkkgggGkkkkdpo', 'oKkkkkkkkkkkkdqo',
+  'oKsssssssssssbBo', 'oKSSSSSSSSSSSbBo', 'oKkkkkkkkkkkkdpo', 'oKkhkkkkkkkkkdqo', 'oKkkkkkkhkkkkdpo',
+  'oKkkkkkkkkkkkdqo', 'oKdddddddddddddo', 'oKqpqpqpqpqpqpqo', '.oooooooooooooo.',
+];
+const GUIDE_COL: Record<string, string> = {
+  o: '#140c06', K: '#2a1e0e', h: '#7e9c4c', k: '#587a36', d: '#3c5426', p: '#f0e4c4', q: '#c8b48c',
+  g: '#f0c860', G: '#a8782a', s: '#6a3a1a', S: '#94602e', b: '#d8b860', B: '#8a6420',
+};
+let guideArtC: Art | null = null;
+function guideArt(): Art {
+  if (guideArtC) return guideArtC;
+  const a = new Art(16, GUIDE_ROWS.length);
+  GUIDE_ROWS.forEach((r, y) => { for (let x = 0; x < 16; x++) { const v = GUIDE_COL[r[x]]; if (v) a.put(x, y, col(v)); } });
+  return (guideArtC = a);
+}
 /** an image URL loaded into a paint buffer (null until it's loaded) */
 const imgArts = new Map<string, Art | null>();
 function imgArt(url: string): Art | null {
@@ -230,7 +249,7 @@ export class Hud2Classic {
   private t = 0;
   private acc = 0;
   private bannerT = 0;
-  private kitRegions: { id: 'pack' | 'lap' | 'cam'; x0: number; x1: number }[] = [];
+  private kitRegions: { id: 'pack' | 'lap' | 'cam' | 'guide'; x0: number; x1: number }[] = [];
   private packFill = 0;
   private bump = 0;
 
@@ -271,6 +290,7 @@ export class Hud2Classic {
       const r = this.kitRegions.find(k => x >= k.x0 && x < k.x1);
       if (r?.id === 'pack') this.onBackpack?.();
       else if (r?.id === 'lap') this.lap?.open();
+      else if (r?.id === 'guide') { audio.play('pageTurn' as never, { vol: 0.4 }); void this.openEncyclopedia(); }
     });
     this.keys = this.root.appendChild(el('div', 'hm-keys'));
     this.setPlace(o.place, o.sub);
@@ -383,9 +403,9 @@ export class Hud2Classic {
         if (Math.random() < 0.5) audio.play('ui', { vol: 0.08, pitch: 1.8 });
       }
     }
-    // keys: J journal, G encyclopedia, L laptop
+    // keys: J journal, G encyclopedia (in the field G is the slingshot's: the guide book in the kit), L laptop
     if (free && inp.keyHit('KeyJ')) this.openJournal();
-    if (free && inp.keyHit('KeyG')) void this.openEncyclopedia();
+    if (free && inp.keyHit('KeyG') && !slingOwnsG()) void this.openEncyclopedia();
     if (this.lap && inp.keyHit('KeyL') && free && this.lap.shown()) this.lap.open();
     // the note unrolls when something changes, then rolls up to its title strip
     const moving = inp.axisX() !== 0 || inp.down('jump');
@@ -600,7 +620,7 @@ export class Hud2Classic {
     const badge = lapOn ? this.lap!.badge() : 0;
     const n = game.save.inv.length, cap = Math.max(1, capacity());
     this.packFill += (n / cap - this.packFill) * 0.2;
-    const W = 30 + (lapOn ? 24 : 0) + (cam ? 58 : 0), H = 36;
+    const W = 30 + 22 + (lapOn ? 24 : 0) + (cam ? 58 : 0), H = 36;
     this.kitRegions = [];
     this.kitW.draw(W, H, a => {
       let x = 0;
@@ -619,6 +639,11 @@ export class Hud2Classic {
       if (f >= 0.8) outlined(a, `${n}/${cap}`, x + 1, 5, f >= 1 ? col('#ff9a80') : CREAM, OUT, { face: 'block', bold: false });
       this.kitRegions.push({ id: 'pack', x0: x, x1: x + 28 });
       x += 30;
+      // the field guide: a strapped leather notebook (click it; in the field G is the slingshot's)
+      plate(a, x, top, 20, ph, col('#2e3a22'), { r: 2 });
+      a.blit(guideArt(), x + 2, top + 4 + (this.bump > 0 ? -1 : 0));
+      this.kitRegions.push({ id: 'guide', x0: x, x1: x + 20 });
+      x += 22;
       // the field laptop with its badge
       if (lapOn) {
         plate(a, x, top, 22, ph, col('#2a3442'), { r: 2 });

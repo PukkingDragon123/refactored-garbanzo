@@ -231,7 +231,7 @@ class Dropped implements Drawable {
 }
 
 /** what Mori is likely to fumble when he goes down: what he carries, else something from the pack */
-function dropSomething(s: FieldScene, x: number, y: number): string | null {
+export function dropSomething(s: FieldScene, x: number, y: number): string | null {
   const p = s.player;
   const c = carryOf(p.body);
   if (c) {

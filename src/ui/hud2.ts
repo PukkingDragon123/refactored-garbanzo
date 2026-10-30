@@ -18,6 +18,7 @@
 // (the loop module opens the watch: setting off, at the dusk radio calls, reading a signpost, a late
 // refusal, every QTE time limit, and floatChoices({ watch: true }) for a timed answer)
 
+import { slingOwnsG } from '../game/v11/predators';
 import { el } from './ui';
 import { game } from '../game/game';
 import { trackedQuest, currentStepIndex, setQuestNotice } from '../game/quests';
@@ -72,7 +73,7 @@ export class Hud2 {
 
   constructor(parent: HTMLElement, o: HudOpts) {
     if (CLASSIC_HUD) {
-      setBodyHud('auto');
+      setBodyHud('never'); // the top-left status plate is gone (user)
       this.classic = new Hud2Classic(parent, o);
       this.root = this.classic.root;
       this.lastRp = game.save.rp;
@@ -178,7 +179,7 @@ export class Hud2 {
     this.lastRp = s.rp;
     // keys: J the notebook, G the field guide, L the field laptop
     if (free && inp.keyHit('KeyJ')) this.openJournal();
-    if (free && inp.keyHit('KeyG')) void this.openEncyclopedia();
+    if (free && inp.keyHit('KeyG') && !slingOwnsG()) void this.openEncyclopedia();
     if (this.lap && inp.keyHit('KeyL') && free && this.lap.shown()) this.lap.open();
     if (this.holdT > 0) this.holdT -= dt;
     this.acc += dt;
