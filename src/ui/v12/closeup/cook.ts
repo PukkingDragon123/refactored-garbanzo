@@ -816,7 +816,8 @@ export class CookSet implements SetScene {
       const a = this.stirA;
       const sx = cx + Math.cos(a) * 18, sy = cy + Math.sin(a) * 4;
       spoon(px, sx, sy, sx + 10, sy - 34);
-      drawHand(px, 'grip', sx + 10, sy - 34, { rot: 3, from: [sx + 70, sy + 80] });
+      // Mori leans over the pot: his arm reaches down into the set from above
+      drawHand(px, 'grip', sx + 10, sy - 34, { rot: 3, from: [sx + 58, -36] });
       if (this.stir > 0.3 && Math.random() < 0.5) c.parts.add('drop', sx + (Math.random() - 0.5) * 4, sy, (Math.random() - 0.5) * 30, -30, { c: lit, g: 260, life: 0.3 });
     }
   }
