@@ -229,6 +229,8 @@ function glyphsOf(text: string, face: Face): { g: Glyph[]; w: number } {
 }
 
 let menusOpen = 0;
+let modalsUp = 0;
+let modalStyled = false;
 /** how many floating menus are up (other UI can stay out of their way) */
 export const floatMenusOpen = () => menusOpen;
 
@@ -271,7 +273,13 @@ export class FloatMenu {
     this.mirror.style.cssText = 'position:absolute;left:0;top:0;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap';
     const parent = o.parent ?? game.ui.root;
     parent.append(this.cv, this.mirror);
-    if (o.modal) game.ui.modalOpen++;
+    if (o.modal) {
+      game.ui.modalOpen++;
+      // over the paused world: the world's own floating words step back while the menu is up
+      this.cv.style.zIndex = '9';
+      if (!modalStyled) { modalStyled = true; const st = document.createElement('style'); st.textContent = '#ui.fm-modal > canvas { visibility: hidden; }'; document.head.appendChild(st); }
+      if (modalsUp++ === 0) game.ui.root.classList.add('fm-modal');
+    }
     if (!o.passive) menusOpen++;
     this.cv.addEventListener('pointerdown', e => this.onDown(e));
     this.cv.addEventListener('pointermove', e => this.onMove(e));
@@ -331,7 +339,12 @@ export class FloatMenu {
     this.popKeys = null;
     this.cv.style.pointerEvents = 'none';
     this.cv.style.cursor = '';
-    if (this.opts.modal) { game.ui.modalOpen = Math.max(0, game.ui.modalOpen - 1); guardInput(250); }
+    if (this.opts.modal) {
+      game.ui.modalOpen = Math.max(0, game.ui.modalOpen - 1);
+      guardInput(250);
+      modalsUp = Math.max(0, modalsUp - 1);
+      if (!modalsUp) game.ui.root.classList.remove('fm-modal');
+    }
     if (!this.opts.passive) menusOpen = Math.max(0, menusOpen - 1);
     this.mirror.remove();
     return new Promise<void>(res => { this.closedRes = res; });

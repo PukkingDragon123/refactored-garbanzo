@@ -399,7 +399,7 @@ export class TitleScene implements Scene {
     const r = game.r;
     if (this.shotName === 'settings') return { x: r.VW * 0.53, y: r.VH * 0.47 };
     if (this.shotName === 'credits') return { x: r.VW * 0.5, y: r.VH * 0.75 };
-    return { x: r.VW * 0.67, y: r.VH * 0.6 };
+    return { x: r.VW * 0.63, y: r.VH * 0.6 };
   }
   private showMenu(focus?: string) {
     const page = this.mainPage();
