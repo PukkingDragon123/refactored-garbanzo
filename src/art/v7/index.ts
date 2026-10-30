@@ -58,12 +58,12 @@ const CHUNK_TRANS: Record<string, Record<string, string>> = {
   sleep: { idle: 'getUp', walk: 'getUp', run: 'getUp' },
 };
 // V7 extras: turning onto / off a ladder, raising / lowering the camera
-const ON_FOOT = ['idle', 'walk', 'run', 'crouch', 'crouchWalk', 'brace', 'slip'];
+const ON_FOOT = ['idle', 'walk', 'jog', 'run', 'crouch', 'crouchWalk', 'brace', 'slip'];
 const TRANS7: Record<string, Record<string, string>> = {};
 const tr = (from: string[], to: string[], clip: string) => { for (const f of from) for (const t of to) (TRANS7[f] ??= {})[t] = clip; };
 tr(ON_FOOT, ['climb'], 'climbOn');
 tr(['climb'], ON_FOOT, 'climbOff');
-tr(['idle', 'walk', 'run', 'brace', 'slip'], ['camera', 'cameraWalk'], 'cameraUp');
+tr(['idle', 'walk', 'jog', 'run', 'brace', 'slip'], ['camera', 'cameraWalk'], 'cameraUp');
 tr(['crouch', 'crouchWalk'], ['cameraCrouch', 'cameraCrouchWalk'], 'cameraUpC');
 tr(['camera', 'cameraWalk'], ['idle', 'walk', 'run', 'brace', 'slip'], 'cameraDown');
 tr(['cameraCrouch', 'cameraCrouchWalk'], ['crouch', 'crouchWalk', 'idle', 'walk'], 'cameraDownC');

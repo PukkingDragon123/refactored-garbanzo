@@ -515,13 +515,15 @@ export class Actor implements Drawable {
     return sl < -0.5 ? 'up' : sl > 0.5 ? 'down' : 'fwd';
   }
 
-  walkTo(x: number, speed = 50, anim = speed > 125 ? 'run' : speed > 85 ? (this.hasClip('jog') ? 'jog' : 'run') : 'walk'): Promise<void> {
+  walkTo(x: number, speed = 50, anim = speed > 125 ? 'run' : speed > 85 ? this.hurryAnim() : 'walk'): Promise<void> {
     this.walkRes?.();
     this.walkX = x;
     this.walkSpeed = speed;
     this.walkAnim = anim;
     return new Promise(res => (this.walkRes = res));
   }
+  /** a hurry: the jog where the rig has one (and nothing being carried remaps the run), else the run */
+  private hurryAnim() { return this.hasClip('jog') && this.mapped('run') === 'run' ? 'jog' : 'run'; }
   get walking() {
     return this.walkX !== null;
   }
