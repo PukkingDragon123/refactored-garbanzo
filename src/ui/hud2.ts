@@ -73,7 +73,7 @@ export class Hud2 {
 
   constructor(parent: HTMLElement, o: HudOpts) {
     if (CLASSIC_HUD) {
-      setBodyHud('auto');
+      setBodyHud('never'); // the top-left status plate is gone (user)
       this.classic = new Hud2Classic(parent, o);
       this.root = this.classic.root;
       this.lastRp = game.save.rp;

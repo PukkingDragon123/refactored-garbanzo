@@ -33,8 +33,11 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
 
 - **HUD (user, latest): the classic HUD is back**, every piece a detailed physical pixel-art object.
   It includes the pinned objective note, the research stamp, the pocket-watch clock, the place
-  banner, the kit and Mori's status plate (`src/ui/v11/hud2classic.ts`, mounted by `src/ui/hud2.ts`
-  via `CLASSIC_HUD`). There are still no dialogue boxes or menu boxes; everything else is in the
+  banner and the kit (`src/ui/v11/hud2classic.ts`, mounted by `src/ui/hud2.ts` via `CLASSIC_HUD`).
+  There's no top-left status plate (medallion, flask or weight scale); the user removed it.
+- **UI resolution (user, latest):** "super detailed like real icon super polish no blocky effect".
+  UI art and icons are high-density pixel art, about 1 device pixel per art pixel. They read as
+  polished, richly shaded illustrated icons, never chunky blocks. There are still no dialogue boxes or menu boxes; everything else is in the
   world or on objects:
   - **Text:** all text floats in the world. Dialogue is simple floating text by the speaker, with
     lively per-letter animation: shouts shake and grow, whispers waver, scared text trembles. The same
