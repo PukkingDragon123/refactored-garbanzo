@@ -32,7 +32,8 @@ import { GATES, gateOk } from './gear';
 import type { GateId } from './gear';
 import { paintSignpost, paintKeyHint } from './signpost';
 import type { ArmSpec, ArmBox } from './signpost';
-import { hourOfClock, LATE_HOUR } from './clock';
+import { hourOfClock, LATE_HOUR, DARK_HOUR } from './clock';
+import { showWatch } from '../../ui/v12/watch';
 
 export type Arm = 'up' | 'down';
 export type TrailKind = 'path' | 'climb' | 'swim' | 'wade' | 'dive' | 'tunnel';
@@ -268,6 +269,8 @@ function armLabel(r: EndRef): string {
 }
 
 function readSign(S: SceneTrails, j: Junction) {
+  // a glance at the pocket watch too: how much day is left (dark marked in red)
+  showWatch({ mode: 'clock', hour: hourNow(S.f), deadline: DARK_HOUR, anchor: 'mori', size: 28, hold: 4.5 });
   const parts: string[] = [];
   for (const s of j.specs) {
     if ('info' in s) { parts.push(`${s.dir === 'left' ? 'West' : 'East'}: ${s.info.toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}`); continue; }
@@ -390,7 +393,7 @@ export async function takeTrail(f: FieldScene, t: TrailDef, side: 'a' | 'b'): Pr
   const away = depthOf(there.loc) >= depthOf(here.loc);
   if (away) {
     if (t.gate && !gateOk(t.gate)) { refuse(f, GATES[t.gate].why); return; }
-    if (deeper && hourNow(f) >= LATE_HOUR) { refuse(f, hourNow(f) >= 18.5 ? 'It’s getting dark. Camp. Now.' : 'The sun’s getting low. Not today: I need to be home before dark.'); return; }
+    if (deeper && hourNow(f) >= LATE_HOUR) { showWatch({ mode: 'clock', hour: hourNow(f), deadline: DARK_HOUR, anchor: 'mori', size: 30, hold: 4, shake: 0.6, red: true }); refuse(f, hourNow(f) >= 18.5 ? 'It’s getting dark. Camp. Now.' : 'The sun’s getting low. Not today: I need to be home before dark.'); return; }
     // the first time over a cliff or under the water is a tricky moment (a QTE); after that he knows the way
     const hard = t.kind === 'climb' || t.kind === 'tunnel' || t.kind === 'swim' || t.kind === 'dive';
     if (hard && !game.save.flags['v12:crossed:' + t.id]) {

@@ -6,7 +6,8 @@
 //   hold   hold the key: the gauge climbs; let go inside the green band (too long and it snaps)
 //   seq    a row of arrow keys: press them in order (touch: tap in time)
 //
-// Keys: E / Space / click / tap (seq: the arrows or WASD). qte() runs one as a little cutscene and
+// The time limit is a brass pocket watch beside the prompt (src/ui/v12/watch.ts) that ticks, shakes
+// and goes red as it runs out. Keys: E / Space / click / tap (seq: the arrows or WASD). qte() runs one as a little cutscene and
 // resolves { ok, score 0..1, perfect }. CamRing is the ring on its own for the camera (fast animals):
 // the viewfinder's shutter press goes to it instead of firing straight away.
 
@@ -21,6 +22,7 @@ import { hex } from '../../art/color';
 import { drawPx, pxWidth } from '../../ui/v11/pixfont';
 import { audio } from '../../core/audio';
 import { floatText } from '../../ui/v12/float';
+import { showWatch } from '../../ui/v12/watch';
 
 export type QteKind = 'ring' | 'mash' | 'hold' | 'seq';
 export interface QteOpts {
@@ -134,7 +136,10 @@ export function qte(o: QteOpts): Promise<QteResult> {
     for (let i = 0; i < Math.max(2, o.count ?? 3 + Math.round(d * 2)); i++) seqKeys.push((['left', 'up', 'right', 'down'] as const)[Math.floor(Math.random() * 4)]);
     let si = 0, mistakes = 0;
     const limit = o.time ?? (o.kind === 'mash' ? 4.2 - d * 1.2 : o.kind === 'seq' ? 2.4 + seqKeys.length * (0.9 - d * 0.35) : o.kind === 'hold' ? 4 : rings * rDur + 1);
+    // the time limit is a pocket watch beside the prompt (V12: every timer is a watch)
+    const watch = showWatch({ manual: true, secs: limit, size: 26, anchor: () => f.css(ax() + 40, ay() + 4) });
     const finish = (ok: boolean, score: number, perfect: boolean) => {
+      watch.close();
       if (done) return;
       done = true;
       audio.play(ok ? 'qteHit' as never : 'qteMiss' as never, { vol: 0.5, pitch: perfect ? 1.25 : 1 });
@@ -163,7 +168,6 @@ export function qte(o: QteOpts): Promise<QteResult> {
         bar(rr, x - 18, y + 8, 36, 5, mash, GOLD);
         const bob = flash > 0 ? 2 : 0;
         rr.fxDraw(glyph(pressGlyph()), x, y - 2 + bob, 1, 1, 0, packColor(1, 1, 1, 1), 1, false);
-        rr.fxRect(x - 18, y + 15, Math.round(36 * Math.max(0, 1 - t / limit)), 1, CREAM);
       } else if (o.kind === 'hold') {
         bar(rr, x - 18, y + 8, 36, 5, hold, holdOn ? GOLD : CREAM, band);
         rr.fxDraw(glyph(pressGlyph()), x, y - 2 + (holdOn ? 1 : 0), 1, 1, 0, packColor(1, 1, 1, 1), 1, false);
@@ -174,10 +178,10 @@ export function qte(o: QteOpts): Promise<QteResult> {
           rr.fxDraw(glyph(game.input.lastDevice === 'touch' ? 'tap' : k), gx, gy, 1, 1, 0, i < si ? packColor(0.55, 1, 0.5, 1) : packColor(1, 1, 1, i === si ? 1 : 0.6), 1, false);
           if (i < si) rr.fxRect(gx - 4, gy + 7, 9, 1, GREEN);
         });
-        rr.fxRect(x - w / 2, y + 10, Math.round(w * Math.max(0, 1 - t / limit)), 1, mistakes ? RED : CREAM);
       }
     }, dt => {
       t += dt;
+      watch.set(1 - t / limit);
       flash -= dt;
       shake -= dt;
       if (done) return;

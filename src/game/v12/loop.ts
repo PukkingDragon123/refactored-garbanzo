@@ -120,6 +120,8 @@ function setOff(f: FieldScene, clock: { t: number; target: number; rate: number 
     : !food ? 'No lunch in that pack? You’ll be eating sand by noon, lad!'
     : pick(['Off you go! Back before dark!', 'Fair winds, Doc! Mind the light!', 'Bring us back something good!']);
   say(f, 'joshu', line, 'shout');
+  // the day's deadline: a look at the watch, dark marked on the dial
+  setTimeout(() => pullWatch(hourNow(f), { hold: 3.6 }), 900);
   const g = todayGoal();
   if (g) setTimeout(() => floatNotice(`Today: ${g.text}`, 4200), 2200);
 }
@@ -153,11 +155,13 @@ function dusk(f: FieldScene) {
   const far = depthOf(currentExpedition() ?? 'camp');
   if (h >= DUSK_HOUR && s.warned < 1) {
     s.warned = 1;
+    pullWatch(h, { hold: 6 });
     radio('jenna', far >= 2 ? 'Mori? Jenna. The sun’s getting low and you’re miles out. Start heading back. Now-ish. Now.' : 'Mori? Jenna here. Sun’s getting low! Start heading back to camp!');
     setTimeout(() => void floatText({ text: pick(['On my way. Ish.', 'Heading back! Just... one more photo.', 'Copy that. Turning round.']), style: 'think', ms: 2400 }), 3200);
     game.persist();
   } else if (h >= DARK_HOUR && s.warned < 2) {
     s.warned = 2;
+    pullWatch(h, { shake: 0.7, red: true, hold: 6 });
     radio('joshu', 'Son, it’s nearly dark. WHERE ARE YOU? Come home. Now.', true);
     setTimeout(() => void floatText({ text: '...walking faster.', style: 'whisper', ms: 2200 }), 3000);
     game.persist();
@@ -168,6 +172,11 @@ function dusk(f: FieldScene) {
     void floatText({ text: 'MORI! MORI?! ...There you are.', style: 'shout', ms: 2400, x: f.player.x - 120, y: f.player.y - 90 });
     setTimeout(() => fireBlackout(), 1800);
   }
+}
+
+/** Mori checks his pocket watch: the time of day, dark marked in red on the dial (V12: every timer is a watch) */
+export function pullWatch(h: number, o: { shake?: number; red?: boolean; hold?: number } = {}) {
+  void import('../../ui/v12/watch').then(m => m.showWatch({ mode: 'clock', hour: h, deadline: DARK_HOUR, anchor: 'mori', size: 30, hold: o.hold ?? 5, shake: o.shake, red: o.red }));
 }
 
 /** the crew on the walkie-talkie: floating radio text by Mori */
