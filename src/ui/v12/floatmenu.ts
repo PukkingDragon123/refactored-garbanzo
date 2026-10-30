@@ -64,6 +64,8 @@ export interface FloatPage {
   focus?: string;
   /** Esc / Backspace / right click */
   onBack?: () => void;
+  /** size of the words on this page (1 = the menu's size) */
+  scale?: number;
 }
 
 export interface FloatMenuOpts {
@@ -200,6 +202,7 @@ interface Page {
   at: number;
   /** room kept under the options for the focused one's hint */
   hintH: number;
+  align: 'left' | 'center' | 'right';
 }
 
 const interactive = (it: FMItem) => (it.kind ?? 'action') !== 'text';
@@ -243,10 +246,13 @@ export class FloatMenu {
   private lastHover = -1;
   /** suspended: drawn dimmed, no input (another window is over it) */
   suspended = false;
+  /** where the anchor sits on the words (may change between pages) */
+  align: 'left' | 'center' | 'right';
   readonly opts: FloatMenuOpts;
 
   constructor(o: FloatMenuOpts) {
     this.opts = o;
+    this.align = o.align ?? 'center';
     this.cv = document.createElement('canvas');
     this.cv.className = 'fm-canvas';
     this.cv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:6;touch-action:none;image-rendering:pixelated';
@@ -298,7 +304,7 @@ export class FloatMenu {
     }
     const valued = rows.filter(r => ['slider', 'choice', 'toggle'].includes(r.item.kind ?? ''));
     const labelCol = valued.length ? Math.max(...valued.map(r => r.w)) + 10 : 0;
-    const p: Page = { def, rows, head, born: t + (this.cur ? 0.18 : 0), dying: null, labelCol, w: 0, h: 0, at: 0, hintH: 0 };
+    const p: Page = { def, rows, head, born: t + (this.cur ? 0.18 : 0), dying: null, labelCol, w: 0, h: 0, at: 0, hintH: 0, align: this.align };
     this.pages.push(p);
     this.cur = p;
     const f = def.focus ? rows.findIndex(r => r.item.id === def.focus) : -1;
@@ -508,10 +514,15 @@ export class FloatMenu {
     this.dpr = dpr;
     // the options' capitals: about 4% of the screen height, never smaller than a phone can read
     const cssW = window.innerWidth, cssH = window.innerHeight;
-    const cap = Math.max(17, Math.min(46, Math.min(cssH * 0.04, cssW * 0.03))) * (this.opts.scale ?? 1);
-    this.gp = Math.max(2, Math.round((cap * dpr) / 7));
-    this.hp = Math.max(1, Math.round(this.gp * 0.5), Math.ceil((12 * dpr) / 7));
+    this.cap = Math.max(17, Math.min(46, Math.min(cssH * 0.04, cssW * 0.03))) * (this.opts.scale ?? 1);
     this.ctx.imageSmoothingEnabled = false;
+  }
+  private cap = 28;
+  /** the pixel sizes for a page (a page may ask for smaller words: a long settings list) */
+  private sizeFor(p: Page) {
+    const k = p.def.scale ?? 1;
+    this.gp = Math.max(2, Math.round((Math.max(16, this.cap * k) * this.dpr) / 7));
+    this.hp = Math.max(1, Math.round(this.gp * 0.5), Math.ceil((12 * this.dpr) / 7));
   }
 
   /** lay a page out (device px), once per pixel size */
@@ -556,7 +567,7 @@ export class FloatMenu {
     const VW = game.r?.VW ?? 640, VH = game.r?.VH ?? 360;
     const a = this.opts.anchor?.() ?? { x: VW / 2, y: VH / 2 };
     let x = (a.x / VW) * this.cv.width, y = (a.y / VH) * this.cv.height;
-    const al = this.opts.align ?? 'center';
+    const al = p.align;
     if (al === 'center') x -= p.w / 2;
     else if (al === 'right') x -= p.w;
     if ((this.opts.valign ?? 'middle') === 'middle') y -= (p.h + p.hintH) / 2;
@@ -568,6 +579,7 @@ export class FloatMenu {
   }
 
   private drawPage(p: Page, t: number) {
+    this.sizeFor(p);
     this.layout(p);
     const [ox, oy] = this.origin(p);
     const live = p === this.cur && !this.closing;
@@ -736,7 +748,7 @@ export class FloatMenu {
       row.parts.push({ k: 'bar', box: [X(5), Y(1) - 2 * gp, X(end - 1), Y(10) + 2 * gp] });
       arrow(end, 1, focused);
       row.parts.push({ k: 'inc', box: box(end - 1, end + 5) });
-      const txt = it.fmt ? it.fmt(v ?? 0) : Math.round(Number(v ?? 0) * 100) + '%';
+      const txt = it.fmt ? it.fmt(v ?? 0) : String(Math.round(Number(v ?? 0) * 100));
       this.drawWord(glyphsOf(txt, 'block').g, 'block', focused ? 'valueF' : 'value', x0 + (end + 6) * gp, y0, gp, p, row.i, 0, t, focused, row.i * 0.07 + 0.12);
     } else if (kind === 'choice') {
       const txt = (it.choices?.[Number(v ?? 0)] ?? '').toUpperCase();

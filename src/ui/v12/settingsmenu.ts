@@ -35,7 +35,7 @@ export function settingsPage(onBack: () => void, o: { heading?: string } = {}): 
       id: 'res', label: 'Resolution', kind: 'slider', steps: RES_STEPS,
       get: () => Math.max(0, Math.min(1, (s.quality - RES_MIN) / (1 - RES_MIN))),
       set: v => { s.quality = Math.round((RES_MIN + Number(v) * (1 - RES_MIN)) * 100) / 100; game.r.quality = s.quality; window.dispatchEvent(new Event('resize')); },
-      fmt: v => Math.round((RES_MIN + Number(v) * (1 - RES_MIN)) * 100) + '%',
+      fmt: v => String(Math.round((RES_MIN + Number(v) * (1 - RES_MIN)) * 100)),
       hint: 'How many pixels the world is drawn with. Lower it if the game stutters.',
     },
     { id: 'grain', label: 'Film grain', kind: 'toggle', get: () => gp.grain, set: v => { gp.grain = !!v; apply(); } },
@@ -51,7 +51,7 @@ export function settingsPage(onBack: () => void, o: { heading?: string } = {}): 
     { id: 'dev', label: 'Developer tools', tone: 'quiet', gap: 3, hint: 'A test tool: jump to any scene, skip quests, cheats, saves. Not part of the game. (` key)', pick: openDevTools },
     { id: 'back', label: 'Back', gap: 2, pick: onBack },
   );
-  return { items, heading: o.heading ?? 'Settings', onBack };
+  return { items, heading: o.heading ?? 'Settings', onBack, scale: 0.86 };
 }
 
 export function creditsPage(onBack: () => void): FloatPage {

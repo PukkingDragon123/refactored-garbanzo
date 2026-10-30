@@ -290,7 +290,7 @@ export class CloudTitle {
   }
 
   draw(r: Renderer, x: number, y: number, alpha = 1) {
-    if (this.acc >= 1 / 12) {
+    if (this.acc >= (this.t < this.done ? 1 / 12 : 1 / 8)) {
       this.acc = 0;
       this.raster();
       if (!this.frame) this.frame = bigFrame(r, this.buf);

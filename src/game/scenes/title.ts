@@ -291,7 +291,7 @@ export class TitleScene implements Scene {
       // down on the deck beside them: they sit on the left third, the settings float on the right
       case 'settings': { const z = 1.6; return { x: MORI_X + (VW * 0.16) / z, y: deck - (VH * 0.2) / z, zoom: z, focus: 1, dof: 0.9 }; }
       // up into the sky
-      case 'credits': return { x: MORI_X - VW * 0.12, y: deck - VH * 0.15 - 170, zoom: 1, focus: null, dof: 0 };
+      case 'credits': return { x: MORI_X - VW * 0.12, y: deck - VH * 0.15 - 150, zoom: 1, focus: null, dof: 0 };
       // pushing on toward the island
       case 'depart': return { x: MORI_X + 120, y: deck - VH * 0.12, zoom: 1.35, focus: 0.3, dof: 0.6 };
     }
@@ -394,14 +394,14 @@ export class TitleScene implements Scene {
     // in the air ahead of the bow, over the open water
     const r = game.r;
     if (this.shotName === 'settings') return { x: r.VW * 0.53, y: r.VH * 0.47 };
-    if (this.shotName === 'credits') return { x: r.VW * 0.5, y: r.VH * 0.6 };
+    if (this.shotName === 'credits') return { x: r.VW * 0.5, y: r.VH * 0.75 };
     return { x: r.VW * 0.67, y: r.VH * 0.6 };
   }
   private showMenu(focus?: string) {
     const page = this.mainPage();
     if (focus) page.focus = focus;
-    if (!this.menu) this.menu = new FloatMenu({ page, parent: this.root, anchor: () => this.anchorEased(), align: this.shotName === 'credits' ? 'center' : 'left' });
-    else this.menu.show(page);
+    if (!this.menu) this.menu = new FloatMenu({ page, parent: this.root, anchor: () => this.anchorEased(), align: 'left' });
+    else { this.menu.align = 'left'; this.menu.show(page); }
   }
   /** the menu's anchor glides between its spots as the camera moves */
   private anc: { x: number; y: number } | null = null;
@@ -445,6 +445,7 @@ export class TitleScene implements Scene {
   private openCredits() {
     audio.play('whoosh', { vol: 0.1, pitch: 0.8 });
     this.go('credits', 3);
+    if (this.menu) this.menu.align = 'center';
     this.menu?.show(creditsPage(() => { this.go('menu', 2.6); this.showMenu('credits'); }));
   }
   private depart(fn: () => void) {

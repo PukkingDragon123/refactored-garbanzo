@@ -168,6 +168,8 @@ async function boot() {
       setCarry(a as never, kind, o);
       return kind;
     },
+    /** the pause menu (floating words over the softened scene), wherever the game is */
+    pause: async () => (await import('./ui/pause')).openPause(),
     /** the cinematic camera and post FX (cineTo, cinePunch, cineLook...): (await zl.cine()).cinePunch() */
     cine: () => import('./game/v11/cine'),
     /** V11 physical UI kit sampler book (see src/ui/v11/paper/index.ts) */
@@ -219,6 +221,12 @@ async function boot() {
     if (/"(noclip|hud|instant)":true|"fast":[2-9]/.test(localStorage.getItem('zl-dev-prefs') ?? '')) void import('./debug/devpanel').then(m => m.applyToggles());
   } catch { /* storage blocked */ }
   (window as unknown as { zl: Record<string, unknown> }).zl.dev = async () => (await import('./debug/devpanel')).openDevPanel();
+  // the developer tools are also on a hidden key: backquote (Settings > Developer tools otherwise)
+  window.addEventListener('keydown', e => {
+    if (e.code !== 'Backquote' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    e.preventDefault();
+    void import('./debug/devpanel').then(m => m.openDevPanel());
+  });
 }
 
 boot();
