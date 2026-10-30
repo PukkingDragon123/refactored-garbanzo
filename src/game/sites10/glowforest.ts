@@ -6,16 +6,17 @@
 
 import type { FieldScene } from '../scenes/field';
 import type { Site10, Swim10 } from './kit';
-import { swimWater, SWIM_DEPTH, dim, ledge, glowField, arrive10, boulder, pillar, propAt, bump, sprite, Rng, hex, mix, PAL, bayer, fbm2, game, clamp } from './kit';
+import { swimWater, SWIM_DEPTH, dim, ledge, glowField, arrive10, boulder, propAt, bump, sprite, Rng, hex, mix, PAL, fbm2, game } from './kit';
 import { groundStrip, mainLayer, jungleWalls, ceiling, trees, undergrowth, hideBush, frontFoliage } from '../sites2/common';
 import { Prop, Custom } from '../../world/props';
 import { packColor } from '../../gfx/renderer';
 import { PixelBuffer } from '../../art/pixel';
-import type { C } from '../../art/color';
 import { plant } from '../../art/jungle-plants';
 import { findArt } from '../v10/finds';
 import { A } from '../assets';
 import { rand } from '../../core/math';
+import { paintGiantShroom, paintShelf, paintFungusClump } from '../../art/glowfungi';
+import { paintTrunk } from '../../art/flora';
 
 const W = 2300, G = 288;
 const POOL: Swim10 = { x0: 1130, x1: 1330, top: G + 4, bottom: G + 64, col: [0.05, 0.3, 0.32] };
@@ -29,43 +30,7 @@ export const glowGround = (x: number) => dip(x, POOL, G + Math.sin(x * 0.009) * 
 
 const CYAN: [number, number, number] = [0.35, 1, 0.85], VIOLET: [number, number, number] = [0.75, 0.5, 1], GOLD: [number, number, number] = [1, 0.85, 0.4];
 
-/** a giant mushroom: a pale stem and a broad cap with glowing gills (the glow on its own layer) */
-function giantShroom(seed: number, h: number, capW: number, col: [number, number, number]): { buf: PixelBuffer; glow: PixelBuffer; ax: number; ay: number } {
-  const w = capW + 6, b = new PixelBuffer(w, h), g = new PixelBuffer(w, h);
-  const cx = w / 2, capH = Math.round(capW * 0.32);
-  const stem = [hex('#5a5a6a'), hex('#7a7a8a'), hex('#a0a0b0'), hex('#c4c4d0')];
-  for (let y = capH - 2; y < h; y++) {
-    const r = 3 + (y / h) * 4 + Math.sin(y * 0.3 + seed) * 0.6;
-    for (let x = -r; x <= r; x++) b.set(cx + x, y, stem[clamp(Math.round((1 - (x + r) / (2 * r)) * 3 + (bayer(cx + x, y) - 0.5)), 0, 3)]);
-  }
-  const cap = [hex('#2a2440'), hex('#3c3458'), hex('#544a78'), hex('#6e6296')];
-  for (let y = 0; y < capH; y++) {
-    const half = (capW / 2) * Math.sqrt(1 - Math.pow(1 - y / capH, 2));
-    for (let x = -half; x <= half; x++) b.set(cx + x, y, cap[clamp(Math.round((1 - y / capH) * 2 + (x < 0 ? 1 : 0) + (bayer(cx + x, y) - 0.5)), 0, 3)]);
-  }
-  // gills under the cap and spots on top glow
-  const gc = hex('#' + col.map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join(''));
-  for (let x = -capW / 2 + 3; x < capW / 2 - 3; x++) { if (Math.floor(x) % 2 === 0) { g.set(cx + x, capH - 1, gc); g.set(cx + x, capH, mix(gc, hex('#ffffff'), 0.3)); } }
-  const rng = new Rng(seed);
-  for (let i = 0; i < capW / 6; i++) { const x = rng.range(-capW / 2.6, capW / 2.6), y = rng.range(2, capH - 4); g.set(cx + x, y, gc); }
-  b.outline(hex('#0c0a14'));
-  return { buf: b, glow: g, ax: Math.floor(cx), ay: h - 1 };
-}
 
-/** a shelf fungus on a trunk: a half-disc bracket you can stand on, its rim glowing */
-function shelf(seed: number, w: number, col: [number, number, number]) {
-  const h = Math.round(w * 0.32), b = new PixelBuffer(w, h), g = new PixelBuffer(w, h);
-  const ramp = [hex('#4a3a2a'), hex('#6a5038'), hex('#8a6a48'), hex('#a88a5a')];
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const nx = x / w, ny = y / h;
-    if (ny > Math.sin(nx * Math.PI) * 1.05) continue;
-    b.set(x, y, ramp[clamp(Math.round(3 - ny * 3 + (bayer(x, y) - 0.5) + (Math.sin(nx * 30 + seed) > 0.7 ? -1 : 0)), 0, 3)]);
-    if (ny > Math.sin(nx * Math.PI) * 0.8) g.set(x, y, packHex(col));
-  }
-  b.outline(hex('#140c08'));
-  return { buf: b, glow: g, ax: 0, ay: 1 };
-}
-const packHex = (c: [number, number, number]) => hex('#' + c.map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join(''));
 
 /** draw a sprite with its glow layer emissive, and a light */
 function glowProp(f: FieldScene, key: string, gen: () => { buf: PixelBuffer; glow: PixelBuffer; ax: number; ay: number }, x: number, y: number, z: number, col: [number, number, number], light = 70) {
@@ -123,19 +88,19 @@ export const GLOWFOREST: Site10 = {
     }));
     // giant mushrooms and the shelf-fungus stair on the big fig
     for (const [x, h, cw, c] of [[260, 120, 70, CYAN], [700, 150, 90, VIOLET], [1460, 110, 64, CYAN], [1880, 170, 100, GOLD], [2180, 90, 54, VIOLET]] as const) {
-      glowProp(f, `gf:gm:${x}`, () => giantShroom(x, h, cw, c as [number, number, number]), x, glowGround(x) + 3, -5, c as [number, number, number], 110);
+      glowProp(f, `gf:gm:${x}`, () => paintGiantShroom(x, h, cw, c as [number, number, number]), x, glowGround(x) + 3, -5, c as [number, number, number], 110);
     }
     const stair: [number, number][] = [[612, G - 20], [648, G - 40], [612, G - 60], [648, G - 80], [614, G - 100]];
     for (const [i, [x, y]] of stair.entries()) {
       f.st.terrain.addPlatform([[x, y], [x + 40, y]], 'branch');
-      glowProp(f, `gf:sh:${i}`, () => shelf(i + 3, 46, i % 2 ? CYAN : GOLD), x - 3, y, -4, i % 2 ? CYAN : GOLD, 50);
+      glowProp(f, `gf:sh:${i}`, () => paintShelf(i + 3, 46, i % 2 ? CYAN : GOLD), x - 3, y, -4, i % 2 ? CYAN : GOLD, 50);
     }
-    propAt(f, 'gf:stairtrunk', () => pillar(9, 26, 170, [hex('#2a2018'), hex('#3a2c20'), hex('#4c3a2a'), hex('#5e4a36')]), 640, G + 4, -6);
+    propAt(f, 'gf:stairtrunk', () => paintTrunk({ width: 20, height: 176, seed: 9, moss: 0.7, flare: 9 }), 640, G + 6, -6, { tint: packColor(0.62, 0.64, 0.82, 1) });
     // glowing fungi on the floor (they glow by day as well: the sun never reaches down here)
     for (let x = 40; x < W; x += rng.range(26, 60)) {
       const glow = rng.chance(0.7);
       const c = rng.pick([CYAN, VIOLET, GOLD]);
-      const s = sprite(`gf:sh${rng.int(0, 5)}:${glow ? 1 : 0}`, () => { const m = glowShrooms(rng.int(1, 999), c); return m as never; });
+      const s = sprite(`gf:sh${rng.int(0, 5)}:${glow ? 1 : 0}`, () => { const m = paintFungusClump(rng.int(1, 999), c); return m as never; });
       if (!s) continue;
       const y = glowGround(x) + 2;
       main.add(new Prop(s.f, x, y, 2));
@@ -148,7 +113,29 @@ export const GLOWFOREST: Site10 = {
     glowField(f, 0, W, 120, 280, 220, CYAN, 251, { lights: 0, size: 0.55, drift: true, z: 40 });
     glowField(f, 0, W, 200, 285, 90, GOLD, 252, { lights: 0, size: 0.5, drift: true, z: 40 });
     for (const x of [500, 1400, 1950]) hideBush(f, x, G0, x, 0.8);
-    frontFoliage(f, 260, W, [180, 300], ['fronds', 'leaves', 'monstera'], 1.35, G + 112, 261, { tint: packColor(0.25, 0.3, 0.42, 1) });
+    // fern fronds in the near dark (not the broad leaves: they swallowed the view)
+    frontFoliage(f, 260, W, [220, 360], ['fronds', 'fronds', 'grass'], 1.35, G + 112, 261, { tint: packColor(0.3, 0.36, 0.5, 1) });
+    // glow-worm threads hanging from the branches overhead: silk lines beaded with sticky drops that
+    // catch the light, each with its larva glowing at the top (two depths)
+    for (const [p, n, sd] of [[1, 70, 3], [0.7, 60, 4]] as const) {
+      const lay = p === 1 ? main : st.addLayer('worms', p, 0.2, 0, 0.5, p);
+      const th = Array.from({ length: n }, (_, i) => { const h1 = ((i * 97.3 + sd * 13) % 1) ; return { x: ((i * 173.7 + sd * 41) % (W * p + 400)) - 100, y: 24 + ((i * 53.1) % 46), len: 10 + ((i * 29.7) % 34), ph: i * 1.7 + h1 }; });
+      lay.add(new Custom(p === 1 ? -7 : 0, (rr, s2) => {
+        const x0 = rr.visibleX0(10), x1 = rr.visibleX1(10);
+        for (const q of th) {
+          if (q.x < x0 || q.x > x1) continue;
+          const sw = Math.sin(s2.time * 0.6 + q.ph) * 1.2;
+          rr.emissive(1);
+          for (let k = 0; k < q.len; k += 1) {
+            const xx = Math.round(q.x + sw * (k / q.len)), yy = q.y + k;
+            rr.rect(xx, yy, 1, 1, packColor(0.55, 0.85, 0.8, 0.16));
+            if (k % 4 === 2) rr.rect(xx, yy, 1, 1, packColor(0.6, 1, 0.92, 0.55 + 0.35 * Math.sin(s2.time * 1.3 + q.ph + k)));
+          }
+          rr.emissive();
+          rr.fxDraw(A.dot, q.x, q.y - 1, 0.5, 0.5, 0, packColor(0.45, 1, 0.9, 1), 0.9 + 0.3 * Math.sin(s2.time * 0.9 + q.ph));
+        }
+      }));
+    }
     frontFoliage(f, 260, W, [300, 480], ['vines', 'branch'], 1.35, -40, 262, { hang: true, tint: packColor(0.25, 0.3, 0.42, 1) });
     // fireflies the colour of the fungi
     let spT = 0;
@@ -193,19 +180,4 @@ export const GLOWFOREST: Site10 = {
 };
 
 /** a cluster of small mushrooms with a glow layer */
-function glowShrooms(seed: number, col: [number, number, number]) {
-  const rng = new Rng(seed);
-  const W2 = 20, H2 = 14, b = new PixelBuffer(W2, H2), g = new PixelBuffer(W2, H2);
-  const gc = packHex(col), stem = hex('#b8b8c8');
-  for (let i = 0; i < rng.int(2, 4); i++) {
-    const x = 4 + i * 4 + rng.range(-1, 1), hgt = rng.range(4, 10), cr = rng.range(2, 3.6);
-    for (let y = H2 - 1; y > H2 - hgt; y--) b.set(x, y, stem);
-    const cy = H2 - hgt;
-    b.ellipseFn(x, cy, cr, cr * 0.6, (_x, _y, _nx, ny) => (ny > 0.3 ? -1 : ny < -0.3 ? hex('#5a5080') : hex('#3c3458')));
-    for (let k = -cr + 1; k < cr - 1; k++) g.set(x + k, cy + 1, gc);
-    g.set(x, cy - 1, mix(gc, hex('#ffffff'), 0.4));
-  }
-  b.outline(hex('#0c0a14'));
-  return { buf: b, glow: g, ax: W2 / 2, ay: H2 - 1 };
-}
 void boulder; void ledge; void fbm2;
