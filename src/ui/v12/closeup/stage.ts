@@ -227,6 +227,19 @@ export class Closeup {
     this.pt = 0;
   }
 
+  /** testing: lay the scene out at W x H units (z fine px each), let it run a moment, paint it */
+  debugSnap(W: number, H: number, z: number, prep: (c: Closeup) => void, secs = 1): PixelBuffer {
+    setZ(z); this.W = W; this.H = H;
+    this.px = new PixelBuffer(W * z, H * z);
+    this.scene.layout(this);
+    prep(this);
+    for (let i = 0; i < secs * 30; i++) { this.t += 1 / 30; if (!this.over) this.scene.update(this, 1 / 30); this.parts.step(1 / 30); for (const f of this.texts) f.age += 1 / 30; this.ptr.pressed = false; this.hits.clear(); }
+    this.scene.draw(this, this.px);
+    this.parts.draw(this.px);
+    this.drawTexts();
+    return this.px;
+  }
+
   // ------------------------------------------------------------ run
   run(): Promise<CloseupResult> {
     const p = new Promise<CloseupResult>(r => (this.resolve = r));

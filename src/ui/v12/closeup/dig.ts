@@ -279,7 +279,7 @@ export class DigSet implements SetScene {
         const u = x - OX, v = y - OY;
         const o = this.mask[i] && lifting <= 0 ? ob.data[v * ob.w + u] : 0;
         if (o) col = o;
-        else col = rd(root ? CLAY : ROCK, 0.36 + Math.sin(gy / Z * 0.5 + Math.sin(gx / Z * 0.04) * 3) * 0.12 + (this.tex[i] - 0.5) * 0.2 - (this.mask[i] && lifting > 0 ? 0.25 : 0), gx, gy);
+        else col = rd(root ? CLAY : ROCK, 0.38 + (Math.sin(gy / Z * 0.9 + vnoise(gx / Z * 0.05, gy / Z * 0.05, 2) * 6) > 0.8 ? -0.1 : 0) + (vnoise(gx / Z * 0.3, gy / Z * 0.3, 4) - 0.5) * 0.18 + (this.tex[i] - 0.5) * 0.15 - (this.mask[i] && lifting > 0 ? 0.25 : 0), gx, gy);
       } else {
         const tx = this.tex[i];
         const R = d > 2.4 ? TOP : d > 1 ? CLAY : SILT;

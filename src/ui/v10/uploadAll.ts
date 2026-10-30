@@ -14,7 +14,7 @@ import { location } from '../../game/v10/regions';
 import type { Discovery } from '../../game/v10/regions';
 import { fx10 } from '../../game/v10/skills10';
 import {
-  cameraRoll, pendingCount, handInPlan, handIn, pendingNotes, fileNote, atCamp, newSession, endSession, today, daySum, weekTargets, unreadMail, itemCat,
+  cameraRoll, pendingCount, handInPlan, handIn, pendingNotes, fileNote, atCamp, newSession, endSession, today, daySum, weekTargets, unreadMail, itemCat, awardRp,
 } from '../../game/v9/research9';
 import type { HandIn, Session, LabOutcome } from '../../game/v9/research9';
 import { game } from '../../game/game';
@@ -154,6 +154,11 @@ export function uploadAllApp(os: OSCtx, ra: ResearchApps): UploadApp {
     const step = (i: number) => b?.querySelectorAll('.up-steps span').forEach((s, j) => { s.classList.toggle('on', j === i); s.classList.toggle('done', j < i); });
     try {
       if (photos.length && !gone()) {
+        // V12: the first print is developed by hand in the darkroom close-up (the save flag 'v12:oldqte' skips it)
+        if (!game.save.flags['v12:oldqte']) {
+          const r = await (await import('../v12/closeup/darkroom')).runDarkroom({ img: photos[0].img });
+          if (r.ok) ses.rp += awardRp(r.perfect ? 6 : r.grade === 'good' ? 3 : 1, 'bonus', 'darkroom');
+        }
         step(0);
         const host = el('div', 'imp up-ph');
         stage.appendChild(host);

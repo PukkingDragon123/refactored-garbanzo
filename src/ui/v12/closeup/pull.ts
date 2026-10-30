@@ -62,7 +62,7 @@ export class PullSet implements SetScene {
         this.roots.push({ pts, thr: (i + 1) / 10 + (hash(i, 4, 2) - 0.5) * 0.06, snapped: false });
       }
       this.roots.sort((a, b) => a.thr - b.thr);
-      for (let i = 0; i < 11; i++) this.blades.push({ a: -Math.PI / 2 + (i - 5) * 0.16 + (hash(i, 1, 9) - 0.5) * 0.1, len: 50 + hash(i, 2, 9) * 30 - Math.abs(i - 5) * 3, w: 4 + (i % 3 === 0 ? 1 : 0), curl: (i - 5) * 0.012 + (hash(i, 3, 9) - 0.5) * 0.01, seed: i });
+      for (let i = 0; i < 11; i++) this.blades.push({ a: -Math.PI / 2 + (i - 5) * 0.16 + (hash(i, 1, 9) - 0.5) * 0.1, len: 50 + hash(i, 2, 9) * 30 - Math.abs(i - 5) * 3, w: 6.5 + (i % 3 === 0 ? 1.5 : 0), curl: (i - 5) * 0.01 + (hash(i, 3, 9) - 0.5) * 0.01, seed: i });
     }
     this.hx = this.bx; this.hy = this.gy - 16;
     this.paintBg(W, H);
@@ -81,7 +81,7 @@ export class PullSet implements SetScene {
         // the wetland behind: the far bush line, reeds, a glint of water
         const far = v < gy - 26 + Math.sin(u * 0.05) * 6 + Math.sin(u * 0.17) * 2 + vnoise(u * 0.3, 0, 3) * 3;
         if (far) return rd(PAL.leafOlive, 0.22 + (v - gy + 40) / 40 * 0.22 + vnoise(u * 0.5, v * 0.5, 3) * 0.16, x, y);
-        if (v > gy - 10 && Math.sin(u * 0.2) > 0.6) return rd(PAL.water, 0.55 + (Math.sin(u * 2 + v) > 0.8 ? 0.3 : 0), x, y);
+        if (v > gy - 9 && v < gy - 6 + vnoise(u * 0.1, 1, 9) * 2 && vnoise(u * 0.06, 2, 8) > 0.55) return rd(PAL.water, 0.5 + (Math.sin(u * 1.3 + v * 2) > 0.85 ? 0.35 : 0), x, y);
         const reed = Math.sin(u * 1.3 + vnoise(u * 0.2, v * 0.1, 4) * 3);
         return rd(PAL.moss, 0.32 + vnoise(u * 0.9, v * 0.4, 4) * 0.25 + (reed > 0.5 ? 0.22 : 0), x, y);
       }
