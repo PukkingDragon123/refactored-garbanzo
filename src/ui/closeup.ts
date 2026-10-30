@@ -35,9 +35,9 @@ const POP = 10;
 
 const CSS = `
 .cu { position: absolute; inset: 0; pointer-events: none; z-index: 4; overflow: hidden; }
-.cu .dim { position: absolute; inset: 0; background: radial-gradient(ellipse at 35% 58%, rgba(8,4,12,0.15) 20%, rgba(8,4,12,0.6) 100%); opacity: 0; transition: opacity 0.2s; }
+.cu .dim { position: absolute; inset: 0; background: rgba(8,4,12,0.42); opacity: 0; transition: opacity 0.2s steps(3); }
 .cu.on .dim { opacity: 1; }
-.cu.cold .dim { background: radial-gradient(ellipse at 35% 58%, rgba(6,10,30,0.25) 15%, rgba(4,6,22,0.78) 100%); }
+.cu.cold .dim { background: rgba(4,6,22,0.55); }
 .cu canvas { position: absolute; left: 0; top: 0; image-rendering: pixelated; image-rendering: crisp-edges; }
 .cu .np { position: absolute; left: 0; top: 0; transform-origin: 0 50%; opacity: 0; transition: opacity 0.12s; }
 .cu .np.on { opacity: 1; }
@@ -51,8 +51,8 @@ const CSS = `
 .cu .fl { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
 .cu.flash .fl { animation: cuFlash 0.22s ease-out; }
 @keyframes cuFlash { from { opacity: 0.6; } to { opacity: 0; } }
-.cu.anime .dim { background: radial-gradient(ellipse at 35% 58%, rgba(40,8,32,0.1) 25%, rgba(36,8,30,0.5) 100%); }
-.cu.anime.cold .dim { background: radial-gradient(ellipse at 35% 58%, rgba(20,12,44,0.2) 20%, rgba(14,8,36,0.66) 100%); }
+.cu.anime .dim { background: rgba(36,8,30,0.34); }
+.cu.anime.cold .dim { background: rgba(14,8,36,0.5); }
 .cu.anime .fl { background: #fff4fa; }
 .cu.anime.flash .fl { animation: cuFlashSoft 0.3s ease-out; }
 @keyframes cuFlashSoft { from { opacity: 0.45; } to { opacity: 0; } }
@@ -68,6 +68,8 @@ const CSS = `
   padding: 0.2em 0.5em 0.15em; box-shadow: 0 0 0 2px #2a2420; opacity: 0; white-space: nowrap; }
 .cu .bf.on { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .cu .np div, .cu.anime .np div { animation: none; } }
+/* V12: no name plates or caption boxes on the cut-in; the line floats beside the bust */
+.cu .np, .cu .bf { display: none !important; }
 `;
 
 /** Jenna's kawaii palettes per mood: [light, mid, dark, accent] */
