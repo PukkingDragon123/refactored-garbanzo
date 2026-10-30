@@ -10,6 +10,9 @@
 //   quests     a new job or the next step is a notice near Mori; the finished step gets its pen tick
 //              in the notebook next time it's opened
 // It also keeps the keys it owned: J the notebook, G the field guide, L the field laptop.
+// The time of day is not shown here any more (the old sun-and-moon dial is gone): when a time or a
+// countdown has to be shown, it's the brass pocket watch (src/ui/v12/watch.ts, the loop module's).
+// TODO watch: nothing here draws a time; a scene that needs one opens the watch.
 
 import { el } from './ui';
 import { game } from '../game/game';

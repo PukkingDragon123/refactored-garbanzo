@@ -1144,10 +1144,13 @@ export interface FloatOption {
   color?: string;
 }
 export interface FloatChoiceOpts {
-  /** seconds before it resolves null (no answer); 0 = no limit */
+  /** seconds before it resolves null (no answer); 0 = no limit. No bar is ever drawn: the scene shows
+   *  the clock (or the brass pocket watch, see below) */
   timeout?: number;
   /** each frame: seconds elapsed, 0..1 of the timeout */
   tick?: (t: number, k: number) => void;
+  /** show the countdown on the pocket watch (src/ui/v12/watch.ts, the loop module's) */
+  watch?: boolean;
   /** where the column floats when an option names no anchor (default: over Mori) */
   anchor?: Anchor | null;
 }
@@ -1249,6 +1252,9 @@ export function floatChoices(options: FloatOption[], o: FloatChoiceOpts = {}): P
     window.addEventListener('pointerdown', pd, true);
     window.addEventListener('pointermove', pm, true);
     set.cancel = () => finish(null);
+    // TODO watch: a timed answer with `watch: true` shows its countdown on the brass pocket watch
+    // (src/ui/v12/watch.ts, built by the loop module) near Mori; never a bar. Hook it up here once the
+    // module lands: open it with o.timeout, wind it with k each frame, put it away in finish().
     const frame = () => {
       if (fin) return;
       const t = now() - set.t0;
