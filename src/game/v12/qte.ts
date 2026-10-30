@@ -23,6 +23,7 @@ import { drawPx, pxWidth } from '../../ui/v11/pixfont';
 import { audio } from '../../core/audio';
 import { floatText } from '../../ui/v12/float';
 import { showWatch } from '../../ui/v12/watch';
+import type { CloseupSpec } from '../../ui/v12/closeup/index';
 
 export type QteKind = 'ring' | 'mash' | 'hold' | 'seq';
 export interface QteOpts {
@@ -42,6 +43,8 @@ export interface QteOpts {
   time?: number;
   /** Mori's pose meanwhile ('kneel', 'climb'...) */
   pose?: string;
+  /** V12: run this hands-on close-up instead (src/ui/v12/closeup; the save flag 'v12:oldqte' keeps the QTE) */
+  closeup?: CloseupSpec;
 }
 export interface QteResult { ok: boolean; score: number; perfect: boolean }
 
@@ -112,6 +115,14 @@ export const qteRunning = () => running;
 export function qte(o: QteOpts): Promise<QteResult> {
   const f = o.f ?? (game.scene as unknown as FieldScene);
   if (!f?.main || !f.player || running) return Promise.resolve({ ok: false, score: 0, perfect: false });
+  // V12: the moments worth zooming in on are close-ups now (the QTE below stays for the rest)
+  if (o.closeup && !game.save.flags['v12:oldqte']) {
+    running = true;
+    const p = f.player, pose = p.poseOverride;
+    if (o.pose) p.poseOverride = o.pose;
+    const at: [number, number] = [o.x ?? p.x, (o.y ?? p.y - p.height) + 20];
+    return import('../../ui/v12/closeup/index').then(m => m.closeupQte({ difficulty: o.difficulty, ...o.closeup! }, at)).catch(e => { console.error(e); return { ok: false, score: 0, perfect: false }; }).finally(() => { p.poseOverride = pose; running = false; });
+  }
   running = true;
   const p = f.player;
   const d = Math.max(0, Math.min(1, o.difficulty ?? 0.4));
@@ -270,15 +281,18 @@ void pxWidth;
 
 // ---------------------------------------------------------------- what kind of moment a gather is
 /** a resource node's QTE (by its kind / animation); null: a quick pick, no QTE */
-export function gatherQte(kind: string, anim: string): (QteOpts & { fail: string }) | null {
-  if (anim === 'dig') return { kind: 'hold', label: 'EASE IT OUT...', difficulty: 0.45, fail: pickOne(['It snapped off. The rest is still down there.', 'Too hard! Mush. Gently next time.']) };
+export function gatherQte(kind: string, anim: string, item?: string): (QteOpts & { fail: string }) | null {
+  if (anim === 'dig') return { kind: 'hold', label: 'EASE IT OUT...', difficulty: 0.45, closeup: { scene: 'dig', buried: 'root', item }, fail: pickOne(['It snapped off. The rest is still down there.', 'Too hard! Mush. Gently next time.']) };
   if (kind === 'flax' || anim === 'pull') return { kind: 'mash', label: 'PULL!', difficulty: 0.4, fail: pickOne(['Ugh. It won’t budge.', 'Flax: one. Mori: nil.']) };
   if (anim === 'jar' || anim === 'net') return { kind: 'ring', label: 'CATCH!', difficulty: 0.5, count: 1, fail: pickOne(['It got away!', 'Missed! It’s laughing at me. Insects can’t laugh. It’s laughing.']) };
   return null;
 }
 /** a find you collect (sites10 points): its QTE by what it is */
-export function findQte(kind: string, itemKind: string): (QteOpts & { fail: string }) | null {
-  if (kind === 'fossil' || kind === 'artifact') return { kind: 'seq', label: 'BRUSH IT FREE', difficulty: 0.5, fail: 'Careful... I nearly cracked it. Slowly.' };
+export function findQte(kind: string, itemKind: string, item?: string): (QteOpts & { fail: string }) | null {
+  if (kind === 'fossil' || kind === 'artifact') {
+    const buried = kind === 'artifact' ? 'find' : item === 'fos_ammonite' ? 'ammonite' : item === 'fos_vertebra' || item === 'fos_tooth' || !item ? 'fossil' : 'find';
+    return { kind: 'seq', label: 'BRUSH IT FREE', difficulty: 0.5, closeup: { scene: 'dig', buried, item }, fail: 'Careful... I nearly cracked it. Slowly.' };
+  }
   if (itemKind === 'insect' || itemKind === 'animal' || itemKind === 'shell') return { kind: 'ring', label: 'CATCH!', difficulty: 0.45, fail: 'It got away!' };
   if (itemKind === 'plant' || itemKind === 'fungus' || kind === 'plant' || kind === 'sample') return { kind: 'hold', label: 'EASE IT OUT...', difficulty: 0.4, fail: 'Torn. I’ll find a better one.' };
   if (itemKind === 'material') return { kind: 'mash', label: 'PULL!', difficulty: 0.35, fail: 'Stuck fast.' };

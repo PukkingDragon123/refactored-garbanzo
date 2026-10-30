@@ -259,7 +259,7 @@ export abstract class TripRun {
     f.player.facing = pt.x >= f.player.x ? 1 : -1;
     // V12: collecting is a short QTE (brush a fossil free, ease a plant out, catch a critter)
     const Q = await import('../v12/qte');
-    const q = Q.findQte(pt.kind, item.kind);
+    const q = Q.findQte(pt.kind, item.kind, tk.item);
     if (q) {
       const res = await Q.qte({ ...q, f, x: pt.x, y: (pt.y ?? this.groundAt(pt.x)) - 40, pose: 'kneel' });
       if (!res.ok) { floatNotice(q.fail, 2200); return; }

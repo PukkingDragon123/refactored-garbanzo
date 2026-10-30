@@ -121,7 +121,7 @@ export class Closeup {
   constructor(readonly scene: SetScene, readonly o: OpenOpts = {}) {
     this.root = document.createElement('div');
     this.root.className = 'v12-closeup';
-    this.root.style.cssText = 'position:fixed;inset:0;z-index:900;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;cursor:crosshair;';
+    this.root.style.cssText = 'position:fixed;inset:0;z-index:900;pointer-events:auto;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;cursor:crosshair;';
     this.cv = this.root.appendChild(document.createElement('canvas'));
     this.cv.style.cssText = 'position:absolute;image-rendering:pixelated;image-rendering:crisp-edges;';
     this.g = this.cv.getContext('2d')!;

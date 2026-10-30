@@ -177,7 +177,7 @@ export abstract class WorldScene implements Scene {
     // V12: digging, pulling and catching are short QTEs once the day loop runs; a quick pick stays quick
     const v12 = !!game.save.flags['v4:day1'] || !!game.save.flags['v10'];
     const Q = v12 ? await import('../v12/qte') : null;
-    const q = Q?.gatherQte(n.kind, def.anim) ?? null;
+    const q = Q?.gatherQte(n.kind, def.anim, gives[0]?.[0]) ?? null;
     if (Q && q) {
       audio.play(def.sfx as 'rustle', { vol: 0.35 });
       const res = await Q.qte({ ...q, f: this as never, x: n.x, y: n.y - 40, pose: anim });
