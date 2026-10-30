@@ -99,6 +99,7 @@ const ACT: Record<TrailKind, HungerActivity> = { path: 'walk', climb: 'climb', s
 const placeName = (loc: string) => (isIsland(location(loc)) ? 'the beach' : location(loc)?.name ?? loc);
 const hoursText = (h: number) => (h < 1 ? `${Math.round(h * 60)} min` : h === 1 ? '1 hour' : `${h} hours`);
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+const pick = (a: string[]) => a[Math.floor(Math.random() * a.length)];
 const other = (s: 'a' | 'b') => (s === 'a' ? 'b' : 'a');
 
 // ---------------------------------------------------------------- depth from camp
@@ -505,7 +506,8 @@ function arrive(S: SceneTrails, loc: string) {
       findLocation(L.id);
       const k = 'v12:been:' + L.id, first = !game.save.flags[k];
       game.save.flags[k] = true;
-      floatNotice(first ? `${L.name}${L.sub ? ` · ${L.sub}` : ''}: somewhere new!` : `${L.name}${L.sub ? ` · ${L.sub}` : ''}`, 3200);
+      // (the HUD floats the place's name in the sky; a first visit gets Mori's own word on it)
+      if (first) void floatText({ text: pick(['Somewhere new. Okay. Breathe. Look at EVERYTHING.', 'Nobody’s ever written this place down. Until now.', 'Whoa. Notebook. Camera. Go.']), style: 'happy', ms: 2800 });
     } else floatNotice('Back on the beach. Camp is west along the sand.', 3000);
   })();
 }
