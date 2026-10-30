@@ -1,12 +1,8 @@
-// V10 expedition body: energy, backpack weight and the blackout.
-//
-// Energy (0..maxEnergy) lives in the 'energy' save bucket. It drains only on expeditions (never at camp
-// or aboard the ship): a trickle standing still, more walking, wading and working, a lot sprinting and
-// climbing, most of all swimming, all multiplied by the pack's encumbrance and fx10.energyMult(). A
-// heavy pack also slows Mori down (Player.loadK), and far over capacity he can't sprint. Food from the
-// backpack restores it (see forage10.ts); unidentified forage can make him ill (ailments below). It
-// refills at the start of each day. When it hits 0 on an expedition the blackout fires once (the
-// camp module plays the carry-home; without one a simple fallback keeps the game going).
+// V10 expedition body, V12 edition: no stamina, no sprint, no exhaustion. What is left: the backpack's
+// weight (a pack over capacity slows Mori a little), ailments from bad forage, and the old energy API
+// mapped onto V12 hunger (src/game/v12/hunger.ts): energy() is how full he is, restore() is eating,
+// spend() makes him a little hungrier. The blackout listeners stay (the loop module fires them when
+// Mori starves out on the trail or is still out after dark: Aroha carries him home).
 //
 // Other modules only call the exported functions; the scenes call tickBody() once per frame.
 
@@ -16,6 +12,8 @@ import type { ItemKind } from '../items';
 import { bucket } from './store';
 import { fx10 } from './skills10';
 import { audio } from '../../core/audio';
+import { hunger, feed, addHunger, tickHunger, tooHungryForPhotos } from '../v12/hunger';
+import type { HungerActivity } from '../v12/hunger';
 import type * as ExpMod from './expedition';
 import type * as DayMod from './day';
 import type * as GearMod from './campgear';
@@ -63,9 +61,6 @@ void import('./regions').then(m => { regMod = m; });
 function S(): BodyState { return bucket<BodyState>('energy', () => ({ e: 100, day: '', out: false, ail: [] })); }
 function clamp(v: number, a = 0, b = 1) { return v < a ? a : v > b ? b : v; }
 function dayKey() { return dayMod ? `${dayMod.dayNumber()}:${game.save.day}` : ''; }
-/** lowest low-energy warning already barked (reset by refill) */
-var warned = 0; // eslint-disable-line no-var
-
 /** a new day since the last refill? refill (the day module can also call refill() itself) */
 function sync(b: BodyState) {
   const k = dayKey();
@@ -74,72 +69,61 @@ function sync(b: BodyState) {
   else b.day = k;
 }
 
-// ---------------------------------------------------------------- energy
+// ---------------------------------------------------------------- energy (V12: it's the stomach now)
+// There is no stamina any more. The old energy API stays for the modules that call it, mapped onto
+// V12 hunger (src/game/v12/hunger.ts): "energy" reads as how full Mori is (100 = just ate, 0 =
+// starving), restore() is eating, and spend() makes him a little hungrier (hard work, a long climb, a
+// fright). Nothing here ever knocks him out: hunger's own starving does (loop.ts).
 
-export function maxEnergy(): number { return 100 + fx10.maxEnergyBonus(); }
+export function maxEnergy(): number { return 100; }
 
-/** current energy 0..maxEnergy() */
+/** how full Mori is, 0..100 (V12: 100 x (1 - hunger)) */
 export function energy(): number {
-  const b = S();
-  sync(b);
-  return clamp(b.e, 0, maxEnergy());
+  sync(S());
+  return Math.round((1 - hunger()) * 1000) / 10;
 }
 
-/** energy as a fraction of the maximum */
+/** fullness as a fraction */
 export function energyFrac() { return energy() / maxEnergy(); }
 
 type SpendFn = (n: number, why: string) => void;
 /** listeners live on hoisted functions so modules in an import cycle can register while this one loads */
 function spendFns(): SpendFn[] { const f = spendFns as unknown as { l?: SpendFn[] }; return (f.l ??= []); }
-/** called on every spend (HUD flashes, tests); returns an unsubscribe */
+/** called on every spend (tests); returns an unsubscribe */
 export function onSpend(fn: SpendFn): () => void {
   spendFns().push(fn);
   return () => { const l = spendFns(), i = l.indexOf(fn); if (i >= 0) l.splice(i, 1); };
 }
 
-/** spend raw energy (poison, hazards...); reaching 0 on an expedition fires the blackout once (away
- *  from an expedition it never drops below 5: camp is safe) */
+/** V12: what an old energy cost becomes in hunger (food trouble counts in full, effort a little) */
+const SPEND_K: Record<string, number> = { poison: 1, stomach: 1 };
+
+/** an old energy cost: a little hunger (poison and a bad stomach: a lot). Never a blackout. */
 export function spend(n: number, why = ''): void {
   if (!(n > 0)) return;
-  const b = S();
-  sync(b);
-  const cur = Math.min(maxEnergy(), b.e);
-  const exp = onExpedition();
-  b.e = Math.max(exp ? 0 : Math.min(cur, 5), cur - n);
+  addHunger((n / 100) * (SPEND_K[why] ?? 0.2), why);
   for (const f of spendFns()) f(n, why);
-  if (b.e <= 0 && !b.out && exp) {
-    b.out = true;
-    game.persist();
-    fireBlackout();
-  }
 }
 
-/** spend energy for physical effort (a cliff, a river crossing...): scaled by Field Skills
- *  (fx10.energyMult), the pack's weight and the route's difficulty */
-export function effort(n: number, why = ''): void {
-  spend(n * fx10.energyMult() * (gearMod?.gearFx.energyMult() ?? 1) * loadCostK() * routeK(), why);
-}
+/** physical effort (a cliff, a river crossing...): a little hunger */
+export function effort(n: number, why = ''): void { spend(n, why); }
 
+/** eating: food "energy" becomes fullness (V12 hunger.feed) */
 export function restore(n: number): void {
   if (!(n > 0)) return;
-  const b = S();
-  sync(b);
-  b.e = Math.min(maxEnergy(), b.e + n);
-  if (b.e > 0) b.out = false;
+  feed(n / 100);
 }
 
-/** refill at the start of each day (sleep): full energy, ailments slept off */
+/** a new day (sleep): ailments slept off (the loop module sets the morning's hunger) */
 export function refill(): void {
   const b = S();
-  b.e = maxEnergy();
   b.out = false;
   b.ail = [];
   b.day = dayKey() || b.day;
-  warned = 0;
 }
 
-/** has the blackout fired (and energy not been restored since)? */
-export function blackedOut() { return S().out; }
+/** V12: never (kept for callers) */
+export function blackedOut() { return false; }
 
 // ---------------------------------------------------------------- weight
 
@@ -252,7 +236,7 @@ async function fallbackBlackout() {
   try {
     if (sc) { sc.cutscene = true; sc.cam?.raise?.(false); }
     if (p) { p.vx = 0; p.poseOverride = 'lie'; }
-    game.ui.bubbles.bark(p?.id ?? 'mori', '...everything’s... going grey...', { expr: 'tired' } as never);
+    void import('../../ui/v12/float').then(m => m.floatText({ text: '...everything’s... going... grey...', style: 'whisper', ms: 1600 }));
     await new Promise(r => setTimeout(r, 1400));
     game.r.post.fadeColor = [0, 0, 0];
     await game.fadeTo(1, 0.7);
@@ -264,7 +248,7 @@ async function fallbackBlackout() {
       if (p) p.poseOverride = null;
       if (sc) sc.cutscene = false;
       await game.fadeTo(0, 0.8);
-      game.ui.toast('You blacked out from exhaustion and came to a while later, aching all over. <b>Eat something</b> or head back to camp.', 'BLACKOUT', 'coral', 5600);
+      void import('../../ui/v12/float').then(m => m.floatNotice('...ugh. I passed out. I really need to eat something.', 4200));
     }
   } finally {
     fallbackBusy = false;
@@ -302,24 +286,22 @@ export interface FieldLike {
   site?: SiteLike;
 }
 
-/** energy per second for each activity (before skills and the load) */
-const COST = { idle: 0.035, walk: 0.19, work: 0.16, sprint: 0.6, hang: 0.25, climb: 0.8, swim: 1.0, jump: 0.5, uphill: 0.012 };
 /** quick-eat hotkey */
 export const EAT_KEY = 'KeyH';
 
 let lastP: Player | null = null;
-let lastX = 0, lastY = 0, wasGround = true;
+let lastX = 0, lastY = 0;
 let overWarned = false;
-let breathT = 0, persistT = 30;
-let heartOn = false, caOn = false;
+let persistT = 30;
+let caOn = false;
 let pending: { text: string; expr?: string; emote?: string; t: number } | null = null;
 let activity = 'idle';
-/** the activity tickBody saw last frame ('idle' | 'walk' | 'sprint' | 'climb' | 'swim' | 'work'...) */
+/** the activity tickBody saw last frame ('idle' | 'walk' | 'climb' | 'swim' | 'work' | 'walk+wade') */
 export const currentActivity = () => activity;
 
-/** low-energy level for warnings: 0 above 25% .. 1 at 0 */
+/** V12: how hungry, for the old low-energy readers: 0 until "too hungry", 1 starving */
 export function lowness(): number {
-  return clamp((0.25 - energyFrac()) / 0.25);
+  return clamp((hunger() - 0.8) / 0.2);
 }
 
 function bark(s: FieldLike, text: string, expr?: string, emote?: string) {
@@ -327,68 +309,56 @@ function bark(s: FieldLike, text: string, expr?: string, emote?: string) {
   game.ui.bubbles.bark(s.player.id, text, { expr, emote } as never);
 }
 
-const LOW_LINES: [number, string, string, string?][] = [
-  [0.5, 'Getting peckish. I should eat something soon.', 'thinking'],
-  [0.25, 'I’m running on fumes. Eat something, or head back to camp.', 'tired', 'sweat'],
-  [0.1, 'Legs... like jelly. If I don’t eat or turn back now, I’m going to drop.', 'tired', 'sweat'],
-];
 const STOMACH_MID = ['Urgh... my stomach is staging a protest.', 'Note to self: analyse it BEFORE eating it.', 'Gurgle. That was my stomach. It hates me.'];
 const DIZZY_MID = ['Whoa... the trees are doing a little dance.', 'Is the ground... breathing? Grounds don’t breathe.', 'Okay. Walking in a straight line is harder than it looks.'];
 
 /**
- * Once per frame from an expedition scene's update (after the camera): energy drain from what the
- * player is doing, the load on his speed, ailments, low-energy warnings, the quick-eat key.
+ * Once per frame from every field scene's update (after the camera): V12 hunger rises with what the
+ * player is doing (no stamina, no sprint), a too-heavy pack slows him a little, ailments from bad
+ * forage run their course, and the quick-eat key works.
  */
 export function tickBody(dt: number, s: FieldLike) {
   const p = s.player;
   if (!p) return;
   const b = S();
   sync(b);
-  if (p !== lastP) { lastP = p; lastX = p.x; lastY = p.y; wasGround = p.onGround; warned = 0; overWarned = false; }
+  if (p !== lastP) { lastP = p; lastX = p.x; lastY = p.y; overWarned = false; }
   const exp = onExpedition();
   const enc = encumbrance();
-  const fr = energyFrac();
-  // ---- the load on his legs (and exhaustion)
-  if (exp) {
-    p.loadK = loadSpeedK(enc) * (fr < 0.1 ? 0.85 : 1) * (b.out ? 0.5 : 1) * (p.running ? fx10.sprintSpeed() : 1);
-    p.noSprint = tooHeavyToRun(enc) || energy() < 3 || b.out;
-  } else { p.loadK = 1; p.noSprint = false; }
+  // ---- the load on his legs (a heavy pack: a little slower; never a sprint, never exhaustion)
+  p.loadK = exp ? loadSpeedK(enc) : 1;
+  p.noSprint = true;
+  p.running = false;
   // ---- quick-eat
   if (!s.cutscene && !game.ui.blocking && game.input.keyHit(EAT_KEY)) void import('./forage10').then(m => m.quickEat());
-  // ---- drain
-  const live = exp && !s.cutscene && !game.ui.blocking && !game.ui.bubbles.active && dt > 0;
+  // ---- hunger: what he's doing
+  const live = !s.cutscene && !game.ui.blocking && !game.ui.bubbles.active && dt > 0;
   const ddt = Math.max(dt, 1e-4);
-  const vx = Math.abs(p.x - lastX) / ddt, vy = Math.abs(p.y - lastY) / ddt, up = Math.max(0, lastY - p.y);
-  if (live) {
-    let rate = COST.idle;
-    activity = 'idle';
-    const gf = gearMod?.gearFx;
-    if (p.underwater || p.anim === 'swim') { rate = COST.swim * fx10.swimMult() * (gf?.swimEnergyMult() ?? 1) * (vx + vy > 50 ? 1.2 : 0.8); activity = 'swim'; }
-    else if (p.state === 'climb') { rate = (vy > 4 ? COST.climb : COST.hang) * fx10.climbMult() * (gf?.climbEnergyMult() ?? 1); activity = 'climb'; }
-    else if (p.state === 'work') { rate = COST.work; activity = 'work'; }
-    else if (p.onGround && vx > 8 && vx < 600) {
-      if (p.running && vx > 80 * p.speedK) { rate = COST.sprint * fx10.sprintMult(); activity = 'sprint'; }
-      else { rate = COST.walk; activity = 'walk'; }
-      if (p.ground === 'water' || p.wadeK < 0.95) { rate *= 1.7; activity += '+wade'; }
-    }
-    let cost = rate * dt;
-    if (p.onGround && p.state === 'normal' && up > 0 && up < 30) cost += up * COST.uphill;
-    if (wasGround && !p.onGround && p.vy < -80 && p.state === 'normal') cost += COST.jump;
-    const walkish = activity === 'walk' || activity.startsWith('sprint') || activity.startsWith('walk');
-    spend(cost * fx10.energyMult() * (walkish ? gf?.energyMult() ?? 1 : 1) * ((s as { lampOn?: boolean }).lampOn ? gf?.nightEnergyMult() ?? 1 : 1) * loadCostK(enc) * routeK(), activity);
+  const vx = Math.abs(p.x - lastX) / ddt, vy = Math.abs(p.y - lastY) / ddt;
+  let act: HungerActivity = 'idle';
+  activity = 'idle';
+  if (p.underwater || p.anim === 'swim') { act = 'swim'; activity = 'swim'; }
+  else if (p.state === 'climb') { act = vy > 4 ? 'climb' : 'idle'; activity = 'climb'; }
+  else if (p.state === 'work') { act = 'work'; activity = 'work'; }
+  else if (p.onGround && vx > 8 && vx < 600) {
+    act = 'walk'; activity = 'walk';
+    if (p.ground === 'water' || p.wadeK < 0.95) { act = 'wade'; activity = 'walk+wade'; }
   }
-  lastX = p.x; lastY = p.y; wasGround = p.onGround;
+  if (!exp && act === 'idle') act = 'rest';
+  tickHunger(dt, { act, live, out: exp });
+  lastX = p.x; lastY = p.y;
   // ---- ailments (they run at camp too: a stomach ache doesn't care where you are)
   if (dt > 0 && !s.cutscene) updateAilments(dt, s);
-  applyDizzy(s, exp);
-  // ---- warnings
-  if (exp && live) warnings(dt, s, enc);
-  else stopWarnings();
+  applyDizzy(s);
+  if (exp && live && !overWarned && enc > 1.02) { overWarned = true; bark(s, 'Oof. This pack weighs a ton. I should drop something.', 'tired', 'sweat'); }
+  if (overWarned && enc < 0.9) overWarned = false;
   if (pending) {
     pending.t -= dt;
     if (pending.t <= 0) pending = null;
     else if (!game.ui.bubbles.active && !game.ui.blocking && !s.cutscene) { const q = pending; pending = null; bark(s, q.text, q.expr, q.emote); }
   }
+  // ---- a too-hungry face
+  if (tooHungryForPhotos() && live) { const body = p.body; if (body.expr === body.baseExpr) body.setExpr('tired', 0.6); }
   // ---- now and then the bucket rides along with a save
   if (exp && (persistT -= dt) <= 0) { persistT = 30; game.persist(); }
 }
@@ -424,8 +394,7 @@ function updateAilments(dt: number, s: FieldLike) {
 }
 
 /** dizziness: wobbly controls (Player.dizzy), a swaying view and a little colour fringing */
-function applyDizzy(s: FieldLike, exp: boolean) {
-  void exp;
+function applyDizzy(s: FieldLike) {
   const k = dizziness();
   const p = s.player;
   p.dizzy = s.cutscene ? 0 : k;
@@ -441,42 +410,11 @@ function applyDizzy(s: FieldLike, exp: boolean) {
   } else if (caOn) { post.ca = base; caOn = false; }
 }
 
-function warnings(dt: number, s: FieldLike, enc: number) {
-  const fr = energyFrac();
-  const p = s.player;
-  // barks at 50 / 25 / 10 %; re-armed once he's eaten back above them
-  for (let i = 0; i < LOW_LINES.length; i++) {
-    const [at, line, expr, emote] = LOW_LINES[i];
-    if (fr <= at && warned <= i) { warned = i + 1; bark(s, line, expr, emote); break; }
-  }
-  if (warned > 0 && fr > LOW_LINES[warned - 1][0] + 0.08) warned--;
-  if (!overWarned && enc > 1.02) { overWarned = true; bark(s, 'Oof. This pack weighs a ton. I should drop something.', 'tired', 'sweat'); }
-  if (overWarned && enc < 0.9) overWarned = false;
-  // heavy breathing and a heartbeat when worn out; a tired face
-  const low = lowness();
-  if (low > 0) {
-    breathT -= dt;
-    if (breathT <= 0) {
-      breathT = 3.4 - low * 1.6 + Math.random() * 0.6;
-      audio.play('breath', { vol: 0.25 + low * 0.55, pitch: 0.95 + Math.random() * 0.1 });
-    }
-    const body = p.body;
-    if (body.expr === body.baseExpr || body.expr === 'tired') body.setExpr('tired', 0.6);
-  }
-  const heart = fr < 0.12 ? 0.25 + (0.12 - fr) / 0.12 * 0.55 : 0;
-  if (heart > 0) { audio.setHeartbeat(heart); heartOn = true; }
-  else if (heartOn) { audio.setHeartbeat(0); heartOn = false; }
-}
-
-function stopWarnings() {
-  if (heartOn) { audio.setHeartbeat(0); heartOn = false; }
-}
-
 /** a scene with tickBody is going away: undo what the body touched */
 export function bodyExit(s?: FieldLike) {
-  stopWarnings();
+  audio.setHeartbeat(0);
   if (caOn) { game.r.post.ca = 0; caOn = false; }
-  if (s?.player) { s.player.dizzy = 0; s.player.loadK = 1; s.player.noSprint = false; }
+  if (s?.player) { s.player.dizzy = 0; s.player.loadK = 1; }
   lastP = null;
   pending = null;
 }

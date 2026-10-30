@@ -10,7 +10,7 @@
 //  boat      the tender grinds onto the sand; Mori jumps down into the shallows and wades up the beach
 //
 // Then the evening at camp: a nudge to upload the day's photos, and the day's "return" event.
-// collapse() is the moment energy runs out, wherever Mori is.
+// collapse() is the moment Mori gives out (V12: starving, or Aroha finds him out after dark).
 
 import { game } from '../game';
 import { audio } from '../../core/audio';
@@ -21,7 +21,7 @@ import { groundY } from '../../art/island4/layout';
 import { rand } from '../../core/math';
 import { wait } from '../v4/islestory';
 import { ITEMS } from '../items';
-import { restore } from './energy';
+import { feed } from '../v12/hunger';
 import { dayState, dayNumber, setPhase, addBond, _hooks } from './day';
 import type { ArriveHow } from './day';
 import { activeCamp, campReady } from './campday';
@@ -169,6 +169,9 @@ function stragglers(): string[] {
 async function arriveBlackout(cd: CampDay) {
   const st = cd.st, s = cd.s, p = cd.p, c = s.chunk, d = cd.d, a = s.aroha;
   const first = !d.blackouts;
+  // V12: why Aroha had to fetch him (loop.ts): 1 = still out after dark, 2 = fainted from hunger
+  const dark = game.save.vars['v12:fetch'] === 1;
+  delete game.save.vars['v12:fetch'];
   d.blackouts++;
   s.clock.set(3.12); s.clock.target = 3.4; s.clock.rate = 0.002;
   cd.dress(false);
@@ -295,18 +298,21 @@ async function arriveBlackout(cd: CampDay) {
     { who: 'aroha', text: 'I carried you. From the ridge. On my back. Like a sack of kūmara.', expr: 'grumpy' },
     { who: 'mori', text: '...All of it?', expr: 'surprised' },
     { who: 'aroha', text: 'Every. Single. Step. You owe me. Forever.', expr: 'angry' },
-    { who: 'joshu', text: 'You ran yourself dry, son. Eat when you’re hungry, rest when you’re tired, turn back BEFORE you’re empty.', expr: 'serious' },
+    dark
+      ? { who: 'joshu', text: 'Out past dark, son. We were worried sick. Back BEFORE the sun goes, every time.', expr: 'serious' }
+      : { who: 'joshu', text: 'You forgot to eat, didn’t you? Pack a lunch, eat when your stomach growls, and turn back before you’re empty.', expr: 'serious' },
     { who: 'jenna', text: '*biting her lip, staring very hard at the fire*', expr: 'laugh', close: false },
     { who: 'mori', text: 'Jenna? Why are you making that face?', expr: 'thinking' },
     { who: 'jenna', text: 'What face? This is my face. My normal, regular, nothing-happened face.', expr: 'smug' },
   ]);
   if (lost.length) await st.say([{ who: 'aroha', text: 'And your bag stayed on the ridge. I could carry you or your rocks. I picked you. Mostly.', expr: 'teasing' }]);
-  if (first) await st.say([{ who: 'aroha', text: 'Next time you feel your legs going, you turn round. Promise me.', expr: 'serious', choices: ['I promise.', 'I promise. Thank you, Aroha.'] }]);
+  if (first) await st.say([{ who: 'aroha', text: dark ? 'When the sun touches the sea, you turn for home. Promise me.' : 'When your stomach starts shouting, you eat, or you turn round. Promise me.', expr: 'serious', choices: ['I promise.', 'I promise. Thank you, Aroha.'] }]);
   addBond('aroha', 5);
-  restore(25);
+  feed(0.5);
   st.pose(null);
-  if (lost.length) game.ui.toast(`Left behind on the ridge: ${lost.join(', ')}.`, 'BLACKOUT', 'coral', 6000);
-  game.ui.toast('Your energy ran out. Eat, rest and turn back before you’re empty. (Something is on your face.)', 'BLACKOUT', 'coral', 6000);
+  const { floatNotice } = await import('../../ui/v12/float');
+  if (lost.length) floatNotice(`Left behind on the trail: ${lost.join(', ')}.`, 5000);
+  setTimeout(() => floatNotice(dark ? 'Out after dark: Aroha came looking. Head home before sunset. (Something is on your face.)' : 'Fainted from hunger: eat on the trail. (Something is on your face.)', 5200), lost.length ? 2200 : 0);
   game.persist();
 }
 

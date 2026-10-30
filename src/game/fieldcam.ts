@@ -29,6 +29,7 @@ const holdSecs10 = (): number => Math.max(0.6, fx10.captureHold() - (gearMod?.ge
 const devSecs10 = (): number => fx10.developTime() * (gearMod?.gearFx.developMult() ?? 1);
 import { audio } from '../core/audio';
 import { clamp, damp } from '../core/math';
+import { tooHungryForPhotos } from './v12/hunger';
 import { pxIcon, setHtml } from '../ui/pxicons';
 
 /** A foreground prop that can block the shot. The mask is the sprite's own pixels. */
@@ -132,6 +133,8 @@ export class FieldCamera {
 
   raise(on: boolean) {
     if (this.active === on) return;
+    // V12: too hungry to hold a camera steady: he lowers it again until he has eaten
+    if (on && this.v10 && tooHungryForPhotos()) { this.refuseHungry(); return; }
     this.active = on;
     this.hold = 0;
     this.holdOn = null;
@@ -144,6 +147,28 @@ export class FieldCamera {
     const r = game.r;
     if (!on) { r.post.dof = false; r.post.ca = 0; }
   }
+  private refuseT = 0;
+  /** V12 hunger: Mori starts to lift the camera, his stomach growls, and down it goes again */
+  private refuseHungry() {
+    const now = performance.now();
+    if (now - this.refuseT < 2500) return;
+    this.refuseT = now;
+    const p = this.host.player as unknown as { body?: { play?(a: string, then?: string): Promise<void>; setExpr(e: string, d?: number): void; showEmote(k: string, d?: number): void } } | undefined;
+    const b = p?.body;
+    if (b) {
+      b.setExpr('sad', 2);
+      void import('../art/v7/anim-contract').then(m => {
+        if (m.hasAnim7('cameraLower') && b.play) b.play('cameraLower').catch(() => {});
+        else b.showEmote('sweat', 1.6);
+      }).catch(() => {});
+    }
+    audio.play('growl' as never, { vol: 0.55, pitch: 0.95 });
+    void import('../ui/v12/float').then(m => m.floatText({
+      text: ['Can’t focus... I need food.', 'My hands are shaking. Food first, photos later.', 'All I can see through the lens is lunch.'][Math.floor(Math.random() * 3)],
+      style: 'sad', ms: 2600,
+    }));
+  }
+
   /** call when lowering the camera so the view stops swaying */
   settle(st: Stage) {
     st.cam.ox = 0;
@@ -167,6 +192,7 @@ export class FieldCamera {
     this.breathless = Math.max(0, this.breathless - dt * 0.18);
     // the print keeps developing with the camera lowered (it shows in the corner meanwhile)
     this.updateDevelop(dt);
+    if (this.active && this.v10 && tooHungryForPhotos()) { this.raise(false); this.refuseHungry(); }
     if (!this.active) {
       this.breath = Math.min(1, this.breath + dt * 0.3);
       this.vf.classList.toggle('pocket', this.develop < 1 || this.els.lcd.classList.contains('on'));
@@ -412,6 +438,7 @@ export class FieldCamera {
   }
 
   shoot(animals: Animal[]) {
+    if (this.v10 && tooHungryForPhotos()) { this.raise(false); this.refuseHungry(); return; }
     if (this.shots <= 0) { audio.play('wrong'); game.ui.toast('Memory card full. Head back to camp and review your shots.', 'CAMERA', 'coral'); this.cooldown = 0.6; return; }
     this.shots--;
     this.shotsTaken++;
