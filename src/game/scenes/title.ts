@@ -53,7 +53,7 @@ const PIVOT = PIVOT5;
 const MORI_X = 494, CHUNK_X = 515;
 
 type ShotName = 'intro' | 'menu' | 'settings' | 'credits' | 'depart';
-interface Shot { x: number; y: number; zoom: number; focus: number | null; dof: number }
+interface Shot { x: number; y: number; zoom: number; focus: number | null; dof: number; /** the name's screen offset (px, + = down) */ sky: number }
 
 // Mori in the wind at the bow: his idle, with the hair streaming and the jacket hem trailing in the
 // gusts (the clip registers once, the first time the title runs)
@@ -285,20 +285,21 @@ export class TitleScene implements Scene {
     const VW = game.r.VW, VH = game.r.VH;
     const deck = this.deck();
     switch (n) {
-      case 'intro': return { x: MORI_X + 14, y: deck - 44, zoom: 2.2, focus: 1, dof: 1.1 };
+      case 'intro': return { x: MORI_X + 14, y: deck - 44, zoom: 2.2, focus: 1, dof: 1.1, sky: -10 };
       // wide: the bow a little right of centre, the open sea ahead for the words, the sky for the name
-      case 'menu': return { x: MORI_X + 30 - VW * 0.1, y: deck - VH * 0.15, zoom: 1, focus: null, dof: 0 };
+      case 'menu': { const z = 1.1; return { x: MORI_X + (30 - VW * 0.1) / z, y: deck - (VH * 0.16) / z, zoom: z, focus: null, dof: 0, sky: 0 }; }
       // down on the deck beside them: they sit on the left third, the settings float on the right
-      case 'settings': { const z = 1.6; return { x: MORI_X + (VW * 0.16) / z, y: deck - (VH * 0.2) / z, zoom: z, focus: 1, dof: 0.9 }; }
+      case 'settings': { const z = 1.6; return { x: MORI_X + (VW * 0.16) / z, y: deck - (VH * 0.2) / z, zoom: z, focus: 1, dof: 0.9, sky: -78 }; }
       // up into the sky
-      case 'credits': return { x: MORI_X - VW * 0.12, y: deck - VH * 0.15 - 150, zoom: 1, focus: null, dof: 0 };
+      case 'credits': return { x: MORI_X - VW * 0.12, y: deck - VH * 0.15 - 150, zoom: 1, focus: null, dof: 0, sky: 40 };
       // pushing on toward the island
-      case 'depart': return { x: MORI_X + 120, y: deck - VH * 0.12, zoom: 1.35, focus: 0.3, dof: 0.6 };
+      case 'depart': return { x: MORI_X + 120, y: deck - VH * 0.12, zoom: 1.35, focus: 0.3, dof: 0.6, sky: -50 };
     }
   }
   private go(n: ShotName, secs: number) {
     const c = this.st.cam;
-    this.shotFrom = { x: c.x, y: c.y, zoom: c.zoom, focus: this.shot(this.shotName).focus, dof: this.shot(this.shotName).dof };
+    const was = this.shot(this.shotName);
+    this.shotFrom = { x: c.x, y: c.y, zoom: c.zoom, focus: was.focus, dof: was.dof, sky: this.skyDY };
     this.shotName = n;
     this.shotT = 0;
     this.shotDur = Math.max(0.01, secs);
@@ -318,6 +319,7 @@ export class TitleScene implements Scene {
     c.y = from.y + (to.y - from.y) * e + sy;
     c.zoom = from.zoom * Math.pow(to.zoom / from.zoom, e) * zb;
     // the lens: on Mori close in, everything sharp wide
+    this.skyDY = from.sky + (to.sky - from.sky) * e;
     const dof = (from.dof ?? 0) + ((to.dof ?? 0) - (from.dof ?? 0)) * e;
     const focus = to.focus ?? from.focus;
     if (focus !== null && dof > 0.02) { cineState.focus = focus; cineState.dof = dof; } else cineState.focus = null;
@@ -326,11 +328,13 @@ export class TitleScene implements Scene {
   // ---------------------------------------------------------------- the name in the sky
 
   /** where the name hangs on screen (it rides a little parallax as the camera moves) */
+  private skyDY = -10;
   private titleXY(r: Renderer): [number, number] {
     const m = this.shot('menu');
     const v = r.view;
-    const x = r.VW / 2 - this.cloud.w / 2 + 8 - (v.x - m.x) * 0.08;
-    const y = Math.max(6, r.VH * 0.05) - (v.y - m.y) * 0.4 + (v.zoom - 1) * -30;
+    // a touch of parallax with the camera's drift, and each shot's own place for it
+    const x = r.VW / 2 - this.cloud.w / 2 + 8 - (v.x - m.x) * 0.04;
+    const y = Math.max(6, r.VH * 0.05) + this.skyDY;
     return [x, y];
   }
   private skyGlow!: Frame;

@@ -46,7 +46,7 @@ export interface FMItem {
   fmt?: (v: number | boolean) => string;
   /** a small handwritten line shown under the menu while this option has the focus */
   hint?: string | (() => string);
-  /** a permanent small handwritten line under the label */
+  /** a small handwritten note beside the label (Continue: the day) */
   sub?: string;
   tone?: 'danger' | 'quiet';
   /** text items: 'hand' (Mori's hand, small) or 'block' (caps, like the options) */
@@ -540,7 +540,6 @@ export class FloatMenu {
       else {
         h = 13 * gp;
         rw = (p.labelCol && row.item.kind && row.item.kind !== 'action' ? p.labelCol + 76 : row.w) * gp;
-        if (row.sub) h += 10 * hp;
       }
       row.h = h;
       y += h;
@@ -599,7 +598,8 @@ export class FloatMenu {
       const pk = row.pop >= 0 ? clamp01((t - row.pop) / 0.28) : 1;
       const hop = pk < 1 ? Math.sin(pk * Math.PI) * 2.5 : 0;
       this.drawWord(row.glyphs, row.face, st, ox, y, gp, p, row.i, hop, t, focused);
-      if (row.sub) this.drawWord(row.sub, 'hand', 'hint', ox + 2 * this.gp, y + 12 * this.gp, this.hp, p, row.i, 0, t, false);
+      // a small handwritten note beside the label, on its baseline
+      if (row.sub) this.drawWord(row.sub, 'hand', 'hint', ox + (row.w + 6) * this.gp, y + 9 * this.gp - 9 * this.hp, this.hp, p, row.i, 0, t, focused, row.i * 0.07 + 0.2);
       // value widgets
       row.parts = [];
       if (kind === 'slider' || kind === 'choice' || kind === 'toggle') this.drawValue(row, p, ox + p.labelCol * this.gp, y, focused, t);
