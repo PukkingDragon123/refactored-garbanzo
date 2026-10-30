@@ -29,9 +29,10 @@ import type { C } from '../../art/color';
 import { bayer } from '../../core/math';
 import { audio } from '../../core/audio';
 import { pushKeys, reduced } from '../laptop-kit';
-import { pxWord, wordOut, wordAnim, wordLayer, wordScale } from './pxwords';
-import type { Word } from './pxwords';
-import { floatText } from './float';
+import { hudScale } from '../v11/hudpx';
+import { pxMeasure } from '../pxfont';
+import type { FloatHandle, FloatStyle } from './float';
+import { floatLine } from './float';
 import { tooHungryForPhotos } from '../../game/v12/hunger';
 
 type Spot = 'camera' | 'backpack' | 'note';
@@ -186,9 +187,7 @@ class Inspection {
   private p: PlayerLike;
   private st: Stage;
   private layer: HTMLElement;
-  private words: HTMLElement;
-  private k = 2;
-  private labels = new Map<Spot, Word>();
+  private labels = new Map<Spot, FloatHandle>();
   private hover: Spot | null = null;
   private busy = false;
   private done = false;
@@ -212,9 +211,6 @@ class Inspection {
     this.layer = document.createElement('div');
     this.layer.className = 'insp12';
     this.layer.style.cssText = 'position:absolute;inset:0;z-index:34;pointer-events:auto;touch-action:none;cursor:default';
-    this.k = wordScale();
-    this.words = wordLayer(this.k);
-    this.layer.appendChild(this.words);
   }
 
   /** which things he has on him */
@@ -332,42 +328,43 @@ class Inspection {
     // Mori keeps real time while the world crawls (his turn, his breathing, the anims he plays)
     const slow = game.slowmo;
     if (slow < 0.999 && rdt > 0) { try { this.p.body.update(rdt * (1 - slow)); } catch { /* */ } }
-    this.placeLabels();
+
   }
 
-  // ------------------------------------------------------------ the words
+  // ------------------------------------------------------------ the words (floating text, src/ui/v12/float.ts)
+  /** float (or re-float in a new style) the word for one thing on him */
+  private label(s: Spot, style: FloatStyle) {
+    this.labels.get(s)?.dismiss();
+    const h = floatLine({ text: LABEL[s], at: () => this.labelAnchor(s), hold: true, kind: 'line', style, voice: 0, talk: false, speed: style === 'say' ? 1.6 : 3, color: '#ffc86a', prio: 1 });
+    this.labels.set(s, h);
+  }
   private showLabels() {
-    for (const s of this.spots()) {
-      if (this.labels.has(s) || this.hide[s]) continue;
-      const w = pxWord(LABEL[s], { font: 'bold', color: '#fff0c0', outline: '#1a0e06', delay: ORDER.indexOf(s) * 120, anim: this.hover === s ? 'wave' : 'pop' });
-      this.words.appendChild(w);
-      this.labels.set(s, w);
-    }
-    this.placeLabels();
+    for (const s of this.spots()) if (!this.labels.has(s) && !this.hide[s]) this.label(s, this.hover === s ? 'happy' : 'say');
   }
   private hideLabels() {
-    for (const w of this.labels.values()) void wordOut(w);
+    for (const h of this.labels.values()) h.dismiss();
     this.labels.clear();
   }
   private toCss(x: number, y: number): [number, number] {
     const r = game.r, p = this.p.body.p ?? 1;
     return game.ui.artToCss(r.projectX(x, p), r.projectY(y, p), r.VW, r.VH) as [number, number];
   }
-  /** each word sits out to the side of its thing (the pack's word on his back side, the others in front) */
-  private placeLabels() {
+  /** a word's size on screen (css px; the floating text draws at the HUD's whole-number scale) */
+  private labelSize(s: Spot): [number, number] {
+    const S = hudScale();
+    return [(pxMeasure(LABEL[s], 'body') + 6) * S, 12 * S];
+  }
+  /** each word sits out to the side of its thing (the pack's word on his back side, the others in
+   *  front), level with it; the floating text hangs a word above its anchor, so the anchor is the
+   *  middle of the word's bottom edge */
+  private labelAnchor(s: Spot): [number, number] | null {
+    if (this.done) return null;
     const f = this.p.body.facing || 1;
-    for (const [s, w] of this.labels) {
-      const [x, y] = this.where(s);
-      const side = s === 'backpack' ? -f : f;
-      const [cx, cy] = this.toCss(x + side * (s === 'backpack' ? 10 : 8), y + (s === 'note' ? -5 : 0));
-      const k = this.k;
-      let lx = side > 0 ? cx / k : cx / k - w.wW;
-      let ly = cy / k - w.wH / 2;
-      lx = Math.max(2, Math.min(window.innerWidth / k - w.wW - 2, lx));
-      ly = Math.max(2, Math.min(window.innerHeight / k - w.wH - 2, ly));
-      w.style.left = Math.round(lx) + 'px';
-      w.style.top = Math.round(ly) + 'px';
-    }
+    const [x, y] = this.where(s);
+    const side = s === 'backpack' ? -f : f;
+    const [cx, cy] = this.toCss(x + side * (s === 'backpack' ? 10 : 8), y + (s === 'note' ? 2 : 0));
+    const [w, h] = this.labelSize(s);
+    return [Math.round(cx + side * w / 2), Math.round(cy + h / 2)];
   }
 
   // ------------------------------------------------------------ input
@@ -382,10 +379,11 @@ class Inspection {
       const d = Math.hypot(cx - sx, cy - sy);
       if (d < rad && d < bd) { bd = d; best = s; }
       // the word itself
-      const w = this.labels.get(s);
-      if (w) {
-        const r = w.getBoundingClientRect();
-        if (cx >= r.left - 6 && cx <= r.right + 6 && cy >= r.top - 6 && cy <= r.bottom + 6) { best = s; bd = 0; }
+      const a = this.labels.has(s) ? this.labelAnchor(s) : null;
+      if (a) {
+        const [w, h] = this.labelSize(s), R = game.ui.root.getBoundingClientRect();
+        const lx = R.left + a[0] - w / 2, ly = R.top + a[1] - h * 1.4;
+        if (cx >= lx - 6 && cx <= lx + w + 6 && cy >= ly - 6 && cy <= ly + h * 1.4 + 6) { best = s; bd = 0; }
       }
     }
     return best;
@@ -398,9 +396,11 @@ class Inspection {
   }
   private setHover(s: Spot | null) {
     if (s === this.hover) return;
-    if (this.hover) { const w = this.labels.get(this.hover); if (w) wordAnim(w, 'pop'); }
+    const was = this.hover;
     this.hover = s;
-    if (s) { const w = this.labels.get(s); if (w) wordAnim(w, 'wave'); audio.play('ui', { vol: 0.12, pitch: 1.6 }); }
+    // the word under the pointer waves (a happy bounce), the one it left settles back
+    if (was && this.labels.has(was)) this.label(was, 'say');
+    if (s && this.labels.has(s)) { this.label(s, 'happy'); audio.play('ui', { vol: 0.12, pitch: 1.6 }); }
     this.layer.style.cursor = s ? 'pointer' : 'default';
     // he shows off the thing under the pointer (the camera lifted off his chest, thumbs in the pack
     // straps, a pat on the pocket)
@@ -471,7 +471,7 @@ class Inspection {
     if (!cam) {
       audio.play('wrong', { vol: 0.3 });
       this.shake('camera');
-      void floatText({ actor: p.body, text: 'Nothing to photograph in here.', style: 'think', ms: 1800 });
+      floatLine({ actor: p.body, text: 'Nothing to photograph in here.', style: 'think', ms: 1800, kind: 'line' });
       return;
     }
     if (this.camWasUp) {
@@ -488,7 +488,7 @@ class Inspection {
       p.body.react(hasAnim7('growl') ? 'growl' : 'shake');
       p.body.setExpr('sad', 2);
       this.shake('camera');
-      void floatText({ actor: p.body, text: 'Too hungry to hold it steady... food first.', style: 'sad', ms: 2400 });
+      floatLine({ actor: p.body, text: 'Too hungry to hold it steady... food first.', style: 'sad', ms: 2400, kind: 'line' });
       return;
     }
     // equip: he raises it and the photo mode comes up
@@ -535,11 +535,11 @@ class Inspection {
     this.showLabels();
   }
 
+  /** a refused pick: its word trembles, then settles */
   private shake(s: Spot) {
-    const w = this.labels.get(s);
-    if (!w) return;
-    wordAnim(w, 'shake');
-    setTimeout(() => { if (w.isConnected) wordAnim(w, this.hover === s ? 'wave' : 'pop'); }, 600);
+    if (!this.labels.has(s)) return;
+    this.label(s, 'scared');
+    setTimeout(() => { if (!this.done && this.labels.has(s)) this.label(s, this.hover === s ? 'happy' : 'say'); }, 900);
   }
 
   /** ease back out (abort: the scene went away, just tidy up) */
