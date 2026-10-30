@@ -124,12 +124,17 @@ export function drawWatch(ctx: CanvasRenderingContext2D, x: number, y: number, s
       // engraving: a ring of punched dots and a little scroll every so often
       const an = Math.atan2(dy, dx);
       if (S >= 24 && Math.abs(d - (Rd + th * 0.5)) < 0.6 && Math.round(((an + Math.PI) / (Math.PI * 2)) * 48) % 2 === 0) c = BR[1];
+      // big cases: a scroll engraved round the outer half of the band, a bright bead on the inner edge
+      if (S >= 40 && d > Rd + th * 0.62 && d < R - 1.4 && Math.sin(an * 34 + (d - Rd) * 2.4) > 0.72) c = BR[1];
+      if (S >= 40 && d < Rd + 1.1 && (Math.round(an * 30) & 1)) c = BR[4];
       px(X, Y, c);
       continue;
     }
     // the dial: cream, a shadow under the bezel on the lower right, a few warm specks
     const edge = d > Rd - 1.2 && dx + dy > -R * 0.2;
-    px(X, Y, edge ? DIAL[2] : (dx + dy) / Rd > 0.8 && dith(X, Y) < 0.5 ? DIAL[1] : DIAL[0]);
+    // big dials: a guilloche of fine dithered rings round the centre
+    const guil = S >= 40 && d < Rd * 0.42 && d > 2.5 && Math.round(d) % 2 === 0 && dith(X, Y) < 0.45;
+    px(X, Y, edge ? DIAL[2] : guil || ((dx + dy) / Rd > 0.8 && dith(X, Y) < 0.5) ? DIAL[1] : DIAL[0]);
   }
   // inner bezel line
   for (let a = 0; a < 120; a++) { const an = (a / 120) * Math.PI * 2; px(Math.round(cx - 0.5 + Math.cos(an) * (Rd + 0.2)), Math.round(cy - 0.5 + Math.sin(an) * (Rd + 0.2)), BR[1]); }
@@ -158,7 +163,7 @@ export function drawWatch(ctx: CanvasRenderingContext2D, x: number, y: number, s
   }
   if (S >= 34) {
     const all = S >= 76;
-    const nums = all ? [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] : [12, 3, 6, 9];
+    const nums = (all ? [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] : [12, 3, 6, 9]).filter(n => n !== 6 || S < 44);
     for (const n of nums) {
       const a = ang((n % 12) / 12), r = Rd - Math.max(5, Math.round(S / 7)) - 1.5;
       const s = String(n), w = s.length * 4 - 1;
@@ -191,7 +196,14 @@ export function drawWatch(ctx: CanvasRenderingContext2D, x: number, y: number, s
   const hc = red ? RED : BLUE;
   hand(hF, Rd * 0.48, 2, hc);
   hand(mF, Rd * 0.72, S >= 28 ? 2 : 1, hc);
-  hand(sF, Rd * 0.86, 1, red ? [RED[1], RED[1]] : [BR[2], BR[2]], Math.max(1, Rd * 0.18));
+  if (S >= 44) {
+    // a sub-seconds dial at six o'clock: a sunk ring with ticks and its own little hand
+    const sr = Math.max(3, Math.round(Rd * 0.24)), scx = cx, scy = Math.round(cy + Rd * 0.5);
+    for (let a = 0; a < 48; a++) { const an = (a / 48) * Math.PI * 2; px(Math.round(scx - 0.5 + Math.cos(an) * sr), Math.round(scy - 0.5 + Math.sin(an) * sr), a % 12 === 0 ? INK : DIAL[2]); }
+    const sa = ang(sF);
+    for (let r = 0; r <= sr - 1; r += 0.5) px(Math.round(scx - 0.5 + Math.cos(sa) * r), Math.round(scy - 0.5 + Math.sin(sa) * r), red ? RED[1] : BLUE[0]);
+    px(scx - 1, scy - 1, INK);
+  } else hand(sF, Rd * 0.86, 1, red ? [RED[1], RED[1]] : [BR[2], BR[2]], Math.max(1, Rd * 0.18));
   rect(cx - 1, cy - 1, 2, 2, BR[4]);
   px(cx - 1, cy - 1, BR[5]);
   // ---- the domed glass: an arc of glint on the top-left, a spark that comes and goes

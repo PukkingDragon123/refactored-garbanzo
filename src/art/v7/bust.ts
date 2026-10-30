@@ -44,7 +44,7 @@ const R6 = (...h: string[]): Ramp6 => h.map(v => hex(v));
 const STRAP = R6('#1a0606', '#3e0e0c', '#5e1a14', '#7e2a1e', '#a03c28', '#c4583a');
 const STITCH = hex('#e8d4a8');
 /** the head is drawn a touch larger than life against the shoulders (a portrait, not a body sprite) */
-const HEAD_K = 1.14, HEAD_DROP = 1.3;
+const HEAD_K = 1.14, HEAD_DROP = 1.9;
 
 function rot(yaw: number, pitch = 0) {
   const ca = Math.cos(yaw), sa = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);

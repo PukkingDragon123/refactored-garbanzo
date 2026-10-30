@@ -39,7 +39,7 @@ export interface MedallionState {
 }
 
 /** the bust's resolution against the in-game sprite */
-export const BUST_K = 2.3;
+export const BUST_K = 2.45;
 /** layout (art px): the medallion's box, its centre and radii */
 export const MED = { W: 84, H: 96, cx: 41, cy: 42, R: 36, Rs: 30, RL: 39 };
 
@@ -208,7 +208,7 @@ export function paintMedallion(a: Art, x0: number, y0: number, st: MedallionStat
   const sky = paintSky(a, cx, cy, Rs, st.hour, st.t);
   // ---- the bust, clipped to the disc, tinted by the sky and rim-lit
   const b = renderBust7(st.id, { expr: st.expr, blink: st.blink, mouth: st.mouth, wind: st.wind }, BUST_K);
-  const bx = cx - b.ox + 1, by = cy - Rs + 3 - topRow(b) - st.breath + 1;
+  const bx = cx - b.ox + 1, by = cy - Rs + 2 - topRow(b) - st.breath + 1;
   const h = ((st.hour % 24) + 24) % 24;
   const sunSide = sky.night ? (h > 12 ? -1 : 1) : h < 12 ? -1 : 1;
   const rimC = sky.night ? col('#9ab0ff') : sky.dusk ? col('#ffb070') : mixC(sky.top, col('#ffffff'), 0.55);
