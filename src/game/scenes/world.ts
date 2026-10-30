@@ -174,17 +174,32 @@ export abstract class WorldScene implements Scene {
     }
     this.player.facing = n.x >= this.player.x ? 1 : -1;
     const anim = def.anim === 'pick' ? 'kneel' : def.anim;
-    let sfxT = 0, fxT = 0;
-    const dur = def.time * perks.collectTime();
-    const ok = await this.player.doWork(anim, dur, k => {
-      n.progress = k;
-      sfxT -= 1 / 60;
-      fxT -= 1 / 60;
-      if (sfxT <= 0) { sfxT = 0.45; audio.play(def.sfx as 'rustle', { vol: 0.35, pitch: 0.9 + rand.next() * 0.25 }); }
-      if (fxT <= 0) { fxT = 0.18; this.collectFx(n, def.fx, 3); }
-    });
-    n.progress = -1;
-    if (!ok) return;
+    // V12: digging, pulling and catching are short QTEs once the day loop runs; a quick pick stays quick
+    const v12 = !!game.save.flags['v4:day1'] || !!game.save.flags['v10'];
+    const Q = v12 ? await import('../v12/qte') : null;
+    const q = Q?.gatherQte(n.kind, def.anim) ?? null;
+    if (Q && q) {
+      audio.play(def.sfx as 'rustle', { vol: 0.35 });
+      const res = await Q.qte({ ...q, f: this as never, x: n.x, y: n.y - 40, pose: anim });
+      if (!res.ok) {
+        this.collectFx(n, def.fx, 4);
+        void import('../../ui/v12/float').then(m => m.floatText({ text: q.fail, style: 'sad', ms: 2200 }));
+        return;
+      }
+      if (res.perfect && gives.length) gives[0][1]++;
+    } else {
+      let sfxT = 0, fxT = 0;
+      const dur = def.time * perks.collectTime();
+      const ok = await this.player.doWork(anim, dur, k => {
+        n.progress = k;
+        sfxT -= 1 / 60;
+        fxT -= 1 / 60;
+        if (sfxT <= 0) { sfxT = 0.45; audio.play(def.sfx as 'rustle', { vol: 0.35, pitch: 0.9 + rand.next() * 0.25 }); }
+        if (fxT <= 0) { fxT = 0.18; this.collectFx(n, def.fx, 3); }
+      });
+      n.progress = -1;
+      if (!ok) return;
+    }
     // bonus find
     if (perks.bonusItem() > 0 && gives.length && rand.next() < perks.bonusItem()) gives[0][1]++;
     const [cx, cy] = this.css(n.x, n.y - 16);

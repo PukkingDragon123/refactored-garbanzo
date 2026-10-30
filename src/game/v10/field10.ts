@@ -1,10 +1,12 @@
 // V10 expedition runtime: what every expedition scene gets on top of the V2 FieldScene. Exploring
-// physically draws the map (every second the stretch around Mori is revealed), the ways deeper wait
-// at the far ends (and a few side routes), finds can be photographed, looked at or collected, deep
-// water is swum (energy), hazards and hard climbs cost energy, the camera draws photographed animals
-// onto the map, events happen (events.ts), and M / the map button opens the Region Map.
-// On the home island (the camp scene) it tracks the shore stretches, the ways inland from the beach,
-// the trailhead signpost at camp and the short trips along the shore.
+// physically draws the map (every second the stretch around Mori is revealed), finds can be
+// photographed, looked at or collected (V12: with a short QTE), deep water is swum, hazards hurt,
+// the camera notes photographed animals, and events happen (events.ts).
+// V12: no fast travel. The ways on are walkable trails with signposted crossroads
+// (src/game/v12/trails.ts installs them in every scene); the Region Map's travel, the map button / M
+// key, the trailhead map picker and the "head back to camp" exits are hidden (MAP_TRAVEL below).
+// On the home island (the camp scene) it tracks the shore stretches; the loop module (v12/loop.ts)
+// starts a trip when Mori walks out of camp and ends it when he walks back in.
 
 import { game } from '../game';
 import type { FieldScene } from '../scenes/field';
@@ -35,9 +37,14 @@ import { bucket } from './store';
 import type { Point10, Site10, Swim10, Hazard10 } from '../sites10/kit';
 import { markerSprite, sprite, SWIM_DEPTH } from '../sites10/kit';
 import { POINTS10 } from './finds';
+import { installTrails } from '../v12/trails';
+import { attachLoop } from '../v12/loop';
+import { floatNotice } from '../../ui/v12/float';
 
 /** the V10 day loop has started (the V4 story's Day 1 is over), or a debug flag */
 export const v10Active = () => !!game.save.flags['v4:day1'] || !!game.save.flags['v10'];
+/** V12: the Region Map's travel (the map button, M, checkpoint jumps) is hidden, not deleted */
+export const MAP_TRAVEL = false;
 
 const V2_LOC: Record<string, string> = { fernwood: 'fernwood', canopy: 'canopy', falls: 'falls', mangrove: 'mangrove', coast: 'coast' };
 /** which location a field scene plays */
@@ -70,6 +77,8 @@ export let run: TripRun | null = null;
 export async function onFieldEnter(f: FieldScene) {
   installTranslator(translatorOn);
   run = null;
+  // V12: the day loop (setting off, dusk on the radio, the carry-home, rare animals) in every scene
+  attachLoop(f);
   if (isIslandScene(f)) { const ir = new IslandRun(f); run = ir; ir.start(); fireLocEnter(f, 'island', ir); return; }
   const loc = locOf(f);
   if (!loc || !location(loc)) { fireLocEnter(f, loc, null); return; }
@@ -125,7 +134,7 @@ export abstract class TripRun {
   protected update(dt: number) {
     this.t += dt;
     const inp = game.input;
-    if (!this.f.cutscene && !game.ui.blocking && inp.keyHit('KeyM') && this.mapAllowed()) void this.openMap();
+    if (MAP_TRAVEL && !this.f.cutscene && !game.ui.blocking && inp.keyHit('KeyM') && this.mapAllowed()) void this.openMap();
     for (const tk of this.tickers) tk(dt);
   }
   protected mapAllowed() { return true; }
@@ -144,6 +153,7 @@ export abstract class TripRun {
   }
 
   protected addMapButton() {
+    if (!MAP_TRAVEL) return;
     if (!document.getElementById('v10-css')) document.head.appendChild(Object.assign(el('style', '', BTN_CSS), { id: 'v10-css' }));
     const b = el('div', 'v10-mapb interactive', `<i><img src="${mapIconURL()}" alt=""></i><span class="k">M</span><b class="t"></b>`);
     b.title = 'Region Map (M)';
@@ -190,7 +200,8 @@ export abstract class TripRun {
       ph.notes.push(`Photographed: ${pt.name}`);
       if (discover({ id: pt.id, kind: pt.kind, name: pt.name, loc: this.locAtX(x), x: Math.round(x), note: pt.note }, true)) drew.push(pt.name);
     }
-    if (drew.length) {
+    // (V12: the map is hidden; the discoveries are still recorded quietly for the notebook)
+    if (drew.length && MAP_TRAVEL) {
       audio.play('pageTurn', { vol: 0.35 });
       game.ui.toast(`Map: sketched ${drew.slice(0, 3).map(d => `<b>${d}</b>`).join(', ')}${drew.length > 3 ? ` +${drew.length - 3}` : ''}.`, 'MAP', 'teal', 2800);
     }
@@ -246,8 +257,16 @@ export abstract class TripRun {
     const n = tk.n ?? 1;
     if (!fits(tk.item, n)) { audio.play('wrong', { vol: 0.5 }); f.bark('mori', 'No room in the pack. Something has to go.', { expr: 'worried' }); return; }
     f.player.facing = pt.x >= f.player.x ? 1 : -1;
-    const ok = await f.player.doWork('kneel', tk.time ?? 2, () => {});
-    if (!ok) return;
+    // V12: collecting is a short QTE (brush a fossil free, ease a plant out, catch a critter)
+    const Q = await import('../v12/qte');
+    const q = Q.findQte(pt.kind, item.kind);
+    if (q) {
+      const res = await Q.qte({ ...q, f, x: pt.x, y: (pt.y ?? this.groundAt(pt.x)) - 40, pose: 'kneel' });
+      if (!res.ok) { floatNotice(q.fail, 2200); return; }
+    } else {
+      const ok = await f.player.doWork('kneel', tk.time ?? 2, () => {});
+      if (!ok) return;
+    }
     const got = add(tk.item, n);
     if (got <= 0) return;
     T().taken[pt.id] = game.save.day;
@@ -257,7 +276,7 @@ export abstract class TripRun {
     const kind: DiscoveryKind = pt.kind;
     discover({ id: tk.item, kind, name: item.name, loc: this.locAtX(pt.x), x: Math.round(pt.x), note: pt.note, icon: tk.item }, true);
     if (pt.id !== tk.item) discover({ id: pt.id, kind, name: pt.name, loc: this.locAtX(pt.x), x: Math.round(pt.x), note: pt.note }, true);
-    game.ui.toast(`Collected <b>${item.name}</b>${item.weight ? ` (${item.weight} kg)` : ''}. Noted on the map.`, 'FIND', 'teal', 3200);
+    floatNotice(`Collected: ${item.name}`, 2600);
     const lines = [];
     if (tk.line) lines.push({ who: 'mori', text: tk.line, expr: 'happy' });
     if (tk.aroha && this.guide) lines.push(this.aroha(tk.aroha, 'serious'));
@@ -334,11 +353,14 @@ class SiteRun extends TripRun {
     const f = this.f, L = this.L;
     const pend = arrivedAt(L.id);
     if (pend) markRoute(pend.from, pend.to);
-    if (findLocation(L.id)) {
-      setTimeout(() => { if (game.scene === f) { f.hud?.banner('NEW PLACE ON THE MAP', `${L.name}${L.sub ? ' · ' + L.sub : ''} is now a fast-travel point`); audio.play('discover'); } }, 3800);
+    if (findLocation(L.id)) setTimeout(() => { if (game.scene === f) audio.play('discover'); }, 3800);
+    // V12: the ways on are walkable trails with signposted crossroads (the old route markers and the
+    // "head back to camp" exit are only used where no trail leads)
+    if (v10Active()) installTrails(f, L.id);
+    else {
+      for (const to of LOCATIONS) for (const r of to.routes ?? []) if (r.from === L.id) this.addRoute(to, r);
+      this.fixHomeExit();
     }
-    for (const to of LOCATIONS) for (const r of to.routes ?? []) if (r.from === L.id) this.addRoute(to, r);
-    this.fixHomeExit();
     // finds
     const ex = (f.site as unknown as Site10).v10;
     for (const pt of [...(POINTS10[L.id] ?? []), ...(ex?.points ?? [])]) this.addPoint(pt, this.pts);
@@ -492,7 +514,6 @@ class SiteRun extends TripRun {
       spend(h.dmg, h.kind);
       const say = h.kind === 'scald' ? 'HOT! Hot hot hot!' : h.kind === 'spores' ? '*cough* *cough* ...it tastes like mushrooms.' : 'OW! That rock nearly took my head off!';
       f.bark('mori', say, { expr: 'scared' });
-      game.ui.toast(`−${h.dmg} energy`, h.kind === 'scald' ? 'BURN' : h.kind === 'spores' ? 'SPORES' : 'ROCKFALL', 'coral', 1800);
     }
   }
 }
@@ -516,7 +537,8 @@ class IslandRun extends TripRun {
     for (const L of LOCATIONS) if (isIsland(L)) for (const pt of POINTS10[L.id] ?? []) this.addPoint(pt, this.pts);
     this.hookCamera(() => this.pts);
     if (v10Active()) {
-      for (const to of LOCATIONS) for (const r of to.routes ?? []) { const from = location(r.from); if (from && isIsland(from)) this.addRoute(to, r); }
+      // V12: the crossroads on the beach (the stream mouth, the cave, the bush track) and camp's signpost
+      installTrails(f, 'island');
       if (TRAILHEAD.on) this.addTrailhead();
       this.addMapButton();
     }
@@ -560,7 +582,7 @@ class IslandRun extends TripRun {
     const z = islandLocAt(p.x);
     if (z !== this.zone) { this.zone = z; this.zoneT = 1.2; }
     // a stretch of shore counts as found once Mori has really been there for a moment
-    if (this.zoneT <= 0 && !f.cutscene && !game.ui.blocking && !isFound(z) && findLocation(z)) game.ui.toast(`Map: <b>${location(z)?.name}</b> added.`, 'MAP', 'teal', 2400);
+    if (this.zoneT <= 0 && !f.cutscene && !game.ui.blocking && !isFound(z) && findLocation(z)) floatNotice(`${location(z)?.name}`, 2400);
     if (!v10Active() || !ISLAND_TRIPS.auto) return;
     // short trips along the shore: out past the palms or the wreck is an expedition; back into camp ends it
     const cur = currentExpedition();
@@ -581,7 +603,7 @@ class IslandRun extends TripRun {
 export const TRAILHEAD = { x: 2420, on: false };
 /** walking out of camp along the shore starts a short trip (the camp module ends it when Mori walks
  *  back into camp; `end` lets this module end it too) */
-export const ISLAND_TRIPS = { auto: true, end: true };
+export const ISLAND_TRIPS = { auto: false, end: false };
 
 /** leave camp for a location picked on the map (fast travel along the known trail); 'loc@x' is a
  *  checkpoint on the way (arrive in loc's scene at world x) */

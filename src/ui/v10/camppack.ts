@@ -1,8 +1,8 @@
-// Packing for the day (the trail sign at camp). V11: this is the Backpack itself, opened beside the
-// camp stash chest (src/ui/v11/backpack.ts mode 'prep'): move things between the pack and the chest,
-// take Joshu's packed lunch off the chest lid, hear the crew's last word, and "Set off" at the trail
-// sign opens the region map (src/ui/v10/regionmap.ts, the map module's) or, without it, Mori heads out
-// along the home island on foot.
+// Packing for the day (V12: at the camp stash chest in the morning). V11: this is the Backpack itself,
+// opened beside the chest (src/ui/v11/backpack.ts mode 'prep'): move things between the pack and the
+// chest, take Joshu's packed lunch off the chest lid, hear the crew's last word. "Set off" no longer
+// opens the region map (V12: no fast travel; MAP_PICKER keeps the old picker hidden): Mori just gets
+// his send-off and walks out of camp along the beach to the crossroads.
 
 import { game } from '../../game/game';
 import { uiIconURL } from '../../art/itemicons';
@@ -14,9 +14,12 @@ import { currentExpedition } from '../../game/v10/expedition';
 import type { CampDay } from '../../game/v10/campday';
 import { rand } from '../../core/math';
 import { lunchFor } from '../../game/v11/cooking';
+import { floatText, floatNotice } from '../v12/float';
 
 /** the map module's region map, if it is in the build (no hard dependency: it may not exist yet) */
 const MAP = import.meta.glob('./regionmap.ts');
+/** V12: the old trail-sign map picker (fast travel) is hidden, not deleted */
+const MAP_PICKER = false;
 type MapMod = { openRegionMap?: (...a: unknown[]) => unknown };
 
 const TIPS: [string, string][] = [
@@ -49,7 +52,7 @@ export async function openPackPrep(cd: CampDay) {
 
 /** off on the day's expedition: the region map, or (without it) the home island on foot */
 async function setOff(cd: CampDay) {
-  const load = MAP['./regionmap.ts'];
+  const load = MAP_PICKER ? MAP['./regionmap.ts'] : undefined;
   let m: MapMod | null = null;
   if (load) { try { m = (await load()) as MapMod; } catch (e) { console.warn('[camppack] region map', e); } }
   if (m?.openRegionMap) {
@@ -68,9 +71,10 @@ async function setOff(cd: CampDay) {
     }
     return;
   }
-  // no map in this build: explore the home island on foot
-  leaveCamp('home');
-  cd.s.bark('joshu', rand.pick(['Off you go! Back before dark!', 'Fair winds, Doc!', 'Mind the seal!']), { expr: 'happy' });
-  game.ui.toast('Off you go: east past the palm grove and the stream, or west past the wreck. Come back into camp when you’re done for the day.', 'EXPEDITION', 'teal', 6000);
+  // V12: no map: Mori walks out of camp himself (the loop module starts the day's trip as he leaves)
+  void leaveCamp;
+  const j = cd.s.actor('joshu');
+  void floatText({ actor: j, text: rand.pick(['Off you go! Back before dark!', 'Fair winds, Doc! Mind the light.', 'Eat your lunch when your stomach says so, not when you remember!']), style: 'happy', ms: 2600 });
+  setTimeout(() => floatNotice('The signpost at the edge of camp: east to the stream crossroads, west to the wreck.', 4200), 1800);
   void uiIconURL;
 }

@@ -179,15 +179,25 @@ const giverOf = (g: ReqGiver): Giver => (g === 'agency' ? 'story' : g);
 const today = () => dayNumber();
 const phase = () => dayState().phase;
 const photosToday = () => game.save.raw.filter(p => p.day === today()).length;
+/** V12: today's goal (the loop module picks it at breakfast: a story step, the gear for the next shut
+ *  trail, somewhere new, a rare animal...); without the loop module the step reads as a general one */
+let dayGoal: (() => { text: string; done: () => boolean } | null) | null = null;
+export function setDayGoal(fn: typeof dayGoal) { dayGoal = fn; }
+const home = () => phase() === 'evening' || phase() === 'night';
 export const DAY_QUEST: QuestDef = {
   id: 'v10day', title: 'A Day at Camp', giver: 'story', main: true,
-  desc: 'Breakfast, plans, an expedition, home before dark, research, dinner and stories round the fire.',
+  desc: 'Breakfast and today’s goal, out along the trails, home before dark, develop the photos, dinner, sleep.',
   steps: [
-    { text: 'Have breakfast at the fire', done: () => dayState().meals.breakfast === today() || phase() !== 'morning', hint: 'Joshu cooks at the fire pit in the middle of camp. A hot breakfast makes the day’s walking easier.' },
-    { text: 'Pack your bag and set off', done: () => phase() !== 'morning', hint: 'The trail sign at the east end of camp. The camp board has requests; Jenna’s bench upgrades your gear.' },
-    { text: 'Make it back to camp', done: () => phase() === 'evening' || phase() === 'night', hint: 'Mind your energy: run it down to nothing and somebody has to carry you home.' },
-    { text: 'Upload today’s photos', done: () => (phase() === 'evening' || phase() === 'night') && photosToday() === 0, hint: 'The laptop on your research table (or press L).' },
-    { text: 'Dinner and stories at the fire', done: () => dayState().meals.dinner === today(), hint: 'Everyone gathers at the fire pit when the sun goes down.' },
+    { text: 'Have breakfast at the fire', done: () => dayState().meals.breakfast === today() || phase() !== 'morning', hint: 'Joshu cooks at the fire pit in the middle of camp. A full belly keeps your stomach quiet till lunch, and the crew have a job for you.' },
+    { text: 'Walk out of camp along a trail', done: () => phase() !== 'morning', hint: 'Take Joshu’s lunch from the stash chest first. The signpost at the east end of camp: the stream crossroads leads inland.' },
+    {
+      get text() { const g = dayGoal?.(); return g ? `Today: ${g.text}` : 'Explore, photograph and collect'; },
+      done: () => { const g = dayGoal?.(); return home() || (!!g && g.done()); },
+      hint: 'Eat when your stomach growls: too hungry and you can’t hold the camera steady.',
+    },
+    { text: 'Walk back into camp before dark', done: home, hint: 'Jenna radios when the sun gets low. Still out after dark and Aroha comes looking for you.' },
+    { text: 'Develop today’s photos at the laptop', done: () => home() && photosToday() === 0, hint: 'The laptop on your research table: upload the day’s photos to research what you found.' },
+    { text: 'Cook and eat dinner at the fire', done: () => dayState().meals.dinner === today(), hint: 'Everyone gathers at the fire pit when the sun goes down.' },
     { text: 'Get some sleep in your tent', done: () => false, hint: 'Your tarp tent, next to the big blue one.' },
   ],
 };

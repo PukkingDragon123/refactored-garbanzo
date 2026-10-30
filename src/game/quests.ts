@@ -296,12 +296,22 @@ export function setQuestHook(h: typeof onQuestEvent) {
 }
 
 let checkT = 0;
+/** V12: the step each active quest was on last check (a step finishing ticks it in Mori's notebook) */
+const stepSeen = new Map<string, number>();
+/** (lazy: the notebook module may well import this one) */
+function markQuestDone(id: string, step?: number) { void import('../ui/v12/notebook').then(m => m.markQuestDone(id, step)).catch(() => {}); }
 /** Call every frame; checks active quests a few times per second and completes finished ones. */
 export function updateQuests(dt: number) {
   checkT -= dt;
   if (checkT > 0) return;
   checkT = 0.25;
-  for (const q of activeQuests()) if (currentStepIndex(q) >= q.steps.length) completeQuest(q.id);
+  for (const q of activeQuests()) {
+    const i = currentStepIndex(q);
+    const was = stepSeen.get(q.id);
+    if (was !== undefined && i > was) for (let k = was; k < i; k++) markQuestDone(q.id, k);
+    stepSeen.set(q.id, i);
+    if (i >= q.steps.length) { completeQuest(q.id); markQuestDone(q.id); stepSeen.delete(q.id); }
+  }
 }
 
 /** Side quests an NPC can offer right now. */

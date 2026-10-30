@@ -3,11 +3,11 @@
 // Day 1 (the ship, the storm, the island, making camp) ends on the "Day 1 Complete" card; from then
 // on every day runs the same loop at the beach camp:
 //
-//   morning   Mori wakes in his tent (camp.ts / campscenes.ts), breakfast at the fire, talk to the
-//             crew, take requests at the camp board, upgrade gear at Jenna's bench, fish off the rocks,
-//             pack at the trail sign and set off (the region map)
-//   out       on an expedition (the map module's scenes), or walking the home island
-//   evening   back at camp (arriveAtCamp: on foot, by boat, or carried home after a blackout); upload
+//   morning   Mori wakes in his tent (camp.ts / campscenes.ts), breakfast at the fire (today's goal),
+//             talk to the crew, take requests at the camp board, upgrade gear at Jenna's bench, fish
+//             off the rocks, pack Joshu's lunch at the stash chest and walk out of camp (V12: loop.ts)
+//   out       walking the trails (V12: src/game/v12/trails.ts), or walking the home island
+//   evening   back at camp (arriveAtCamp: on foot, by boat, or carried home by Aroha); upload
 //             the day's photos, dinner and stories round the fire (the day's finds), a story event
 //   night     after dinner: the night talk, lights out, sleep in the tent -> the next morning
 //
@@ -17,6 +17,7 @@
 import { game } from '../game';
 import { bucket } from './store';
 import { onBlackout, refill } from './energy';
+import { setHunger } from '../v12/hunger';
 import { discoveries } from './regions';
 
 export type Phase = 'morning' | 'out' | 'evening' | 'night';
@@ -216,6 +217,8 @@ async function blackout() {
 /** start the next day: the day number, the energy refill, the dawn snapshot (the scene reloads after) */
 export async function startNextDay() {
   const s = game.save, d = dayState();
+  // V12: Mori wakes up a little hungry (properly hungry if he skipped dinner): breakfast matters
+  const ateDinner = d.meals.dinner === dayNumber();
   s.day = Math.max(2, dayNumber() + 1);
   if (!s.flags['v4:day1']) s.flags['v4:day1'] = true;
   d.phase = 'morning';
@@ -226,6 +229,7 @@ export async function startNextDay() {
   d.dawn = { research: Object.keys(s.research ?? {}).length, rp: s.totalRp, uploads: s.uploads.length, photos: s.vars['v10:photosTaken'] ?? 0, fish: s.vars['v4:fishCaught'] ?? 0, finds: 0 };
   try { d.dawn.finds = discoveries().length; } catch { /* no atlas yet */ }
   try { refill(); } catch (e) { console.warn('[day] refill', e); }
+  setHunger(ateDinner ? 0.3 : 0.55);
   for (const f of dayFns) try { f(s.day); } catch (e) { console.warn('[day] new day hook', e); }
   game.persist();
 }

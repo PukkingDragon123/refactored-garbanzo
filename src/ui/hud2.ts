@@ -12,7 +12,8 @@
 // It also keeps the keys it owned: J the notebook, G the field guide, L the field laptop.
 // The time of day is not shown here any more (the old sun-and-moon dial is gone): when a time or a
 // countdown has to be shown, it's the brass pocket watch (src/ui/v12/watch.ts, the loop module's).
-// TODO watch: nothing here draws a time; a scene that needs one opens the watch.
+// (the loop module opens the watch: setting off, at the dusk radio calls, reading a signpost, a late
+// refusal, every QTE time limit, and floatChoices({ watch: true }) for a timed answer)
 
 import { el } from './ui';
 import { game } from '../game/game';
