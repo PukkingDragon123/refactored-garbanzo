@@ -37,9 +37,11 @@ export interface HudOpts {
 
 type SceneLike = { player?: { x: number; y: number }; cutscene?: boolean; st?: { cam: { x: number; y: number; zoom: number } } } | null;
 
-/** the last place named in the sky (so a scene change back to the same place stays quiet) */
+/** the last place named in the sky (so a scene change back to the same place stays quiet), and when
+ *  each place was last named (walking back and forth over a boundary doesn't repeat it) */
 let lastPlace = '';
 let lastDay = -1;
+const namedAt = new Map<string, number>();
 
 export class Hud2 {
   /** an empty, never-shown element (kept for the V2 API) */
@@ -80,6 +82,9 @@ export class Hud2 {
     lastPlace = place;
     lastDay = day;
     if (!place) return;
+    const now = performance.now(), was = namedAt.get(place + '|' + day);
+    if (was !== undefined && now - was < 150000 && !newDay) return;
+    namedAt.set(place + '|' + day, now);
     void floatSky(place, '', newDay ? `Day ${day}` : '', 2400, { soft: true });
   }
   /** (the controls line is gone) */

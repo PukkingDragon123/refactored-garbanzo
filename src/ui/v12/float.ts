@@ -711,7 +711,7 @@ function placeAll(t: number, dt: number) {
     it.py = Math.max(top, Math.min(bot - it.H, Math.round(ny + it.off)));
     it.vis = true;
     // (the sky words are scenery: lines near the heads don't make way for them)
-    if (it.kind !== 'sky') placed.push({ x: it.px, y: it.py, w: it.W, h: it.H });
+    if (it.kind !== 'sky' && it.outAt < 0) placed.push({ x: it.px, y: it.py, w: it.W, h: it.H });
   }
 }
 
@@ -740,8 +740,9 @@ function motion(it: Item, q: Gl, t: number): Off {
       o.dy += age < 0.04 ? 2 : age < 0.08 ? 1 : age < 0.13 ? -1 : 0;
       break;
     case 'shout': {
-      if (age < 0.06) o.big = true;
-      o.dy += age < 0.06 ? -1 : 0;
+      // each letter punches up out of the line and slams down onto it
+      const k = it.look.k;
+      o.dy += age < 0.035 ? -3 * k : age < 0.07 ? -k : age < 0.11 ? k : 0;
       const since = t - it.t0;
       const loud = since < 0.9 || (it.typedAt < 0) || ((t * 0.8) % 1 < 0.1);
       if (loud) { o.dx += hash(i, f) < 0.33 ? -1 : hash(i, f) > 0.66 ? 1 : 0; o.dy += hash(i + 99, f) < 0.3 ? -1 : hash(i + 99, f) > 0.7 ? 1 : 0; }
@@ -759,8 +760,9 @@ function motion(it: Item, q: Gl, t: number): Off {
       break;
     }
     case 'happy':
-      o.dy -= Math.round(Math.max(0, Math.sin(t * 6 - i * 0.5)) * 2);
-      if (age < 0.1) o.dy -= 2;
+      // a light wave runs along the line (a pixel), each letter hops in
+      o.dy -= Math.sin(t * 5.5 - i * 0.45) > 0.55 ? 1 : 0;
+      if (age < 0.06) o.dy -= 2; else if (age < 0.11) o.dy -= 1;
       break;
     case 'laugh':
       o.dy -= Math.round(Math.abs(Math.sin(t * 9 - i * 0.7)) * 3);
@@ -841,9 +843,8 @@ function drawItem(it: Item, t: number) {
   const L = it.look;
   const [ddx, ddy] = drift(it, t);
   const bx = it.px + ddx, by = it.py + ddy;
-  const textW = Math.max(0, ...it.rowW);
   const inner = it.W - it.lead;
-  const rowOff = (row: number) => it.lead + (it.align === 'center' ? Math.floor((inner - it.rowW[row]) / 2) : 0) + (it.align === 'center' && textW < inner ? 0 : 0);
+  const rowOff = (row: number) => it.lead + (it.align === 'center' ? Math.floor((inner - it.rowW[row]) / 2) : 0);
   const ty = by + it.nameH + 1;
   // the name, small and in the speaker's colour
   if (it.name) {
@@ -852,18 +853,21 @@ function drawItem(it: Item, t: number) {
     for (const q of it.name) if (q.born < 0) q.born = it.t0;
     for (const pass of [0, 1] as const) drawGlyphs(it, it.name, nx, by + 1, NL, () => 0, t, pass, () => it.nameCol, false);
   }
+  // what leads the first row, right to left from the text: the radio, a pickup's icon, the keycap,
   // a notice's tag
-  if (it.tag) {
+  const x0 = bx + rowOff(0);
+  const radioW = it.style === 'radio' ? 12 : 0, iconW = it.icon ? it.icon.w + 2 : 0, keyW = it.keyLabel ? keySpr(it.keyLabel).w + 3 : 0;
+  const midY = ty + Math.round((FM[L.font][0] * L.k) / 2);
+  const gone = it.outAt >= 0 && t > it.outAt + 0.05;
+  if (it.tag && !gone) {
     const NL: Look = { ...L, font: 'tiny', k: 1, track: 1 };
     for (const q of it.tag) if (q.born < 0) q.born = it.t0;
-    const cap = FM[L.font][0] * L.k;
-    for (const pass of [0, 1] as const) drawGlyphs(it, it.tag, bx, ty + Math.round(cap / 2 - 2.5), NL, () => 0, t, pass, () => it.tagCol, false);
+    for (const pass of [0, 1] as const) drawGlyphs(it, it.tag, x0 - it.lead, midY - 3, NL, () => 0, t, pass, () => it.tagCol, false);
   }
-  // the radio, the keycap, a pickup's icon
-  if (it.style === 'radio' && (it.outAt < 0 || t < it.outAt + 0.1)) {
+  if (radioW && !gone) {
     const on = Math.floor(t * 2.5) % 2 === 0;
     const r = rowsSpr('radio' + (on ? 1 : 0), RADIO, { k: OUT, o: '#3a4a44', g: '#2f7a5e', d: '#173c2e', L: on ? '#ff5a3a' : '#5a1a10' });
-    const rx = bx + (it.align === 'center' ? Math.floor((inner - it.rowW[0]) / 2) : 0);
+    const rx = x0 - radioW;
     g!.drawImage(r.c, rx, ty - 5);
     // crackle: a couple of static pixels off the antenna
     if (!reduced) for (let s = 0; s < 3; s++) {
@@ -871,15 +875,15 @@ function drawItem(it: Item, t: number) {
       if (h1 < 0.45) { g!.fillStyle = h1 < 0.2 ? '#ffffff' : '#9dffd8'; g!.fillRect(rx + 2 + Math.floor(hash(s, Math.floor(t * 14)) * 6) - 2, ty - 7 - Math.floor(h1 * 8), 1, 1); }
     }
   }
-  if (it.keyLabel && !(it.outAt >= 0 && t > it.outAt + 0.05)) {
-    const kc = keySpr(it.keyLabel);
-    g!.drawImage(kc.c, bx + (it.align === 'center' ? Math.floor((inner - it.rowW[0]) / 2) : 0) - (it.icon ? it.icon.w + 2 : 0), ty + Math.round(FM[L.font][0] * L.k / 2 - kc.h / 2) - 1 + (Math.floor(t * 2.2) % 2 ? 0 : 0));
-  }
-  if (it.icon && !(it.outAt >= 0 && t > it.outAt + 0.05)) {
+  if (it.icon && !gone) {
     const ic = it.icon;
     const age = t - it.t0;
-    const pop = age < 0.06 ? -2 : age < 0.12 ? 1 : 0;
-    g!.drawImage(ic.c, bx + (it.align === 'center' ? Math.floor((inner - it.rowW[0]) / 2) : 0) - ic.w - 2 + (it.keyLabel ? 0 : 0), ty + Math.round(FM[L.font][0] * L.k / 2 - ic.h / 2) + pop);
+    const pop = reduced ? 0 : age < 0.06 ? -2 : age < 0.12 ? 1 : 0;
+    g!.drawImage(ic.c, x0 - radioW - iconW, midY - Math.round(ic.h / 2) + pop);
+  }
+  if (it.keyLabel && !gone) {
+    const kc = keySpr(it.keyLabel);
+    g!.drawImage(kc.c, x0 - radioW - iconW - keyW, midY - Math.round(kc.h / 2) - 1);
   }
   // the typing dots while a line is about to start
   if (!it.isTyped && it.shown < 1 && it.pre > 0 && it.kind === 'line') {
@@ -955,8 +959,10 @@ export function floatLine(o: FloatOpts & { kind?: 'line' | 'bark' | 'notice'; lo
   else if (typeof o.x === 'number' && typeof o.y === 'number') { const x = o.x, y = o.y; r = { anchor: () => worldToCss(x, y) }; }
   else r = { anchor: moriAnchor() };
   const kind = o.kind ?? (style === 'notice' ? 'notice' : o.hold ? 'line' : 'bark');
+  const aimed = !!o.at || (o.actor !== undefined && o.actor !== null) || typeof o.x === 'number';
   const it = make({
-    kind, style, text: o.text, anchor: r.anchor, lost: o.lost ?? (kind === 'bark' ? 'hide' : kind === 'notice' ? 'mori' : 'top'),
+    // (a bark over someone who walks off screen goes with them; one by Mori stays near where he is)
+    kind, style, text: o.text, anchor: r.anchor, lost: o.lost ?? (kind === 'notice' || !aimed ? 'mori' : kind === 'bark' ? 'hide' : 'top'),
     place: o.place, align: o.place === 'right' ? 'left' : 'center',
     speaker: o.color ?? r.color, name: o.name, voice: o.voice ?? (kind === 'notice' ? 0 : r.voice ?? 1), speed: o.speed,
     hold: o.hold, ttl: (o.ms ?? (kind === 'notice' ? 2600 : 2400 + o.text.length * 45)) / 1000,
