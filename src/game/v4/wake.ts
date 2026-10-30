@@ -22,6 +22,8 @@ import { drawTrycop, trycopRest, trycopCanvas, TrycopPose } from '../../art/v9/w
 import { clamp, damp, noise1, smoothstep } from '../../core/math';
 import { audio } from '../../core/audio';
 import { el } from '../../ui/ui';
+import { floatLine } from '../../ui/v12/float';
+import type { FloatHandle } from '../../ui/v12/float';
 
 const W = POV_W;
 /** the close crab's scale (1 = the in-world sprite) */
@@ -102,10 +104,18 @@ export class BeachWakeScene implements Scene {
     if (ff > 0) { game.fadeTo(0, 100); while (this.t < ff) this.update(1 / 30); }
   }
 
+  /** Mori's first thoughts float low over the view (V12 floating text): drowsy, then a shout */
+  private capLine: FloatHandle | null = null;
   private say(text: string) {
     if (!this.cap) return;
-    this.cap.textContent = text;
-    this.cap.style.opacity = text ? '1' : '0';
+    this.capLine?.dismiss();
+    this.capLine = null;
+    if (!text) return;
+    const loud = /!/.test(text);
+    this.capLine = floatLine({
+      text, kind: 'line', hold: true, style: loud ? 'shout' : 'whisper', voice: 1,
+      at: () => { const r = game.ui.root.getBoundingClientRect(); return [r.width / 2, r.height * 0.86]; },
+    });
   }
 
   /** eyelid openness over the timeline */
@@ -411,6 +421,7 @@ export class BeachWakeScene implements Scene {
     r.post.dof = false;
     r.post.dofStrength = 3;
     this.cap?.remove();
+    this.capLine?.dismiss();
     this.crabSpr?.dispose();
     this.crabSpr = null;
   }
