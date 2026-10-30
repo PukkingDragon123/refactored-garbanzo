@@ -174,7 +174,7 @@ export function drawWatch(ctx: CanvasRenderingContext2D, x: number, y: number, s
     for (let r = r0; r <= r1; r += 0.5) dot(Math.round(cx - 0.5 + Math.cos(a) * r), Math.round(cy - 0.5 + Math.sin(a) * r), hour ? INK : '#8a7a5a', hour ? m : Math.max(1, m - 1));
   }
   if (S >= 34) {
-    const all = S >= 130;
+    const all = false; // (all twelve crowd the dial; the sub-seconds take six)
     const nums = (all ? [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] : [12, 3, 6, 9]).filter(n => n !== 6 || S < 44);
     // big cases use the finer 5x7 numerals
     const big = S >= 76, gw = big ? 5 : 3, gh = big ? 7 : 5, src = big ? DIG7 : DIG;

@@ -75,12 +75,11 @@ interface NoteRow { text: string; state: 'todo' | 'done'; tick: number; strike: 
 // ---------------------------------------------------------------- resolution
 /** the kit's icons are drawn this much larger than their 52-unit design box */
 const KIT_K = 1.3;
-/** CSS px per design unit: 1 on a desktop, smaller on phones and small windows, larger on huge screens */
+/** CSS px per design unit: 1 at 1280 x 720, in proportion to the screen above and below that (a phone
+ *  in landscape about 0.72, 1080p 1.5) */
 function hudUi(): number {
   const w = window.innerWidth, h = window.innerHeight;
-  if (w >= 2300 && h >= 1250) return 1.4;
-  if (w >= 1100 && h >= 640) return 1;
-  return 0.78;
+  return Math.max(0.72, Math.min(1.8, Math.min(w / 1280, h / 720)));
 }
 const dprOf = () => window.devicePixelRatio || 1;
 /** device px per design unit */
@@ -375,7 +374,7 @@ export class Hud2Classic {
     const q = this.noteQ;
     if (!q) return;
     const open = this.openT > 0 || this.hover;
-    const k = hudK(), gp = Math.max(1, Math.round(2 * k)), u = gp / 2; // u: device px per font half-pixel
+    const k = hudK(), gp = Math.max(1, Math.round(1.6 * k));
     const W = 250, pad = 12;
     // lay the words out in font pixels
     const maxFont = Math.floor(((W - pad * 2 - 16) * k) / gp);
