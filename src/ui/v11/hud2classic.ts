@@ -1,20 +1,18 @@
-// The HUD is back (src/ui/hud2.ts mounts this when CLASSIC_HUD is on); dialogue, barks and pickups
-// still float in the world. The time of day is the brass pocket watch (src/ui/v12/watch.ts).
-//
-// V11 HUD, pixel art in the spirit of Dave the Diver: chunky, present, readable, every piece a small
-// canvas painted in art pixels and shown at 3x (2x on phones), so nothing is ever smooth.
-//   top left    Mori's status plate (bodyhud.ts): his medallion, the stamina flask and its number,
-//               the pack's spring scale, ailment chips
-//   top right   the research points on an ink-stamp counter that ticks up (a "+15 RP" stamp slams
-//               down when points come in), the sun-and-moon dial with the time and the day, and the
-//               quest note: a scrap of Mori's journal pinned under them with the current step in his
-//               pixel handwriting. When a step is done it's ticked and struck through in ink, pixel
-//               by pixel, then the next one is written in. After a while it rolls up to its title
-//               strip; hover it (or tap) to unroll it, click it to open the field journal (J).
-//   top centre  a banner with the place name when you walk somewhere new
-//   bottom left the kit: the backpack with a fill gauge, the field laptop with its upload badge,
-//               the instant camera with the film count and the print developing out of its slot
-//   bottom      the controls line for the first seconds of a scene
+// The HUD (src/ui/hud2.ts mounts this when CLASSIC_HUD is on): only what the player uses, painted at
+// the screen's own resolution (about one device pixel per art pixel, never chunky blocks):
+//   top right   the brass pocket watch with the time of day (src/ui/v12/watch.ts), and under it the
+//               objective note: a small pinned scrap of journal paper with the current step in Mori's
+//               marker hand. When a step is done it's ticked and struck through in ink, then the next
+//               one is written in. After a while it rolls up to its title; hover it (or tap) to unroll
+//               it, click it to open the field journal (J).
+//   bottom left the kit as real objects that are the buttons themselves (no plates behind them): the
+//               rucksack (I), the field guide (G), the field laptop (L, with its upload badge) and the
+//               instant camera with the film left on its own counter window and the print developing
+//               out of its slot (src/ui/v11/kitart.ts). Hover lifts an object and a glint runs across
+//               it; pressing pushes it down; a small keycap hint sits by it on a keyboard.
+// Words are the floating words of the menus and dialogue (src/ui/v12/float.ts): the place name floats
+// in the sky when you arrive somewhere new, big moments and new jobs are notices near Mori, pickups
+// rise off the spot. There is no research counter, no status plate and no controls line.
 // The API is the V2 Hud2 one (setPlace, setKeys, setLaptop, show, refresh, update, flyItem, banner,
 // packPos, bumpPack, destroy), so every scene keeps working.
 
@@ -24,127 +22,37 @@ import { audio } from '../../core/audio';
 import { trackedQuest, currentStepIndex, setQuestNotice } from '../../game/quests';
 import type { QuestDef } from '../../game/quests';
 import { capacity } from '../../game/inventory';
-import { itemIconURL, uiIconURL } from '../../art/itemicons';
+import { itemIcon, itemIconURL } from '../../art/itemicons';
 import { mountBodyHud, BodyHud } from '../v10/bodyhud';
-import { installPaper, scrap, stamp, paperSfx, escHtml as esc, setTransitionFocus, rasterStrokes, tick, strike, paperTileArt } from './paper';
-import { Art, col, dith, shadeC, mixC, spriteURL, PX } from './paper/px';
-import { drawText, wrapText } from './paper/pxfont';
-import { PxW, outlined, tw, plate, hudScale } from './hudpx';
+import { installPaper, paperSfx, setTransitionFocus, rasterStrokes, tick } from './paper';
+import { Art, col, mixC, shadeC, bayer } from './paper/px';
+import { pxDraw, pxMeasure, pxWrap } from '../pxfont';
+import type { PxFontId } from '../pxfont';
+import { PixelBuffer } from '../../art/pixel';
 import { hudHour } from './hudclock';
 import { drawWatch, watchSize } from '../v12/watch';
 import { slingOwnsG } from '../../game/v11/predators';
-
-const OUT = col('#140c06'), CREAM = col('#fff1cc'), INKC = col('#2a2440'), PENC = col('#6a6458');
-
-/** a keycap, a manila tag and a paper slip as 9-slice sprites (2 CSS px per art pixel) */
-const keycapURL = () => spriteURL('hud:keycap', 8, 10, a => {
-  plate(a, 0, 0, 8, 9, col('#f2e4bc'), { r: 1, shadow: false });
-  a.rect(1, 7, 6, 1, col('#b89c68')); a.rect(0, 9, 8, 1, col('#140c06', 0.5));
-});
-const tagURL = () => spriteURL('hud:tag', 22, 14, a => {
-  const H = 12, base = col('#e8cc92'), dk = col('#c8a464');
-  for (let y = 0; y < H; y++) for (let x = 0; x < 20; x++) {
-    const notch = Math.abs(y - 5.5);
-    if (x < Math.floor(notch) - 1) continue;
-    const edge = x === Math.max(0, Math.floor(notch) - 1) || y === 0 || y === H - 1 || x === 19;
-    a.put(x, y, edge ? OUT : y >= H - 3 ? dk : base);
-  }
-  a.ellipse(6, 6, 1.6, 1.6, col('#3a2614'));
-  for (let y = 2; y < H + 2; y++) for (let x = 2; x < 22; x++) if (!(a.get(x, y) >>> 24) && (a.get(x - 2, y - 2) >>> 24) && dith(x, y, 0.6)) a.px(x, y, col('#000000', 0.4));
-});
-const slipURL = () => spriteURL('hud:slip', 16, 16, a => {
-  const tile = paperTileArt('card');
-  for (let y = 0; y < 14; y++) for (let x = 0; x < 14; x++) a.put(x, y, mixC(col('#f6eed8'), tile.d[y * 128 + x], 0.3));
-  for (let i = 0; i < 14; i++) { a.put(i, 0, OUT); a.put(i, 13, OUT); a.put(0, i, OUT); a.put(13, i, OUT); }
-  a.put(0, 0, 0); a.put(13, 0, 0); a.put(0, 13, 0); a.put(13, 13, 0);
-  for (let i = 1; i < 13; i++) a.put(i, 12, col('#d8c8a0'));
-  for (let y = 2; y < 16; y++) for (let x = 2; x < 16; x++) if (!(a.get(x, y) >>> 24) && dith(x, y, 0.6)) a.px(x, y, col('#000000', 0.38));
-});
+import { floatSky, floatNotice, floatPickup } from '../v12/float';
+import { paintKitIcon, paintKitButton, KIT_SIZE } from './kitart';
+import type { KitKind } from './kitart';
 
 const CSS = `
 .h2 { position: absolute; inset: 0; pointer-events: none; transition: opacity 0.3s steps(4); }
 .h2.off { opacity: 0; }
-.h2 canvas.hx { display: block; image-rendering: pixelated; }
-/* top right: the stamp counter and the dial, the quest note under them */
-.h2 .hr { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-.h2 .hr .row { display: flex; align-items: flex-start; gap: 6px; }
-.h2 .hr .rp { pointer-events: auto; cursor: help; }
-.h2 .hr .rp.pop { animation: hxPop 0.36s steps(6); }
-@keyframes hxPop { 30% { transform: translateY(-6px) scale(1.12); } 60% { transform: translateY(2px); } }
+.h2 canvas.hd { display: block; image-rendering: pixelated; }
+.h2 .hr { position: absolute; right: 12px; top: 10px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .h2 .hr .dial.off { display: none; }
 .h2 .hq { position: relative; pointer-events: auto; cursor: pointer; }
 .h2 .hq.off { display: none; }
-.h2 .hq.slide { animation: hxSlide 0.4s steps(6); }
-@keyframes hxSlide { from { transform: translateY(-40px); opacity: 0; } }
-.h2 .hq .new-q { position: absolute; right: -8px; top: -14px; pointer-events: none; }
-.h2 .hq-plus { position: absolute; pointer-events: none; z-index: 3; animation: hxPlus 2.2s steps(22) forwards; }
-@keyframes hxPlus { 0% { transform: translateY(8px); opacity: 0; } 12% { transform: none; opacity: 1; } 75% { opacity: 1; } 100% { transform: translateY(-26px); opacity: 0; } }
-/* the place banner */
-.h2 .hb { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); pointer-events: none; }
-.h2 .hb.off { display: none; }
-.h2 .hb.in { animation: hxDrop 0.5s steps(7) both; }
-.h2 .hb.out { animation: hxRise 0.45s steps(6) forwards; }
-@keyframes hxDrop { 0% { transform: translate(-50%, -120%); } 60% { transform: translate(-50%, 8px); } 100% { transform: translate(-50%, 0); } }
-@keyframes hxRise { to { transform: translate(-50%, -140%); } }
-/* the kit in the bottom corner */
-.h2 .hk { position: absolute; left: 10px; bottom: 10px; pointer-events: auto; cursor: pointer; }
-.h2 .hk.bump { animation: hxPop 0.36s steps(6); }
-body.touchmode .h2 .hk { pointer-events: none; bottom: auto; top: 168px; left: 6px; }
-body.touchmode .h2 .hr { right: 6px; top: 6px; }
-@media (max-width: 560px) {
-  .h2 .hr { right: 6px; top: 6px; }
-  .h2 .hr .row { flex-direction: column; align-items: flex-end; gap: 4px; }
-  .h2 .hq { position: absolute; right: 0; top: 156px; }
-}
-/* the controls line */
-.hm-keys { position: absolute; right: 14px; bottom: 12px; white-space: nowrap; transition: opacity 1.2s steps(6); opacity: 0.95;
-  font-family: var(--pp-head); font-size: 18.6667px; line-height: 24px; color: #fff1cc; letter-spacing: 1px;
-  text-shadow: 2px 0 0 #140c06, -2px 0 0 #140c06, 0 2px 0 #140c06, 0 -2px 0 #140c06, 2px 2px 0 #140c06, -2px 2px 0 #140c06, 2px -2px 0 #140c06, -2px -2px 0 #140c06; }
-#ui .hm-keys, #ui .hm-keys * { font-size-adjust: none; }
-.hm-keys.gone { opacity: 0; }
-#ui .hm-keys .key { display: inline-block; min-width: 24px; margin: 0 4px 0 8px !important; padding: 0 5px 2px !important; font-family: var(--pp-label) !important; font-size: 16px !important; line-height: 18px; color: #3a2614 !important;
-  background: none !important; box-shadow: none !important; text-shadow: none; border-style: solid; border-width: 4px 4px 6px; border-image: var(--hx-key) 4 4 6 fill / 4px 4px 6px stretch; image-rendering: pixelated; }
-body.touchmode .hm-keys { display: none; }
-/* the big stamped note */
-.hm-ban { position: absolute; left: 50%; top: 16%; transform: translateX(-50%); pointer-events: none; z-index: 4; text-align: center; animation: hxBan 3.4s steps(34) both; }
-.hm-ban .pp-scrap-in { padding: 18px 30px 20px; }
-.hm-ban .s { font-size: 20px; line-height: 24px; margin-top: 10px; max-width: 520px; color: var(--pp-ink); }
-@keyframes hxBan { 0% { opacity: 0; transform: translate(-50%, -30px); } 8% { opacity: 1; transform: translate(-50%, 0); } 88% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -12px); } }
-.flyitem { position: absolute; width: 48px; height: 48px; image-rendering: pixelated; pointer-events: none; z-index: 9; filter: drop-shadow(4px 4px 0 rgba(0,0,0,0.4)); }
-.pickup { position: absolute; transform: translate(-50%, -100%); font-family: var(--pp-hand); font-size: 20px; line-height: 24px; font-weight: 700; color: #fff6dc; pointer-events: none; white-space: nowrap;
-  text-shadow: 2px 0 0 #140c06, -2px 0 0 #140c06, 0 2px 0 #140c06, 0 -2px 0 #140c06, 2px 2px 0 #140c06, -2px 2px 0 #140c06, 2px -2px 0 #140c06, -2px -2px 0 #140c06; animation: pickupRise 1.3s steps(16) forwards; }
-#ui .pickup { font-size-adjust: none; }
-@keyframes pickupRise { 0% { opacity: 0; transform: translate(-50%, -60%); } 15% { opacity: 1; transform: translate(-50%, -120%); } 100% { opacity: 0; transform: translate(-50%, -300%); } }
-/* the interaction prompt: a manila tag */
-#ui .prompt.panel { border: 0 !important; border-image: none !important; box-shadow: none !important; background: none !important; clip-path: none !important; animation: hxBob 1.2s steps(2) infinite;
-  border-style: solid !important; border-width: 4px 6px 6px 18px !important; border-image: var(--hx-tag) 4 6 6 18 fill / 4px 6px 6px 18px stretch !important; image-rendering: pixelated;
-  padding: 0 6px 0 2px; color: #3a2614; font-family: var(--pp-hand); font-size: 20px; line-height: 24px; font-weight: 400; }
-#ui .prompt.panel, #ui .prompt.panel * { font-size-adjust: none; -webkit-font-smoothing: none; }
-@keyframes hxBob { 50% { margin-top: -4px; } }
-#ui .prompt.panel .key { font-family: var(--pp-label) !important; font-size: 16px !important; line-height: 16px; padding: 0 4px 2px !important; margin: 0 6px 0 0 !important; vertical-align: 1px; color: #3a2614 !important;
-  background: none !important; box-shadow: none !important; border-style: solid; border-width: 4px 4px 6px; border-image: var(--hx-key) 4 4 6 fill / 4px 4px 6px stretch; }
-/* toasts: little paper slips */
-#ui .toast.panel { border: 0 !important; box-shadow: none !important; background: none !important; clip-path: none !important;
-  border-style: solid !important; border-width: 8px !important; border-image: var(--hx-slip) 8 fill / 8px / 0 repeat !important; image-rendering: pixelated;
-  color: var(--pp-ink); font-family: var(--pp-hand); font-size: 20px; line-height: 24px; padding: 2px 8px 4px; animation: hxToast 0.35s steps(5); }
-#ui .toast.panel.out { animation: hxToastOut 0.4s steps(5) forwards; }
-@keyframes hxToast { from { transform: translateX(40px); opacity: 0; } }
-@keyframes hxToastOut { to { transform: translateX(40px); opacity: 0; } }
-#ui .toast.panel, #ui .toast.panel * { font-size-adjust: none; -webkit-font-smoothing: none; }
-#ui .toast.panel .ic { font-family: var(--pp-label) !important; font-size: 16px !important; line-height: 18px; padding: 2px 6px !important; color: #fff1cc !important; background: #a8321e !important; box-shadow: 0 0 0 2px #140c06 !important; transform: none; }
-#ui .toast.panel.teal .ic { background: #26408a !important; }
-#ui .toast.panel.coral .ic { background: #c8321e !important; }
-#ui .toast.panel b { color: #2a2440; font-weight: 700; }
-/* the region-map button from the expedition runtime: a folded map in the corner */
-#ui .v10-mapb { left: 10px; top: auto; bottom: 110px; padding: 0 8px 0 0; background: none; box-shadow: none; opacity: 0.9; }
-#ui .v10-mapb:hover { opacity: 1; transform: translateY(-2px); }
-#ui .v10-mapb i { background: none; }
-#ui .v10-mapb .k { display: none; }
-#ui .v10-mapb .t { font-family: var(--pp-label); font-size-adjust: none; font-size: 16px; color: #fff1cc; text-transform: uppercase;
-  text-shadow: 2px 0 0 #140c06, -2px 0 0 #140c06, 0 2px 0 #140c06, 0 -2px 0 #140c06; }
-body.touchmode #ui .v10-mapb { bottom: auto; top: 230px; left: 6px; }
+.h2 .hq.slide { animation: hxSlide 0.4s steps(8); }
+@keyframes hxSlide { from { transform: translateY(-30px); opacity: 0; } }
+.h2 .hk { position: absolute; left: 12px; bottom: 8px; display: flex; align-items: flex-end; gap: 4px; }
+.h2 .hk canvas { pointer-events: auto; cursor: pointer; }
+.h2 .hk canvas.off { display: none; }
+body.touchmode .h2 .hk { bottom: auto; top: 8px; left: 8px; }
+body.touchmode .h2 .hr { right: 8px; top: 6px; }
+.flyitem { position: absolute; width: 32px; height: 32px; image-rendering: pixelated; pointer-events: none; z-index: 9; }
 `;
-
 let styled = false;
 
 /** the island's field laptop on the belt (see game/v9/research9.ts) */
@@ -154,71 +62,86 @@ interface HudLaptop {
   badge: () => number;
   open: () => void;
 }
-
-/** 16x16 pixel laptop (lid up, aqua screen) */
-const LAP_ROWS = [
-  '................', '................', '..kkkkkkkkkkkk..', '..kTTTTTTTTTTk..', '..kTjCCCCCCcTk..', '..kTCjCCCCCcTk..', '..kTCCCCCCccTk..', '..kTCCGGCcccTk..',
-  '..kTGGGGGGGGTk..', '..kTTTTTTTTTTk..', '.kkkkkkkkkkkkkk.', 'kqqqqqqqqqqqqqqk', 'kTqTqTqTqTqTqTqk', 'kTTTTTTKKTTTTTTk', '.kkkkkkkkkkkkkk.', '................',
-];
-const LAP_COL: Record<string, string> = { k: '#0b0f12', T: '#7a8189', q: '#b9c0c4', K: '#454b53', C: '#3fd1c1', c: '#138a86', j: '#eafffb', G: '#6fb150' };
-let lapArt: Art | null = null;
-function laptopArt(): Art {
-  if (lapArt) return lapArt;
-  const a = new Art(16, 16);
-  LAP_ROWS.forEach((r, y) => { for (let x = 0; x < 16; x++) { const v = LAP_COL[r[x]]; if (v) a.put(x, y, col(v)); } });
-  return (lapArt = a);
-}
-// the field guide in the kit: a little strapped leather notebook with a gold koru on the cover
-const GUIDE_ROWS = [
-  '.oooooooooooooo.', 'oKhhhhhhhhhhhkpo', 'oKhkkkkkkkkkkdpo', 'oKkkkkgggkkkkdqo', 'oKkkkgkkkgkkkdpo',
-  'oKkkgkkgkkgkkdqo', 'oKkkgkgGkkgkkdpo', 'oKkkgkkkkgkkkdqo', 'oKkkkgggGkkkkdpo', 'oKkkkkkkkkkkkdqo',
-  'oKsssssssssssbBo', 'oKSSSSSSSSSSSbBo', 'oKkkkkkkkkkkkdpo', 'oKkhkkkkkkkkkdqo', 'oKkkkkkkhkkkkdpo',
-  'oKkkkkkkkkkkkdqo', 'oKdddddddddddddo', 'oKqpqpqpqpqpqpqo', '.oooooooooooooo.',
-];
-const GUIDE_COL: Record<string, string> = {
-  o: '#140c06', K: '#2a1e0e', h: '#7e9c4c', k: '#587a36', d: '#3c5426', p: '#f0e4c4', q: '#c8b48c',
-  g: '#f0c860', G: '#a8782a', s: '#6a3a1a', S: '#94602e', b: '#d8b860', B: '#8a6420',
-};
-let guideArtC: Art | null = null;
-function guideArt(): Art {
-  if (guideArtC) return guideArtC;
-  const a = new Art(16, GUIDE_ROWS.length);
-  GUIDE_ROWS.forEach((r, y) => { for (let x = 0; x < 16; x++) { const v = GUIDE_COL[r[x]]; if (v) a.put(x, y, col(v)); } });
-  return (guideArtC = a);
-}
-/** an image URL loaded into a paint buffer (null until it's loaded) */
-const imgArts = new Map<string, Art | null>();
-function imgArt(url: string): Art | null {
-  if (imgArts.has(url)) return imgArts.get(url)!;
-  imgArts.set(url, null);
-  const im = new Image();
-  im.onload = () => imgArts.set(url, Art.from(im));
-  im.src = url;
-  return null;
-}
-
 interface HudOpts {
   place: string;
   sub?: string;
   keys?: string;
   onBackpack?: () => void;
 }
-
 type CamLike = { active?: boolean; shots?: number; develop?: number; v10?: boolean; developLeft?(): number };
-type SceneLike = { player?: { x: number; y: number; vx?: number; body?: { showEmote?(e: string, t?: number): void } }; cutscene?: boolean; st?: { cam: { x: number; y: number; zoom: number } }; cam?: CamLike } | null;
-
+type SceneLike = { player?: { x: number; y: number; vx?: number }; cutscene?: boolean; st?: { cam: { x: number; y: number; zoom: number } }; cam?: CamLike } | null;
 interface NoteRow { text: string; state: 'todo' | 'done'; tick: number; strike: number; reveal: number; seed: number; old?: boolean }
+
+// ---------------------------------------------------------------- resolution
+/** the kit's icons are drawn this much larger than their 52-unit design box */
+const KIT_K = 1.3;
+/** CSS px per design unit: 1 at 1280 x 720, in proportion to the screen above and below that (a phone
+ *  in landscape about 0.72, 1080p 1.5) */
+function hudUi(): number {
+  const w = window.innerWidth, h = window.innerHeight;
+  return Math.max(0.72, Math.min(1.8, Math.min(w / 1280, h / 720)));
+}
+const dprOf = () => window.devicePixelRatio || 1;
+/** device px per design unit */
+const hudK = () => dprOf() * hudUi();
+
+/** a canvas painted at device resolution: w x h design units */
+class HdCanvas {
+  readonly el: HTMLCanvasElement;
+  private g: CanvasRenderingContext2D;
+  art: Art | null = null;
+  k = 1;
+  constructor(parent: HTMLElement, cls: string) {
+    this.el = parent.appendChild(document.createElement('canvas'));
+    this.el.className = 'hd ' + cls;
+    this.g = this.el.getContext('2d')!;
+  }
+  draw(wu: number, hu: number, paint: (a: Art, k: number) => void) {
+    const k = hudK(), dpr = dprOf();
+    const W = Math.max(1, Math.ceil(wu * k)), H = Math.max(1, Math.ceil(hu * k));
+    if (!this.art || this.art.w !== W || this.art.h !== H) {
+      this.art = new Art(W, H);
+      this.el.width = W; this.el.height = H;
+      this.el.style.width = W / dpr + 'px';
+      this.el.style.height = H / dpr + 'px';
+    } else this.art.d.fill(0);
+    this.k = k;
+    paint(this.art, k);
+    this.g.putImageData(this.art.img, 0, 0);
+  }
+  /** the design-unit point under a pointer event */
+  hit(e: { clientX: number; clientY: number }): [number, number] {
+    const r = this.el.getBoundingClientRect(), u = hudUi();
+    return [(e.clientX - r.left) / u, (e.clientY - r.top) / u];
+  }
+}
+
+// ---------------------------------------------------------------- ink words on paper
+/** a line in one of the game's bitmap faces (the menus' words), each font pixel gp x gp device px */
+function inkText(a: Art, text: string, x: number, y: number, gp: number, font: PxFontId, c: number | ((row: number) => number), upTo = Infinity): number {
+  if (!text) return 0;
+  const w = pxMeasure(text, font) + 4, b = new PixelBuffer(w, 16);
+  pxDraw(b, text, 1, 1, { font, color: '#ffffff', bounce: font === 'script' });
+  let n = 0;
+  for (let gy = 0; gy < b.h; gy++) for (let gx = 0; gx < b.w; gx++) {
+    if (!(b.get(gx, gy) >>> 24) || gx > upTo) continue;
+    const cc = typeof c === 'number' ? c : c(gy);
+    for (let j = 0; j < gp; j++) for (let i = 0; i < gp; i++) a.put(x + gx * gp + i, y + gy * gp + j, cc);
+    n++;
+  }
+  void n;
+  return (w - 4) * gp;
+}
 
 export class Hud2Classic {
   readonly root: HTMLElement;
   private hr: HTMLElement;
-  private rpW: PxW;
   private watchCv: HTMLCanvasElement;
   private noteBox: HTMLElement;
-  private noteW: PxW;
-  private banW: PxW;
-  private kitW: PxW;
-  private keys: HTMLElement;
+  private note: HdCanvas;
+  private kit: Record<KitKind, HdCanvas>;
+  private kitSt: Record<KitKind, { hover: boolean; press: boolean; lift: number; glint: number; key: string }>;
+  private kitBox: HTMLElement;
   private lap: HudLaptop | null = null;
   private body: BodyHud | null = null;
   private onBackpack?: () => void;
@@ -233,69 +156,56 @@ export class Hud2Classic {
   private holdT = 0;
   private swapT: ReturnType<typeof setTimeout>[] = [];
   private noteDirty = true;
-  // the stamp counter
-  private rpShown = 0;
-  private lastRp = -1;
-  private rpTickT = 0;
-  // the place banner
+  // the place name
   private placeName = '';
-  private placeSub = '';
   private dayShown = -1;
-  private banT = 0;
+  private namedAt = new Map<string, number>();
   // misc
-  private keysT = 7;
   private moved = false;
   private idleT = 0;
   private t = 0;
   private acc = 0;
   private bannerT = 0;
-  private kitRegions: { id: 'pack' | 'lap' | 'cam' | 'guide'; x0: number; x1: number }[] = [];
   private packFill = 0;
   private bump = 0;
+  private kitKey = '';
 
   constructor(parent: HTMLElement, o: HudOpts) {
     installPaper();
-    if (!styled) {
-      styled = true;
-      document.head.appendChild(el('style', '', CSS));
-      const r = document.documentElement.style;
-      r.setProperty('--hx-key', `url(${keycapURL()})`);
-      r.setProperty('--hx-tag', `url(${tagURL()})`);
-      r.setProperty('--hx-slip', `url(${slipURL()})`);
-    }
+    if (!styled) { styled = true; document.head.appendChild(el('style', '', CSS)); }
     this.onBackpack = o.onBackpack;
     this.root = parent.appendChild(el('div', 'h2'));
     this.body = mountBodyHud(this.root);
-    // top right
+    // top right: the watch, the note under it
     this.hr = this.root.appendChild(el('div', 'hr'));
-    const row = this.hr.appendChild(el('div', 'row'));
-    this.rpW = new PxW(row, 'rp');
-    this.rpW.el.title = 'Research points';
-    this.watchCv = row.appendChild(document.createElement('canvas'));
-    this.watchCv.className = 'hx dial';
+    this.watchCv = this.hr.appendChild(document.createElement('canvas'));
+    this.watchCv.className = 'hd dial';
     this.watchCv.title = 'The time (Mori\'s pocket watch)';
     this.noteBox = this.hr.appendChild(el('div', 'hq off'));
-    this.noteW = new PxW(this.noteBox, 'note');
+    this.note = new HdCanvas(this.noteBox, 'note');
     this.noteBox.addEventListener('click', e => { e.stopPropagation(); if (this.openT <= 0 && document.body.classList.contains('touchmode')) { this.reveal(6); return; } this.openJournal(); });
     this.noteBox.addEventListener('pointerenter', () => { this.hover = true; this.noteDirty = true; });
     this.noteBox.addEventListener('pointerleave', () => { this.hover = false; this.noteDirty = true; });
     this.noteBox.title = 'What am I doing? (J opens the journal)';
-    // the banner, the kit, the controls line
-    const banBox = this.root.appendChild(el('div', 'hb off'));
-    this.banW = new PxW(banBox, 'ban');
-    this.kitW = new PxW(this.root, 'hk');
-    this.kitW.el.addEventListener('pointerdown', e => {
-      e.stopPropagation();
-      const [x] = this.kitW.hit(e);
-      const r = this.kitRegions.find(k => x >= k.x0 && x < k.x1);
-      if (r?.id === 'pack') this.onBackpack?.();
-      else if (r?.id === 'lap') this.lap?.open();
-      else if (r?.id === 'guide') { audio.play('pageTurn' as never, { vol: 0.4 }); void this.openEncyclopedia(); }
-    });
-    this.keys = this.root.appendChild(el('div', 'hm-keys'));
+    // bottom left: the kit, each object its own button
+    this.kitBox = this.root.appendChild(el('div', 'hk'));
+    const mk = (id: KitKind, key: string, title: string) => {
+      const c = new HdCanvas(this.kitBox, 'kit ' + id);
+      c.el.title = title;
+      const st = { hover: false, press: false, lift: 0, glint: -1, key };
+      c.el.addEventListener('pointerenter', () => { st.hover = true; st.glint = 0; audio.play('ui', { vol: 0.05, pitch: 1.6 }); });
+      c.el.addEventListener('pointerleave', () => { st.hover = false; st.press = false; });
+      c.el.addEventListener('pointerdown', e => { e.stopPropagation(); st.press = true; });
+      c.el.addEventListener('pointerup', e => { e.stopPropagation(); if (st.press) this.useKit(id); st.press = false; });
+      return [c, st] as const;
+    };
+    const [pk, ps] = mk('pack', 'I', 'Backpack (I)');
+    const [gd, gs] = mk('guide', 'G', 'Field guide (G)');
+    const [lp, ls] = mk('lap', 'L', 'Field laptop (L)');
+    const [cm, cs] = mk('cam', '', 'Camera: film left');
+    this.kit = { pack: pk, guide: gd, lap: lp, cam: cm };
+    this.kitSt = { pack: ps, guide: gs, lap: ls, cam: cs };
     this.setPlace(o.place, o.sub);
-    this.keys.innerHTML = o.keys ?? '<span class="key">A</span><span class="key">D</span> move · <span class="key">E</span> use · <span class="key">I</span> pack · <span class="key">J</span> journal';
-    if (!/journal/.test(this.keys.innerHTML)) this.keys.innerHTML += ' · <span class="key">J</span> journal';
     setQuestNotice(q => this.noticeQuest(q));
     // transitions centre their iris / first ink blot on Mori
     setTransitionFocus(() => {
@@ -305,8 +215,6 @@ export class Hud2Classic {
       const r = game.r;
       return [Math.max(0, Math.min(1, r.projectX(p.x, 1) / r.VW)), Math.max(0, Math.min(1, r.projectY(p.y - 20, 1) / r.VH))];
     });
-    this.lastRp = game.save.rp;
-    this.rpShown = game.save.rp;
     this.refresh(true);
     // a fresh scene: show what we're doing for a few seconds
     this.reveal(6);
@@ -314,53 +222,40 @@ export class Hud2Classic {
   }
 
   // ---------------------------------------------------------------- API
+  /** a new place (or a new day): its name floats in the sky */
   setPlace(place: string, sub = '') {
     const day = game.save.day || 1;
-    // only a new place (or a new day) gets the banner; the time of day is the dial's job
     if (place === this.placeName && day === this.dayShown) return;
-    const firstOfDay = day !== this.dayShown;
+    const newDay = day !== this.dayShown && this.dayShown >= 0 && /day/i.test(sub);
     this.placeName = place;
     this.dayShown = day;
-    this.placeSub = firstOfDay && /day/i.test(sub) ? `DAY ${day}` : '';
-    this.banT = 4.2;
-    const box = this.banW.el.parentElement!;
-    box.classList.remove('off', 'out', 'in');
-    void box.offsetWidth;
-    box.classList.add('in');
-    this.paintBanner();
+    if (!place) return;
+    const now = performance.now(), was = this.namedAt.get(place + '|' + day);
+    if (was !== undefined && now - was < 150000 && !newDay) return;
+    this.namedAt.set(place + '|' + day, now);
+    void floatSky(place, '', newDay || /day/i.test(sub) ? `Day ${day}` : '', 2600, { soft: true });
   }
-  setKeys(html: string) {
-    this.keys.innerHTML = html;
-    this.keys.classList.remove('gone');
-    this.keysT = 6;
-  }
-  /** put the field laptop in the corner kit (null removes it); L opens it too */
+  /** (the controls line is gone: the kit's keycaps show the keys) */
+  setKeys(_html: string) { /* */ }
+  /** put the field laptop in the kit (null removes it); L opens it too */
   setLaptop(l: HudLaptop | null) { this.lap = l; this.refresh(); }
   show(on: boolean) { this.root.classList.toggle('off', !on); }
 
   /** backpack screen position (for flying pickups), relative to the UI root */
   packPos(): [number, number] {
-    const r = this.kitW.el.getBoundingClientRect(), p = game.ui.root.getBoundingClientRect();
+    const r = this.kit.pack.el.getBoundingClientRect(), p = game.ui.root.getBoundingClientRect();
     if (!r.width) return [p.width * 0.06, p.height * 0.92];
-    const s = this.kitW.s || hudScale();
-    return [r.left - p.left + 11 * s, r.top - p.top + 20 * s];
+    return [r.left - p.left + r.width / 2, r.top - p.top + r.height * 0.55];
   }
-  bumpPack() {
-    this.bump = 0.3;
-    this.kitW.el.classList.remove('bump');
-    void this.kitW.el.offsetWidth;
-    this.kitW.el.classList.add('bump');
-  }
+  bumpPack() { this.bump = 0.3; }
 
-  /** big stamped note in the middle of the screen (a new place on the map...) */
+  /** a big moment ("NEW PLACE ON THE MAP"): floating words near Mori */
   banner(title: string, sub = '') {
     const now = performance.now();
     if (now - this.bannerT < 600) return;
     this.bannerT = now;
-    const b = el('div', 'hm-ban', scrap(`${stamp(title, { color: 'red', fresh: true, size: 'lg' })}${sub ? `<div class="s pp-hand">${esc(sub)}</div>` : ''}`, { kind: 'card', seed: title.length, edges: { top: 'deckle', bottom: 'torn', left: 'deckle', right: 'deckle' } }));
-    this.root.appendChild(b);
-    setTimeout(() => paperSfx('stamp'), 140);
-    setTimeout(() => b.remove(), 3500);
+    floatNotice(sub || title, 3800, sub ? { tag: title, accent: '#ffd05a' } : {});
+    setTimeout(() => paperSfx('stamp', 0.5), 120);
   }
 
   refresh(force = false) {
@@ -387,40 +282,20 @@ export class Hud2Classic {
 
   update(dt: number) {
     this.t += dt;
-    const s = game.save;
     const sc = game.scene as SceneLike;
     const inp = game.input;
     const free = !game.ui.blocking && !sc?.cutscene;
-    // research points: the counter ticks up, a stamp slams down
-    if (s.rp > this.lastRp && this.lastRp >= 0) this.rpGain(s.rp - this.lastRp);
-    this.lastRp = s.rp;
-    if (this.rpShown !== s.rp) {
-      this.rpTickT -= dt;
-      if (this.rpTickT <= 0) {
-        const d = s.rp - this.rpShown;
-        this.rpShown += Math.sign(d) * Math.max(1, Math.floor(Math.abs(d) / 6));
-        this.rpTickT = 0.045;
-        if (Math.random() < 0.5) audio.play('ui', { vol: 0.08, pitch: 1.8 });
-      }
-    }
-    // keys: J journal, G encyclopedia (in the field G is the slingshot's: the guide book in the kit), L laptop
+    // keys: I is the scene's, J journal, G the field guide (in the field G is the slingshot's), L laptop
     if (free && inp.keyHit('KeyJ')) this.openJournal();
     if (free && inp.keyHit('KeyG') && !slingOwnsG()) void this.openEncyclopedia();
     if (this.lap && inp.keyHit('KeyL') && free && this.lap.shown()) this.lap.open();
-    // the note unrolls when something changes, then rolls up to its title strip
+    // the note unrolls when something changes, then rolls up to its title
     const moving = inp.axisX() !== 0 || inp.down('jump');
     if (moving) { this.moved = true; this.idleT = 0; } else this.idleT += dt;
     if (this.openT > 0) { this.openT -= dt; if (this.openT <= 0) this.noteDirty = true; }
     if (this.idleT > 24 && free) { this.idleT = -40; this.reveal(5); }
-    // the controls line fades once you're on your way
-    this.keysT -= dt;
-    if ((this.keysT <= 0 || (this.moved && this.keysT < 4.5)) && !this.keys.classList.contains('gone')) this.keys.classList.add('gone');
-    if (this.banT > 0) {
-      this.banT -= dt;
-      if (this.banT <= 0) { const box = this.banW.el.parentElement!; box.classList.remove('in'); box.classList.add('out'); setTimeout(() => { if (this.banT <= 0) box.classList.add('off'); }, 460); }
-    }
     if (this.holdT > 0) { this.holdT -= dt; if (this.holdT <= 0) this.lastKey = ''; }
-    // animations on the note
+    // the note's ink: the tick drawn on, the strike, the new step written in
     let anim = false;
     for (const r of this.rows) {
       if (r.state === 'done' && r.tick < 1) { r.tick = Math.min(1, r.tick + dt / 0.45); anim = true; }
@@ -428,6 +303,14 @@ export class Hud2Classic {
       if (r.reveal < 1) { r.reveal = Math.min(1, r.reveal + dt / 0.9); anim = true; }
     }
     if (anim) this.noteDirty = true;
+    // the kit's buttons: lift on hover, down on press, the glint runs once
+    for (const id of Object.keys(this.kitSt) as KitKind[]) {
+      const s = this.kitSt[id];
+      const want = s.press ? -1 : s.hover ? 3 : 0;
+      s.lift += (want - s.lift) * Math.min(1, dt * 18);
+      if (Math.abs(want - s.lift) < 0.05) s.lift = want;
+      if (s.glint >= 0) { s.glint += dt / 0.45; if (s.glint > 1) s.glint = -1; }
+    }
     this.bump = Math.max(0, this.bump - dt);
     this.body?.update(dt);
     this.acc += dt;
@@ -435,18 +318,16 @@ export class Hud2Classic {
     this.paint(false, dt);
   }
 
-  /** icon flies from a screen point into the backpack, with a pixel "+2 Flax" */
+  /** "+2 Flax" floats up off the spot; the item flies into the backpack */
   flyItem(id: string, n: number, name: string, cssX: number, cssY: number) {
+    let buf = null;
+    try { buf = itemIcon(id); } catch { buf = null; }
+    floatPickup(`+${n} ${name}`, cssX, cssY, buf ? { key: id, buf } : null);
     const root = game.ui.root;
-    const lab = el('div', 'pickup', `+${n} ${esc(name)}`);
-    lab.style.left = Math.round(cssX) + 'px';
-    lab.style.top = Math.round(cssY) + 'px';
-    root.appendChild(lab);
-    setTimeout(() => lab.remove(), 1400);
     const img = el('img', 'flyitem');
-    img.src = itemIconURL(id, 3);
-    img.style.left = Math.round(cssX - 24) + 'px';
-    img.style.top = Math.round(cssY - 24) + 'px';
+    img.src = itemIconURL(id, 2);
+    img.style.left = Math.round(cssX - 16) + 'px';
+    img.style.top = Math.round(cssY - 16) + 'px';
     root.appendChild(img);
     const [tx, ty] = this.packPos();
     const dx = tx - cssX, dy = ty - cssY;
@@ -472,147 +353,124 @@ export class Hud2Classic {
     this.paintT += dt;
     if (!force && this.paintT < 1 / 30) return;
     this.paintT = 0;
-    // the stamp counter
-    const rpTxt = String(Math.max(0, Math.round(this.rpShown)));
-    const rw = 30 + tw(rpTxt, { face: 'block', scale: 2, spacing: 1 });
-    this.rpW.draw(rw, 26, a => {
-      plate(a, 0, 2, rw - 2, 22, col('#2e3a52'), { r: 2 });
-      // the stamp: a round blue ink seal with RP in it
-      a.ellipse(11, 13, 9, 9, OUT);
-      a.ellipse(11, 13, 8, 8, col('#f4ead0'));
-      a.ring(11, 13, 7, 7, col('#26408a'));
-      drawText(a, 'RP', 7, 16, col('#26408a'), { face: 'block', bold: false, spacing: 0 });
-      outlined(a, rpTxt, 24, 20, CREAM, OUT, { face: 'block', scale: 2, spacing: 1 });
-    });
-    // the sun-and-moon dial
     // the pocket watch: brass case, cream dial, blued hands on the time of day
     const hour = hudHour();
     this.watchCv.classList.toggle('off', hour === null);
     if (hour !== null) {
-      const S = 30, ws = watchSize(S), sc = hudScale();
-      if (this.watchCv.width !== ws.w) { this.watchCv.width = ws.w; this.watchCv.height = ws.h; }
-      this.watchCv.style.width = ws.w * sc + 'px';
-      this.watchCv.style.height = ws.h * sc + 'px';
+      const k = hudK(), S = Math.round(88 * k), ws = watchSize(S);
+      if (this.watchCv.width !== ws.w || this.watchCv.height !== ws.h) { this.watchCv.width = ws.w; this.watchCv.height = ws.h; }
+      this.watchCv.style.width = ws.w / dprOf() + 'px';
+      this.watchCv.style.height = ws.h / dprOf() + 'px';
       const g = this.watchCv.getContext('2d')!;
       g.clearRect(0, 0, ws.w, ws.h);
       drawWatch(g, 0, 0, S, 1, { mode: 'clock', hour });
     }
-    // the quest note
     if (this.noteDirty && this.noteQ) { this.noteDirty = false; this.paintNote(); }
-    // the kit
     this.paintKit();
   }
 
-  private paintBanner() {
-    const name = this.placeName.toUpperCase();
-    const k = 1;
-    const tw0 = tw(name, { face: 'block', scale: k, spacing: 1 });
-    const W = tw0 + 36, H = this.placeSub ? 38 : 28;
-    this.banW.draw(W, H, a => {
-      const red = col('#a8321e'), redD = col('#6e1a10'), redL = col('#d0503a');
-      // the folded ends behind
-      for (const s of [-1, 1]) {
-        const x0 = s < 0 ? 0 : W - 14;
-        for (let y = 6; y < 24; y++) for (let x = 0; x < 14; x++) {
-          const ox = s < 0 ? x : 13 - x;
-          if (ox < Math.abs(y - 15) - 5) continue;
-          a.put(x0 + x, y, ox === Math.max(0, Math.abs(y - 15) - 5) || y === 6 || y === 23 ? OUT : redD);
-        }
-      }
-      plate(a, 8, 2, W - 16, 20, red, { r: 1 });
-      for (let x = 10; x < W - 10; x++) { a.put(x, 4, redL); if (x % 4 === 0) a.put(x, 19, redD); }
-      outlined(a, name, Math.round(W / 2 - tw0 / 2), 16, CREAM, OUT, { face: 'block', scale: k, spacing: 1 });
-      if (this.placeSub) {
-        const sw = tw(this.placeSub, { face: 'block', bold: false, spacing: 1 }) + 10;
-        plate(a, Math.round(W / 2 - sw / 2), 23, sw, 12, col('#3e2814'), { r: 1 });
-        outlined(a, this.placeSub, Math.round(W / 2 - sw / 2) + 5, 32, col('#f4d27a'), OUT, { face: 'block', bold: false, spacing: 1 });
-      }
-    });
-  }
-
+  /** the objective note: a small scrap of journal paper, pinned, in Mori's marker hand */
   private paintNote() {
     const q = this.noteQ;
     if (!q) return;
     const open = this.openT > 0 || this.hover;
-    const W = window.innerWidth < 560 ? 100 : 124, pad = 7;
-    const title = q.title.toUpperCase();
-    let tl = title;
-    while (tw(tl, { face: 'block', bold: false, spacing: 1 }) > W - 30 && tl.length > 4) tl = tl.slice(0, -2);
-    if (tl !== title) tl = tl.replace(/\s*\S?$/, '') + '...';
-    // lay the rows out
-    const lines: { row: NoteRow; lines: string[] }[] = this.rows.map(r => ({ row: r, lines: wrapText(r.text, W - pad * 2 - 12) }));
+    const k = hudK(), gp = Math.max(1, Math.round(1.6 * k));
+    const W = 250, pad = 12;
+    // lay the words out in font pixels
+    const maxFont = Math.floor(((W - pad * 2 - 16) * k) / gp);
+    let title = q.title;
+    while (pxMeasure(title.toUpperCase(), 'bold') > maxFont && title.length > 4) title = title.slice(0, -2);
+    if (title !== q.title) title = title.replace(/\s*\S?$/, '') + '...';
+    const lines = this.rows.map(r => ({ row: r, lines: pxWrap(r.text, maxFont, 'script') }));
     const step = q.steps[currentStepIndex(q)];
     const pr = step?.progress?.();
-    let H = 22;
-    if (open) { for (const l of lines) H += l.lines.length * 11 + 3; if (pr) H += 10; H += 6; }
-    else H = 22;
-    this.noteW.draw(W + 2, H + 2, a => {
-      // the paper: journal stock, a perforated top, a torn bottom, a hard shadow
-      const tile = paperTileArt('journal');
-      const torn = (x: number) => Math.round((Math.sin(x * 1.7) + Math.sin(x * 0.53 + 2)) * 0.8 + 1.5);
-      const inside = (x: number, y: number) => x >= 0 && x < W && y >= ((x % 6) < 2 ? 1 : 0) && y < H - torn(x);
-      for (let y = 2; y < H + 2; y++) for (let x = 2; x < W + 2; x++) if (!inside(x, y) && inside(x - 2, y - 2) && dith(x, y, 0.6)) a.px(x, y, col('#000000', 0.4));
-      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-        if (!inside(x, y)) continue;
-        let c = tile.d[(y % 128) * 128 + (x % 128)];
-        if (y > 18 && (y - 18) % 11 === 10) c = mixC(c, col('#5078aa'), 0.25);
-        if (x === 5) c = mixC(c, col('#c0463a'), 0.3);
-        const edge = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y + 1) || !inside(x, y - 1);
-        if (edge) c = mixC(c, col('#7a4a1a'), 0.45);
-        a.put(x, y, c);
+    const lh = 13 * gp / k; // a line of the hand in design units
+    let H = 32;
+    if (open) { for (const l of lines) H += l.lines.length * lh + 4; if (pr) H += 14; H += 6; }
+    this.note.draw(W + 6, H + 6, (a, kk) => {
+      const P = (v: number) => Math.round(v * kk);
+      const torn = (x: number) => (Math.sin(x * 0.9) + Math.sin(x * 0.37 + 2) + Math.sin(x * 2.3) * 0.4) * 0.8 + 2.4;
+      const inside = (x: number, y: number) => x >= 0 && x < W && y >= ((Math.floor(x / 6) % 2) ? 0.6 : 0) && y < H - torn(x);
+      // a soft dithered shadow under the scrap, then the paper: cream stock with fibres, faint rules, a
+      // red margin, a darker torn edge
+      const paper = col('#f6ecd2'), fibre = col('#dccaa0'), rule = col('#8ab0d8'), margin = col('#d87a6a'), edge = col('#b89a6a');
+      for (let py = 0; py < a.h; py++) for (let px = 0; px < a.w; px++) {
+        const x = (px + 0.5) / kk, y = (py + 0.5) / kk;
+        if (inside(x, y)) {
+          let c = paper;
+          const n = hashN(px, py);
+          if (n > 0.985) c = fibre; else if (n < 0.012) c = col('#fffaf0');
+          if (Math.floor(x * 0.5 + y * 1.3) % 23 === 0 && hashN(px >> 1, py, 3) > 0.6) c = mixC(c, fibre, 0.5);
+          if (y > 30 && Math.abs(((y - 30) % lh) - (lh - 2)) < 0.5 / kk + 0.25) c = mixC(c, rule, 0.45);
+          if (Math.abs(x - 7) < 0.5) c = mixC(c, margin, 0.55);
+          if (!inside(x, y + 1.2) || !inside(x - 0.8, y) || !inside(x + 0.8, y)) c = mixC(c, edge, 0.55);
+          else if (!inside(x, y + 2.6) && bayer(px, py) < 0.5) c = mixC(c, edge, 0.25);
+          a.put(px, py, c);
+        } else if (inside(x - 3, y - 4)) {
+          const dd = inside(x - 1.5, y - 2) ? 0.42 : 0.22;
+          if (bayer(px, py) < dd) a.put(px, py, col('#000000', 0.5));
+        }
       }
-      // the pin
-      const px = Math.round(W / 2);
-      a.ellipse(px + 1.5, 4.5, 3.4, 3.4, col('#000000', 0.3));
-      a.ellipse(px, 3, 3.4, 3.4, OUT);
-      a.ellipse(px, 3, 2.6, 2.6, q.main ? col('#e2533a') : col('#4a7ad8'));
-      a.put(px - 1, 2, col('#ffe2d8'));
-      // the title strip
-      outlined(a, tl, pad + 2, 16, q.main ? col('#a8321e') : col('#26408a'), col('#fff8e8'), { face: 'block', bold: false, spacing: 1 });
+      // the pushpin
+      paintPin(a, kk, W / 2, 4, q.main ? '#d8402a' : '#3a68c8');
+      // the title in red or blue ink capitals
+      const titleC = q.main ? col('#a8321e') : col('#26408a');
+      inkText(a, title.toUpperCase(), P(pad + 2), P(12), gp, 'bold', row => (row <= 3 ? shadeC(titleC, 0.12) : titleC));
       if (!open) {
-        // rolled up: how far along, and a little arrow to unroll it
         const n = currentStepIndex(q), tot = q.steps.length;
         const st = `${Math.min(n + 1, tot)}/${tot}`;
-        drawText(a, st, W - 8 - tw(st, { face: 'block', bold: false }), 16, PENC, { face: 'block', bold: false });
+        inkText(a, st, P(W - pad) - pxMeasure(st, 'body') * gp, P(12), gp, 'body', col('#7a7060'));
         return;
       }
-      let y = 22;
+      let y = 30;
+      const inkC = col('#2a2a5a'), oldC = col('#8a8478');
       for (const { row, lines: ls } of lines) {
-        // the checkbox, the tick drawn on, the text written in, the strike drawn through
-        const bx = pad, by = y + 1;
-        const boxC = row.state === 'done' ? INKC : PENC;
-        a.rect(bx, by, 8, 1, boxC); a.rect(bx, by + 7, 8, 1, boxC); a.rect(bx, by, 1, 8, boxC); a.rect(bx + 7, by, 1, 8, boxC);
-        if (row.state === 'done') {
-          const ta = new Art(12, 12);
-          rasterStrokes(ta, 24, 24, [{ d: tick(24, row.seed), c: '#26408a', w: 3, draw: 1 }], false, row.tick, 0);
-          a.blit(ta, bx - 1, by - 3);
+        // the checkbox, drawn by hand; the tick inked on; the words written in; the strike
+        const bx = pad, by = y + 3;
+        const boxC = row.state === 'done' ? inkC : oldC;
+        const bs = 9, lw = Math.max(1, Math.round(kk));
+        for (let i = 0; i <= P(bs); i++) for (let t = 0; t < lw; t++) {
+          a.put(P(bx) + i, P(by) + t + (i > P(bs) * 0.7 ? 1 : 0), boxC); a.put(P(bx) + i, P(by + bs) - t, boxC);
+          a.put(P(bx) + t, P(by) + i, boxC); a.put(P(bx + bs) - t + (i < P(bs) * 0.25 ? 1 : 0), P(by) + i, boxC);
         }
-        const total = row.text.length;
-        let shown = Math.floor(total * row.reveal);
-        let ly = y + 9;
+        if (row.state === 'done') {
+          const ta = new Art(P(16), P(16));
+          rasterStrokes(ta, 32, 32, [{ d: tick(32, row.seed), c: '#26408a', w: 3, draw: 1 }], false, row.tick, 0);
+          a.blit(ta, P(bx - 1), P(by - 5));
+        }
+        let shown = Math.floor(row.text.length * row.reveal);
+        let ly = y;
         for (const l of ls) {
           const part = l.slice(0, Math.max(0, shown));
           shown -= l.length + 1;
-          drawText(a, part, bx + 12, ly, row.old ? PENC : INKC);
+          const w = inkText(a, part, P(bx + 15), P(ly), gp, 'script', row.old ? oldC : inkC);
           if (row.state === 'done' && row.strike > 0) {
-            const sw = Math.round(tw(l) * row.strike);
-            for (let x = 0; x < sw; x++) a.put(bx + 11 + x, ly - 3 - (x > sw * 0.6 ? 1 : 0), col('#2a2440'));
+            const sw = Math.round((pxMeasure(l, 'script') * gp) * row.strike);
+            const sy = P(ly) + 8 * gp;
+            for (let x = 0; x < sw; x++) for (let t = 0; t < Math.max(1, Math.round(kk)); t++) a.put(P(bx + 15) + x, sy + t - (x > sw * 0.6 ? Math.round(kk) : 0), col('#2a2440'));
           }
-          ly += 11;
+          void w;
+          ly += lh;
         }
-        y += ls.length * 11 + 3;
+        y += ls.length * lh + 4;
       }
       if (pr) {
-        // progress as pips
+        // progress as inked pips
         const n = Math.min(pr[1], 12);
         const done = Math.round((pr[0] / Math.max(1, pr[1])) * n);
-        for (let i = 0; i < n; i++) { a.rect(pad + 12 + i * 5, y + 2, 4, 4, OUT); a.rect(pad + 13 + i * 5, y + 3, 2, 2, i < done ? col('#26408a') : col('#f4ead0')); }
-        drawText(a, `${pr[0]}/${pr[1]}`, pad + 16 + n * 5, y + 7, PENC, { face: 'block', bold: false });
+        for (let i = 0; i < n; i++) {
+          const px0 = P(pad + 15 + i * 8), py0 = P(y + 2), s = P(6);
+          for (let yy = 0; yy < s; yy++) for (let xx = 0; xx < s; xx++) {
+            const edgeP = xx < Math.max(1, kk) || yy < Math.max(1, kk) || xx >= s - Math.max(1, kk) || yy >= s - Math.max(1, kk);
+            a.put(px0 + xx, py0 + yy, edgeP ? col('#2a2440') : i < done ? (yy < s / 3 ? col('#4a68b8') : col('#26408a')) : col('#fbf4e2'));
+          }
+        }
+        inkText(a, `${pr[0]}/${pr[1]}`, P(pad + 20 + n * 8), P(y), gp, 'body', col('#7a7060'));
       }
-      void strike;
     });
   }
 
+  /** the kit: each object its own button */
   private paintKit() {
     const sc = game.scene as SceneLike;
     const cam = sc?.cam && typeof sc.cam.shots === 'number' ? sc.cam : null;
@@ -620,76 +478,37 @@ export class Hud2Classic {
     const badge = lapOn ? this.lap!.badge() : 0;
     const n = game.save.inv.length, cap = Math.max(1, capacity());
     this.packFill += (n / cap - this.packFill) * 0.2;
-    const W = 30 + 22 + (lapOn ? 24 : 0) + (cam ? 58 : 0), H = 36;
-    this.kitRegions = [];
-    this.kitW.draw(W, H, a => {
-      let x = 0;
-      const top = 6, ph = 28;
-      // the backpack and its fill gauge
-      const pk = imgArt(uiIconURL('pack', 1));
-      const by = this.bump > 0 ? -1 : 0;
-      plate(a, x, top, 28, ph, col('#3e2814'), { r: 2 });
-      if (pk) a.blit(pk, x + 3, top + 6 + by);
-      const f = Math.min(1, this.packFill);
-      const gx = x + 21, gh = 20;
-      a.rect(gx, top + 3, 4, gh + 2, OUT);
-      const fill = Math.round(f * gh);
-      const gc = f >= 1 ? col('#e83a2a') : f > 0.8 ? col('#f0a03a') : col('#8ccf4a');
-      for (let i = 0; i < fill; i++) a.rect(gx + 1, top + 3 + gh - i, 2, 1, i === fill - 1 ? shadeC(gc, 0.3) : gc);
-      if (f >= 0.8) outlined(a, `${n}/${cap}`, x + 1, 5, f >= 1 ? col('#ff9a80') : CREAM, OUT, { face: 'block', bold: false });
-      this.kitRegions.push({ id: 'pack', x0: x, x1: x + 28 });
-      x += 30;
-      // the field guide: a strapped leather notebook (click it; in the field G is the slingshot's)
-      plate(a, x, top, 20, ph, col('#2e3a22'), { r: 2 });
-      a.blit(guideArt(), x + 2, top + 4 + (this.bump > 0 ? -1 : 0));
-      this.kitRegions.push({ id: 'guide', x0: x, x1: x + 20 });
-      x += 22;
-      // the field laptop with its badge
-      if (lapOn) {
-        plate(a, x, top, 22, ph, col('#2a3442'), { r: 2 });
-        a.blit(laptopArt(), x + 3, top + 6);
-        if (badge > 0) {
-          const t = String(Math.min(99, badge));
-          const bw = tw(t, { face: 'block' }) + 6;
-          plate(a, x + 22 - bw + 2, 0, bw, 11, col('#c8321e'), { r: 2, shadow: false });
-          drawText(a, t, x + 22 - bw + 5, 9, CREAM, { face: 'block' });
-        }
-        this.kitRegions.push({ id: 'lap', x0: x, x1: x + 22 });
-        x += 24;
-      }
-      // the instant camera, the film left, the print developing out of the top
-      if (cam) {
-        const dev = cam.v10 !== false ? Math.max(0, Math.min(1, cam.develop ?? 1)) : 1;
-        plate(a, x, top, 56, ph, col('#2e2a26'), { r: 2 });
-        const cx = x + 3, cy = top + 10;
-        if (dev < 1) {
-          // the print sticking out of the slot, coming up from dark brown in dithered steps
-          const pr = new Art(10, 11);
-          pr.rect(0, 0, 10, 11, col('#f6f0e2')); pr.rect(0, 0, 10, 1, OUT); pr.rect(0, 0, 1, 11, OUT); pr.rect(9, 0, 1, 11, OUT);
-          for (let yy = 1; yy < 8; yy++) for (let xx = 1; xx < 9; xx++) pr.put(xx, yy, dith(xx, yy, dev) ? (yy < 4 ? col('#7ab8e8') : col('#5a9a3a')) : col('#3a2a1a'));
-          a.blit(pr, cx + 4, cy - 10 + Math.round((1 - Math.min(1, dev * 3)) * 6));
-        }
-        // the camera body
-        a.rect(cx, cy, 18, 12, OUT);
-        a.rect(cx + 1, cy + 1, 16, 10, col('#e8e0d0'));
-        a.rect(cx + 1, cy + 7, 16, 4, col('#4a4440'));
-        a.rect(cx + 1, cy + 1, 16, 1, col('#ffffff'));
-        a.ellipse(cx + 9, cy + 6.5, 4, 4, OUT); a.ellipse(cx + 9, cy + 6.5, 3, 3, col('#3a5a7a')); a.put(cx + 8, cy + 5, col('#bfe0ff'));
-        a.rect(cx + 2, cy + 2, 3, 2, col('#2a2a2a')); a.rect(cx + 14, cy - 1, 3, 2, col('#c8321e'));
-        for (let i = 0; i < 5; i++) a.put(cx + 3 + i * 3, cy + 10, (i & 1) ? col('#e83a8a') : col('#3ac8e8'));
-        // the film count (or the seconds left on the print)
-        const shots = Math.max(0, Math.round(cam.shots ?? 0));
-        const lx = cx + 22;
-        if (dev < 1) {
-          outlined(a, 'DRY', lx, top + 10, col('#c8baa4'), OUT, { face: 'block', bold: false });
-          outlined(a, `${Math.ceil(cam.developLeft?.() ?? 0)}S`, lx, top + 23, col('#f4d27a'), OUT, { face: 'block', scale: 1, spacing: 1 });
-        } else {
-          outlined(a, 'FILM', lx, top + 10, col('#c8baa4'), OUT, { face: 'block', bold: false });
-          outlined(a, String(shots), lx, top + 25, shots <= 2 ? col('#ff8a6a') : CREAM, OUT, { face: 'block', scale: 2, spacing: 1 });
-        }
-        this.kitRegions.push({ id: 'cam', x0: x, x1: x + 56 });
-      }
-    });
+    const touch = document.body.classList.contains('touchmode');
+    const dev = cam && cam.v10 !== false ? Math.max(0, Math.min(1, cam.develop ?? 1)) : 1;
+    const shots = Math.max(0, Math.round(cam?.shots ?? 0));
+    const k = hudK();
+    const states = Object.values(this.kitSt).map(s => `${s.lift.toFixed(2)},${s.glint.toFixed(2)}`).join('|');
+    const key = `${k}|${lapOn}|${badge}|${!!cam}|${shots}|${Math.round(dev * 12)}|${Math.round(this.packFill * 8)}|${this.bump > 0}|${touch}|${slingOwnsG()}|${states}`;
+    if (key === this.kitKey) return;
+    this.kitKey = key;
+    this.kit.lap.el.classList.toggle('off', !lapOn);
+    this.kit.cam.el.classList.toggle('off', !cam);
+    const draw = (id: KitKind, info: Parameters<typeof paintKitIcon>[2], extra: { badge?: number } = {}) => {
+      const st = this.kitSt[id];
+      const hint = touch ? '' : id === 'guide' && slingOwnsG() ? '' : st.key;
+      this.kit[id].draw(KIT_SIZE * KIT_K, (KIT_SIZE + 10) * KIT_K, (a, kk) => {
+        const ik = kk * KIT_K;
+        const icon = paintKitIcon(id, ik, info);
+        paintKitButton(a, icon, ik, { lift: st.lift + (id === 'pack' && this.bump > 0 ? 1.5 : 0), glint: st.glint, key: hint || undefined, keyGp: Math.max(1, Math.round(kk)), badge: extra.badge });
+      });
+    };
+    draw('pack', { fill: this.packFill });
+    draw('guide', {});
+    if (lapOn) draw('lap', { badge }, { badge });
+    if (cam) draw('cam', { shots, develop: dev });
+  }
+
+  private useKit(id: KitKind) {
+    if (game.ui.blocking) return;
+    audio.play('ui', { vol: 0.2, pitch: 1.1 });
+    if (id === 'pack') this.onBackpack?.();
+    else if (id === 'lap') this.lap?.open();
+    else if (id === 'guide') { audio.play('pageTurn' as never, { vol: 0.4 }); void this.openEncyclopedia(); }
   }
 
   // ---------------------------------------------------------------- the note
@@ -700,15 +519,13 @@ export class Hud2Classic {
     if (!was) { this.noteDirty = true; this.noteBox.classList.remove('slide'); void this.noteBox.offsetWidth; this.noteBox.classList.add('slide'); }
   }
   private noticeQuest(q: QuestDef) {
-    // a new quest: the note shows it (with a NEW stamp) for a moment, then goes back to the tracked one
+    // a new quest: the note shows it for a moment, then goes back to the tracked one; a notice floats by Mori
     if (trackedQuest()?.id !== q.id) {
       this.drawNote(q, currentStepIndex(q), true);
       this.holdT = 5.5;
       this.lastKey = 'held';
     } else { this.lastKey = ''; this.refresh(); }
-    this.noteBox.querySelector('.new-q')?.remove();
-    this.noteBox.insertAdjacentHTML('beforeend', `<span class="new-q">${stamp(q.main ? 'New' : 'New job', { color: 'red', fresh: true, rot: '8deg' })}</span>`);
-    setTimeout(() => this.noteBox.querySelector('.new-q')?.remove(), 5000);
+    floatNotice(q.title, 3800, { tag: q.main ? 'New' : 'New job', accent: '#ffd05a' });
     setTimeout(() => paperSfx('stamp', 0.6), 150);
     this.body?.cheer?.();
     this.reveal(7);
@@ -742,19 +559,6 @@ export class Hud2Classic {
       this.swapT.push(setTimeout(() => { if (trackedQuest()?.id === q.id) this.drawNote(q, currentStepIndex(q), false); }, 3200));
     }, 1300));
   }
-  private rpGain(n: number) {
-    this.rpW.el.classList.remove('pop');
-    void this.rpW.el.offsetWidth;
-    this.rpW.el.classList.add('pop');
-    const e = el('div', 'hq-plus', stamp(`+${n} RP`, { color: 'blue', fresh: true, rot: '-8deg' }));
-    const r = this.rpW.el.getBoundingClientRect(), p = this.root.getBoundingClientRect();
-    e.style.left = `${Math.round(r.left - p.left - 20)}px`;
-    e.style.top = `${Math.round(r.bottom - p.top + 4)}px`;
-    this.root.appendChild(e);
-    setTimeout(() => paperSfx('stamp', 0.45), 100);
-    setTimeout(() => e.remove(), 2300);
-    this.body?.cheer?.();
-  }
 
   private openJournal() {
     if (game.ui.blocking) return;
@@ -775,4 +579,31 @@ export class Hud2Classic {
   }
 }
 
-void PX;
+/** a texture hash (0..1) for a device pixel */
+function hashN(x: number, y: number, s = 0): number {
+  let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(s | 0, 1442695041)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+/** a pushpin seen from above: a domed head lit from the top left with a hard catch-light, its shadow */
+function paintPin(a: Art, k: number, cx: number, cy: number, hex: string) {
+  const base = col(hex), R = 4.2;
+  const tones = [shadeC(base, -0.6), shadeC(base, -0.4), shadeC(base, -0.2), base, shadeC(base, 0.25), shadeC(base, 0.5)];
+  for (let py = Math.floor((cy - R - 1) * k); py <= Math.ceil((cy + R + 4) * k); py++) for (let px = Math.floor((cx - R - 1) * k); px <= Math.ceil((cx + R + 4) * k); px++) {
+    const x = (px + 0.5) / k, y = (py + 0.5) / k;
+    const d = Math.hypot(x - cx, y - cy);
+    if (d > R) {
+      if (Math.hypot(x - cx - 2.2, y - cy - 2.6) < R && bayer(px, py) < 0.45) a.put(px, py, col('#000000', 0.5));
+      continue;
+    }
+    if (d > R - Math.max(1, Math.round(k * 0.8)) / k) { a.put(px, py, shadeC(base, -0.7)); continue; }
+    const nx = (x - cx) / R, ny = (y - cy) / R, nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
+    const l = (-0.5 * nx - 0.62 * ny + 0.6 * nz + 0.2) / 1.2;
+    const f = Math.max(0, Math.min(tones.length - 1, l * (tones.length - 1)));
+    const i0 = Math.floor(f);
+    let c = tones[Math.min(tones.length - 1, i0 + (f - i0 > bayer(px, py) ? 1 : 0))];
+    if (Math.hypot(x - cx + 1.4, y - cy + 1.5) < 1.1) c = col('#ffffff');
+    a.put(px, py, c);
+  }
+}

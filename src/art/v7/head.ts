@@ -92,6 +92,8 @@ const EXPR: Record<string, Ex> = {
   wow: { eye: 'wide', brow: 2, browTilt: 0, mouth: 'o', blush: true },
 };
 export const HEAD_EXPRS7 = Object.keys(EXPR);
+/** an expression's face settings (neutral for unknown names); the HUD bust (bust.ts) paints from these */
+export const headExpr7 = (name: string): HeadExpr7 => EXPR[name] ?? EXPR.neutral;
 
 // ------------------------------------------------------------------ cast heads
 

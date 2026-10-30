@@ -34,7 +34,11 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
 - **HUD (user, latest): the classic HUD is back**, every piece a detailed physical pixel-art object.
   It includes the pinned objective note, the research stamp, the pocket-watch clock, the place
   banner and the kit (`src/ui/v11/hud2classic.ts`, mounted by `src/ui/hud2.ts` via `CLASSIC_HUD`).
-  There's no top-left status plate (medallion, flask or weight scale); the user removed it.
+  There's no top-left status plate (medallion, flask or weight scale) and no research-point counter;
+  the user removed both. The HUD is only what's useful: the objective note, the pocket-watch clock,
+  and the kit as real icon buttons (backpack, field guide, laptop, camera). No decoration-only UI.
+- The user likes the floating-word menu style (title, pause, settings). Use that style for any text
+  the HUD still needs (place names, prompts), not plates or boxes.
 - **UI resolution (user, latest):** "super detailed like real icon super polish no blocky effect".
   UI art and icons are high-density pixel art, about 1 device pixel per art pixel. They read as
   polished, richly shaded illustrated icons, never chunky blocks. There are still no dialogue boxes or menu boxes; everything else is in the

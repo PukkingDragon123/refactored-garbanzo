@@ -165,28 +165,40 @@ const fillSpr = (font: PxFontId, ch: string, col: string) => sprite(`f|${font}|$
 /** the glyph's dark ring and drop pixel, same origin */
 const silSpr = (font: PxFontId, ch: string, col: string) => sprite(`o|${font}|${ch}|${col}`, () => bufSpr(pxTextBuf(ch, { font, color: col, outline: col, shadow: col, bounce: false })));
 const iconSpr = (name: string) => sprite('i|' + name, () => bufSpr(pxIconBuf(name)));
-/** a little ivory keycap, like a typewriter key: dished top face with a lit rim, shaded sides, a
- *  deep front skirt and a hard shadow, its letter pressed into the face */
+/** a little ivory keycap, like a typewriter key (HD: 15 px tall): a dished top face lit at its back rim
+ *  and left edge with a dithered dip in the middle, shaded right edge, a deep front skirt darker toward
+ *  the bottom, cut corners, worn specks, a hard dithered shadow, its letter pressed into the face with a
+ *  lit lower lip */
 const keySpr = (label: string) => sprite('k|' + label, () => {
   const lab = label.toUpperCase();
-  const tw = Math.max(5, pxMeasure(lab, 'tiny'));
-  const w = tw + 7, h = 12;
+  const font: PxFontId = lab.length > 1 ? 'tiny' : 'bold';
+  const tw = Math.max(6, pxMeasure(lab, font));
+  const w = tw + 10, h = 15;
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
   const x = c.getContext('2d')!;
   const R = (col: string, a: number, b: number, cw: number, ch: number) => { x.fillStyle = col; x.fillRect(a, b, cw, ch); };
-  // hard shadow, then the outline with cut corners
-  R('rgba(0,0,0,0.45)', 2, 2, w - 2, h - 2);
-  R(OUT, 1, 0, w - 3, h - 1); R(OUT, 0, 1, w - 1, h - 3);
-  // the skirt (front and sides of the key), darker toward the bottom
-  R('#9a7e4e', 1, 1, w - 3, h - 3); R('#7a6038', 1, h - 4, w - 3, 2);
-  // the top face, its lit back rim and left edge, its shaded right edge
-  R('#efe0b4', 1, 1, w - 3, h - 5); R('#fffaea', 2, 1, w - 5, 1); R('#fff4d6', 1, 2, 1, h - 7);
-  R('#d8c48e', w - 3, 2, 1, h - 6);
-  // two worn specks
-  R('#e2d0a0', 3, h - 6, 1, 1); R('#e2d0a0', w - 5, 3, 1, 1);
-  const t = pxTextBuf(lab, { font: 'tiny', color: '#3a2614' }).toCanvas(1);
-  x.drawImage(t, Math.floor((w - 1 - tw) / 2), 0);
+  const B4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+  const dz = (px: number, py: number, k: number) => (B4[(py & 3) * 4 + (px & 3)] + 0.5) / 16 < k;
+  // the hard shadow, dithered
+  for (let py = 2; py < h; py++) for (let px = 2; px < w; px++) if (dz(px, py, 0.6)) R('rgba(0,0,0,0.45)', px, py, 1, 1);
+  // the outline with cut corners
+  R(OUT, 2, 0, w - 5, h - 1); R(OUT, 1, 1, w - 3, h - 3); R(OUT, 0, 2, w - 1, h - 5);
+  // the skirt: sides and a deep front, darker toward the bottom
+  R('#a88a58', 1, 2, w - 3, h - 4); R('#8a6e42', 2, h - 6, w - 5, 2); R('#6e5634', 2, h - 4, w - 5, 1);
+  R('#b89a66', 1, 3, 1, h - 8); R('#7a6038', w - 3, 3, 1, h - 8);
+  // the top face: lit back rim and left edge, shaded right edge, a dithered dip in the middle
+  R('#efe0b4', 2, 1, w - 5, h - 8); R('#fffaea', 3, 1, w - 7, 1); R('#fff4d6', 2, 2, 1, h - 10);
+  R('#d8c48e', w - 4, 2, 1, h - 9); R('#cdb680', 3, h - 8, w - 7, 1);
+  for (let py = 3; py < h - 9; py++) for (let px = 4; px < w - 5; px++) if (dz(px, py, 0.18)) R('#e2d0a0', px, py, 1, 1);
+  // worn specks
+  R('#e2d0a0', 3, h - 9, 1, 1); R('#fff8e4', w - 6, 2, 1, 1); R('#9a7e4e', 4, h - 5, 1, 1);
+  // the letter, pressed in: a lit lip under each stroke, then the ink
+  const lit = pxTextBuf(lab, { font, color: '#fffaea' }).toCanvas(1);
+  const t = pxTextBuf(lab, { font, color: '#3a2614' }).toCanvas(1);
+  const lx = Math.floor((w - 1 - tw) / 2), ly = font === 'bold' ? -1 : 0;
+  x.drawImage(lit, lx, ly + 1);
+  x.drawImage(t, lx, ly);
   return { c, w, h };
 });
 /** an item icon from a pixel buffer (pickups) */
