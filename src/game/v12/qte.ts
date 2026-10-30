@@ -283,8 +283,8 @@ void pxWidth;
 /** a resource node's QTE (by its kind / animation); null: a quick pick, no QTE */
 export function gatherQte(kind: string, anim: string, item?: string): (QteOpts & { fail: string }) | null {
   if (anim === 'dig') return { kind: 'hold', label: 'EASE IT OUT...', difficulty: 0.45, closeup: { scene: 'dig', buried: 'root', item }, fail: pickOne(['It snapped off. The rest is still down there.', 'Too hard! Mush. Gently next time.']) };
-  if (kind === 'flax' || anim === 'pull') return { kind: 'mash', label: 'PULL!', difficulty: 0.4, fail: pickOne(['Ugh. It won’t budge.', 'Flax: one. Mori: nil.']) };
-  if (anim === 'jar' || anim === 'net') return { kind: 'ring', label: 'CATCH!', difficulty: 0.5, count: 1, fail: pickOne(['It got away!', 'Missed! It’s laughing at me. Insects can’t laugh. It’s laughing.']) };
+  if (kind === 'flax' || anim === 'pull') return { kind: 'mash', label: 'PULL!', difficulty: 0.4, closeup: { scene: 'pull', item, flax: kind === 'flax' || !item }, fail: pickOne(['Ugh. It won’t budge.', 'Flax: one. Mori: nil.']) };
+  if (anim === 'jar' || anim === 'net') return { kind: 'ring', label: 'CATCH!', difficulty: 0.5, count: 1, closeup: { scene: 'catch', item, itemKind: kind }, fail: pickOne(['It got away!', 'Missed! It’s laughing at me. Insects can’t laugh. It’s laughing.']) };
   return null;
 }
 /** a find you collect (sites10 points): its QTE by what it is */
@@ -293,8 +293,8 @@ export function findQte(kind: string, itemKind: string, item?: string): (QteOpts
     const buried = kind === 'artifact' ? 'find' : item === 'fos_ammonite' ? 'ammonite' : item === 'fos_vertebra' || item === 'fos_tooth' || !item ? 'fossil' : 'find';
     return { kind: 'seq', label: 'BRUSH IT FREE', difficulty: 0.5, closeup: { scene: 'dig', buried, item }, fail: 'Careful... I nearly cracked it. Slowly.' };
   }
-  if (itemKind === 'insect' || itemKind === 'animal' || itemKind === 'shell') return { kind: 'ring', label: 'CATCH!', difficulty: 0.45, fail: 'It got away!' };
-  if (itemKind === 'plant' || itemKind === 'fungus' || kind === 'plant' || kind === 'sample') return { kind: 'hold', label: 'EASE IT OUT...', difficulty: 0.4, fail: 'Torn. I’ll find a better one.' };
+  if (itemKind === 'insect' || itemKind === 'animal' || itemKind === 'shell') return { kind: 'ring', label: 'CATCH!', difficulty: 0.45, closeup: { scene: 'catch', item, itemKind }, fail: 'It got away!' };
+  if (itemKind === 'plant' || itemKind === 'fungus' || kind === 'plant' || kind === 'sample') return { kind: 'hold', label: 'EASE IT OUT...', difficulty: 0.4, closeup: itemKind === 'plant' || itemKind === 'fungus' ? { scene: 'pull', item } : undefined, fail: 'Torn. I’ll find a better one.' };
   if (itemKind === 'material') return { kind: 'mash', label: 'PULL!', difficulty: 0.35, fail: 'Stuck fast.' };
   return null;
 }
