@@ -12,7 +12,7 @@ import { trimPair } from '../people-rig';
 import { AROHA_HEAD } from './aroha7';
 
 const R6 = (...h: string[]): Ramp6 => h.map(v => hex(v));
-export type Look = 'fwd' | 'up' | 'down' | 'back';
+export type Look = 'fwd' | 'up' | 'down' | 'back' | 'cam' | 'away';
 export interface HeadOpts7 { expr: string; mouth: 0 | 1 | 2; blink: boolean; look: Look; hair?: number }
 
 export interface Lock { a: V3; b: V3; r0: number; r1: number; sway?: number }
@@ -234,9 +234,10 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '')
   const d = HEADS7[id] ?? MORI;
   const ex = EXPR[o.expr] ?? EXPR.neutral;
   const s = new Scene3D(HW, HH, HOX, HOY);
-  // the head turns a little further toward the camera than the body, so both eyes read
+  // the head turns a little further toward the camera than the body, so both eyes read; 'cam' looks
+  // straight out at the viewer, 'away' glances back over the shoulder (at someone behind)
   const back = o.look === 'back';
-  const HY = back ? BACK_YAW - 0.1 : YAW + 0.25, ca = Math.cos(HY), sa = Math.sin(HY);
+  const HY = back ? BACK_YAW - 0.1 : o.look === 'cam' ? Math.PI / 2 - 0.16 : o.look === 'away' ? Math.PI - YAW - 0.12 : YAW + 0.25, ca = Math.cos(HY), sa = Math.sin(HY);
   const pitch = o.look === 'up' || back ? 0.2 : o.look === 'down' ? -0.24 : 0;
   const cp = Math.cos(pitch), sp = Math.sin(pitch);
   // head space → world: pitch about the neck (z axis), then yaw toward the camera
