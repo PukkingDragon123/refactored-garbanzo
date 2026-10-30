@@ -310,11 +310,10 @@ export async function breakfast(cd: CampDay) {
     st.pose('eat');
     audio.play('munch', { vol: 0.4 });
     await st.say(BREAKFAST_CHAT[(day - 2 + rand.int(0, 1)) % BREAKFAST_CHAT.length]);
-    // a little plan for the day: the requests waiting
-    const { REQUESTS, reqState } = await import('./campquests');
-    const active = REQUESTS.filter(r => reqState(r) === 'active' || reqState(r) === 'ready');
-    if (active.length) await st.say([{ who: 'mori', text: `Today’s list: ${active.slice(0, 2).map(r => r.title.toLowerCase()).join(', and ')}${active.length > 2 ? ', and the rest' : ''}.`, expr: 'determined' }]);
-    else await st.say([{ who: 'mori', text: 'Right. Board first, then the trail.', expr: 'determined' }]);
+    // V12: today's goal, said by whoever has the job for Mori (it is the day quest in the notebook too)
+    const { tellGoal } = await import('../v12/loop');
+    await tellGoal(cd);
+    await st.say([{ who: 'mori', text: rand.pick(['Right. Lunch from the chest, then the trail.', 'Got it. Notebook, lunch, out the gate.', 'On it. Back before dark.']), expr: 'determined' }]);
     for (const a of [s.jenna, s.joshu, s.aroha]) a.setAnim('sit');
     st.pose('sit');
     d.meals.breakfast = day;

@@ -38,6 +38,7 @@ import type { Point10, Site10, Swim10, Hazard10 } from '../sites10/kit';
 import { markerSprite, sprite, SWIM_DEPTH } from '../sites10/kit';
 import { POINTS10 } from './finds';
 import { installTrails } from '../v12/trails';
+import { attachLoop } from '../v12/loop';
 import { floatNotice } from '../../ui/v12/float';
 
 /** the V10 day loop has started (the V4 story's Day 1 is over), or a debug flag */
@@ -76,6 +77,8 @@ export let run: TripRun | null = null;
 export async function onFieldEnter(f: FieldScene) {
   installTranslator(translatorOn);
   run = null;
+  // V12: the day loop (setting off, dusk on the radio, the carry-home, rare animals) in every scene
+  attachLoop(f);
   if (isIslandScene(f)) { const ir = new IslandRun(f); run = ir; ir.start(); fireLocEnter(f, 'island', ir); return; }
   const loc = locOf(f);
   if (!loc || !location(loc)) { fireLocEnter(f, loc, null); return; }
