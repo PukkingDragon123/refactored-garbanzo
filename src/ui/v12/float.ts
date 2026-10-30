@@ -61,6 +61,8 @@ export interface FloatOpts {
   place?: 'above' | 'right';
   /** a small tag before a notice ("FIND", "MAP") */
   tag?: string;
+  /** move the speaker's body while the line types (default true when an actor is given) */
+  talk?: boolean;
   /** the tag's colour */
   accent?: string;
 }
@@ -548,7 +550,8 @@ function skipItem(it: Item) {
 }
 
 // ---------------------------------------------------------------- anchors
-type SpeakerLike = { name?: string; color?: string; voice?: number; anchor?: () => [number, number] | null };
+type TalkFn = (on: boolean, style?: string) => void;
+type SpeakerLike = { name?: string; color?: string; voice?: number; anchor?: () => [number, number] | null; talk?: TalkFn };
 type BubblesLike = { speaker(id: string): SpeakerLike | undefined };
 const bubbles = () => (game as unknown as { ui?: { bubbles?: BubblesLike } }).ui?.bubbles;
 
@@ -571,22 +574,28 @@ export function moriAnchor(): Anchor {
     return sc?.player?.body?.cssAnchor?.() ?? null;
   };
 }
-interface Resolved { anchor: Anchor | null; name?: string; color?: string; voice?: number }
+/** an actor resolved: where its head is, who it is, and its talking body (the text's style picks the
+ *  gesture clip: shout leans in, whisper hunches, scared recoils... see world/actor.ts) */
+interface Resolved { anchor: Anchor | null; name?: string; color?: string; voice?: number; talk?: TalkFn }
 function resolveActor(a: unknown): Resolved {
   if (typeof a === 'string') {
     const sp = bubbles()?.speaker(a);
-    if (sp?.anchor) { const f = sp.anchor; return { anchor: () => f(), name: sp.name, color: sp.color, voice: sp.voice }; }
-    const ac = (game.scene as { actor?(id: string): { cssAnchor?(): [number, number] | null } | undefined } | null)?.actor?.(a);
-    if (ac?.cssAnchor) return { anchor: () => ac.cssAnchor!() };
+    if (sp?.anchor) { const f = sp.anchor; const tk = sp.talk; return { anchor: () => f(), name: sp.name, color: sp.color, voice: sp.voice, talk: tk ? (on, st) => tk.call(sp, on, st) : undefined }; }
+    const ac = (game.scene as { actor?(id: string): { cssAnchor?(): [number, number] | null; speaker?(): SpeakerLike } | undefined } | null)?.actor?.(a);
+    if (ac?.cssAnchor) { const sk = ac.speaker?.(); return { anchor: () => ac.cssAnchor!(), name: sk?.name, color: sk?.color, voice: sk?.voice, talk: sk?.talk }; }
     return { anchor: null };
   }
   if (a && typeof a === 'object') {
-    const o = a as { anchor?: unknown; cssAnchor?: unknown; x?: unknown; y?: unknown; id?: unknown; name?: unknown; color?: unknown; voice?: unknown };
-    if (typeof o.anchor === 'function') { const f = o.anchor as Anchor; return { anchor: () => f.call(a), name: o.name as string, color: o.color as string, voice: o.voice as number }; }
+    const o = a as { anchor?: unknown; cssAnchor?: unknown; x?: unknown; y?: unknown; id?: unknown; name?: unknown; color?: unknown; voice?: unknown; talk?: unknown; speaker?: unknown };
+    if (typeof o.anchor === 'function') {
+      const f = o.anchor as Anchor, tk = typeof o.talk === 'function' ? (o.talk as TalkFn) : undefined;
+      return { anchor: () => f.call(a), name: o.name as string, color: o.color as string, voice: o.voice as number, talk: tk ? (on, st) => tk.call(a, on, st) : undefined };
+    }
     if (typeof o.cssAnchor === 'function') {
       const sp = typeof o.id === 'string' ? bubbles()?.speaker(o.id) : undefined;
+      const sk = !sp && typeof o.speaker === 'function' ? (o.speaker as () => SpeakerLike).call(a) : sp;
       const f = o.cssAnchor as Anchor;
-      return { anchor: () => f.call(a), name: sp?.name, color: sp?.color, voice: sp?.voice };
+      return { anchor: () => f.call(a), name: sk?.name, color: sk?.color, voice: sk?.voice, talk: sk?.talk ? (on, st) => sk.talk!.call(sk, on, st) : undefined };
     }
     if (typeof o.x === 'number' && typeof o.y === 'number') return { anchor: () => worldToCss(o.x as number, o.y as number) };
   }
@@ -1015,6 +1024,12 @@ export function floatLine(o: FloatOpts & { kind?: 'line' | 'bark' | 'notice'; lo
   });
   add(it);
   if (kind === 'notice' && it.gl.length) { try { audio.play('bubblePop' as never, { vol: 0.12, pitch: 1.5 }); } catch { /* */ } }
+  // the speaker's body talks in the text's style while the letters type (the dialogue drives its own)
+  if (r.talk && kind !== 'notice' && o.talk !== false && it.gl.length) {
+    const tk = r.talk;
+    try { tk(true, style); } catch { /* */ }
+    void it.typed.then(() => { try { tk(false); } catch { /* */ } });
+  }
   return handle(it);
 }
 

@@ -42,8 +42,9 @@ export interface Speaker {
   color: string;
   /** CSS px (relative to #ui) of the point just above the head, or null when not visible */
   anchor(): [number, number] | null;
-  /** called when the speaker starts/stops talking; mouth flaps are driven by the actor */
-  talk?(on: boolean): void;
+  /** called when the speaker starts/stops talking; mouth flaps and the gesture clip for the line's
+   *  style (shout, whisper, scared, happy, laugh, sad, think) are driven by the actor */
+  talk?(on: boolean, style?: string): void;
   /** start-of-line reaction: expression, emote icon and body reaction ids are interpreted by the actor */
   react?(o: { expr?: string; emote?: string; react?: string }): void;
 }
@@ -157,7 +158,11 @@ export class Bubbles {
     return line.style === 'shout' && ['shocked', 'angry', 'scared', 'surprised'].includes(line.expr ?? '');
   }
 
-  private show(line: BubbleLine, close: boolean): FloatHandle {
+  private styleOf(line: BubbleLine): FloatStyle {
+    return floatStyleOf(line.style, line.expr, line.text);
+  }
+
+  private show(line: BubbleLine, close: boolean, style: FloatStyle): FloatHandle {
     const sp = this.speakers.get(line.who);
     const narr = line.who === 'narrator';
     const turn = line.who !== this.lastWho;
@@ -169,7 +174,7 @@ export class Bubbles {
       : sp ? () => sp.anchor() ?? this.edge(line.who) : () => this.edge(line.who);
     return floatLine({
       text: this.fmt(line.text), kind: 'line', hold: true,
-      style: floatStyleOf(line.style, line.expr, line.text),
+      style,
       at: anchor, place: close ? 'right' : 'above',
       // the name rides on the first line of each turn, and always when the speaker is out of sight
       name: name && (turn || !sp || !sp.anchor()) ? name : undefined,
@@ -230,9 +235,11 @@ export class Bubbles {
         let h: FloatHandle | null = null;
         if (close) this.cu.show(line.who as never, line.expr ?? 'neutral', { name: sp?.name ?? line.who, style: line.style, talking: () => !!h && !h.isTyped() });
         else this.cu.hide();
-        h = this.show(line, close);
+        const fs = this.styleOf(line);
+        h = this.show(line, close, fs);
         this.cur = h;
-        sp?.talk?.(true);
+        // the body says it the same way the letters do
+        sp?.talk?.(true, fs);
         await h.typed;
         sp?.talk?.(false);
         if (line.choices) {
@@ -277,11 +284,17 @@ export class Bubbles {
     const sp = this.speakers.get(who);
     if (!sp || !sp.anchor()) return;
     sp.react?.({ expr: o.expr, emote: o.emote });
+    const style = floatStyleOf(o.style, o.expr, text);
     const h = floatLine({
-      text: this.fmt(text), kind: 'bark', style: floatStyleOf(o.style, o.expr, text), at: () => sp.anchor(),
+      text: this.fmt(text), kind: 'bark', style, at: () => sp.anchor(),
       color: sp.color, voice: sp.voice, ms: 2400 + text.length * 45, lost: 'hide',
     });
     this.barks.set(who, h);
+    // (a bark gestures while it types, unless the speaker is in a conversation line right now)
+    if (!(this.active && this.cur && this.lastWho === who)) {
+      sp.talk?.(true, style);
+      void h.typed.then(() => { if (!(this.active && this.lastWho === who)) sp.talk?.(false); });
+    }
   }
 
   clear() {
