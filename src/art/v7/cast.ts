@@ -5,7 +5,7 @@
 //          canvas shorts, paraerae (aroha7.ts)
 //  Joshu - navy cable-knit gansey over a big belly, dark trousers, black sea boots; tall and broad
 
-import { hex, C } from '../color';
+import { hex, mix, C } from '../color';
 import { cel, Ramp6 } from './raster';
 import type { Char7, Part } from './body';
 import { AROHA7 } from './aroha7';
@@ -24,10 +24,17 @@ const JOSHU_SKIN = R6('#3a1810', '#a04a3a', '#d08064', '#f2aa86', '#f8c49c', '#f
 const M = {
   tunic: R6('#16100f', '#2c2426', '#453c3e', '#5e5456', '#786e70', '#948a8c'),
   belt: R6('#1d0e0f', '#4d2c25', '#61372d', '#7a4c32', '#946246', '#b07c58'),
-  shorts: R6('#08070c', '#141420', '#1e1e2c', '#2a2c3c', '#383a4e', '#4a4c62'),
-  boot: R6('#0c0607', '#2a1612', '#3e2218', '#583224', '#744434', '#8e5a44'),
-  glove: R6('#0c0607', '#1d0e0f', '#2b2122', '#3a2f30', '#4d3a38', '#5e4a46'),
+  shorts: R6('#08070c', '#161826', '#22243a', '#30344c', '#40465e', '#565c76'),
+  boot: R6('#0c0607', '#2a1612', '#3e2218', '#583224', '#744434', '#a0705a'),
+  glove: R6('#0c0607', '#1d0e0f', '#2b2122', '#3a2f30', '#4d3a38', '#6e5a56'),
 };
+/** brass hardware (buckle, ring, studs, eyelets) and horn buttons */
+const BRASS = R6('#1a1004', '#4a3010', '#7a5418', '#b08430', '#d8b050', '#fff0b0');
+const HORN = R6('#0a0606', '#1e1412', '#2e201c', '#3e2c26', '#5a443a', '#7a6458');
+const STITCH = hex('#b89a74');
+const fr = (v: number) => v - Math.floor(v);
+/** a seam: a dark line, then a lit ridge beside it toward the light */
+const seam = (r: Ramp6, l: number, d: number, w = 0.12) => (Math.abs(d) < w ? cel(r, l, -0.45) : d > 0 && d < w * 2.4 ? cel(r, l, 0.22) : -1);
 export const MORI7: Char7 = {
   id: 'mori',
   // a man's frame: broad shoulders over narrow hips, a thicker neck and arms
@@ -36,28 +43,100 @@ export const MORI7: Char7 = {
   armR: [2.1, 1.75, 1.5], legR: [2.45, 1.95, 1.65], neckR: 1.8, hand: 1.16,
   skin: BOY_SKIN, ink: hex('#1a0e10'),
   torso(p) {
-    const l = L(p);
-    // belt with a brass buckle
-    if (p.hh > 0.14 && p.hh < 0.24) return p.f > 2 && Math.abs(p.z) < 1 ? hex('#d8a848') : cel(M.belt, l, 0.1);
-    // cross strap from the far shoulder to the near hip, over the front
-    const sz = -4.6 + ((0.92 - p.hh) / 0.7) * 7.2;
-    if (p.f > 0 && p.hh > 0.22 && p.hh < 0.94 && Math.abs(p.z - sz) < 0.95) return cel(M.belt, l, -0.05);
-    // collar: a V of skin at the neck
-    if (p.hh > 0.9 && p.f > 1.6 && Math.abs(p.z) < (p.hh - 0.9) * 22) return cel(BOY_SKIN, l, -0.2);
-    // placket seam and hem fold
-    if (p.f > 2.2 && Math.abs(p.z - 0.4) < 0.35 && p.hh > 0.3) return cel(M.tunic, l, -0.3);
+    const l = L(p), hh = p.hh, f = p.f, z = p.z, front = f > 1.1;
+    // the belt: stitched leather, two loops of the shirt over it, a brass buckle with its prong
+    if (hh > 0.14 && hh < 0.24) {
+      if (front && Math.abs(z - 0.2) < 1.05) {
+        const rim = Math.abs(z - 0.2) > 0.6 || hh < 0.163 || hh > 0.217;
+        return rim ? cel(BRASS, l, 0.25, true) : Math.abs(z - 0.2) < 0.18 ? cel(BRASS, l, -0.1) : cel(M.belt, l, -0.5);
+      }
+      if (front && (Math.abs(z - 2.5) < 0.32 || Math.abs(z + 2.1) < 0.32)) return cel(M.tunic, l, 0.12);
+      if (hh < 0.152 || hh > 0.228) return cel(M.belt, l, -0.3);
+      if ((hh < 0.163 || hh > 0.217) && Math.floor(z * 3.2) % 2 === 0) return mix(cel(M.belt, l, 0), STITCH, 0.45);
+      return cel(M.belt, l, 0.1, true);
+    }
+    // the camera strap from the far shoulder to the near hip: stitched edges, a brass ring on the chest
+    const sz = -4.6 + ((0.92 - hh) / 0.7) * 7.2, ds = Math.abs(z - sz);
+    if (f > 0 && hh > 0.22 && hh < 0.94 && ds < 0.95) {
+      if (Math.abs(hh - 0.6) < 0.045 && ds < 0.9) return Math.abs(hh - 0.6) < 0.02 && ds < 0.45 ? cel(M.tunic, l, -0.35) : cel(BRASS, l, 0.2, true);
+      if (ds > 0.72) return cel(M.belt, l, -0.4);
+      if (ds > 0.5 && Math.floor(hh * 48) % 2 === 0) return mix(cel(M.belt, l, 0), STITCH, 0.5);
+      return cel(M.belt, l, -0.05, true);
+    }
+    // the open collar: a V of skin at the throat, the folded collar points either side, inked at the fold
+    if (hh > 0.9 && f > 1.4 && Math.abs(z) < (hh - 0.9) * 22) return cel(BOY_SKIN, l, -0.15);
+    if (hh > 0.8 && f > 0.6) {
+      const edge = (hh - 0.8) * 30 + 1.1 - Math.abs(z);
+      if (edge > 0) return edge < 0.32 ? cel(M.tunic, l, -0.5) : cel(M.tunic, l, 0.28);
+    }
+    if (hh > 0.93) return cel(M.tunic, l, 0.15); // the collar band round the back of the neck
+    // breast pockets with buttoned flaps (box-stitched), each side of the placket
+    for (const side of [1, -1]) {
+      const pz = side * 2.25, dz = Math.abs(z - pz);
+      if (front && dz < 1.05 && hh > 0.54 && hh < 0.75) {
+        if (hh > 0.68) {
+          if (hh < 0.692) return cel(M.tunic, l, -0.55); // under the flap
+          if (dz < 0.24 && Math.abs(hh - 0.705) < 0.02) return cel(HORN, l, 0.2, true);
+          return dz > 0.86 || hh > 0.736 ? cel(M.tunic, l, -0.5) : cel(M.tunic, l, 0.22);
+        }
+        if (dz > 0.86 || hh < 0.558) return cel(M.tunic, l, -0.55);
+        return cel(M.tunic, l, 0.06);
+      }
+    }
+    // the placket down the front with horn buttons
+    if (front && hh > 0.26 && hh < 0.9) {
+      const dz = z - 0.35;
+      if (Math.abs(dz) < 0.3 && [0.42, 0.58, 0.74].some(b => Math.abs(hh - b) < 0.022)) return cel(HORN, l, 0.25, true);
+      const sm = seam(M.tunic, l, dz - 0.38, 0.1);
+      if (sm !== -1) return sm;
+    }
+    // the yoke seam across the chest above the pockets
+    if (front && Math.abs(hh - 0.8) < 0.012) return cel(M.tunic, l, -0.4);
     return cel(M.tunic, l);
   },
   upperArm(p) { return cel(M.tunic, L(p), lb(p)); },
-  foreArm(p) { return p.t > 0.62 ? cel(M.glove, L(p), lb(p)) : p.t > 0.5 ? cel(M.tunic, L(p), lb(p) - 0.3) : cel(M.tunic, L(p), lb(p)); },
-  hands(p) { return cel(M.glove, L(p), lb(p) + 0.1); },
+  // sleeves rolled to the forearm, then the leather gauntlet of the glove with a strap and a stud
+  foreArm(p) {
+    const l = L(p), t = p.t, b = lb(p);
+    if (t > 0.62) {
+      if (t > 0.72 && t < 0.8) return Math.sin(p.hit.q[1]) < -0.75 && t > 0.74 && t < 0.78 ? cel(BRASS, l, b + 0.2, true) : cel(M.glove, l, b - 0.25);
+      return t < 0.645 ? cel(M.glove, l, b - 0.4) : cel(M.glove, l, b + 0.05, true);
+    }
+    if (t > 0.42) return t < 0.45 || t > 0.595 ? cel(M.tunic, l, b - 0.42) : fr(t * 22) < 0.18 ? cel(M.tunic, l, b - 0.2) : cel(M.tunic, l, b + 0.2);
+    return cel(M.tunic, l, b);
+  },
+  hands(p) { return cel(M.glove, L(p), lb(p) + 0.1, true); },
   // fingerless field gloves: the fingers and thumb are bare from the first knuckle
   fingers(p) { return p.t < 0.2 ? cel(M.glove, L(p), lb(p) + 0.1) : cel(BOY_SKIN, L(p), lb(p) + 0.12); },
-  thigh(p) { return cel(M.shorts, L(p), lb(p)); },
-  shin(p) { return p.t < 0.18 ? cel(BOY_SKIN, L(p), lb(p)) : p.t < 0.28 ? cel(M.boot, L(p), lb(p) + 0.25) : cel(M.boot, L(p), lb(p)); },
-  shoe(p) { return p.hit.q[1] < -0.45 ? M.boot[0] : cel(M.boot, L(p), lb(p) + 0.05); },
-  // the tunic ends in a short straight hem at the hips (a field shirt, not a dress)
-  skirt: { len: 4.2, flare: 0.5, mat: p => (p.t > 0.8 ? cel(M.tunic, L(p), -0.35) : Math.sin(Math.atan2(p.z, p.f) * 5) > 0.8 ? cel(M.tunic, L(p), -0.25) : cel(M.tunic, L(p))) },
+  // canvas shorts to the knee: a slant pocket on the front, a turned-up hem
+  thigh(p) {
+    const l = L(p), t = p.t, b = lb(p), a = p.hit.q[1];
+    if (t > 0.86) return t < 0.885 ? cel(M.shorts, l, b - 0.4) : t > 0.97 ? cel(M.shorts, l, b - 0.25) : cel(M.shorts, l, b + 0.2);
+    if (p.near && Math.sin(a) < -0.1 && t < 0.34 && Math.abs(t - (0.04 + 0.13 * (1 - Math.cos(a)))) < 0.024) return cel(M.shorts, l, b - 0.45);
+    return cel(M.shorts, l, b);
+  },
+  // the knee, then tall leather boots: a turned-down cuff, laces up the front through brass eyelets, a polish streak
+  shin(p) {
+    const l = L(p), t = p.t, b = lb(p), a = p.hit.q[1], fa = -Math.sin(a), ac = Math.cos(a);
+    if (t < 0.1) return cel(BOY_SKIN, l, b);
+    if (t < 0.25) return t < 0.12 ? cel(M.boot, l, b + 0.3) : t > 0.235 ? cel(M.boot, l, b - 0.5) : cel(M.boot, l, b + 0.18);
+    if (fa > 0.45 && t > 0.3 && t < 0.92) {
+      const tri = Math.abs(fr((t - 0.3) * 11) - 0.5) * 2 - 0.5;
+      if (Math.abs(Math.abs(ac) * 1.8 - Math.abs(tri) * 1.1) < 0.2 && Math.abs(ac) < 0.42) return mix(cel(M.boot, l, b + 0.4), STITCH, 0.5);
+      if (Math.abs(Math.abs(ac) - 0.45) < 0.08 && fr((t - 0.3) * 11) < 0.25) return cel(BRASS, l, b, true);
+    }
+    if (l + b > 0.62 && fa > 0.2 && Math.abs(ac + 0.45) < 0.12) return M.boot[5];
+    return cel(M.boot, l, b);
+  },
+  shoe(p) {
+    const q = p.hit.q, l = L(p), b = lb(p);
+    if (q[1] < -0.45) return M.boot[0];
+    if (q[1] < -0.28) return Math.floor(p.hit.x / 2) % 2 ? mix(cel(M.boot, l, b - 0.2), STITCH, 0.35) : cel(M.boot, l, b - 0.3);
+    if (q[0] > 0.45 && l + b > 0.5) return M.boot[5]; // the polished toe cap
+    return cel(M.boot, l, b + 0.05);
+  },
+  // the shirt's tails at the hips: a stitched hem, a few soft folds
+  skirt: { len: 4.2, flare: 0.5, mat: p => (p.t > 0.84 ? cel(M.tunic, L(p), -0.35) : p.t > 0.76 && p.t < 0.8 ? mix(cel(M.tunic, L(p), 0), STITCH, 0.2) : Math.sin(Math.atan2(p.z, p.f) * 5) > 0.8 ? cel(M.tunic, L(p), -0.25) : cel(M.tunic, L(p))) },
 };
 
 // ------------------------------------------------------------------ Jenna

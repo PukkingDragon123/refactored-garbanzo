@@ -7,12 +7,14 @@
 import { PixelBuffer } from '../pixel';
 import { C, hex, mix } from '../color';
 import { Scene3D, V3, Hit, cel, Ramp6, vadd } from './raster';
-import { YAW, BACK_YAW } from './body';
+import { YAW, BACK_YAW, PX7 } from './body';
+import { paintFace7 } from './face7';
 import { trimPair } from '../people-rig';
 import { AROHA_HEAD } from './aroha7';
 
 const R6 = (...h: string[]): Ramp6 => h.map(v => hex(v));
 export type Look = 'fwd' | 'up' | 'down' | 'back' | 'cam' | 'away';
+const frac = (v: number) => v - Math.floor(v);
 export interface HeadOpts7 { expr: string; mouth: 0 | 1 | 2; blink: boolean; look: Look; hair?: number }
 
 export interface Lock { a: V3; b: V3; r0: number; r1: number; sway?: number }
@@ -60,6 +62,12 @@ export interface HeadDef7 {
   eyePaint?(mark: FaceMark, x: number, y: number, inner: 1 | -1, far: boolean, eye: HeadExpr7['eye'], ex: HeadExpr7, d: HeadDef7): void;
   /** a character's own mouth painter (mouth: the expression's shape, or the talking flap) */
   mouthPaint?(mark: FaceMark, x: number, y: number, mouth: HeadExpr7['mouth'], ex: HeadExpr7, d: HeadDef7): void;
+  /**
+   * The anime face (face7.ts) that the sprites now wear (eyePaint / mouthPaint are kept for the
+   * older low-density painters): iris colours [dark, lit], lash style ('f' flicks up and out, with a
+   * lower lash), freckles.
+   */
+  face?: { iris?: [string, string]; lash?: 'm' | 'f'; freckles?: boolean };
 }
 export type FaceMark = (x: number, y: number, c: C) => void;
 
@@ -103,7 +111,8 @@ const JOSHU_SKIN = R6('#3a1810', '#a04a3a', '#d08064', '#f2aa86', '#f8c49c', '#f
 
 const MORI: HeadDef7 = {
   skin: BOY_SKIN,
-  hair: R6('#0a0608', '#1a1216', '#2a2024', '#3c3034', '#564a4e', '#7a6c70'),
+  hair: R6('#0a0608', '#1a1216', '#2a2024', '#3c3034', '#5a5262', '#8a86a0'),
+  face: { iris: ['#3e2a22', '#8e6a4c'], lash: 'm' },
   ink: hex('#1a0e10'),
   skull: [[0.1, 8.0, 0], [4.8, 5.4, 4.2]],
   // a squarer jaw and a broad chin (a man's head, even at sprite scale)
@@ -141,6 +150,7 @@ const JENNA: HeadDef7 = {
   eye: [3.9, 6.7, 2.2],
   mouth: [4.2, 4.0, 0.3],
   eyeCol: '#24141a', brow: '#4a3434', blush: '#f49a90',
+  face: { iris: ['#4a3a56', '#9e88b4'], lash: 'f' },
   shell: [[-0.5, 8.9, 0], [5.4, 5.9, 5.0]],
   cut: q => q[0] > 0.22 && q[1] < 0.34,
   locks: [
@@ -167,6 +177,7 @@ const JOSHU: HeadDef7 = {
   eye: [4.8, 7.8, 2.8],
   mouth: [5.4, 3.6, 0.3],
   eyeCol: '#140a0c', brow: '#e8e2d8', blush: '#f08a80',
+  face: { iris: ['#283442', '#6a8498'], lash: 'm' },
   shell: [[-0.8, 8.4, 0], [5.8, 5.2, 5.8]],
   cut: q => q[0] > 0.1 || q[1] > 0.55,
   locks: [],
@@ -189,53 +200,32 @@ const JOSHU: HeadDef7 = {
 
 export const HEADS7: Record<string, HeadDef7> = { mori: MORI, jenna: JENNA, aroha: AROHA_HEAD, joshu: JOSHU };
 
-/**
- * Joshu's eyes are always narrowed: a short dark slit sunk under a heavy brow ridge (a shadow row)
- * with bushy pale brows pressing down on it. Anger slants the slit and drives the inner brow down onto
- * it, sorrow lifts the inner brow and droops the outer corner, surprise raises the brows and opens
- * the slit a pixel, a grin squeezes it into a crinkled arc, sleep is a soft lid line.
- * `inner` is the screen direction toward the nose.
- */
-function slitEye(mark: (x: number, y: number, c: C) => void, x: number, y: number, inner: 1 | -1, eye: Ex['eye'], ex: Ex, d: HeadDef7, eyeC: C, browC: C) {
-  const o = -inner;
-  const lid = mix(d.skin[1], eyeC, 0.35), browS = mix(browC, d.skin[1], 0.4), crease = mix(d.skin[2], d.skin[1], 0.6);
-  const t = ex.browTilt;
-  if (eye === 'wide') {
-    // brows up, the eye opened to a taller dot: about as wide-eyed as he gets
-    mark(x + inner, y - 3, browC); mark(x, y - 3, browC); mark(x + o, y - 2, browS);
-    mark(x, y, eyeC); mark(x, y - 1, eyeC);
-    return;
-  }
-  if (eye === 'happy') {
-    // squeezed into a grin: an arc under the brow, crow's feet at the outer corner
-    mark(x + inner, y - 2, browC); mark(x, y - 2, browC); mark(x + o, y - 2, browS);
-    mark(x, y - 1, eyeC); mark(x + inner, y, eyeC); mark(x + o, y, eyeC); mark(x + o * 2, y + 1, crease);
-    return;
-  }
-  // the heavy brow sits right on the eye: angry slants it down to the nose, sad lifts its inner end
-  if (t < 0) { mark(x + inner, y, browC); mark(x, y - 1, browC); mark(x + o, y - 2, browS); }
-  else if (t > 0) { mark(x + inner, y - 2, browC); mark(x, y - 1, browC); mark(x + o, y - 1, browS); }
-  else { mark(x + inner, y - 1, browC); mark(x, y - 1, browC); mark(x + o, y - 1, browS); }
-  if (eye === 'closed') { mark(x, y, lid); mark(x + o, y, lid); return; }
-  if (eye === 'sad') { mark(x, y, eyeC); mark(x + o, y + 1, lid); return; }
-  // the narrowed glare (neutral, half, angry): a two-pixel slit, its outer corner creased
-  mark(x, y, eyeC); mark(x + o, y, eyeC);
-  if (eye === 'angry') mark(x + o * 2, y - 1, crease);
-}
-
 // ------------------------------------------------------------------ render
 
-const cache = new Map<string, { buf: PixelBuffer; ax: number; ay: number }>();
+const cache = new Map<string, { buf: PixelBuffer; ax: number; ay: number; k: number }>();
+/** head-space canvas (head units): the buffer is this times the head's pixel density */
 const HW = 48, HH = 56, HOX = 24, HOY = 40;
+/**
+ * Grown-ups' heads are drawn at this fraction of the head volumes' size: the anime-realistic
+ * proportions (about six heads tall, the head kept a touch large so faces read at game scale).
+ * Children (index.ts passes their own) keep rounder, larger heads.
+ */
+export const HEAD_SCALE7 = 0.8;
 
-/** a head, optionally dressed in outfit head wear (`wk` names it for the cache) */
-export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = ''): { buf: PixelBuffer; ax: number; ay: number } {
-  const key = `${id}|${wk}|${o.expr}|${o.mouth}|${o.blink ? 1 : 0}|${o.look}|${o.hair ?? 0}`;
+/**
+ * A head, optionally dressed in outfit head wear (`wk` names it for the cache), at `hs` of its
+ * volumes' size. The buffer is at the rig's pixel density (PX7 px per world px; `k` says so).
+ */
+export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '', hs = HEAD_SCALE7): { buf: PixelBuffer; ax: number; ay: number; k: number } {
+  const key = `${id}|${wk}|${o.expr}|${o.mouth}|${o.blink ? 1 : 0}|${o.look}|${o.hair ?? 0}|${hs}`;
   const hit = cache.get(key);
   if (hit) return hit;
   const d = HEADS7[id] ?? MORI;
   const ex = EXPR[o.expr] ?? EXPR.neutral;
-  const s = new Scene3D(HW, HH, HOX, HOY);
+  // buffer px per head unit
+  const k = PX7 * hs;
+  const BW = Math.ceil(HW * k), BH = Math.ceil(HH * k), BOX = Math.round(HOX * k), BOY = Math.round(HOY * k);
+  const s = new Scene3D(BW, BH, BOX, BOY, k);
   // the head turns a little further toward the camera than the body, so both eyes read; 'cam' looks
   // straight out at the viewer, 'away' glances back over the shoulder (at someone behind)
   const back = o.look === 'back';
@@ -256,12 +246,41 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '')
   E(d.chin[0], d.chin[1], 1, skinM(0.1));
   E(d.nose[0], d.nose[1], 1, skinM(0.2));
   E(d.ear[0], d.ear[1], 2, skinM(-0.05));
-  // hair: shell with the face cut out, then the locks (tips trail back with `hair`)
-  const hairM = (h: Hit) => {
-    const band = h.n[1] > 0.35 && h.n[1] < 0.7 && h.l > 0.45;
-    return band ? d.hair[4] : cel(d.hair, h.l, 0.05);
+  // hair in strand clusters: dark grooves between the clumps, a broken two-tone angel ring across the
+  // crown and a fainter second band, lit tips on the locks (the rim light comes in the finish pass)
+  const HR = d.hair;
+  // the angel ring: one band at a fixed height round the head, across the shell and every lock alike,
+  // its lower edge cut into teeth along the strands; a thinner second band lower on the bangs
+  const ringY = d.skull[0][1] + d.skull[1][1] * 0.52;
+  const ring = (h: Hit, groove: boolean, strand: number): C | 0 => {
+    if (groove || h.l < 0.18) return 0;
+    const y = h.p[1], saw = frac(strand);
+    if (y < ringY + 0.75 && y > ringY - 0.35 - saw * 0.9) return h.l > 0.55 && y > ringY - 0.1 && y < ringY + 0.45 ? HR[5] : HR[4];
+    if (h.l > 0.42 && y < ringY - 2.3 && y > ringY - 2.75 - saw * 0.5) return mix(cel(HR, h.l, 0.05), HR[4], 0.55);
+    return 0;
   };
-  if (!wear?.hideShell) s.ellipsoid(W(d.shell[0]), Wv([d.shell[1][0], 0, 0]), Wv([0, d.shell[1][1], 0]), Wv([0, 0, d.shell[1][2]]), 3, h => (d.cut(h.q) ? -1 : hairM(h)));
+  const shellM = (h: Hit): C | -1 => {
+    if (d.cut(h.q)) return -1;
+    const q = h.q, lat = q[1];
+    // strands fan out from the whorl at the back of the crown
+    const ang = Math.atan2(q[2], q[0] + 0.45);
+    const groove = lat < 0.92 && Math.sin(ang * 8 + lat * 2.4) > 0.8;
+    const rg = ring(h, groove, ang * 2.6);
+    if (rg) return rg;
+    const c = cel(HR, h.l, 0.05);
+    return groove ? mix(c, HR[1], 0.55) : c;
+  };
+  const lockM = (i: number) => (h: Hit): C => {
+    const t = h.t;
+    const groove = Math.sin(h.q[1] * 2.6 + i * 1.9) > 0.8;
+    const rg = ring(h, groove, h.q[1] * 0.8 + i * 0.37);
+    if (rg) return rg;
+    const c = cel(HR, h.l, 0.05);
+    if (groove) return mix(c, HR[1], 0.6);
+    if (t > 0.84 && h.l > -0.1) return mix(c, HR[4], 0.35); // fine tips catch the light
+    return c;
+  };
+  if (!wear?.hideShell) s.ellipsoid(W(d.shell[0]), Wv([d.shell[1][0], 0, 0]), Wv([0, d.shell[1][1], 0]), Wv([0, 0, d.shell[1][2]]), 3, shellM);
   const sway = o.hair ?? 0;
   d.locks.forEach((l, i) => {
     if (wear?.hideLock?.(l, i)) return;
@@ -274,53 +293,37 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '')
       a = [a[0] + (tip[0] - a[0]) * u, tk, a[2] + (tip[2] - a[2]) * u];
       r0 = l.r0 + (l.r1 - l.r0) * u;
     }
-    s.limb(W(a), W(tip), r0, l.r1, 3, hairM);
+    s.limb(W(a), W(tip), r0, l.r1, 3, lockM(i));
   });
   if (!wear?.hideExtras) d.extras?.(s, W, o);
   wear?.draw(s, W, o, d);
-  // face details (dot eyes, brows, mouth, blush) projected onto the surface
-  const px = (p: V3): [number, number, number] => { const w = W(p); return [HOX + w[0], HOY - w[1], w[2]]; };
+  // the face (face7.ts), projected onto the surface and painted after the ink
+  const px = (p: V3): [number, number, number] => { const w = W(p); return [BOX + w[0] * k, BOY - w[1] * k, w[2]]; };
   const marks: [number, number, C][] = [];
-  const mark = (x: number, y: number, c: C) => { x = Math.floor(x); y = Math.floor(y); if (x >= 0 && y >= 0 && x < HW && y < HH && s.grp[y * HW + x]) marks.push([x, y, c]); };
-  const eyeC = hex(d.eyeCol), browC = hex(d.brow);
-  const eyes = [[d.eye[0], d.eye[1], d.eye[2]], [d.eye[0], d.eye[1], -d.eye[2]]] as V3[];
+  const onFace = (x: number, y: number) => x >= 0 && y >= 0 && x < BW && y < BH && s.grp[y * BW + x] === 1;
+  const put = (x: number, y: number, c: C) => { x = Math.floor(x); y = Math.floor(y); if (onFace(x, y)) marks.push([x, y, c]); };
+  const visible = (p: V3) => { const [x, y, z] = px(p); const i = Math.floor(y) * BW + Math.floor(x); return x >= 0 && y >= 0 && x < BW && y < BH && s.grp[i] === 1 && s.z[i] <= z + 2.2; };
+  const eyeA: V3 = [d.eye[0], d.eye[1], d.eye[2]], eyeB: V3 = [d.eye[0], d.eye[1], -d.eye[2]];
+  const [nearE, farE] = W(eyeA)[2] >= W(eyeB)[2] ? [eyeA, eyeB] : [eyeB, eyeA];
   const eye = o.blink && ex.eye !== 'happy' ? 'closed' : ex.eye;
-  const visible = (p: V3) => { const [x, y, z] = px(p); const i = Math.floor(y) * HW + Math.floor(x); return x >= 0 && y >= 0 && x < HW && y < HH && s.grp[i] === 1 && s.z[i] <= z + 2.2; };
-  for (const e of eyes) {
-    if (!visible(e)) continue;
-    const [x, y] = px(e);
-    if (d.eyeStyle === 'slit') { slitEye(mark, x, y, e[2] > 0 ? 1 : -1, eye, ex, d, eyeC, browC); continue; }
-    if (d.eyePaint) { d.eyePaint(mark, x, y, e[2] > 0 ? 1 : -1, e[2] < 0, eye, ex, d); continue; }
-    if (eye === 'dot' || eye === 'angry' || eye === 'sad' || eye === 'half') mark(x, y, eyeC);
-    else if (eye === 'wide') { mark(x, y, eyeC); mark(x, y - 1, eyeC); }
-    else if (eye === 'closed') { mark(x, y, eyeC); mark(x - 1, y, eyeC); }
-    else if (eye === 'happy') { mark(x, y - 1, eyeC); mark(x - 1, y, eyeC); mark(x + 1, y, eyeC); }
-    // brows: two pixels, raised / tilted by the expression (inner end toward the nose)
-    if (!d.browHidden || ex.brow > 1) {
-      const by = y - 2 - (ex.brow > 1 ? 1 : 0);
-      const inner = e[2] > 0 ? 1 : -1; // toward the face centre on screen
-      void inner;
-      const t = ex.browTilt;
-      mark(x - 1, by + (t < 0 ? 0 : t > 0 ? 1 : 0), browC);
-      mark(x, by + (t < 0 ? 1 : 0), browC);
-    }
-    if (ex.blush) mark(x, y + 2, mix(hex(d.blush), d.skin[3], 0.2));
-  }
-  // mouth
-  const [mx, my] = px(d.mouth);
-  const lip = mix(d.skin[1], hex('#6a2020'), 0.4), dark = hex('#4a1418');
   const mouth = o.mouth === 2 ? 'shout' : o.mouth === 1 ? (ex.mouth === 'none' || ex.mouth === 'smile' || ex.mouth === 'frown' ? 'open' : ex.mouth) : ex.mouth;
-  if (d.mouthPaint) d.mouthPaint(mark, mx, my, mouth, ex, d);
-  else if (mouth === 'smile') { mark(mx, my, lip); mark(mx - 1, my - 1, lip); }
-  else if (mouth === 'frown') { mark(mx, my, lip); mark(mx - 1, my + 1, lip); }
-  else if (mouth === 'open' || mouth === 'o') mark(mx, my, dark);
-  else if (mouth === 'grit') { mark(mx, my, dark); mark(mx - 1, my, dark); }
-  else if (mouth === 'shout') { mark(mx, my, dark); mark(mx, my + 1, dark); mark(mx - 1, my, dark); }
-  if (ex.sweat) { const [sx, sy] = px([0, 11, d.skull[1][2] * 0.9]); mark(sx, sy, hex('#9ad8ff')); mark(sx, sy + 1, hex('#4a9ad8')); }
-  const r = s.finish({ ink: d.ink, depthLine: 1.6 });
-  if (!back) for (const [x, y, c] of marks) r.back.data[y * HW + x] = c;
+  const at2 = (p: V3): [number, number] => { const q = px(p); return [q[0], q[1]]; };
+  if (!back) {
+    paintFace7(put, {
+      near: visible(nearE) ? at2(nearE) : null, far: visible(farE) ? at2(farE) : null,
+      mouth: at2(d.mouth), nose: at2([d.nose[0][0] + d.nose[1][0] * 0.85, d.nose[0][1] - d.nose[1][1] * 0.3, 0]),
+      dir: ca * cp >= 0 ? 1 : -1, eye, mouthShape: mouth, ex, d,
+    });
+    if (ex.sweat) {
+      const [sx, sy] = px([0, 11, d.skull[1][2] * 0.9]);
+      const drop = ['.w', 'wb', 'bb', '.b'], dc: Record<string, C> = { w: hex('#e8f8ff'), b: hex('#5ab0ec') };
+      drop.forEach((row, j) => { for (let i = 0; i < 2; i++) if (row[i] !== '.') { const X = Math.floor(sx) + i, Y = Math.floor(sy) - 2 + j; if (X >= 0 && Y >= 0 && X < BW && Y < BH && s.grp[Y * BW + X]) marks.push([X, Y, dc[row[i]]]); } });
+    }
+  }
+  const r = s.finish({ ink: d.ink, depthLine: 1.6, rim: 0.55 });
+  for (const [x, y, c] of marks) r.back.data[y * BW + x] = c;
   const tr = trimPair(r.back, null, 1);
-  const out = { buf: tr.a, ax: HOX - tr.ox, ay: HOY - tr.oy };
+  const out = { buf: tr.a, ax: BOX - tr.ox, ay: BOY - tr.oy, k: PX7 };
   if (cache.size > 600) cache.clear();
   cache.set(key, out);
   return out;

@@ -10,7 +10,7 @@ import { Build, Pose, solve, ik2, trimPair, P2, Canvas, PropP, lerpPose } from '
 import { drawProp5 } from '../v5/props';
 import { finish5 } from '../v5/body';
 import type { Ctx, CharDef } from '../people-parts';
-import type { C } from '../color';
+import { C, mix, shade } from '../color';
 import { Scene3D, V3, Hit, Mat, vadd, vsub, vsc, vnorm, vdot, vlerp, vlen, vcross, cel, Ramp6 } from './raster';
 import { drawHand7, HandFrame, handScale } from './hands';
 import { drawHeld7 } from './held';
@@ -222,7 +222,15 @@ function mixJ(A: J3, B: J3, u: number): J3 {
   return j;
 }
 
-const CW = 128, CH = 118, OX = 64, OY = 100;
+/**
+ * Buffer px per world px: the cast is rasterised at twice the world's pixel density (finer faces,
+ * hair strands, folds and seams) and the Actor draws the frames at 1 / PX7, so a figure stands as tall
+ * in the world as before. Frames say so in `k`.
+ */
+export const PX7 = 2;
+/** the side-view prop painter's canvas (world px), and the body's buffer at PX7 */
+const CW0 = 128, CH0 = 118, OX0 = 64, OY0 = 100;
+const CW = CW0 * PX7, CH = CH0 * PX7, OX = OX0 * PX7, OY = OY0 * PX7;
 
 /**
  * Held 3D props and other extra drawing registered by other modules (Aroha's slingshot, a grenade):
@@ -237,10 +245,12 @@ export interface Frame7 {
   back: PixelBuffer; front: PixelBuffer | null; ax: number; ay: number; hx: number; hy: number; hand: [number, number]; look?: 'fwd' | 'up' | 'down' | 'back' | 'cam' | 'away'; headBehind?: boolean; hrot?: number; hflip?: boolean; hair?: number;
   /** named points on the sprite (buffer px, sub-pixel): the palms ('handN', 'handF') and the held object's own (held.ts) */
   pts?: Record<string, [number, number]>;
+  /** buffer px per world px (PX7): every coordinate above is in buffer px */
+  k?: number;
 }
 
 export function renderBody7(ch: Char7, pose0: Pose): Frame7 {
-  const s = new Scene3D(CW, CH, OX, OY);
+  const s = new Scene3D(CW, CH, OX, OY, PX7);
   // a blend toward another pose (Pose.mix): joints mixed in 3D, the rest (hand shapes, props) eased over
   const J = liftPose(ch, pose0);
   const pose = flatPose(pose0);
@@ -250,6 +260,12 @@ export function renderBody7(ch: Char7, pose0: Pose): Frame7 {
     return { hit, near, t, hh: l[0] / T, f: l[1], z: l[2] };
   };
   const pm = (m: PartMat, near: boolean): Mat => h => m(part(h, near, h.t));
+  // fabric: folds and seams laid over whatever the outfit paints on the limbs and torso (skin is left bare)
+  const skin = skinSet(ch.skin);
+  const fm = (m: PartMat, near: boolean, kind: Fold): Mat => h => {
+    const p = part(h, near, h.t), c = m(p);
+    return c === -1 || skin.has(c) ? c : fold(kind, p, c);
+  };
   const front = new Set(pose.front ?? []);
 
   // ---- legs (thigh, shin, shoe)
@@ -257,8 +273,8 @@ export function renderBody7(ch: Char7, pose0: Pose): Frame7 {
     const g = near ? G.legN : G.legF;
     const hp = near ? J.hpN : J.hpF, kn = near ? J.knN : J.knF, an = near ? J.anN : J.anF;
     const [r0, r1, r2] = ch.legR;
-    s.limb(hp, kn, r0, r1, g, pm(ch.thigh, near));
-    s.limb(kn, an, r1, r2, g, pm(ch.shin, near));
+    s.limb(hp, kn, r0, r1, g, fm(ch.thigh, near, 'thigh'));
+    s.limb(kn, an, r1, r2, g, fm(ch.shin, near, 'shin'));
     // a boot shaft / gaiter: a slightly thicker sleeve over the lower shin
     const bt = ch.bootTop;
     if (bt) { const top = vlerp(kn, an, bt.t), bm = pm(bt.mat, near); s.limb(top, an, r1 + (r2 - r1) * bt.t + bt.r, r2 + bt.r * 0.8, g, h => { h.t = bt.t + h.t * (1 - bt.t); return bm(h); }); }
@@ -275,7 +291,7 @@ export function renderBody7(ch: Char7, pose0: Pose): Frame7 {
   leg(true);
 
   // ---- torso: pelvis, waist, chest, belly, shoulder caps; neck
-  const tmat = pm(ch.torso, true);
+  const tmat = fm(ch.torso, true, 'torso');
   const E = (h: number, f: number, rf: number, ru: number, rz: number, fo = 0) =>
     s.ellipsoid(J.T(h, f + fo, 0), vsc(J.fwd, rf), vsc(J.up, ru), vsc(J.lat, rz), G.torso, tmat);
   E(2.2, 0, ch.pelvis[0], 3.6, ch.pelvis[1]);
@@ -283,7 +299,8 @@ export function renderBody7(ch: Char7, pose0: Pose): Frame7 {
   E(T * 0.7, 0.2, ch.chest[0], T * 0.3, ch.chest[1]);
   if (ch.belly) E(T * 0.36, ch.belly * 0.45, ch.waist[0] + ch.belly * 0.6, T * 0.3, ch.waist[1] + ch.belly * 0.25);
   s.limb(J.shN, J.shF, ch.armR[0] + 0.5, ch.armR[0] + 0.5, G.torso, tmat);
-  s.limb(J.neckBase, vadd(J.neckTop, [0, -0.5, 0]), ch.neckR, ch.neckR * 0.92, G.torso, h => cel(ch.skin, h.l, -0.35));
+  // the neck, in the jaw's shadow at the top and lit down the side that faces the light
+  s.limb(J.neckBase, vadd(J.neckTop, [0, -0.5, 0]), ch.neckR, ch.neckR * 0.92, G.torso, h => (h.t > 0.6 ? ch.skin[2] : cel(ch.skin, h.l, -0.1)));
   if (ch.skirt) {
     const sk = ch.skirt, top = sk.top ?? 3.2;
     const kneeMid = vlerp(J.knN, J.knF, 0.5);
@@ -311,8 +328,8 @@ export function renderBody7(ch: Char7, pose0: Pose): Frame7 {
     if (front.has(near ? 'armF' : 'armB') || raised) s.layer = 1;
     const sh = near ? J.shN : J.shF, el = near ? J.elN : J.elF, wr = near ? J.wrN : J.wrF;
     const [r0, r1, r2] = ch.armR;
-    s.limb(sh, el, r0, r1, g, pm(ch.upperArm, near));
-    s.limb(el, wr, r1, r2, g, pm(ch.foreArm, near));
+    s.limb(sh, el, r0, r1, g, fm(ch.upperArm, near, 'upper'));
+    s.limb(el, wr, r1, r2, g, fm(ch.foreArm, near, 'fore'));
     const hp = (near ? pose.fa.hand : pose.ba.hand) ?? 'relax';
     if (hp !== 'none') {
       const am = near ? pose.fa : pose.ba;
@@ -335,7 +352,7 @@ export function renderBody7(ch: Char7, pose0: Pose): Frame7 {
   const posts: ((back: PixelBuffer, front: PixelBuffer) => void)[] = [];
   for (const h of HELD7) { const f = h(s, J, pose, ch); if (f) posts.push(f); }
 
-  const r = s.finish({ ink: ch.ink, inkK: HAND_INK });
+  const r = s.finish({ ink: ch.ink, inkK: HAND_INK, rim: 0.5 });
   if (pose.props?.length) drawProps(ch, pose, J, r.back, r.front ?? (r.front = new PixelBuffer(CW, CH)));
   if (posts.length) { const fr = r.front ?? (r.front = new PixelBuffer(CW, CH)); for (const f of posts) f(r.back, fr); }
   const tr = trimPair(r.back, r.front, 1);
@@ -343,11 +360,69 @@ export function renderBody7(ch: Char7, pose0: Pose): Frame7 {
   return {
     back: tr.a, front: tr.b,
     ax: OX - tr.ox, ay: OY - tr.oy,
-    hx: Math.round(OX + nt[0]) - tr.ox, hy: Math.round(OY - nt[1]) - tr.oy,
-    hand: [Math.round(OX + J.wrN[0]) - tr.ox, Math.round(OY - J.wrN[1]) - tr.oy],
+    hx: Math.round(OX + nt[0] * PX7) - tr.ox, hy: Math.round(OY - nt[1] * PX7) - tr.oy,
+    hand: [Math.round(OX + J.wrN[0] * PX7) - tr.ox, Math.round(OY - J.wrN[1] * PX7) - tr.oy],
     look: pose.flags?.back ? 'back' : pose.look, headBehind: pose.headBehind || undefined, hrot: pose.flags?.hrot, hflip: (pose.flags?.hrot ?? 0) < 0 || undefined,
-    pts: Object.fromEntries(Object.entries(pts).map(([k, p]) => [k, [OX + p[0] - tr.ox, OY - p[1] - tr.oy] as [number, number]])),
+    pts: Object.fromEntries(Object.entries(pts).map(([k, p]) => [k, [OX + p[0] * PX7 - tr.ox, OY - p[1] * PX7 - tr.oy] as [number, number]])),
+    k: PX7,
   };
+}
+
+// ------------------------------------------------------------------ fabric
+
+type Fold = 'upper' | 'fore' | 'thigh' | 'shin' | 'torso';
+const skins = new WeakMap<Ramp6, Set<C>>();
+/** every tone a skin ramp can paint (so folds and seams skip bare skin) */
+function skinSet(r: Ramp6): Set<C> {
+  let s = skins.get(r);
+  if (!s) { s = new Set(r.slice(0, 6)); s.add(cel(r, 0.1)); for (let v = -1; v <= 1.2; v += 0.05) s.add(cel(r, v, 0, true)); skins.set(r, s); }
+  return s;
+}
+/** the torso's drag lines: [height at the flank, slope toward the middle] */
+const DRAG: [number, number][] = [[0.66, 0.05], [0.5, 0.045]];
+/**
+ * Folds on a sleeve or trouser leg, as [t, skew] lines (t along the limb from its root joint; the
+ * skew slants the line across the front): compression folds bunch at the elbow and knee, drag lines
+ * fan from the crotch, and fabric stacks at the ankle.
+ */
+const FOLDS: Record<Exclude<Fold, 'torso'>, [number, number][]> = {
+  upper: [[0.7, 0.07], [0.84, -0.06], [0.95, 0.05]],
+  fore: [[0.08, -0.06], [0.2, 0.07]],
+  thigh: [[0.1, 0.12], [0.22, 0.08], [0.86, -0.05]],
+  shin: [[0.1, 0.06], [0.82, -0.04], [0.92, 0.05]],
+};
+/**
+ * Fabric folds and seams: each fold is a dark crease with a lit ridge on the side toward the light,
+ * a sleeve gets its shoulder seam, the torso its side seams and a few drag lines under the arms and
+ * across the waist. Only where the cloth faces the viewer, and never through thin shadows.
+ */
+function fold(kind: Fold, p: Part, c: C): C {
+  const h = p.hit;
+  if (kind === 'torso') {
+    // the side seam: a line down the flank where front panel meets back
+    if (p.z > 0 && Math.abs(p.f + 0.3) < 0.2 && p.hh > 0.08 && p.hh < 0.9) return mix(c, shade(c, -0.55), 0.6);
+    // two long drag lines from the near armpit down toward the middle of the waist, each a crease
+    // with a lit ridge above it
+    if (p.z > 0.6 && p.hh > 0.36 && p.hh < 0.8) {
+      for (const [h0, sl] of DRAG) {
+        const d = p.hh - (h0 + sl * (p.z - 2.5));
+        if (Math.abs(d) < 0.022) return mix(c, shade(c, -0.5), 0.55);
+        if (d > 0 && d < 0.05 && h.l > 0.15) return mix(c, shade(c, 0.28), 0.38);
+      }
+    }
+    return c;
+  }
+  const t = p.t, a = h.q[1];
+  // the face of the limb that turns toward the viewer (the e2 side of the limb's frame)
+  if (Math.sin(a) > 0.25) return c; // (the limb frame's e2 points away from the viewer)
+  if (kind === 'upper' && t < 0.045) return mix(c, shade(c, -0.5), 0.55); // the sleeve's shoulder seam
+  const across = Math.cos(a);
+  for (const [t0, sk] of FOLDS[kind]) {
+    const dt = t - (t0 + sk * across);
+    if (Math.abs(dt) < 0.026) return mix(c, shade(c, -0.6), 0.62);
+    if (dt < 0 && dt > -0.07 && h.l > 0.05) return mix(c, shade(c, 0.32), 0.42);
+  }
+  return c;
 }
 
 const flat = (v: V3): V3 => vnorm([v[0], 0, v[2]]);
@@ -365,7 +440,8 @@ function drawProps(ch: Char7, pose: Pose, J: J3, back: PixelBuffer, front: Pixel
   J2.wrB = [J.wrF[0], J.wrF[1]];
   const k = Math.cos(J.yaw);
   for (const pr of pose.props ?? []) {
-    const c = new Canvas(CW, CH, OX, OY);
+    // painted at the world's density, then each pixel laid as a PX7 block on the body's finer grid
+    const c = new Canvas(CW0, CH0, OX0, OY0);
     const q: PropP = pr.t ? { ...pr } : { ...pr, x: pr.x * k };
     const x = { c, J: J2, P: pose, b, ch: ch as unknown as CharDef, anim: '', t: 0 } as unknown as Ctx;
     drawProp5(x, q);
@@ -376,8 +452,12 @@ function drawProps(ch: Char7, pose: Pose, J: J3, back: PixelBuffer, front: Pixel
     for (let i = 0; i < d.length; i++) {
       const v = d[i];
       if (!(v >>> 24)) continue;
-      if (z === 'back' && (dst.data[i] >>> 24)) continue;
-      dst.data[i] = v;
+      const x0 = (i % CW0) * PX7, y0 = Math.floor(i / CW0) * PX7;
+      for (let dy = 0; dy < PX7; dy++) for (let dx = 0; dx < PX7; dx++) {
+        const j = (y0 + dy) * CW + x0 + dx;
+        if (z === 'back' && (dst.data[j] >>> 24)) continue;
+        dst.data[j] = v;
+      }
     }
   }
 }

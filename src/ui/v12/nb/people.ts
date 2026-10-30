@@ -23,7 +23,8 @@ async function cameoArt(id: string, d: number): Promise<Art | null> {
     const hd = renderHead(id, { expr: 'neutral', mouth: 0, blink: false, look: 'fwd' } as never);
     const src = artOfData(hd.buf.w, hd.buf.h, hd.buf.data);
     const a = new Art(d, d);
-    const ox = Math.floor(d / 2) - hd.ax - 1, oy = Math.floor(d / 2) - hd.ay + (id === 'chunk' ? 5 : 9);
+    // (the cast's heads are painted at a higher density, k: the face sits further up in their pixels)
+    const ox = Math.floor(d / 2) - hd.ax - 1, oy = Math.floor(d / 2) - hd.ay + (id === 'chunk' ? 5 : Math.round(9 * (hd.k ? hd.k * 0.8 : 1)));
     for (let y = 0; y < d; y++) for (let x = 0; x < d; x++) {
       const u = (x + 0.5) / d - 0.5, v = (y + 0.5) / d - 0.5;
       if (u * u * 4 + v * v * 4 > 1) continue;

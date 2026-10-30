@@ -16,13 +16,13 @@ import { approach, clamp, rand } from '../core/math';
 // ------------------------------------------------------------------ art binding (src/art/people.ts, src/art/emotes.ts)
 
 export type Look = 'fwd' | 'up' | 'down' | 'back' | 'cam' | 'away';
-export interface BodyFrameArt { back: PixelBuffer; front: PixelBuffer | null; ax: number; ay: number; hx: number; hy: number; look?: Look; hand?: [number, number]; headBehind?: boolean; hrot?: number; hflip?: boolean; hair?: number; pts?: Record<string, [number, number]> }
+export interface BodyFrameArt { back: PixelBuffer; front: PixelBuffer | null; ax: number; ay: number; hx: number; hy: number; look?: Look; hand?: [number, number]; headBehind?: boolean; hrot?: number; hflip?: boolean; hair?: number; pts?: Record<string, [number, number]>; /** buffer px per world px (hi-density cast: the frame is drawn at 1 / k) */ k?: number }
 export interface PeopleArt {
   ANIMS: Record<string, { frames: number; fps: number; loop: boolean; dist?: number; talk?: string; phased?: boolean }>;
   CHAR_ANIMS: Record<string, string[]>;
   CHAR_INFO: Record<string, { name: string; short: string; voice: number; height: number }>;
   renderBody(id: string, anim: string, frame: number): BodyFrameArt;
-  renderHead(id: string, o: { expr: string; mouth: 0 | 1 | 2; blink: boolean; look: Look; hair?: number }): { buf: PixelBuffer; ax: number; ay: number };
+  renderHead(id: string, o: { expr: string; mouth: 0 | 1 | 2; blink: boolean; look: Look; hair?: number }): { buf: PixelBuffer; ax: number; ay: number; k?: number };
   renderPortrait(id: string, expr: string, o?: { mouth?: 0 | 1 | 2; blink?: boolean }): PixelBuffer;
   /** per-character anim table (e.g. the pug has his own frame counts) */
   animFor?(id: string, anim: string): { frames: number; fps: number; loop: boolean; dist?: number; talk?: string; phased?: boolean } | null;
@@ -74,17 +74,26 @@ function zGlyphs(): Frame[] {
   return zFrames;
 }
 
+/** a frame painted at k texels per world px: its quad (size and anchor) in world px, its texels untouched */
+function dense(f: Frame, k: number): Frame {
+  if (k === 1) return f;
+  return { ...f, w: f.w / k, h: f.h / k, ax: f.ax / k, ay: f.ay / k };
+}
+
 function bodyFrame(id: string, anim: string, frame: number): BodyCache | null {
   if (!people) return null;
   const key = `${id}.${anim}.${frame}`;
   let b = bodyCache.get(key);
   if (!b) {
     const art = people.renderBody(id, anim, frame);
+    // a hi-density frame (k buffer px per world px) is drawn at 1 / k: its quad and every point on it
+    // are kept in world px, so it stands as tall as before with k times the detail
+    const k = art.k ?? 1, w = (v: number) => v / k;
     b = {
-      back: atlas.add('pb:' + key, art.back, art.ax, art.ay),
-      front: art.front ? atlas.add('pf:' + key, art.front, art.ax, art.ay) : null,
-      ax: art.ax, ay: art.ay, hx: art.hx, hy: art.hy, look: art.look ?? 'fwd', hand: art.hand ?? null, headBehind: !!art.headBehind, hrot: art.hrot ?? 0, hflip: !!art.hflip, hair: art.hair ?? 0,
-      pts: art.pts && Object.keys(art.pts).length ? art.pts : null,
+      back: dense(atlas.add('pb:' + key, art.back, art.ax, art.ay), k),
+      front: art.front ? dense(atlas.add('pf:' + key, art.front, art.ax, art.ay), k) : null,
+      ax: w(art.ax), ay: w(art.ay), hx: w(art.hx), hy: w(art.hy), look: art.look ?? 'fwd', hand: art.hand ? [w(art.hand[0]), w(art.hand[1])] : null, headBehind: !!art.headBehind, hrot: art.hrot ?? 0, hflip: !!art.hflip, hair: art.hair ?? 0,
+      pts: art.pts && Object.keys(art.pts).length ? Object.fromEntries(Object.entries(art.pts).map(([n, p]) => [n, [w(p[0]), w(p[1])] as [number, number]])) : null,
     };
     bodyCache.set(key, b);
   }
@@ -97,7 +106,7 @@ function headFrame(id: string, expr: string, mouth: 0 | 1 | 2, blink: boolean, l
   let f = headCache.get(key);
   if (!f) {
     const h = people.renderHead(id, { expr, mouth, blink, look, hair });
-    f = atlas.add('ph:' + key, h.buf, h.ax, h.ay);
+    f = dense(atlas.add('ph:' + key, h.buf, h.ax, h.ay), h.k ?? 1);
     headCache.set(key, f);
   }
   return f;

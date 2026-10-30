@@ -31,7 +31,7 @@ import { drawPx, pxWidth, pxWrap } from './pixfont';
 // ------------------------------------------------------------------ faces
 const headCache = new Map<string, PixelBuffer>();
 /** a person's sprite head (the in-world face, at its native pixels) */
-function head(id: string): { buf: PixelBuffer; ax: number; ay: number } | null {
+function head(id: string): { buf: PixelBuffer; ax: number; ay: number; k?: number } | null {
   try { registerNpcArt(); return renderHead(id, { expr: 'neutral', mouth: 0, blink: false, look: 'fwd' }); } catch { return null; }
 }
 /** the head cropped into a w x h cameo window at (x, y), on a paper oval */
@@ -45,7 +45,8 @@ function cameo(b: PixelBuffer, id: string, x: number, y: number, w = 22, h = 22,
   }
   if (!hd) return;
   // the face sits a little up from the neck point; Chunk's head is a whole dog
-  const ox = x + Math.floor(w / 2) - hd.ax - 1, oy = y + Math.floor(h / 2) - hd.ay + (id === 'chunk' ? 5 : 9);
+  // (the cast's heads are painted at a higher density, k: the face sits further up in their pixels)
+  const ox = x + Math.floor(w / 2) - hd.ax - 1, oy = y + Math.floor(h / 2) - hd.ay + (id === 'chunk' ? 5 : Math.round(9 * (hd.k ? hd.k * 0.8 : 1)));
   for (let j = 0; j < hd.buf.h; j++) for (let i = 0; i < hd.buf.w; i++) {
     const v = hd.buf.data[j * hd.buf.w + i];
     if (v >>> 24 < 128) continue;

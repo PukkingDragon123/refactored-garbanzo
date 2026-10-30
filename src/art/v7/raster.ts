@@ -43,15 +43,27 @@ export interface Hit {
 /** returns a colour, or -1 to leave the pixel empty (cut-outs) */
 export type Mat = (h: Hit) => C | -1;
 
-/** 6-tone ramp: [ink, deep, shadow, base, light, shine] */
+/** 6-tone ramp: [ink, deep, shadow, base, light, shine] (a 7th, the terminator step, is cached on it) */
 export type Ramp6 = C[];
-/** anime cel pick: shadow / base / light, with an optional bias */
+/**
+ * Anime cel pick with a refined ramp: deep / shadow / a narrow terminator step (a warmer, richer tone
+ * where the shadow meets the light, as in painted anime key art) / base / light / shine.
+ */
 export function cel(r: Ramp6, l: number, bias = 0, shine = false): C {
   const v = l + bias;
   if (v < -0.42) return r[1];
-  if (v < 0.08) return r[2];
+  if (v < 0.04) return r[2];
+  if (v < 0.15) return r[6] ?? (r[6] = terminator(r[2], r[3]));
   if (v < 0.78) return r[3];
   return shine && v > 0.93 ? r[5] : r[4];
+}
+/** the step between shadow and base: half way, pushed a touch warmer and more saturated */
+export function terminator(sh: C, base: C): C {
+  const m = mix(sh, base, 0.5);
+  const r = m & 255, g = (m >>> 8) & 255, b = (m >>> 16) & 255, a = m >>> 24;
+  const avg = (r + g + b) / 3, k = 1.18;
+  const cl = (v: number) => Math.max(0, Math.min(255, Math.round(avg + (v - avg) * k)));
+  return ((a << 24) | (cl(b * 0.97) << 16) | (cl(g) << 8) | cl(r * 1.03)) >>> 0;
 }
 
 export class Scene3D {
@@ -59,25 +71,41 @@ export class Scene3D {
   readonly h: number;
   readonly z: Float32Array;
   readonly col: Uint32Array;
+  /** surface normal (screen x, y) and cel light per pixel: the finish pass lights the outline and rim from them */
+  readonly nx: Float32Array;
+  readonly ny: Float32Array;
+  readonly lit: Float32Array;
   /** part group per pixel (0 = empty); lines are drawn between different groups */
   readonly grp: Uint16Array;
   /** 1 = routed to the front layer */
   readonly lay: Uint8Array;
   layer = 0;
   private bx0 = 1e9; private by0 = 1e9; private bx1 = -1; private by1 = -1;
-  constructor(w: number, h: number, readonly ox: number, readonly oy: number) {
+  /**
+   * (ox, oy): the world origin in the buffer (px). k: buffer px per world unit, so a figure can be
+   * rasterised at a higher pixel density than the world it stands in (geometry, materials and depth
+   * stay in world units; only the pixel grid gets finer).
+   */
+  constructor(w: number, h: number, readonly ox: number, readonly oy: number, readonly k = 1) {
     this.w = w; this.h = h;
     this.z = new Float32Array(w * h).fill(-1e9);
     this.col = new Uint32Array(w * h);
     this.grp = new Uint16Array(w * h);
     this.lay = new Uint8Array(w * h);
+    this.nx = new Float32Array(w * h);
+    this.ny = new Float32Array(w * h);
+    this.lit = new Float32Array(w * h);
   }
   /** world → buffer */
-  sx(p: V3) { return this.ox + p[0]; }
-  sy(p: V3) { return this.oy - p[1]; }
+  sx(p: V3) { return this.ox + p[0] * this.k; }
+  sy(p: V3) { return this.oy - p[1] * this.k; }
+  /** buffer pixel centre → world x / y */
+  private wx(x: number) { return (x + 0.5 - this.ox) / this.k; }
+  private wy(y: number) { return (this.oy - (y + 0.5)) / this.k; }
 
-  private write(i: number, z: number, c: C, g: number, x: number, y: number) {
+  private write(i: number, z: number, c: C, g: number, x: number, y: number, H?: Hit) {
     this.z[i] = z; this.col[i] = c; this.grp[i] = g; this.lay[i] = this.layer;
+    if (H) { this.nx[i] = H.n[0]; this.ny[i] = H.n[1]; this.lit[i] = H.l; }
     if (x < this.bx0) this.bx0 = x; if (y < this.by0) this.by0 = y; if (x > this.bx1) this.bx1 = x; if (y > this.by1) this.by1 = y;
   }
 
@@ -97,14 +125,15 @@ export class Scene3D {
       (m[3] * m[7] - m[4] * m[6]) * id, (m[1] * m[6] - m[0] * m[7]) * id, (m[0] * m[4] - m[1] * m[3]) * id,
     ];
     const ext = [Math.hypot(a0[0], a1[0], a2[0]), Math.hypot(a0[1], a1[1], a2[1])];
-    const x0 = Math.max(0, Math.floor(this.ox + c[0] - ext[0] - 1)), x1 = Math.min(this.w - 1, Math.ceil(this.ox + c[0] + ext[0] + 1));
-    const y0 = Math.max(0, Math.floor(this.oy - c[1] - ext[1] - 1)), y1 = Math.min(this.h - 1, Math.ceil(this.oy - c[1] + ext[1] + 1));
+    const k = this.k;
+    const x0 = Math.max(0, Math.floor(this.ox + (c[0] - ext[0]) * k - 1)), x1 = Math.min(this.w - 1, Math.ceil(this.ox + (c[0] + ext[0]) * k + 1));
+    const y0 = Math.max(0, Math.floor(this.oy - (c[1] + ext[1]) * k - 1)), y1 = Math.min(this.h - 1, Math.ceil(this.oy - (c[1] - ext[1]) * k + 1));
     // v = inv * ez
     const vx = inv[2], vy = inv[5], vz = inv[8];
     const A = vx * vx + vy * vy + vz * vz;
     const H: Hit = { n: [0, 0, 1], p: [0, 0, 0], q: [0, 0, 0], t: 0, l: 0, x: 0, y: 0 };
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-      const wx = x + 0.5 - this.ox - c[0], wy = this.oy - (y + 0.5) - c[1];
+      const wx = this.wx(x) - c[0], wy = this.wy(y) - c[1];
       const ux = inv[0] * wx + inv[1] * wy, uy = inv[3] * wx + inv[4] * wy, uz = inv[6] * wx + inv[7] * wy;
       const Bq = 2 * (ux * vx + uy * vy + uz * vz), Cq = ux * ux + uy * uy + uz * uz - 1;
       const D = Bq * Bq - 4 * A * Cq;
@@ -119,7 +148,7 @@ export class Scene3D {
       H.n = n; H.p = [c[0] + wx, c[1] + wy, zw]; H.q = [qx, qy, qz]; H.t = 0; H.l = vdot(n, LIGHT7); H.x = x; H.y = y;
       const col = mat(H);
       if (col === -1) continue;
-      this.write(i, zw + zb, col, g, x, y);
+      this.write(i, zw + zb, col, g, x, y, H);
     }
   }
 
@@ -140,8 +169,9 @@ export class Scene3D {
       (m[3] * m[7] - m[4] * m[6]) * id, (m[1] * m[6] - m[0] * m[7]) * id, (m[0] * m[4] - m[1] * m[3]) * id,
     ];
     const ex = Math.abs(a0[0]) + Math.abs(a1[0]) + Math.abs(a2[0]), ey = Math.abs(a0[1]) + Math.abs(a1[1]) + Math.abs(a2[1]);
-    const x0 = Math.max(0, Math.floor(this.ox + c[0] - ex - 1)), x1 = Math.min(this.w - 1, Math.ceil(this.ox + c[0] + ex + 1));
-    const y0 = Math.max(0, Math.floor(this.oy - c[1] - ey - 1)), y1 = Math.min(this.h - 1, Math.ceil(this.oy - c[1] + ey + 1));
+    const k = this.k;
+    const x0 = Math.max(0, Math.floor(this.ox + (c[0] - ex) * k - 1)), x1 = Math.min(this.w - 1, Math.ceil(this.ox + (c[0] + ex) * k + 1));
+    const y0 = Math.max(0, Math.floor(this.oy - (c[1] + ey) * k - 1)), y1 = Math.min(this.h - 1, Math.ceil(this.oy - (c[1] - ey) * k + 1));
     const v = [inv[2], inv[5], inv[8]];
     const H: Hit = { n: [0, 0, 1], p: [0, 0, 0], q: [0, 0, 0], t: 0, l: 0, x: 0, y: 0 };
     // the front (largest zz) of the interval where -1 <= u + v zz <= 1 along one local axis
@@ -153,7 +183,7 @@ export class Scene3D {
       if (b < iv[1]) iv[1] = b;
     };
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-      const wx = x + 0.5 - this.ox - c[0], wy = this.oy - (y + 0.5) - c[1];
+      const wx = this.wx(x) - c[0], wy = this.wy(y) - c[1];
       const u = [inv[0] * wx + inv[1] * wy, inv[3] * wx + inv[4] * wy, inv[6] * wx + inv[7] * wy];
       let zz = -1e9, face = 0;
       if (kind === 'box') {
@@ -193,24 +223,24 @@ export class Scene3D {
       H.n = n; H.p = [c[0] + wx, c[1] + wy, zw]; H.q = q; H.t = face; H.l = vdot(n, LIGHT7); H.x = x; H.y = y;
       const col = mat(H);
       if (col === -1) continue;
-      this.write(i, zw, col, g, x, y);
+      this.write(i, zw, col, g, x, y, H);
     }
   }
 
   /** tapered limb from a (radius ra) to b (radius rb): a sweep of spheres */
   limb(a: V3, b: V3, ra: number, rb: number, g: number, mat: Mat) {
-    const d = vsub(b, a), L = vlen(d);
-    const n = Math.max(2, Math.ceil(L / 0.35));
+    const d = vsub(b, a), L = vlen(d), k = this.k;
+    const n = Math.max(2, Math.ceil((L * k) / 0.4));
     const ax = vnorm(L > 1e-4 ? d : [0, -1, 0]);
     // a stable frame around the axis for the angle coordinate
     const ref: V3 = Math.abs(ax[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
     const e1 = vnorm(vcross(ax, ref)), e2 = vcross(ax, e1);
     const H: Hit = { n: [0, 0, 1], p: [0, 0, 0], q: [0, 0, 0], t: 0, l: 0, x: 0, y: 0 };
     const rmax = Math.max(ra, rb);
-    const x0 = Math.max(0, Math.floor(this.ox + Math.min(a[0], b[0]) - rmax - 1)), x1 = Math.min(this.w - 1, Math.ceil(this.ox + Math.max(a[0], b[0]) + rmax + 1));
-    const y0 = Math.max(0, Math.floor(this.oy - Math.max(a[1], b[1]) - rmax - 1)), y1 = Math.min(this.h - 1, Math.ceil(this.oy - Math.min(a[1], b[1]) + rmax + 1));
+    const x0 = Math.max(0, Math.floor(this.ox + (Math.min(a[0], b[0]) - rmax) * k - 1)), x1 = Math.min(this.w - 1, Math.ceil(this.ox + (Math.max(a[0], b[0]) + rmax) * k + 1));
+    const y0 = Math.max(0, Math.floor(this.oy - (Math.max(a[1], b[1]) + rmax) * k - 1)), y1 = Math.min(this.h - 1, Math.ceil(this.oy - (Math.min(a[1], b[1]) - rmax) * k + 1));
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-      const px = x + 0.5 - this.ox, py = this.oy - (y + 0.5);
+      const px = this.wx(x), py = this.wy(y);
       let best = -1e9, bt = 0, bc: V3 | null = null, br = 1;
       for (let k = 0; k <= n; k++) {
         const t = k / n;
@@ -229,18 +259,25 @@ export class Scene3D {
       H.q = [bt, Math.atan2(vdot(nrm, e2), vdot(nrm, e1)), vdot(nrm, ax)];
       const col = mat(H);
       if (col === -1) continue;
-      this.write(i, best, col, g, x, y);
+      this.write(i, best, col, g, x, y, H);
     }
   }
 
   /** a single dot painted on the nearest surface if the point isn't hidden (eyes, buttons) */
   dot(p: V3, c: C, tol = 1.2): boolean {
-    const x = Math.floor(this.ox + p[0]), y = Math.floor(this.oy - p[1]);
-    if (x < 0 || y < 0 || x >= this.w || y >= this.h) return false;
-    const i = y * this.w + x;
-    if (!this.grp[i] || this.z[i] > p[2] + tol) return false;
-    this.col[i] = c;
-    return true;
+    // a world pixel's worth of buffer pixels (a block at higher densities)
+    const n = Math.max(1, Math.round(this.k));
+    const x = Math.floor(this.sx(p) - (n - 1) / 2), y = Math.floor(this.sy(p) - (n - 1) / 2);
+    let any = false;
+    for (let dy = 0; dy < n; dy++) for (let dx = 0; dx < n; dx++) {
+      const X = x + dx, Y = y + dy;
+      if (X < 0 || Y < 0 || X >= this.w || Y >= this.h) continue;
+      const i = Y * this.w + X;
+      if (!this.grp[i] || this.z[i] > p[2] + tol) continue;
+      this.col[i] = c;
+      any = true;
+    }
+    return any;
   }
   /**
    * A crease along a 3D segment lying on a surface of group `g` (the gap between two fingers, a
@@ -249,13 +286,13 @@ export class Scene3D {
    * The crease mixes toward a warm dark (`ink`) rather than re-shading, so skin stays skin-toned.
    */
   crease(a: V3, b: V3, g: number, k = 0.35, tol = 1.3, done?: Set<number>, ink: C = 0xff181018) {
-    const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]) * this.k;
     const n = Math.max(1, Math.ceil(L / 0.4));
     const seen = done ?? new Set<number>();
     for (let i = 0; i <= n; i++) {
       const t = i / n;
       const px = a[0] + (b[0] - a[0]) * t, py = a[1] + (b[1] - a[1]) * t, pz = a[2] + (b[2] - a[2]) * t;
-      const x = Math.floor(this.ox + px), y = Math.floor(this.oy - py);
+      const x = Math.floor(this.ox + px * this.k), y = Math.floor(this.oy - py * this.k);
       if (x < 0 || y < 0 || x >= this.w || y >= this.h) continue;
       const j = y * this.w + x;
       if (seen.has(j) || this.grp[j] !== g || Math.abs(this.z[j] - pz) > tol) continue;
@@ -274,22 +311,25 @@ export class Scene3D {
 
   /**
    * Ink: interior lines where a nearer part overlaps a different group (drawn on the farther
-   * pixel, so the near part keeps its full shape), a contact shadow just under overlaps, and a
-   * dark outline round the silhouette. Returns the back layer and (if used) the front layer.
+   * pixel, so the near part keeps its full shape), a contact shadow just under overlaps, a rim of
+   * back light along the silhouette on the side away from the key light, and a hand-picked outline
+   * round the silhouette: deep and inky where the form turns away from the light, a lighter tint of
+   * the part itself where it faces the light (selective outlining). Returns the back layer and (if
+   * used) the front layer.
    */
-  finish(o: { ink: C; line?: number; depthLine?: number; /** per group: how far its edge lines go toward the ink (small parts, e.g. hands, read cleaner darker) */ inkK?: Record<number, number> } = { ink: 0xff201418 }): { back: PixelBuffer; front: PixelBuffer | null; ox: number; oy: number } {
+  finish(o: { ink: C; line?: number; depthLine?: number; /** per group: how far its edge lines go toward the ink (small parts, e.g. hands, read cleaner darker) */ inkK?: Record<number, number>; /** rim light strength (0 = none) */ rim?: number } = { ink: 0xff201418 }): { back: PixelBuffer; front: PixelBuffer | null; ox: number; oy: number } {
     const W = this.w, Hh = this.h, z = this.z, g = this.grp, src = this.col.slice();
-    const out = this.col;
-    const lineK = o.line ?? 0.55, dl = o.depthLine ?? 2.2, ik = o.inkK;
+    const out = this.col, nx = this.nx, ny = this.ny, lit = this.lit;
+    const lineK = o.line ?? 0.55, dl = o.depthLine ?? 2.2, ik = o.inkK, rim = o.rim ?? 0.5;
     for (let y = 0; y < Hh; y++) for (let x = 0; x < W; x++) {
       const i = y * W + x;
       if (!g[i]) continue;
-      let line = -1, contact = false;
+      let line = -1, contact = false, edgeR = false;
       for (const [dx, dy] of N4) {
         const X = x + dx, Y = y + dy;
-        if (X < 0 || Y < 0 || X >= W || Y >= Hh) continue;
+        if (X < 0 || Y < 0 || X >= W || Y >= Hh) { if (dx > 0 || dy < 0) edgeR = true; continue; }
         const j = Y * W + X;
-        if (!g[j]) continue;
+        if (!g[j]) { if (dx > 0 || (dy < 0 && nx[i] > 0.1)) edgeR = true; continue; }
         const nearer = z[j] - z[i];
         if ((g[j] !== g[i] && nearer > 0.4) || nearer > dl) line = j;
         else if (dy === -1 && g[j] !== g[i] && nearer > -0.4) contact = true;
@@ -297,8 +337,10 @@ export class Scene3D {
       // the line takes the dark tone of the part in front (a hand-inked edge of that part)
       if (line >= 0) out[i] = mix(mix(shade(src[line], -lineK - 0.1), shade(src[i], -lineK), 0.3), o.ink, ik?.[g[line]] ?? 0.3);
       else if (contact) out[i] = mix(src[i], shade(src[i], -0.3), 0.6);
+      // back light: a thin bright rim on the far edge of a form that turns away from the key light
+      else if (rim > 0 && edgeR && nx[i] > 0.25 && lit[i] < 0.5) out[i] = mix(src[i], shade(src[i], 0.75), rim * Math.min(1, (nx[i] - 0.1) * 2));
     }
-    // silhouette outline (tinted by the neighbour)
+    // silhouette outline (tinted by the neighbour, its weight picked by how the form meets the light)
     const filled = new Uint8Array(W * Hh);
     for (let i = 0; i < W * Hh; i++) filled[i] = g[i] ? 1 : 0;
     const back = new PixelBuffer(W, Hh), front = new PixelBuffer(W, Hh);
@@ -316,7 +358,10 @@ export class Scene3D {
         if (filled[Y * W + X]) { nb = Y * W + X; break; }
       }
       if (nb >= 0) {
-        const c = mix(shade(src[nb], -0.72), o.ink, ik ? Math.max(0.55, ik[g[nb]] ?? 0) : 0.55);
+        // 0 = the form faces the light here (a soft tinted line), 1 = turned away into shadow (deep ink)
+        const away = Math.max(0, Math.min(1, 0.55 - lit[nb] * 0.9));
+        const base = ik ? Math.max(0.55, ik[g[nb]] ?? 0) : 0.55;
+        const c = mix(shade(src[nb], -0.5 - 0.3 * away), o.ink, Math.min(1, base * (0.55 + 0.75 * away)));
         if (this.lay[nb]) { front.data[i] = c; anyFront = true; } else back.data[i] = c;
       }
     }

@@ -7,7 +7,8 @@ import * as P from '../art/v7';
 import { renderAnimePortrait, renderAnimePortraitHD } from '../art/anime/portraits';
 import { COMBAT_ANIMS } from '../art/v7/anim-contract';
 
-const CW = 132, CH = 112, OX = 66, OY = 96;
+// (the cast is painted at twice the world's pixel density)
+const CW = 264, CH = 224, OX = 132, OY = 192;
 /** a body frame with its head on, composited the way the Actor draws it (rotation included) */
 export function composite(id: string, anim: string, frame: number, expr = 'neutral'): PixelBuffer {
   const out = new PixelBuffer(CW, CH);

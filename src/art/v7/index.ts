@@ -21,6 +21,7 @@ import './anims-talk';
 import './aroha7';
 import './combat7';
 import { dress, OUTFIT_NAMES } from './outfits';
+import { restyle7, headScale7 } from './restyle';
 import { outfitOf, setOutfit, splitOutfit, wardrobeVersion } from './wardrobe';
 import { ANIME_COMMON, TRANSITIONS, AnimInfo } from '../anime/anims';
 import { CHUNK_ANIMS, renderChunkBody, renderChunkHead } from '../anime/chunk';
@@ -40,7 +41,7 @@ export const ANIMS: Record<string, AnimInfo> = ANIMS7;
 export function animFor(id: string, anim: string): AnimInfo | null {
   id = parse(id)[0];
   if (id === 'chunk') return CHUNK_ANIMS[anim] ?? null;
-  return animInfo7((CAST7[id] ?? CAST7.mori).build, anim, id);
+  return animInfo7(restyle7(CAST7[id] ?? CAST7.mori).build, anim, id);
 }
 
 const human = () => [...new Set([...ANIME_COMMON, ...Object.keys(ANIMS7)])];
@@ -102,22 +103,22 @@ export function renderBody(id: string, anim: string, frame: number): Frame7 {
   const key = `${cid}@${outfit}|${a}|${fi}`;
   const hit = cache.get(key);
   if (hit) return hit;
-  const { ch } = dress(cid, outfit);
+  const ch = restyle7(dress(cid, outfit).ch);
   const pose = pose7(cid, a, ch.build, fi);
   const out = renderBody7(ch, pose);
   // hair trails while moving fast
   // (a pose may say how hard: flags.hair 0..2, e.g. the combat moves)
   out.hair = pose.flags?.hair !== undefined ? pose.flags.hair : a === 'run' || a === 'carryPupRun' ? ((pose.sway ?? 0) > 0.4 ? 2 : 1) : (pose.sway ?? 0) > 0.75 ? 1 : 0;
-  if (cache.size > 2500) cache.clear();
+  if (cache.size > 900) cache.clear();
   cache.set(key, out);
   return out;
 }
 
-export function renderHead(id: string, o: HeadOpts7): { buf: PixelBuffer; ax: number; ay: number } {
+export function renderHead(id: string, o: HeadOpts7): { buf: PixelBuffer; ax: number; ay: number; k?: number } {
   const [cid, outfit] = parse(id);
   if (cid === 'chunk') return renderChunkHead({ ...o, look: o.look === 'up' || o.look === 'down' ? o.look : 'fwd' });
   const { wear, key } = dress(cid, outfit);
-  return renderHead7(cid, o, wear, key);
+  return renderHead7(cid, o, wear, key, headScale7(cid));
 }
 
 /** the fidgets a character drops into now and then while standing about (the Actor plays them) */

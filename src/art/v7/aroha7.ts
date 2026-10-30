@@ -258,6 +258,7 @@ const AROHA_HEAD: HeadDef7 = {
   eye: [4.05, 6.95, 2.25],
   mouth: [4.45, 3.9, 0.3],
   eyeCol: '#110705', brow: '#0e0604', blush: '#c46450',
+  face: { iris: ['#2e1a10', '#7e4e2a'], lash: 'f' },
   // the hair slicked back off the face, close to the skull, up into the bun
   shell: [[-0.65, 8.7, 0], [5.15, 5.65, 4.72]],
   cut: q => q[0] > 0.3 && q[1] < 0.46,
