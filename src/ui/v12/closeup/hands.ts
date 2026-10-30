@@ -1,13 +1,14 @@
-// Mori's gloved hands in the close-ups: hand-drawn glove poses (sprites.ts) on the end of his olive
-// shirt sleeve, which runs in from the edge of the set. A pose has an anchor (where the tool handle,
-// the palm or the pinch is) so a scene just says where the action happens.
+// Mori's gloved hands in the close-ups: hand-drawn glove poses (sprites.ts), brought up to the fine
+// grid with the EPX scaler and rim-lit, on the end of his olive shirt sleeve, which runs in from the
+// edge of the set with its folds and seam painted at the fine grid. A pose has an anchor (where the
+// tool handle, the palm or the pinch is) so a scene just says where the action happens (in units).
 
-import { PixelBuffer, pmap, rd, ramp, dith, blit } from './kit';
+import { PixelBuffer, pmap, rd, ramp, dith, blitF, up, area, vnoise, Z } from './kit';
 import { GRIP, OPEN, PINCH, GLOVE_PAL } from './sprites';
 
 export type Pose = 'grip' | 'open' | 'pinch';
 interface PoseDef { b: PixelBuffer; ax: number; ay: number; wx: number; wy: number }
-const SLEEVE = ramp('#1a200e', '#283214', '#36441c', '#4a5a26', '#5e7030', '#76883e', '#94a452');
+const SLEEVE = ramp('#161c0c', '#222c12', '#303c18', '#404e20', '#52622a', '#667834', '#7e9040', '#98aa54');
 
 let defs: Record<string, PoseDef> | null = null;
 function rot90(b: PixelBuffer): PixelBuffer {
@@ -21,6 +22,7 @@ function flipX(b: PixelBuffer): PixelBuffer {
   for (let y = 0; y < b.h; y++) for (let x = 0; x < b.w; x++) o.data[y * b.w + (b.w - 1 - x)] = b.data[y * b.w + x];
   return o;
 }
+/** the pose at 1 px per map pixel (anchor and wrist in map pixels) */
 function pose(p: Pose, rot: 0 | 1 | 2 | 3, mirror: boolean): PoseDef {
   if (!defs) defs = {};
   const key = p + rot + (mirror ? 'm' : '');
@@ -36,33 +38,33 @@ function pose(p: Pose, rot: 0 | 1 | 2 | 3, mirror: boolean): PoseDef {
   return d;
 }
 
-/** the shirt sleeve from (x0, y0) (off the edge of the set) to the wrist at (x1, y1) */
+/** the shirt sleeve from (x0, y0) (off the edge of the set) to the wrist at (x1, y1), units */
 export function drawSleeve(px: PixelBuffer, x0: number, y0: number, x1: number, y1: number, r = 7) {
   const dx = x1 - x0, dy = y1 - y0, L = Math.max(1, Math.hypot(dx, dy));
   const ux = dx / L, uy = dy / L;
-  const minx = Math.floor(Math.min(x0, x1) - r - 2), maxx = Math.ceil(Math.max(x0, x1) + r + 2);
-  const miny = Math.floor(Math.min(y0, y1) - r - 2), maxy = Math.ceil(Math.max(y0, y1) + r + 2);
-  for (let y = Math.max(0, miny); y <= Math.min(px.h - 1, maxy); y++) for (let x = Math.max(0, minx); x <= Math.min(px.w - 1, maxx); x++) {
-    const rx = x + 0.5 - x0, ry = y + 0.5 - y0;
+  area(px, Math.min(x0, x1) - r - 2, Math.min(y0, y1) - r - 2, Math.max(x0, x1) + r + 2, Math.max(y0, y1) + r + 2, (u, v, fx, fy) => {
+    const rx = u - x0, ry = v - y0;
     const t = rx * ux + ry * uy;
-    if (t < -2 || t > L + 1) continue;
+    if (t < -2 || t > L + 0.5) return -1;
     const d = rx * -uy + ry * ux;
-    // the sleeve tapers a touch toward the cuff
-    const rr = r * (1 - 0.12 * (t / L));
-    if (Math.abs(d) > rr) continue;
-    const edge = Math.abs(d) > rr - 1;
-    let k = 0.62 - d / rr * 0.38;
-    // cloth folds: soft creases across the sleeve, a little irregular
-    const fold = Math.sin(t * 0.42 + Math.sin(t * 0.11) * 2 + d * 0.15);
-    if (fold > 0.72) k -= 0.22; else if (fold > 0.5) k += 0.1;
-    // the hem at the wrist
-    if (t > L - 3) k = t > L - 1 ? 0.2 : 0.7;
-    px.set(x, y, edge ? SLEEVE[0] : rd(SLEEVE, k, x, y));
-  }
-  // a seam down the sleeve, stitched
-  for (let i = 4; i < L - 4; i += 3) {
-    const sx = Math.round(x0 + ux * i - uy * r * 0.45), sy = Math.round(y0 + uy * i + ux * r * 0.45);
-    if (dith(sx, sy) < 0.7) px.set(sx, sy, SLEEVE[2]);
+    const rr = r * (1 - 0.1 * (t / L));
+    if (Math.abs(d) > rr) return -1;
+    if (Math.abs(d) > rr - 0.7) return SLEEVE[0];
+    // round across the arm, lit from the upper left
+    let k = 0.6 - d / rr * 0.42 - (d / rr) ** 2 * 0.12;
+    // cloth folds: soft creases across the sleeve that bunch toward the cuff
+    const f = Math.sin(t * 0.22 + Math.sin(t * 0.07 + d * 0.25) * 2.6 + d * 0.18 + vnoise(t * 0.1, d * 0.3, 8) * 2);
+    if (f > 0.86) k -= 0.17; else if (f > 0.7) k -= 0.07; else if (f < -0.75) k += 0.06;
+    k += (vnoise(u * 2, v * 2, 5) - 0.5) * 0.08;
+    // the hem at the wrist: a turned-back band with its stitching
+    if (t > L - 3.2) { k = t > L - 0.6 ? 0.15 : 0.72 - (t - (L - 3.2)) * 0.1; if (Math.abs(t - (L - 2.2)) < 0.25 && (fx + fy) % 3 === 0) return SLEEVE[7]; }
+    return rd(SLEEVE, k, fx, fy);
+  });
+  // a stitched seam along the sleeve
+  for (let i = 4; i < L - 4; i += 1.2) {
+    const sx = x0 + ux * i - uy * r * 0.42, sy = y0 + uy * i + ux * r * 0.42;
+    const fx = Math.round(sx * Z), fy = Math.round(sy * Z);
+    if ((Math.floor(i / 1.2) % 2) && dith(fx, fy) < 0.9) px.set(fx, fy, SLEEVE[2]);
   }
 }
 
@@ -71,24 +73,20 @@ export interface HandOpts {
   rot?: 0 | 1 | 2 | 3;
   /** the left hand */
   left?: boolean;
-  /** where the sleeve comes in from (default: straight down off the bottom of the set) */
+  /** where the sleeve comes in from (units; default: straight down off the bottom of the set) */
   from?: [number, number];
-  /** sleeve radius */
+  /** sleeve radius (units) */
   r?: number;
   /** darken (in shadow) */
   dark?: number;
 }
-/** draw a gloved hand with its anchor at (x, y), the sleeve running in from o.from */
+/** draw a gloved hand with its anchor at (x, y) units, the sleeve running in from o.from */
 export function drawHand(px: PixelBuffer, p: Pose, x: number, y: number, o: HandOpts = {}) {
   const d = pose(p, o.rot ?? 0, !!o.left);
-  const left = Math.round(x - d.ax), top = Math.round(y - d.ay);
-  const wx = left + d.wx, wy = top + d.wy;
-  const from = o.from ?? [wx + (o.left ? -18 : 18), px.h + 30];
+  const fine = up(d.b, Z);
+  const left = Math.round(x * Z - (d.ax + 0.5) * Z), top = Math.round(y * Z - (d.ay + 0.5) * Z);
+  const wx = (left + (d.wx + 0.5) * Z) / Z, wy = (top + (d.wy + 0.5) * Z) / Z;
+  const from = o.from ?? [wx + (o.left ? -18 : 18), px.h / Z + 30];
   drawSleeve(px, from[0], from[1], wx, wy, o.r ?? 7);
-  blit(px, d.b, left, top, { dark: o.dark });
-}
-/** where the wrist of a pose lands when its anchor is at (x, y) */
-export function wristOf(p: Pose, x: number, y: number, o: HandOpts = {}): [number, number] {
-  const d = pose(p, o.rot ?? 0, !!o.left);
-  return [Math.round(x - d.ax) + d.wx, Math.round(y - d.ay) + d.wy];
+  blitF(px, fine, left, top, { dark: o.dark });
 }

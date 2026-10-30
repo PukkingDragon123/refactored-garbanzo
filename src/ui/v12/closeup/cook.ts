@@ -21,14 +21,16 @@ import type { Method, CookResult, Tag } from '../../../game/v11/cooking';
 import type { CookOpts, CookOutcome } from '../../v11/cooking';
 import { CookSound } from '../../v11/cooksfx';
 import { PAL } from '../../../art/palettes';
-import { paintRock, paintLog, paintGroundFern, paintLitterDots } from '../../../art/flora';
+import { paintRock, paintLog, paintGroundFern } from '../../../art/flora';
 import { runCloseup } from './stage';
 import type { Closeup, SetScene, Grade } from './stage';
-import { PixelBuffer, hex, mix, rd, ramp, dith, hash, clamp, clamp01, lerp, easeOut, easeInOut, blit, copyWin, itemSprite, shadowOval, glow, pmap, drawWord } from './kit';
+import { PixelBuffer, hex, mix, rd, ramp, dith, hash, vnoise, clamp, clamp01, lerp, easeInOut, blit, blitF, copyWin, itemSprite, shadowOval, glow, pmap, up, drawWord, area, ellipse, poly, line, dot, Z } from './kit';
 import type { C } from './kit';
 import { drawHand } from './hands';
 
 type From = 'pack' | 'stash' | 'debug';
+/** how big (units) the food is on the chopping board */
+const CHOP = 40;
 interface Stock { id: string; n: number; from: From }
 interface Prep {
   id: string; from: From;
@@ -161,91 +163,84 @@ export class CookSet implements SetScene {
   }
   private paintSet(H: number) {
     const SW = this.SW, GY = this.GY, HZ = this.HZ, FX = this.FX;
-    const bg = new PixelBuffer(SW, H), fg = new PixelBuffer(SW, H);
+    const bg = new PixelBuffer(SW * Z, H * Z), fg = new PixelBuffer(SW * Z, H * Z);
     this.bg = bg; this.fg = fg;
     const fy = GY - 8;
-    // the night behind, warm where the fire reaches
-    for (let y = 0; y < H; y++) for (let x = 0; x < SW; x++) {
-      const d = Math.hypot((x - FX) / 1.6, (y - fy) * 1.2);
-      const edge = HZ + 6 + Math.round(Math.sin(x * 0.045) * 3 + Math.sin(x * 0.13 + 1) * 1.5);
-      if (y < edge || (y < edge + 3 && dith(x, y) < (edge + 3 - y) / 4)) {
-        const k = y / (HZ + 6) * 0.55 + Math.max(0, 1 - d / 260) * 0.45;
-        bg.data[y * SW + x] = rd(NIGHT, k, x, y);
-      } else {
-        // packed earth round the fire: lit in rings, dithered between them
-        const lit = clamp01(1 - d / 230);
-        const k = 0.12 + lit * 0.62 + (hash(x, y, 3) - 0.5) * 0.18;
-        let col = rd(PAL.soil, k, x, y);
-        const n = hash(x >> 1, y >> 1, 9);
-        if (n < 0.05) col = PAL.soil[Math.max(0, Math.floor(k * 6) - 2)];
-        else if (n > 0.975) col = PAL.soil[Math.min(6, Math.floor(k * 6) + 2)];
-        bg.data[y * SW + x] = col;
-      }
-    }
+    // the night behind, warm where the fire reaches; packed earth lit in rings round the fire
+    area(bg, 0, 0, SW, H, (u, v, x, y) => {
+      const d = Math.hypot((u - FX) / 1.6, (v - fy) * 1.2);
+      const edge = HZ + 6 + Math.sin(u * 0.045) * 3 + Math.sin(u * 0.13 + 1) * 1.5;
+      if (v < edge || (v < edge + 3 && dith(x, y) < (edge + 3 - v) / 4)) return rd(NIGHT, v / (HZ + 6) * 0.55 + Math.max(0, 1 - d / 260) * 0.45 + (vnoise(u * 0.06, v * 0.1, 2) - 0.5) * 0.08, x, y);
+      const lit = clamp01(1 - d / 230);
+      let k = 0.12 + lit * 0.62 + (vnoise(u * 0.22, v * 0.45, 3) - 0.5) * 0.24 + (vnoise(u * 1.3, v * 1.3, 4) - 0.5) * 0.1;
+      const g = hash(Math.floor(u * 1.5), Math.floor(v * 1.5), 9);
+      if (g < 0.035) k -= 0.28; else if (g > 0.975) k += 0.22;
+      return rd(PAL.soil, k, x, y);
+    });
     // tree trunks at the edge of the clearing, running up out of frame, lit on the fire side
     for (let i = 0; i < 5; i++) {
-      const tx = Math.round(30 + i * (SW - 60) / 4 + (hash(i, 1, 21) - 0.5) * 40), tw = 9 + (i * 5) % 7;
+      const tx = 30 + i * (SW - 60) / 4 + (hash(i, 1, 21) - 0.5) * 40, tw = 9 + (i * 5) % 7;
       if (Math.abs(tx - FX) < 70) continue;
-      const foot = HZ + 4 + (i % 2) * 3;
-      for (let y = 0; y < foot + 2; y++) for (let x = tx - tw; x <= tx + tw; x++) {
-        const s = (x - tx) / tw;
-        const flare = y > foot - 8 ? (y - foot + 8) * 0.6 : 0;
-        if (Math.abs(x - tx) > tw + flare) continue;
-        const side = Math.sign(FX - tx);
-        let v = 0.18 + s * side * 0.16 + (Math.sin(x * 1.7 + Math.sin(y * 0.08) * 2) > 0.7 ? -0.08 : 0) + (hash(x, y >> 2, 4) - 0.5) * 0.08;
-        if (Math.abs(x - tx) > tw + flare - 1) v = 0.04;
-        bg.set(x, y, rd(PAL.bark, v * clamp01(0.5 + (1 - Math.abs(tx - FX) / 300)), x, y));
-      }
+      const foot = HZ + 4 + (i % 2) * 3, side = Math.sign(FX - tx), far = clamp01(0.5 + (1 - Math.abs(tx - FX) / 300));
+      area(bg, tx - tw - 8, 0, tx + tw + 8, foot + 2, (u, v, x, y) => {
+        const flare = v > foot - 8 ? (v - foot + 8) * 0.6 : 0;
+        const half = tw + flare + Math.sin(v * 0.21 + i) * 0.6;
+        const s = (u - tx) / half;
+        if (Math.abs(s) > 1) return -1;
+        if (Math.abs(s) > 1 - 0.8 / half) return PAL.bark[0];
+        // bark: deep vertical furrows, lichen flecks, the fire's light on one side
+        const furrow = Math.sin(u * 1.9 + Math.sin(v * 0.07 + i) * 2.4);
+        let k = 0.2 + s * side * 0.18 + (furrow > 0.75 ? -0.1 : furrow < -0.6 ? 0.05 : 0) + (vnoise(u * 0.8, v * 0.15, i) - 0.5) * 0.12;
+        if (vnoise(u * 0.5, v * 0.5, 40 + i) > 0.8) k += 0.12;
+        return rd(PAL.bark, k * far, x, y);
+      });
     }
     // the bush and the tree ferns at the edge of the firelight
     for (let i = 0; i < 9; i++) {
-      const f = paintGroundFern(31 + i * 7, 18 + (i * 7) % 13, PAL.fern).buf;
-      const x = Math.round(i * SW / 8 - 20 + (i % 3) * 9), y = HZ + 8 - f.h;
-      const lit = clamp01(1 - Math.abs(x + f.w / 2 - FX) / 260);
-      blit(bg, f, x, y, { dark: 0.82 - lit * 0.35 });
+      const f = paintGroundFern(31 + i * 7, (18 + (i * 7) % 13) * Z, PAL.fern).buf;
+      const x = i * SW / 8 - 20 + (i % 3) * 9, y = HZ + 8 - f.h / Z;
+      const lit = clamp01(1 - Math.abs(x + f.w / Z / 2 - FX) / 260);
+      blit(bg, f, x, y, { dark: 0.8 - lit * 0.35 });
     }
     // the tent at the back right, lit from the fire
     paintTent(bg, SW - 150, HZ - 50, 120, 62, FX);
-    paintLitterDots(bg, 77, HZ + 10, H, [PAL.soil[1], PAL.soil[2], hex('#4a3a22'), hex('#5a4a2a')], 0.035);
-    // pebbles
-    for (let i = 0; i < 14; i++) {
+    // pebbles and twigs
+    for (let i = 0; i < 16; i++) {
       const w = 6 + (i * 5) % 9, h = 4 + (i * 3) % 5;
-      const r = paintRock(400 + i, w, h, PAL.stoneWarm, 0).buf;
-      const x = Math.round(hash(i, 1, 5) * SW), y = Math.round(HZ + 14 + hash(i, 2, 5) * (H - HZ - 20));
+      const x = hash(i, 1, 5) * SW, y = HZ + 14 + hash(i, 2, 5) * (H - HZ - 20);
       if (Math.abs(x - FX) < 70 && Math.abs(y - fy) < 20) continue;
+      if (i % 4 === 3) { const a = hash(i, 3, 5) * 3; line(bg, x, y, x + Math.cos(a) * 12, y + Math.sin(a) * 3, (t, fx2, fy2, sd) => rd(PAL.bark, 0.45 - sd * 0.2 - t * 0.1, fx2, fy2), Math.max(2, Z)); continue; }
+      const r = paintRock(400 + i, w * Z, h * Z, PAL.stoneWarm, 0).buf;
       shadowOval(bg, x + w / 2, y + h, w * 0.6, 2, 0.6);
       blit(bg, r, x, y);
     }
-    // the fire pit: ash bed, the back stones, the logs
-    for (let y = fy - 12; y < fy + 10; y++) for (let x = FX - 50; x < FX + 50; x++) {
-      const nx = (x - FX) / 48, ny = (y - fy) / 10;
-      if (nx * nx + ny * ny > 1) continue;
-      const k = 0.3 + hash(x, y, 1) * 0.4 - ny * 0.15;
-      bg.set(x, y, rd(ramp('#141010', '#2a2220', '#4a3c34', '#6a5a4c', '#8a7a6a'), k, x, y));
-    }
+    // the fire pit: the ash bed, the back stones, the logs
+    ellipse(bg, FX, fy, 48, 10, (nx, ny, u, v, x, y) => rd(ramp('#141010', '#2a2220', '#4a3c34', '#6a5a4c', '#8a7a6a'), 0.32 + (vnoise(u * 0.6, v * 0.9, 6) - 0.5) * 0.5 - ny * 0.15 - (nx * nx) * 0.1, x, y));
     const ringN = 12;
     for (let i = 0; i < ringN; i++) {
       const a = i / ringN * Math.PI * 2;
       const sx = FX + Math.cos(a) * 50, sy = fy + Math.sin(a) * 11;
       const w = 18 + (i * 7) % 8, h = 11 + (i * 5) % 5;
-      const r = paintRock(90 + i * 3, w, h, PAL.stoneWarm, 0).buf;
+      const r = paintRock(90 + i * 3, w * Z, h * Z, PAL.stoneWarm, 0).buf;
       const front = Math.sin(a) > 0.1;
       // the fire side of each stone glows
-      r.map((col, x, y) => (y < h * 0.5 && dith(x, y) < 0.5 ? mix(col, hex('#ff9a40'), 0.35) : col));
-      blit(front ? fg : bg, r, Math.round(sx - w / 2), Math.round(sy - h + 4));
+      r.map((col, x, y) => (y < r.h * 0.5 && dith(x, y) < 0.55 - y / r.h ? mix(col, hex('#ff9a40'), 0.35) : col));
+      blit(front ? fg : bg, r, sx - w / 2, sy - h + 4);
     }
-    const log1 = paintLog(5, 54, 4).buf, log2 = paintLog(9, 50, 4).buf;
-    blit(bg, log1, FX - 30, fy - 8);
-    blit(bg, log2, FX - 22, fy - 4, { fx: true });
+    blit(bg, paintLog(5, 54 * Z, 4 * Z).buf, FX - 30, fy - 8);
+    blit(bg, paintLog(9, 50 * Z, 4 * Z).buf, FX - 22, fy - 4, { fx: true });
     // the tripod over the fire: the back leg, then the two front ones (in front of the pot)
     leg(bg, FX + 6, -4, FX + 40, GY - 26, 2);
     leg(fg, FX - 2, -4, FX - 58, GY + 6, 3);
     leg(fg, FX + 2, -4, FX + 62, GY + 4, 3);
-    // a chain from the top to the pot's bail
-    for (let y = -2; y < this.RY - 15; y += 3) { fg.set(FX, y, hex('#2a2620')); fg.set(FX, y + 1, hex('#6a625a')); fg.set(FX - 1, y + 1, hex('#1a1612')); fg.set(FX + 1, y + 1, hex('#1a1612')); }
+    // a chain of little iron links from the top down to the pot's bail
+    for (let y = -2; y < this.RY - 16; y += 2.6) {
+      const flat = Math.round(y / 2.6) % 2 === 0;
+      ellipse(fg, FX, y + 1.3, flat ? 1.1 : 0.5, 1.5, (nx, ny, _u, _v, x, yy) => (nx * nx + ny * ny > 0.35 || !flat ? rd(ramp('#141210', '#3a3632', '#6a625a', '#9a9288'), 0.5 - nx * 0.35, x, yy) : -1));
+    }
     // the woodpile left of the fire
     for (let i = 0; i < 4; i++) {
-      const l = paintLog(40 + i, 24 + (i % 2) * 4, 3).buf;
+      const l = paintLog(40 + i, (24 + (i % 2) * 4) * Z, 3 * Z).buf;
       blit(bg, l, FX - 92 + (i % 2) * 6 + Math.floor(i / 2) * 2, GY - 6 - Math.floor(i / 2) * 6 - (i % 2) * 2, { fx: i % 2 === 1 });
     }
     // the driftwood board on the left
@@ -255,10 +250,9 @@ export class CookSet implements SetScene {
     // the paua shell of sea salt, right of the fire
     paintShell(bg, FX + 52, GY - 2);
     // the bowl on its flat stone, the sprig beside it
-    const st = paintRock(777, 70, 14, PAL.stone, 0.2).buf;
-    blit(bg, st, this.BX - 35, this.BY + 2);
-    blit(bg, SPRIG, this.BX + 36, this.BY + 4);
-    blit(bg, SPRIG, this.BX + 41, this.BY + 6, { fx: true });
+    blit(bg, paintRock(777, 70 * Z, 14 * Z, PAL.stone, 0.2).buf, this.BX - 35, this.BY + 2);
+    blit(bg, up(SPRIG, Z), this.BX + 36, this.BY + 4);
+    blit(bg, up(SPRIG, Z), this.BX + 41, this.BY + 6, { fx: true });
   }
   private layoutRow() {
     const row = this.items.filter(p => p.state === 'row');
@@ -397,13 +391,13 @@ export class CookSet implements SetScene {
     this.chopI = i;
     const p = this.items[i];
     p.state = 'chop';
-    const sp = itemSprite(p.id, 24);
+    const w = itemSprite(p.id, CHOP).w / Z;
     p.tx = 112; p.ty = this.GY - 28;
-    const n = sp.w >= 18 ? 4 : 3;
+    const n = w >= 30 ? 4 : 3;
     this.marks = [];
-    for (let k = 0; k < n; k++) this.marks.push(Math.round(sp.w * (0.18 + 0.64 * (k + 0.5) / n) + (hash(i, k, 4) - 0.5) * 2));
+    for (let k = 0; k < n; k++) this.marks.push(w * (0.18 + 0.64 * (k + 0.5) / n) + (hash(i, k, 4) - 0.5) * 2);
     this.marked = this.marks.map(() => false);
-    this.knifeX = p.tx + sp.w + 10;
+    this.knifeX = p.tx + w / 2 + 10;
     this.knifeDir = -1;
     this.chopWait = 0.35;
     this.go('chop');
@@ -411,8 +405,8 @@ export class CookSet implements SetScene {
   private updChop(c: Closeup, dt: number) {
     this.camTo = 0;
     const p = this.items[this.chopI];
-    const sp = itemSprite(p.id, 24);
-    const k = 2, left = p.x - sp.w, right = p.x + sp.w;
+    const w = itemSprite(p.id, CHOP).w / Z;
+    const left = p.x - w / 2, right = p.x + w / 2;
     this.knifeDown = Math.max(0, this.knifeDown - dt * 6);
     if (this.chopWait > 0) { this.chopWait -= dt; return; }
     // the knife sweeps across, quicker each cut
@@ -423,14 +417,14 @@ export class CookSet implements SetScene {
     if (c.act() && this.knifeDown <= 0.2) {
       this.knifeDown = 1;
       // the nearest mark still to cut
-      const lx = (this.knifeX - left) / k;
+      const lx = this.knifeX - left;
       let best = -1, bd = 1e9;
       this.marks.forEach((m, i) => { if (!this.marked[i] && Math.abs(m - lx) < bd) { bd = Math.abs(m - lx); best = i; } });
       if (best < 0) return;
-      const dpx = bd * k;
+      const dpx = bd;
       const q = dpx < 2 ? 1 : dpx < 4.5 ? 0.75 : dpx < 8 ? 0.45 : 0.15;
       this.marked[best] = true;
-      p.cuts.push(Math.round(clamp(lx, 1, sp.w - 1))); p.cutQ.push(q);
+      p.cuts.push(clamp(lx, 1, w - 1)); p.cutQ.push(q);
       p.cuts.sort((a, b) => a - b);
       this.chopQ.push(q);
       this.sound.chop();
@@ -709,7 +703,7 @@ export class CookSet implements SetScene {
   trophy(_c: Closeup) {
     const r = this.result;
     if (!r) return null;
-    const b = new PixelBuffer(64, 34);
+    const b = new PixelBuffer(64 * Z, 34 * Z);
     this.drawBowl(b, 32, 14, true);
     const name = ITEMS[r.dish]?.name ?? r.dish;
     return { img: b, name: name.length > 18 ? name.slice(0, 17) + '.' : name, sub: `${r.learned ? 'NEW RECIPE · ' : ''}${r.portions} PORTION${r.portions > 1 ? 'S' : ''}` };
@@ -727,16 +721,16 @@ export class CookSet implements SetScene {
     else this.done({ result: null, ids: [] });
   }
 
-  // ------------------------------------------------------------ drawing
+  // ------------------------------------------------------------ drawing (units, painted at the fine grid)
   draw(c: Closeup, px: PixelBuffer) {
-    const cam = Math.round(this.cam);
+    const cam = Math.round(this.cam * Z) / Z;
     copyWin(px, this.bg, cam);
     const t = c.t;
-    // firelight breathes
     this.drawFire(px, cam, t);
     this.drawPot(c, px, cam, t);
     // the front of the fire pit and the tripod legs
-    for (let y = 0; y < px.h; y++) for (let x = 0; x < px.w; x++) { const v = this.fg.data[y * this.fg.w + x + cam]; if (v >>> 24 > 128) px.data[y * px.w + x] = v; }
+    const off = Math.round(cam * Z), fg = this.fg, FW = fg.w, D = px.data, W = px.w, rows = Math.min(px.h, Math.ceil((this.GY + 14) * Z));
+    for (let y = 0; y < rows; y++) { const r = y * FW + off, o = y * W; for (let x = 0; x < W; x++) { const v = fg.data[r + x]; if (v >>> 24 > 128) D[o + x] = v; } }
     if (this.dialBuf) this.drawDial(px, cam, t);
     this.drawLogsFlying(px, cam);
     this.drawBowlStation(c, px, cam);
@@ -746,90 +740,84 @@ export class CookSet implements SetScene {
   }
 
   private drawFire(px: PixelBuffer, cam: number, t: number) {
-    const fx = this.FX - cam, base = this.GY - 10;
-    const top = this.RY + 40;
+    const fx = this.FX - cam, base = this.GY - 10, top = this.RY + 32;
     const Fh = 10 + this.F * 22;
-    for (let y = top - 6; y <= base; y++) for (let x = fx - 40; x <= fx + 40; x++) {
-      if (x < 0 || x >= px.w) continue;
-      const dx = (x - fx) / 40;
-      const h = Fh * (1 - dx * dx) * (0.75 + 0.25 * Math.sin(x * 0.9 + t * 7) * Math.sin(x * 0.37 - t * 5));
-      const v = (base - y) / Math.max(1, h);
-      const lick = 0.22 * Math.sin(x * 1.3 + y * 0.6 - t * 14) + 0.12 * Math.sin(x * 2.9 - t * 21);
-      const k = v + lick;
-      if (k < 0 || k > 1) continue;
-      px.set(x, y, rd(FIRE, 1 - k * 0.95, x, y + Math.floor(t * 12)));
-    }
+    area(px, fx - 42, top - 6, fx + 42, base + 1, (u, v, x, y) => {
+      const dx = (u - fx) / 42;
+      const h = Fh * (1 - dx * dx) * (0.68 + 0.32 * vnoise(u * 0.32, t * 3, 7));
+      // tongues: noise scrolling up through the flame, a fast flicker on top
+      const k = (base - v) / Math.max(1, h) + (vnoise(u * 0.45, v * 0.3 + t * 6, 8) - 0.5) * 0.55 + 0.1 * Math.sin(u * 2.1 - t * 19);
+      if (k < 0 || k > 1) return -1;
+      return rd(FIRE, 1 - k * 0.97, x, y);
+    });
     // embers glowing in the logs
-    for (let i = 0; i < 18; i++) {
-      const x = fx - 30 + Math.round(hash(i, 1, 3) * 60), y = base + 2 + Math.round(hash(i, 2, 3) * 4);
-      if (Math.sin(t * (3 + i % 4) + i) > 0.2) px.set(x, y, hash(i, 3, 3) > 0.5 ? hex('#ff9a30') : hex('#ffd060'));
+    for (let i = 0; i < 26; i++) {
+      const x = fx - 30 + hash(i, 1, 3) * 60, y = base + 2 + hash(i, 2, 3) * 4;
+      if (Math.sin(t * (3 + i % 4) + i) > 0.1) dot(px, x, y, hash(i, 3, 3) > 0.5 ? hex('#ff9a30') : hex('#ffd060'), Math.max(1, Math.round(Z / 2)));
     }
   }
 
   private drawPot(c: Closeup, px: PixelBuffer, cam: number, t: number) {
     const pb = this.potBuf;
-    const x0 = this.PX - cam - Math.floor(pb.w / 2), y0 = this.RY - 12;
+    const cx = this.PX - cam;
     // the wire bail up to the hook
-    for (let i = 0; i <= 40; i++) {
-      const a = Math.PI * (i / 40);
-      const bx = Math.round(this.PX - cam - Math.cos(a) * 38), by = Math.round(this.RY + 2 - Math.sin(a) * 18);
-      px.set(bx, by, hex('#4a4440')); px.set(bx, by + 1, hex('#1a1614'));
+    for (let i = 0; i < 60; i++) {
+      const a0 = Math.PI * (i / 60), a1 = Math.PI * ((i + 1) / 60);
+      line(px, cx - Math.cos(a0) * 38, this.RY + 2 - Math.sin(a0) * 18, cx - Math.cos(a1) * 38, this.RY + 2 - Math.sin(a1) * 18, (_t, x, y, sd) => (sd < 0 ? hex('#8a847c') : hex('#2a2622')), Math.max(2, Math.round(Z * 0.7)));
     }
-    blit(px, pb, x0, y0);
+    blit(px, pb, cx - pb.w / Z / 2, this.RY - 12);
     // the fire lights the belly from below
-    glow(px, this.PX - cam, this.RY + 46, 40, 0.35 + this.F * 0.25, hex('#ff8a30'));
+    glow(px, cx, this.RY + 46, 40, 0.35 + this.F * 0.25, hex('#ff8a30'));
     // what's in the pot
-    const cx = this.PX - cam, cy = this.RY + 1, rx = 31, ry = 7;
+    const cy = this.RY + 1, rx = 31, ry = 7;
     const broth = this.pot.length ? mix(hex('#5a7480'), this.brothCol(), clamp01(this.acc * 1.3)) : hex('#4a6a78');
-    const dark = mix(broth, hex('#0a0806'), 0.45), lit = mix(broth, hex('#fff0d0'), 0.35);
-    const level = this.phase === 'plate' || this.phase === 'garnish' || this.phase === 'end' ? clamp01(1 - this.bowlFill * 0.3) : 1;
+    const dark = mix(broth, hex('#0a0806'), 0.45), deep = mix(broth, hex('#0a0806'), 0.65), lit = mix(broth, hex('#fff0d0'), 0.35), shine = mix(broth, hex('#ffffff'), 0.6);
+    const served = this.phase === 'plate' || this.phase === 'garnish' || this.phase === 'end';
+    const level = served ? clamp01(1 - this.bowlFill * 0.3) : 1;
     const B = this.B;
-    for (let y = Math.floor(cy - ry); y <= cy + ry; y++) for (let x = Math.floor(cx - rx); x <= cx + rx; x++) {
-      const nx = (x + 0.5 - cx) / rx, ny = (y + 0.5 - cy) / ry, d = nx * nx + ny * ny;
-      if (d > 1) continue;
+    ellipse(px, cx, cy, rx, ry, (nx, ny, u, v, x, y) => {
       // the back of the surface is in the pot's shadow, the front catches the sky
-      let k = 0.5 - ny * 0.25 + (level < 1 ? -0.2 : 0);
-      const wob = Math.sin(x * 0.6 + t * (2 + B * 8)) * Math.sin(y * 1.3 - t * 3) * (0.1 + B * 0.25);
-      k += wob;
-      let col = k < 0.35 ? dark : k > 0.7 ? lit : broth;
-      if (d > 0.8 && ny < 0) col = mix(col, hex('#0a0806'), 0.4);
-      if (this.scorch > 0.3 && hash(x, y, Math.floor(t * 3)) < this.scorch * 0.15) col = mix(col, hex('#1a1210'), 0.6);
-      px.set(x, y, col);
-    }
+      let k = 0.52 - ny * 0.28 + (level < 1 ? -0.2 : 0);
+      k += Math.sin(u * 0.6 + t * (2 + B * 8)) * Math.sin(v * 1.3 - t * 3) * (0.1 + B * 0.25) + (vnoise(u * 0.4 + t, v * 0.8, 2) - 0.5) * 0.2;
+      if (nx * nx + ny * ny > 0.82 && ny < 0) return deep;
+      if (this.scorch > 0.3 && hash(x >> 1, y >> 1, Math.floor(t * 3)) < this.scorch * 0.15) return mix(broth, hex('#1a1210'), 0.6);
+      // the sky's reflection, a long soft streak
+      if (Math.abs(ny + 0.1 + nx * 0.25) < 0.08 && nx > -0.6 && nx < 0.2 && dith(x, y) < 0.7) return shine;
+      return k < 0.32 ? dark : k > 0.72 ? lit : rd([dark, broth, lit], k, x, y);
+    });
     // the food bobbing
     for (const q of this.pot) {
       const sp = itemSprite(q.id, 9);
       const bob = Math.sin(t * (1.5 + B * 3) + q.ph) * (0.5 + B * 1.2);
-      const qx = Math.round(cx + q.x * (this.phase === 'plate' || this.phase === 'garnish' || this.phase === 'end' ? level : 1) - sp.w / 2), qy = Math.round(cy + q.y + bob - sp.h * (1 - q.sink));
+      const qx = cx + q.x * (served ? level : 1) - sp.w / Z / 2, qy = cy + q.y + bob - sp.h / Z * (1 - q.sink);
       const cooked = hex(CK.INGREDIENTS[q.id]?.cooked ?? '#c89048');
       blit(px, sp, qx, qy, { tint: cooked, tk: clamp01(this.acc) * 0.6, dark: this.scorch > 0.4 ? 0.4 : 0 });
       // the broth laps over the lower part
-      for (let x = qx; x < qx + sp.w; x++) if (dith(x, qy + sp.h - 1) < 0.7) px.set(x, qy + sp.h - 1, broth);
+      area(px, qx, qy + sp.h / Z - 1.2, qx + sp.w / Z, qy + sp.h / Z, (_u, _v, x, y) => (dith(x, y) < 0.75 ? broth : -1));
     }
     // bubbles: a few when it simmers, a rolling boil when it's hot
-    const nb = Math.floor(B * 18);
+    const nb = Math.floor(B * 22);
     for (let i = 0; i < nb; i++) {
-      const ph = (t * (0.8 + B * 2) + hash(i, 9, 1)) % 1;
-      const bx = Math.round(cx + (hash(i, Math.floor(t * (0.8 + B * 2) + hash(i, 9, 1)), 2) - 0.5) * rx * 1.6), by = Math.round(cy + (hash(i, 4, Math.floor(t + hash(i, 9, 1))) - 0.5) * ry * 1.4);
-      const r = ph < 0.7 ? (B > 0.6 ? 2 : 1) : 0;
-      if (r === 1) { px.set(bx, by, lit); px.set(bx + 1, by, lit); }
-      else if (r === 2) { px.set(bx - 1, by, lit); px.set(bx + 1, by, lit); px.set(bx, by - 1, lit); px.set(bx, by + 1, dark); px.set(bx, by - 1, hex('#ffffff')); }
-      else if (ph > 0.9) px.set(bx, by - 1, hex('#e8f0f0'));
+      const sp = 0.8 + B * 2, ph = (t * sp + hash(i, 9, 1)) % 1, gen = Math.floor(t * sp + hash(i, 9, 1));
+      const bx = cx + (hash(i, gen, 2) - 0.5) * rx * 1.6, by = cy + (hash(i, 4, gen) - 0.5) * ry * 1.4;
+      const r = (B > 0.6 ? 1.4 : 0.9) * (ph < 0.7 ? 0.5 + ph : 0);
+      if (r > 0) ellipse(px, bx, by, r, r * 0.8, (nx, ny) => (nx * nx + ny * ny > 0.45 ? (ny < 0 ? shine : dark) : -1));
+      else if (ph > 0.9) dot(px, bx, by - 1, hex('#e8f0f0'));
     }
     // too hot: foam climbs the rim
     if (B > this.heat[1] + 0.06 && this.phase === 'cook') {
-      for (let x = cx - rx; x <= cx + rx; x++) {
-        const fy = Math.round(cy - ry * 0.6 + Math.sin(x * 0.8 + t * 9) * 1.5);
-        if (dith(x, fy) < (B - this.heat[1]) * 3) { px.set(x, fy, hex('#f0ece0')); px.set(x, fy + 1, hex('#c8c0b0')); }
-      }
+      area(px, cx - rx, cy - ry - 2, cx + rx, cy - ry * 0.2, (u, v, x, y) => {
+        const fy = cy - ry * 0.6 + Math.sin(u * 0.8 + t * 9) * 1.5;
+        return Math.abs(v - fy) < 1 && dith(x, y) < (B - this.heat[1]) * 3 ? (v < fy ? hex('#f8f4ec') : hex('#c8c0b0')) : -1;
+      });
     }
-    // the stirring spoon (cook) / the ladle sits in the pot otherwise
+    // the stirring spoon in Mori's hand
     if (this.phase === 'cook') {
       const a = this.stirA;
-      const sx = Math.round(cx + Math.cos(a) * 18), sy = Math.round(cy + Math.sin(a) * 4);
+      const sx = cx + Math.cos(a) * 18, sy = cy + Math.sin(a) * 4;
       spoon(px, sx, sy, sx + 10, sy - 34);
       drawHand(px, 'grip', sx + 10, sy - 34, { rot: 3, from: [sx + 70, sy + 80] });
-      if (this.stir > 0.3 && Math.random() < 0.5) c.parts.add('drop', sx - 0 + (Math.random() - 0.5) * 4, sy, (Math.random() - 0.5) * 30, -30, { c: lit, g: 260, life: 0.3 });
+      if (this.stir > 0.3 && Math.random() < 0.5) c.parts.add('drop', sx + (Math.random() - 0.5) * 4, sy, (Math.random() - 0.5) * 30, -30, { c: lit, g: 260, life: 0.3 });
     }
   }
 
@@ -837,61 +825,57 @@ export class CookSet implements SetScene {
     const d = this.dialBuf!;
     const cx = this.DX - cam, cy = this.DY;
     // the bracket clipped to the rim
-    for (let i = 0; i < 12; i++) { px.set(cx + 8 + i, cy + 6 + Math.round(i * 0.4), hex('#3a3430')); px.set(cx + 8 + i, cy + 7 + Math.round(i * 0.4), hex('#141210')); }
-    blit(px, d, cx - Math.floor(d.w / 2), cy - Math.floor(d.h / 2));
+    line(px, cx + 8, cy + 6, cx + 20, cy + 10, (_t, x, y, sd) => (sd < 0 ? hex('#6a625a') : hex('#141210')), Math.max(2, Z));
+    blit(px, d, cx - d.w / Z / 2, cy - d.h / Z / 2);
     // the needle (it trembles when it boils)
     const B = this.phase === 'cook' ? this.B : this.B * 0.8;
     const jit = Math.sin(t * 31) * B * 0.05 + Math.sin(t * 17) * 0.01;
     const a = Math.PI * (7 / 6) - (clamp01(B) + jit) * Math.PI * (4 / 3);
-    for (let r = 0; r <= 9; r++) {
-      const x = Math.round(cx + Math.cos(a) * r), y = Math.round(cy - Math.sin(a) * r);
-      px.set(x, y, r > 6 ? hex('#c8301e') : hex('#1a1210'));
-    }
-    px.set(cx, cy, hex('#e8c45a')); px.set(cx - 1, cy, hex('#6a4416'));
-    // the glass glints
-    px.set(cx - 5, cy - 6, hex('#ffffff')); px.set(cx - 6, cy - 5, hex('#ffffff'));
+    line(px, cx - Math.cos(a) * 2, cy + Math.sin(a) * 2, cx + Math.cos(a) * 9.5, cy - Math.sin(a) * 9.5, (tt, _x, _y, sd) => (tt > 0.7 ? (sd < 0 ? hex('#ff6a4a') : hex('#a01a10')) : (sd < 0 ? hex('#3a2a1a') : hex('#0a0604'))), Math.max(2, Math.round(Z * 0.7)));
+    ellipse(px, cx, cy, 1.4, 1.4, (nx, ny, _u, _v, x, y) => rd(ramp('#5a3a10', '#c8962e', '#fff0a8'), 0.6 - (nx + ny) * 0.4, x, y));
+    // the glass catches the light
+    line(px, cx - 7, cy - 4, cx - 4, cy - 8, hex('#ffffff'), Math.max(1, Math.round(Z * 0.5)));
     const [lo, hi] = this.heat;
-    if (this.phase === 'cook' && B >= lo && B <= hi) for (let i = 0; i < 3; i++) if (Math.sin(t * 6 + i * 2) > 0.6) px.set(cx - 2 + i * 2, cy + 12, hex('#9af07a'));
+    if (this.phase === 'cook' && B >= lo && B <= hi) for (let i = 0; i < 3; i++) if (Math.sin(t * 6 + i * 2) > 0.6) dot(px, cx - 3 + i * 3, cy + 15, hex('#9af07a'), Math.max(1, Math.round(Z / 2)));
   }
 
   private drawLogsFlying(px: PixelBuffer, cam: number) {
     for (const l of this.logs) {
       const k = clamp01(l.t / 0.5);
-      const x = Math.round(lerp(l.x, this.FX, k) - cam), y = Math.round(lerp(l.y, this.GY - 14, k) - Math.sin(k * Math.PI) * 26);
-      for (let i = -6; i <= 6; i++) { px.set(x + i, y - 1, hex('#8a6a48')); px.set(x + i, y, hex('#5a4026')); px.set(x + i, y + 1, hex('#2a1a0e')); }
-      px.set(x - 7, y, hex('#c8a070')); px.set(x + 7, y, hex('#c8a070'));
+      const x = lerp(l.x, this.FX, k) - cam, y = lerp(l.y, this.GY - 14, k) - Math.sin(k * Math.PI) * 26, a = k * 3;
+      line(px, x - Math.cos(a) * 7, y - Math.sin(a) * 2, x + Math.cos(a) * 7, y + Math.sin(a) * 2, (_t, xx, yy, sd) => rd(PAL.bark, 0.55 - sd * 0.35, xx, yy), Math.max(3, Z * 2));
+      dot(px, x + Math.cos(a) * 7, y + Math.sin(a) * 2, hex('#c8a070'), Math.max(1, Z - 1));
     }
   }
 
   private drawBowlStation(c: Closeup, px: PixelBuffer, cam: number) {
     const bx = this.BX - cam, by = this.BY;
-    if (bx < -40 || bx > px.w + 40) return;
+    if (bx < -40 || bx > c.W + 40) return;
     this.drawBowl(px, bx, by - 8, false);
     if (this.bowlFill > 0 && Math.random() < 0.05 + this.bowlFill * 0.05) c.parts.add('steam', bx + (Math.random() - 0.5) * 30, by - 12, 0, -10, { c: '#d8d0c8', life: 1.4 });
-    // the sprig on top once it lands
     const s = this.sprig;
-    if (s.landed) blit(px, SPRIG, Math.round(s.x - cam - 4), Math.round(s.y - 8));
+    if (s.landed) blit(px, up(SPRIG, Z), s.x - cam - 4, s.y - 8);
   }
-  /** the carved bowl (and what's in it) with its rim's centre at (cx, cy) */
+  /** the carved bowl (and what's in it) with its rim's centre at (cx, cy), units */
   drawBowl(px: PixelBuffer, cx: number, cy: number, trophy: boolean) {
     const bb = this.bowlBuf;
-    blit(px, bb, cx - Math.floor(bb.w / 2), cy - 6);
+    blit(px, bb, cx - bb.w / Z / 2, cy - 6);
     const fill = trophy ? 2 : this.bowlFill;
     if (fill <= 0) return;
     const q = this.result?.quality ?? (this.acc + this.scorch * 0.35 > 1.18 ? 'burnt' : this.acc < 0.72 ? 'raw' : 'good');
     let broth = this.pot.length ? this.brothCol() : hex('#a8783c');
     if (q === 'raw') broth = mix(broth, hex('#d8d0b0'), 0.4);
     if (q === 'burnt') broth = mix(broth, hex('#1e1410'), 0.6);
-    const dark = mix(broth, hex('#0a0806'), 0.35), lit = mix(broth, hex('#fff4d8'), q === 'perfect' ? 0.5 : 0.3);
-    const rx = 21, ry = 5.5, sy = cy + Math.round((2 - fill) * 1.5);
-    for (let y = Math.floor(sy - ry); y <= sy + ry; y++) for (let x = Math.floor(cx - rx); x <= cx + rx; x++) {
-      const nx = (x + 0.5 - cx) / rx, ny = (y + 0.5 - sy) / ry;
-      if (nx * nx + ny * ny > 1) continue;
-      let col = ny < -0.5 ? dark : broth;
-      if (q === 'perfect' && ny > -0.2 && ny < 0.25 && nx > -0.6 && nx < -0.1 && dith(x, y) < 0.6) col = lit;
-      else if (q !== 'burnt' && dith(x, y) < 0.08) col = lit;
-      px.set(x, y, col);
-    }
+    const dark = mix(broth, hex('#0a0806'), 0.35), lit = mix(broth, hex('#fff4d8'), q === 'perfect' ? 0.55 : 0.3), shine = hex('#fffaf0');
+    const rx = 21, ry = 5.5, sy = cy + (2 - fill) * 1.5;
+    ellipse(px, cx, sy, rx, ry, (nx, ny, u, v, x, y) => {
+      if (ny < -0.55) return dark;
+      // the glossy sheen of a good broth; a dull film when it's raw; a scorched skin when burnt
+      if (q === 'perfect' && Math.abs(ny + 0.05 + nx * 0.2) < 0.12 && nx > -0.65 && nx < -0.05) return dith(x, y) < 0.6 ? shine : lit;
+      if (q === 'burnt' && vnoise(u * 0.8, v * 1.6, 3) > 0.62) return hex('#120c08');
+      const k = 0.5 - ny * 0.2 + (vnoise(u * 0.5, v, 4) - 0.5) * (q === 'raw' ? 0.5 : 0.2);
+      return rd([dark, broth, lit], k, x, y);
+    });
     // the pieces: neat when it went well, lumpy and pale raw, charcoal when burnt
     const ids = this.used.length ? this.used.map(u => u.id) : ['pipi', 'vil_kumara', 'kawakawa'];
     for (let i = 0; i < 9; i++) {
@@ -899,12 +883,11 @@ export class CookSet implements SetScene {
       const ing = CK.INGREDIENTS[id];
       let col = hex(q === 'raw' ? (ing?.raw ?? '#d8c8a0') : (ing?.cooked ?? '#c89048'));
       if (q === 'burnt') col = hash(i, 1, 1) < 0.6 ? hex('#1a1210') : hex('#3a2a20');
-      const x = Math.round(cx + (hash(i, 3, 11) - 0.5) * rx * 1.5), y = Math.round(sy + (hash(i, 5, 11) - 0.5) * ry * 1.2);
-      const big = q === 'raw' ? 3 : 2;
-      for (let j = 0; j < big; j++) for (let k = 0; k < big; k++) if (!(j === big - 1 && k === big - 1)) px.set(x + k, y + j, j === 0 ? mix(col, hex('#ffffff'), 0.2) : col);
-      px.set(x, y + big, mix(col, hex('#000000'), 0.4));
+      const x = cx + (hash(i, 3, 11) - 0.5) * rx * 1.5, y = sy + (hash(i, 5, 11) - 0.5) * ry * 1.2;
+      const r = q === 'raw' ? 1.6 : 1.1;
+      ellipse(px, x, y, r * 1.2, r, (nx, ny, _u, _v, fx, fy) => rd([mix(col, hex('#000000'), 0.4), col, mix(col, hex('#ffffff'), 0.35)], 0.55 - (nx + ny) * 0.45, fx, fy));
     }
-    if (trophy && this.sprig.landed && this.sprig.off <= 1) blit(px, SPRIG, Math.round(cx + (this.sprig.x - this.BX) - 4), sy - 8);
+    if (trophy && this.sprig.landed && this.sprig.off <= 1) blit(px, up(SPRIG, Z), cx + (this.sprig.x - this.BX) - 4, sy - 8);
   }
 
   private drawBoard(c: Closeup, px: PixelBuffer, cam: number, t: number) {
@@ -914,15 +897,16 @@ export class CookSet implements SetScene {
       const mx = c.ptr.x + cam, my = c.ptr.y;
       spots.forEach((sp, i) => {
         const s = itemSprite(sp.s.id, 20);
+        const sw = s.w / Z, sh = s.h / Z;
         const hov = Math.abs(mx - sp.x) < 13 && Math.abs(my - sp.y) < 13 && !c.touch;
-        const x = sp.x - cam - Math.floor(s.w / 2), y = sp.y - Math.floor(s.h / 2) - (hov ? 2 : 0);
-        shadowOval(px, sp.x - cam, sp.y + s.h / 2, s.w / 2, 2, 0.8);
-        if (hov) { const o = s.clone(); o.outline(hex('#ffe680')); blit(px, o, x - 1, y - 1); }
+        const x = sp.x - cam - sw / 2, y = sp.y - sh / 2 - (hov ? 2 : 0);
+        shadowOval(px, sp.x - cam, sp.y + sh / 2, sw / 2, 2, 0.8);
+        if (hov) { const o = s.clone(); o.outline(hex('#ffe680')); blit(px, o, x - 1 / Z, y - 1 / Z); }
         blit(px, s, x, y);
-        drawWord(px, '' + sp.s.n, sp.x - cam + 8, sp.y + 4, { font: 'tiny', color: '#fff6dc', align: 'left' });
-        if (!c.touch && i < 8) drawWord(px, '' + (i + 1), sp.x - cam - 9, sp.y - 12, { font: 'tiny', color: '#c8b890', align: 'left' });
+        drawWord(px, '' + sp.s.n, sp.x - cam + 7, sp.y + 2, { size: 'small', color: '#fff6dc', align: 'left' });
+        if (!c.touch && i < 8) drawWord(px, '' + (i + 1), sp.x - cam - 10, sp.y - 13, { size: 'small', color: '#c8b890', align: 'left' });
       });
-      if (!spots.length && !this.items.length) drawWord(px, 'NOTHING TO COOK. FIND FOOD: FISH, SHELLFISH, ROOTS, BERRIES', Math.round(110 - cam), this.GY + 12, { font: 'tiny', color: '#fff6dc', style: 'whisper', t });
+      if (!spots.length && !this.items.length) drawWord(px, 'NOTHING TO COOK. FIND FOOD: FISH, SHELLFISH, ROOTS, BERRIES', 110 - cam, this.GY + 10, { size: 'small', color: '#fff6dc', style: 'whisper', t });
     }
     // the prepared things in a row along the back of the board
     for (const p of this.items) {
@@ -933,81 +917,79 @@ export class CookSet implements SetScene {
     if (this.phase === 'chop' && this.chopI >= 0) {
       const p = this.items[this.chopI];
       if (p.state === 'chop') {
-        const sp = itemSprite(p.id, 24);
-        const k = 2, left = Math.round(p.x - sp.w - cam), top = Math.round(p.y - sp.h);
-        shadowOval(px, p.x - cam, p.y + sp.h - 2, sp.w, 3, 0.8);
-        drawPieces(px, sp, p.cuts, left, top, k, p.cuts.length ? 2 : 0);
+        const sp = itemSprite(p.id, CHOP);
+        const w = sp.w / Z, h = sp.h / Z, left = p.x - w / 2 - cam, top = p.y - h / 2;
+        shadowOval(px, p.x - cam, p.y + h / 2 - 1, w / 2 + 2, 3, 0.8);
+        drawPieces(px, sp, p.cuts, left, top, p.cuts.length ? 1.5 : 0);
         // the cut marks: dotted, ticked off as they're cut
         if (!this.marked.every(Boolean)) this.marks.forEach((m, i) => {
           if (this.marked[i]) return;
-          const x = left + m * k;
-          for (let y = top - 6; y < top + sp.h * k + 4; y += 3) px.set(x, y, Math.sin(t * 8) > 0 ? hex('#fff6dc') : hex('#ffe680'));
-          px.set(x - 1, top - 7, hex('#ffe680')); px.set(x + 1, top - 7, hex('#ffe680')); px.set(x, top - 6, hex('#ffe680'));
+          const x = left + m;
+          const col = Math.sin(t * 8) > 0 ? hex('#fff6dc') : hex('#ffe680');
+          for (let y = top - 6; y < top + h + 4; y += 2.5) line(px, x, y, x, y + 1.2, col, Math.max(1, Math.round(Z * 0.5)));
+          ellipse(px, x, top - 8, 1.6, 1.2, (nx, ny) => (ny > 0.2 && Math.abs(nx) < 1 - ny ? hex('#ffe680') : -1));
         });
       }
     }
     // dragged or flying food
     for (const p of this.items) if (p.state === 'held' || p.state === 'fly') this.drawPrep(c, px, p, cam, true);
   }
-  private drawPrep(_c: Closeup, px: PixelBuffer, p: Prep, cam: number, lifted: boolean) {
+  private drawPrep(c: Closeup, px: PixelBuffer, p: Prep, cam: number, lifted: boolean) {
     const sp = itemSprite(p.id, 16);
-    const x = Math.round(p.x - cam - sp.w / 2), y = Math.round(p.y - sp.h / 2);
-    if (!lifted) shadowOval(px, p.x - cam, p.y + sp.h / 2, sp.w / 2 + 1, 2, 0.8);
-    else shadowOval(px, p.x - cam + 4, p.y + 18, sp.w / 2, 2, 0.5);
+    const w = sp.w / Z, h = sp.h / Z;
+    const x = p.x - cam - w / 2, y = p.y - h / 2;
+    if (!lifted) shadowOval(px, p.x - cam, p.y + h / 2, w / 2 + 1, 2, 0.8);
+    else shadowOval(px, p.x - cam + 4, p.y + 18, w / 2, 2, 0.5);
     if (p.cuts.length) {
-      // chopped: the pieces, scaled to the small sprite
-      const s24 = itemSprite(p.id, 24);
-      const cuts = p.cuts.map(cx => Math.round(cx * sp.w / s24.w)).filter(v => v > 0 && v < sp.w);
-      drawPieces(px, sp, cuts, x - cuts.length, y, 1, 1);
+      // chopped: the pieces, the cuts scaled down from the big board view
+      const k = w / (itemSprite(p.id, CHOP).w / Z);
+      drawPieces(px, sp, p.cuts.map(v => v * k), x - p.cuts.length * 0.5, y, 1);
     } else blit(px, sp, x, y);
-    if (this.phase === 'add' && !lifted && !_c.touch) {
+    if (this.phase === 'add' && !lifted && !c.touch) {
       const row = this.items.filter(q => q.state === 'row');
-      if (row[this.sel] === p) { px.set(Math.round(p.x - cam), y - 4, hex('#ffe680')); px.set(Math.round(p.x - cam) - 1, y - 5, hex('#ffe680')); px.set(Math.round(p.x - cam) + 1, y - 5, hex('#ffe680')); }
+      if (row[this.sel] === p) ellipse(px, p.x - cam, y - 4, 2, 1.6, (nx, ny) => (ny > -0.2 && Math.abs(nx) < 1 - ny * 0.5 ? hex('#ffe680') : -1));
     }
   }
 
   private drawHands(c: Closeup, px: PixelBuffer, cam: number, t: number) {
-    const hx = Math.round(this.hx - cam), hy = Math.round(this.hy);
+    const hx = this.hx - cam, hy = this.hy, H = c.H;
     switch (this.phase) {
-      case 'pick': if (c.ptr.y > 20) drawHand(px, 'open', hx, hy + 4, { from: [hx + 30, px.h + 40] }); break;
+      case 'pick': if (c.ptr.y > 20) drawHand(px, 'open', hx, hy + 4, { from: [hx + 30, H + 40] }); break;
       case 'chop': {
         const p = this.items[this.chopI];
         if (!p) break;
-        const sp = itemSprite(p.id, 24);
+        const w = itemSprite(p.id, CHOP).w / Z;
         // the left hand steadies it, the right hand holds the knife
-        drawHand(px, 'open', Math.round(p.x - cam - sp.w - 6), Math.round(p.y - 2), { left: true, from: [Math.round(p.x - cam - sp.w - 40), px.h + 40] });
-        const lift = Math.round((1 - this.knifeDown) * 5);
-        const kx = Math.round(this.knifeX - cam), ky = Math.round(p.y + 12 - lift);
+        drawHand(px, 'open', p.x - cam - w / 2 - 4, p.y - 2, { left: true, from: [p.x - cam - w / 2 - 40, H + 40] });
+        const lift = (1 - this.knifeDown) * 5;
+        const kx = this.knifeX - cam, ky = p.y + 12 - lift;
         shadowOval(px, kx + 2, p.y + 8, 3, 2, 0.6);
         knife(px, kx, ky);
-        drawHand(px, 'grip', kx, ky, { rot: 3, from: [kx + 60, px.h + 40] });
+        drawHand(px, 'grip', kx, ky, { rot: 3, from: [kx + 60, H + 40] });
         break;
       }
-      case 'add': if (!this.drag && !c.touch && c.ptr.y > 20) drawHand(px, 'open', hx, hy + 4, { from: [hx + 30, px.h + 40] });
-        if (this.drag) drawHand(px, 'pinch', Math.round(this.drag.x - cam), Math.round(this.drag.y - 6), { from: [Math.round(this.drag.x - cam) + 40, px.h + 40] }); break;
+      case 'add':
+        if (!this.drag && !c.touch && c.ptr.y > 20) drawHand(px, 'open', hx, hy + 4, { from: [hx + 30, H + 40] });
+        if (this.drag) drawHand(px, 'pinch', this.drag.x - cam, this.drag.y - 6, { from: [this.drag.x - cam + 40, H + 40] });
+        break;
       case 'season': {
-        const jig = this.salting ? Math.round(Math.sin(t * 40)) : 0;
-        if (!this.salting && this.tasteT < 0) {
-          // a pinch from the shell first
-          drawHand(px, 'pinch', hx + jig, hy, { from: [hx + 40, px.h + 40] });
-        } else drawHand(px, 'pinch', hx + jig, hy, { from: [hx + 40, px.h + 40] });
+        const jig = this.salting ? Math.sin(t * 40) * 0.6 : 0;
+        drawHand(px, 'pinch', hx + jig, hy, { from: [hx + 40, H + 40] });
         break;
       }
-      case 'plate': case 'garnish': case 'end': {
-        if (this.phase === 'plate') {
-          const L = this.ladle;
-          const lx = Math.round(L.x - cam), ly = Math.round(L.y);
-          const tip = L.pour > 0 ? Math.round(L.pour * 6) : 0;
-          ladle(px, lx, ly, L.fill, this.brothCol(), tip);
-          drawHand(px, 'grip', lx + 8, ly - 30, { rot: 3, from: [lx + 60, px.h + 40] });
-        } else if (this.phase === 'garnish' && !this.sprig.landed) {
-          const s = this.sprig;
-          const sx = Math.round(s.x - cam), sy = Math.round(s.y);
-          blit(px, SPRIG, sx - 4, sy - 2);
-          if (!s.dropped) drawHand(px, 'pinch', sx, sy - 2, { from: [sx + 50, -40] });
-          // where it'd land
-          if (!s.dropped) shadowOval(px, sx, this.BY - 6, 4, 1.5, 0.5);
-        }
+      case 'plate': {
+        const L = this.ladle;
+        const lx = L.x - cam, ly = L.y;
+        ladle(px, lx, ly, L.fill, this.brothCol(), L.pour > 0 ? L.pour * 6 : 0);
+        drawHand(px, 'grip', lx + 8, ly - 30, { rot: 3, from: [lx + 60, H + 40] });
+        break;
+      }
+      case 'garnish': {
+        const s = this.sprig;
+        if (s.landed) break;
+        const sx = s.x - cam, sy = s.y;
+        blit(px, up(SPRIG, Z), sx - 4, sy - 2);
+        if (!s.dropped) { drawHand(px, 'pinch', sx, sy - 2, { from: [sx + 50, -40] }); shadowOval(px, sx, this.BY - 6, 4, 1.5, 0.5); }
         break;
       }
     }
@@ -1020,21 +1002,21 @@ export class CookSet implements SetScene {
         if (this.chosen.length) {
           const pl = this.planNow();
           const known = pl.recipe && CK.knowsRecipe(pl.recipe.id);
-          const name = pl.recipe ? (known ? pl.recipe.name : 'SOMETHING NEW...?') : (ITEMS[pl.dish]?.name ?? 'A HOTPOT');
-          drawWord(px, name.toUpperCase(), this.PX - cam, this.RY - 40, { color: known ? '#ffe680' : '#fff6dc', style: 'happy', t: c.t });
-          c.prompt(px, 'COOK!', this.PX - cam, this.RY - 26, 'ENTER', 'shout');
+          const name = pl.recipe ? (known ? pl.recipe.name : 'Something new...?') : (ITEMS[pl.dish]?.name ?? 'A hotpot');
+          drawWord(px, name, this.PX - cam, this.RY - 44, { size: 'body', color: known ? '#ffe680' : '#fff6dc', style: 'happy', t: c.t });
+          c.prompt(px, 'COOK!', this.PX - cam, this.RY - 28, 'ENTER', 'shout');
         } else if (this.stock.some(s => s.n > 0)) c.prompt(px, 'PICK FOOD', 110 - cam, this.GY - 4, c.touch ? 'mouse' : '1-8');
         break;
       }
-      case 'chop': if (t < 4 && this.chopQ.length < 2) c.prompt(px, 'CHOP ON THE MARKS', 112 - cam, this.GY - 70, 'SPACE'); break;
-      case 'add': if (this.items.some(p => p.state === 'row')) c.prompt(px, c.touch ? 'DRAG INTO THE POT' : 'DRAG INTO THE POT', 110 - cam, this.GY - 58, 'SPACE'); break;
+      case 'chop': if (t < 4 && this.chopQ.length < 2) c.prompt(px, 'CHOP ON THE MARKS', 112 - cam, this.GY - 74, 'SPACE'); break;
+      case 'add': if (this.items.some(p => p.state === 'row')) c.prompt(px, 'DRAG INTO THE POT', 110 - cam, this.GY - 58, 'SPACE'); break;
       case 'cook': {
         if (t < 6 || this.B > this.heat[1]) c.prompt(px, 'STIR', this.PX - cam, this.RY + 52, c.touch ? 'mouse' : 'S', this.B > this.heat[1] ? 'shout' : 'hint');
         if (t < 6 || this.B < this.heat[0]) c.prompt(px, 'LOG', this.FX - 80 - cam, this.GY - 30, c.touch ? 'mouse' : 'W', this.B < this.heat[0] ? 'shout' : 'hint');
         break;
       }
       case 'season': if (!this.salting && this.tasteT < 0) c.prompt(px, this.seasonTries ? 'A BIT MORE?' : 'HOLD OVER THE POT', this.PX - cam, this.RY - 46, 'SPACE'); break;
-      case 'plate': if (this.bowlFill < 0.5 || t < 4) c.prompt(px, this.ladle.fill > 0 ? 'INTO THE BOWL, GENTLY' : 'SCOOP FROM THE POT', Math.round((this.PX + this.BX) / 2 - cam), this.RY - 34, 'SPACE'); break;
+      case 'plate': if (this.bowlFill < 0.5 || t < 4) c.prompt(px, this.ladle.fill > 0 ? 'INTO THE BOWL, GENTLY' : 'SCOOP FROM THE POT', (this.PX + this.BX) / 2 - cam, this.RY - 34, 'SPACE'); break;
       case 'garnish': if (!this.sprig.dropped) c.prompt(px, 'DROP IT IN THE MIDDLE', this.BX - cam, this.BY - 66, 'SPACE'); break;
     }
   }
@@ -1043,251 +1025,251 @@ export class CookSet implements SetScene {
 // ---------------------------------------------------------------- small timers (scene time)
 function setTimeoutish(s: CookSet, secs: number, fn: () => void) { setTimeout(() => { if (s.phase !== 'end') fn(); }, secs * 1000); }
 
-// ---------------------------------------------------------------- painted props
+// ---------------------------------------------------------------- painted props (units in, fine pixels out)
+/** a green-wood pole: round, lit on the fire side, bark stripes and the odd knot */
 function leg(b: PixelBuffer, x0: number, y0: number, x1: number, y1: number, r: number) {
-  const L = Math.hypot(x1 - x0, y1 - y0), n = Math.ceil(L);
-  const BARK = PAL.bark;
-  for (let i = 0; i <= n; i++) {
-    const t = i / n, x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t;
-    for (let k = -r; k <= r; k++) {
-      const s = k / r;
-      // lit on the fire side, a knot now and then, bark stripes along it
-      let v = 0.55 - s * 0.35 + (hash(Math.round(i / 3), k, 5) - 0.5) * 0.25;
-      if (Math.abs(k) === r) v = 0.05;
-      if (i % 23 === 7 && Math.abs(k) < r) v = 0.15;
-      b.set(Math.round(x + k), Math.round(y), rd(BARK, v, Math.round(x + k), Math.round(y)));
-    }
-  }
+  const L = Math.hypot(x1 - x0, y1 - y0), ux = (x1 - x0) / L, uy = (y1 - y0) / L;
+  area(b, Math.min(x0, x1) - r - 1, Math.min(y0, y1) - 1, Math.max(x0, x1) + r + 1, Math.max(y0, y1) + 1, (u, v, x, y) => {
+    const rx = u - x0, ry = v - y0, t = rx * ux + ry * uy;
+    if (t < 0 || t > L) return -1;
+    const d = (rx * -uy + ry * ux) / r;
+    if (Math.abs(d) > 1) return -1;
+    if (Math.abs(d) > 1 - 0.8 / r / Z * 2) return PAL.bark[0];
+    let k = 0.56 - d * 0.32 - d * d * 0.12 + (vnoise(t * 0.6, d * 2, 5) - 0.5) * 0.2;
+    if (Math.sin(t * 1.7 + d) > 0.85) k -= 0.15;
+    const knot = (t % 23) - 11;
+    if (Math.abs(knot) < 1.2 && Math.abs(d) < 0.6) k = 0.12 + Math.abs(knot) * 0.1;
+    return rd(PAL.bark, k, x, y);
+  });
 }
 function paintTent(b: PixelBuffer, x: number, y: number, w: number, h: number, fx: number) {
-  const ax = x + Math.round(w * 0.42);
+  const ax = x + w * 0.42;
   const CAN = PAL.canvas;
-  for (let j = 0; j < h; j++) {
-    const k = j / h;
-    const l = Math.round(ax - k * w * 0.42 - Math.sin(k * 3) * 2), r = Math.round(ax + k * w * 0.58 + Math.sin(k * 2.5) * 2);
-    for (let i = l; i <= r; i++) {
-      const lit = clamp01(1 - Math.abs(i - fx) / 260) * 0.6 + 0.12;
-      const sag = Math.sin((i - l) / Math.max(1, r - l) * Math.PI) * 0.12;
-      let v = lit - sag + (i < ax ? 0.08 : -0.05);
-      if (i === l || i === r) v = 0.02;
-      if ((i - ax) % 19 === 0 && i !== ax) v -= 0.12;
-      // the open flap: a dark wedge
-      const flap = i > ax - k * 14 && i < ax + k * 8 && j > h * 0.35;
-      b.set(i, y + j, flap ? (dith(i, y + j) < 0.2 ? hex('#2a1c10') : hex('#0e0806')) : rd(CAN, v, i, y + j));
-    }
-  }
-  // the ridge pole and a guy rope
-  for (let i = 0; i < 6; i++) b.set(ax, y - i, hex('#3a2a1a'));
-  for (let i = 0; i < 44; i++) b.set(ax + 6 + i, y + Math.round(i * 1.4), dith(i, i) < 0.6 ? hex('#8a7a5a') : hex('#5a4a34'));
+  area(b, x - 4, y - 6, x + w + 4, y + h, (u, v, X, Y) => {
+    const k = (v - y) / h;
+    if (k < 0) return Math.abs(u - ax) < 0.6 && v > y - 6 ? hex('#3a2a1a') : -1;
+    const l = ax - k * w * 0.42 - Math.sin(k * 3) * 2, r = ax + k * w * 0.58 + Math.sin(k * 2.5) * 2;
+    if (u < l || u > r) return -1;
+    if (u < l + 0.6 || u > r - 0.6) return CAN[0];
+    const lit = clamp01(1 - Math.abs(u - fx) / 260) * 0.6 + 0.12;
+    const sag = Math.sin((u - l) / Math.max(1, r - l) * Math.PI) * 0.12;
+    let t = lit - sag + (u < ax ? 0.08 : -0.05) + (vnoise(u * 0.7, v * 0.2, 9) - 0.5) * 0.08;
+    // seams, the open flap
+    if (Math.abs(((u - ax) % 19 + 19) % 19) < 0.4 && Math.abs(u - ax) > 1) t -= 0.12;
+    if (u > ax - k * 14 && u < ax + k * 8 && v > y + h * 0.35) return dith(X, Y) < 0.2 ? hex('#2a1c10') : hex('#0e0806');
+    return rd(CAN, t, X, Y);
+  });
+  // a guy rope out to its peg
+  line(b, ax + 6, y, ax + 50, y + 62, (t, X, Y) => (dith(X, Y) < 0.6 ? hex('#8a7a5a') : hex('#5a4a34')), Math.max(1, Math.round(Z * 0.6)));
 }
 function paintBoard(b: PixelBuffer, x: number, y: number, w: number, h: number) {
   // a weathered driftwood plank seen from above: wavy edges, grain, two knots, old knife marks
-  for (let i = 0; i < w; i++) {
-    const top = Math.round(Math.sin(i * 0.05) * 1.5 + Math.sin(i * 0.17) * 0.8 + (i < 6 ? 6 - i : 0) * 0.6 + (i > w - 8 ? (i - w + 8) * 0.7 : 0));
-    const bot = h - Math.round(Math.sin(i * 0.07 + 1) * 1.2 + (i < 4 ? 4 - i : 0) + (i > w - 5 ? i - w + 5 : 0));
-    for (let j = top; j < bot + 6; j++) {
-      const X = x + i, Y = y + j;
-      if (j >= bot) {
-        // the front face of the plank
-        const v = 0.25 + (j - bot) * -0.03 + (hash(i >> 2, 1, 2) - 0.5) * 0.1;
-        b.set(X, Y, j === bot + 5 ? DRIFT[0] : rd(DRIFT, v, X, Y));
-        continue;
-      }
-      const grain = Math.sin(j * 1.1 + Math.sin(i * 0.045 + j * 0.2) * 3 + Math.sin(i * 0.013) * 4);
-      let v = 0.58 + (i / w) * 0.15 - (j / h) * 0.1 + (hash(i, j, 3) - 0.5) * 0.08;
-      if (grain > 0.82) v -= 0.22; else if (grain < -0.9) v += 0.08;
-      for (const [kx, ky] of [[w * 0.28, h * 0.55], [w * 0.74, h * 0.3]]) {
-        const d = Math.hypot((i - kx) / 3.2, j - ky);
-        if (d < 1.2) v = 0.12; else if (d < 2.4 && (Math.round(d * 3) % 2)) v -= 0.2;
-      }
-      if (j === top) v = 0.85;
-      // old knife scores
-      if ((i + j * 2) % 37 === 0 && hash(i, j, 8) < 0.5) v -= 0.25;
-      b.set(X, Y, rd(DRIFT, v, X, Y));
-    }
-    b.set(x + i, y + top - 1, DRIFT[0]);
-  }
-  // cracks at the ends
-  for (let k = 0; k < 9; k++) { b.set(x + 2 + k, y + 12 + Math.round(Math.sin(k) * 0.8), DRIFT[0]); b.set(x + w - 3 - k, y + 18 - Math.round(k * 0.3), DRIFT[1]); }
+  const top = (i: number) => Math.sin(i * 0.05) * 1.5 + Math.sin(i * 0.17) * 0.8 + (i < 6 ? (6 - i) * 0.6 : 0) + (i > w - 8 ? (i - w + 8) * 0.7 : 0);
+  const bot = (i: number) => h - (Math.sin(i * 0.07 + 1) * 1.2 + (i < 4 ? 4 - i : 0) + (i > w - 5 ? i - w + 5 : 0));
   shadowOval(b, x + w / 2, y + h + 7, w / 2, 3, 0.7);
+  area(b, x, y - 2, x + w, y + h + 7, (u, v, X, Y) => {
+    const i = u - x, j = v - y;
+    if (i < 0 || i > w) return -1;
+    const tp = top(i), bt = bot(i);
+    if (j < tp - 0.7 || j > bt + 6) return -1;
+    if (j < tp) return DRIFT[0];
+    if (j >= bt) {
+      // the front face of the plank, darker, with end grain
+      if (j > bt + 5.3) return DRIFT[0];
+      return rd(DRIFT, 0.26 - (j - bt) * 0.03 + (vnoise(i * 0.4, j * 2, 2) - 0.5) * 0.12, X, Y);
+    }
+    const grain = Math.sin(j * 1.1 + Math.sin(i * 0.045 + j * 0.2) * 3 + vnoise(i * 0.05, j * 0.3, 1) * 4);
+    let k = 0.6 + (i / w) * 0.15 - (j / h) * 0.1 + (vnoise(i * 0.8, j * 0.8, 3) - 0.5) * 0.12;
+    if (grain > 0.84) k -= 0.24; else if (grain > 0.7) k -= 0.08; else if (grain < -0.92) k += 0.08;
+    for (const [kx, ky] of [[w * 0.28, h * 0.55], [w * 0.74, h * 0.3]]) {
+      const d = Math.hypot((i - kx) / 3.2, j - ky);
+      if (d < 1.1) k = 0.12; else if (d < 2.6 && Math.round(d * 2.5) % 2) k -= 0.2;
+    }
+    if (j < tp + 0.7) k = 0.88;
+    // old knife scores, short and pale
+    const sc = (i * 1.3 + j * 2.6) % 31;
+    if (sc < 0.5 && hash(Math.floor(i / 4), Math.floor(j / 3), 8) < 0.35) k += 0.15;
+    // cracks at the ends
+    if ((i < 11 && Math.abs(j - 12 - Math.sin(i) * 0.8) < 0.35) || (i > w - 12 && Math.abs(j - 18 + (w - i) * 0.3) < 0.35)) k = 0.05;
+    return rd(DRIFT, k, X, Y);
+  });
 }
 function paintMat(b: PixelBuffer, x: number, y: number, w: number, h: number) {
-  // woven harakeke: strips over and under, frayed ends
-  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
-    const X = x + i, Y = y + j;
+  // woven harakeke: strips over and under, each with its sheen and edges; frayed ends
+  area(b, x - 1, y - 1, x + w + 1, y + h + 1, (u, v, X, Y) => {
+    const i = u - x, j = v - y;
+    if (j < 0 || j > h) return Math.abs(j) < 0.5 || Math.abs(j - h) < 0.5 ? FLAX[0] : -1;
+    if (i < 0 || i > w) return -1;
     const ci = Math.floor(i / 5), cj = Math.floor(j / 4);
     const over = (ci + cj) % 2 === 0;
-    const u = over ? (i % 5) / 4 : (j % 4) / 3;
-    let v = over ? 0.62 - Math.abs(u - 0.4) * 0.5 : 0.42 - Math.abs(u - 0.4) * 0.5;
-    if ((over && i % 5 === 4) || (!over && j % 4 === 3)) v = 0.12;
-    v += (hash(ci, cj, 4) - 0.5) * 0.18 - (j / h) * 0.12;
-    if (i < 2 || i > w - 3) { if (hash(i, j, 2) < 0.5) continue; v -= 0.1; }
-    b.set(X, Y, rd(FLAX, v, X, Y));
-  }
-  for (let i = 0; i < w; i += 2) { b.set(x + i, y - 1, FLAX[1]); b.set(x + i, y + h, FLAX[0]); }
+    const fu = over ? (i % 5) / 5 : (j % 4) / 4;
+    let k = (over ? 0.66 : 0.44) - Math.abs(fu - 0.4) * 0.6 + (vnoise(i * 0.6, j * 0.6, ci + cj) - 0.5) * 0.12;
+    if ((over && i % 5 > 4.6) || (!over && j % 4 > 3.6)) k = 0.1;
+    // the fibres along each strip
+    if ((over ? Math.sin(j * 6 + ci) : Math.sin(i * 6 + cj)) > 0.92) k -= 0.1;
+    k += (hash(ci, cj, 4) - 0.5) * 0.16 - (j / h) * 0.12;
+    if (i < 2 || i > w - 2) { if (hash(X, Y >> 1, 2) < 0.5) return -1; k -= 0.1; }
+    return rd(FLAX, k, X, Y);
+  });
 }
 function paintShell(b: PixelBuffer, x: number, y: number) {
   // a paua shell (an ear-shaped outline placed point by point), its rainbow inside full of salt
-  const pts: [number, number][] = [[0, 4], [3, 1], [9, 0], [16, 0], [21, 2], [24, 5], [23, 9], [18, 12], [10, 13], [4, 11], [1, 8]];
-  const P = pts.map(([a, c]) => [x + a, y + c] as [number, number]);
-  b.polyFn(P.flat(), (X, Y) => {
-    const u = X - x, v = Y - y;
-    const swirl = Math.sin(u * 0.55 + v * 0.35 + Math.sin(u * 0.2) * 2);
+  const pts: [number, number][] = [[0, 4], [3, 1], [9, 0], [16, 0], [21, 2], [24, 5], [23, 9], [18, 12], [10, 13], [4, 11], [1, 8]].map(([a, c]) => [x + a, y + c]);
+  poly(b, pts, (u, v, X, Y) => {
+    const lu = u - x, lv = v - y;
+    const swirl = Math.sin(lu * 0.55 + lv * 0.35 + Math.sin(lu * 0.2) * 2 + vnoise(lu * 0.4, lv * 0.4, 3) * 2);
     return rd(PAUA, (swirl + 1) / 2, X, Y);
   });
-  for (const [px, py] of P) b.set(px, py, hex('#3a2a20'));
-  for (let i = 0; i < P.length; i++) { const [a, c] = P[i], [d, e] = P[(i + 1) % P.length]; b.line(a, c, d, e, hex('#5a4434')); }
-  // the salt heap
-  for (let j = 0; j < 6; j++) for (let i = 0; i < 14 - j * 2; i++) {
-    const X = x + 6 + j + i, Y = y + 7 - j;
-    if (hash(X, Y, 6) < 0.85) b.set(X, Y, hash(X, Y, 7) < 0.3 ? hex('#c8c8c0') : hash(X, Y, 8) < 0.15 ? hex('#a8b0b8') : hex('#f4f4ee'));
-  }
+  for (let i = 0; i < pts.length; i++) { const [a, c] = pts[i], [d, e] = pts[(i + 1) % pts.length]; line(b, a, c, d, e, (t, X, Y, sd) => (sd < 0 ? hex('#7a6050') : hex('#2a1a12')), Math.max(2, Z)); }
+  // the salt heap: crystals that catch the firelight
+  area(b, x + 5, y + 1, x + 21, y + 9, (u, v, X, Y) => {
+    const lu = u - x - 13, lv = v - y - 8;
+    if (lv > 0 || Math.abs(lu) > 7 + lv * 0.9 || hash(X, Y, 6) > 0.9) return -1;
+    return hash(X, Y, 7) < 0.25 ? hex('#c8c8c0') : hash(X, Y, 8) < 0.1 ? hex('#ffe8c0') : rd(ramp('#b8bcc0', '#e0e0dc', '#fafaf6'), 0.7 + lv * 0.08 - lu * 0.03, X, Y);
+  });
 }
 function paintPot(): PixelBuffer {
-  // the cast-iron pot: a rough round base, then the lip, the casting seam, pits, soot, lug handles
+  // the cast-iron pot: a round belly, the thick lip, the casting seam, pits and soot, two lugs
   const W = 84, H = 60, cx = 42, rimY = 12;
-  const b = new PixelBuffer(W, H);
+  const b = new PixelBuffer(W * Z, H * Z);
   const prof = (y: number) => { const t = y / 46; return 34 + Math.sin(t * Math.PI * 0.85) * 6 - t * t * 10; };
-  for (let y = 0; y < 47; y++) {
-    const hw = prof(y);
-    for (let x = Math.floor(cx - hw); x <= cx + hw; x++) {
-      const nx = (x + 0.5 - cx) / hw;
-      // the bottom curves under
-      const bot = 46 - (1 - Math.sqrt(Math.max(0, 1 - nx * nx))) * 8;
-      if (y > bot) continue;
-      let v = 0.42 - nx * 0.32 + (y < 6 ? 0.1 : 0) - (y / 46) * 0.08;
-      if (Math.abs(nx) > 0.94) v = 0.08;
-      if (hash(x, y, 4) < 0.06) v -= 0.18;
-      if (hash(x >> 2, y >> 2, 9) < 0.18) v -= 0.1;
-      if (y === 22 && Math.abs(nx) < 0.92) v -= 0.12;
-      if (y === 23 && Math.abs(nx) < 0.92 && nx < 0) v += 0.15;
-      // the fire's glow on the underside
-      if (y > bot - 3) v = 0.35 + (hash(x, y, 2) * 0.3);
-      b.set(x, y + rimY, y > bot - 3 ? rd(ramp('#3a1a10', '#6a2a14', '#a84a1e', '#d8742a'), v, x, y) : rd(IRON, v, x, y + rimY));
-    }
-  }
+  const GLOWR = ramp('#3a1a10', '#6a2a14', '#a84a1e', '#d8742a');
+  area(b, 0, rimY, W, rimY + 47, (u, vv, x, y) => {
+    const v = vv - rimY, hw = prof(v), nx = (u - cx) / hw;
+    if (Math.abs(nx) > 1) return -1;
+    const bot = 46 - (1 - Math.sqrt(Math.max(0, 1 - nx * nx))) * 8;
+    if (v > bot) return -1;
+    if (Math.abs(nx) > 1 - 0.8 / hw || v > bot - 0.5) return IRON[0];
+    // the fire's glow on the underside
+    if (v > bot - 3.5) return rd(GLOWR, 0.3 + vnoise(u * 0.8, v, 2) * 0.6 - (v - bot + 3.5) * 0.05, x, y);
+    let k = 0.42 - nx * 0.32 - nx * nx * 0.08 + (v < 6 ? 0.1 : 0) - (v / 46) * 0.08;
+    // a warm rim light on the fire side, cool sky on the top
+    if (nx > 0.82) k += 0.15;
+    k += (vnoise(u * 1.2, v * 1.2, 4) - 0.5) * 0.12;
+    if (hash(x, y, 4) < 0.025) k -= 0.2;
+    if (vnoise(u * 0.25, v * 0.3, 9) > 0.66) k -= 0.12;
+    if (Math.abs(v - 22) < 0.5) k -= 0.14; else if (Math.abs(v - 23) < 0.4 && nx < 0) k += 0.16;
+    return rd(IRON, k, x, y);
+  });
   // the mouth: the inside back wall, the lip all round
-  for (let y = 0; y <= 24; y++) for (let x = 0; x < W; x++) {
-    const nx = (x + 0.5 - cx) / 36, ny = (y + 0.5 - rimY) / 10, d = nx * nx + ny * ny;
-    if (d > 1) continue;
-    const inner = (x + 0.5 - cx) ** 2 / 33 ** 2 + (y + 0.5 - rimY) ** 2 / 8 ** 2 <= 1;
-    if (inner) b.set(x, y, ny < 0 ? rd(IRON, 0.15 + (ny + 1) * 0.15, x, y) : IRON[1]);
-    else b.set(x, y, rd(IRON, ny < 0 ? 0.35 - nx * 0.2 : 0.62 - nx * 0.35, x, y));
-  }
-  for (let x = 8; x < W - 8; x++) {
-    const nx = (x + 0.5 - cx) / 36;
-    const y = Math.round(rimY + Math.sqrt(Math.max(0, 1 - nx * nx)) * 10);
-    if (nx < 0.4) b.set(x, y - 1, IRON[6]);
-  }
+  ellipse(b, cx, rimY, 36, 10, (nx, ny, u, v, x, y) => {
+    const inner = ((u - cx) / 33) ** 2 + ((v - rimY) / 8) ** 2 <= 1;
+    if (inner) return ny < 0 ? rd(IRON, 0.12 + (ny + 1) * 0.16, x, y) : IRON[1];
+    const e = nx * nx + ny * ny;
+    if (e > 0.97) return IRON[0];
+    return rd(IRON, ny < 0 ? 0.36 - nx * 0.2 : 0.66 - nx * 0.35 + (ny > 0.6 ? 0.1 : 0), x, y);
+  });
+  line(b, cx - 34, rimY + 3, cx + 10, rimY + 9.6, (t, x, y) => (dith(x, y) < 0.8 ? IRON[6] : -1), Math.max(1, Math.round(Z * 0.6)));
   // the lugs and their rivets
   for (const s of [-1, 1]) {
-    for (let j = 0; j < 6; j++) for (let i = 0; i < 5; i++) b.set(cx + s * (37 + i) - (s < 0 ? 4 : 0), rimY + 3 + j, rd(IRON, 0.3 + (s < 0 ? 0.2 : 0) - j * 0.03, i, j));
-    b.set(cx + s * 38, rimY + 5, IRON[6]);
+    area(b, cx + s * 36.5 - (s < 0 ? 5 : 0), rimY + 3, cx + s * 36.5 + (s > 0 ? 5 : 0), rimY + 9, (u, v, x, y) => rd(IRON, 0.32 + (s < 0 ? 0.2 : 0) - (v - rimY - 3) * 0.04 + (vnoise(u, v, 7) - 0.5) * 0.1, x, y));
+    dot(b, cx + s * 38.5, rimY + 5.5, IRON[6], Math.max(1, Math.round(Z * 0.5)));
   }
   return b;
 }
 function paintDial(band: [number, number]): PixelBuffer {
-  // Joshu's old boiler gauge: a brass bezel, a cream face painted blue / green / red, ticks, the hub
-  const R = 13, W = R * 2 + 3, b = new PixelBuffer(W, W);
-  const c = R + 1;
-  for (let y = 0; y < W; y++) for (let x = 0; x < W; x++) {
-    const d = Math.hypot(x + 0.5 - c, y + 0.5 - c);
-    if (d > R + 0.5) continue;
-    if (d > R - 2.2) { const a = Math.atan2(y - c, x - c); b.set(x, y, d > R - 0.5 ? BRASS[0] : rd(BRASS, 0.55 - Math.sin(a + 0.8) * 0.4, x, y)); continue; }
-    // the face, a touch yellowed
-    let col = rd(ramp('#b8a882', '#d8ccaa', '#efe6cc'), 0.75 - (y / W) * 0.3, x, y);
-    // the coloured arc
-    const ang = Math.atan2(c - y, x - c);
+  // Joshu's old boiler gauge: a brass bezel, a cream face painted blue / green / red, ticks, a maker's line
+  const R = 13, W = R * 2 + 3, c = R + 1.5;
+  const b = new PixelBuffer(W * Z, W * Z);
+  const FACE = ramp('#b8a882', '#d8ccaa', '#efe6cc', '#fbf6e4');
+  area(b, 0, 0, W, W, (u, v, x, y) => {
+    const d = Math.hypot(u - c, v - c);
+    if (d > R) return -1;
+    if (d > R - 0.5) return BRASS[0];
+    if (d > R - 2.4) { const a = Math.atan2(v - c, u - c); return rd(BRASS, 0.55 - Math.sin(a + 0.8) * 0.42 + (d > R - 1.2 ? 0.1 : -0.1), x, y); }
+    if (d > R - 2.8) return BRASS[1];
+    let col = rd(FACE, 0.8 - (v / W) * 0.35 + (vnoise(u, v, 3) - 0.5) * 0.1, x, y);
+    const ang = Math.atan2(c - v, u - c);
     let k = (Math.PI * (7 / 6) - ang) / (Math.PI * (4 / 3));
     if (k < -0.2) k += Math.PI * 2 / (Math.PI * (4 / 3));
-    if (d > R - 5.5 && d < R - 2.6 && k >= 0 && k <= 1) col = k < band[0] ? hex('#3a6ab0') : k <= band[1] ? hex('#4a9a3a') : hex('#c83a24');
-    b.set(x, y, col);
+    if (d > R - 6.2 && d < R - 3.4 && k >= 0 && k <= 1) col = k < band[0] ? rd(ramp('#24488a', '#3a6ab0', '#5a8ad0'), 0.5 - (d - R + 6) * 0.1, x, y) : k <= band[1] ? rd(ramp('#2a6a24', '#4a9a3a', '#7ac85a'), 0.5, x, y) : rd(ramp('#8a1a10', '#c83a24', '#ea6a40'), 0.5, x, y);
+    return col;
+  });
+  // ticks round the arc
+  for (let i = 0; i <= 16; i++) {
+    const a = Math.PI * (7 / 6) - i / 16 * Math.PI * (4 / 3), r0 = i % 4 === 0 ? R - 8.2 : R - 7.2;
+    line(b, c + Math.cos(a) * r0, c - Math.sin(a) * r0, c + Math.cos(a) * (R - 6.4), c - Math.sin(a) * (R - 6.4), hex('#2a1a0c'), i % 4 === 0 ? Math.max(2, Math.round(Z * 0.6)) : 1);
   }
-  // ticks
-  for (let i = 0; i <= 8; i++) {
-    const a = Math.PI * (7 / 6) - i / 8 * Math.PI * (4 / 3);
-    for (let r = R - 7; r <= R - 6; r++) b.set(Math.round(c + Math.cos(a) * r), Math.round(c - Math.sin(a) * r), hex('#2a1a0c'));
-  }
+  // the maker's tiny engraved line under the hub
+  line(b, c - 3, c + 6, c + 3, c + 6, hex('#8a7a5a'), 1);
   return b;
 }
 function paintBowl(): PixelBuffer {
-  // a carved rimu bowl: adze facets on the outside, a pale lip, a dark inside
+  // a carved rimu bowl: adze facets round the belly, a pale lip, a dark inside
   const W = 54, H = 22, cx = 27, rimY = 6;
-  const b = new PixelBuffer(W, H);
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const nx = (x + 0.5 - cx) / 26, ny = (y + 0.5 - rimY) / 6.5;
+  const b = new PixelBuffer(W * Z, H * Z);
+  area(b, 0, 0, W, H, (u, v, x, y) => {
+    const nx = (u - cx) / 26, ny = (v - rimY) / 6.5;
     const inRim = nx * nx + ny * ny <= 1;
-    // the outside: below the rim, a half ellipse 15 deep
     const outY = rimY + Math.sqrt(Math.max(0, 1 - nx * nx)) * 15;
-    if (!inRim && (y < rimY || y > outY || Math.abs(nx) > 1)) continue;
+    if (!inRim && (v < rimY || v > outY || Math.abs(nx) > 1)) return -1;
     if (inRim) {
-      const inner = (x + 0.5 - cx) ** 2 / 23 ** 2 + (y + 0.5 - rimY) ** 2 / 5 ** 2 <= 1;
-      b.set(x, y, inner ? rd(RIMU, 0.12 + (ny + 1) * 0.12, x, y) : rd(RIMU, 0.8 - nx * 0.2, x, y));
-      continue;
+      const inner = ((u - cx) / 23) ** 2 + ((v - rimY) / 5) ** 2 <= 1;
+      if (inner) return rd(RIMU, 0.1 + (ny + 1) * 0.14 + (vnoise(u * 0.5, v, 2) - 0.5) * 0.08, x, y);
+      return nx * nx + ny * ny > 0.96 ? RIMU[1] : rd(RIMU, 0.84 - nx * 0.22, x, y);
     }
-    // adze facets: bands of light and dark round the belly
-    const facet = Math.floor((nx + 1) * 6);
-    let v = 0.5 - nx * 0.3 + (facet % 2 ? 0.08 : -0.04) - (y - rimY) / 15 * 0.2;
-    const grain = Math.sin(y * 1.4 + nx * 8);
-    if (grain > 0.85) v -= 0.14;
-    if (y >= outY - 1) v = 0.05;
-    b.set(x, y, rd(RIMU, v, x, y));
-  }
+    // adze facets: bands of light and dark round the belly, the grain curving with it
+    const facet = Math.floor((nx + 1) * 7);
+    let k = 0.5 - nx * 0.3 + (facet % 2 ? 0.08 : -0.04) - (v - rimY) / 15 * 0.2;
+    if (Math.sin(v * 1.4 + nx * 8 + vnoise(u * 0.3, v * 0.3, 5) * 2) > 0.86) k -= 0.14;
+    if (v >= outY - 0.6 || Math.abs(nx) > 0.985) k = 0.04;
+    return rd(RIMU, k, x, y);
+  });
   return b;
 }
-/** chopped food: the sprite in pieces, spread apart at the cuts */
-function drawPieces(px: PixelBuffer, sp: PixelBuffer, cuts: number[], x: number, y: number, k: number, gap: number) {
-  const edges = [0, ...cuts, sp.w];
+/** chopped food: the sprite in pieces at the cuts (units in sprite space), spread apart */
+function drawPieces(px: PixelBuffer, sp: PixelBuffer, cuts: number[], x: number, y: number, gap: number) {
+  const edges = [0, ...cuts.map(v => Math.round(v * Z)), sp.w];
+  const X = Math.round(x * Z), Y = Math.round(y * Z), G = gap * Z;
   for (let s = 0; s < edges.length - 1; s++) {
     const a = edges[s], e = edges[s + 1];
-    const ox = x + s * gap, oy = y + (s % 2 ? 1 : 0) * Math.min(1, gap);
+    const ox = X + Math.round(s * G), oy = Y + (s % 2 ? Math.round(Math.min(Z, G / 2)) : 0);
     for (let v = 0; v < sp.h; v++) for (let u = a; u < e; u++) {
       let c = sp.data[v * sp.w + u];
       if (c >>> 24 < 128) continue;
-      // the cut face shows the inside, a shade lighter
-      if (s > 0 && u === a) c = mix(c, hex('#fff4d8'), 0.35);
-      for (let j = 0; j < k; j++) for (let i = 0; i < k; i++) px.set(ox + u * k + i, oy + v * k + j, c);
+      // the cut faces show the inside, paler
+      if (s > 0 && u - a < Math.max(1, Z / 2)) c = mix(c, hex('#fff4d8'), 0.4);
+      else if (s < edges.length - 2 && e - u <= 1) c = mix(c, hex('#000000'), 0.3);
+      px.set(ox + u, oy + v, c);
     }
   }
 }
 function knife(px: PixelBuffer, x: number, y: number) {
-  // seen from above: a long steel blade, the bevel catching the light, a brass bolster, a wood handle
-  const STEEL = ramp('#2a3038', '#4a5460', '#7a8694', '#aab6c0', '#dce6ec');
-  for (let j = 0; j < 36; j++) {
-    const yy = y - 10 - j;
-    const w = j > 30 ? Math.max(1, 5 - (j - 30)) : 5;
-    for (let i = 0; i < w; i++) {
-      const xx = x - 2 + i;
-      let v = 0.35 + i * 0.12;
-      if (i === 0) v = 0.05;
-      if (i === w - 1) v = 0.95;
-      if (i === 3 && j < 30) v = 0.7;
-      px.set(xx, yy, rd(STEEL, v, xx, yy));
-    }
-  }
-  for (let i = -2; i < 4; i++) { px.set(x + i, y - 10, hex('#c8962e')); px.set(x + i, y - 9, hex('#6a4416')); }
-  for (let j = 0; j < 14; j++) for (let i = -2; i < 3; i++) px.set(x + i, y - 8 + j, i === -2 || i === 2 ? hex('#2a140a') : rd(RIMU, 0.5 - i * 0.12, x + i, y + j));
-  px.set(x, y - 6, hex('#e8c45a')); px.set(x, y + 3, hex('#e8c45a'));
+  // seen from above: a long steel blade with a bright bevel, a brass bolster, a wooden handle, rivets
+  const STEEL = ramp('#2a3038', '#4a5460', '#7a8694', '#aab6c0', '#dce6ec', '#ffffff');
+  area(px, x - 3, y - 47, x + 3, y - 9, (u, v, X, Y) => {
+    const j = (y - 10) - v;
+    const w = j > 30 ? Math.max(0.4, 2.6 - (j - 30) * 0.42) : 2.6;
+    const i = u - x;
+    if (i < -w || i > w) return -1;
+    if (i < -w + 0.4) return STEEL[0];
+    // the flat, then the bevel down to the edge (right side) that catches the light
+    const bev = i > w * 0.35;
+    return rd(STEEL, bev ? 0.85 + (i - w * 0.35) * 0.1 : 0.42 + i * 0.06 + (vnoise(u * 2, v * 0.3, 4) - 0.5) * 0.1, X, Y);
+  });
+  area(px, x - 3, y - 10, x + 3.2, y - 8.4, (u, v, X, Y) => rd(BRASS, 0.75 - (v - y + 10) * 0.25, X, Y));
+  area(px, x - 2.4, y - 8.4, x + 2.4, y + 6, (u, v, X, Y) => {
+    const i = (u - x) / 2.4;
+    if (Math.abs(i) > 0.92) return hex('#2a140a');
+    return rd(RIMU, 0.62 - i * 0.35 + (Math.sin(v * 2.2 + i * 3) > 0.8 ? -0.12 : 0), X, Y);
+  });
+  dot(px, x, y - 5, BRASS[4], Math.max(1, Math.round(Z * 0.5)));
+  dot(px, x, y + 2.5, BRASS[4], Math.max(1, Math.round(Z * 0.5)));
 }
 function spoon(px: PixelBuffer, tx: number, ty: number, hx: number, hy: number) {
   // a carved wooden spoon handle from the broth up to the hand
-  const n = Math.ceil(Math.hypot(hx - tx, hy - ty));
-  for (let i = 0; i <= n; i++) {
-    const t = i / n, x = Math.round(tx + (hx - tx) * t), y = Math.round(ty + (hy - ty) * t);
-    px.set(x - 1, y, RIMU[1]); px.set(x, y, RIMU[4]); px.set(x + 1, y, RIMU[2]);
-  }
+  line(px, tx, ty, hx, hy, (_t, X, Y, sd) => rd(RIMU, 0.6 - sd * 0.4, X, Y), Math.max(3, Math.round(Z * 1.4)));
 }
 function ladle(px: PixelBuffer, x: number, y: number, fill: number, broth: C, tip: number) {
   // a tin ladle: the handle up to the hand, the cup tilting as it pours
-  for (let j = 0; j < 28; j++) { const xx = x + Math.round(j * 0.28); px.set(xx, y - 2 - j, hex('#8a949c')); px.set(xx + 1, y - 2 - j, hex('#3a4248')); }
-  for (let j = -3 - tip; j <= 3; j++) for (let i = -6; i <= 6; i++) {
-    const nx = i / 6.5, ny = j / 3.5;
-    if (nx * nx + ny * ny > 1) continue;
-    const rim = nx * nx + ny * ny > 0.6;
-    let c = rim ? (ny < 0 ? hex('#c8d0d8') : hex('#5a646c')) : hex('#2a3036');
-    if (!rim && fill > 0 && ny > 0.4 - fill * 1.2) c = j < 0 ? mix(broth, hex('#ffffff'), 0.25) : broth;
-    px.set(x + i, y + j, c);
-  }
+  line(px, x, y - 2, x + 8, y - 30, (_t, X, Y, sd) => (sd < -0.3 ? hex('#c8d0d8') : sd > 0.3 ? hex('#3a4248') : hex('#8a949c')), Math.max(2, Math.round(Z * 0.9)));
+  ellipse(px, x, y - tip * 0.3, 6.5, 3.5 + tip * 0.15, (nx, ny, _u, _v, X, Y) => {
+    const e = nx * nx + ny * ny;
+    if (e > 0.88) return ny < 0 ? hex('#e0e8ee') : hex('#4a545c');
+    if (e > 0.6) return rd(ramp('#3a4248', '#7a848c', '#c8d0d8'), 0.5 - ny * 0.4, X, Y);
+    if (fill > 0 && ny > 0.4 - fill * 1.2) return ny < 0 ? mix(broth, hex('#ffffff'), 0.25) : broth;
+    return hex('#2a3036');
+  });
 }
 
 // ---------------------------------------------------------------- entry
