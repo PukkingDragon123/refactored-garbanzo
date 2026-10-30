@@ -7,6 +7,7 @@ import { buildDone, buildLevel } from './crafting';
 import { SPECIES, SPECIES_BY_ID } from './species';
 import { V4_QUESTS } from './v4/quests4';
 import { BOAT_QUESTS } from './v10/boatquests';
+import { markQuestDone } from '../ui/v12/notebook';
 
 export type Giver = 'story' | 'rowan' | 'crowe' | 'aroha' | 'lou' | 'pip' | 'mori' | 'jenna' | 'joshu' | 'chunk';
 
@@ -278,6 +279,8 @@ export function completeQuest(id: string) {
   if (r?.flag) s.flags[r.flag] = true;
   if (s.tracked === id) s.tracked = null;
   game.persist();
+  // V12: the pen ticks it off in Mori's notebook (and "noted" floats by him)
+  markQuestDone(id);
   // no "chapter / quest complete" popup: the tracker quietly moves on to the next quest (the RP
   // counter counts any reward up on its own)
   onQuestEvent?.('done', q);
@@ -296,12 +299,20 @@ export function setQuestHook(h: typeof onQuestEvent) {
 }
 
 let checkT = 0;
+/** the step each active quest was on at the last check (V12: finished steps get ticked in the notebook) */
+const stepWas: Record<string, number> = {};
 /** Call every frame; checks active quests a few times per second and completes finished ones. */
 export function updateQuests(dt: number) {
   checkT -= dt;
   if (checkT > 0) return;
   checkT = 0.25;
-  for (const q of activeQuests()) if (currentStepIndex(q) >= q.steps.length) completeQuest(q.id);
+  for (const q of activeQuests()) {
+    const cur = currentStepIndex(q);
+    const was = stepWas[q.id];
+    if (was !== undefined && cur > was) for (let i = was; i < Math.min(cur, q.steps.length); i++) markQuestDone(q.id, i);
+    stepWas[q.id] = cur;
+    if (cur >= q.steps.length) completeQuest(q.id);
+  }
 }
 
 /** Side quests an NPC can offer right now. */

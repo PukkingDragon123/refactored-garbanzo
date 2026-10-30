@@ -492,6 +492,8 @@ export interface EncyOpts {
   key?: string;
   /** called whenever the book marks entries as seen (the laptop refreshes its badges) */
   onChange?: () => void;
+  /** open this book (the research archive) rather than the notebook's field guide */
+  archive?: boolean;
 }
 
 function buildSections(onChange?: () => void): { sections: BookSection[]; tabs: BookTab[] } {
@@ -525,6 +527,9 @@ function buildSections(onChange?: () => void): { sections: BookSection[]; tabs: 
 
 /** open the Zealandia Encyclopedia; resolves when it's closed */
 export async function openEncyclopedia(o: EncyOpts = {}): Promise<void> {
+  // V12: G, the HUD and the pause menu open the FIELD GUIDE in Mori's notebook; the laptop's research
+  // archive (which passes onChange) still opens this book
+  if (!o.onChange && !o.archive) { const { openNotebook } = await import('../v12/notebook'); return openNotebook({ page: 'guide', entry: o.key }); }
   if (current?.isOpen()) { if (o.key) void current.goto(o.key); return current.closed; }
   if (!styled) { styled = true; const s = document.createElement('style'); s.dataset.ui = 'encybook'; s.textContent = CSS; document.head.appendChild(s); }
   const { sections, tabs } = buildSections(o.onChange);

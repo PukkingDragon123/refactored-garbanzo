@@ -155,7 +155,7 @@ export class Flow {
    * 'now' (a red arrow in the margin, underlined), 'todo', 'next' (faint pencil). With `fresh`, the
    * tick and the strike-through are an animation (drawn on by the pen when the page is shown).
    */
-  check(s: string, state: 'done' | 'now' | 'todo' | 'next', o: { seed?: number; fresh?: Anim; color?: number; hit?: { act: string; arg?: string }; bold?: boolean } = {}) {
+  check(s: string, state: 'done' | 'now' | 'todo' | 'next', o: { seed?: number; fresh?: Anim; color?: number; hit?: { act: string; arg?: string }; bold?: boolean; light?: boolean } = {}) {
     const seed = o.seed ?? hashStr(s);
     const bx = TEXT_X, tx = TEXT_X + 12;
     const w = this.right() - tx;
@@ -184,7 +184,7 @@ export class Flow {
       if (state === 'done') {
         const n = k >= 1 ? all.length : Math.floor(all.length * k);
         plot(c.a, all.slice(0, Math.min(n, tick.length)), C.blue, Infinity, { w: 1 });
-        plot(c.a, all.slice(tick.length, n), C.ink);
+        plot(c.a, all.slice(tick.length, n), o.light ? C.pencilLt : C.ink);
         if (k > 0 && k < 1 && n > 0) { const [px, py] = all[Math.min(n, all.length) - 1]; c.pen(px, py); }
       }
     });

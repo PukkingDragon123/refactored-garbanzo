@@ -17,7 +17,8 @@ export const MAP_W = 360, MAP_H = 236, MAP_Y = 28;
 /** where the map starts on the left page */
 const MAP_X0 = PW * 2 - MAP_W - 16;
 
-interface MapPic { art: Art; places: { x: number; y: number; name: string; camp: boolean }[]; here: [number, number] | null }
+interface Place { x: number; y: number; name: string; camp: boolean; lx: number; ly: number; show: boolean }
+interface MapPic { art: Art; places: Place[]; here: [number, number] | null }
 let mapP: Promise<MapPic | null> | null = null;
 let lastMap: MapPic | null = null;
 let mapKey = '';
@@ -104,14 +105,30 @@ async function buildMap(): Promise<MapPic | null> {
     for (const d of discoveries()) {
       const l = location(d.loc);
       if (!l) continue;
-      const mk = art.MARKS[d.kind] ?? art.MARKS.note;
+      const mk = art.MARKS[d.kind];
+      if (!mk) continue;
       const [u, v] = mapPoint(d.loc, d.x ?? (l.pos ? 0 : 0));
       const [mx, my] = fx.onMap(u, v);
       const g = artOfData(mk.w, mk.h, mk.data);
       out.blit(g, Math.round(mx / k) - 3, Math.round(my / kh) - 3);
     }
   } catch { /* no finds */ }
-  const places = LOCATIONS.filter(l => isFound(l.id)).map(l => { const [x, y] = fx.onMap(l.pos[0], l.pos[1]); return { x: Math.round(x / k), y: Math.round(y / kh), name: l.name, camp: l.id === 'camp' }; });
+  const places: Place[] = LOCATIONS.filter(l => isFound(l.id)).map(l => { const [x, y] = fx.onMap(l.pos[0], l.pos[1]); return { x: Math.round(x / k), y: Math.round(y / kh), name: l.name, camp: l.id === 'camp', lx: 0, ly: 0, show: false }; });
+  // letter the names where they don't run into each other (the camp first)
+  places.sort((a, b) => +b.camp - +a.camp);
+  const taken: [number, number, number, number][] = [];
+  for (const p of places) {
+    const w = handW(p.name) + 2;
+    for (const [dx, dy] of [[-w / 2, 13], [-w / 2, -6], [6, 4], [-w - 5, 4], [-w / 2, 22]]) {
+      const lx = Math.round(p.x + dx), ly = Math.round(p.y + dy);
+      const r: [number, number, number, number] = [lx - 1, ly - 9, w + 2, 12];
+      if (r[0] < 0 || r[0] + r[2] > MAP_W || r[1] < 0 || r[1] + r[3] > MAP_H) continue;
+      if (taken.some(t => r[0] < t[0] + t[2] && t[0] < r[0] + r[2] && r[1] < t[1] + t[3] && t[1] < r[1] + r[3])) continue;
+      taken.push(r);
+      p.lx = lx; p.ly = ly; p.show = true;
+      break;
+    }
+  }
   let here: [number, number] | null = null;
   const lp = lastPos();
   if (lp && location(lp.loc)) { const [u, v] = mapPoint(lp.loc, lp.x); const [x, y] = fx.onMap(u, v); here = [Math.round(x / k), Math.round(y / kh)]; }
@@ -145,9 +162,11 @@ function drawHalf(a: Art, m: MapPic, side: 'l' | 'r') {
     const x = toPage(p.x), y = MAP_Y + p.y;
     if (p.camp) a.blit(doodleArt('tent', 12, C.ink, { pencil: false }), x - 6, y - 10);
     else { a.put(x, y, C.ink); a.put(x - 1, y, C.ink); a.put(x + 1, y, C.ink); a.put(x, y - 1, C.ink); a.put(x, y + 1, C.ink); }
-    const w = handW(p.name);
-    const lx = Math.max(2, Math.min(PW - w - 2, x - Math.round(w / 2)));
-    if (x > -40 && x < PW + 40) hand(a, p.name, lx, y + 11, C.ink);
+    if (!p.show) continue;
+    const lx = toPage(p.lx), ly = MAP_Y + p.ly;
+    const halo = col('#efe4c6');
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) hand(a, p.name, lx + dx, ly + dy, halo);
+    hand(a, p.name, lx, ly, C.ink);
   }
   if (m.here) {
     const x = toPage(m.here[0]), y = MAP_Y + m.here[1];
@@ -160,7 +179,7 @@ export interface MapBuild { pages: Page[]; anchors: Record<string, string> }
 export function mapPages(): MapBuild {
   const f = new Flow('map', 'm:l', { head: 'map', paper: 'plain' });
   const half = (side: 'l' | 'r') => {
-    const pg = f.page(side === 'l' ? 'm:l' : 'm:r', { head: side === 'l' ? 'where I have walked' : 'map', paper: 'plain' });
+    const pg = f.page(side === 'l' ? 'm:l' : 'm:r', { head: '', paper: 'plain' });
     pg.ops.push(c => {
       const m = c.pic('map:' + mapKey, () => getMap().then(mm => { lastMap = mm; return mm?.art ?? null; }));
       if (!m || !lastMap) {
@@ -169,12 +188,14 @@ export function mapPages(): MapBuild {
       }
       drawHalf(c.a, lastMap, side);
       if (side === 'l') {
-        hand(c.a, 'Where I have walked', 18, 22, C.ink, { bold: true });
-        c.a.blit(doodleArt('compass', 28, C.ink, { pencil: false, seed: 2 }), 10, PH - 40);
-        hand(c.a, 'N', 21, PH - 42, C.red, { bold: true });
+        hand(c.a, 'My map', 18, 22, C.ink, { bold: true, scale: 2 });
+        hand(c.a, 'where I have walked so far', 82, 21, C.pencil, { pencil: true });
+        c.a.blit(doodleArt('compass', 26, C.ink, { pencil: false, seed: 2 }), 12, PH - 70);
+        hand(c.a, 'N', 23, PH - 71, C.red, { bold: true });
       } else {
-        hand(c.a, 'no ferry, no shortcuts: walk it', PW - 8 - handW('no ferry, no shortcuts: walk it'), PH - 10, C.pencil, { pencil: true });
-        c.a.blit(doodleArt('footprints', 22, C.pencil, { pencil: true, seed: 3 }), PW - 30, 6);
+        const t = 'no ferry, no shortcuts: walk it';
+        hand(c.a, t, PW - 40 - handW(t), PH - 30, C.pencil, { pencil: true });
+        c.a.blit(doodleArt('footprints', 30, C.pencil, { pencil: true, seed: 3 }), PW - 38, PH - 62);
       }
     });
   };

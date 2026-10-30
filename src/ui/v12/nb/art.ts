@@ -604,71 +604,76 @@ export function bandArt(h: number): Art {
 
 // ---------------------------------------------------------------- Mori's hands
 
-/**
- * Mori's right hand holding the book's bottom-right corner (mirror it for the left): the thumb over
- * the page, the fingerless glove under the corner and round the edge, the sleeve running down out of
- * the picture. The returned anchor is the book corner's position inside the buffer; len is how far
- * below the corner the picture must reach.
- */
-export function handArt(len: number): { art: Art; ax: number; ay: number } {
-  const W = 64, H = Math.max(40, Math.round(len) + 4);
-  const a = new Art(W, H);
-  const ax = 18, ay = 12; // the book corner
-  const shade = (ramp: number[], l: number, x: number, y: number) => ramp[Math.max(1, Math.min(ramp.length - 1, Math.floor(l * 4 + bayer(x, y) * 0.9 - 0.45) + 1))];
-  // the sleeve: from under the hand down and out to the right, past the bottom edge
-  const s0: [number, number] = [ax + 6, ay + 14], dirX = 0.5, dirY = 1;
-  const L = H;
-  const sw = 13;
-  const sl: [number, number][] = [
-    [s0[0] - sw, s0[1] + 2], [s0[0] + sw - 2, s0[1] - 4],
-    [s0[0] + sw + dirX * L, s0[1] + dirY * L], [s0[0] - sw + dirX * L, s0[1] + dirY * L],
-  ];
-  a.poly(sl, (x, y) => {
-    // across the sleeve: lit on the upper-left, folds as darker diagonals
-    const u = ((x - s0[0]) * dirY - (y - s0[1]) * dirX) / (sw * 1.1);
-    let l = 0.62 - u * 0.35;
-    const fold = Math.sin((y - x * 0.4) / 5);
-    if (fold > 0.82) l -= 0.25;
-    return shade(TUNIC, l, x, y);
-  });
-  // the rolled cuff
-  a.poly([[s0[0] - sw - 1, s0[1] + 1], [s0[0] + sw - 1, s0[1] - 5], [s0[0] + sw + 3, s0[1] + 3], [s0[0] - sw + 3, s0[1] + 9]], (x, y) => shade(TUNIC, 0.85 - (y - s0[1]) * 0.03, x, y));
-  // the glove: the heel of the hand under the corner, the fingers curling round the outer edge
-  a.ellipse(ax + 3, ay + 6, 13, 9, (x, y) => shade(GLOVE, 0.55 - (y - ay) * 0.03 + (x - ax) * 0.012, x, y));
-  for (let k = 0; k < 3; k++) a.ellipse(ax + 11 + k * 1.5, ay - 4 + k * 5, 4, 3, (x, y) => shade(GLOVE, 0.7 - k * 0.12 - (y - ay) * 0.02, x, y));
-  // bare fingertips peeking round the edge
-  for (let k = 0; k < 3; k++) { const fx = ax + 14 + k, fy = ay - 6 + k * 5; a.ellipse(fx + 1, fy, 2.2, 2, (x, y) => shade(SKIN, 0.62 - k * 0.1, x, y)); }
-  // the thumb, over the page, pointing up and in
-  const tb: [number, number] = [ax - 2, ay + 3], tt: [number, number] = [ax - 13, ay - 13];
-  const tw = 3.3;
-  for (let y = tt[1] - 4; y <= tb[1] + 4; y++) for (let x = tt[0] - 5; x <= tb[0] + 5; x++) {
-    const vx = tb[0] - tt[0], vy = tb[1] - tt[1], L2 = vx * vx + vy * vy;
-    const t = Math.max(0, Math.min(1, ((x + 0.5 - tt[0]) * vx + (y + 0.5 - tt[1]) * vy) / L2));
-    const px = tt[0] + vx * t, py = tt[1] + vy * t;
-    const d = Math.hypot(x + 0.5 - px, y + 0.5 - py);
-    const r = tw * (0.85 + t * 0.25);
+/** a tapered capsule from (ax, ay) (radius r0) to (bx, by) (radius r1), shaded per pixel: f(light 0..1, t 0 at a .. 1 at b, x, y) */
+function capsule(a: Art, ax: number, ay: number, bx: number, by: number, r0: number, r1: number, f: (l: number, t: number, x: number, y: number) => number, mask?: Art) {
+  const vx = bx - ax, vy = by - ay, L2 = vx * vx + vy * vy || 1, L = Math.sqrt(L2);
+  const R = Math.max(r0, r1);
+  const x0 = Math.floor(Math.min(ax, bx) - R - 1), x1 = Math.ceil(Math.max(ax, bx) + R + 1), y0 = Math.floor(Math.min(ay, by) - R - 1), y1 = Math.ceil(Math.max(ay, by) + R + 1);
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const qx = x + 0.5 - ax, qy = y + 0.5 - ay;
+    const t = Math.max(0, Math.min(1, (qx * vx + qy * vy) / L2));
+    const r = r0 + (r1 - r0) * t;
+    const dx = qx - vx * t, dy = qy - vy * t, d = Math.hypot(dx, dy);
     if (d > r) continue;
-    const side = ((x + 0.5 - px) * vy - (y + 0.5 - py) * vx) / Math.sqrt(L2);
-    let c = shade(SKIN, 0.66 - side * 0.12 - t * 0.12, x, y);
-    // the glove covers the thumb up to the first knuckle
-    if (t > 0.62) c = shade(GLOVE, 0.6 - side * 0.1, x, y);
-    // the nail
-    if (t < 0.22 && side < 0.6 && d < r - 1.2) c = SKIN[5];
-    // the knuckle crease
-    if (Math.abs(t - 0.4) < 0.03) c = SKIN[1];
-    a.put(x, y, c);
+    // which side of the axis (light from the upper left), and how round it is here
+    const side = (dx * -vy + dy * vx) / L / r;
+    const n = Math.sqrt(Math.max(0, 1 - (d / r) * (d / r)));
+    a.put(x, y, f(0.5 + side * 0.32 + n * 0.28 - 0.14, t, x, y));
+    if (mask) mask.put(x, y, 0xff000000);
   }
-  a.outline(C.out);
-  return { art: a, ax, ay };
 }
-/** the thumb's shadow on the page (drawn before the hand) */
-export function thumbShadow(a: Art, cx: number, cy: number, mirror: boolean) {
-  const sh = col('#1e1406', 0.42);
-  const s = mirror ? -1 : 1;
-  for (let i = 0; i < 16; i++) for (let w = -3; w <= 3; w++) {
-    const x = cx + s * (-1 - i * 0.75 + 2) + w * 0.4, y = cy + 4 - i * 1.05 + 2;
-    if (dith(Math.round(x), Math.round(y), 0.5)) a.px(x, y, sh);
+/** pick from a ramp with ordered dithering between its steps (l 0..1) */
+const ramp = (r: number[], l: number, x: number, y: number, lo = 1) => r[Math.max(lo, Math.min(r.length - 1, Math.floor(lo + l * (r.length - lo) + bayer(x, y) * 0.9 - 0.45)))];
+
+/**
+ * Mori's right hand holding the book's bottom-right corner (mirror it for the left): the thumb lying
+ * over the page, the fingerless glove under the corner with the fingertips curling round the board's
+ * edge, the rolled sleeve running down out of the picture. ax, ay is where the book's corner sits in
+ * the buffer; len is how far below the corner the picture must reach. `thumb` is the thumb's
+ * silhouette (for its shadow on the page).
+ */
+export function handArt(len: number): { art: Art; ax: number; ay: number; thumb: Art } {
+  const ax = 44, ay = 40;
+  const W = 104, H = Math.max(ay + 30, Math.round(ay + len) + 4);
+  const a = new Art(W, H);
+  const thumbM = new Art(W, H);
+  // the sleeve: a wide tube from under the hand, down and out to the right, past the bottom edge
+  const sx0 = ax + 2, sy0 = ay + 16;
+  const dirX = 0.42, dirY = 1;
+  const sl: [number, number][] = [[sx0 - 19, sy0 + 2], [sx0 + 17, sy0 - 8], [sx0 + 25 + dirX * H, sy0 + dirY * H], [sx0 - 15 + dirX * H, sy0 + dirY * H]];
+  a.poly(sl, (x, y) => {
+    const u = ((x - sx0) * dirY - (y - sy0) * dirX) / 21; // -1 left .. 1 right across the sleeve
+    let l = 0.66 - u * 0.36 - Math.abs(u) * 0.12;
+    const fold = Math.sin((y - x * 0.38) / 4.2 + Math.sin(y / 9) * 1.2);
+    if (fold > 0.86 && Math.abs(u) < 0.8) l -= 0.3;
+    else if (fold > 0.7 && Math.abs(u) < 0.8) l += 0.1;
+    return ramp(TUNIC, l, x, y);
+  });
+  // the rolled-up cuff (a fatter, lighter band)
+  capsule(a, sx0 - 18, sy0 + 6, sx0 + 19, sy0 - 4, 5.2, 5.2, (l, _t, x, y) => ramp(TUNIC, l + 0.16, x, y));
+  // the glove's cuff at the wrist, then the back of the hand under the corner
+  capsule(a, sx0 - 12, sy0 - 2, sx0 + 13, sy0 - 9, 5, 5, (l, _t, x, y) => ramp(GLOVE, l * 0.9, x, y));
+  a.ellipse(ax - 4, ay + 4, 21, 12, (x, y) => {
+    const u = (x - (ax - 4)) / 21, v = (y - (ay + 4)) / 12;
+    const n = Math.sqrt(Math.max(0, 1 - u * u - v * v));
+    return ramp(GLOVE, 0.42 - u * 0.2 - v * 0.3 + n * 0.3, x, y);
+  });
+  // a seam stitched across the back of the glove
+  for (let i = -14; i <= 10; i += 3) a.put(ax - 4 + i, ay + 1 + Math.round(i * 0.15), GLOVE[5]);
+  // fingertips curling round the board's outer edge (bare: fingerless gloves)
+  for (let k = 0; k < 4; k++) {
+    const fy = ay - 30 + k * 8;
+    capsule(a, ax - 3, fy + 3, ax + 5, fy, 3.1 - k * 0.15, 3.2 - k * 0.15, (l, t, x, y) => (t < 0.35 ? ramp(GLOVE, l, x, y) : ramp(SKIN, l * 0.85 + 0.05, x, y)));
   }
+  // the thumb on the page, up and in from the base of the hand
+  const tbx = ax - 16, tby = ay + 3, ttx = ax - 34, tty = ay - 21;
+  capsule(a, tbx, tby, ttx, tty, 6.2, 4.9, (l, t, x, y) => (t < 0.32 ? ramp(GLOVE, l + 0.08, x, y) : ramp(SKIN, l, x, y)), thumbM);
+  // the nail, the knuckle crease
+  const nx = tbx + (ttx - tbx) * 0.86, ny = tby + (tty - tby) * 0.86;
+  a.ellipse(nx - 0.5, ny - 0.5, 2.6, 3.2, (x, y) => (y < ny - 1 ? SKIN[5] : SKIN[4]));
+  for (let i = -3; i <= 2; i++) { const kx = Math.round(tbx + (ttx - tbx) * 0.56 + i * 0.8), ky = Math.round(tby + (tty - tby) * 0.56 - i * 0.6); a.put(kx, ky, SKIN[1]); }
+  a.outline(C.out);
+  return { art: a, ax, ay, thumb: thumbM };
 }
 
 // ---------------------------------------------------------------- the pen, the pencil, the eraser
@@ -830,6 +835,15 @@ export function artOfData(w: number, h: number, data: Uint32Array): Art {
   return a;
 }
 
+/** a buffer scaled by a whole number to fit w x h: down until it fits, or up (at most maxK) to fill it */
+export function fitArt(src: Art, w: number, h: number, maxK = 3): Art {
+  const k = Math.min(maxK, Math.floor(Math.min(w / src.w, h / src.h)));
+  if (k < 1) return fitDown(src, w, h);
+  if (k === 1) return src;
+  const a = new Art(src.w * k, src.h * k);
+  for (let y = 0; y < a.h; y++) for (let x = 0; x < a.w; x++) a.put(x, y, src.d[Math.floor(y / k) * src.w + Math.floor(x / k)]);
+  return a;
+}
 /** a buffer scaled down by whole steps until it fits w x h (nearest neighbour) */
 export function fitDown(src: Art, w: number, h: number): Art {
   const k = Math.max(1, Math.ceil(Math.max(src.w / w, src.h / h)));

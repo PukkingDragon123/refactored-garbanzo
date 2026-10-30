@@ -113,10 +113,17 @@ const REACT_WORD: Record<GiftReaction, string> = { love: 'loves', like: 'likes',
 // ================================================================== the people book
 const BW = 360, BH = 216;
 let bookOpen = false;
-export const peopleOpen = () => bookOpen;
+let nbPeople = false;
+export const peopleOpen = () => bookOpen || nbPeople;
+
+/** V12: K opens the PEOPLE tab of Mori's notebook (the old people book is openPeopleBook) */
+export async function openPeople(sel?: string): Promise<void> {
+  nbPeople = true;
+  try { const { openNotebook } = await import('../v12/notebook'); await openNotebook({ page: 'people', person: sel }); } finally { nbPeople = false; }
+}
 
 /** the people book; resolves when closed */
-export async function openPeople(sel?: string): Promise<void> {
+export async function openPeopleBook(sel?: string): Promise<void> {
   if (bookOpen) return;
   bookOpen = true;
   audio.play('uiOpen');

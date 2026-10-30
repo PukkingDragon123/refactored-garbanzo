@@ -168,7 +168,7 @@ export function questPages(): QuestBuild {
     f.gap(1);
     for (const q of doneAll.slice().reverse()) {
       if (S.done[q.id] === undefined && freshDone.includes(q)) { f.check(q.title, 'done', { seed: hashStr(q.id), hit: { act: 'goto', arg: 'q:' + q.id } }); continue; }
-      f.check(q.title, 'done', { seed: hashStr(q.id) });
+      f.check(q.title, 'done', { seed: hashStr(q.id), light: true });
     }
   }
   const anchors = { ...f.anchors, quests: 'q:index' };

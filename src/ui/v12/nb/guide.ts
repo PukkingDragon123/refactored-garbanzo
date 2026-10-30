@@ -20,7 +20,7 @@ import { hashStr } from '../../v11/paper/rng';
 import { Flow } from './flow';
 import type { Page, Ctx } from './flow';
 import {
-  C, TEXT_X, TEXT_R, TEXT_W, LINE, lineY, hand, handW, wrap, photoAt, tapeAt, stickyAt, barAt, plot, wavyPx, doodleArt, loadImg, photoArt, fitDown, stampAt,
+  C, TEXT_X, TEXT_R, TEXT_W, LINE, lineY, hand, handW, wrap, photoAt, tapeAt, stickyAt, barAt, plot, wavyPx, doodleArt, loadImg, photoArt, fitArt, stampAt,
 } from './art';
 
 const STATUS = ['', 'Common', 'Uncommon', 'Scarce', 'Rare', 'Legendary'];
@@ -35,13 +35,13 @@ async function sketchOfSpecies(id: string, w: number, h: number, seed: number): 
   if (!src) return null;
   const im = await loadImg(src);
   if (!im) return null;
-  return fitDown(Art.from(sketchCanvas(im, { seed, style: 'pencil', wash: 0.62 })), w, h);
+  return fitArt(Art.from(sketchCanvas(im, { seed, style: 'pencil', wash: 0.62 })), w, h, 2);
 }
 async function sketchOfIcon(src: string, w: number, h: number, seed: number): Promise<Art | null> {
   if (!src) return null;
   const im = await loadImg(src);
   if (!im) return null;
-  return fitDown(Art.from(sketchCanvas(im, { seed, style: 'pencil', wash: 0.55 })), w, h);
+  return fitArt(Art.from(sketchCanvas(im, { seed, style: 'pencil', wash: 0.55 })), w, h, 2);
 }
 /** a photo cut round the animal in it */
 async function photoOf(u: UploadRecord, species: string | null, w: number, h: number, pad = 2.4): Promise<Art | null> {
@@ -230,10 +230,13 @@ export function guidePages(): GuideBuild {
   for (const c of CATS) {
     const st = catStat(c.id);
     const first = entries(c.id).find(e => e.known);
-    f.text(c.name, { bold: true, hit: first ? { act: 'goto', arg: 'cat:' + c.id } : undefined });
+    const name = c.id === 'culture' ? 'Taonga & culture' : c.name;
+    f.text(name, { bold: true, hit: first ? { act: 'goto', arg: 'cat:' + c.id } : undefined });
     const y = lineY(f.line - 1);
     const seed = hashStr(c.id);
-    f.op(cx => { barAt(cx.a, TEXT_R - 74, y - 7, 46, 6, st.pct / 100, seed, C.green); hand(cx.a, `${st.known}/${st.total}`, TEXT_R - 24, y, C.pencil, { pencil: true }); });
+    const cnt = `${st.known}/${st.total}`;
+    const bx = Math.max(TEXT_X + handW(name, { bold: true }) + 6, TEXT_R - 76);
+    f.op(cx => { barAt(cx.a, bx, y - 7, TEXT_R - 30 - bx, 6, st.pct / 100, seed, C.green); hand(cx.a, cnt, TEXT_R - handW(cnt), y, C.pencil, { pencil: true }); });
   }
   f.gap(1);
   if (knownFauna.length) {

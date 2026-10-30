@@ -135,8 +135,15 @@ function doneBlocks(done: QuestDef[]): BookBlock[] {
 
 let current: BookHandle | null = null;
 
-/** open Mori's field journal (at a quest, else at the bookmarked one); resolves when closed */
+/** V12: J, the HUD and the pause menu open Mori's notebook at its QUESTS tab (the old journal book is
+ *  kept as openJournalBook) */
 export async function openJournal(o: { quest?: string } = {}): Promise<void> {
+  const { openNotebook } = await import('../v12/notebook');
+  return openNotebook({ page: 'quests', quest: o.quest });
+}
+
+/** open Mori's field journal (at a quest, else at the bookmarked one); resolves when closed */
+export async function openJournalBook(o: { quest?: string } = {}): Promise<void> {
   if (current?.isOpen()) { if (o.quest) void current.goto('q:' + o.quest); return current.closed; }
   if (!styled) { styled = true; const s = document.createElement('style'); s.dataset.ui = 'journalbook'; s.textContent = CSS; document.head.appendChild(s); }
   const build = () => {

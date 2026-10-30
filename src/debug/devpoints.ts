@@ -453,8 +453,26 @@ export async function chapters(): Promise<DevChapter[]> {
     { id: 'm:pack', name: 'Backpack', icon: 'gift', run: async () => { await zl().pack?.(); } },
     { id: 'm:review', name: 'Photo review', icon: 'film', run: async () => { await zl().review?.(); } },
     { id: 'm:journal', name: 'Field Guide (V2)', icon: 'scroll', run: async () => { (await import('../ui/journal')).openJournal(); } },
-    { id: 'm:fieldjournal', name: 'Field journal (quests book)', icon: 'scroll', run: async () => { await (await import('../ui/v11/journalbook')).openJournal(); } },
-    { id: 'm:ency', name: 'Zealandia Encyclopedia (book)', icon: 'scroll', run: async () => { await (await import('../ui/v11/encybook')).openEncyclopedia(); } },
+    { id: 'm:notebook', name: 'Mori’s notebook', sub: 'Quests, field guide, people, map, sketches (J / G / K)', icon: 'scroll', run: async () => { await (await import('../ui/v12/notebook')).openNotebook(); } },
+    { id: 'm:notebookbusy', name: 'Mori’s notebook: a busy save', sub: 'Animals documented, the map walked, quests on the go; the pen ticks a day’s steps and stamps a quest DONE', icon: 'scroll', run: async () => {
+      ensureLoop();
+      await revealAll();
+      await zl().devDoc?.(8);
+      (await import('../game/v10/campquests')).registerCampQuests();
+      const Qs = await import('../game/quests');
+      for (const id of ['v10day', 'v10kitten', 'v9shells', 'v9notes']) if (Qs.QUEST_BY_ID[id] && Qs.questStatus(id) === 'hidden') Qs.startQuest(id, true);
+      const nb = await import('../ui/v12/notebook');
+      const S = nb.nbSave();
+      S.seen['v10day'] = 0;
+      if (Qs.questStatus('v4camp') === 'done') { delete S.done['v4camp']; S.seen['v4camp'] = Math.max(0, (Qs.QUEST_BY_ID['v4camp']?.steps.length ?? 1) - 2); }
+      if (Qs.questStatus('v10day') === 'active') game.save.tracked = 'v10day';
+      game.persist();
+      await goIsle();
+      await sleep(600);
+      void nb.openNotebook({ page: 'quests' });
+    } },
+    { id: 'm:fieldjournal', name: 'Field journal (the V11 quests book)', icon: 'scroll', run: async () => { await (await import('../ui/v11/journalbook')).openJournalBook(); } },
+    { id: 'm:ency', name: 'Zealandia Encyclopedia (the research archive book)', icon: 'scroll', run: async () => { await (await import('../ui/v11/encybook')).openEncyclopedia({ archive: true }); } },
     { id: 'm:board', name: 'Camp board (cork)', icon: 'flag', run: async () => { await (await import('../ui/v10/campboard')).openBoard(); } },
     { id: 'm:paper', name: 'Paper kit sampler', icon: 'scroll', run: async () => { (await import('../ui/v11/paper/demo')).paperDemo(); } },
   ] });

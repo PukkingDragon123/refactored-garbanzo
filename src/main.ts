@@ -176,6 +176,10 @@ async function boot() {
     ency: async (key?: string) => (await import('./ui/v11/encybook')).openEncyclopedia({ key }),
     /** V11 Mori's field journal (quests), the camp board */
     journal: async (id?: string) => (await import('./ui/v11/journalbook')).openJournal({ quest: id }),
+    /** V12 Mori's notebook: zl.notebook('quests' | 'guide' | 'people' | 'map' | 'sketch', { quest, entry, person }) */
+    notebook: async (page?: string, o: Record<string, string> = {}) => (await import('./ui/v12/notebook')).openNotebook({ page, ...o }),
+    /** V12: replay the pen on a finished quest step (or the DONE stamp without a step), live if the notebook is open */
+    notebookMark: async (quest: string, step?: number) => (await import('./ui/v12/notebook')).markQuestDone(quest, step),
     board: async () => (await import('./ui/v10/campboard')).openBoard(),
     /** V11 blueprints: the drafting table ('bench' | 'laptop' | 'field', optionally at a sheet) */
     folio: async (at = 'bench', focus?: string) => (await import('./ui/v11/blueprints/folio')).openFolio({ at: at as never, focus }),
