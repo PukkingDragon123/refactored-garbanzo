@@ -25,8 +25,12 @@ import { audio } from '../../core/audio';
 import { guardInput } from '../../core/input';
 import { pushKeys } from '../laptop-kit';
 import { Art, bayer, col } from '../v11/paper/px';
-import { drawText, textWidth, wrapText } from '../v11/paper/pxfont';
-import type { Face } from '../v11/paper/pxfont';
+import { pxDraw, pxMeasure, pxWrap } from '../pxfont';
+import type { PxFontId } from '../pxfont';
+import { PixelBuffer } from '../../art/pixel';
+
+/** 'block': upright bold capitals (the options); 'hand': Mori's marker hand (notes, headings) */
+export type Face = 'block' | 'hand';
 
 export type FMKind = 'action' | 'slider' | 'choice' | 'toggle' | 'text';
 
@@ -103,19 +107,23 @@ const STYLES: Record<Style, StyleDef> = {
   valueF: { top: '#ffffff', mid: '#fff0b8', bot: '#ffc860', ink: '#2a1004' },
 };
 const PAD = 3;
-const GW = 12, GH = 10;
+const GW = 14, GH = 12;
 const sprites = new Map<string, HTMLCanvasElement>();
 const masks = new Map<string, Uint8Array>();
 const advs = new Map<string, number>();
+/** the game's bitmap faces (src/ui/pxfont.ts, the same as the floating dialogue): 'block' is the bold
+ *  print (6 px caps), 'hand' Mori's marker hand (8 px caps); both sit on glyph row 7 */
+const FONT: Record<Face, PxFontId> = { block: 'bold', hand: 'script' };
+const CAP: Record<Face, number> = { block: 6, hand: 8 };
 
 function maskOf(ch: string, face: Face): Uint8Array {
   const k = face + ch;
   let m = masks.get(k);
   if (m) return m;
-  const a = new Art(GW, GH);
-  drawText(a, ch, 0, 8, col('#ffffff'), { face, bold: face === 'block' });
+  const b = new PixelBuffer(GW, GH);
+  pxDraw(b, ch, 0, 8 - CAP[face], { font: FONT[face], color: '#ffffff', bounce: false });
   m = new Uint8Array(GW * GH);
-  for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) if (a.get(x, y) >>> 24) m[y * GW + x] = 1;
+  for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) if (b.get(x, y) >>> 24) m[y * GW + x] = 1;
   masks.set(k, m);
   return m;
 }
@@ -123,7 +131,7 @@ function maskOf(ch: string, face: Face): Uint8Array {
 function adv(ch: string, face: Face): number {
   const k = face + ch;
   let v = advs.get(k);
-  if (v === undefined) { v = textWidth(ch, { face, bold: face === 'block' }) + 1 + (face === 'block' ? 1 : 0); advs.set(k, v); }
+  if (v === undefined) { v = pxMeasure(ch + ch, FONT[face]) - pxMeasure(ch, FONT[face]) + (face === 'block' ? 1 : 0); advs.set(k, v); }
   return v;
 }
 
@@ -521,8 +529,8 @@ export class FloatMenu {
   /** the pixel sizes for a page (a page may ask for smaller words: a long settings list) */
   private sizeFor(p: Page) {
     const k = p.def.scale ?? 1;
-    this.gp = Math.max(2, Math.round((Math.max(16, this.cap * k) * this.dpr) / 7));
-    this.hp = Math.max(1, Math.round(this.gp * 0.5), Math.ceil((12 * this.dpr) / 7));
+    this.gp = Math.max(2, Math.round((Math.max(16, this.cap * k) * this.dpr) / 6));
+    this.hp = Math.max(1, Math.round(this.gp * 0.45), Math.ceil((12 * this.dpr) / 8));
   }
 
   /** lay a page out (device px), once per pixel size */
@@ -531,12 +539,12 @@ export class FloatMenu {
     if (p.at === gp * 1000 + hp) return;
     p.at = gp * 1000 + hp;
     let y = 0, w = 0;
-    if (p.head) { p.head.y = 0; p.head.h = 12 * hp; y += 14 * hp; w = Math.max(w, p.head.w * hp); }
+    if (p.head) { p.head.y = 0; p.head.h = 12 * hp; y += 15 * hp; w = Math.max(w, p.head.w * hp); }
     for (const row of p.rows) {
       y += (row.item.gap ?? 0) * gp;
       row.y = y;
       let h: number, rw: number;
-      if (row.small) { h = 11 * hp; rw = row.w * hp; }
+      if (row.small) { h = 13 * hp; rw = row.w * hp; }
       else {
         h = 13 * gp;
         rw = (p.labelCol && row.item.kind && row.item.kind !== 'action' ? p.labelCol + 76 : row.w) * gp;
@@ -547,7 +555,7 @@ export class FloatMenu {
     }
     p.w = w;
     p.h = y;
-    p.hintH = p.rows.some(r => r.item.hint) ? 3 * gp + 33 * hp : 0;
+    p.hintH = p.rows.some(r => r.item.hint) ? 3 * gp + 39 * hp : 0;
   }
 
   private frame() {
@@ -599,7 +607,7 @@ export class FloatMenu {
       const hop = pk < 1 ? Math.sin(pk * Math.PI) * 2.5 : 0;
       this.drawWord(row.glyphs, row.face, st, ox, y, gp, p, row.i, hop, t, focused);
       // a small handwritten note beside the label, on its baseline
-      if (row.sub) this.drawWord(row.sub, 'hand', 'hint', ox + (row.w + 6) * this.gp, y + 9 * this.gp - 9 * this.hp, this.hp, p, row.i, 0, t, focused, row.i * 0.07 + 0.2);
+      if (row.sub) this.drawWord(row.sub, 'hand', 'hint', ox + (row.w + 6) * this.gp, y + 8 * this.gp - 8 * this.hp, this.hp, p, row.i, 0, t, focused, row.i * 0.07 + 0.2);
       // value widgets
       row.parts = [];
       if (kind === 'slider' || kind === 'choice' || kind === 'toggle') this.drawValue(row, p, ox + p.labelCol * this.gp, y, focused, t);
@@ -631,8 +639,8 @@ export class FloatMenu {
       const h = typeof focusRow.item.hint === 'function' ? focusRow.item.hint() : focusRow.item.hint;
       if (h) {
         const maxW = Math.max(p.w, this.cv.width * 0.4) / this.hp;
-        wrapText(h, maxW, { face: 'hand' }).slice(0, 3).forEach((line, li) => {
-          this.drawWord(glyphsOf(line, 'hand').g, 'hand', 'hint', ox, oy + p.h + 3 * this.gp + li * 11 * this.hp, this.hp, p, 7 + li, 0, t, false, 0.3);
+        pxWrap(h, maxW, 'script').slice(0, 3).forEach((line, li) => {
+          this.drawWord(glyphsOf(line, 'hand').g, 'hand', 'hint', ox, oy + p.h + 3 * this.gp + li * 13 * this.hp, this.hp, p, 7 + li, 0, t, false, 0.3);
         });
       }
     }
