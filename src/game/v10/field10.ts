@@ -257,8 +257,16 @@ export abstract class TripRun {
     const n = tk.n ?? 1;
     if (!fits(tk.item, n)) { audio.play('wrong', { vol: 0.5 }); f.bark('mori', 'No room in the pack. Something has to go.', { expr: 'worried' }); return; }
     f.player.facing = pt.x >= f.player.x ? 1 : -1;
-    const ok = await f.player.doWork('kneel', tk.time ?? 2, () => {});
-    if (!ok) return;
+    // V12: collecting is a short QTE (brush a fossil free, ease a plant out, catch a critter)
+    const Q = await import('../v12/qte');
+    const q = Q.findQte(pt.kind, item.kind);
+    if (q) {
+      const res = await Q.qte({ ...q, f, x: pt.x, y: (pt.y ?? this.groundAt(pt.x)) - 40, pose: 'kneel' });
+      if (!res.ok) { floatNotice(q.fail, 2200); return; }
+    } else {
+      const ok = await f.player.doWork('kneel', tk.time ?? 2, () => {});
+      if (!ok) return;
+    }
     const got = add(tk.item, n);
     if (got <= 0) return;
     T().taken[pt.id] = game.save.day;
@@ -268,7 +276,7 @@ export abstract class TripRun {
     const kind: DiscoveryKind = pt.kind;
     discover({ id: tk.item, kind, name: item.name, loc: this.locAtX(pt.x), x: Math.round(pt.x), note: pt.note, icon: tk.item }, true);
     if (pt.id !== tk.item) discover({ id: pt.id, kind, name: pt.name, loc: this.locAtX(pt.x), x: Math.round(pt.x), note: pt.note }, true);
-    game.ui.toast(`Collected <b>${item.name}</b>${item.weight ? ` (${item.weight} kg)` : ''}. Noted on the map.`, 'FIND', 'teal', 3200);
+    floatNotice(`Collected: ${item.name}`, 2600);
     const lines = [];
     if (tk.line) lines.push({ who: 'mori', text: tk.line, expr: 'happy' });
     if (tk.aroha && this.guide) lines.push(this.aroha(tk.aroha, 'serious'));

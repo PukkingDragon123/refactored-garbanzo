@@ -30,6 +30,9 @@ const devSecs10 = (): number => fx10.developTime() * (gearMod?.gearFx.developMul
 import { audio } from '../core/audio';
 import { clamp, damp } from '../core/math';
 import { tooHungryForPhotos } from './v12/hunger';
+import { CamRing } from './v12/qte';
+/** world px / s: faster subjects need a timed shutter (the QTE ring) instead of the automatic one */
+const FAST_SUBJECT = 70;
 import { pxIcon, setHtml } from '../ui/pxicons';
 
 /** A foreground prop that can block the shot. The mask is the sprite's own pixels. */
@@ -145,7 +148,7 @@ export class FieldCamera {
     if (!on && this.recording) this.stopRecording();
     if (on) audio.play('zoom', { vol: 0.3 });
     const r = game.r;
-    if (!on) { r.post.dof = false; r.post.ca = 0; }
+    if (!on) { r.post.dof = false; r.post.ca = 0; this.endFastRing(); }
   }
   private refuseT = 0;
   /** V12 hunger: Mori starts to lift the camera, his stomach growls, and down it goes again */
@@ -266,7 +269,7 @@ export class FieldCamera {
         this.cooldown = 0.3;
         this.holdNag = 1.2;
         audio.play('wrong', { vol: 0.2, pitch: 1.3 });
-      } else if (this.mode === 'photo') { this.shoot(animals); this.hold = 0; }
+      } else if (this.mode === 'photo') { if (!this.fastPress(animals)) { this.shoot(animals); this.hold = 0; } }
       else if (this.recording) this.stopRecording();
       else this.startRecording();
     }
@@ -283,6 +286,7 @@ export class FieldCamera {
    * ready, a press takes the shot.
    */
   private updateHold(dt: number, brace: boolean, animals: Animal[]) {
+    if (this.fastRing && (this.hold < 1 || this.fastOn?.dead || this.fastOn?.gone)) this.endFastRing();
     this.holdNag = Math.max(0, this.holdNag - dt);
     this.upT += dt;
     if (!this.v10 || this.mode !== 'photo' || this.recording) { this.hold = 0; this.holdState = 'idle'; return; }
@@ -316,10 +320,49 @@ export class FieldCamera {
     const q = Math.floor(this.hold * 4);
     if (q > this.holdQ) { this.holdQ = q; if (q < 4) audio.play('focus', { vol: 0.12, pitch: 0.8 + q * 0.12 }); }
     if (this.hold >= 1 && tgt && this.afState === 'locked' && this.cooldown <= 0 && !game.ui.blocking) {
+      // V12: a fast animal won't wait for the ring: a timing ring closes on it, the shutter press must land
+      if (Math.hypot(tgt.vx, tgt.vy) > FAST_SUBJECT && this.v10) { this.startFastRing(tgt); return; }
       this.shoot(animals);
       this.hold = 0;
       this.holdQ = 0;
     }
+    if (this.fastRing && (this.hold < 1 || !tgt)) this.endFastRing();
+  }
+
+  // ---------------------------------------------------------------- V12: steadying a shot of a fast animal
+  private fastRing: CamRing | null = null;
+  private fastOn: Animal | null = null;
+  private startFastRing(a: Animal) {
+    if (this.fastRing && this.fastOn === a) return;
+    this.endFastRing();
+    this.fastOn = a;
+    this.fastRing = new CamRing(this.host as never, () => [a.x, a.y - 12], 0.5);
+    if (!game.save.flags['v12:fastTip']) {
+      game.save.flags['v12:fastTip'] = true;
+      void import('../ui/v12/float').then(m => m.floatText({ text: 'It’s too quick! Wait for the ring... NOW.', style: 'think', ms: 2600 }));
+    }
+  }
+  private endFastRing() { this.fastRing?.destroy(); this.fastRing = null; this.fastOn = null; }
+  /** the shutter on a fast animal: timed right it lands, off the beat the shot blurs and the ring resets */
+  private fastPress(animals: Animal[]): boolean {
+    const ring = this.fastRing;
+    if (!ring) return false;
+    const r = ring.press();
+    if (r === 'miss') {
+      this.cooldown = 0.5;
+      this.shakeK = Math.min(1, this.shakeK + 0.5);
+      this.hold = 0.55;
+      audio.play('qteMiss' as never, { vol: 0.35 });
+      void import('../ui/v12/float').then(m => m.floatText({ text: 'Too slow! Blurry. Again...', style: 'sad', ms: 1600 }));
+      this.endFastRing();
+      return true;
+    }
+    audio.play('qteHit' as never, { vol: 0.35, pitch: r === 'perfect' ? 1.25 : 1 });
+    this.endFastRing();
+    this.shoot(animals);
+    this.hold = 0;
+    this.holdQ = 0;
+    return true;
   }
 
   // ---------------------------------------------------------------- occlusion
@@ -693,6 +736,7 @@ export class FieldCamera {
   }
 
   destroy() {
+    this.endFastRing();
     game.r.post.dof = false;
     game.r.post.ca = 0;
     this.vf.classList.remove('on', 'pocket');
