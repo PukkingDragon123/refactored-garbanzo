@@ -169,7 +169,7 @@ export class Bubbles {
       : sp ? () => sp.anchor() ?? this.edge(line.who) : () => this.edge(line.who);
     return floatLine({
       text: this.fmt(line.text), kind: 'line', hold: true,
-      style: narr && !line.style ? 'think' : floatStyleOf(line.style, line.expr, line.text),
+      style: floatStyleOf(line.style, line.expr, line.text),
       at: anchor, place: close ? 'right' : 'above',
       // the name rides on the first line of each turn, and always when the speaker is out of sight
       name: name && (turn || !sp || !sp.anchor()) ? name : undefined,

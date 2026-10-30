@@ -670,7 +670,7 @@ function blip(it: Item) {
   try { audio.play('dialogBlip', { pitch, vol }); } catch { /* */ }
 }
 
-interface Rect { x: number; y: number; w: number; h: number }
+interface Rect { x: number; y: number; w: number; h: number; body?: boolean }
 const hit = (r: Rect, x: number, y: number, w: number, h: number, pad = 2) => x < r.x + r.w + pad && x + w + pad > r.x && y < r.y + r.h + pad && y + h + pad > r.y;
 
 function natural(it: Item, t: number): [number, number] | null {
@@ -691,9 +691,25 @@ function natural(it: Item, t: number): [number, number] | null {
   return [Math.round(ax - it.W / 2), Math.round(ay - it.H - gap - drift)];
 }
 
+/** Mori's figure on screen in art px (his head to his feet), when he's in the scene */
+function moriBody(): Rect | null {
+  const sc = game.scene as { player?: { x: number; y: number } } | null;
+  const p = sc?.player;
+  if (!p || modalUp()) return null;
+  const head = moriAnchor()(), feet = worldToCss(p.x, p.y);
+  if (!head || !feet) return null;
+  const hx = head[0] / S, hy = head[1] / S, fy = feet[1] / S;
+  if (!(fy > hy)) return null;
+  const half = Math.max(5, Math.round((fy - hy) * 0.2));
+  return { x: Math.round(hx - half), y: Math.round(hy + 2), w: half * 2, h: Math.round(fy - hy - 2), body: true };
+}
+
 function placeAll(t: number, dt: number) {
   const top = topMargin(), bot = CH - botMargin();
   const placed: Rect[] = [];
+  // Mori himself is in the way: words never sit over his head or body (they float above him)
+  const body = moriBody();
+  if (body) placed.push(body);
   // the answers first (their own columns), then everything else by priority, newest first
   for (const set of optionSets) placeOptions(set, placed, top, bot);
   const order = items.filter(it => it.kind !== 'option' && !it.gone).sort((a, b) => a.prio - b.prio || b.id - a.id);
@@ -711,7 +727,7 @@ function placeAll(t: number, dt: number) {
       // stack above whatever is in the way (below it once there's no room above), never beside it:
       // text stays over its speaker
       let guard = 0, down = false, r: Rect | undefined;
-      while ((r = placed.find(p => hit(p, x, y, it.W, it.H))) && guard++ < 12) {
+      while ((r = placed.find(p => !(p.body && it.place === 'right') && hit(p, x, y, it.W, it.H))) && guard++ < 12) {
         const up = r.y - it.H - 2;
         if (!down && up >= top) y = up;
         else { down = true; y = r.y + r.h + 2; }
