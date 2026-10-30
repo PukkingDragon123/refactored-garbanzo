@@ -312,42 +312,112 @@ export function renderChunkHead(o: HeadOpts): { buf: PixelBuffer; ax: number; ay
 
 // ------------------------------------------------------------------ animations
 
-export interface AnimInfo { frames: number; fps: number; loop: boolean }
-const A = (frames: number, fps: number, loop = true): AnimInfo => ({ frames, fps, loop });
+export interface AnimInfo { frames: number; fps: number; loop: boolean; /** ground px per cycle: the Actor advances it by distance, so paws don't skate */ dist?: number }
+const A = (frames: number, fps: number, loop = true, dist?: number): AnimInfo => ({ frames, fps, loop, ...(dist ? { dist } : {}) });
 
+// gaits (distance-driven: the paws stay planted) — see the gait functions below for the stride numbers
+const TROT = { stride: 7, stance: 0.42 }, SNIFF = { stride: 4.2, stance: 0.74 }, GALLOP = { stride: 9.4, stance: 0.27 }, WADDLE = { stride: 4.6, stance: 0.6 };
 export const CHUNK_ANIMS: Record<string, AnimInfo> = {
-  idle: A(4, 3), walk: A(6, 10), run: A(6, 14), zoom: A(4, 18), sniff: A(6, 7), sit: A(2, 1.5), lie: A(2, 1.2),
-  sleep: A(2, 0.8), snore: A(2, 0.9), eat: A(4, 8), shiver: A(2, 14), bark: A(2, 6), roll: A(4, 8, false), bellyUp: A(4, 6),
+  idle: A(16, 8), walk: A(8, 12, true, TROT.stride / TROT.stance), trot: A(8, 12, true, TROT.stride / TROT.stance), run: A(8, 16, true, GALLOP.stride / GALLOP.stance),
+  zoom: A(4, 18), sniff: A(12, 8, true, SNIFF.stride / SNIFF.stance), sniffGround: A(16, 10), sit: A(12, 5), lie: A(8, 3),
+  sleep: A(2, 0.8), snore: A(2, 0.9), eat: A(4, 8), shiver: A(2, 14), bark: A(6, 14), roll: A(4, 8, false), bellyUp: A(4, 6),
   scratch: A(4, 12), trip: A(4, 10, false), faceplant: A(2, 2), spin: A(8, 12), beg: A(2, 4), sneeze: A(4, 10, false),
-  wiggle: A(4, 12), carried: A(2, 3), jump: A(1, 1), fall: A(1, 1), stuck: A(4, 10), dig: A(4, 12), yawn: A(4, 4, false),
-  flop: A(4, 10, false), tilt: A(2, 1.5), swim: A(4, 8), turn: A(1, 1), circle: A(8, 8), sitDown: A(2, 10, false),
-  standUp: A(2, 10, false), lieDown: A(3, 9, false), getUp: A(3, 9, false), talk: A(2, 6), shake: A(4, 16),
-  proud: A(2, 2), hide: A(2, 3), waddle: A(6, 8),
+  wiggle: A(4, 12), wag: A(8, 16), carried: A(2, 3), jump: A(1, 1), fall: A(1, 1), stuck: A(4, 10), dig: A(4, 12), yawn: A(4, 4, false),
+  flop: A(4, 10, false), tilt: A(12, 6), swim: A(4, 8), turn: A(6, 26, false), circle: A(8, 8), sitDown: A(5, 14, false),
+  standUp: A(5, 14, false), lieDown: A(6, 12, false), getUp: A(5, 12, false), talk: A(6, 12), shake: A(4, 16),
+  proud: A(2, 2), hide: A(2, 3), waddle: A(8, 10, true, WADDLE.stride / WADDLE.stance),
 };
 
 const TAU = Math.PI * 2;
 const frac = (v: number) => v - Math.floor(v);
 
-function gait(t: number, o: { stride: number; lift: number; bob: number; tilt?: number; speedy?: boolean }): DogPose {
-  // diagonal pairs (near front + far hind) move together
-  const ph = (q: number) => {
-    q = frac(q);
-    const st = 0.55;
-    if (q < st) return { x: o.stride / 2 - (o.stride * q) / st, y: 0 };
-    const k = (q - st) / (1 - st);
-    return { x: -o.stride / 2 + o.stride * k, y: Math.sin(k * Math.PI) * o.lift };
-  };
-  const a = ph(t), b = ph(t + 0.5);
-  const bob = Math.cos(TAU * 2 * t) * o.bob;
-  const p = dogStand({ body: [0, 8.2 + bob], tilt: (o.tilt ?? 0.04) + Math.sin(TAU * 2 * t) * 0.03 });
-  p.fn = [5.4 + a.x, 1.3 + a.y];
-  p.hf = [-3.9 + a.x, 1.3 + a.y];
-  p.ff = [6.9 + b.x, 1.3 + b.y];
-  p.hn = [-5.4 + b.x, 1.3 + b.y];
-  p.tail = Math.sin(TAU * t * 2);
-  p.head = [0, -bob * 0.4];
+/** one paw over its cycle: planted and sliding back at the body's speed, then a quick arc forward */
+function paw(ph: number, stride: number, stance: number, lift: number, flick = 0): { x: number; y: number } {
+  ph = frac(ph);
+  if (ph < stance) return { x: stride / 2 - (stride * ph) / stance, y: 0 };
+  const k = (ph - stance) / (1 - stance);
+  const e = k * k * (3 - 2 * k);
+  // the paw folds up behind early in the swing (the wrist flicks), then reaches forward and down
+  return { x: -stride / 2 + stride * e + flick * Math.sin(Math.PI * k) * (k > 0.5 ? 1 : -0.5), y: Math.sin(Math.PI * Math.pow(k, 0.8)) * lift };
+}
+
+/**
+ * The trot (Chunk's everyday gait): diagonal pairs (near front with far hind) swing together, the hind
+ * paw landing a beat before its partner; a short float between the pairs. The body dips over each
+ * pair's stance and lifts through the float, rocking a touch nose-down as the front paws land; the
+ * head rides steadier than the body; the curly tail bounces a beat behind.
+ */
+function gait(t: number, o: { stride: number; lift: number; bob: number; tilt?: number; stance?: number }): DogPose {
+  const st = o.stance ?? TROT.stance;
+  const fN = paw(t, o.stride, st, o.lift * 1.15, 0.6), hF = paw(t + 0.04, o.stride, st, o.lift);
+  const fF = paw(t + 0.5, o.stride, st, o.lift * 1.15, 0.6), hN = paw(t + 0.54, o.stride, st, o.lift);
+  // lowest at the middle of each pair's stance, up through the float
+  const bob = -Math.cos(TAU * 2 * (t - st / 2)) * o.bob;
+  const p = dogStand({ body: [0, 8.2 + bob], tilt: (o.tilt ?? 0.04) - Math.sin(TAU * 2 * (t - st / 2) + 0.6) * 0.035 });
+  p.fn = [5.4 + fN.x, 1.3 + fN.y];
+  p.ff = [6.9 + fF.x, 1.3 + fF.y];
+  p.hn = [-5.4 + hN.x, 1.3 + hN.y];
+  p.hf = [-3.9 + hF.x, 1.3 + hF.y];
+  p.tail = 0.55 * Math.sin(TAU * 2 * t - 1.2);
+  p.head = [0.2, -bob * 0.45];
   return p;
 }
+
+/**
+ * Sniffing along: a slow four-beat walk (hind, front, other hind, other front), the nose down at the
+ * ground dabbing at smells, the tail low and wagging slowly.
+ */
+function sniffWalk(t: number): DogPose {
+  const S = SNIFF.stride, st = SNIFF.stance;
+  const hN = paw(t, S, st, 1), fN = paw(t + 0.25, S, st, 1.1), hF = paw(t + 0.5, S, st, 1), fF = paw(t + 0.75, S, st, 1.1);
+  const roll = Math.sin(TAU * t);
+  const p = dogStand({ body: [0.3 * roll, 7.8 + 0.25 * Math.abs(Math.sin(TAU * 2 * t))], tilt: -0.12 });
+  p.fn = [5.4 + fN.x, 1.3 + fN.y];
+  p.ff = [6.9 + fF.x, 1.3 + fF.y];
+  p.hn = [-5.4 + hN.x, 1.3 + hN.y];
+  p.hf = [-3.9 + hF.x, 1.3 + hF.y];
+  // the nose: down at the ground, quick little dabs
+  const dab = Math.pow(Math.max(0, Math.sin(TAU * 3 * t)), 3);
+  p.head = [1.6 + 0.3 * dab, -4.2 - 0.6 * dab];
+  p.look = 'down';
+  p.tail = 0.35 * Math.sin(TAU * t * 2);
+  return p;
+}
+
+/**
+ * The gallop (a pug's bunny-hop run): the hind paws push off together and the body stretches out in
+ * the air, the front paws reach and land together, the back gathers up as the hind paws swing in under
+ * the chest; nose and rump see-saw, ears and tongue flying.
+ */
+function gallop(t: number): DogPose {
+  const S = GALLOP.stride, st = GALLOP.stance;
+  const hN = paw(t, S, st, 1.8), hF = paw(t + 0.06, S, st, 1.8), fN = paw(t + 0.44, S, st, 2.4, 1), fF = paw(t + 0.5, S, st, 2.4, 1);
+  // spine: stretched after the hind push-off, gathered when the hind paws come in under
+  const stretch = Math.sin(TAU * (t - 0.15));
+  const p = dogStand({ body: [0.4 * stretch, 9 + 0.9 * Math.max(0, Math.sin(TAU * (t - 0.3)))], tilt: 0.03 - 0.065 * Math.sin(TAU * (t - 0.05)), sx: 1 + 0.05 * stretch });
+  p.fn = [5.4 + fN.x, 1.3 + fN.y];
+  p.ff = [6.9 + fF.x, 1.3 + fF.y];
+  p.hn = [-5.4 + hN.x, 1.3 + hN.y];
+  p.hf = [-3.9 + hF.x, 1.3 + hF.y];
+  p.tail = Math.sin(TAU * t - 2);
+  p.head = [0.6 + 0.3 * stretch, 0.3 - 0.5 * Math.sin(TAU * (t - 0.05))];
+  return p;
+}
+
+/** a dog pose part way to another (sitting down, getting up) */
+function lerpDog(a: DogPose, b: DogPose, u: number): DogPose {
+  const L = (x: number, y: number) => x + (y - x) * u;
+  const P = (x: P2, y: P2): P2 => [L(x[0], y[0]), L(x[1], y[1])];
+  const pick = u < 0.5 ? a : b;
+  return {
+    ...pick, body: P(a.body, b.body), tilt: L(a.tilt, b.tilt), sx: L(a.sx ?? 1, b.sx ?? 1), sy: L(a.sy ?? 1, b.sy ?? 1),
+    fn: P(a.fn, b.fn), ff: P(a.ff, b.ff), hn: P(a.hn, b.hn), hf: P(a.hf, b.hf), head: P(a.head ?? [0, 0], b.head ?? [0, 0]), tail: L(a.tail, b.tail),
+    hrot: L(a.hrot ?? 0, b.hrot ?? 0) || undefined,
+  };
+}
+const sm = (u: number) => { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); };
+/** the tail's wag in bursts: still, a quick happy burst, still (a dog's wag, not a metronome) */
+const wagBurst = (t: number, a: number, b: number, hz: number) => (t > a && t < b ? Math.sin(TAU * hz * (t - a)) * Math.sin(Math.PI * (t - a) / (b - a)) : 0);
 
 function sitPose(o: Partial<DogPose> = {}): DogPose {
   return dogStand({
@@ -379,19 +449,20 @@ function backPose(k: number, wig = 0): DogPose {
 type DogFn = (t: number) => DogPose;
 const POSES: Record<string, DogFn> = {
   idle: t => {
-    const br = Math.sin(TAU * t);
-    const p = dogStand({ body: [0, 8.2 + (br > 0 ? 0.3 : 0)], sy: 1 + br * 0.02 });
-    p.tail = Math.floor(t * 4) % 2 ? 0.4 : -0.4;
+    // panting (quick shallow breaths heave the chest), weight shifting between the front paws, a glance
+    // up now and then, and a burst of tail wagging
+    const pant = Math.abs(Math.sin(TAU * 6 * t)), shift = Math.sin(TAU * t);
+    const p = dogStand({ body: [0.25 * shift, 8.2 + 0.25 * pant], sy: 1 + pant * 0.025, tilt: 0.04 + 0.015 * shift });
+    p.fn = [5.4 + 0.2 * shift, 1.3]; p.ff = [6.9 - 0.2 * shift, 1.3];
+    p.head = [0, 0.35 * pant - 0.2];
+    p.look = t > 0.3 && t < 0.45 ? 'up' : 'fwd';
+    p.tail = 0.25 + 0.75 * wagBurst(t, 0.55, 0.95, 4);
     return p;
   },
-  walk: t => gait(t, { stride: 5.2, lift: 1.6, bob: 0.45 }),
-  waddle: t => { const p = gait(t, { stride: 4.2, lift: 1.4, bob: 0.7 }); p.tilt += Math.sin(TAU * t) * 0.06; return p; },
-  run: t => {
-    const p = gait(t, { stride: 8, lift: 2.8, bob: 1.1, tilt: 0.02 });
-    p.body[1] += 1;
-    p.head = [0.6, (p.head?.[1] ?? 0) + 0.4];
-    return p;
-  },
+  walk: t => gait(t, { stride: TROT.stride, lift: 1.7, bob: 0.4 }),
+  trot: t => gait(t, { stride: TROT.stride, lift: 1.7, bob: 0.4 }),
+  waddle: t => { const p = gait(t, { stride: WADDLE.stride, lift: 1.3, bob: 0.55, stance: WADDLE.stance }); p.tilt += Math.sin(TAU * t) * 0.06; p.body[0] += 0.4 * Math.sin(TAU * t); return p; },
+  run: t => gallop(t),
   zoom: t => {
     // full-speed zoomies: stretched out, ears flapping, tongue flying
     const i = Math.floor(t * 4) % 4;
@@ -405,13 +476,31 @@ const POSES: Record<string, DogFn> = {
     p.head = [1, ext ? 0.6 : -0.4];
     return p;
   },
-  sniff: t => { const p = gait(t, { stride: 3.6, lift: 1.1, bob: 0.3, tilt: -0.1 }); p.head = [1.6, -4.2]; p.look = 'down'; return p; },
-  sit: t => sitPose({ tail: Math.sin(TAU * t) * 0.5, sy: 1 + (Math.sin(TAU * t) > 0 ? 0.02 : 0) }),
-  sitDown: t => (t < 0.5 ? dogStand({ body: [-0.8, 8.4], tilt: 0.36, hn: [-3.6, 1.3], hf: [-2.4, 1.3] }) : sitPose()),
-  standUp: t => (t < 0.5 ? dogStand({ body: [-0.8, 8.4], tilt: 0.36, hn: [-3.6, 1.3], hf: [-2.4, 1.3] }) : dogStand()),
-  lie: t => liePose({ sy: 0.92 + Math.sin(TAU * t) * 0.02 }),
-  lieDown: t => [dogStand({ body: [0, 7], tilt: -0.04 }), liePose({ body: [0, 6.2], head: [0.6, -1.6] }), liePose()][Math.min(2, Math.floor(t * 3))],
-  getUp: t => [liePose(), liePose({ body: [0, 6.6], head: [0.6, -1] }), dogStand()][Math.min(2, Math.floor(t * 3))],
+  sniff: t => sniffWalk(t),
+  sniffGround: t => {
+    // nose to the ground on the spot: working a smell, the nose moving along and dabbing, a paw shifting
+    const dab = Math.pow(Math.max(0, Math.sin(TAU * 4 * t)), 3), along = Math.sin(TAU * t);
+    const p = dogStand({ body: [0.3 * along, 7.6], tilt: -0.16 });
+    p.fn = [5.2 + Math.max(0, along) * 0.8, 1.3 + (t > 0.2 && t < 0.3 ? 0.8 : 0)];
+    p.head = [1.6 + 0.8 * along, -4.6 - 0.5 * dab];
+    p.look = 'down';
+    p.tail = 0.3 * Math.sin(TAU * 2 * t);
+    return p;
+  },
+  sit: t => {
+    // sitting up, panting; the tail sweeps the ground in a burst, the head turns up now and then
+    const pant = Math.abs(Math.sin(TAU * 4 * t));
+    const p = sitPose({ sy: 1 + pant * 0.02, tail: 0.6 * wagBurst(t, 0.1, 0.5, 3) });
+    p.head = [-1.4, 0.6 + 0.3 * pant];
+    p.look = t > 0.6 && t < 0.8 ? 'up' : 'fwd';
+    return p;
+  },
+  // sitting: the rump goes down first and back, the front stays up; standing: the reverse
+  sitDown: t => lerpDog(dogStand(), sitPose(), sm(t * 1.1)),
+  standUp: t => { const p = lerpDog(sitPose(), dogStand(), sm(t)); p.body[1] += 0.5 * Math.sin(Math.PI * t); return p; },
+  lie: t => { const br = Math.sin(TAU * t); const p = liePose({ sy: 0.92 + br * 0.025 }); p.tail = 0.2 * Math.max(0, br); return p; },
+  lieDown: t => (t < 0.4 ? lerpDog(dogStand(), sitPose(), sm(t / 0.4)) : lerpDog(sitPose(), liePose(), sm((t - 0.4) / 0.6))),
+  getUp: t => { const p = lerpDog(liePose(), dogStand(), sm(t)); p.body[1] += 0.8 * Math.sin(Math.PI * t); p.tilt += 0.15 * Math.sin(Math.PI * t); return p; },
   sleep: t => curlPose(Math.sin(TAU * t)),
   snore: t => backPose(Math.sin(TAU * t) * 0.3),
   eat: t => {
@@ -433,14 +522,16 @@ const POSES: Record<string, DogFn> = {
     return p;
   },
   bark: t => {
-    const up = t < 0.5;
-    const p = dogStand({ body: [0, 8.4 + (up ? 0.4 : 0)], tilt: up ? 0.14 : 0.04 });
-    p.head = [0.4, up ? 1.2 : 0];
-    p.look = up ? 'up' : 'fwd';
-    p.tail = up ? 1 : -1;
+    // a bark: the front braces, the chest pumps and the head jerks up with it, then settles
+    const k = Math.max(0, Math.sin(Math.PI * Math.min(1, t * 2.2)));
+    const p = dogStand({ body: [-0.3 * k, 8.2 + 0.5 * k], tilt: 0.04 + 0.12 * k, sy: 1 + 0.04 * k });
+    p.fn = [5.8, 1.3]; p.ff = [7.3, 1.3];
+    p.head = [0.4 * k, 1.2 * k];
+    p.look = k > 0.5 ? 'up' : 'fwd';
+    p.tail = 0.4 + 0.6 * k;
     return p;
   },
-  talk: t => POSES.bark(t * 0.5 + 0.5),
+  talk: t => { const p = POSES.bark(t); p.head = [0.3 * (p.head?.[0] ?? 0), 0.6 * (p.head?.[1] ?? 0)]; return p; },
   roll: t => {
     const i = Math.min(3, Math.floor(t * 4));
     if (i === 0) return liePose();
@@ -482,7 +573,27 @@ const POSES: Record<string, DogFn> = {
     return p;
   },
   circle: t => POSES.spin(t),
-  turn: () => { const p = dogStand({ sx: 0.62 }); p.head = [-1.6, 0.4]; return p; },
+  // turning round (the Actor draws the first half facing the old way): the body foreshortens as it
+  // swings round toward the viewer and back out the other side, the head leading
+  turn: t => {
+    const tri = 1 - Math.abs(2 * t - 1), e = sm(Math.min(1, tri * 1.3));
+    const p = dogStand({ sx: 1 - 0.45 * e, body: [0, 8.2 - 0.2 * e] });
+    const step = 1.2 * Math.sin(Math.PI * t);
+    p.fn = [5.4 - 2.4 * e, 1.3 + (t < 0.5 ? step * 0.6 : 0)]; p.ff = [6.9 - 3 * e, 1.3 + (t >= 0.5 ? step * 0.6 : 0)];
+    p.hn = [-5.4 + 2.6 * e, 1.3]; p.hf = [-3.9 + 2 * e, 1.3];
+    p.head = [-1.4 * e, 0.3 * e];
+    p.tail = 0.4;
+    return p;
+  },
+  // a happy wag: the whole rear end swinging with the tail
+  wag: t => {
+    const w = Math.sin(TAU * 2 * t);
+    const p = dogStand({ body: [0.35 * w, 8.3], tilt: 0.05 + 0.03 * w });
+    p.hn = [-5.4 + 0.5 * w, 1.3]; p.hf = [-3.9 - 0.4 * w, 1.3];
+    p.head = [0, 0.3 * Math.abs(w)];
+    p.tail = w;
+    return p;
+  },
   beg: t => {
     const up = t > 0.5 ? 0.6 : 0;
     const p = sitPose({ body: [-2.2, 10.4 + up], tilt: 1.22 });
@@ -544,7 +655,15 @@ const POSES: Record<string, DogFn> = {
     if (i === 1) return dogStand({ body: [0, 7], tilt: 0.3, sy: 0.9, fn: [7.4, 3.4], hn: [-4.2, 2.6] });
     return liePose({ body: [0, 5], sy: 0.86, fn: [8.4, 5.2], ff: [9.4, 4.4], hn: [-9.6, 4.4], hf: [-8.6, 4], head: [0.6, -2.8] });
   },
-  tilt: t => { const p = sitPose(); p.hrot = t > 0.5 ? -0.3 : 0.3; p.head = [-1.4, 0.8]; return p; },
+  tilt: t => {
+    // the head tilt: one way, a held beat (ears up, listening), the other way, held, back
+    const a = sm((t - 0.05) / 0.12) * (1 - sm((t - 0.42) / 0.1)), b = sm((t - 0.5) / 0.12) * (1 - sm((t - 0.86) / 0.1));
+    const p = sitPose();
+    p.hrot = 0.32 * a - 0.28 * b || undefined;
+    p.head = [-1.4, 0.8 + 0.3 * (a + b)];
+    p.tail = 0.3 * wagBurst(t, 0.3, 0.5, 3);
+    return p;
+  },
   swim: t => {
     // doggy paddle: only the head and a bit of jacket above the water line
     const i = Math.floor(t * 4) % 4;

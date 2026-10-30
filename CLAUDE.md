@@ -15,6 +15,8 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
   - Paper, ink, stamps, tape and pins are painted as pixel art.
 - The UI should be present and look great. Make it cool, stylish and physical, in the spirit of
   Dave the Diver: a proper stamina gauge, gauges and tags. Don't strip things away until it's bare.
+- Every UI piece is a super-detailed physical object. Timers are a real vintage pocket watch
+  (`src/ui/v12/watch.ts`), never a bar or a bare number.
 - Never use emoji. Use painted pixel icons (`src/ui/pxicons.ts`).
 - Never show the HD close-up face as a small profile portrait in the HUD.
 - The quality bar is the best scenes in the game, such as the palm beach and the great forest.
@@ -28,8 +30,9 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
     lively per-letter animation: shouts shake and grow, whispers waver, scared text trembles. The same
     goes for barks, prompts and notices. No dialogue boxes, no toasts.
   - **Mori:** click or tap Mori (or press Tab) to inspect him. The camera eases in close, and three
-    things on him can be picked: the camera (equip or unequip), the backpack (a detailed
-    first-person backpack scene with a 5×3 grid; items can be rotated) and the note paper (pulled
+    things on him can be picked: the camera (equip or unequip), the backpack (floating UI over
+    the world, never a first-person scene: the pack lifts off his back and opens in the air as a
+    super-detailed pixel-art object with a 5×3 grid; items can be rotated) and the note paper (pulled
     out as a detailed notebook with real page flips; quests are ticked with an animated pen; you can
     draw on it; it also holds the field guide and people).
   - **Main menu:** a cinematic scene of the boat sailing with Mori on deck. The title is a cloud

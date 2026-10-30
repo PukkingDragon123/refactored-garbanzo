@@ -6,7 +6,7 @@
 // materials that read the part's local frame (height up the torso, around a limb, along a sleeve).
 
 import { PixelBuffer } from '../pixel';
-import { Build, Pose, solve, ik2, trimPair, P2, Canvas, PropP } from '../people-rig';
+import { Build, Pose, solve, ik2, trimPair, P2, Canvas, PropP, lerpPose } from '../people-rig';
 import { drawProp5 } from '../v5/props';
 import { finish5 } from '../v5/body';
 import type { Ctx, CharDef } from '../people-parts';
@@ -104,11 +104,13 @@ export function lift(ch: Char7, pose: Pose, yaw0 = YAW): J3 {
   const { W } = yawer(yaw);
   // the legs stride along the direction of travel: a shallower turn than the torso, so steps read
   // on screen while the chest stays open to the camera (a natural hip-to-shoulder rotation)
-  const { W: Wl } = yawer(back ? yaw : yaw * 0.5);
+  // (flags.lyaw: the legs' own turn, e.g. pivoting round to face the other way)
+  const { W: Wl } = yawer(pose.flags?.lyaw ?? (back ? yaw : yaw * 0.5));
   const P = (p: P2, z = 0): V3 => [p[0], p[1], z];
-  // shoulders counter-rotate against the hips with the arm swing (walk / run twist)
+  // shoulders counter-rotate against the hips with the arm swing (walk / run twist): each shoulder
+  // comes forward with its own arm, the hips the other way (with the opposite leg)
   const aF = pose.fa.a ?? 0, aB = pose.ba.a ?? 0;
-  const tw = pose.fa.ik || pose.ba.ik ? 0 : Math.max(-0.45, Math.min(0.45, (aB - aF) * 0.16));
+  const tw = pose.fa.ik || pose.ba.ik ? 0 : Math.max(-0.45, Math.min(0.45, (aF - aB) * 0.16));
   const upS: V3 = [J.up[0], J.up[1], 0], fwS: V3 = [J.fwd[0], J.fwd[1], 0];
   const latS: V3 = [0, 0, 1];
   // rotate about the vertical axis (the spine, near enough while upright)
@@ -130,7 +132,7 @@ export function lift(ch: Char7, pose: Pose, yaw0 = YAW): J3 {
   const shift: V3 = [0, 0, sx];
   // swinging arms move along the direction of travel (a turn between torso and legs); arms that
   // hold or reach for something (IK) stay in the torso's frame
-  const { W: Wa } = yawer(back ? yaw : yaw * 0.55);
+  const { W: Wa } = yawer(pose.flags?.lyaw !== undefined ? (yaw + pose.flags.lyaw) / 2 : back ? yaw : yaw * 0.55);
   const armW = (ik: boolean) => (ik ? W : Wa);
   // flags.zN: the near hand goes to this lateral depth (body centre = 0) instead of splaying out, so
   // it can come in to the mouth or the face (a sip, a bite, a hand over a yawn); the elbow follows part way.
@@ -184,6 +186,42 @@ export function lift(ch: Char7, pose: Pose, yaw0 = YAW): J3 {
   return j;
 }
 
+/**
+ * Poses blended in 3D (Pose.mix): both sides are lifted and their joints mixed (positions, axes and
+ * the turn), so a hand on a world-space target can ease down to one hanging from the shoulder, or a
+ * gesture fold away, without the limbs snapping between ways of posing them. Bones shorten a touch
+ * mid-blend; the blends are short. u a little past 1 carries on past the target (follow-through).
+ */
+export function liftPose(ch: Char7, p: Pose): J3 {
+  const m = p.mix;
+  if (!m) return lift(ch, p);
+  const A = liftPose(ch, m.a ?? { ...p, mix: undefined });
+  if (m.u <= 0) return A;
+  const B = liftPose(ch, m.p);
+  if (m.u === 1) return B;
+  return mixJ(A, B, m.u);
+}
+/** the pose's own fields (hand shapes, props, flags) for a blended pose */
+export function flatPose(p: Pose): Pose {
+  const m = p.mix;
+  if (!m) return p;
+  const a = flatPose(m.a ?? { ...p, mix: undefined }), b = flatPose(m.p);
+  return { ...lerpPose(a, b, Math.max(0, Math.min(1, m.u))), mix: undefined };
+}
+function mixJ(A: J3, B: J3, u: number): J3 {
+  const L = (k: keyof J3) => vlerp(A[k] as V3, B[k] as V3, u);
+  const N = (k: keyof J3) => vnorm(vlerp(A[k] as V3, B[k] as V3, u));
+  const j = {
+    hip: L('hip'), neckBase: L('neckBase'), neckTop: L('neckTop'), shN: L('shN'), shF: L('shF'), elN: L('elN'), elF: L('elF'), wrN: L('wrN'), wrF: L('wrF'),
+    hpN: L('hpN'), hpF: L('hpF'), knN: L('knN'), knF: L('knF'), anN: L('anN'), anF: L('anF'),
+    up: N('up'), fwd: N('fwd'), lat: N('lat'), legFwd: N('legFwd'), yaw: A.yaw + (B.yaw - A.yaw) * u, flags: u < 0.5 ? A.flags : B.flags,
+  } as J3;
+  const T0 = j.hip;
+  j.T = (h, f, z) => vadd(T0, vadd(vsc(j.up, h), vadd(vsc(j.fwd, f), vsc(j.lat, z))));
+  j.local = q => { const d = vsub(q, T0); return [vdot(d, j.up), vdot(d, j.fwd), vdot(d, j.lat)]; };
+  return j;
+}
+
 const CW = 128, CH = 118, OX = 64, OY = 100;
 
 /**
@@ -196,14 +234,16 @@ export type Held7 = (s: Scene3D, J: J3, pose: Pose, ch: Char7) => ((back: PixelB
 export const HELD7: Held7[] = [];
 
 export interface Frame7 {
-  back: PixelBuffer; front: PixelBuffer | null; ax: number; ay: number; hx: number; hy: number; hand: [number, number]; look?: 'fwd' | 'up' | 'down' | 'back'; headBehind?: boolean; hrot?: number; hflip?: boolean; hair?: number;
+  back: PixelBuffer; front: PixelBuffer | null; ax: number; ay: number; hx: number; hy: number; hand: [number, number]; look?: 'fwd' | 'up' | 'down' | 'back' | 'cam' | 'away'; headBehind?: boolean; hrot?: number; hflip?: boolean; hair?: number;
   /** named points on the sprite (buffer px, sub-pixel): the palms ('handN', 'handF') and the held object's own (held.ts) */
   pts?: Record<string, [number, number]>;
 }
 
-export function renderBody7(ch: Char7, pose: Pose): Frame7 {
+export function renderBody7(ch: Char7, pose0: Pose): Frame7 {
   const s = new Scene3D(CW, CH, OX, OY);
-  const J = lift(ch, pose);
+  // a blend toward another pose (Pose.mix): joints mixed in 3D, the rest (hand shapes, props) eased over
+  const J = liftPose(ch, pose0);
+  const pose = flatPose(pose0);
   const T = ch.build.torso * (pose.sq ?? 1);
   const part = (hit: Hit, near: boolean, t: number): Part => {
     const l = J.local(hit.p);

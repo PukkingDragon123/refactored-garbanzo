@@ -391,7 +391,7 @@ function idle(b: Build, t: number): Pose {
 }
 
 /** a light, springy walk on the balls of her feet: quick, a forward lean, compact arm swing */
-const WALK_G = (b: Build): Gait => ({ stride: b.thigh * 1.42, stance: 0.55, lift: 2.7 * K(b), bob: 0.95 * K(b), lean: 0.07, swing: 0.3, elbow: 0.48, elbowSwing: 0.32, drop: 0.6 * K(b), kick: 0.7, flight: 0, hand: 'relax', sway: 0.3 * K(b), roll: 0.025, armOut: 0.5 });
+const WALK_G = (b: Build): Gait => ({ stride: b.thigh * 1.62, stance: 0.55, lift: 2.7 * K(b), bob: 0.95 * K(b), lean: 0.07, swing: 0.3, elbow: 0.48, elbowSwing: 0.32, drop: 0.6 * K(b), kick: 0.7, flight: 0, hand: 'relax', sway: 0.3 * K(b), roll: 0.025, armOut: 0.5 });
 /** the sprint: low and driving, long strides, knife hands pumping, a big flight phase */
 const RUN_G = (b: Build): Gait => ({ stride: b.thigh * 2.55, stance: 0.3, lift: 7.2 * K(b), bob: 1.25 * K(b), lean: 0.38, swing: 0.92, elbow: 1.6, elbowSwing: 0.24, drop: 1.7 * K(b), kick: 1.25, flight: 1.5 * K(b), hand: 'flat', sway: 0.12 * K(b), armOut: 0.35 });
 
