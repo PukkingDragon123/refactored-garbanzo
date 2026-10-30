@@ -1001,8 +1001,8 @@ export class PackScene {
     const el = pd.el;
     const r0 = el.getBoundingClientRect();
     const r: 0 | 1 = ref.where === 'pack' || ref.where === 'stash' ? (ref.s.p?.r ?? 0) : (ref.lo?.r ?? 0);
-    this.select(null);
     this.hover = null;
+    this.select(null);
     el.classList.remove('hov', 'sel');
     el.classList.add('lift');
     this.dragEl.appendChild(el);
