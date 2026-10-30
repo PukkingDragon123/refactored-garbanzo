@@ -5,6 +5,7 @@ import { packColor } from '../gfx/renderer';
 import type { Drawable, Stage } from './stage';
 import { chars, A } from '../game/assets';
 import { rand } from '../core/math';
+import { floatPrompt, floatPromptHide } from '../ui/v12/float';
 
 export class NPC implements Drawable {
   z = 40;
@@ -76,26 +77,23 @@ export interface Interactable {
   quest?: () => boolean;
 }
 
-/** Floating "E  Talk to Pip" prompt positioned over the canvas. */
+/** The "E  Talk to Pip" prompt: V12 floats it as a small pixel word over the target (a keycap glyph
+ *  on desktop), only while you're near (src/ui/v12/float.ts). */
 export class PromptView {
+  /** (kept for the V2 API; never shown) */
   el: HTMLDivElement;
-  constructor(parent: HTMLElement) {
+  private on = false;
+  constructor(_parent: HTMLElement) {
     this.el = document.createElement('div');
-    this.el.className = 'prompt panel';
-    this.el.style.display = 'none';
-    parent.appendChild(this.el);
   }
   show(text: string, cssX: number, cssY: number) {
-    if (this.el.dataset.t !== text) {
-      this.el.innerHTML = text;
-      this.el.dataset.t = text;
-    }
-    this.el.style.display = '';
-    this.el.style.left = Math.round(cssX / 2) * 2 + 'px';
-    this.el.style.top = Math.round(cssY / 2) * 2 + 'px';
+    this.on = true;
+    floatPrompt(text, cssX, cssY);
   }
   hide() {
-    this.el.style.display = 'none';
+    if (!this.on) return;
+    this.on = false;
+    floatPromptHide();
   }
 }
 

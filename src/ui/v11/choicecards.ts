@@ -1,16 +1,14 @@
-// V11 in-world choice cards: the answers to a tense moment appear as little paper cards over the
-// heads of whoever would say them (Mori and Joshu in the standoff with Aroha), tracking the actors
-// as the camera moves, instead of a menu panel. Keys 1-9, a click or a tap picks one. Minimal UI:
-// no timer bar (the scene shows the clock: the slingshot drawing tighter); `tick` gets the elapsed
-// seconds so the caller can animate it.
+// In-world answers for a tense moment (Mori and Joshu in the standoff with Aroha). V12: no cards; the
+// answers float as pixel text over the heads of whoever would say them, each speaker's in a column
+// with their name in their colour, tracking the actors as the camera moves (src/ui/v12/float.ts).
+// Keys 1-9, a click or a tap picks one. `tick` gets the elapsed seconds so the caller can animate
+// the clock in the scene (the slingshot drawing tighter).
 
-import { el } from '../ui';
-import { game } from '../../game/game';
-import { audio } from '../../core/audio';
+import { floatChoices } from '../v12/float';
 
 export interface ChoiceCard {
   text: string;
-  /** who'd say it: their name over the card, and the card sits over their head */
+  /** who'd say it: their name over their answers, which float over their head */
   who: string;
   name: string;
   color: string;
@@ -24,98 +22,7 @@ export interface CardOpts {
   tick?: (t: number, k: number) => void;
 }
 
-const CSS = `
-.ccards { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
-#ui .ccard, #ui .ccard * { font-size-adjust: none; }
-.ccard { position: absolute; left: 0; top: 0; pointer-events: auto; max-width: min(300px, 40vw); min-width: 140px; text-align: left; cursor: pointer;
-  font-family: var(--pp-hand); font-size: 20px; line-height: 24px; color: #2a1a10;
-  background: #f4e6c6; border: 0; padding: 6px 12px 8px 40px; border-radius: 0; image-rendering: pixelated;
-  box-shadow: 0 0 0 2px #3a2614, 6px 6px 0 2px rgba(10, 6, 2, 0.38);
-  background-image: repeating-linear-gradient(180deg, transparent 0 22px, rgba(120, 80, 30, 0.16) 22px 24px); background-position: 0 6px; }
-.ccard .k { position: absolute; left: 8px; top: 8px; font-family: var(--pp-label); font-size: 16px; line-height: 16px; color: #f4e6c6; background: #3a2614; padding: 2px 5px 4px; }
-.ccard .who { display: block; font-family: var(--pp-label); font-size: 16px; line-height: 18px; letter-spacing: 1px; text-transform: uppercase; color: var(--c, #4a6a2a); margin-bottom: 2px; }
-.ccard.in { animation: ccIn 0.3s steps(5) both; }
-.ccard:hover, .ccard.sel { background-color: #fffaec; box-shadow: 0 0 0 2px #3a2614, 0 0 0 4px #ffd84a, 6px 6px 0 4px rgba(10, 6, 2, 0.38); }
-.ccard.pick { animation: ccPick 0.32s steps(5) both; }
-.ccard.gone { animation: ccGone 0.18s steps(3) both; pointer-events: none; }
-@keyframes ccIn { from { opacity: 0; translate: 0 12px; } }
-@keyframes ccPick { 30% { translate: 0 -6px; } to { opacity: 0; translate: 0 -16px; } }
-@keyframes ccGone { to { opacity: 0; translate: 0 8px; } }
-@media (prefers-reduced-motion: reduce) { .ccard.in, .ccard.pick, .ccard.gone { animation: none; } }
-`;
-let styled = false;
-
-/** show the cards; resolves with the picked index, or null when the time runs out */
+/** show the answers; resolves with the picked index, or null when the time runs out */
 export function choiceCards(cards: ChoiceCard[], o: CardOpts = {}): Promise<number | null> {
-  if (!styled) { document.head.appendChild(el('style', '', CSS)); styled = true; }
-  const root = el('div', 'ccards');
-  game.ui.root.appendChild(root);
-  const els = cards.map((c, i) => {
-    const b = el('button', 'ccard in', `<span class="k">${i + 1}</span><span class="who">${c.name}</span>${c.text}`);
-    b.style.setProperty('--c', c.color);
-    b.style.marginTop = `${((i * 37) % 3) * 2}px`;
-    b.style.animationDelay = `${i * 0.07}s`;
-    b.style.visibility = 'hidden';
-    root.appendChild(b);
-    return b;
-  });
-  return new Promise(res => {
-    let done = false, raf = 0;
-    const t0 = performance.now();
-    const finish = (i: number | null) => {
-      if (done) return;
-      done = true;
-      cancelAnimationFrame(raf);
-      window.removeEventListener('keydown', kd, true);
-      els.forEach((b, k) => b.classList.add(k === i ? 'pick' : 'gone'));
-      if (i !== null) audio.play('ui', { vol: 0.4, pitch: 1.2 });
-      setTimeout(() => root.remove(), 340);
-      res(i);
-    };
-    els.forEach((b, i) => {
-      b.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); finish(i); });
-      b.addEventListener('pointerenter', () => audio.play('ui', { vol: 0.12, pitch: 1.6 }));
-    });
-    const kd = (e: KeyboardEvent) => {
-      const n = parseInt(e.key, 10);
-      if (n >= 1 && n <= cards.length) { e.preventDefault(); e.stopPropagation(); finish(n - 1); }
-    };
-    window.addEventListener('keydown', kd, true);
-    const rootR = () => game.ui.root.getBoundingClientRect();
-    const frame = () => {
-      if (done) return;
-      const t = (performance.now() - t0) / 1000;
-      const k = o.timeout ? Math.min(1, t / o.timeout) : 0;
-      o.tick?.(t, k);
-      if (o.timeout && t >= o.timeout) { finish(null); return; }
-      // each speaker's cards in a column over their head (the first on top); columns are pushed apart
-      // so two speakers standing close never overlap, and kept below the letterbox bars
-      const R = rootR();
-      const top = R.height * 0.11 + 6;
-      const groups: { who: string; ids: number[]; ax: number; ay: number; w: number; h: number; x: number }[] = [];
-      cards.forEach((c, i) => {
-        let g = groups.find(q => q.who === c.who);
-        if (!g) { const a = c.anchor(); g = { who: c.who, ids: [], ax: a ? a[0] : R.width / 2, ay: a ? a[1] : R.height * 0.35, w: 0, h: 0, x: 0 }; groups.push(g); }
-        g.ids.push(i);
-        g.w = Math.max(g.w, els[i].offsetWidth);
-        g.h += els[i].offsetHeight + 7;
-      });
-      groups.sort((a, b) => a.ax - b.ax);
-      let right = 8;
-      for (const g of groups) { g.x = Math.max(right, g.ax - g.w / 2); right = g.x + g.w + 10; }
-      const over = right - 10 - (R.width - 8);
-      if (over > 0) for (const g of groups) g.x = Math.max(8, g.x - over);
-      for (const g of groups) {
-        let y = Math.max(top, g.ay - 26 - g.h);
-        for (const i of g.ids) {
-          const b = els[i];
-          b.style.transform = `translate(${Math.round(g.x + (g.w - b.offsetWidth) / 2)}px, ${Math.round(y)}px)`;
-          b.style.visibility = '';
-          y += b.offsetHeight + 7;
-        }
-      }
-      raf = requestAnimationFrame(frame);
-    };
-    frame();
-  });
+  return floatChoices(cards.map(c => ({ text: c.text, group: c.who, anchor: c.anchor, name: c.name, color: c.color })), { timeout: o.timeout, tick: o.tick });
 }
