@@ -131,7 +131,7 @@ export class ForestStory implements ForestHooks {
     const f = this.f;
     f.onWalkOut = () => this.walkOut();
     // the way out at the west end (walking on into it does the same)
-    this.it({ x: FSPOT.exit, y: fgroundY(FSPOT.exit), w: 18, h: 26, get label() { return f.day1 ? 'Back down the stream to the beach' : 'Down the stream: head back to camp'; }, standX: FSPOT.exit + 4,
+    this.it({ x: FSPOT.exit, y: fgroundY(FSPOT.exit), w: 18, h: 26, get label() { return f.day1 ? 'Back down the stream to the beach' : 'Down the stream to the beach'; }, standX: FSPOT.exit + 4,
       enabled: () => !f.cutscene && !f.leaving, action: () => f.walkOut() } as never);
     if (f.day1) await this.enterDay1();
     else this.enterExpedition();
@@ -538,6 +538,9 @@ export class ForestStory implements ForestHooks {
   private async walkOut() {
     const f = this.f, p = this.p;
     if (!f.day1) {
+      // V12: a walk, not a jump: down the stream trail to the beach (the trails module)
+      const { walkOutEdge } = await import('../../v12/trails');
+      if (await walkOutEdge(f, 'W')) return;
       const { returnToCamp } = await import('../../v10/expedition');
       await returnToCamp('walk');
       return;

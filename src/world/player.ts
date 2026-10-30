@@ -1,4 +1,4 @@
-// Rowan Ellis: side-scrolling controller with walk/run/crouch/jump/climb/hide/swim, scripted moves,
+// Rowan Ellis: side-scrolling controller with walk/crouch/jump/climb/hide/swim (V12: no sprint), scripted moves,
 // timed work actions (collecting, building) and deck sliding. Rendered through an Actor so any
 // expression, emote or cartoon reaction works on the player too.
 
@@ -266,9 +266,9 @@ export class Player implements Drawable {
         return;
       }
     }
-    this.running = canControl && !this.noRun && !this.noSprint && inp.down('run') && !this.crouch && !this.camera;
-    if (this.running && Math.abs(this.vx) > 80 * this.speedK * this.loadK) this.sinceRun = 0;
-    const speed = (this.state === 'script' ? this.scriptSpeed : this.camera ? 28 : this.crouch ? 26 : this.running ? 118 : 60) * this.speedK * this.wadeK * (this.state === 'script' ? 1 : this.loadK * carrySpeedK(this.body));
+    // V12: no sprint, no rush. Mori walks everywhere (scripted moves can still hurry him along)
+    this.running = false;
+    const speed = (this.state === 'script' ? this.scriptSpeed : this.camera ? 28 : this.crouch ? 26 : 60) * this.speedK * this.wadeK * (this.state === 'script' ? 1 : this.loadK * carrySpeedK(this.body));
     let target = ax * speed;
     // dizzy: he veers, stalls and staggers a step on his own (facing still follows the keys)
     if (this.dizzy > 0 && canControl) {
@@ -393,7 +393,7 @@ export class Player implements Drawable {
     const inp = game.input;
     const ax = canControl ? inp.axisX() : 0;
     const ay = canControl ? (inp.down('down') ? 1 : 0) - (inp.down('up') || inp.down('jump') ? 1 : 0) : 0;
-    const sp = (inp.down('run') && !this.noSprint ? 72 : 44) * this.loadK;
+    const sp = 50 * this.loadK;
     this.vx = approach(this.vx, ax * sp, 90 * dt);
     this.vy = approach(this.vy, ay * sp + 4, 90 * dt);
     this.x = clamp(this.x + this.vx * dt, this.minX, this.maxX);

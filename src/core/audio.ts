@@ -38,6 +38,8 @@ export type Sfx =
   | 'stepWater' | 'drip' | 'trickle'
   // V10: the expedition body: heavy breathing when worn out, a gurgling stomach after bad forage
   | 'breath' | 'tummy'
+  // V12: a hungry stomach's big cartoon growl; the QTE prompts (a tick, a hit, a miss)
+  | 'growl' | 'qteTick' | 'qteHit' | 'qteMiss'
   // animal vocalizations: the pitch param sets the caller's size/voice (<1 bigger & slower, >1 smaller & quicker)
   | 'callChirp' | 'callTrill' | 'callHoot' | 'callScreech' | 'callHiss' | 'callRattle' | 'callGrunt'
   | 'callBark' | 'callSqueak' | 'callGrowl' | 'callHonk' | 'callCroak' | 'callClick' | 'callWhale' | 'callPurr';
@@ -3241,6 +3243,45 @@ export class AudioEngine {
           this.tone(v, { f, pts: [[0.05, f * 1.7], [0.12, f * 0.85], [0.16, f * 1.2]], t: s1, a: 0.02, d: 0.15, vol: 0.55 });
           this.burst(v, { noise: 'brown', t: s1, a: 0.02, d: 0.13, vol: 0.4, ft: 'bandpass', f: rand(160, 260) * p, Q: 5 });
         }
+        break;
+      }
+      case 'growl': {
+        // a cartoon stomach growl: a long wobbling "grrrr" rumble that slides up into a whiny "owwl",
+        // a couple of wet gurgles, and a tiny squeak at the end
+        const v = V(0.55, 2.6, 0.05);
+        const f0 = rand(58, 70) * p;
+        const wob: [number, number][] = [];
+        for (let i = 1; i <= 14; i++) wob.push([i * 0.045, f0 * (i % 2 ? 1.22 : 0.9) * (1 + i * 0.012)]);
+        this.tone(v, { type: 'sawtooth', f: f0, pts: wob, t, a: 0.06, hold: 0.42, d: 0.22, vol: 0.22 });
+        this.burst(v, { noise: 'brown', t, a: 0.06, hold: 0.45, d: 0.25, vol: 0.55, ft: 'bandpass', f: 170 * p, f2: 260 * p, Q: 5 });
+        const t1 = t + 0.62;
+        this.tone(v, { type: 'triangle', f: f0 * 1.5, pts: [[0.12, f0 * 2.4], [0.3, f0 * 2.9], [0.46, f0 * 1.9]], t: t1, a: 0.05, hold: 0.18, d: 0.3, vol: 0.32 });
+        this.burst(v, { noise: 'pink', t: t1, a: 0.05, hold: 0.2, d: 0.25, vol: 0.22, ft: 'bandpass', f: 320 * p, f2: 520 * p, Q: 3 });
+        for (let i = 0; i < 2; i++) {
+          const s1 = t + 1.12 + i * rand(0.12, 0.18);
+          const f = rand(80, 120) * p;
+          this.tone(v, { f, pts: [[0.05, f * 1.8], [0.11, f * 0.8], [0.15, f * 1.3]], t: s1, a: 0.02, d: 0.14, vol: 0.4 });
+        }
+        this.tone(v, { f: 880 * p, f2: 1500 * p, glide: 0.07, t: t + 1.52, a: 0.006, d: 0.08, vol: 0.1 });
+        break;
+      }
+      case 'qteTick': {
+        const v = V(0.22, 0.3, 0.05);
+        this.tone(v, { type: 'square', f: 1320 * p, t, a: 0.001, d: 0.035, vol: 0.35 });
+        break;
+      }
+      case 'qteHit': {
+        // a bright two-note "ding!" with a little click
+        const v = V(0.3, 0.9, 0.2);
+        this.burst(v, { t, a: 0.0008, d: 0.02, vol: 0.5, ft: 'bandpass', f: 2600 * p, Q: 2 });
+        this.tone(v, { type: 'square', f: mtof(84) * p, t, a: 0.002, d: 0.09, vol: 0.32 });
+        this.tone(v, { type: 'square', f: mtof(91) * p, t: t + 0.07, a: 0.002, d: 0.22, vol: 0.3 });
+        break;
+      }
+      case 'qteMiss': {
+        // a deflating "bwomp"
+        const v = V(0.3, 0.8, 0.08);
+        this.tone(v, { type: 'square', f: 220 * p, f2: 110 * p, glide: 0.28, t, a: 0.004, hold: 0.06, d: 0.25, vol: 0.3 });
         break;
       }
       case 'craft': {

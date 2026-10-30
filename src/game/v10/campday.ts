@@ -116,8 +116,8 @@ export class CampDay implements CrewHost {
     const s = this.s;
     this.lastPhase = ph;
     const t = s.clock.t;
-    if (ph === 'morning') { s.clock.target = 1.4; s.clock.rate = 0.0011; }
-    else if (ph === 'out') { s.clock.target = 2.7; s.clock.rate = 0.0014; }
+    if (ph === 'morning') { s.clock.target = 2.5; s.clock.rate = 0.0011; }
+    else if (ph === 'out') { s.clock.target = 4; s.clock.rate = 0.0014; } // (V12: the sun keeps going down while Mori is out)
     else if (ph === 'evening') { s.clock.set(Math.max(t, 2.55)); s.clock.target = 3.5; s.clock.rate = 0.0009; }
     else { s.clock.set(Math.max(t, 3.72)); s.clock.target = 3.95; s.clock.rate = 0.0006; }
     this.dress(ph === 'night');
@@ -224,7 +224,8 @@ export class CampDay implements CrewHost {
       rr.light(bench.x + 10, bench.y - 30, 40, 1, 0.92, 0.7, 0.35 + night * 0.5, 0.1);
     }));
     st.prop('v10board', ART.campBoard(), C10.board, groundY(C10.board) + 2, () => true, -3);
-    st.prop('v10sign', ART.trailSign(), C10.sign, groundY(C10.sign) + 2, () => true, -3);
+    // (V12: the trails module's crossroads signpost stands here instead of the old map trail sign)
+    st.prop('v10sign', ART.trailSign(), C10.sign, groundY(C10.sign) + 2, () => false, -3);
     st.prop('v10rock', ART.fishRock(), C10.rock - 4, groundY(C10.rock) + 9, () => true, -2.6);
     st.prop('v10rod', ART.rodInRock(), C10.rock + 12, groundY(C10.rock) - 2, () => !this.fishing && !this.joshuFishing(), -2.7);
     st.prop('v10pot', ART.pot(), C10.fire + 2, groundY(C10.fire) - 1, () => this.potOn, -1.4);
@@ -272,14 +273,18 @@ export class CampDay implements CrewHost {
     st.it({ x: C10.bench, y: groundY(C10.bench), w: 18, label: 'Jenna’s workbench: upgrade your gear', standX: C10.bench - 24, enabled: free, action: () => this.atBench() });
     // the camp board
     st.it({ x: C10.board, y: groundY(C10.board), w: 14, label: 'The camp board: requests', standX: C10.board - 18, quest: () => this.boardDue(), enabled: free, action: () => this.atBoard() });
-    // the trail sign
-    st.it({ x: C10.sign, y: groundY(C10.sign), w: 14, get label() { return self.signLabel(); }, standX: C10.sign - 18, quest: () => dayPhase() === 'morning' && this.d.meals.breakfast === this.day,
-      enabled: free, action: () => this.atSign() } as never);
+    // (V12: no trail-sign picker: Mori walks out of camp along the beach to the crossroads; the
+    // packing for the day happens at the stash chest)
     // the fishing rock
     st.it({ x: C10.rock, y: groundY(C10.rock), w: 14, get label() { return self.fishLabel(); }, standX: C10.rock, enabled: () => free() && dayPhase() !== 'night', action: () => this.atRock() } as never);
     // V11: the stash chest by the supply crates (the Backpack opens beside it)
-    st.it({ x: C10.storage, y: groundY(C10.storage), w: 16, label: 'The camp stash: leave or take things', standX: C10.storage + 20, enabled: free,
-      action: async () => { const { openBackpack11 } = await import('../../ui/v11/backpack'); await openBackpack11({ mode: 'stash' }); this.s.hud?.refresh(true); } });
+    st.it({ x: C10.storage, y: groundY(C10.storage), w: 16, get label() { return dayPhase() === 'morning' ? 'Pack for the day (Joshu’s lunch is on the chest)' : 'The camp stash: leave or take things'; }, standX: C10.storage + 20, enabled: free,
+      quest: () => dayPhase() === 'morning' && this.d.meals.breakfast === this.day && (this.d.events['lunch'] ?? 0) !== this.day,
+      action: async () => {
+        if (dayPhase() === 'morning') { const { openPackPrep } = await import('../../ui/v10/camppack'); await openPackPrep(this); }
+        else { const { openBackpack11 } = await import('../../ui/v11/backpack'); await openBackpack11({ mode: 'stash' }); }
+        this.s.hud?.refresh(true);
+      } } as never);
     // V11: cooking at the fire when it isn't mealtime (a snack, lunch tins for tomorrow)
     st.it({ x: C10.fire + 18, y: groundY(C10.fire), w: 8, label: 'Cook something at the fire', standX: C10.fire + 30,
       enabled: () => free() && dayPhase() !== 'out' && !this.fireDue(),
@@ -399,7 +404,7 @@ export class CampDay implements CrewHost {
     this.lightT -= dt;
     if (this.lightT <= 0) { this.lightT = 1.5; this.lights(); }
     // a whole day at camp: the evening comes on its own
-    if (ph === 'morning' && s.clock.t > 1.35 && !this.arrivalP) {
+    if (ph === 'morning' && s.clock.t > 2.42 && !this.arrivalP) {
       setPhase('evening');
       s.clock.target = 3.5;
       s.clock.rate = 0.0016;
@@ -413,12 +418,7 @@ export class CampDay implements CrewHost {
       else if (ph === 'morning' && s.clock.t > 0.8) s.bark('joshu', rand.pick(['Daylight’s burning, Doc. Pack up and go see something.', 'The island won’t photograph itself.']), { expr: 'teasing' });
       else if (ph === 'evening' && d.meals.dinner !== this.day && s.clock.t > 3.1) s.bark('joshu', 'Grub’s up! Come and get it!', { expr: 'happy' });
     }
-    // out walking the home island: coming back into camp ends the trip
-    if (ph === 'out' && !currentExpedition()) {
-      const x = s.player.x;
-      if (x < C10.salvage - 120 || x > C10.sign + 220) this.away = true;
-      else if (this.away && x > C10.salvage && x < C10.sign) { this.away = false; void arriveAtCamp('walk'); }
-    }
+    // (V12: leaving camp and walking back into it is the loop module's: src/game/v12/loop.ts)
   }
 
   /** leave the camp scene (an expedition elsewhere): stop the brains */

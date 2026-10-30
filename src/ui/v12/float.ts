@@ -30,6 +30,7 @@ import { pxTextBuf, pxMeasure } from '../pxfont';
 import type { PxFontId } from '../pxfont';
 import { pxIconBuf } from '../pxicons';
 import { hudScale } from '../v11/hudpx';
+import { showWatch } from './watch';
 import type { PixelBuffer } from '../../art/pixel';
 
 export type FloatStyle = 'say' | 'shout' | 'whisper' | 'scared' | 'happy' | 'laugh' | 'sad' | 'think' | 'radio' | 'notice';
@@ -1272,9 +1273,12 @@ export function floatChoices(options: FloatOption[], o: FloatChoiceOpts = {}): P
   paintSel();
   return new Promise<number | null>(res => {
     let fin = false, rafT = 0;
+    // a timed answer's countdown: the brass pocket watch near Mori (never a bar)
+    const watch = o.watch && o.timeout ? showWatch({ manual: true, secs: o.timeout, size: 28, anchor: 'mori' }) : null;
     const finish = (i: number | null) => {
       if (fin) return;
       fin = true;
+      watch?.close();
       cancelAnimationFrame(rafT);
       window.removeEventListener('keydown', kd, true);
       window.removeEventListener('pointerdown', pd, true);
@@ -1311,13 +1315,12 @@ export function floatChoices(options: FloatOption[], o: FloatChoiceOpts = {}): P
     window.addEventListener('pointerdown', pd, true);
     window.addEventListener('pointermove', pm, true);
     set.cancel = () => finish(null);
-    // TODO watch: a timed answer with `watch: true` shows its countdown on the brass pocket watch
-    // (src/ui/v12/watch.ts, built by the loop module) near Mori; never a bar. Hook it up here once the
-    // module lands: open it with o.timeout, wind it with k each frame, put it away in finish().
+    // (a timed answer with `watch: true` winds the pocket watch down each frame; finish() puts it away)
     const frame = () => {
       if (fin) return;
       const t = now() - set.t0;
       const k = o.timeout ? Math.min(1, t / o.timeout) : 0;
+      watch?.set(1 - k);
       o.tick?.(t, k);
       if (o.timeout && t >= o.timeout) { finish(null); return; }
       if (!raf) { lastT = performance.now(); raf = requestAnimationFrame(loop); }

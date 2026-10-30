@@ -10,9 +10,10 @@ import { game } from '../../../game/game';
 import { QUESTS, questStatus, currentStepIndex, trackedQuest } from '../../../game/quests';
 import type { QuestDef } from '../../../game/quests';
 import { nbSave } from '../notebook';
+import { todayGoal } from '../../../game/v12/loop';
 import { Flow } from './flow';
 import type { Page } from './flow';
-import { C, TEXT_X, TEXT_R, lineY, hand, handW, photoAt, artOfData, doodleArt, plot, wavyPx, tapeAt } from './art';
+import { C, TEXT_X, TEXT_R, TEXT_W, LINE, lineY, hand, handW, wrap, photoAt, artOfData, doodleArt, plot, wavyPx, tapeAt, boxPx, tickPx } from './art';
 import { hashStr } from '../../v11/paper/rng';
 
 const NAMES: Record<string, string> = { story: '', rowan: 'Mori', mori: 'me', crowe: 'Captain Crowe', aroha: 'Aroha', lou: 'Lou', pip: 'Pip', jenna: 'Jenna', joshu: 'Joshu', chunk: 'Chunk' };
@@ -53,7 +54,21 @@ export function questPages(): QuestBuild {
   // ---- the index
   f.page('q:index');
   f.title('On my list', { sub: `day ${game.save.day || 1}${doneAll.length ? ` · ${doneAll.length} ticked off` : ''}` });
-  f.gap(1);
+  // today's goal (the loop picks one each morning), boxed in red so it can't be missed
+  let goal: ReturnType<typeof todayGoal> = null;
+  try { goal = todayGoal(); } catch { goal = null; }
+  if (goal) {
+    const g = goal;
+    const done = (() => { try { return g.done(); } catch { return false; } })();
+    const ls = wrap(`Today: ${g.text}`, TEXT_W - 22);
+    const h = ls.length * LINE + 6;
+    f.block(h + 2, (c, x, y, w) => {
+      plot(c.a, boxPx(x - 3, y, w + 2, h, hashStr(g.text)), C.red, Infinity);
+      c.a.blit(doodleArt('sun', 14, C.red, { pencil: false }), x + w - 15, y + 2);
+      ls.forEach((l, i) => hand(c.a, l, x + 2, y + LINE + 1 + i * LINE, done ? C.pencil : C.ink, { pencil: done }));
+      if (done) plot(c.a, tickPx(x + w - 16, y + 3, 9, 5), C.blue);
+    });
+  } else f.gap(1);
   if (!active.length) f.text('Nothing on the list. Enjoy it while it lasts.', { color: C.pencil, pencil: true });
   for (const q of active) {
     const cur = currentStepIndex(q);

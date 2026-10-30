@@ -23,7 +23,8 @@ import { wait } from '../v4/islestory';
 import type { BubbleLine } from '../../ui/bubbles';
 import { SPECIES_BY_ID } from '../species';
 import { discoveries } from './regions';
-import { restore, maxEnergy } from './energy';
+import { restore } from './energy';
+import { feed } from '../v12/hunger';
 import { dayState, dayNumber, setPhase, startNextDay, addBond, CREW } from './day';
 import type { CampDay } from './campday';
 import { C10 } from './campcrew';
@@ -309,11 +310,10 @@ export async function breakfast(cd: CampDay) {
     st.pose('eat');
     audio.play('munch', { vol: 0.4 });
     await st.say(BREAKFAST_CHAT[(day - 2 + rand.int(0, 1)) % BREAKFAST_CHAT.length]);
-    // a little plan for the day: the requests waiting
-    const { REQUESTS, reqState } = await import('./campquests');
-    const active = REQUESTS.filter(r => reqState(r) === 'active' || reqState(r) === 'ready');
-    if (active.length) await st.say([{ who: 'mori', text: `Today’s list: ${active.slice(0, 2).map(r => r.title.toLowerCase()).join(', and ')}${active.length > 2 ? ', and the rest' : ''}.`, expr: 'determined' }]);
-    else await st.say([{ who: 'mori', text: 'Right. Board first, then the trail.', expr: 'determined' }]);
+    // V12: today's goal, said by whoever has the job for Mori (it is the day quest in the notebook too)
+    const { tellGoal } = await import('../v12/loop');
+    await tellGoal(cd);
+    await st.say([{ who: 'mori', text: rand.pick(['Right. Lunch from the chest, then the trail.', 'Got it. Notebook, lunch, out the gate.', 'On it. Back before dark.']), expr: 'determined' }]);
     for (const a of [s.jenna, s.joshu, s.aroha]) a.setAnim('sit');
     st.pose('sit');
     d.meals.breakfast = day;
@@ -325,12 +325,13 @@ export async function breakfast(cd: CampDay) {
       const fed = mine.quality === 'good' || mine.quality === 'perfect';
       if (fed) d.buff = { id: 'hearty', day };
       game.persist();
-      game.ui.toast(`Breakfast: <b>+${sv.ate} energy</b>.${fed ? ' Well fed: walking costs <b>10% less</b> today.' : ''}${sv.packed ? ` ${sv.packed} portion${sv.packed > 1 ? 's' : ''} packed for lunch.` : ''}`, 'CAMP', 'teal', 4800);
+      feed(0.45);
+      void import('../../ui/v12/float').then(m => m.floatNotice(`Breakfast: a full belly${fed ? ', and steady hands' : ''}.${sv.packed ? ` ${sv.packed} portion${sv.packed > 1 ? 's' : ''} packed for lunch.` : ''}`, 4000));
     } else {
-      restore(30);
+      feed(0.65);
       d.buff = { id: 'hearty', day };
       game.persist();
-      game.ui.toast('Breakfast: <b>+30 energy</b>. Well fed: walking costs <b>10% less</b> today.', 'CAMP', 'teal', 4200);
+      void import('../../ui/v12/float').then(m => m.floatNotice('Breakfast: a full belly. That’ll keep the stomach quiet till lunch.', 3800));
     }
     await wait(400);
     cd.potOn = false;
@@ -406,7 +407,7 @@ export async function dinner(cd: CampDay) {
     await shareFinds(cd);
     for (const a of [s.jenna, s.joshu, s.aroha]) a.setAnim('sit');
     st.pose('sit');
-    restore(maxEnergy());
+    feed(1);
     if (mine) { const { serveDish } = await import('../../ui/v11/cooking'); serveDish(mine, { eatNow: false, shared: Math.min(4, mine.portions) }); for (const who of CREW) addBond(who, 1); }
     d.meals.dinner = day;
     for (const who of CREW) addBond(who, 2);
@@ -516,7 +517,7 @@ export async function restUntilEvening(cd: CampDay) {
     st.pose(null);
     s.clock.set(2.75);
     setPhase('evening');
-    restore(40);
+    feed(0.2);
     cd.mode('evening');
     p.x = C10.tent + 22; p.y = groundY(p.x);
     s.snapCamera();

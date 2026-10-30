@@ -7,7 +7,6 @@ import { buildDone, buildLevel } from './crafting';
 import { SPECIES, SPECIES_BY_ID } from './species';
 import { V4_QUESTS } from './v4/quests4';
 import { BOAT_QUESTS } from './v10/boatquests';
-import { markQuestDone } from '../ui/v12/notebook';
 
 export type Giver = 'story' | 'rowan' | 'crowe' | 'aroha' | 'lou' | 'pip' | 'mori' | 'jenna' | 'joshu' | 'chunk';
 
@@ -299,19 +298,22 @@ export function setQuestHook(h: typeof onQuestEvent) {
 }
 
 let checkT = 0;
-/** the step each active quest was on at the last check (V12: finished steps get ticked in the notebook) */
-const stepWas: Record<string, number> = {};
+/** V12: the step each active quest was on last check (a step finishing ticks it in Mori's notebook) */
+const stepSeen = new Map<string, number>();
+/** (lazy: the notebook module may well import this one) */
+function markQuestDone(id: string, step?: number) { void import('../ui/v12/notebook').then(m => m.markQuestDone(id, step)).catch(() => {}); }
 /** Call every frame; checks active quests a few times per second and completes finished ones. */
 export function updateQuests(dt: number) {
   checkT -= dt;
   if (checkT > 0) return;
   checkT = 0.25;
   for (const q of activeQuests()) {
-    const cur = currentStepIndex(q);
-    const was = stepWas[q.id];
-    if (was !== undefined && cur > was) for (let i = was; i < Math.min(cur, q.steps.length); i++) markQuestDone(q.id, i);
-    stepWas[q.id] = cur;
-    if (cur >= q.steps.length) completeQuest(q.id);
+    const i = currentStepIndex(q);
+    const was = stepSeen.get(q.id);
+    if (was !== undefined && i > was) for (let k = was; k < Math.min(i, q.steps.length); k++) markQuestDone(q.id, k);
+    stepSeen.set(q.id, i);
+    // (completeQuest marks the whole quest done in the notebook)
+    if (i >= q.steps.length) { completeQuest(q.id); stepSeen.delete(q.id); }
   }
 }
 

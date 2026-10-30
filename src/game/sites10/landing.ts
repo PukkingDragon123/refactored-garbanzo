@@ -125,7 +125,7 @@ export abstract class LandingScene extends FieldScene {
     const when = t < 0.7 ? 'Morning' : t < 1.5 ? 'Midday' : t < 2.2 ? 'Afternoon' : t < 2.75 ? 'Golden hour' : t < 3.4 ? 'Dusk' : 'Night';
     return {
       place: this.cfg.place(this.player?.x ?? this.cfg.spawnX), sub: `Day ${game.save.day} · ${when}`,
-      keys: '<span class="key">A</span><span class="key">D</span> move · <span class="key">Shift</span> run · <span class="key">E</span> interact · <span class="key">Q</span> camera · <span class="key">Tab</span> pack',
+      keys: '<span class="key">A</span><span class="key">D</span> move · <span class="key">E</span> interact · <span class="key">Q</span> camera · <span class="key">Tab</span> pack',
     };
   }
 
