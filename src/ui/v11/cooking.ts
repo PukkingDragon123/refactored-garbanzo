@@ -326,6 +326,11 @@ let current: unknown = null;
 
 export function runCooking(o: CookOpts): Promise<CookOutcome> {
   if (running) return running;
+  // V12: the hands-on close-up at the fire (the old screen stays behind the 'v12:oldqte' flag)
+  if (!game.save.flags['v12:oldqte']) {
+    running = import('../v12/closeup/cook').then(m => m.runCookCloseup(o)).finally(() => { running = null; });
+    return running;
+  }
   const ck = new Cook(o);
   current = ck;
   running = ck.run().finally(() => { running = null; current = null; });

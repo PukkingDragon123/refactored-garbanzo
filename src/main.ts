@@ -72,6 +72,8 @@ async function boot() {
     const { TitleScene } = await import('./game/scenes/title');
     await game.setNow(new TitleScene());
   }
+  // ?closeup=cook|dig|pull|catch|dark opens a V12 close-up straight away (testing)
+  if (params.has('closeup')) setTimeout(() => { void import('./ui/v12/closeup/index').then(m => m.debugCloseup(params.get('closeup') as never)); }, 1500);
   load.style.opacity = '0';
   setTimeout(() => load.remove(), 700);
   game.fadeTo(0, 1.2);
