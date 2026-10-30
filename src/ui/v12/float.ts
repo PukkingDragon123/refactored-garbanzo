@@ -110,7 +110,7 @@ try { reduced = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch 
 // card boxes, the V1 HUD, the region-map button); their callers float their text instead
 try {
   const st = document.createElement('style');
-  st.textContent = `#ui > .hud, #ui > .toasts, #ui > .dialogue, #ui > .caption, #ui > .titlecard, #ui .v10-mapb, #ui .hm-keys { display: none !important; }`;
+  st.textContent = `#ui > .hud, #ui > .toasts, #ui > .dialogue, #ui > .caption, #ui > .titlecard, #ui .v10-mapb, #ui .hm-keys, #ui .bt-route { display: none !important; }`;
   document.head.appendChild(st);
 } catch { /* */ }
 
@@ -595,7 +595,7 @@ const modalUp = () => { const u = (game as unknown as { ui?: { modalOpen?: numbe
 
 function loop(ms: number) {
   raf = 0;
-  const dt = Math.min(0.05, Math.max(0, (ms - lastT) / 1000));
+  const dt = Math.min(0.25, Math.max(0, (ms - lastT) / 1000));
   lastT = ms;
   if (!cv || !g || !cv.isConnected) { if (!layer()) { items = []; return; } }
   fitLayer();
@@ -695,15 +695,13 @@ function placeAll(t: number, dt: number) {
     const ny = Math.max(top, Math.min(bot - it.H, y));
     y = ny;
     if (it.kind !== 'sky') {
-      let guard = 0, r: Rect | undefined;
+      // stack above whatever is in the way (below it once there's no room above), never beside it:
+      // text stays over its speaker
+      let guard = 0, down = false, r: Rect | undefined;
       while ((r = placed.find(p => hit(p, x, y, it.W, it.H))) && guard++ < 12) {
         const up = r.y - it.H - 2;
-        if (up >= top) y = up;
-        else {
-          // no room above: beside it, whichever side has room
-          const right = r.x + r.w + 4, left = r.x - it.W - 4;
-          if (right + it.W <= CW - 3) x = right; else if (left >= 3) x = left; else { y = r.y + r.h + 2; }
-        }
+        if (!down && up >= top) y = up;
+        else { down = true; y = r.y + r.h + 2; }
       }
     }
     const off = y - ny;
@@ -712,7 +710,8 @@ function placeAll(t: number, dt: number) {
     it.px = x;
     it.py = Math.max(top, Math.min(bot - it.H, Math.round(ny + it.off)));
     it.vis = true;
-    placed.push({ x: it.px, y: it.py, w: it.W, h: it.H });
+    // (the sky words are scenery: lines near the heads don't make way for them)
+    if (it.kind !== 'sky') placed.push({ x: it.px, y: it.py, w: it.W, h: it.H });
   }
 }
 
@@ -768,7 +767,8 @@ function motion(it: Item, q: Gl, t: number): Off {
       if (age < 0.08) o.dy -= 2;
       break;
     case 'sad':
-      o.dy += Math.min(2, Math.floor(age * 1.1)) + (Math.sin(t * 1.2 + i * 0.35) > 0.55 ? 1 : 0);
+      // each letter lands a pixel high and slowly sinks onto a sagging line
+      o.dy += age < 0.5 ? -1 : age < 1.1 ? 0 : 1;
       break;
     case 'think':
       o.dy += Math.sin(t * 2 + i * 0.3) > 0.75 ? -1 : 0;
@@ -788,6 +788,8 @@ function motion(it: Item, q: Gl, t: number): Off {
 function drift(it: Item, t: number): [number, number] {
   if (reduced) return [0, 0];
   if (it.style === 'think') return [Math.round(Math.sin(t * 0.8 + it.id) * 1), Math.round(Math.sin(t * 1.5 + it.id) * 1.5)];
+  // a sad line breathes down, slowly
+  if (it.style === 'sad') return [0, Math.sin(t * 1.1 + it.id) > 0.3 ? 1 : 0];
   if (it.style === 'radio') { const p = Math.floor(t * 0.7 + it.id); if ((t * 0.7 + it.id) % 1 < 0.06 && hash(p, it.id) < 0.6) return [hash(p, 3) < 0.5 ? -2 : 2, 0]; }
   if (it.kind === 'prompt') return [0, Math.floor(t * 2.2) % 2 ? -1 : 0];
   if (it.sel) return [2, 0];
@@ -1007,7 +1009,8 @@ export function floatPrompt(html: string, cssX: number, cssY: number) {
   const touch = document.body.classList.contains('touchmode');
   let key = '';
   let text = html.replace(/<span class="key">([^<]*)<\/span>\s*/g, (_m, k: string) => { if (!key) key = k; return ''; });
-  if (/^click$/i.test(key)) key = '';
+  // only while Mori is near it: a mouse hovering something far off gets the pointer cursor, no word
+  if (/^click$/i.test(key)) { floatPromptHide(); return; }
   if (touch) key = '';
   text = text.trim();
   const k = key + '|' + text;
@@ -1073,13 +1076,13 @@ function showSky(title: string, sub: string, chapter: string, ms: number, soft: 
     let k = 3;
     while (k > 1 && (pxMeasure(ttl.toUpperCase(), 'bold') + ttl.length) * k > CW * 0.9) k--;
     const titleLook: Partial<Look> = { font: 'bold', k, fill: '#fffaf0', fill2: '#f0d49a', out: '#1a0e06', speed: 16, maxW: 999, track: 1, depth: 1 };
-    const subK = CW > 520 && sb.length < 34 ? 2 : 1;
+    const subK = CW > 620 && sb.length < 34 ? 2 : 1;
     const pieces: Item[] = [];
-    const y0 = () => topMargin() + Math.round(CH * 0.08);
-    const chIt: Item | null = chp ? make({ kind: 'sky', style: 'notice', text: chp.toUpperCase(), anchor: null, prio: 0, hold: true, look: { font: 'tiny', k: Math.max(1, k - 1), fill: '#9ff0dc', speed: 40, track: 2, maxW: 999 }, fixed: (): [number, number] => [Math.round(CW / 2 - chIt!.W / 2), y0()] }) : null;
+    const y0 = () => topMargin() + Math.round(CH * 0.045);
+    const chIt: Item | null = chp ? make({ kind: 'sky', style: 'notice', text: chp.toUpperCase(), anchor: null, prio: 0, hold: true, look: { font: 'tiny', k: 1, fill: '#9ff0dc', speed: 40, track: 2, maxW: 999 }, fixed: (): [number, number] => [Math.round(CW / 2 - chIt!.W / 2), y0()] }) : null;
     const chH = chIt ? chIt.H + 2 : 0;
     const tIt: Item = make({ kind: 'sky', style: 'shout', text: ttl.toUpperCase(), anchor: null, prio: 0, hold: true, look: titleLook, delay: chIt ? 0.3 : 0, fixed: (): [number, number] => [Math.round(CW / 2 - tIt.W / 2), y0() + chH] });
-    const sIt: Item | null = sb ? make({ kind: 'sky', style: 'notice', text: sb, anchor: null, prio: 0, hold: true, look: { font: 'script', k: subK, fill: '#ffd57a', speed: 36, maxW: Math.floor(CW * 0.8) }, delay: (chIt ? 0.3 : 0) + ttl.length / 16 + 0.15, fixed: (): [number, number] => [Math.round(CW / 2 - sIt!.W / 2), y0() + chH + tIt.H + 3] }) : null;
+    const sIt: Item | null = sb ? make({ kind: 'sky', style: 'notice', text: sb, anchor: null, prio: 0, hold: true, look: { font: 'script', k: subK, fill: '#ffd57a', speed: 36, maxW: Math.floor(CW * 0.8) }, delay: (chIt ? 0.3 : 0) + ttl.length / 16 + 0.15, fixed: (): [number, number] => [Math.round(CW / 2 - sIt!.W / 2), y0() + chH + tIt.H - FM.bold[1] * k + 2] }) : null;
     for (const p of [chIt, tIt, sIt]) if (p) { p.group = grp; pieces.push(p); }
     // the title's letters thump in: the sky style is 'shout' for its pop, without the shake
     tIt.style = 'say';
@@ -1273,3 +1276,6 @@ function drawOptionPointers(t: number) {
     g!.drawImage(ar.c, it.px - 7 + bob, it.py + 1 + Math.round(FM[it.look.font][0] * it.look.k / 2 - 3) + it.nameH);
   });
 }
+
+// debug: try the styles from the console (zlFloat.floatText({ text: 'Hi!', actor: 'jenna', style: 'shout' }))
+try { (window as unknown as { zlFloat?: unknown }).zlFloat = { floatText, floatNotice, floatSky, floatChoices, floatCaption, floatToast, floatPickup, clearFloats, floatPrompt }; } catch { /* */ }
