@@ -1,15 +1,15 @@
-// The backpack. V11: the old slot grid and tool belt are gone; the pack is now the physical Backpack
-// (src/ui/v11/backpack.ts): Mori swings it off, it opens up on the ground, and its tile grid holds
-// every item in its own shape, the tools ride in their holders round the outside and a spring
-// balance weighs the load. Everything that opened the old backpack still calls openBackpack.
+// The backpack. V12: the first-person Backpack scene (src/ui/v12/pack): Mori swings his pack off, the
+// view drops to the ground where he kneels, and the open pack lies there with its 5x3 compartments,
+// the tools in the webbing loops and the ground round it. Opened by inspecting Mori (click him or
+// press Tab, then the backpack: src/ui/v12/inspect.ts), and by everything that opened the old pack.
 
-import { openBackpack11 } from './v11/backpack';
-import type { PackOpts } from './v11/backpack';
+import { openPack12 } from './v12/pack';
+import type { PackOpts12 } from './v12/pack';
 // cooking registers the billy can's Use and the recipe notebook with the pack
 import './v11/cooking';
 
 /** Open the backpack. Resolves when it closes. (onEat is kept for old callers but not called: eating
- *  goes through v10/forage10 eatFood, as it did in the V10 pack.) */
-export async function openBackpack(o: { onEat?: (id: string) => void | Promise<void> } & PackOpts = {}): Promise<void> {
-  await openBackpack11(o);
+ *  goes through v10/forage10 eatFood and the V12 hunger contract.) */
+export async function openBackpack(o: PackOpts12 = {}): Promise<void> {
+  await openPack12(o);
 }

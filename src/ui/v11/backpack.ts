@@ -52,6 +52,8 @@ import { paintBtn, paintBubble, paintStamp, paintHint, paintDisc, ditherVignette
 import * as ART from './bagart';
 import type { BagLayout, ChestLayout, Rect, GroundKind, HolderId } from './bagart';
 import { packOff } from './takeoff';
+import { openPack12, packOpen12 } from '../v12/pack';
+import { registerUse } from '../v12/pack/uses';
 
 packIcons();
 const CELL = ART.CELL;
@@ -80,7 +82,7 @@ export type PackResult = 'closed' | 'go';
 /** item uses other modules provide (the card's Use action): by item id or by kind */
 type UseFn = (id: string) => void | Promise<void>;
 const USES: Record<string, { label: string; fn: UseFn; icon?: string }> = {};
-export function registerItemUse(idOrKind: string, label: string, fn: UseFn, icon = 'v11hand') { USES[idOrKind] = { label, fn, icon }; }
+export function registerItemUse(idOrKind: string, label: string, fn: UseFn, icon = 'v11hand') { USES[idOrKind] = { label, fn, icon }; registerUse(idOrKind, label, fn, icon); }
 const useOf = (id: string) => USES[id] ?? USES['kind:' + (ITEMS[id]?.kind ?? '')] ?? null;
 
 // ---------------------------------------------------------------- styles
@@ -276,11 +278,17 @@ interface Drag {
 let current: Promise<PackResult> | null = null;
 /** the screen up right now (null when closed) */
 let screen: PackScreen | null = null;
-export const backpackOpen = () => !!screen;
+export const backpackOpen = () => !!screen || packOpen12();
 
-/** Open the Backpack (the world part, then the screen). Resolves when it's closed; 'go' when Mori
- *  set off from the trail sign (mode 'prep'). */
+/** Open the Backpack. V12: the first-person Backpack scene (src/ui/v12/pack); the V11 screen below is
+ *  kept (hidden) as openBackpack11Legacy. Resolves when it's closed; 'go' when Mori set off from the
+ *  trail marker (mode 'prep'). */
 export function openBackpack11(o: PackOpts = {}): Promise<PackResult> {
+  return openPack12(o);
+}
+
+/** the V11 Backpack screen (hidden in V12: the spring balance, the specimen card) */
+export function openBackpack11Legacy(o: PackOpts = {}): Promise<PackResult> {
   if (current) return current;
   current = (async () => {
     css('bp11', CSS);
