@@ -140,9 +140,8 @@ export interface PackLayout {
   lid: Rect;
   /** the lid buckled shut over the opening (down to the receivers) */
   shut: Rect;
-  sideL: Rect; sideR: Rect;
-  /** tool slots on the side panels (top to bottom, left side first) */
-  slots: { side: 'L' | 'R'; r: Rect }[];
+  /** tool loops on the flap (rows of four, top row first) */
+  slots: { r: Rect }[];
   /** the haul loop on the hinge (shake and repack) */
   handle: Rect;
   /** the turn swivel hanging off the front wall */
@@ -153,27 +152,29 @@ export interface PackLayout {
   straps: [number, number];
 }
 
-export function packLayout(cols = 5, rows = 3): PackLayout {
-  const SIDE = 30, RIM = 8, BACK = 8, FRONT = 13, TOPPAD = 12, LID = 46;
+/** toolRows: rows of webbing loops on the flap (four tools a row) */
+export function packLayout(cols = 5, rows = 3, toolRows = 2): PackLayout {
+  const SIDE = 13, RIM = 8, BACK = 8, FRONT = 13, TOPPAD = 12;
+  const tr = Math.max(1, Math.min(3, toolRows));
+  const LID = 14 + tr * 27;
   const bw = cols * CELL + RIM * 2, bh = BACK + rows * CELL + FRONT;
-  const bx = SIDE - 2, by = TOPPAD + LID - 3;
+  const bx = SIDE, by = TOPPAD + LID - 3;
   const W = bx * 2 + bw;
   const body = { x: bx, y: by, w: bw, h: bh };
   const grid = { x: bx + RIM, y: by + BACK, w: cols * CELL, h: rows * CELL };
-  const sideH = bh + 4;
-  const sideL = { x: 1, y: by - 2, w: SIDE + 2, h: sideH }, sideR = { x: W - SIDE - 3, y: by - 2, w: SIDE + 2, h: sideH };
-  const n = 4, sh = Math.floor((sideH - 6) / n);
-  const slots: { side: 'L' | 'R'; r: Rect }[] = [];
-  for (const [side, r] of [['L', sideL], ['R', sideR]] as const) for (let i = 0; i < n; i++) slots.push({ side, r: { x: r.x + 4, y: r.y + 3 + i * sh, w: r.w - 8, h: sh } });
-  const s0 = bx + 30, s1 = bx + bw - 36;
+  const lid = { x: bx + 3, y: 0, w: bw - 6, h: TOPPAD + LID };
+  // the lid straps run down its edges; the loops for the tools sit between them, four a row
+  const s0 = lid.x + 5, s1 = lid.x + lid.w - 11;
+  const slots: { r: Rect }[] = [];
+  const inner = s1 - (s0 + 6) - 4, sw = Math.floor(inner / 4);
+  for (let j = 0; j < tr; j++) for (let i = 0; i < 4; i++) slots.push({ r: { x: s0 + 8 + i * sw, y: TOPPAD + 6 + j * 27, w: sw - 2, h: 25 } });
   const recvY = grid.y + grid.h + 3;
   const recv: [Rect, Rect] = [{ x: s0 - 1, y: recvY, w: 8, h: 8 }, { x: s1 - 1, y: recvY, w: 8, h: 8 }];
   const turn = { x: bx + bw - 30, y: by + bh - 4, w: 15, h: 19 };
   return {
-    W, H: turn.y + turn.h + 2, cols, rows, body, grid,
-    lid: { x: bx + 3, y: 0, w: bw - 6, h: TOPPAD + LID },
+    W, H: by + bh + 20, cols, rows, body, grid, lid,
     shut: { x: bx + 1, y: by - 3, w: bw - 2, h: recvY + 10 - (by - 3) },
-    sideL, sideR, slots,
+    slots,
     handle: { x: Math.round(W / 2) - 11, y: by - 6, w: 22, h: 11 },
     turn, recv, straps: [s0, s1],
   };
@@ -181,22 +182,42 @@ export function packLayout(cols = 5, rows = 3): PackLayout {
 
 // ---------------------------------------------------------------- the pack: body
 
-/** the open pack from above (side panels, collar, the sewn compartments, front wall, haul loop) */
+/** a padded shoulder strap hanging down the pack's side (behind it), a buckle and a webbing tail */
+function shoulderStrap(b: PixelBuffer, x0: number, y0: number, y1: number, dir: 1 | -1) {
+  const n = y1 - y0;
+  for (let i = 0; i <= n; i++) {
+    const y = y0 + i, k = i / n;
+    // it hangs straight, then swings out a little at the bottom
+    const cx = x0 + dir * Math.round(Math.sin(k * Math.PI * 0.5) * 5);
+    const pad = k < 0.62;
+    const w = pad ? 8 : 5;
+    for (let q = 0; q < w; q++) {
+      const t = pad ? 0.68 - Math.abs(q - (w - 1) / 2) / w * 0.6 + grain(cx + q, y) : 0.55 - q * 0.05 + ((y + q) % 3 === 0 ? -0.06 : 0);
+      b.set(cx + q - Math.floor(w / 2), y, q === 0 || q === w - 1 ? OUT : rp(pad ? LT : WEB, t, cx + q, y));
+    }
+    if (pad && i % 3 === 1) { b.set(cx - 2, y, LT[6]); b.set(cx + 2, y, LT[6]); }
+  }
+  // the buckle where the pad meets the webbing
+  const by = y0 + Math.round(n * 0.62), bx = x0 + dir * Math.round(Math.sin(0.62 * Math.PI * 0.5) * 5);
+  for (let yy = -2; yy <= 3; yy++) for (let xx = -4; xx <= 4; xx++) {
+    const e = Math.abs(xx) === 4 || yy === -2 || yy === 3;
+    if (e) b.set(bx + xx, by + yy, OUT);
+    else if (Math.abs(xx) === 3 || yy === -1 || yy === 2) b.set(bx + xx, by + yy, xx + yy < 0 ? BR[4] : BR[2]);
+  }
+  b.rect(bx, by - 1, 1, 4, BR[1]);
+  // the tail's metal tip
+  const ex = x0 + dir * 5;
+  b.rect(ex - 2, y1 + 1, 5, 2, IRON[3]); b.set(ex - 2, y1 + 2, IRON[1]);
+}
+
+/** the open pack, floating face up in the air (shoulder straps hanging behind, the collar, the sewn
+ *  compartments, the front wall with the strap receivers, the haul loop, a luggage tag) */
 export function paintPack(L: PackLayout): PixelBuffer {
   const b = new PixelBuffer(L.W, L.H);
-  // ---- the side panels, flopped out on the ground
-  for (const [r, left] of [[L.sideL, true], [L.sideR, false]] as const) {
-    roundRect(b, r, 7, (x, y, u, v, edge) => {
-      if (edge === 0) return OUT;
-      if (edge === 1) return (left ? u < 0.5 : u > 0.5) ? LT[2] : LT[4];
-      // the outer half bends down to the ground: darker toward the outside edge
-      const out = left ? 1 - u : u;
-      const t = 0.62 - out * 0.32 + (v < 0.08 ? 0.08 : 0) - (v > 0.92 ? 0.12 : 0) + weave(x, y) + (fbm(x, y, 9, 5) - 0.5) * 0.12;
-      return rp(FADE, t, x, y);
-    });
-    // binding stitches
-    for (let y = r.y + 4; y < r.y + r.h - 4; y += 3) b.set(left ? r.x + 2 : r.x + r.w - 3, y, THREAD2);
-  }
+  // ---- the shoulder straps, hanging down behind the body
+  const bb = L.body;
+  shoulderStrap(b, bb.x + 1, bb.y + 8, bb.y + bb.h + 12, -1);
+  shoulderStrap(b, bb.x + bb.w - 2, bb.y + 8, bb.y + bb.h + 12, 1);
   // ---- the body
   const g = L.grid, bd = L.body;
   const op = { x: g.x - 1, y: g.y - 1, w: g.w + 2, h: g.h + 2 };
@@ -325,30 +346,17 @@ export function paintLidOpen(L: PackLayout): PixelBuffer {
     return rp(UNDER, t, x, y);
   });
   for (let x = 6; x < r.w - 6; x += 3) b.set(x, lid.y + 2, THREAD2);
-  // the mesh pocket with its zip, a folded map and a pencil inside
-  const m: Rect = { x: 14, y: lid.y + 8, w: r.w - 28, h: 21 };
-  for (let y = m.y; y < m.y + m.h; y++) for (let x = m.x; x < m.x + m.w; x++) {
-    const ix = x - m.x, iy = y - m.y;
-    let c = rp(UNDER, 0.3, x, y);
-    // the map
-    if (ix > 6 && ix < 40 && iy > 3 && iy < 18) {
-      // a folded chart: blue sea, a green island with a dotted trail, the fold lines
-      const land = vnoise(ix, iy, 5, 12) > 0.5 && ix > 12 && ix < 36 && iy > 6 && iy < 16;
-      c = land ? rp([H('#5a7a3a'), H('#7a9a4a'), H('#9ab866')], 0.6 - iy * 0.03, x, y) : rp([H('#7a9ab0'), H('#9ab8c8'), H('#bcd2dc')], 0.55 + ((ix + iy) % 5 === 0 ? 0.25 : 0), x, y);
-      if (land && (ix + iy * 2) % 4 === 0 && Math.abs(iy - 11 - Math.sin(ix * 0.4) * 2) < 1) c = H('#b83a2a');
-      if (ix === 18 || ix === 29) c = mix(c, H('#2a3a4a'), 0.3);
-      if (ix === 7 || ix === 39 || iy === 4 || iy === 17) c = H('#e8dcc0');
+  // frayed threads and scuffs along the worn far edge
+  for (let x = 12; x < r.w - 12; x++) if (noise(x, 1, 71) > 0.86) { b.set(x, lid.y - 1, THREAD2); if (noise(x, 2, 71) > 0.5) b.set(x, lid.y - 2, THREAD2); }
+  // a sewn-on pad behind each tool loop, its stitching round it
+  for (const s of L.slots) {
+    const sx = s.r.x - L.lid.x, sy = s.r.y - L.lid.y;
+    for (let y = sy; y < sy + s.r.h; y++) for (let x = sx; x < sx + s.r.w; x++) {
+      const e = x === sx || y === sy || x === sx + s.r.w - 1 || y === sy + s.r.h - 1;
+      b.set(x, y, e ? (((x + y) & 1) ? THREAD2 : UNDER[1]) : rp(UNDER, 0.42 - (y - sy) / s.r.h * 0.12 + weave(x, y), x, y));
     }
-    // the pencil
-    if (iy >= 6 && iy <= 7 && ix > 48 && ix < 76) c = ix < 51 ? H('#e88a8a') : ix < 53 ? IRON[3] : ix > 72 ? (ix > 74 ? H('#3a3a3a') : H('#e8c89a')) : iy === 6 ? H('#f6d248') : H('#c89a1c');
-    // the mesh over it all
-    if ((ix + iy) % 3 === 0 || (ix - iy + 300) % 3 === 0) c = mix(c, WEB[1], 0.72);
-    b.set(x, y, c);
   }
-  for (let x = m.x - 1; x <= m.x + m.w; x++) { b.set(x, m.y - 1, (x & 1) ? IRON[3] : IRON[1]); b.set(x, m.y + m.h, OUT); }
-  for (let y = m.y; y < m.y + m.h; y++) { b.set(m.x - 1, y, LT[3]); b.set(m.x + m.w, y, LT[2]); }
-  b.rect(m.x + m.w - 8, m.y - 2, 3, 6, IRON[3]); b.set(m.x + m.w - 7, m.y, IRON[0]);
-  // the straps: from the hinge out past the far edge, their clips dangling on the ground
+  // the straps: from the hinge out past the far edge, their clips dangling
   for (const sx of L.straps) {
     const x = sx - L.lid.x;
     vstrap(b, x, 4, r.h - 1, 6, WEB, 0.06);
@@ -519,419 +527,35 @@ export function paintSign(): PixelBuffer {
   return b;
 }
 
-// ---------------------------------------------------------------- Mori's knees and hands
+// ---------------------------------------------------------------- the world behind, dimmed
 
-const STONE = [H('#1a1712'), H('#36301f'), H('#544a34'), H('#726648'), H('#8e825e'), H('#aca07a'), H('#c4b892')];
-const SKIN = [H('#3a1810'), H('#7a3a28'), H('#9a4a36'), H('#c8805e'), H('#f0a878'), H('#f8c090'), H('#ffe0b8')];
-const OAT = [H('#2a2420'), H('#5a4c40'), H('#8c7c6a'), H('#b8a890'), H('#d4c6ae'), H('#ece0ca')];
-
-/** rasterise a shape given in a rotated frame: u runs along `ang` from (ox, oy), v across it */
-function along(b: PixelBuffer, ox: number, oy: number, ang: number, flip: boolean, fn: (u: number, v: number, x: number, y: number) => C | -1) {
-  const ca = Math.cos(ang), sa = Math.sin(ang);
-  for (let y = 0; y < b.h; y++) for (let x = 0; x < b.w; x++) {
-    const X = flip ? b.w - 1 - x : x;
-    const dx = X + 0.5 - ox, dy = y + 0.5 - oy;
-    const u = dx * ca + dy * sa, v = -dx * sa + dy * ca;
-    const c = fn(u, v, x, y);
-    if (c !== -1) b.set(x, y, c);
-  }
-}
-
-/** Mori's thigh and knee, seen from above, coming in from the bottom corner of the view (right: the
- *  right leg, mirrored). The knee points in toward the pack. */
-export function paintKnee(right: boolean): PixelBuffer {
-  const b = new PixelBuffer(118, 78);
-  const ang = -0.72;
-  along(b, 4, 92, ang, right, (u, v, x, y) => {
-    // a capsule 46 wide, its far end rounded into the knee
-    const L = 104, R0 = 24 - Math.max(0, u - 60) * 0.06;
-    if (u < -10) return -1;
-    const end = u > L - R0 ? Math.sqrt(Math.max(0, R0 * R0 - (u - (L - R0)) ** 2)) : R0;
-    if (Math.abs(v) > end) return -1;
-    const k = v / Math.max(1, end);
-    // round across the leg, the knee cap catching the light, folds where the knee bends
-    const cap = Math.max(0, 1 - Math.hypot((u - (L - 16)) / 16, v / 14));
-    const fold = u > 46 && u < 78 && Math.sin(u * 0.5 + k * 3) > 0.84 ? -0.2 : 0;
-    const seam = Math.abs(k - 0.62) < 0.035 && u < L - 10 ? -0.16 : 0;
-    const t = 0.56 - k * 0.3 - k * k * 0.18 + cap * 0.3 - (u < 20 ? (20 - u) * 0.012 : 0) + fold + seam + ((x + y * 2) % 4 === 0 ? -0.03 : 0);
-    return rp(STONE, t, x, y);
-  });
-  b.outline(OUT);
-  return b;
-}
-
-/** a hand resting on the knee, fingers curled over it, the forearm and rolled sleeve trailing back out
- *  of the view (right: mirrored). grip: curled to take hold of something */
-export function paintHand(right: boolean, grip = false): PixelBuffer {
-  const b = new PixelBuffer(46, 56);
-  const ang = -1.05;
-  along(b, 8, 62, ang, right, (u, v, x, y) => {
-    // forearm (u 0..34), the wrist, the back of the hand (34..48), the fingers (48..60)
-    if (u < -4 || u > 62) return -1;
-    const lit = -v * 0.035;
-    if (u < 34) {
-      const half = 7.4 - u * 0.03;
-      if (Math.abs(v) > half) return -1;
-      const k = v / half;
-      if (u < 12) return u > 10.5 ? OAT[1] : rp(OAT, 0.62 - k * 0.3 + (Math.floor(u) % 4 === 0 ? -0.15 : 0), x, y); // the rolled sleeve
-      return rp(SKIN, 0.6 - k * 0.32 + lit, x, y);
-    }
-    if (u < 48) {
-      const half = 6.6 + (u - 34) * 0.14;
-      // the thumb on the inside edge
-      if (v > half && v < half + 4 && u > 36 && u < 46 + (grip ? -3 : 0)) return rp(SKIN, 0.5 - (v - half) * 0.08, x, y);
-      if (Math.abs(v) > half) return -1;
-      const k = v / half;
-      const tendon = u > 38 && Math.abs(Math.sin(v * 0.62)) < 0.12 ? -0.1 : 0;
-      return rp(SKIN, 0.7 - k * 0.28 + tendon + (u > 46 ? 0.08 : 0), x, y);
-    }
-    // four fingers, a dark line between each, the middle ones longest; curled: shorter, darker tips
-    const f = Math.floor((v + 8.6) / 4.3);
-    if (f < 0 || f > 3) return -1;
-    const len = (grip ? 54 : 58) + (f === 1 || f === 2 ? 3 : 0) - (f === 3 ? 2 : 0);
-    if (u > len) return -1;
-    const fv = (v + 8.6) - f * 4.3;
-    if (fv < 0.6) return SKIN[1];
-    const tip = u > len - 2;
-    return rp(SKIN, 0.66 - (fv - 2.2) * 0.07 - (tip ? 0.12 : 0) - (Math.abs(u - 52) < 0.6 ? 0.18 : 0), x, y);
-  });
-  b.outline(H('#2a120a'));
-  return b;
-}
-
-// ---------------------------------------------------------------- the ground
-
-export interface GroundOpts {
-  biome: Biome;
-  tod: Tod;
-  /** dark contact shadows under the pack and the chest (ground px) */
-  shadows: Rect[];
-  /** where the camp fire is (ground px; off the edge of the view) */
-  fire?: [number, number] | null;
-  seed?: number;
-}
-
-/** the ground filling the view, w x h art px */
-export function paintGround(w: number, h: number, o: GroundOpts): PixelBuffer {
+/** the world dimmed by an ordered dither (no blur): dark pixels on and off, thinner round the spots
+ *  that should stay lit (Mori, the pack) */
+export function paintDim(w: number, h: number, spots: { x: number; y: number; r: number }[], max = 0.56): PixelBuffer {
   const b = new PixelBuffer(w, h);
-  const seed = o.seed ?? 7;
-  const R0 = rng(seed * 977 + w * 13 + h);
-  switch (o.biome) {
-    case 'forest': groundForest(b, R0, seed); break;
-    case 'camp': groundCamp(b, R0, seed, o.fire ?? null); break;
-    case 'hills': groundHills(b, R0, seed); break;
-    case 'deck': groundDeck(b, R0); break;
-    case 'cave': groundCave(b, R0, seed); break;
-    default: groundBeach(b, R0, seed);
-  }
-  // contact shadows: dithered dark, densest under the middle
-  for (const s of o.shadows) for (let y = s.y - 2; y < s.y + s.h + 4; y++) for (let x = s.x - 3; x < s.x + s.w + 5; x++) {
-    const ex = Math.min(x - (s.x - 3), s.x + s.w + 4 - x) / 7, ey = Math.min(y - (s.y - 2), s.y + s.h + 3 - y) / 5;
-    const k = Math.min(1, Math.min(ex, ey));
-    if (k <= 0 || !b.inside(x, y)) continue;
-    const a = 0.55 * k;
-    if (a > bayer(x, y) * 0.8) b.set(x, y, mix(b.get(x, y), H('#080604'), 0.42));
-  }
-  grade(b, o.tod, o.biome === 'camp' ? o.fire ?? null : null);
-  // a dithered vignette: the edges of the view fall away
+  const c = H('#07060c', 236);
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const dx = (x / w - 0.5) * 2, dy = (y / h - 0.48) * 2;
-    const d = Math.sqrt(dx * dx * 0.7 + dy * dy);
-    const k = (d - 0.82) / 0.5;
-    if (k > 0 && k * 0.55 > bayer(x, y)) b.set(x, y, mix(b.get(x, y), H('#0a0604'), 0.35 + Math.min(0.3, k * 0.2)));
+    let k = max;
+    for (const s of spots) {
+      const d = Math.hypot(x - s.x, (y - s.y) * 1.1) / s.r;
+      if (d < 1) k = Math.min(k, max * (0.25 + 0.75 * d * d));
+    }
+    // quantised to the dither's own steps: bands, not a gradient
+    if (bayer(x, y) < Math.round(k * 8) / 8) b.set(x, y, c);
   }
   return b;
 }
 
-type Rng = ReturnType<typeof rng>;
-
-function fillBase(b: PixelBuffer, ramp: C[], fn: (x: number, y: number) => number) {
-  for (let y = 0; y < b.h; y++) for (let x = 0; x < b.w; x++) b.set(x, y, rp(ramp, fn(x, y), x, y));
-}
-function blob(b: PixelBuffer, cx: number, cy: number, rx: number, ry: number, ang: number, fn: (x: number, y: number, nx: number, ny: number) => C | -1) {
-  const c = Math.cos(ang), s = Math.sin(ang), m = Math.ceil(Math.max(rx, ry)) + 1;
-  for (let y = -m; y <= m; y++) for (let x = -m; x <= m; x++) {
-    const u = (x * c + y * s) / rx, v = (-x * s + y * c) / ry;
-    if (u * u + v * v > 1) continue;
-    const col = fn(cx + x, cy + y, u, v);
-    if (col !== -1) b.set(Math.round(cx + x), Math.round(cy + y), col);
+/** the floating pack's shadow cast down on the world: a dithered oval */
+export function paintFloatShadow(w: number, h: number): PixelBuffer {
+  const b = new PixelBuffer(w, h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const d = Math.hypot((x + 0.5 - w / 2) / (w / 2), (y + 0.5 - h / 2) / (h / 2));
+    if (d > 1) continue;
+    const k = d < 0.55 ? 0.75 : d < 0.8 ? 0.5 : 0.25;
+    if (bayer(x, y) < k) b.set(x, y, H('#050408', 220));
   }
-}
-/** a pebble: a lit dome with a dark rim and a drop shadow */
-function pebble(b: PixelBuffer, x: number, y: number, rx: number, ry: number, ramp: C[], ang = 0) {
-  blob(b, x + 1, y + 1, rx, ry, ang, (px, py) => mix(b.get(px, py), H('#0a0604'), 0.35));
-  blob(b, x, y, rx, ry, ang, (px, py, u, v) => {
-    const d = u * u + v * v;
-    return d > 0.72 ? ramp[1] : rp(ramp, 0.75 - u * 0.25 - v * 0.35 - d * 0.2, px, py);
-  });
-}
-
-/** grains: clumps of two or three pixels lighter or darker than the ground (not single-pixel static) */
-const grains = (x: number, y: number, seed: number, k = 1) => { const g = vnoise(x, y, 1.6, seed + 50); return g > 0.86 ? 0.12 * k : g < 0.12 ? -0.11 * k : 0; };
-/** a boot print pressed into soft ground: the sole and the heel, tread bars, the rim pushed up */
-function bootPrint(b: PixelBuffer, x: number, y: number, ang: number, dark: C, lite: C) {
-  const ca = Math.cos(ang), sa = Math.sin(ang);
-  for (let j = -12; j <= 12; j++) for (let i = -7; i <= 7; i++) {
-    const u = i * ca - j * sa, v = i * sa + j * ca; // v along the foot (toe at -v)
-    const sole = (u * u) / 16 + ((v + 3) * (v + 3)) / 49 <= 1 && v < 3;
-    const heel = (u * u) / 10 + ((v - 6) * (v - 6)) / 9 <= 1;
-    const X = Math.round(x + i), Y = Math.round(y + j);
-    if (!b.inside(X, Y)) continue;
-    if (sole || heel) b.set(X, Y, mix(b.get(X, Y), dark, Math.round(v + 20) % 3 === 0 ? 0.42 : 0.24));
-    else {
-      const rim = (u * u) / 22 + ((v + 2) * (v + 2)) / 72 <= 1 || (u * u) / 15 + ((v - 6) * (v - 6)) / 14 <= 1;
-      if (rim && j < 0) b.set(X, Y, mix(b.get(X, Y), lite, 0.3));
-    }
-  }
-}
-/** a tuft of grass seen from above: blades fanning out from a dark heart */
-function tuft(b: PixelBuffer, cx: number, cy: number, R: Rng, ramp: C[], n = 22, len = 14) {
-  blob(b, cx + 2, cy + 2, len * 0.45, len * 0.32, 0, (x, y) => mix(b.get(x, y), H('#0a0806'), 0.3));
-  for (let k = 0; k < n; k++) {
-    const a = R.r(0, 6.28), l = R.r(len * 0.4, len), bend = R.r(-0.35, 0.35);
-    for (let q = 0; q < l; q++) {
-      const aa = a + bend * (q / l);
-      const x = cx + Math.cos(aa) * q, y = cy + Math.sin(aa) * q * 0.72;
-      b.set(x, y, rp(ramp, 0.25 + (q / l) * 0.6 + (k % 4) * 0.04, Math.round(x), Math.round(y)));
-    }
-  }
-}
-const MARRAM = [H('#2a2a0e'), H('#4a4a18'), H('#6e6a26'), H('#948c3a'), H('#b8ac56'), H('#d6ca7a')];
-
-const SAND = [H('#7a5a32'), H('#94733f'), H('#ad8c50'), H('#c4a262'), H('#d6b676'), H('#e6c88c'), H('#f2dcaa')];
-function groundBeach(b: PixelBuffer, R: Rng, seed: number) {
-  fillBase(b, SAND, (x, y) => {
-    // wind ripples across the sand
-    const rip = Math.sin((x * 0.32 + y * 0.9 + fbm(x, y, 22, seed) * 9)) * 0.5 + 0.5;
-    return 0.52 + (fbm(x, y, 26, seed) - 0.5) * 0.34 + (rip > 0.86 ? 0.1 : rip < 0.12 ? -0.09 : 0) + grains(x, y, seed);
-  });
-  // damp darker patches
-  for (let y = 0; y < b.h; y++) for (let x = 0; x < b.w; x++) if (fbm(x, y, 40, seed + 4) > 0.68 && bayer(x, y) < 0.6) b.set(x, y, mix(b.get(x, y), H('#5a4a30'), 0.28));
-  // boot prints leading in from the bottom
-  for (let i = 0; i < 5; i++) bootPrint(b, b.w * 0.5 + (i % 2 ? 16 : -16) + R.r(-3, 3), b.h - 10 - i * 30, R.r(-0.12, 0.12), H('#5a4426'), H('#f6e2b4'));
-  // marram grass at the edges
-  for (let i = 0; i < 5; i++) tuft(b, i % 2 ? R.r(b.w * 0.86, b.w + 6) : R.r(-6, b.w * 0.14), R.r(0, b.h * 0.8), R, MARRAM, 26, R.r(12, 20));
-  // wrack: dried seaweed strands
-  for (let i = 0; i < 5; i++) {
-    let x = R.r(0, b.w), y = R.r(0, b.h), a = R.r(0, 6.28);
-    const len = R.i(14, 30);
-    for (let k = 0; k < len; k++) {
-      a += R.r(-0.4, 0.4); x += Math.cos(a); y += Math.sin(a) * 0.7;
-      b.set(x, y, k % 5 === 0 ? H('#5a4a18') : H('#2e2a10')); b.set(x + 1, y, H('#3e3a14'));
-    }
-  }
-  // shells: cockles, a spiral, a paua glint
-  const SHELL = [H('#6a5040'), H('#b89480'), H('#e2c4b0'), H('#f8ecdc')], PINK = [H('#7a4040'), H('#c47a70'), H('#eab0a0'), H('#fce0d4')];
-  for (let i = 0; i < 26; i++) {
-    const x = R.r(4, b.w - 4), y = R.r(4, b.h - 4), kind = R.i(0, 3);
-    if (kind === 0) {
-      // a cockle: a ribbed fan
-      const r = R.r(2.5, 4), ramp = R.f() < 0.4 ? PINK : SHELL, ang = R.r(0, 6.28);
-      blob(b, x + 1, y + 1, r, r * 0.8, ang, (px, py) => mix(b.get(px, py), H('#3a2a14'), 0.4));
-      blob(b, x, y, r, r * 0.8, ang, (px, py, u, v) => (Math.abs(Math.sin(Math.atan2(v, u) * 5)) < 0.25 ? ramp[1] : rp(ramp, 0.85 - u * 0.2 - v * 0.3, px, py)));
-    } else if (kind === 1) {
-      // a spiral shell
-      for (let t = 0; t < 9; t += 0.3) { const rr = t * 0.42; b.set(x + Math.cos(t) * rr, y + Math.sin(t) * rr * 0.8, t < 3 ? SHELL[1] : SHELL[2 + (Math.floor(t) % 2)]); }
-      b.set(x, y, SHELL[3]);
-    } else if (kind === 2) {
-      // a broken shell shard
-      b.set(x, y, SHELL[3]); b.set(x + 1, y, SHELL[2]); b.set(x, y + 1, SHELL[1]); b.set(x + 2, y + 1, SHELL[2]);
-    } else {
-      // a paua chip catching the light
-      const c = [H('#2a6a7a'), H('#4aa0a0'), H('#8ad0c0'), H('#5a7ab0')];
-      b.set(x, y, c[0]); b.set(x + 1, y, c[1]); b.set(x, y + 1, c[3]); b.set(x + 1, y + 1, c[2]); b.set(x + 2, y, c[1]);
-    }
-  }
-  // pebbles
-  const PEB = [H('#2a2622'), H('#4a443c'), H('#6a6258'), H('#8a8276'), H('#aaa294')];
-  for (let i = 0; i < 18; i++) pebble(b, R.r(0, b.w), R.r(0, b.h), R.r(1.5, 3.5), R.r(1.2, 2.6), PEB, R.r(0, 3));
-  // a bleached twig of driftwood
-  const dx = R.r(b.w * 0.08, b.w * 0.25), dy = R.r(b.h * 0.15, b.h * 0.4);
-  b.thickLine(dx, dy, dx + 34, dy + 9, 1.4, H('#9a8e78'));
-  b.line(dx, dy - 1, dx + 34, dy + 8, H('#d8ccb4'));
-  b.line(dx + 18, dy + 5, dx + 24, dy - 3, H('#b8ac94'));
-  // tiny crab tracks
-  for (let k = 0; k < 14; k++) { const x = b.w * 0.82 + k * 2.4, y = b.h * 0.3 + Math.sin(k * 0.8) * 6; b.set(x, y - 2, H('#7a5a32')); b.set(x, y + 2, H('#7a5a32')); }
-}
-
-const SOIL = [H('#140c06'), H('#1e140a'), H('#2a1c10'), H('#382616'), H('#46301c'), H('#563c24')];
-const LEAF = [[H('#3a1a08'), H('#6a3010'), H('#9a4a18'), H('#c46a28')], [H('#3a2a0a'), H('#6a5016'), H('#9a7a26'), H('#c4a040')], [H('#1a2a0e'), H('#2e4a16'), H('#4a6a22'), H('#6a8a32')], [H('#2a1a10'), H('#4a3020'), H('#6a4a30'), H('#8a6a48')]];
-const MOSS = [H('#16260a'), H('#24400e'), H('#365e16'), H('#4e7e20'), H('#6e9e30'), H('#94be4a')];
-const BARK = [H('#140a06'), H('#26160c'), H('#3a2414'), H('#52341e'), H('#6a4628'), H('#845a36')];
-function groundForest(b: PixelBuffer, R: Rng, seed: number) {
-  fillBase(b, SOIL, (x, y) => 0.45 + (fbm(x, y, 18, seed) - 0.5) * 0.5 + grains(x, y, seed, 1.2));
-  // roots: thick, winding, crossing the view
-  for (let i = 0; i < 4; i++) {
-    let x = R.f() < 0.5 ? -4 : b.w + 4, y = R.r(0, b.h), a = x < 0 ? R.r(-0.4, 0.4) : Math.PI + R.r(-0.4, 0.4);
-    let r = R.r(3.5, 6.5);
-    const pts: [number, number, number][] = [];
-    for (let k = 0; k < 140 && r > 1; k++) {
-      pts.push([x, y, r]);
-      a += Math.sin(k * 0.13 + i) * 0.06 + R.r(-0.05, 0.05); x += Math.cos(a) * 2; y += Math.sin(a) * 2; r -= 0.025;
-      if (x < -10 || x > b.w + 10 || y < -10 || y > b.h + 10) break;
-    }
-    // shadow, then the root lit from the top left with bark ridges
-    for (const [px, py, pr] of pts) for (let yy = -pr - 1; yy <= pr + 2; yy++) for (let xx = -pr - 1; xx <= pr + 2; xx++) if (xx * xx + yy * yy <= (pr + 1.5) ** 2) { const X = px + xx + 2, Y = py + yy + 2; if (b.inside(X, Y)) b.set(X, Y, mix(b.get(X, Y), H('#050302'), 0.45)); }
-    for (const [px, py, pr] of pts) for (let yy = -pr; yy <= pr; yy++) for (let xx = -pr; xx <= pr; xx++) {
-      const d = (xx * xx + yy * yy) / (pr * pr);
-      if (d > 1) continue;
-      const X = Math.round(px + xx), Y = Math.round(py + yy);
-      const t = 0.62 - (xx + yy) / (pr * 2) * 0.4 - d * 0.25 + (Math.sin((X + Y) * 0.9) > 0.8 ? -0.2 : 0);
-      b.set(X, Y, rp(BARK, t, X, Y));
-    }
-  }
-  // moss cushions
-  for (let i = 0; i < 9; i++) {
-    const cx = R.r(0, b.w), cy = R.r(0, b.h), rr = R.r(7, 16);
-    for (let y = -rr; y <= rr; y++) for (let x = -rr; x <= rr; x++) {
-      const d = Math.sqrt(x * x + y * y) / rr + (vnoise(cx + x, cy + y, 3, seed + 9) - 0.5) * 0.6;
-      if (d > 1) continue;
-      const X = Math.round(cx + x), Y = Math.round(cy + y);
-      b.set(X, Y, rp(MOSS, 0.6 - (x + y) / (rr * 2) * 0.3 - d * 0.25 + (noise(X, Y, 5) > 0.8 ? 0.2 : 0) + (noise(X, Y, 6) > 0.88 ? -0.25 : 0), X, Y));
-    }
-  }
-  // leaf litter: hundreds of small leaves, some curled, some skeleton-dark
-  for (let i = 0; i < Math.floor(b.w * b.h / 130); i++) {
-    const x = R.r(0, b.w), y = R.r(0, b.h), ramp = LEAF[R.i(0, 3)], a = R.r(0, 6.28), l = R.r(2.2, 4.6), wd = l * R.r(0.38, 0.55);
-    blob(b, x + 1, y + 1, l, wd, a, (px, py) => mix(b.get(px, py), H('#050302'), 0.3));
-    blob(b, x, y, l, wd, a, (px, py, u, v) => (Math.abs(v) < 0.18 ? ramp[0] : rp(ramp, 0.7 - v * 0.3 - u * 0.15, px, py)));
-  }
-  // twigs
-  for (let i = 0; i < 10; i++) { const x = R.r(0, b.w), y = R.r(0, b.h), a = R.r(0, 6.28), l = R.r(8, 20); b.line(x, y, x + Math.cos(a) * l, y + Math.sin(a) * l, BARK[3]); b.line(x + 1, y + 1, x + 1 + Math.cos(a) * l, y + 1 + Math.sin(a) * l, BARK[0]); }
-  // a little clump of fern fronds at the edges and a bracket fungus on a root
-  for (const [fx, fy] of [[R.r(4, 30), R.r(10, b.h * 0.5)], [b.w - R.r(4, 30), R.r(b.h * 0.2, b.h * 0.6)]] as [number, number][]) {
-    for (let f = 0; f < 4; f++) {
-      const a = -1.2 + f * 0.8 + R.r(-0.2, 0.2), len = R.r(18, 30);
-      for (let k = 0; k < len; k++) {
-        const x = fx + Math.cos(a) * k + Math.sin(k * 0.2) * 1.5, y = fy + Math.sin(a) * k * 0.8;
-        b.set(x, y, MOSS[2]);
-        const leafL = Math.max(1, Math.round((len - k) * 0.22));
-        if (k % 2 === 0) for (let q = 1; q <= leafL; q++) { b.set(x + Math.cos(a + 1.3) * q, y + Math.sin(a + 1.3) * q, rp(MOSS, 0.75 - q * 0.06, x, y)); b.set(x + Math.cos(a - 1.3) * q, y + Math.sin(a - 1.3) * q, rp(MOSS, 0.55 - q * 0.06, x, y)); }
-      }
-    }
-  }
-}
-
-const EARTH = [H('#2a1c10'), H('#3e2a18'), H('#564026'), H('#6e5434'), H('#887048'), H('#a28c60'), H('#bca878')];
-function groundCamp(b: PixelBuffer, R: Rng, seed: number, fire: [number, number] | null) {
-  // trodden sand and earth, darker where the feet go
-  fillBase(b, EARTH, (x, y) => 0.56 + (fbm(x, y, 24, seed) - 0.5) * 0.4 + grains(x, y, seed) + (Math.sin(x * 0.4 + y * 0.8 + fbm(x, y, 16, seed) * 7) > 0.92 ? 0.06 : 0));
-  // the paths worn between the tents and the fire: packed darker
-  for (let y = 0; y < b.h; y++) for (let x = 0; x < b.w; x++) if (Math.abs(fbm(x, y, 60, seed + 8) - 0.5) < 0.05 && bayer(x, y) < 0.55) b.set(x, y, mix(b.get(x, y), H('#2a1c10'), 0.18));
-  // footprints everywhere (camp is busy)
-  for (let i = 0; i < 10; i++) bootPrint(b, R.r(0, b.w), R.r(0, b.h), R.r(-0.7, 0.7), H('#2e2012'), H('#c8b488'));
-  // dune grass where the camp meets the beach
-  for (let i = 0; i < 4; i++) tuft(b, R.r(b.w * 0.55, b.w + 6), i < 2 ? R.r(-6, b.h * 0.18) : R.r(b.h * 0.2, b.h * 0.6), R, MARRAM, 24, R.r(12, 18));
-  // the fire ring at the edge: stones round the ash, a charred log end, embers
-  if (fire) {
-    const [fx, fy] = fire;
-    const ASH = [H('#1a1612'), H('#2e2a26'), H('#4a4642'), H('#6a6660'), H('#8a8680')];
-    for (let y = -40; y <= 40; y++) for (let x = -40; x <= 40; x++) {
-      const d = Math.sqrt(x * x + y * y * 1.3) / 34 + (vnoise(fx + x, fy + y, 4, 3) - 0.5) * 0.3;
-      if (d > 1) continue;
-      const X = Math.round(fx + x), Y = Math.round(fy + y);
-      if (!b.inside(X, Y)) continue;
-      b.set(X, Y, rp(ASH, 0.5 - d * 0.3 + (noise(X, Y, 3) > 0.9 ? 0.2 : 0), X, Y));
-      if (d < 0.55 && noise(X, Y, 4) > 0.94) b.set(X, Y, noise(X, Y, 5) > 0.5 ? H('#ff9a3a') : H('#e8481c'));
-    }
-    const STN = [H('#1e1c1a'), H('#3a3632'), H('#56524a'), H('#767066'), H('#968e82')];
-    for (let k = 0; k < 11; k++) { const a = k / 11 * 6.28; pebble(b, fx + Math.cos(a) * 40, fy + Math.sin(a) * 33, R.r(5, 8), R.r(4, 6), STN, a); }
-    // a log, its burnt end in the ring
-    const lx = fx + 10, ly = fy - 6;
-    for (let k = 0; k < 70; k++) for (let w = -5; w <= 5; w++) {
-      const X = Math.round(lx + k * 0.95), Y = Math.round(ly + k * 0.32 + w);
-      if (!b.inside(X, Y)) continue;
-      const burnt = k < 18;
-      b.set(X, Y, burnt ? (noise(X, Y, 8) > 0.86 ? H('#ff7a2a') : rp([H('#0a0806'), H('#1a1410'), H('#2a2420')], 0.6 - w * 0.06, X, Y)) : rp(BARK, 0.62 - w * 0.07 + (Math.sin(k * 1.1) > 0.85 ? -0.2 : 0), X, Y));
-    }
-  }
-  // a dropped tent peg and a coil of guy rope, a tin cup
-  const gx = R.r(b.w * 0.7, b.w * 0.92), gy = R.r(b.h * 0.1, b.h * 0.3);
-  b.thickLine(gx, gy, gx + 12, gy + 4, 0.8, IRON[3]); b.line(gx, gy - 1, gx + 12, gy + 3, IRON[4]); b.rect(gx - 2, gy - 2, 3, 4, IRON[2]);
-  for (let t = 0; t < 26; t += 0.25) { const rr = 3 + t * 0.22; b.set(gx + 8 + Math.cos(t) * rr, gy + 18 + Math.sin(t) * rr * 0.75, (Math.floor(t * 4) % 3) ? H('#c8a868') : H('#8a6a38')); }
-  // shells: camp is on the beach
-  for (let i = 0; i < 10; i++) { const x = R.r(0, b.w), y = R.r(0, b.h); b.set(x, y, H('#f0e0cc')); b.set(x + 1, y, H('#c8a890')); b.set(x, y + 1, H('#a88870')); }
-  for (let i = 0; i < 12; i++) pebble(b, R.r(0, b.w), R.r(0, b.h), R.r(1.5, 3), R.r(1.2, 2.2), [H('#2a2622'), H('#4a443c'), H('#6a6258'), H('#8a8276'), H('#aaa294')]);
-}
-
-const ROCK = [H('#1c1a18'), H('#2e2b28'), H('#43403b'), H('#5a5650'), H('#726d66'), H('#8c867d'), H('#a8a296')];
-const GRAV = [H('#2a2420'), H('#463e36'), H('#625850'), H('#7e746a'), H('#9a9084')];
-const TUSS = [H('#3a2e0e'), H('#5e4c16'), H('#86702a'), H('#ac9440'), H('#ccb45e'), H('#e6d084')];
-function groundHills(b: PixelBuffer, R: Rng, seed: number) {
-  fillBase(b, GRAV, (x, y) => 0.5 + (fbm(x, y, 14, seed) - 0.5) * 0.4 + grains(x, y, seed, 1.8) + grains(x + 31, y + 17, seed + 3, -1.2));
-  // flat rock slabs with cracks and lichen
-  for (let i = 0; i < 5; i++) {
-    const cx = R.r(0, b.w), cy = R.r(0, b.h), rx = R.r(22, 46), ry = R.r(14, 26), a = R.r(-0.6, 0.6);
-    blob(b, cx + 3, cy + 3, rx, ry, a, (x, y) => mix(b.get(x, y), H('#0a0806'), 0.4));
-    blob(b, cx, cy, rx, ry, a, (x, y, u, v) => {
-      const e = u * u + v * v + (vnoise(x, y, 5, seed + i) - 0.5) * 0.35;
-      if (e > 1) return -1;
-      let t = 0.58 - u * 0.15 - v * 0.2 + (e > 0.82 ? -0.2 : 0) + (fbm(x, y, 9, seed + 30 + i) - 0.5) * 0.3;
-      if (Math.abs(Math.sin(x * 0.11 + y * 0.07 + i) * 30 - (y - cy)) < 0.6 && e < 0.8) t = 0.05;
-      return rp(ROCK, t, x, y);
-    });
-    // lichen rosettes
-    for (let k = 0; k < 6; k++) { const lx = cx + R.r(-rx * 0.6, rx * 0.6), ly = cy + R.r(-ry * 0.5, ry * 0.5), c = R.f() < 0.5 ? H('#d88a2a') : H('#a8b878'); blob(b, lx, ly, R.r(1.5, 3), R.r(1.5, 2.5), 0, (x, y) => (noise(Math.round(x), Math.round(y), 9) > 0.35 ? c : -1)); }
-  }
-  // tussock: golden tufts of long blades fanning out
-  for (let i = 0; i < 9; i++) {
-    const cx = R.r(0, b.w), cy = R.r(0, b.h);
-    blob(b, cx + 2, cy + 3, 9, 6, 0, (x, y) => mix(b.get(x, y), H('#0a0806'), 0.35));
-    for (let k = 0; k < 34; k++) {
-      const a = R.r(0, 6.28), len = R.r(6, 16), bend = R.r(-0.3, 0.3);
-      for (let q = 0; q < len; q++) {
-        const aa = a + bend * q / len;
-        const x = cx + Math.cos(aa) * q, y = cy + Math.sin(aa) * q * 0.75;
-        b.set(x, y, rp(TUSS, 0.35 + q / len * 0.55 + (k % 3) * 0.05, Math.round(x), Math.round(y)));
-      }
-    }
-  }
-  for (let i = 0; i < 26; i++) pebble(b, R.r(0, b.w), R.r(0, b.h), R.r(1.5, 4), R.r(1.2, 3), ROCK.slice(1), R.r(0, 3));
-}
-
-function groundDeck(b: PixelBuffer, R: Rng) {
-  const PL = [H('#2a1a0e'), H('#3e2814'), H('#58391c'), H('#704a26'), H('#8a5e32'), H('#a87a46')];
-  for (let y = 0; y < b.h; y++) for (let x = 0; x < b.w; x++) {
-    const plank = Math.floor(x / 22), px = x % 22;
-    let t = 0.5 + (noise(plank, 0, 3) - 0.5) * 0.24 + Math.sin(y * 0.18 + plank * 3 + Math.sin(y * 0.03 + plank) * 4) * 0.06;
-    if (px === 0) t = 0.02; else if (px === 1) t = 0.62; else if (px === 21) t -= 0.12;
-    if ((y + plank * 37) % 120 === 0) t = 0.05;
-    b.set(x, y, rp(PL, t, x, y));
-  }
-  for (let y = 10; y < b.h; y += 60) for (let x = 6; x < b.w; x += 22) { b.set(x, y + (x * 7) % 30, IRON[3]); b.set(x + 12, y + (x * 7) % 30, IRON[3]); }
-  void R;
-}
-
-function groundCave(b: PixelBuffer, R: Rng, seed: number) {
-  fillBase(b, ROCK, (x, y) => 0.3 + (fbm(x, y, 16, seed) - 0.5) * 0.5 + grains(x, y, seed));
-  // puddles reflecting the cave's dim light
-  for (let i = 0; i < 4; i++) {
-    const cx = R.r(0, b.w), cy = R.r(0, b.h);
-    blob(b, cx, cy, R.r(12, 26), R.r(6, 12), R.r(-0.3, 0.3), (x, y, u, v) => (u * u + v * v > 0.8 ? H('#1a2224') : rp([H('#0e1618'), H('#1a2a30'), H('#2a4048'), H('#4a6a74')], 0.5 - v * 0.4 + (Math.sin(x * 0.5) > 0.9 ? 0.3 : 0), x, y)));
-  }
-  for (let i = 0; i < 30; i++) pebble(b, R.r(0, b.w), R.r(0, b.h), R.r(1.5, 4), R.r(1.2, 3), ROCK.slice(0, 6), R.r(0, 3));
-}
-
-/** the time of day on the ground (night: dark and cool, a fire's warm pool), quantised and dithered */
-function grade(b: PixelBuffer, tod: Tod, fire: [number, number] | null) {
-  const night = tod === 'night', dusk = tod === 'dusk', dawn = tod === 'dawn';
-  for (let y = 0; y < b.h; y++) for (let x = 0; x < b.w; x++) {
-    let c = b.get(x, y);
-    if (night) c = mix(c, H('#0a1020'), 0.62);
-    else if (dusk) c = mix(c, H('#5a2a10'), 0.18);
-    else if (dawn) c = mix(c, H('#4a3a5a'), 0.12);
-    if (fire) {
-      const d = Math.hypot(x - fire[0], (y - fire[1]) * 1.15);
-      // warm light in bands (quantised), the band edges dithered
-      const k = Math.max(0, 1 - d / (night ? 230 : 170));
-      const band = Math.floor(k * 5 + bayer(x, y) * 0.9) / 5;
-      if (band > 0) {
-        const warm = night ? 0.55 : 0.22;
-        c = rgba(Math.min(255, R(c) + band * 150 * warm), Math.min(255, G(c) + band * 70 * warm), Math.min(255, B(c) + band * 18 * warm), A(c));
-      }
-    }
-    b.set(x, y, c);
-  }
+  return b;
 }
 
 // ---------------------------------------------------------------- small helpers for the scene

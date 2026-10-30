@@ -200,6 +200,8 @@ class Inspection {
   private resolve!: () => void;
   private poseSet = false;
   private camWasUp = false;
+  /** the close shot on him */
+  private shot: { x: number; y: number; zoom: number; focus: number; dof: number; sway: number } | null = null;
   /** the props are hidden (the pack is off his back, the note is out) */
   private hide: Partial<Record<Spot, boolean>> = {};
   private hudWas: string[] = [];
@@ -249,7 +251,8 @@ class Inspection {
     audio.play('whoosh', { vol: 0.18, pitch: 0.7 });
     // the camera eases in close, the lens on him
     const zoom = this.zoom();
-    await cineTo(this.st, { x: p.x, y: p.y - (p.height || 62) * 0.52, zoom, secs: reduced() ? 0.05 : 0.9, focus: p.body.p ?? 1, dof: 1.35, sway: 0.1 });
+    this.shot = { x: p.x, y: p.y - (p.height || 62) * 0.52, zoom, focus: p.body.p ?? 1, dof: 1.35, sway: 0.1 };
+    await cineTo(this.st, { ...this.shot, secs: reduced() ? 0.05 : 0.9 });
     if (this.done) return done;
     // the overlay: hover, picks, a click away
     game.ui.modalLayer.appendChild(this.layer);
@@ -479,14 +482,15 @@ class Inspection {
 
   private async backpack() {
     this.hideLabels();
+    // the pack lifts off his back and hangs open in the air beside him (the camera makes room)
     this.hide.backpack = true;
+    audio.play('rustle', { vol: 0.3, pitch: 1.3 });
     const { openBackpack } = await import('../backpack');
-    // (the pack's own world part swings it off his back and eases the camera in a little closer)
-    if (this.poseSet) this.p.poseOverride = null;
-    await openBackpack({});
+    await openBackpack({ fromInspect: true });
     if (this.done) return;
-    if (this.poseSet) this.p.poseOverride = 'inspectFace';
+    // back on his back, the camera back on him
     this.hide.backpack = false;
+    if (this.shot) await cineTo(this.st, { ...this.shot, secs: reduced() ? 0.05 : 0.45 });
     this.showLabels();
   }
 

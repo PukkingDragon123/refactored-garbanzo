@@ -1,24 +1,27 @@
-// V12 Backpack: the way in and out. Mori swings his pack off in the world (the cast's 'backpackOff'
-// clip; the camera pushes in), the view drops to first person (the frozen world slides up and away
-// as the ground comes up: src/ui/v12/pack/scene.ts), and closing runs it all backwards: the flap shuts,
-// the clips go in, the pack swings back on, and the camera eases back. Everything that opened the
-// old pack (openBackpack, openBackpack11) comes here.
+// V12 Backpack: the way in and out. The pack lifts off Mori's back and hangs open in the air beside
+// him over the world, dimmed by a dither (src/ui/v12/pack/scene.ts). When he is being inspected
+// (src/ui/v12/inspect.ts) the close camera slides over to make room for it; opened any other way
+// (the camp chest, the trail sign, a heap he can't fit) the world just slows down while it is open.
+// Everything that opened the old pack (openBackpack, openBackpack11) comes here.
 
 import { game } from '../../../game/game';
 import { migratePack } from '../../../game/v11/backpack';
-import { packOff } from '../../v11/takeoff';
+import { cineTo, cineSlowmo, cineState } from '../../../game/v11/cine';
+import type { Stage } from '../../../world/stage';
+import { reduced } from '../../laptop-kit';
 import { PackScene } from './scene';
 import type { PackMode, PrepHooks, PackResult } from './scene';
-import type { Biome, Tod } from './art';
 
 export type { PackMode, PrepHooks, PackResult };
 export interface PackOpts12 {
   mode?: PackMode;
   /** old callers' eat hook (ignored: eating goes through v10/forage10 eatFood and the hunger contract) */
   onEat?: (id: string) => void | Promise<void>;
-  /** play the take-off in the world (default yes) */
+  /** (kept for old callers) */
   anim?: boolean;
   prep?: PrepHooks;
+  /** opened from the inspection of Mori: the close camera makes room beside him */
+  fromInspect?: boolean;
 }
 
 let current: Promise<PackResult> | null = null;
@@ -26,59 +29,32 @@ let open = false;
 export const packOpen12 = () => open;
 
 interface SceneLike {
-  player?: { x: number; ground?: string };
-  tod?: string;
-  site?: { id?: string };
-  interact?: { x: number; label: string }[];
-  constructor: { name: string };
+  player?: { x: number; y: number; facing: number; height: number; vx: number; body?: { p?: number } };
+  st?: Stage;
+  cutscene?: boolean;
 }
 
-/** which ground Mori is kneeling on */
-async function whereAmI(): Promise<{ biome: Biome; tod: Tod; fireSide: -1 | 1 | 0 }> {
-  const sc = game.scene as unknown as SceneLike | null;
-  const p = sc?.player;
-  const todRaw = sc?.tod ?? game.save.campTime ?? 'day';
-  const tod: Tod = todRaw === 'night' || todRaw === 'dusk' || todRaw === 'dawn' ? todRaw : 'day';
-  let biome: Biome = p?.ground === 'wood' ? 'deck' : p?.ground === 'leaves' || p?.ground === 'grass' ? 'forest' : 'beach';
-  let loc: string | null = null;
-  try {
-    const [{ locOf }, { isIslandScene }, { islandLocAt }, { lookLocOf }] = await Promise.all([import('../../../game/v10/field10'), import('../../../game/v10/expedition'), import('../../../game/v10/regions'), import('../../../game/v11/regions-lookfx')]);
-    if (sc && p && isIslandScene(sc)) loc = islandLocAt(p.x);
-    else if (sc && (sc as { site?: unknown }).site) loc = lookLocOf(sc as never, locOf(sc as never));
-  } catch { /* no location: the ground underfoot decides */ }
-  if (loc) {
-    if (loc === 'camp') biome = 'camp';
-    else if (/cave|grotto|deep/.test(loc)) biome = 'cave';
-    else if (/hills|geovalley|fossils/.test(loc)) biome = 'hills';
-    else if (/wreck|seals|coast|motuahi|grove|glassreef/.test(loc)) biome = 'beach';
-    else if (/forest|fern|canopy|falls|stream|track|mangrove|glow|ruins|village|unknown/.test(loc)) biome = 'forest';
-  }
-  if (p?.ground === 'wood' && biome !== 'camp') biome = 'deck';
-  // at camp: which side the fire is on
-  let fireSide: -1 | 1 | 0 = 0;
-  if (biome === 'camp' && p) {
-    const f = sc?.interact?.find(i => { try { return /fire|cook|breakfast|dinner/i.test(i.label); } catch { return false; } });
-    fireSide = f ? (f.x < p.x ? -1 : 1) : -1;
-  }
-  return { biome, tod, fireSide };
+/** css px of a world point on the gameplay plane */
+function project(x: number, y: number): [number, number] | null {
+  const r = game.r;
+  if (!r || !game.scene) return null;
+  return game.ui.artToCss(r.projectX(x, 1), r.projectY(y, 1), r.VW, r.VH) as [number, number];
 }
 
 // ---------------------------------------------------------------- debug handle (window.zl.bp12)
 const BP12_ZL = {
-  /** how long the last opening took (ms) and where it was */
+  /** how long the last opening took (ms) */
   last: null as Record<string, unknown> | null,
   open: (mode: PackMode = 'pack') => openPack12({ mode }),
-  where: () => whereAmI(),
-  /** ms to paint each piece of the scene (biome: beach / forest / camp / hills / deck / cave) */
-  timeArt: async (biome: Biome = 'camp', w = 427, h = 240) => {
+  /** ms to paint each piece */
+  timeArt: async () => {
     const A = await import('./art');
     const L = A.packLayout();
     const t: Record<string, number> = {};
     const time = (k: string, f: () => unknown) => { const t0 = performance.now(); f(); t[k] = Math.round(performance.now() - t0); };
-    time('ground', () => A.paintGround(w, h, { biome, tod: 'day', shadows: [{ x: 100, y: 60, w: 140, h: 90 }], fire: biome === 'camp' ? [-20, 100] : null }));
     time('pack', () => A.paintPack(L));
     time('lids', () => { A.paintLidOpen(L); A.paintLidShut(L); });
-    time('knees', () => { A.paintKnee(false); A.paintHand(false); });
+    time('dim', () => A.paintDim(640, 360, [{ x: 300, y: 180, r: 120 }]));
     return t;
   },
 };
@@ -88,36 +64,55 @@ const BP12_ZL = {
   else setTimeout(hook, 500);
 })();
 
-/** Open the Backpack (the world part, then the scene). Resolves when it's shut; 'go' when Mori set off
- *  from the trail marker (mode 'prep'). */
+/** Open the Backpack. Resolves when it's shut; 'go' when Mori set off from the trail marker (mode 'prep'). */
 export function openPack12(o: PackOpts12 = {}): Promise<PackResult> {
   if (current) return current;
   current = (async () => {
     migratePack();
     game.ui.modalOpen++;
     open = true;
-    let putOn: (() => Promise<void>) | null = null;
+    const sc = game.scene as unknown as SceneLike | null;
+    const p = sc?.player;
+    const slowed = !o.fromInspect && !!p && !sc?.cutscene && game.slowmo > 0.5;
+    // the HUD steps aside (the inspection has already put it away)
+    const hud = [game.ui.sceneLayer, game.ui.prompts, game.ui.hud];
+    const was = hud.map(h => h.style.opacity);
     try {
       const t0 = performance.now();
-      const here = await whereAmI();
-      const t1 = performance.now();
-      const off = await packOff({ anim: o.anim });
-      putOn = off.putOn;
-      const t2 = performance.now();
-      const sc = new PackScene({ mode: o.mode, prep: o.prep, backdrop: off.backdrop, ...here });
-      const p = sc.run();
-      BP12_ZL.last = { where: Math.round(t1 - t0), off: Math.round(t2 - t1), build: Math.round(performance.now() - t2), ...here };
-      return await p;
+      if (p) p.vx = 0;
+      if (slowed) {
+        cineSlowmo(0.15, 0.3);
+        for (const h of hud) { h.style.transition = 'opacity 0.25s'; h.style.opacity = '0'; }
+      }
+      // inspecting: the close camera slides over so Mori stands to one side and the pack has room
+      if (o.fromInspect && p && sc?.st && cineState.shot) {
+        const c = sc.st.cam, r = game.r;
+        const cssPerWorld = c.zoom * (window.innerHeight / r.VH);
+        const portrait = window.innerHeight > window.innerWidth * 1.1;
+        if (!portrait) {
+          const want = window.innerWidth * (p.facing >= 0 ? 0.3 : 0.7);
+          const now = project(p.x, p.y)?.[0] ?? window.innerWidth / 2;
+          const dx = (now - want) / cssPerWorld;
+          if (Math.abs(dx) > 4) await cineTo(sc.st, { x: c.x + dx, y: c.y, zoom: c.zoom, secs: reduced() ? 0.05 : 0.45, focus: p.body?.p ?? 1, dof: 1.35, sway: 0.08 });
+        }
+      }
+      const scene = new PackScene({ mode: o.mode, prep: o.prep, project, mori: p ? { x: p.x, y: p.y, facing: p.facing || 1, height: p.height || 62 } : null });
+      const run = scene.run();
+      BP12_ZL.last = { build: Math.round(performance.now() - t0), mode: o.mode ?? 'pack', fromInspect: !!o.fromInspect };
+      return await run;
     } catch (e) {
       console.error('[backpack]', e);
       return 'closed' as PackResult;
     } finally {
       open = false;
-      try { await putOn?.(); } catch (e) { console.error(e); }
+      if (slowed) {
+        cineSlowmo(1, 0.3);
+        hud.forEach((h, i) => { h.style.opacity = was[i] ?? ''; });
+      }
       game.ui.modalOpen = Math.max(0, game.ui.modalOpen - 1);
       game.persist();
-      const hud = (game.scene as unknown as { hud?: { refresh(f?: boolean): void } | null })?.hud;
-      hud?.refresh(true);
+      const hd = (game.scene as unknown as { hud?: { refresh(f?: boolean): void } | null })?.hud;
+      hd?.refresh(true);
     }
   })().finally(() => { current = null; });
   return current;

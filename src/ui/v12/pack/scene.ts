@@ -1,23 +1,23 @@
-// V12 Backpack scene: first person, looking down at Mori's open pack lying on the ground where he
-// kneels (src/ui/v12/pack/art.ts paints it all). No panels: the pack, the ground, his knees and hands,
-// and the things themselves.
+// V12 Backpack: Mori's pack lifts off his back and hangs open in the air beside him, over the world
+// (src/ui/v12/pack/art.ts paints it). The world stays there behind it, dimmed by a dither (never
+// blurred). No panels: the pack itself and the things in it.
 //
 //  - the block space: fifteen compartments sewn into the lining (5 x 3). Every item takes its
 //    footprint (src/game/v11/footprints.ts) and is drawn with its own artwork. Drag it to move it;
 //    turn it with R, a right click, the wheel, a second finger (twist), or the brass swivel hanging
 //    off the front of the pack. Drop a stack on the same thing to top it up
-//  - the ground round the pack is real ground: drag something out of the pack and it lies there in
-//    the sand / leaf litter / gravel; anything lying by Mori in the world lies here too, ready to be
-//    picked up. What is still on the ground when the pack is shut stays behind in the world
-//  - tools never take a compartment: they hang in the webbing loops on the side panels
-//  - pick something and its name floats over it in the bitmap hand, with a line about it and the
-//    action words (EAT, TURN, DROP, and whatever other modules registered: COOK, THROW). Words only:
-//    no cards, no boxes
-//  - the physical buttons: the swivel (turn), the lid (click it to shut the pack), the haul loop
-//    (shake it all down and repack), and at camp the trail marker plank (set off)
-//  - at camp the stash chest stands open beside the pack (modes 'stash' and 'prep'); packing up for
+//  - drag something out of the pack and let go: it drops to the ground at Mori's feet, in the world
+//    (src/game/v11/ground.ts). Whatever lies there shows by his feet, ready to be dragged back in
+//  - tools never take a compartment: they hang in the webbing loops inside the flap
+//  - pick something and its name floats beside the pack in the bitmap hand, with a line about it and
+//    the action words (EAT, TURN, DROP, and whatever other modules registered: COOK, THROW), a dotted
+//    line to the item. Words only: no cards, no boxes
+//  - the physical buttons: the swivel (turn), the flap (click it to shut the pack), the haul loop
+//    (shake it all down and repack), and at camp the trail marker plank (set off). A click outside
+//    the pack (or Esc) shuts it too
+//  - at camp the stash chest floats open beside the pack (modes 'stash' and 'prep'); packing up for
 //    the day (prep) puts Joshu's lunch on the chest lid and the crew's last word in the air
-// The world part (Mori swinging the pack off and back on) is src/ui/v12/pack/index.ts.
+// The way in and out (the camera making room, the hunger contract) is src/ui/v12/pack/index.ts.
 
 import { game } from '../../../game/game';
 import { ITEMS } from '../../../game/items';
@@ -42,7 +42,7 @@ import { pxWord, wordOut, wordAnim } from '../pxwords';
 import type { Word } from '../pxwords';
 import { useOf } from './uses';
 import * as ART from './art';
-import type { PackLayout, ChestLayout, Rect, Biome, Tod } from './art';
+import type { PackLayout, ChestLayout, Rect } from './art';
 
 const CELL = ART.CELL;
 
@@ -58,12 +58,10 @@ export interface PrepHooks {
 export interface SceneOpts {
   mode?: PackMode;
   prep?: PrepHooks;
-  biome: Biome;
-  tod: Tod;
-  /** which side the camp fire is on (-1 left, 1 right), at camp */
-  fireSide?: -1 | 1 | 0;
-  /** the frozen world, in big dim pixels (null: a dark veil) */
-  backdrop: HTMLCanvasElement | null;
+  /** css px of the world point (null: no world); the pack lifts off his back, hangs beside him */
+  project: (x: number, y: number) => [number, number] | null;
+  /** Mori in the world: where he stands and which way he faces */
+  mori: { x: number; y: number; facing: number; height: number } | null;
 }
 export type PackResult = 'closed' | 'go';
 
@@ -74,9 +72,11 @@ type Target = { kind: 'grid'; cont: 'pack' | 'stash'; p: Place; ok: boolean; mer
 interface Drag { ref: Ref; el: HTMLElement; pid: number; r: 0 | 1; gx: number; gy: number; px: number; py: number; target: Target }
 
 const STYLE = `
-.bp12 { position: absolute; inset: 0; z-index: 36; pointer-events: auto; touch-action: none; overflow: hidden; user-select: none; -webkit-user-select: none; background: #0a0806; }
+.bp12 { position: absolute; inset: 0; z-index: 36; pointer-events: auto; touch-action: none; overflow: hidden; user-select: none; -webkit-user-select: none; }
 .bp12 canvas { image-rendering: pixelated; display: block; }
-.bp12 .bd { position: absolute; left: 0; top: 0; will-change: transform; }
+.bp12 .dim { position: absolute; left: 0; top: 0; }
+.bp12 .pk, .bp12 .ch { will-change: transform; }
+.bp12 .lidG { position: absolute; left: 0; top: 0; }
 .bp12 .st, .bp12 .wl { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 .bp12 .wl { pointer-events: none; z-index: 60; }
 .bp12 .ab { position: absolute; left: 0; top: 0; }
@@ -110,10 +110,8 @@ const STYLE = `
 .bp12 .act { position: absolute; pointer-events: auto; cursor: pointer; padding: 3px; margin: -3px; }
 .bp12 .pk.shake { animation: bp12Shake 0.5s steps(8) both; }
 @keyframes bp12Shake { 15% { transform: translate(-3px, -1px); } 30% { transform: translate(3px, -3px); } 45% { transform: translate(-2px, 0); } 60% { transform: translate(2px, -2px); } 80% { transform: translate(-1px, 0); } }
-.bp12 .lidO { transform-origin: 50% 100%; }
 .bp12 .lidS { transform-origin: 50% 0; }
 .bp12 .turn { cursor: pointer; }
-.bp12 .hand { transition: transform 0.3s steps(3); }
 `;
 
 // ---------------------------------------------------------------- pictures
@@ -185,13 +183,18 @@ export class PackScene {
   CL: ChestLayout | null = null;
   PX = 0; PY = 0; CX = 0; CY = 0;
   signR: Rect | null = null;
+  /** where it lifts off from (Mori's back, stage px) and where his mouth is (eating) */
+  from: [number, number] | null = null;
+  mouth: [number, number] | null = null;
   // layers
-  gnd: HTMLCanvasElement | null = null;
-  looseEl = div('ab'); dragEl = div('ab'); handsEl = div('ab');
+  dim: HTMLCanvasElement | null = null;
+  shadow: HTMLCanvasElement | null = null;
+  looseEl = div('ab'); dragEl = div('ab');
   pk = div('grp pk'); ch: HTMLElement | null = null;
+  lidG = div('lidG');
   packItems = div('ab'); chestItems = div('ab'); toolsEl = div('ab');
   ghostEl = div('ghost'); loopsCv: HTMLCanvasElement | null = null;
-  lidO!: HTMLCanvasElement; lidS!: HTMLCanvasElement; turnEl = div('hot turn'); turnCv: HTMLCanvasElement | null = null;
+  lidS!: HTMLCanvasElement; turnEl = div('hot turn'); turnCv: HTMLCanvasElement | null = null;
   // state
   itemEls = new Map<Stack, HTMLElement>();
   refs = new WeakMap<HTMLElement, Ref>();
@@ -213,12 +216,11 @@ export class PackScene {
   private offs: (() => void)[] = [];
   private resolve!: (r: PackResult) => void;
   private lunchTaken = false;
-  private raf = 0;
-  private t0 = performance.now();
 
   constructor(readonly o: SceneOpts) {
     this.mode = o.mode ?? 'pack';
-    this.L = ART.packLayout();
+    const tools = game.save.tools.filter(id => ITEMS[id]).length;
+    this.L = ART.packLayout(5, 3, Math.max(1, Math.ceil(tools / 4)));
     if (this.mode !== 'pack') this.CL = ART.chestLayout(STASH_AREAS[0].cols, STASH_AREAS[0].rows);
     css('bp12', STYLE);
   }
@@ -226,18 +228,15 @@ export class PackScene {
   // ------------------------------------------------------------ open / close
   async run(): Promise<PackResult> {
     const done = new Promise<PackResult>(r => (this.resolve = r));
-    // everything placed; what has no room (an old save, a gift) comes out on the ground by the pack
+    // everything placed; what has no room (an old save, a gift) drops to the ground at Mori's feet
     const spill = PACK.reconcile();
     for (const s of spill) { const i = game.save.inv.indexOf(s); if (i >= 0) game.save.inv.splice(i, 1); }
+    if (spill.length && !dropOnGround(spill, { quiet: true })) for (const s of spill) this.loose.push({ s, where: 'ground', x: 0, y: 0, r: flatR(s.id) });
     if (this.mode !== 'pack') STASH.reconcile();
     this.layout();
     this.build();
-    // the ground: what doesn't fit, a heap lying by Mori in the world, Joshu's lunch
-    const spots = this.groundSpots(spill.length + 8);
-    spill.forEach((s, i) => { const p = spots[i] ?? [this.PX - 30, this.PY + 40]; this.loose.push({ s, where: 'ground', x: p[0], y: p[1], r: flatR(s.id) }); });
-    const pile = pileNear(80);
-    if (pile) pile.stacks.forEach((s, i) => { const p = spots[spill.length + i] ?? [this.PX - 30, this.PY + 60]; this.loose.push({ s, where: 'ground', pile, x: p[0], y: p[1], r: flatR(s.id) }); });
     if (this.mode === 'prep') this.offerLunch();
+    this.layGround();
     game.ui.modalLayer.appendChild(this.root);
     this.sync();
     for (const e of this.itemEls.values()) if (this.refs.get(e)?.where === 'pack' || this.refs.get(e)?.where === 'stash') e.classList.add('hidden');
@@ -246,55 +245,70 @@ export class PackScene {
     return done;
   }
 
-  /** scale and positions (art px) */
+  /** scale and positions (art px): the pack hangs in the air beside Mori, the chest beyond it */
   private layout() {
     const vw = window.innerWidth, vh = window.innerHeight, dpr = window.devicePixelRatio || 1;
     const L = this.L, CL = this.CL;
     this.portrait = vh > vw * 1.1;
-    const sign = this.mode === 'prep' ? 70 : 0;
-    let needW: number, needH: number;
-    if (!CL) { needW = L.W + (this.portrait ? 16 : 70); needH = L.H + (this.portrait ? 130 : 56); }
-    else if (!this.portrait) { needW = L.W + CL.W + 34 + sign; needH = Math.max(L.H, CL.H) + 56; }
-    else { needW = Math.max(L.W, CL.W) + 16; needH = L.H + CL.H + 70 + (sign ? 26 : 0); }
-    const k = Math.max(1, Math.floor(Math.min((vw * dpr) / needW, (vh * dpr) / needH) + 0.02));
+    const sign = this.mode === 'prep' ? 26 : 0;
+    const GAP = 16;
+    const gw = CL && !this.portrait ? L.W + GAP + CL.W : Math.max(L.W, CL?.W ?? 0);
+    const gh = (CL && this.portrait ? L.H + GAP + CL.H : Math.max(L.H, CL?.H ?? 0)) + sign + 10;
+    // big enough to work in, small enough to leave Mori in view: whole device pixels per art pixel
+    const fw = CL ? 0.94 : this.portrait ? 0.9 : 0.6, fh = vh < 520 ? 0.84 : CL ? 0.8 : 0.66;
+    const k = Math.max(1, Math.floor(Math.min((vw * dpr * fw) / gw, (vh * dpr * fh) / gh) + 0.02));
     this.s = k / dpr;
     this.ws = Math.max(this.s, Math.min(Math.floor(2 * dpr) / dpr, Math.floor(((vh * dpr) / 150)) / dpr));
     this.SW = Math.ceil(vw / this.s); this.SH = Math.ceil(vh / this.s);
     const SW = this.SW, SH = this.SH;
-    if (!CL) {
-      this.PX = Math.round((SW - L.W) / 2);
-      this.PY = Math.round((SH - L.H) / 2 + (this.portrait ? 16 : 4));
-    } else if (!this.portrait) {
-      const total = CL.W + 18 + L.W + (sign ? sign + 6 : 0);
-      const x0 = Math.round((SW - total) / 2);
-      this.CX = x0; this.PX = x0 + CL.W + 18;
-      const base = Math.round((SH + Math.max(L.H, CL.H)) / 2) + 2;
-      this.PY = base - L.H; this.CY = base - CL.H - 6;
-      if (sign) this.signR = { x: this.PX + L.W + 6, y: this.PY + L.body.y + 30, w: 62, h: 22 };
-    } else {
-      const total = CL.H + 14 + L.H;
-      const y0 = Math.round((SH - total) / 2) + 4;
-      this.CX = Math.round((SW - CL.W) / 2); this.CY = y0;
-      this.PX = Math.round((SW - L.W) / 2); this.PY = y0 + CL.H + 14;
-      if (sign) this.signR = { x: Math.round(SW / 2 - 31), y: this.PY + L.H + 2, w: 62, h: 22 };
+    // Mori on screen (stage px): his middle, his back (it lifts off from there), his mouth
+    const m = this.o.mori;
+    let mx = SW / 2, my = SH / 2, side = 1;
+    if (m) {
+      const c = this.o.project(m.x, m.y - m.height * 0.5), bk = this.o.project(m.x - m.facing * 7, m.y - m.height * 0.6), mo = this.o.project(m.x + m.facing * 2, m.y - m.height * 0.82);
+      if (c) { mx = c[0] / this.s; my = c[1] / this.s; }
+      if (bk) this.from = [bk[0] / this.s, bk[1] / this.s];
+      if (mo) this.mouth = [mo[0] / this.s, mo[1] / this.s];
+      // the side with more room (in front of him when it's even)
+      side = SW - mx > mx + 30 ? 1 : mx > SW - mx + 30 ? -1 : (m.facing >= 0 ? 1 : -1);
     }
+    const near = Math.round(Math.max(18, SW * 0.05));
+    let gx = m ? (side > 0 ? mx + near : mx - near - gw) : (SW - gw) / 2;
+    if (this.portrait) gx = (SW - gw) / 2;
+    gx = Math.round(Math.max(6, Math.min(SW - gw - 6, gx)));
+    let gy = Math.round(Math.max(6, Math.min(SH - gh - 6, (m && !this.portrait ? my : SH / 2) - gh / 2)));
+    if (this.portrait && m) gy = Math.round(Math.max(6, Math.min(SH - gh - 6, my < SH / 2 ? my + 40 : my - 40 - gh)));
+    if (!CL) { this.PX = gx + Math.round((gw - L.W) / 2); this.PY = gy; }
+    else if (!this.portrait) {
+      // the pack nearest Mori, the chest beyond it, their bottoms level
+      const packFirst = side > 0;
+      this.PX = packFirst ? gx : gx + CL.W + GAP;
+      this.CX = packFirst ? gx + L.W + GAP : gx;
+      const base = gy + Math.max(L.H, CL.H);
+      this.PY = base - L.H; this.CY = base - CL.H - 8;
+    } else {
+      this.CX = Math.round((SW - CL.W) / 2); this.CY = gy;
+      this.PX = Math.round((SW - L.W) / 2); this.PY = gy + CL.H + GAP;
+    }
+    if (sign) this.signR = { x: Math.round(this.PX + L.W / 2 - 31), y: this.PY + L.H + 2, w: 62, h: 22 };
   }
 
   private build() {
     const r = this.root, st = this.stage, L = this.L;
     r.innerHTML = '';
-    // the frozen world (what Mori was looking at before he looked down)
-    if (this.o.backdrop) { this.o.backdrop.classList.add('bd'); r.appendChild(this.o.backdrop); }
     r.appendChild(st);
     st.style.transform = `scale(${this.s})`;
     st.style.width = this.SW + 'px'; st.style.height = this.SH + 'px';
     st.innerHTML = '';
-    // ---- the ground
-    const shadows: Rect[] = [{ x: this.PX + L.body.x - 2, y: this.PY + L.body.y + 4, w: L.body.w + 4, h: L.body.h }, { x: this.PX + L.sideL.x, y: this.PY + L.sideL.y + 6, w: L.W - 2, h: L.sideL.h - 6 }];
-    if (this.CL) shadows.push({ x: this.CX + this.CL.box.x, y: this.CY + this.CL.box.y + 4, w: this.CL.box.w + 2, h: this.CL.box.h });
-    const fire: [number, number] | null = this.o.biome === 'camp' && this.o.fireSide ? [this.o.fireSide < 0 ? -26 : this.SW + 26, Math.round(this.SH * 0.42)] : null;
-    this.gnd = cv(ART.paintGround(this.SW, this.SH, { biome: this.o.biome, tod: this.o.tod, shadows, fire, seed: (game.save.day || 1) * 31 + this.o.biome.length }), 'gnd');
-    st.appendChild(this.gnd);
+    // ---- the world behind, dimmed by a dither (lighter round Mori and the pack)
+    const spots: { x: number; y: number; r: number }[] = [{ x: this.PX + L.W / 2, y: this.PY + L.H / 2, r: Math.max(L.W, L.H) * 0.75 }];
+    if (this.from) spots.push({ x: this.from[0], y: this.from[1] + 10, r: this.SH * 0.32 });
+    this.dim = cv(ART.paintDim(this.SW, this.SH, spots), 'dim');
+    st.appendChild(this.dim);
+    // ---- the shadow the floating pack (and chest) cast down on the world
+    this.shadow = cv(ART.paintFloatShadow(Math.round(L.W * 0.8), 12));
+    at(this.shadow, Math.round(this.PX + L.W * 0.1), Math.min(this.SH - 14, this.PY + L.H + 8));
+    st.appendChild(this.shadow);
     // ---- the sign (prep)
     if (this.signR) {
       const sg = cv(ART.paintSign());
@@ -305,7 +319,7 @@ export class PackScene {
       st.appendChild(hot);
       this.hotWord(hot, 'SET OFF', 'sign', () => { this.result = 'go'; void this.close(); });
     }
-    // ---- things lying on the ground
+    // ---- things lying on the ground at Mori's feet
     st.appendChild(this.looseEl);
     // ---- the chest
     if (this.CL) {
@@ -319,12 +333,22 @@ export class PackScene {
     const pk = this.pk;
     pk.innerHTML = '';
     at(pk, this.PX, this.PY, L.W, L.H);
-    this.lidO = cv(ART.paintLidOpen(L), 'lidO');
-    at(this.lidO, L.lid.x, L.lid.y);
-    this.lidO.style.transform = 'scaleY(0)';
-    pk.appendChild(this.lidO);
+    // the flap, thrown open above the body: its underside, the tool loops, a click on it shuts the pack
+    const lg = this.lidG;
+    lg.innerHTML = '';
+    at(lg, 0, 0, L.W, L.lid.y + L.lid.h);
+    lg.style.transformOrigin = `50% ${L.lid.y + L.lid.h}px`;
+    lg.style.transform = 'scaleY(0)';
+    const lidO = cv(ART.paintLidOpen(L));
+    at(lidO, L.lid.x, L.lid.y);
+    lg.appendChild(lidO);
+    const lidHot = div('hot lidhit');
+    at(lidHot, L.lid.x + 2, L.lid.y + 10, L.lid.w - 4, L.lid.h - 12);
+    lg.appendChild(lidHot);
+    this.hotWord(lidHot, 'CLOSE', 'lid', () => void this.close());
+    lg.appendChild(this.toolsEl);
+    pk.appendChild(lg);
     pk.appendChild(cv(ART.paintPack(L)));
-    pk.appendChild(this.toolsEl);
     this.loopsCv = null;
     pk.appendChild(this.packItems);
     this.lidS = cv(ART.paintLidShut(L), 'lidS');
@@ -341,27 +365,13 @@ export class PackScene {
     this.hotWord(tu, 'TURN', 'turn', () => this.turnPressed());
     tu.addEventListener('pointerenter', () => this.paintTurn('hover'));
     tu.addEventListener('pointerleave', () => this.paintTurn('idle'));
-    // the lid (shut the pack) and the haul loop (repack)
-    const lidHot = div('hot lidhit');
-    at(lidHot, L.lid.x + 4, L.lid.y + 12, L.lid.w - 8, L.lid.h - 14);
-    pk.appendChild(lidHot);
-    this.hotWord(lidHot, 'CLOSE', 'lid', () => void this.close());
+    // the haul loop (shake it all down and repack)
     const hd = div('hot handle');
     at(hd, L.handle.x - 2, L.handle.y - 2, L.handle.w + 4, L.handle.h + 2);
     pk.appendChild(hd);
     this.hotWord(hd, 'REPACK', 'handle', () => this.repack());
     st.appendChild(pk);
     this.renderTools();
-    // ---- Mori's knees and hands at the bottom of the view
-    this.handsEl.innerHTML = '';
-    st.appendChild(this.handsEl);
-    const kl = cv(ART.paintKnee(false)), kr = cv(ART.paintKnee(true));
-    const ky = this.SH - 62;
-    at(kl, -14, ky); at(kr, this.SW - 104, ky);
-    const hl = cv(ART.paintHand(false), 'hand'), hr = cv(ART.paintHand(true), 'hand');
-    at(hl, 24, this.SH - 54); at(hr, this.SW - 70, this.SH - 54);
-    this.handsEl.append(kl, kr, hl, hr);
-    this.hands = [hl, hr];
     // ---- the hand-held item and the words
     st.appendChild(this.dragEl);
     this.dragEl.style.zIndex = '70';
@@ -371,7 +381,32 @@ export class PackScene {
     this.words.style.height = Math.ceil(window.innerHeight / this.ws) + 'px';
     this.words.innerHTML = '';
   }
-  hands: HTMLCanvasElement[] = [];
+
+  /** what lies on the ground at Mori's feet (a heap in the world), laid out where it lies */
+  private layGround() {
+    const keep = this.loose.filter(l => l.where === 'offer' || !l.pile);
+    const pile = this.o.mori ? pileNear(80) : null;
+    const ground: Loose[] = pile ? pile.stacks.map(s => ({ s, where: 'ground' as const, pile, x: 0, y: 0, r: flatR(s.id) })) : [];
+    this.loose = [...keep, ...ground];
+    const row = this.loose.filter(l => l.where === 'ground');
+    if (!row.length) return;
+    const ws = row.map(l => stackDims(l.s.id, l.r));
+    const total = ws.reduce((a, [w]) => a + w * CELL + 4, -4);
+    const hMax = Math.max(...ws.map(([, h]) => h * CELL));
+    // at the heap's spot in the world (or under the pack with no world)
+    let cx = this.PX + this.L.W / 2, bottom = this.PY + this.L.H + 4 + hMax;
+    const at0 = pile ? this.o.project(pile.x, pile.y) : null;
+    if (at0) { cx = at0[0] / this.s; bottom = at0[1] / this.s; }
+    let x = Math.round(Math.max(4, Math.min(this.SW - total - 4, cx - total / 2)));
+    bottom = Math.max(hMax + 4, Math.min(this.SH - 4, bottom));
+    // (never under the pack: below it, or beside it)
+    const pr = { x: this.PX - 4, y: this.PY, w: this.L.W + 8, h: this.L.H + 4 };
+    if (x < pr.x + pr.w && x + total > pr.x && bottom > pr.y && bottom - hMax < pr.y + pr.h) {
+      if (this.PY + this.L.H + 6 + hMax <= this.SH - 4) bottom = this.PY + this.L.H + 6 + hMax;
+      else x = Math.round(pr.x - total - 6 >= 4 ? pr.x - total - 6 : Math.min(this.SW - total - 4, pr.x + pr.w + 6));
+    }
+    row.forEach((l, i) => { l.x = x; l.y = Math.round(bottom - ws[i][1] * CELL); x += ws[i][0] * CELL + 4; });
+  }
 
   private paintTurn(state: 'idle' | 'hover' | 'down') {
     if (!this.turnCv) return;
@@ -404,37 +439,46 @@ export class PackScene {
     this.hint = null;
   }
 
+  /** the pack's offset (stage px) from where it hangs to Mori's back */
+  private homeOffset(): [number, number] {
+    if (!this.from) return [0, 40];
+    return [Math.round(this.from[0] - (this.PX + this.L.W / 2)), Math.round(this.from[1] - (this.PY + this.L.H / 2))];
+  }
+
   private async openAnim() {
     const fast = reduced();
-    const st = this.stage, bd = this.o.backdrop;
-    // the view tilts down from the world to the ground: the world slides up and away, the ground comes up
-    const H = window.innerHeight;
-    const ease = 'cubic-bezier(.45,0,.2,1)';
-    if (bd) bd.animate([{ transform: 'translateY(0)', opacity: 1 }, { transform: `translateY(${-Math.round(H * 0.7)}px)`, opacity: 0 }], { duration: fast ? 1 : 520, easing: ease, fill: 'forwards' });
-    st.animate([{ transform: `translateY(${H}px) scale(${this.s})` }, { transform: `translateY(0) scale(${this.s})` }], { duration: fast ? 1 : 520, easing: ease, fill: 'none' });
-    const hd = this.handsEl.animate([{ transform: 'translateY(40px)' }, { transform: 'translateY(0)' }], { duration: fast ? 1 : 700, easing: 'cubic-bezier(.2,.8,.3,1)' });
-    // the pack lands on the ground a beat behind
-    const land = this.pk.animate([{ transform: 'translateY(-36px)' }, { transform: 'translateY(2px)', offset: 0.75 }, { transform: 'translateY(0)' }], { duration: fast ? 1 : 640, easing: 'cubic-bezier(.5,0,.6,1)' });
-    if (this.ch) this.ch.animate([{ transform: 'translateY(-20px)' }, { transform: 'translateY(0)' }], { duration: fast ? 1 : 560, easing: 'cubic-bezier(.4,0,.4,1)' });
-    await land.finished.catch(() => {});
-    void hd;
-    sfx('land', { vol: 0.45, pitch: 0.7 });
-    if (!fast) this.pk.animate([{ transform: 'translateY(0) scaleY(1)' }, { transform: 'translateY(1px) scaleY(0.98)' }, { transform: 'translateY(0)' }], { duration: 160, easing: 'steps(3)' });
-    await this.wait(fast ? 0 : 140);
+    const ms = (n: number) => (fast ? 1 : n);
+    // the world dims, a dither stepping in
+    this.dim?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: ms(300), easing: 'steps(3)', fill: 'backwards' });
+    // the pack lifts off his back, swings out into the air beside him and pops to size, shut
+    const [dx, dy] = this.homeOffset();
+    sfx('rustle', { vol: 0.4, pitch: 1.1 });
+    const pop = this.pk.animate([
+      { transform: `translate(${dx}px, ${dy}px) scale(0.16) rotate(-8deg)`, opacity: 0 },
+      { transform: `translate(${Math.round(dx * 0.35)}px, ${Math.round(dy * 0.35) - 10}px) scale(0.7) rotate(4deg)`, opacity: 1, offset: 0.55 },
+      { transform: 'translate(0, 2px) scale(1.04) rotate(-1deg)', offset: 0.82 },
+      { transform: 'translate(0, 0) scale(1) rotate(0deg)' },
+    ], { duration: ms(460), easing: 'cubic-bezier(.3,.7,.4,1)', fill: 'backwards' });
+    this.shadow?.animate([{ opacity: 0, transform: 'scaleX(0.3)' }, { opacity: 1, transform: 'scaleX(1)' }], { duration: ms(460), easing: 'steps(4)', fill: 'backwards' });
+    if (this.ch) this.ch.animate([{ transform: 'translateY(24px) scale(0.6)', opacity: 0 }, { transform: 'translateY(-3px) scale(1.02)', opacity: 1, offset: 0.7 }, { transform: 'none', opacity: 1 }], { duration: ms(420), delay: ms(120), easing: 'cubic-bezier(.3,.7,.4,1)', fill: 'backwards' });
+    await pop.finished.catch(() => {});
+    sfx('whoosh', { vol: 0.2, pitch: 1.6 });
+    await this.wait(fast ? 0 : 90);
     // the clips pop, one then the other
     this.swapShut([true, false]); sfx('reelClick', { vol: 0.5, pitch: 1.5 });
-    await this.wait(fast ? 0 : 120);
-    this.swapShut([true, true]); sfx('reelClick', { vol: 0.5, pitch: 1.75 });
     await this.wait(fast ? 0 : 110);
-    // the flap folds back over the hinge
+    this.swapShut([true, true]); sfx('reelClick', { vol: 0.5, pitch: 1.75 });
+    await this.wait(fast ? 0 : 100);
+    // the flap flips up over the hinge and falls open above the pack
     sfx('whoosh', { vol: 0.25, pitch: 1.4 });
-    const a = this.lidS.animate([{ transform: 'scaleY(1)' }, { transform: 'scaleY(0)' }], { duration: fast ? 1 : 170, easing: 'cubic-bezier(.5,0,.9,.6)', fill: 'forwards' });
+    const a = this.lidS.animate([{ transform: 'scaleY(1)' }, { transform: 'scaleY(0)' }], { duration: ms(150), easing: 'cubic-bezier(.5,0,.9,.6)', fill: 'forwards' });
     await a.finished.catch(() => {});
     this.lidS.style.visibility = 'hidden';
-    const b2 = this.lidO.animate([{ transform: 'scaleY(0)' }, { transform: 'scaleY(1.08)', offset: 0.7 }, { transform: 'scaleY(1)' }], { duration: fast ? 1 : 230, easing: 'ease-out', fill: 'forwards' });
+    const b2 = this.lidG.animate([{ transform: 'scaleY(0)' }, { transform: 'scaleY(1.1)', offset: 0.65 }, { transform: 'scaleY(0.97)', offset: 0.85 }, { transform: 'scaleY(1)' }], { duration: ms(280), easing: 'ease-out', fill: 'forwards' });
     sfx('rustle', { vol: 0.45, pitch: 1.1 });
     await b2.finished.catch(() => {});
-    this.lidO.style.transform = 'scaleY(1)';
+    this.lidG.style.transform = 'scaleY(1)';
+    b2.cancel();
     // the contents settle, bottom row first
     this.opened = true;
     const order = [...this.itemEls.entries()].filter(([, e]) => e.classList.contains('hidden')).sort((x, y) => (y[0].p?.y ?? 0) - (x[0].p?.y ?? 0));
@@ -466,46 +510,45 @@ export class PackScene {
     this.hideHint();
     for (const w of [...this.words.children]) void wordOut(w as HTMLElement);
     const fast = reduced();
+    const ms = (n: number) => (fast ? 1 : n);
     sfx('rustle', { vol: 0.4, pitch: 1.2 });
-    // the hands come in to the pack
-    for (const [i, h] of this.hands.entries()) h.style.transform = `translate(${i ? -18 : 18}px, -10px)`;
-    await this.wait(fast ? 0 : 120);
-    // the lid comes back over, the clips go in
+    // the flap comes back over, the clips go in
     this.lidS.style.visibility = '';
     this.swapShut([true, true]);
-    const a = this.lidO.animate([{ transform: 'scaleY(1)' }, { transform: 'scaleY(0)' }], { duration: fast ? 1 : 150, easing: 'ease-in', fill: 'forwards' });
+    this.lidS.style.transform = 'scaleY(0)';
+    const a = this.lidG.animate([{ transform: 'scaleY(1)' }, { transform: 'scaleY(0)' }], { duration: ms(140), easing: 'ease-in', fill: 'forwards' });
     await a.finished.catch(() => {});
-    const b = this.lidS.animate([{ transform: 'scaleY(0)' }, { transform: 'scaleY(1)' }], { duration: fast ? 1 : 170, easing: 'cubic-bezier(.3,.4,.6,1)', fill: 'forwards' });
+    const b = this.lidS.animate([{ transform: 'scaleY(0)' }, { transform: 'scaleY(1)' }], { duration: ms(160), easing: 'cubic-bezier(.3,.4,.6,1)', fill: 'forwards' });
     sfx('whoosh', { vol: 0.2, pitch: 1.2 });
     await b.finished.catch(() => {});
     this.lidS.style.transform = 'scaleY(1)';
-    await this.wait(fast ? 0 : 90);
+    await this.wait(fast ? 0 : 80);
     this.swapShut([false, true]); sfx('reelClick', { vol: 0.5, pitch: 1.6 });
-    await this.wait(fast ? 0 : 110);
+    await this.wait(fast ? 0 : 100);
     this.swapShut([false, false]); sfx('reelClick', { vol: 0.5, pitch: 1.4 });
-    sfx('zipper', { vol: 0.3, pitch: 1.2 });
-    await this.wait(fast ? 0 : 140);
-    // the pack swings up onto his back and the view lifts back to the world
-    const H = window.innerHeight, ease = 'cubic-bezier(.5,0,.3,1)';
-    this.pk.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(-60px)' }], { duration: fast ? 1 : 420, easing: ease, fill: 'forwards' });
-    this.stage.animate([{ transform: `translateY(0) scale(${this.s})` }, { transform: `translateY(${H}px) scale(${this.s})` }], { duration: fast ? 1 : 480, easing: ease, fill: 'forwards' });
-    const bd = this.o.backdrop;
-    if (bd) bd.animate([{ transform: `translateY(${-Math.round(H * 0.7)}px)`, opacity: 0 }, { transform: 'translateY(0)', opacity: 1 }], { duration: fast ? 1 : 480, easing: ease, fill: 'forwards' });
-    else this.root.animate([{ opacity: 1 }, { opacity: 0 }], { duration: fast ? 1 : 420, fill: 'forwards' });
-    await this.wait(fast ? 0 : 470);
+    await this.wait(fast ? 0 : 110);
+    // it swings back onto his back; the world comes back up
+    const [dx, dy] = this.homeOffset();
+    sfx('rustle', { vol: 0.35, pitch: 0.9 });
+    this.pk.animate([
+      { transform: 'none', opacity: 1 },
+      { transform: 'translate(0, -6px) scale(1.03)', opacity: 1, offset: 0.25 },
+      { transform: `translate(${dx}px, ${dy}px) scale(0.16) rotate(8deg)`, opacity: 0 },
+    ], { duration: ms(380), easing: 'cubic-bezier(.5,0,.7,.4)', fill: 'forwards' });
+    this.ch?.animate([{ transform: 'none', opacity: 1 }, { transform: 'translateY(24px) scale(0.6)', opacity: 0 }], { duration: ms(300), easing: 'ease-in', fill: 'forwards' });
+    this.looseEl.animate([{ opacity: 1 }, { opacity: 0 }], { duration: ms(240), fill: 'forwards' });
+    this.shadow?.animate([{ opacity: 1 }, { opacity: 0 }], { duration: ms(300), easing: 'steps(3)', fill: 'forwards' });
+    this.dim?.animate([{ opacity: 1 }, { opacity: 0 }], { duration: ms(360), easing: 'steps(3)', fill: 'forwards' });
+    await this.wait(fast ? 0 : 380);
     this.finish();
   }
 
   private finish() {
-    cancelAnimationFrame(this.raf);
     for (const f of this.offs) f();
     this.offs = [];
-    // what is lying on the ground stays behind in the world (a heap by Mori)
+    // (no world to leave things in: back into the pack, unplaced; they come out again next time)
     const left = this.loose.filter(l => l.where === 'ground' && !l.pile).map(l => l.s);
-    if (left.length && !dropOnGround(left, { quiet: true })) {
-      // (no world to leave it in: back into the pack, unplaced; it comes out again next time)
-      for (const s of left) { s.p = undefined; game.save.inv.push(s); }
-    }
+    for (const s of left) { s.p = undefined; game.save.inv.push(s); }
     this.root.remove();
     game.persist();
     this.resolve(this.result);
@@ -535,31 +578,22 @@ export class PackScene {
     });
     this.offs.push(pushKeys(e => this.onKey(e)));
     this.offs.push(onInvChange(() => { if (!this.drag && !this.closing) this.sync(); }));
-    const tick = () => { this.raf = requestAnimationFrame(tick); this.frame(); };
-    this.raf = requestAnimationFrame(tick);
-  }
-
-  /** idle life: Mori breathes (his hands rise and fall a pixel) */
-  private frame() {
-    const t = (performance.now() - this.t0) / 1000;
-    if (this.closing) return;
-    const b = Math.floor(t / 1.6) % 2;
-    for (const h of this.hands) if (!h.style.transform || h.style.transform.startsWith('translateY')) h.style.transform = `translateY(${b}px)`;
   }
 
   private relayout() {
     if (this.closing) return;
     const keep = this.sel;
     this.select(null);
-    const ox = this.PX, oy = this.PY;
+    this.hideHint();
     this.layout();
-    // things on the ground keep their place relative to the pack
-    for (const l of this.loose) { l.x = Math.max(4, Math.min(this.SW - 30, l.x + this.PX - ox)); l.y = Math.max(4, Math.min(this.SH - 30, l.y + this.PY - oy)); }
     this.itemEls.clear(); this.toolEls.clear();
     this.packItems.innerHTML = ''; this.chestItems.innerHTML = ''; this.looseEl.innerHTML = ''; this.toolsEl.innerHTML = '';
     this.build();
+    const offers = this.loose.filter(l => l.where === 'offer');
+    if (offers.length && this.CL) { this.loose = this.loose.filter(l => l.where !== 'offer'); this.offerLunch(offers); }
+    this.layGround();
     this.lidS.style.visibility = 'hidden';
-    this.lidO.style.transform = 'scaleY(1)';
+    this.lidG.style.transform = 'scaleY(1)';
     this.sync();
     if (keep) this.select(keep);
   }
@@ -608,7 +642,10 @@ export class PackScene {
       (hot as unknown as { __hot?: () => void }).__hot?.();
       return;
     }
-    if (this.sel) this.select(null);
+    // on the pack or the chest: let go of what is picked; anywhere else (the world): shut the pack
+    if (t.closest('.pk') || t.closest('.ch')) { if (this.sel) this.select(null); return; }
+    e.preventDefault();
+    void this.close();
   }
 
   private pairAngle(): number {
@@ -779,20 +816,16 @@ export class PackScene {
     if (this.sel?.s && !this.sel.tool && !seen.has(this.sel.s)) this.select(null);
   }
 
-  /** the tools in the webbing loops on the side panels */
+  /** the tools in the webbing loops inside the flap: the camera and the glass first, then the
+   *  blades and the digging tools */
   private renderTools() {
     const L = this.L;
     this.toolsEl.innerHTML = '';
     this.toolEls.clear();
     const order = ['camera', 'binoculars', 'jar', 'translator', 'headlamp', 'tweezers', 'gloves', 'knife', 'trowel', 'net', 'slingshot', 'hammer', 'ghillie'];
-    const tools = game.save.tools.filter(id => ITEMS[id]).sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99));
-    // the left loops take the camera and the glass, the right the blades and the digging tools
-    const leftKinds = new Set(['camera', 'binoculars', 'jar', 'phone', 'lamp', 'pouch']);
-    const L0 = L.slots.filter(s => s.side === 'L'), R0 = L.slots.filter(s => s.side === 'R');
-    const left: string[] = [], right: string[] = [];
-    for (const id of tools) (leftKinds.has(toolSlotOf(id) ?? '') ? left : right).push(id);
-    while (left.length > L0.length && right.length < R0.length) right.push(left.pop()!);
-    while (right.length > R0.length && left.length < L0.length) left.push(right.pop()!);
+    const first = new Set(['camera', 'binoculars', 'jar', 'phone', 'lamp', 'pouch']);
+    const rank = (id: string) => (first.has(toolSlotOf(id) ?? '') ? 0 : 100) + (order.indexOf(id) + 1 || 99);
+    const tools = game.save.tools.filter(id => ITEMS[id]).sort((a, b) => rank(a) - rank(b));
     const filled = L.slots.map(() => false);
     const place = (ids: string[], slots: typeof L.slots) => ids.slice(0, slots.length).forEach((id, i) => {
       const sl = slots[i], r = sl.r;
@@ -808,8 +841,7 @@ export class PackScene {
       this.toolEls.set(id, e);
       this.refs.set(e, { s: { id, n: 1 }, where: 'pack', tool: id });
     });
-    place(left, L0);
-    place(right, R0);
+    place(tools, L.slots);
     if (this.loopsCv) this.loopsCv.remove();
     this.loopsCv = cv(ART.paintLoops(L, filled));
     this.loopsCv.style.pointerEvents = 'none';
@@ -1029,7 +1061,7 @@ export class PackScene {
     }
     const [ox, oy] = this.gridOrigin(t.cont);
     at(g, ox + t.p.x * CELL, oy + t.p.y * CELL);
-    if (g.parentElement !== this.stage) this.stage.insertBefore(g, this.handsEl);
+    if (g.parentElement !== this.stage) this.stage.insertBefore(g, this.dragEl);
   }
 
   private rotateHeld() {
@@ -1077,10 +1109,14 @@ export class PackScene {
     if (t.kind === 'none') return false;
     if (t.kind === 'ground') {
       if (ITEMS[id]?.kind === 'key') { this.say(null, 'Better keep that.', '#ffd76a', 'shake'); return false; }
-      if (ref.where === 'ground' && ref.lo) { ref.lo.x = t.x; ref.lo.y = t.y; ref.lo.r = r; return true; }
+      // (already lying there)
+      if (ref.where === 'ground') return true;
+      // it drops out of the air to the ground at Mori's feet, in the world
       this.takeOut(ref);
-      this.loose.push({ s, where: 'ground', x: t.x, y: t.y, r });
-      sfx('rustle', { vol: 0.3, pitch: 0.8 });
+      s.p = undefined;
+      const pile = this.o.mori ? dropOnGround([s]) : null;
+      if (!pile) this.loose.push({ s, where: 'ground', x: t.x, y: t.y, r });
+      this.layGround();
       return true;
     }
     const list = this.listOf(t.cont)!;
@@ -1164,7 +1200,7 @@ export class PackScene {
       this.pk.classList.remove('shake');
       const out = PACK.arrange();
       // (never happens with a pack that was fine; just in case, onto the ground)
-      for (const s of out) { const i = game.save.inv.indexOf(s); if (i >= 0) game.save.inv.splice(i, 1); const sp = this.groundSpots(1)[0] ?? [this.PX - 30, this.PY + 40]; this.loose.push({ s, where: 'ground', x: sp[0], y: sp[1], r: flatR(s.id) }); }
+      for (const s of out) this.moveTo({ s, where: 'pack' }, { kind: 'ground', x: 0, y: 0 }, flatR(s.id));
       this.select(null);
       this.sync();
       let i = 0;
@@ -1174,17 +1210,18 @@ export class PackScene {
     }, reduced() ? 0 : 480);
   }
 
-  /** put a stack down on the ground beside the pack */
+  /** drop a stack out of the pack (or the chest): it falls to the ground at Mori's feet */
   private dropOut(ref: Ref) {
     if (ITEMS[ref.s.id]?.kind === 'key') { this.say(this.elOf(ref) ? this.stageRectOf(this.elOf(ref)!) : null, 'Better keep that.', '#ffd76a', 'shake'); return; }
-    const sp = this.groundSpots(1, ref.s.id)[0];
-    if (!sp) { sfx('wrong', { vol: 0.35 }); return; }
-    const r = flatR(ref.s.id);
+    const el = this.elOf(ref);
+    const from = el ? this.stageRectOf(el) : null;
     this.select(null);
-    this.moveTo(ref, { kind: 'ground', x: sp[0], y: sp[1] }, r);
+    this.moveTo(ref, { kind: 'ground', x: this.PX, y: this.PY + this.L.H }, flatR(ref.s.id));
     this.sync();
-    const e = this.itemEls.get(ref.s);
-    if (e) { e.classList.add('pop'); setTimeout(() => e.classList.remove('pop'), 400); }
+    // (the one that fell drops in from where it was)
+    const fell = this.loose.find(l => l.s.id === ref.s.id && l.where === 'ground');
+    const e = fell ? this.itemEls.get(fell.s) : null;
+    if (e && from) e.animate([{ transform: `translate(${Math.round(from.x - fell!.x)}px, ${Math.round(from.y - fell!.y)}px)` }, { transform: 'none' }], { duration: reduced() ? 1 : 320, easing: 'cubic-bezier(.5,0,.9,.5)' });
   }
 
   /** pick something up off the ground (or the lunch off the chest lid) into the pack */
@@ -1201,7 +1238,7 @@ export class PackScene {
     sfx('place', { vol: 0.35 });
   }
 
-  /** eat one: the bite goes down out of the view (to Mori's mouth); hunger and the forage gamble */
+  /** eat one: a bite floats over to Mori's mouth; hunger and the forage gamble */
   private async eat(ref: Ref) {
     const s = ref.s, id = s.id;
     if (ref.where !== 'pack' || this.busy) return;
@@ -1212,18 +1249,23 @@ export class PackScene {
     this.busy = true;
     const fi = foodInfo(id);
     this.select(null);
-    // the hand comes up for it
-    const hand = this.hands[1];
-    if (hand) { hand.style.transform = 'translate(-14px, -16px)'; setTimeout(() => { hand.style.transform = ''; }, 420); }
-    if (el && s.n <= 1) { el.classList.add('eat'); await this.wait(reduced() ? 0 : 360); }
-    else if (el) {
-      // just one off the stack: a copy of it goes
+    if (el && rr) {
+      // one of it (a copy when it's a stack) arcs out of the pack to his mouth and is gone
       const c = el.cloneNode(true) as HTMLElement;
       c.querySelector('.n')?.remove();
-      el.parentElement?.appendChild(c);
-      c.classList.add('eat');
-      setTimeout(() => c.remove(), 450);
-      await this.wait(reduced() ? 0 : 200);
+      c.classList.remove('sel', 'hov');
+      this.dragEl.appendChild(c);
+      at(c, Math.round(rr.x), Math.round(rr.y));
+      if (s.n <= 1) el.style.visibility = 'hidden';
+      const [tx, ty] = this.mouth ?? [rr.x, rr.y + 60];
+      const dx = Math.round(tx - rr.x - rr.w / 2), dy = Math.round(ty - rr.y - rr.h / 2);
+      const a = c.animate([
+        { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+        { transform: `translate(${Math.round(dx * 0.5)}px, ${Math.round(dy * 0.5) - 26}px) scale(0.8)`, opacity: 1, offset: 0.5 },
+        { transform: `translate(${dx}px, ${dy}px) scale(0.25)`, opacity: 0 },
+      ], { duration: reduced() ? 1 : 420, easing: 'cubic-bezier(.4,0,.6,1)', fill: 'forwards' });
+      await a.finished.catch(() => {});
+      c.remove();
     }
     let r: ReturnType<typeof eatFood> | null = null;
     try { r = eatFood(id, { quiet: true }); } catch (e) { console.error(e); }
@@ -1258,43 +1300,19 @@ export class PackScene {
 
   // ------------------------------------------------------------ the ground and camp
 
-  /** free spots on the ground round the pack (stage px), nearest the front first */
-  private groundSpots(n: number, id?: string): [number, number][] {
-    const out: [number, number][] = [];
-    const L = this.L;
-    const [w, h] = id ? stackDims(id, flatR(id)) : [1, 1];
-    const iw = w * CELL, ih = h * CELL;
-    const busy: Rect[] = [
-      { x: this.PX, y: this.PY, w: L.W, h: L.H },
-      ...(this.CL ? [{ x: this.CX, y: this.CY, w: this.CL.W, h: this.CL.H }] : []),
-      ...(this.signR ? [this.signR] : []),
-      { x: -30, y: this.SH - 44, w: 110, h: 60 }, { x: this.SW - 80, y: this.SH - 44, w: 110, h: 60 },
-      ...this.loose.map(l => { const [a, b] = stackDims(l.s.id, l.r); return { x: l.x, y: l.y, w: a * CELL, h: b * CELL }; }),
-    ];
-    const free = (x: number, y: number) => x >= 4 && y >= 4 && x + iw <= this.SW - 4 && y + ih <= this.SH - 6 && !busy.some(r => x < r.x + r.w + 3 && x + iw + 3 > r.x && y < r.y + r.h + 3 && y + ih + 3 > r.y);
-    const cx = this.PX + L.W / 2, cy = this.PY + L.body.y + L.body.h / 2;
-    for (let ring = 0; ring < 40 && out.length < n; ring++) {
-      const rad = 70 + ring * 9;
-      for (let k = 0; k < 24 && out.length < n; k++) {
-        const a = Math.PI * 0.5 + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 12);
-        const x = Math.round(cx + Math.cos(a) * rad * 1.3 - iw / 2), y = Math.round(cy + Math.sin(a) * rad * 0.8 - ih / 2);
-        if (free(x, y)) { out.push([x, y]); busy.push({ x, y, w: iw, h: ih }); }
-      }
-    }
-    return out;
-  }
+  // ------------------------------------------------------------ camp
 
-  /** prep: Joshu's packed lunch waiting on the chest lid */
-  private offerLunch() {
+  /** prep: Joshu's packed lunch waiting on the chest lid (again: after a resize) */
+  private offerLunch(again?: Loose[]) {
     const CL = this.CL;
-    const lunch = this.o.prep?.lunch?.() ?? null;
-    if (!CL || !lunch?.length) return;
+    const lunch = again ? again.map(l => ({ id: l.s.id, n: l.s.n, s: l.s })) : (this.o.prep?.lunch?.() ?? []).map(l => ({ ...l, s: { id: l.id, n: l.n } as Stack }));
+    if (!CL || !lunch.length) return;
     let x = this.CX + CL.lid.x + CL.lid.w - 8;
     for (const l of lunch) {
       if (!ITEMS[l.id]) continue;
       const [w] = stackDims(l.id, flatR(l.id));
       x -= w * CELL + 4;
-      this.loose.push({ s: { id: l.id, n: l.n }, where: 'offer', x, y: this.CY + CL.lid.y + 2, r: flatR(l.id) });
+      this.loose.push({ s: l.s, where: 'offer', x, y: this.CY + CL.lid.y + 2, r: flatR(l.id) });
     }
   }
 
