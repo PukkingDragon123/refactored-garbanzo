@@ -17,6 +17,12 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
   Dave the Diver: a proper stamina gauge, gauges and tags. Don't strip things away until it's bare.
 - Every UI piece is a super-detailed physical object. Timers are a real vintage pocket watch
   (`src/ui/v12/watch.ts`), never a bar or a bare number.
+- Every asset is hand-drawn pixel art, placed pixel by pixel with hand-picked clusters. Don't
+  build things by sticking primitive shapes together: no circle or ellipse rocks, no blob fossils,
+  no stacked-rectangle props. That covers world art, item icons and UI. Rocks, fossils, plants and
+  props need irregular hand-shaped silhouettes, readable form shading, texture, cracks and
+  highlights. If the code draws with `arc` or `ellipse`, it's only for a rough base that is then
+  hand-detailed, never the final look.
 - Never use emoji. Use painted pixel icons (`src/ui/pxicons.ts`).
 - Never show the HD close-up face as a small profile portrait in the HUD.
 - The quality bar is the best scenes in the game, such as the palm beach and the great forest.
