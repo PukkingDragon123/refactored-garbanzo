@@ -6,7 +6,7 @@
 // the flash, the viewfinder, the rainbow stripe and the print slot.
 
 import { Art, col, dith, mixC, shadeC } from './paper/px';
-import { hnoise } from './hudpx';
+import { hnoise, leatherAt } from './hudpx';
 
 const K = col('#1a1008');
 
@@ -201,4 +201,42 @@ export function paintCamera(a: Art, ox: number, oy: number) {
   // the print slot along the bottom and two strap lugs
   for (let x = 4; x < 24; x++) a.put(ox + x, oy + 17, x > 18 ? col('#2a2624') : K);
   a.put(ox + 0, oy + 6, col('#9a9a94')); a.put(ox + 0, oy + 7, col('#6a6a64')); a.put(ox + 27, oy + 6, col('#9a9a94')); a.put(ox + 27, oy + 7, col('#6a6a64'));
+}
+
+// ---------------------------------------------------------------- the field guide (22 x 31)
+const KORU = ['...gggg..', '..g....g.', '.g..ggg.g', '.g.g...gg', '.g.g.G.g.', '.g..gg...', '..g......', '..g......', '...g.....', '....gg...'];
+export const GUIDE_W = 22, GUIDE_H = 31;
+/** a strapped green leather notebook: raised spine bands, the page block, a gold koru tooled on the
+ *  cover, a strap with a brass buckle, brass corners and a red ribbon marker hanging out */
+export function paintGuide(a: Art, ox: number, oy: number) {
+  const green = col('#587a36'), spine = col('#3c5426'), page = col('#f0e4c4'), gold = col('#f0c860'), brass = col('#c8962e');
+  // the page block showing on the right and along the bottom
+  for (let y = 2; y < 28; y++) for (let x = 18; x < 22; x++) a.put(ox + x, oy + y, x === 21 || y === 27 ? K : (y & 1) ? page : col('#c8b48c'));
+  for (let x = 3; x < 21; x++) { a.put(ox + x, oy + 27, (x & 1) ? page : col('#c8b48c')); a.put(ox + x, oy + 28, K); }
+  // the cover: tooled leather with a darker spine and two raised bands
+  for (let y = 0; y < 27; y++) for (let x = 0; x < 19; x++) {
+    const corner = (x === 0 || x === 18) && (y === 0 || y === 26);
+    if (corner) continue;
+    const edge = x === 0 || x === 18 || y === 0 || y === 26 || (x === 1 && (y === 0 || y === 26));
+    let c = x < 4 ? spine : green;
+    if (x === 4) c = shadeC(green, -0.35);
+    if (y === 1 && x > 4) c = shadeC(green, 0.3);
+    else if (x === 17 || y === 25) c = shadeC(c, -0.25);
+    if (x < 4 && (y === 6 || y === 20)) c = shadeC(spine, 0.35);
+    if (x < 4 && (y === 7 || y === 21)) c = shadeC(spine, -0.35);
+    a.put(ox + x, oy + y, edge ? K : leatherAt(ox + x, oy + y, c));
+  }
+  // a tooled border on the cover
+  for (let x = 6; x < 16; x++) { a.put(ox + x, oy + 3, shadeC(green, -0.3)); a.put(ox + x, oy + 23, shadeC(green, -0.3)); }
+  for (let y = 4; y < 23; y++) { a.put(ox + 6, oy + y, shadeC(green, -0.3)); a.put(ox + 15, oy + y, shadeC(green, -0.3)); }
+  // the gold koru
+  KORU.forEach((r, j) => { for (let i = 0; i < r.length; i++) if (r[i] !== '.') a.put(ox + 7 + i, oy + 5 + j, r[i] === 'G' ? col('#fff0a8') : j > 6 ? shadeC(gold, -0.2) : gold); });
+  // the strap across, its brass buckle on the fore-edge
+  for (let x = 1; x < 21; x++) { a.put(ox + x, oy + 17, col('#94602e')); a.put(ox + x, oy + 18, col('#6a3a1a')); if (x % 3 === 0) a.put(ox + x, oy + 17, col('#b07a44')); }
+  for (const [dx, dy, c] of [[18, 16, brass], [19, 16, col('#fff0a8')], [20, 16, brass], [18, 19, shadeC(brass, -0.4)], [19, 19, brass], [20, 19, shadeC(brass, -0.4)], [18, 17, brass], [20, 18, shadeC(brass, -0.4)]] as [number, number, number][]) a.put(ox + dx, oy + dy, c);
+  // brass corners on the fore-edge
+  for (const [x, y] of [[16, 1], [17, 1], [17, 2], [16, 25], [17, 25], [17, 24]]) a.put(ox + x, oy + y, y < 5 ? col('#e8c45a') : brass);
+  // the ribbon marker
+  for (let y = 27; y < 31; y++) { a.put(ox + 12, oy + y, col('#c8321e')); a.put(ox + 13, oy + y, y === 30 ? 0 : col('#8a1e10')); }
+  a.put(ox + 11, oy + 30, col('#c8321e'));
 }

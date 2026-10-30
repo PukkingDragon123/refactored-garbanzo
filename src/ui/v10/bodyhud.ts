@@ -7,14 +7,15 @@
 //     his stomach growls (game/v12/hunger.ts onGrowl), a flinch and a red flash when he's knocked down,
 //     wide eyes and a tremble while a predator is on him (game/v11/predators-core.ts onPredator), and
 //     whatever his in-game face is doing otherwise. Click it (or tap it) to inspect him.
-//   - the stamina flask (on expeditions): a glass flask in a brass cage whose liquid is his energy. It
-//     sloshes when he moves, bubbles, shifts from teal to yellow to red as it drains, blinks when he's
-//     low, and cracks with a flash when a climb or a swim takes a big gulp. The number hangs on a tag.
+//   - the lunch tin (on expeditions): how full he is (V12 hunger; energy() reads as fullness). Five rice
+//     bowls painted down a chipped enamel tin fill from the bottom; they jiggle when he moves, steam
+//     curls off the lid when he's just eaten, the tin blinks red when he's empty, and a big gulp of
+//     hunger rattles it. A wooden tag hung from the handle says FULL, FINE, PECKISH, HUNGRY or STARVING.
 //   - the pack: a spring scale that stretches with the load (kg / capacity), red and shaking when
 //     it's too heavy to run.
 //   - ailment chips (a tummy ache, dizziness) with their time running out.
 //   - the edge of the screen darkens in dithered pixels as he tires; illness tints it.
-// Hud2 mounts it and ticks it. Click the flask (or press H) for a snack.
+// Hud2 mounts it and ticks it. Click the tin (or press H) for a snack.
 
 import { el } from '../ui';
 import { game } from '../../game/game';
@@ -73,103 +74,97 @@ const WOOD = col('#4a2e16');
 interface Bubble { x: number; y: number; v: number }
 interface FlaskSt { level: number; tilt: number; tiltV: number; amp: number; t: number; bubbles: Bubble[]; crack: number; flash: number; shown: number }
 
-/** the flask: 32 x 70 art px, a cork in a brass cap, a ribbed neck, a glass body in a brass cage */
+/** the lunch tin: 32 x 70 art px. A chipped enamel tin with a wire handle, a lid with a brass latch,
+ *  and five rice bowls painted down its front that fill from the bottom with how full he is (the top
+ *  one half full in between). The bowls jiggle when he moves, steam curls off the lid when he's just
+ *  eaten, the tin's edge blinks red when he's empty, and a big gulp of hunger rattles it with a flash. */
 const FW = 32, FH = 70;
-function paintFlask(a: Art, x0: number, y0: number, st: FlaskSt, frac: number, low: boolean, blinkOn: boolean) {
-  const [liq, liqD, liqL] = gaugeColor(frac);
-  const glass = col('#16262a'), glassL = col('#2a4448'), glassS = col('#0e1a1c');
+const BOWL_FULL = ['...wWWWw....', '.wwwWwwwwww.', 'kkkkkkkkkkkk', 'kBbbbbbbbbBk', '.kbbRbbRbbk.', '..kbbbbbbk..', '...kkkkkk...'];
+const BOWL_HALF = ['............', '..wwwwwwww..', 'kkkkkkkkkkkk', 'kBbbbbbbbbBk', '.kbbRbbRbbk.', '..kbbbbbbk..', '...kkkkkk...'];
+const BOWL_EMPTY = ['............', '............', 'kkkkkkkkkkkk', 'kdddddddddbk', '.kddddddddk.', '..kddddddk..', '...kkkkkk...'];
+function paintTin(a: Art, x0: number, y0: number, st: FlaskSt, frac: number, low: boolean, blinkOn: boolean) {
+  const enamel = col('#3a7a8a'), tin = col('#b8c0c4');
   const outC = low && blinkOn ? col('#e83a2a') : OUT;
   // the hard shadow
-  for (let y = y0 + 14; y < y0 + FH + 2; y++) for (let x = x0 + 3; x < x0 + FW + 2; x++) if (dith(x, y, 0.6)) a.px(x, y, col('#000000', 0.4));
-  // the cork, the brass cap with its knurled band, the chain loop
-  const cx = x0 + FW / 2;
-  for (let j = 0; j < 4; j++) for (let i = -4; i <= 3; i++) a.put(cx + i, y0 + j, i === -4 || i === 3 || j === 0 ? OUT : hnoise(i, j, 2) > 0.7 ? col('#8a5a30') : col('#b07a44'));
-  a.put(cx - 2, y0 + 1, col('#d8a46a'));
-  for (let j = 4; j < 9; j++) for (let i = -6; i <= 5; i++) {
-    const edge = i === -6 || i === 5 || j === 4 || j === 8;
-    a.put(cx + i, y0 + j, edge ? OUT : j === 6 ? ((i & 1) ? BRASS_D : BRASS_L) : brassAt(cx + i, y0 + j, 0.75 - (i + 6) / 14));
+  for (let y = y0 + 10; y < y0 + FH + 2; y++) for (let x = x0 + 3; x < x0 + FW + 2; x++) if (dith(x, y, 0.6)) a.px(x, y, col('#000000', 0.4));
+  // the wire handle, swung up over the lid
+  const HANDLE = ['......kkkkkkkkkkkkkkkkkkkk......', '.....kwwwwwwwwwwwwwwwwwwwwsk.....', '....kwk..................kwk....', '....kwk..................kwk....', '....kwk..................kwk....', '...kkskk................kkskk...'];
+  HANDLE.forEach((r, j) => { for (let i = 0; i < r.length; i++) { const c = r[i]; if (c !== '.') a.put(x0 + i, y0 + j, c === 'k' ? OUT : c === 'w' ? col('#e0e4e6') : col('#7a8086')); } });
+  // the lid: domed, lighter enamel, a rolled tin rim under it
+  for (let y = 5; y < 15; y++) for (let x = 1; x < FW - 1; x++) {
+    const inset = y === 5 ? 3 : y === 6 ? 1 : 0;
+    if (x < 1 + inset || x >= FW - 1 - inset) continue;
+    const edge = x === 1 + inset || x === FW - 2 - inset || y === 5;
+    let c = y < 8 ? shadeC(enamel, 0.3) : shadeC(enamel, 0.12);
+    if (x > FW - 6) c = shadeC(c, -0.2);
+    if (y >= 13) c = y === 13 ? col('#dfe4e6') : col('#8a9296');
+    a.put(x0 + x, y0 + y, edge ? outC : c);
   }
-  for (const [i, j] of [[6, 5], [7, 6], [7, 7], [6, 8], [5, 9]]) a.put(cx + i, y0 + j, BRASS_D);
-  // the neck: brass with two ribs
-  for (let j = 9; j < 14; j++) for (let i = -4; i <= 3; i++) a.put(cx + i, y0 + j, i === -4 || i === 3 ? OUT : j === 10 || j === 12 ? BRASS_L : brassAt(cx + i, y0 + j, 0.6 - (i + 4) / 12));
-  // the body: rounded glass in a brass rim
-  const bx = x0, by = y0 + 14, bw = FW, bh = FH - 14;
+  // the body: enamel with rolled rims, side shading, chips showing tin, scratches
+  const bx = x0, by = y0 + 15, bw = FW, bh = FH - 15;
   const inside = (x: number, y: number) => {
     if (x < bx || y < by || x >= bx + bw || y >= by + bh) return false;
-    const ux = x < bx + 6 ? bx + 6 - x : x >= bx + bw - 6 ? x - (bx + bw - 7) : 0;
-    const uy = y < by + 6 ? by + 6 - y : y >= by + bh - 6 ? y - (by + bh - 7) : 0;
-    return ux * ux + uy * uy <= 38;
+    const ux = x < bx + 4 ? bx + 4 - x : x >= bx + bw - 4 ? x - (bx + bw - 5) : 0;
+    const uy = y >= by + bh - 4 ? y - (by + bh - 5) : 0;
+    return ux * ux + uy * uy <= 17;
   };
-  const gx0 = bx + 3, gx1 = bx + bw - 3, gy0 = by + 3, gy1 = by + bh - 3;
-  const innerH = gy1 - gy0;
-  const surf = gy1 - Math.round(st.level * innerH);
   for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) {
     if (!inside(x, y)) continue;
-    const edge = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1);
+    const edge = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y + 1);
     if (edge) { a.put(x, y, outC); continue; }
-    if (!inside(x - 3, y) || !inside(x + 3, y) || !inside(x, y - 3) || !inside(x, y + 3)) {
-      const lit = (x - bx) / bw * 0.5 + (y - by) / bh * 0.5;
-      a.put(x, y, !inside(x - 4, y) || !inside(x, y - 4) ? brassAt(x, y, 0.85 - lit * 0.6) : brassAt(x, y, 0.55 - lit * 0.5));
-      continue;
-    }
-    // the liquid: a sloshing surface tilted against the way he moves
-    const sx = surf + st.tilt * (x - (bx + bw / 2)) + Math.sin(x * 0.6 + st.t * 7) * st.amp;
-    const yS = Math.round(sx);
-    let c = x <= gx0 + 1 ? glassL : x >= gx1 - 2 ? glassS : glass;
-    if (y > yS) {
-      c = x <= gx0 + 1 ? liqL : x >= gx1 - 3 ? liqD : liq;
-      if ((y - yS) % 7 === 0 && dith(x, y, 0.35)) c = liqL;
-      if (y > gy1 - 3) c = mixC(c, liqD, 0.5);
-    } else if (y === yS) c = liqL;
-    else if (y === yS - 1 && (x & 1)) c = mixC(glass, liqL, 0.35);
+    let c = enamel;
+    if (x < bx + 4) c = shadeC(enamel, 0.22);
+    else if (x > bx + bw - 6) c = shadeC(enamel, -0.3);
+    else if (x > bx + bw - 9 && dith(x, y, 0.5)) c = shadeC(enamel, -0.15);
+    if (y === by + 1 || y === by + bh - 4) c = tin;
+    if (y === by + 2 || y === by + bh - 3) c = shadeC(tin, -0.35);
+    if (hnoise(x, y, 51) > 0.975) c = col('#dfe4e6');
+    else if (hnoise(x >> 1, y, 53) > 0.96) c = shadeC(c, -0.2);
     a.put(x, y, c);
   }
-  // the cage: two brass bands with rivets, measuring ticks etched on the glass
-  for (const yy of [by + Math.round(bh * 0.28), by + Math.round(bh * 0.7)]) {
-    for (let x = bx + 1; x < bx + bw - 1; x++) if (inside(x, yy) && inside(x, yy + 1)) { a.put(x, yy, (x & 1) ? BRASS : BRASS_L); a.put(x, yy + 1, BRASS_D); }
-    rivet(a, bx + 3, yy, BRASS); rivet(a, bx + bw - 4, yy, BRASS);
+  // the brass latch over the lid's rim
+  for (let y = 11; y < 19; y++) for (let x = 13; x < 19; x++) {
+    const edge = x === 13 || x === 18 || y === 11 || y === 18;
+    a.put(x0 + x, y0 + y, edge ? OUT : y === 12 ? BRASS_L : x === 17 ? BRASS_D : BRASS);
   }
-  for (let i = 1; i < 8; i++) {
-    const yy = gy1 - Math.round((i / 8) * innerH);
-    const len = i % 2 ? 2 : 4;
-    for (let k = 0; k < len; k++) a.px(gx1 - 3 - k, yy, col('#ffffff', 0.35));
+  a.put(x0 + 15, y0 + 15, OUT); a.put(x0 + 16, y0 + 15, BRASS_D);
+  // the bowls, bottom up: full, half full, empty
+  const n = Math.max(0, Math.min(5, frac * 5));
+  const full = Math.floor(n + 0.001), half = n - full >= 0.4;
+  const jig = Math.abs(st.tilt) > 0.12 ? Math.round(Math.sin(st.t * 18)) : 0;
+  const P: Record<string, number> = { k: col('#1a1a2a'), w: col('#f4f0e4'), W: col('#ffffff'), B: col('#5a8ae0'), b: col('#2a52b0'), R: col('#e8432a'), d: col('#141c38') };
+  for (let i = 0; i < 5; i++) {
+    const rows = i < full ? BOWL_FULL : i === full && half ? BOWL_HALF : BOWL_EMPTY;
+    const ox = x0 + 9 + (i % 2 ? jig : -jig), oy = y0 + FH - 14 - i * 9;
+    rows.forEach((r, j) => { for (let k = 0; k < 12; k++) if (r[k] !== '.') a.put(ox + k - 1, oy + j, P[r[k]]); });
   }
-  // glints on the glass
-  for (let y = gy0 + 4; y < gy0 + 22; y++) a.px(gx0 + 3, y, col('#ffffff', 0.55));
-  for (let y = gy0 + 6; y < gy0 + 11; y++) a.px(gx0 + 5, y, col('#ffffff', 0.4));
-  a.px(gx1 - 4, gy1 - 6, col('#ffffff', 0.4));
-  // bubbles rising through the liquid
+  // steam off the lid
   for (const b of st.bubbles) {
-    const X = bx + Math.round(b.x), Y = by + Math.round(b.y);
-    if (Y > surf + 1 && inside(X, Y)) { a.px(X, Y, liqL); if (b.v > 11) a.px(X + 1, Y, mixC(liqL, liq, 0.5)); }
+    const X = x0 + Math.round(b.x), Y = y0 + Math.round(b.y);
+    if (Y < y0 + 5 && Y >= y0 - 8) a.px(X, Y, col('#ffffff', 0.55));
   }
-  // a crack and a flash after a big gulp
-  if (st.crack > 0) {
-    const c = col('#ffffff', Math.min(1, st.crack * 2));
-    let x = gx0 + 8, y = gy0 + 2;
-    for (let i = 0; i < 13; i++) { a.px(x, y, c); y += 2; x += i % 3 === 0 ? 1 : i % 3 === 1 ? -1 : 0; a.px(x, y - 1, c); if (i === 5) { a.px(x + 1, y, c); a.px(x + 2, y + 1, c); a.px(x + 3, y + 1, c); } }
-  }
-  if (st.flash > 0) for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) if (inside(x, y) && dith(x, y, st.flash * 0.7)) a.px(x, y, col('#ffffff', 0.85));
+  // a rattle: a dent and a flash
+  if (st.crack > 0) { const c = col('#ffffff', Math.min(1, st.crack * 2)); for (let i = 0; i < 5; i++) a.px(x0 + 5 + i, y0 + 24 + (i % 2), c); }
+  if (st.flash > 0) for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) if (inside(x, y) && dith(x, y, st.flash * 0.6)) a.px(x, y, col('#ffffff', 0.8));
 }
 
-/** the number on a wooden tag hung from the flask's neck by a string */
-function tagW(value: number, label: string): number {
-  return Math.max(36, hudTextW(String(Math.max(0, Math.round(value))), 'num', 1) + 14, tw(label, { face: 'block', bold: false, spacing: 1 }) + 10);
+/** how he feels on a wooden tag hung from the tin's handle: FULL, FINE, PECKISH, HUNGRY, STARVING */
+const tagWord = (frac: number) => { const h = 1 - frac; return h >= 0.8 ? 'STARVING' : h >= 0.65 ? 'HUNGRY' : h >= 0.45 ? 'PECKISH' : h >= 0.2 ? 'FINE' : 'FULL'; };
+function tagW(word: string, label: string): number {
+  return Math.max(40, hudTextW(word, 'caps', 1) + 14, tw(label, { face: 'block', bold: false, spacing: 1 }) + 10);
 }
-function paintTag(a: Art, x: number, y: number, w: number, value: number, low: boolean, blinkOn: boolean, label: string, fx: number) {
-  const txt = String(Math.max(0, Math.round(value)));
-  // the string from the flask's neck to the tag's eyelet
-  for (let i = 0; fx + i < x + 6; i++) a.put(fx + i, y - 6 + Math.round(Math.sin((i / Math.max(1, x + 6 - fx)) * Math.PI) * 2) + Math.round((i / Math.max(1, x + 6 - fx)) * 9), col('#d8c8a0'));
+function paintTag(a: Art, x: number, y: number, w: number, word: string, low: boolean, blinkOn: boolean, label: string, fx: number) {
+  // the string from the handle to the tag's eyelet
+  const run = Math.max(1, x + 6 - fx);
+  for (let i = 0; fx + i < x + 6; i++) a.put(fx + i, y - 14 + Math.round(Math.sin((i / run) * Math.PI) * 2) + Math.round((i / run) * 17), col('#d8c8a0'));
   const base = low && blinkOn ? col('#8a1e14') : WOOD;
-  plate(a, x, y, w, 34, base, { r: 3 });
-  // wood grain
-  for (let j = 3; j < 31; j++) for (let i = 3; i < w - 3; i++) if (hnoise(i >> 3, j, 21) > 0.82 && hnoise(x + i, y + j, 5) > 0.3) a.put(x + i, y + j, shadeC(base, -0.12));
-  // the brass eyelet
+  plate(a, x, y, w, 30, base, { r: 3 });
+  for (let j = 3; j < 27; j++) for (let i = 3; i < w - 3; i++) if (hnoise(i >> 3, j, 21) > 0.82 && hnoise(x + i, y + j, 5) > 0.3) a.put(x + i, y + j, shadeC(base, -0.12));
   a.put(x + 5, y + 4, OUT); a.put(x + 6, y + 4, BRASS_L); a.put(x + 7, y + 4, OUT); a.put(x + 6, y + 3, BRASS); a.put(x + 6, y + 5, BRASS_D);
-  const nw = hudTextW(txt, 'num', 1);
-  hudText(a, txt, Math.round(x + w / 2 - nw / 2), y + 6, { face: 'num', c: low ? [col('#ffd0c0'), col('#ffb0a0'), col('#e88070')] : [col('#fffaea'), CREAM, col('#e8c890')], drop: 1 });
+  const ww = hudTextW(word, 'caps', 1);
+  hudText(a, word, Math.round(x + w / 2 - ww / 2), y + 7, { face: 'caps', c: low ? [col('#ffd0c0'), col('#ffb0a0'), col('#e88070')] : [col('#fffaea'), CREAM, col('#e8c890')], drop: 1 });
   const lw = tw(label, { face: 'block', bold: false, spacing: 1 });
-  outlined(a, label, Math.round(x + w / 2 - lw / 2), y + 29, low && blinkOn ? col('#ff8a6a') : col('#f4d27a'), OUT, { face: 'block', bold: false, spacing: 1 });
+  outlined(a, label, Math.round(x + w / 2 - lw / 2), y + 26, low && blinkOn ? col('#ff8a6a') : col('#f4d27a'), OUT, { face: 'block', bold: false, spacing: 1 });
 }
 
 /** the pack's spring scale and its load bar: 168 x 27 */
@@ -264,7 +259,7 @@ export function mountBodyHud(root: HTMLElement, _who?: HTMLElement): BodyHud {
     e.stopPropagation();
     if (game.ui.blocking) return;
     const [x, y] = plateW.hit(e);
-    // the medallion: inspect him; the flask: a snack
+    // the medallion: inspect him; the lunch tin: a snack
     if ((x - MED.cx) ** 2 + (y - MED.cy) ** 2 <= (MED.RL + 2) ** 2 || (x < MED.W && y >= MED.cy + MED.Rs - 2)) {
       void import('../v12/inspect').then(m => { if (m.canInspect()) void m.inspectMori(); });
       return;
@@ -273,10 +268,10 @@ export function mountBodyHud(root: HTMLElement, _who?: HTMLElement): BodyHud {
   });
   plateW.el.addEventListener('pointermove', e => {
     const [x] = plateW.hit(e);
-    plateW.el.title = x < MED.W ? 'Mori (click to look him over)' : `Energy. Eat a snack (${EAT_KEY.replace('Key', '')})`;
+    plateW.el.title = x < MED.W ? 'Mori (click to look him over)' : `How full he is. Eat a snack (${EAT_KEY.replace('Key', '')})`;
   });
   const st: FlaskSt = { level: energy() / maxEnergy(), tilt: 0, tiltV: 0, amp: 0.6, t: 0, bubbles: [], crack: 0, flash: 0, shown: 0 };
-  let shownVal = energy(), acc = 0, blinkT = 3, blink = 0, cheerT = 0, lastOn: boolean | null = null, sweatT = 3;
+  let acc = 0, blinkT = 3, blink = 0, cheerT = 0, lastOn: boolean | null = null, sweatT = 3;
   // the face's moments: knocked down, a predator on him, a growl, a yawn
   let hurtT = 0, scaredT = 0, growlT = 0, yawnT = 0, yawnWait = 9;
   const shake = () => { box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake'); };
@@ -317,7 +312,7 @@ export function mountBodyHud(root: HTMLElement, _who?: HTMLElement): BodyHud {
           if (sc && !sc.cutscene && !game.ui.blocking) sc.player?.body?.showEmote?.('sweat', 1.2);
         }
       }
-      // the liquid: level eases to the energy, the surface leans against his speed and settles
+      // the tin: its level eases to how full he is, the bowls jiggle with his speed
       st.level += (f - st.level) * Math.min(1, dt * 3);
       const vx = sc?.player?.vx ?? 0;
       const want = Math.max(-0.35, Math.min(0.35, -vx / 260));
@@ -326,13 +321,9 @@ export function mountBodyHud(root: HTMLElement, _who?: HTMLElement): BodyHud {
       st.amp = Math.max(0.35 + Math.abs(vx) / 260, st.amp - dt * 1.5);
       st.crack = Math.max(0, st.crack - dt);
       st.flash = Math.max(0, st.flash - dt * 2);
-      if (Math.random() < dt * (1.5 + low * 4)) st.bubbles.push({ x: 6 + Math.random() * 20, y: FH - 18, v: 6 + Math.random() * 10 });
+      if (st.level < f - 0.01 && Math.random() < dt * 8) st.bubbles.push({ x: 10 + Math.random() * 12, y: 5, v: 6 + Math.random() * 6 });
       for (const b of st.bubbles) { b.y -= b.v * dt; b.x += Math.sin(b.y * 0.6) * dt * 3; }
-      st.bubbles = st.bubbles.filter(b => b.y > 4);
-      // the number ticks toward the real value
-      const target = energy();
-      shownVal += (target - shownVal) * Math.min(1, dt * 6);
-      if (Math.abs(target - shownVal) < 0.5) shownVal = target;
+      st.bubbles = st.bubbles.filter(b => b.y > -8);
       blinkT -= dt;
       if (blinkT <= 0) { blink = 0.14; blinkT = 2.2 + Math.random() * 3.5; if (Math.random() < 0.2) blinkT = 0.3; }
       blink = Math.max(0, blink - dt);
@@ -353,7 +344,7 @@ export function mountBodyHud(root: HTMLElement, _who?: HTMLElement): BodyHud {
       try { starving = hunger() >= TOO_HUNGRY; } catch { starving = false; }
       // his face: what's happening to him first, then what his in-game face shows, then how he is
       const bodyExpr = sc?.player?.body?.expr;
-      const tiredNow = (on && f < 0.15) || late;
+      const tiredNow = late;
       if (tiredNow && hurtT <= 0 && scaredT <= 0 && growlT <= 0) {
         yawnWait -= 1 / 30;
         if (yawnWait <= 0) { yawnT = 1.4; yawnWait = 10 + Math.random() * 10; }
@@ -381,14 +372,15 @@ export function mountBodyHud(root: HTMLElement, _who?: HTMLElement): BodyHud {
       const lowNow = on && f < 0.25;
       const id = playerId();
       const name = (CHAR_INFO[id]?.short ?? 'Mori').toUpperCase();
-      const label = lowNow ? `EAT ${EAT_KEY.replace('Key', '')}` : 'ENERGY';
-      const tWid = tagW(shownVal, label);
+      const label = lowNow ? `EAT ${EAT_KEY.replace('Key', '')}` : `${Math.round(f * 5)}/5 BOWLS`;
+      const word = tagWord(f);
+      const tWid = tagW(word, label);
       const wPlate = on ? MED.W + 4 + FW + 6 + tWid + 3 : MED.W;
       plateW.draw(wPlate, MED.H, a => {
         if (on) {
           const fx = MED.W + 2;
-          paintFlask(a, fx, 4, st, f, lowNow, blinkOn);
-          paintTag(a, fx + FW + 6, 22, tWid, shownVal, lowNow, blinkOn, label, fx + FW / 2 + 5);
+          paintTin(a, fx, 10, st, f, lowNow, blinkOn);
+          paintTag(a, fx + FW + 6, 30, tWid, word, lowNow, blinkOn, label, fx + FW - 5);
         }
         paintMedallion(a, 0, 0, { id, name, expr, blink: blink > 0, mouth, wind, hour, t: st.t, breath, warn: lowNow && blinkOn, growl: growlT > 0 ? Math.min(1, growlT * 2) : 0, hurt: hurtT > 1.2 ? (hurtT - 1.2) : 0 });
       });

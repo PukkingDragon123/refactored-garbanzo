@@ -81,6 +81,8 @@ const LURE_FOOD: Record<string, { food: Lure['food']; scent: number; glow?: bool
   scentlure: { food: ['carrion'], scent: 480 },
   glowlure: { food: ['insect'], scent: 300, glow: true },
   caller: { food: [], scent: 420, call: true },
+  // V12: the Thunderbird's storm bait (fish and a fluttering feather): carrion-eaters come from far off
+  tb_bait: { food: ['carrion', 'fish'], scent: 600 },
 };
 
 /** Aroha as field guide: follows at a respectful distance, mirrors your stealth, whispers tips. */

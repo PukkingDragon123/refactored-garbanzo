@@ -30,6 +30,12 @@ export async function tigerAmbush(o: AmbushOpts): Promise<void> {
 }
 /** the player can defend himself once he has crafted the slingshot */
 export function hasSlingshot(): boolean { return game.save.tools.includes('slingshot'); }
+/** G belongs to the slingshot wherever it can be used (any field scene, once it is on the belt); the
+ *  field guide then opens from the notebook's tabs or the HUD's little guide book instead */
+export function slingOwnsG(): boolean {
+  const s = game.scene as unknown as { animals?: unknown; player?: unknown; site?: { id?: string } } | null;
+  return hasSlingshot() && !!s && Array.isArray(s.animals) && !!s.player && s.site?.id !== 'boat';
+}
 
 /** predators, Mori's slingshot and Aroha's combat AI in a field scene (idempotent) */
 export async function attachPredators(scene: unknown): Promise<void> {

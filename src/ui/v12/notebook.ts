@@ -15,6 +15,7 @@
 // This file is light (the save, the quest marks and the J / G / K keys); the notebook itself lives in
 // ./nb/ and is loaded the first time it is opened.
 
+import { slingOwnsG } from '../../game/v11/predators';
 import { game } from '../../game/game';
 import { bucket } from '../../game/v10/store';
 
@@ -103,7 +104,7 @@ export function markQuestDone(questId: string, step?: number): void {
   if (!current && !tracked && now - lastNotice > 2500) { lastNotice = now; void import('./float').then(m => m.floatNotice('noted', 1800)).catch(() => { /* no world yet */ }); }
 }
 
-// ---------------------------------------------------------------- keys: J quests, G field guide, K people
+// ---------------------------------------------------------------- keys: J quests, G field guide (away from the slingshot), K people
 
 const KEY_TAB: Record<string, string> = { KeyJ: 'quests', KeyG: 'guide', KeyK: 'people' };
 let keysOn = false;
@@ -113,6 +114,8 @@ export function installNotebookKeys() {
   keysOn = true;
   window.addEventListener('keydown', e => {
     const tab = KEY_TAB[e.code];
+    // in the field G is the slingshot's (the guide is a tab of the notebook, or the HUD's guide book)
+    if (e.code === 'KeyG' && slingOwnsG()) return;
     if (!tab || e.repeat || e.ctrlKey || e.metaKey || e.altKey || current) return;
     const t = e.target as HTMLElement | null;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;

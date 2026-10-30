@@ -30,9 +30,10 @@ import { installPaper, scrap, stamp, paperSfx, escHtml as esc, setTransitionFocu
 import { Art, col, dith, shadeC, mixC, spriteURL, PX } from './paper/px';
 import { drawText, wrapText } from './paper/pxfont';
 import { PxW, outlined, tw, plate, hudScale, hudText, hudTextW, hnoise, leatherAt, paperAt, rivet } from './hudpx';
-import { paintPack, paintLaptop, paintCamera } from './kitart';
+import { paintPack, paintLaptop, paintCamera, paintGuide } from './kitart';
 import { hudHour } from './hudclock';
 import { drawWatch, watchSize } from '../v12/watch';
+import { slingOwnsG } from '../../game/v11/predators';
 
 const OUT = col('#140c06'), CREAM = col('#fff1cc'), INKC = col('#2a2440'), PENC = col('#6a6458');
 
@@ -247,7 +248,7 @@ export class Hud2Classic {
   private t = 0;
   private acc = 0;
   private bannerT = 0;
-  private kitRegions: { id: 'pack' | 'lap' | 'cam'; x0: number; x1: number }[] = [];
+  private kitRegions: { id: 'pack' | 'lap' | 'cam' | 'guide'; x0: number; x1: number }[] = [];
   private packFill = 0;
   private bump = 0;
 
@@ -288,6 +289,7 @@ export class Hud2Classic {
       const r = this.kitRegions.find(k => x >= k.x0 && x < k.x1);
       if (r?.id === 'pack') this.onBackpack?.();
       else if (r?.id === 'lap') this.lap?.open();
+      else if (r?.id === 'guide') { audio.play('pageTurn' as never, { vol: 0.4 }); void this.openEncyclopedia(); }
     });
     this.keys = this.root.appendChild(el('div', 'hm-keys'));
     this.setPlace(o.place, o.sub);
@@ -400,9 +402,9 @@ export class Hud2Classic {
         if (Math.random() < 0.5) audio.play('ui', { vol: 0.08, pitch: 1.8 });
       }
     }
-    // keys: J journal, G encyclopedia, L laptop
+    // keys: J journal, G encyclopedia (in the field G is the slingshot's: the guide book in the kit), L laptop
     if (free && inp.keyHit('KeyJ')) this.openJournal();
-    if (free && inp.keyHit('KeyG')) void this.openEncyclopedia();
+    if (free && inp.keyHit('KeyG') && !slingOwnsG()) void this.openEncyclopedia();
     if (this.lap && inp.keyHit('KeyL') && free && this.lap.shown()) this.lap.open();
     // the note unrolls when something changes, then rolls up to its title strip
     const moving = inp.axisX() !== 0 || inp.down('jump');
@@ -636,8 +638,8 @@ export class Hud2Classic {
     const badge = lapOn ? this.lap!.badge() : 0;
     const n = game.save.inv.length, cap = Math.max(1, capacity());
     this.packFill += (n / cap - this.packFill) * 0.2;
-    const PW = 42, LW = 36, CWd = 86, H = 54, top = 9, ph = 42;
-    const W = PW + 3 + (lapOn ? LW + 3 : 0) + (cam ? CWd : 0);
+    const PW = 42, GW = 30, LW = 36, CWd = 86, H = 54, top = 9, ph = 42;
+    const W = PW + 3 + GW + 3 + (lapOn ? LW + 3 : 0) + (cam ? CWd : 0);
     this.kitRegions = [];
     this.kitW.draw(W, H, a => {
       let x = 0;
@@ -657,6 +659,11 @@ export class Hud2Classic {
       if (f >= 0.8) outlined(a, `${n}/${cap}`, x + 2, 7, f >= 1 ? col('#ff9a80') : CREAM, OUT, { face: 'block', bold: false });
       this.kitRegions.push({ id: 'pack', x0: x, x1: x + PW });
       x += PW + 3;
+      // the field guide: a strapped leather notebook (click it; in the field G is the slingshot's)
+      kitTile(a, x, top, GW, ph, col('#2e3a22'));
+      paintGuide(a, x + 4, top + 7 + (this.bump > 0 ? -1 : 0));
+      this.kitRegions.push({ id: 'guide', x0: x, x1: x + GW });
+      x += GW + 3;
       // the field laptop with its upload badge
       if (lapOn) {
         kitTile(a, x, top, LW, ph, col('#2a3442'));

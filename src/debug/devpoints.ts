@@ -273,6 +273,38 @@ export async function goTrip(id: string, stop = false) {
   await oc.goStop(id);
 }
 
+/** the Thunderbird hunt, ready to go: the signs found, the cloak, the kahu band, bait and rope; on the
+ *  ridge top with the storm coming (feeding: the bird already down on the bait) */
+async function tbHunt(feeding: boolean) {
+  ensureLoop();
+  if ((game.save.day ?? 1) < 5) game.save.day = 5;
+  F('aroha:met', 'v4:arohaJoined', 'aroha:blueprint', 'tb:legend', 'tb:sign:feather', 'tb:sign:talons', 'tb:sign:kill');
+  for (const k of ['tb:storm', 'tb:photo', 'tb:driven', 'tb:tagged', 'tb:report']) delete game.save.flags[k];
+  tool('slingshot', 'hide_cloak');
+  await import('../game/v12/thunderbird/quest');
+  const bp = await import('../game/v11/blueprints');
+  for (const id of ['slingshot', 'hide_cloak', 'sling_kahu', 'tb_bait']) bp.grantBlueprint(id, 'dev');
+  if (!bp.isBuilt('slingshot')) bp.markMade('slingshot');
+  if (!bp.isBuilt('sling_kahu')) bp.markMade('sling_kahu');
+  if (count('tb_bait') < 2) add('tb_bait', 2 - count('tb_bait'));
+  if (count('rope') < 1) add('rope', 1);
+  game.save.quests['thunderbird'] = 'active';
+  Q(['arohaLesson'], ['thunderbird']);
+  V('v11:pebbles', 20);
+  const d = dayState();
+  d.phase = 'out'; d.went = 'hills'; d.woke = dayNumber(); d.meals.breakfast = dayNumber(); d.arrive = null;
+  game.persist();
+  await idle();
+  await (await import('../game/v10/expedition')).goExpedition('hills', { at: 2880 });
+  refill();
+  if (!(await sceneWhere(s => (s as { site?: { id?: string } }).site?.id === 'hills'))) return;
+  const h = await import('../game/v12/thunderbird/hunt');
+  const sc = game.scene as unknown as Parameters<typeof h.huntOf>[0];
+  await until(() => !!h.huntOf(sc)?.bird, 8000);
+  await sleep(500);
+  h.startEncounter(sc, { feeding });
+}
+
 // ---------------------------------------------------------------- the list
 export interface DevPoint {
   id: string;
@@ -364,6 +396,24 @@ export async function chapters(): Promise<DevChapter[]> {
       const { startNextDay } = await import('../game/v10/day');
       await startNextDay();
       await goIsle();
+    } },
+  ] });
+  // V12: the Thunderbird (src/game/v12/thunderbird) and the harder wilds (src/game/v12/wilds.ts)
+  out.push({ id: 'thunderbird', name: 'The Thunderbird · Aroha’s hunt', points: [
+    { id: 'tb:legend', name: 'The legend of Te Pouākai', sub: 'After dinner by the fire: Aroha’s story, the hunt’s blueprints', icon: 'scroll', run: () => campLoop('evening', async () => {
+      F('aroha:blueprint'); Q(['arohaLesson'], ['thunderbird']); delete game.save.flags['tb:legend'];
+      await dayEvent('tbLegend');
+    }) },
+    { id: 'tb:hunt', name: 'The storm on the ridge', sub: 'The encounter on the Rocky Hills’ ridge top, ready for it (cloak, kahu band, bait, rope)', icon: 'bolt', variants: [
+      { label: 'Storm', run: () => tbHunt(false) },
+      { label: 'On the bait', run: () => tbHunt(true) },
+    ] },
+    { id: 'tb:wilds', name: 'Hostile wilds: the tors', sub: 'The Rocky Hills with the sling but no cloak: rams and hawks', icon: 'target', run: async () => {
+      ensureLoop(); tool('slingshot');
+      const d = dayState(); d.phase = 'out'; d.woke = dayNumber(); d.meals.breakfast = dayNumber();
+      game.persist(); await idle();
+      await (await import('../game/v10/expedition')).goExpedition('hills', { at: 1640 });
+      refill();
     } },
   ] });
   // V11: the new people (src/game/v11/npcs)
