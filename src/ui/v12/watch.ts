@@ -50,6 +50,15 @@ const DIG: Record<string, string[]> = {
   '9': ['###', '#.#', '###', '..#', '###'],
 };
 
+/** finer 5x7 numerals for big cases */
+const DIG7: Record<string, string[]> = {
+  '0': ['.###.', '#...#', '#..##', '#.#.#', '##..#', '#...#', '.###.'], '1': ['..#..', '.##..', '..#..', '..#..', '..#..', '..#..', '.###.'],
+  '2': ['.###.', '#...#', '....#', '...#.', '..#..', '.#...', '#####'], '3': ['####.', '....#', '....#', '.###.', '....#', '....#', '####.'],
+  '4': ['...#.', '..##.', '.#.#.', '#..#.', '#####', '...#.', '...#.'], '5': ['#####', '#....', '####.', '....#', '....#', '#...#', '.###.'],
+  '6': ['..##.', '.#...', '#....', '####.', '#...#', '#...#', '.###.'], '7': ['#####', '....#', '...#.', '..#..', '.#...', '.#...', '.#...'],
+  '8': ['.###.', '#...#', '#...#', '.###.', '#...#', '#...#', '.###.'], '9': ['.###.', '#...#', '#...#', '.####', '....#', '...#.', '.##..'],
+};
+
 /** the canvas a watch of case `size` needs (the bow / strap and the shake margin included) */
 export function watchSize(size: number, wrist = false): { w: number; h: number } {
   const s = Math.max(14, Math.round(size));
@@ -154,30 +163,37 @@ export function drawWatch(ctx: CanvasRenderingContext2D, x: number, y: number, s
     const f = ((opts.deadline % 12) + 12) % 12 / 12, a = ang(f);
     for (let r = Rd * 0.55; r < Rd - 1; r += 0.5) px(Math.round(cx - 0.5 + Math.cos(a) * r), Math.round(cy - 0.5 + Math.sin(a) * r), RED[1]);
   }
-  // ---- minute ticks and numerals
+  // ---- minute ticks and numerals (line weights grow with the case: a watch painted at screen
+  // resolution keeps its proportions instead of going to hairlines)
+  const m = Math.max(1, Math.round(S / 70));
+  const dot = (X: number, Y: number, c: string, size: number) => { const o = Math.floor((size - 1) / 2); rect(X - o, Y - o, size, size, c); };
   const ticks = S >= 30 ? 60 : 12;
   for (let i = 0; i < ticks; i++) {
     const a = ang(i / ticks), hour = ticks === 12 || i % 5 === 0;
-    const r0 = Rd - (hour ? Math.max(2, Math.round(S / 14)) : 1) - 0.5, r1 = Rd - 0.8;
-    for (let r = r0; r <= r1; r += 0.5) px(Math.round(cx - 0.5 + Math.cos(a) * r), Math.round(cy - 0.5 + Math.sin(a) * r), hour ? INK : '#8a7a5a');
+    const r0 = Rd - (hour ? Math.max(2, Math.round(S / 14)) : Math.max(1, Math.round(S / 50))) - 0.5, r1 = Rd - 0.8 - m * 0.5;
+    for (let r = r0; r <= r1; r += 0.5) dot(Math.round(cx - 0.5 + Math.cos(a) * r), Math.round(cy - 0.5 + Math.sin(a) * r), hour ? INK : '#8a7a5a', hour ? m : Math.max(1, m - 1));
   }
   if (S >= 34) {
-    const all = S >= 76;
+    const all = S >= 130;
     const nums = (all ? [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] : [12, 3, 6, 9]).filter(n => n !== 6 || S < 44);
+    // big cases use the finer 5x7 numerals
+    const big = S >= 76, gw = big ? 5 : 3, gh = big ? 7 : 5, src = big ? DIG7 : DIG;
     for (const n of nums) {
-      const a = ang((n % 12) / 12), r = Rd - Math.max(5, Math.round(S / 7)) - 1.5;
-      const s = String(n), w = s.length * 4 - 1;
-      const nx = Math.round(cx + Math.cos(a) * r - w / 2), ny = Math.round(cy + Math.sin(a) * r - 2.5);
-      for (let k = 0; k < s.length; k++) DIG[s[k]].forEach((row, yy) => { for (let xx = 0; xx < 3; xx++) if (row[xx] === '#') px(nx + k * 4 + xx, ny + yy, INK); });
+      const a = ang((n % 12) / 12), r = Rd - Math.max(5, Math.round(S / 7)) - 1.5 - (big ? m * 2 : 0);
+      const s = String(n), w = (s.length * (gw + 1) - 1) * m;
+      const nx = Math.round(cx + Math.cos(a) * r - w / 2), ny = Math.round(cy + Math.sin(a) * r - (gh * m) / 2);
+      for (let k = 0; k < s.length; k++) src[s[k]].forEach((row, yy) => { for (let xx = 0; xx < gw; xx++) if (row[xx] === '#') rect(nx + (k * (gw + 1) + xx) * m, ny + yy * m, m, m, INK); });
     }
   }
-  // ---- the hands
+  // ---- the hands: tapered blued steel with a lit edge
   const hand = (f: number, len: number, wide: number, col: string[], tail = 0) => {
     const a = ang(f), ca = Math.cos(a), sa = Math.sin(a);
+    const w = wide * m;
     for (let r = -tail; r <= len; r += 0.5) {
       const X = Math.round(cx - 0.5 + ca * r), Y = Math.round(cy - 0.5 + sa * r);
-      px(X, Y, col[0]);
-      if (wide > 1 && r < len - 1) px(X + (Math.abs(sa) > Math.abs(ca) ? 1 : 0), Y + (Math.abs(sa) > Math.abs(ca) ? 0 : 1), col[1]);
+      const ww = Math.max(1, Math.round(w * (r < 0 ? 0.8 : 1 - (r / len) * 0.55)));
+      dot(X, Y, col[0], ww);
+      if (wide > 1 && r < len - 1) dot(X + (Math.abs(sa) > Math.abs(ca) ? Math.ceil(ww / 2) : 0), Y + (Math.abs(sa) > Math.abs(ca) ? 0 : Math.ceil(ww / 2)), col[1], Math.max(1, Math.round(ww / 2)));
     }
   };
   let hF: number, mF: number, sF: number;
@@ -199,13 +215,13 @@ export function drawWatch(ctx: CanvasRenderingContext2D, x: number, y: number, s
   if (S >= 44) {
     // a sub-seconds dial at six o'clock: a sunk ring with ticks and its own little hand
     const sr = Math.max(3, Math.round(Rd * 0.24)), scx = cx, scy = Math.round(cy + Rd * 0.5);
-    for (let a = 0; a < 48; a++) { const an = (a / 48) * Math.PI * 2; px(Math.round(scx - 0.5 + Math.cos(an) * sr), Math.round(scy - 0.5 + Math.sin(an) * sr), a % 12 === 0 ? INK : DIAL[2]); }
+    for (let a = 0; a < 96; a++) { const an = (a / 96) * Math.PI * 2; dot(Math.round(scx - 0.5 + Math.cos(an) * sr), Math.round(scy - 0.5 + Math.sin(an) * sr), a % 24 === 0 ? INK : DIAL[2], Math.max(1, m - (a % 24 === 0 ? 0 : 1))); }
     const sa = ang(sF);
-    for (let r = 0; r <= sr - 1; r += 0.5) px(Math.round(scx - 0.5 + Math.cos(sa) * r), Math.round(scy - 0.5 + Math.sin(sa) * r), red ? RED[1] : BLUE[0]);
-    px(scx - 1, scy - 1, INK);
+    for (let r = 0; r <= sr - 1; r += 0.5) dot(Math.round(scx - 0.5 + Math.cos(sa) * r), Math.round(scy - 0.5 + Math.sin(sa) * r), red ? RED[1] : BLUE[0], Math.max(1, m - 1));
+    dot(scx - 1, scy - 1, INK, m + 1);
   } else hand(sF, Rd * 0.86, 1, red ? [RED[1], RED[1]] : [BR[2], BR[2]], Math.max(1, Rd * 0.18));
-  rect(cx - 1, cy - 1, 2, 2, BR[4]);
-  px(cx - 1, cy - 1, BR[5]);
+  rect(cx - m, cy - m, 2 * m, 2 * m, BR[4]);
+  rect(cx - m, cy - m, m, m, BR[5]);
   // ---- the domed glass: an arc of glint on the top-left, a spark that comes and goes
   for (let a = 0; a < 20; a++) {
     const an = Math.PI * 1.08 + (a / 20) * Math.PI * 0.32;
