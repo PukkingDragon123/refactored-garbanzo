@@ -29,9 +29,16 @@ export interface AnimInfo7 extends AnimInfo {
 
 export const ANIMS7: Record<string, AnimInfo7> = {
   ...ANIME_ANIMS,
-  idle: { frames: 8, fps: 5, loop: true },
+  idle: { frames: 24, fps: 6, loop: true },
   walk: { frames: 12, fps: 16, loop: true },
   run: { frames: 12, fps: 18, loop: true },
+  // a cutscene jog (distance-driven like the walk)
+  jog: { frames: 12, fps: 16, loop: true },
+  // setting off from standing (a transition, distance-driven: see DIST7.walkStart)
+  walkStart: { frames: 6, fps: 22, loop: false },
+  // turning round on the spot: the Actor plays it over the stance when the facing flips (frames from
+  // `phase`: the first half is drawn facing the old way)
+  turn: { frames: 6, fps: 30, loop: false },
   // ladder climbing: the frame is the climber's place on the ladder (climbFrame), held by the caller
   climb: { frames: CLIMB_FRAMES, fps: 1, loop: true },
   climbIdle: { frames: CLIMB_FRAMES, fps: 1, loop: true },
@@ -43,10 +50,13 @@ export const ANIMS7: Record<string, AnimInfo7> = {
   camera: { frames: 8, fps: 3, loop: true },
   cameraCrouch: { frames: 8, fps: 3, loop: true },
   photograph: { frames: 8, fps: 3, loop: true },
-  cameraUp: { frames: 6, fps: 24, loop: false },
-  cameraDown: { frames: 5, fps: 24, loop: false },
-  cameraUpC: { frames: 6, fps: 24, loop: false },
-  cameraDownC: { frames: 5, fps: 24, loop: false },
+  cameraUp: { frames: 8, fps: 26, loop: false },
+  cameraDown: { frames: 7, fps: 24, loop: false },
+  cameraUpC: { frames: 8, fps: 26, loop: false },
+  cameraDownC: { frames: 7, fps: 24, loop: false },
+  // the same, by the names the inspect / camera code asks for (V12 contract)
+  cameraRaise: { frames: 8, fps: 26, loop: false },
+  cameraLower: { frames: 7, fps: 24, loop: false },
   cameraWalk: { frames: 12, fps: 12, loop: true },
   cameraCrouchWalk: { frames: 12, fps: 12, loop: true },
   // at the helm: both fists on the wheel; talking keeps one of them there (the Actor plays `talk`)
@@ -73,11 +83,11 @@ export const ANIMS7: Record<string, AnimInfo7> = {
 
 export interface Gait { stride: number; stance: number; lift: number; bob: number; lean: number; swing: number; elbow: number; elbowSwing: number; drop: number; kick: number; flight: number; hand: ArmP['hand']; sway?: number; roll?: number; armOut?: number; headBob?: number }
 // personality gaits (k-scaled): each cast member moves their own way
-type GaitSet = { walk: (b: Build) => Gait; run: (b: Build) => Gait };
+type GaitSet = { walk: (b: Build) => Gait; run: (b: Build) => Gait; jog?: (b: Build) => Gait };
 const GAITS: Record<string, GaitSet> = {
   // Mori: easy-going naturalist, loose arms, a relaxed lope when he runs
   mori: {
-    walk: b => ({ stride: b.thigh * 1.45, stance: 0.6, lift: 2.3 * K(b), bob: 0.8 * K(b), lean: 0.05, swing: 0.4, elbow: 0.22, elbowSwing: 0.3, drop: 0.3 * K(b), kick: 0.2, flight: 0, hand: 'relax', sway: 0.35 * K(b) }),
+    walk: b => ({ stride: b.thigh * 1.45, stance: 0.6, lift: 2.2 * K(b), bob: 0.8 * K(b), lean: 0.05, swing: 0.34, elbow: 0.16, elbowSwing: 0.28, drop: 0.3 * K(b), kick: 0.2, flight: 0, hand: 'relax', sway: 0.35 * K(b) }),
     run: b => ({ stride: b.thigh * 2.2, stance: 0.36, lift: 5.4 * K(b), bob: 1.2 * K(b), lean: 0.22, swing: 0.62, elbow: 1.2, elbowSwing: 0.25, drop: 1.1 * K(b), kick: 1, flight: 0.9 * K(b), hand: 'relax', sway: 0.25 * K(b) }),
   },
   // Jenna: quick light steps with a bounce and a hip sway, hands a little out from her sides
@@ -99,6 +109,16 @@ const GAITS: Record<string, GaitSet> = {
 const gaitOf = (id: string) => GAITS[id] ?? GAITS.mori;
 const WALK = (b: Build, id = 'mori') => gaitOf(id).walk(b);
 const RUN = (b: Build, id = 'mori') => gaitOf(id).run(b);
+/**
+ * The jog (cutscenes: hurrying somewhere): an easy trot between the walk and the run, a short float
+ * between the steps, forearms up, the hands loose; nobody sprints any more.
+ */
+const JOG = (b: Build, id = 'mori'): Gait => {
+  const gs = gaitOf(id);
+  if (gs.jog) return gs.jog(b);
+  const g = mixGait(gs.walk(b), gs.run(b), 0.5);
+  return { ...g, stance: 0.44, flight: 0.35 * K(b), elbow: Math.max(g.elbow, 1.05), lean: g.lean * 0.8, hand: 'relax' };
+};
 
 /** px travelled per cycle on screen: a foot slides back S over the stance, in the legs' yaw */
 export const gaitDist = (g: Gait) => (g.stride * LEG_YAW) / g.stance;
@@ -122,39 +142,65 @@ function foot(b: Build, g: Gait, ph: number, base: number): LegP {
   return { f: [base + x, y], fa: -0.75 * (1 - e) + 0.25 * e * e };
 }
 
+/**
+ * The cycle, from the classic key poses: t = 0 the near heel strikes (contact), just after it the
+ * knee gives and the body sinks (down), the far leg swings past (passing) and the body vaults up over
+ * the straight near leg (up), t = 0.5 the far heel strikes. Each arm swings with the OPPOSITE leg, a
+ * beat behind it; the shoulders turn with their arm and the hips with their leg (body.ts), the
+ * weight rolls over the loaded foot, and the head rides steady over all of it.
+ */
 export function gait(b: Build, t: number, g: Gait): Pose {
   const k = K(b);
   const st = g.stance;
   // hip height: compressed through each stance, up through the swing (and the flight phase)
   const comp = (ph: number) => { ph = frac(ph); return ph < st ? Math.sin(Math.PI * ph / st) : 0; };
   const c = Math.max(comp(t), comp(t + 0.5));
+  // walking: lowest just after each heel strike (the down), highest just past the passing (the up),
+  // a quick give and a slower rise
+  const s2 = frac(2 * t);
+  const wv = 0.5 - 0.5 * Math.cos(TAU * (s2 - 0.1)) - 0.12 * Math.sin(TAU * (s2 - 0.1));
   const bob = g.flight > 0
     ? -g.drop - g.bob * c + g.flight * (1 - c)
-    : -g.drop - g.bob * (0.5 + 0.5 * Math.cos(TAU * 2 * t));
-  // arms from the shoulder, opposite the legs; the forearm trails a beat behind, and the hand a beat
-  // behind that: dragged back through the swing, flicking through at the end of it (follow-through)
+    : -g.drop - g.bob * (1 - Math.max(0, Math.min(1, wv)));
+  // arms from the shoulder, opposite the legs and a beat behind them; the forearm trails a beat
+  // behind that, and the hand behind the forearm: dragged back through the swing, flicking through at
+  // the end of it (follow-through). The swing goes further forward than back.
   const stiff = g.hand === 'fist' || g.hand === 'grip' ? 0.45 : 1;
   const arm = (ph: number): ArmP => {
-    const sw = -Math.cos(TAU * ph);
-    const lag = -Math.cos(TAU * (ph - 0.1));
-    const drag = Math.sin(TAU * (ph - 0.07));
-    return { a: 0.04 + g.swing * sw, e: g.elbow + g.elbowSwing * (0.5 + 0.5 * lag), hand: g.hand, dev: -0.4 * stiff * drag * Math.min(1, g.swing * 1.8), flex: 0.08 + 0.14 * stiff * Math.max(0, -sw) * Math.min(1, g.swing * 2) };
+    const sw = -Math.cos(TAU * (ph - 0.04));
+    const lag = -Math.cos(TAU * (ph - 0.14));
+    const drag = Math.sin(TAU * (ph - 0.1));
+    return { a: 0.05 + g.swing * sw * (sw > 0 ? 1 : 0.82), e: g.elbow + g.elbowSwing * (0.5 + 0.5 * lag), hand: g.hand, dev: -0.4 * stiff * drag * Math.min(1, g.swing * 1.8), flex: 0.08 + 0.14 * stiff * Math.max(0, -sw) * Math.min(1, g.swing * 2) };
   };
+  // the head: steadied against the bob, nodding a touch forward as each heel lands (headBob: a
+  // bird-like bob some walkers have)
+  const land = Math.pow(Math.max(0, Math.cos(Math.PI * Math.min(1, s2 / 0.3))), 2);
   const p: Pose = {
     hip: [0.15 * k * Math.sin(TAU * 2 * t), b.hipH + bob],
     lean: g.lean + 0.03 * Math.cos(TAU * 2 * t) * (g.flight > 0 ? 1 : 0.4),
     // squash as the weight lands on the leg, a stretch off the toes in the run's flight
     sq: 1 - c * (g.flight > 0 ? 0.04 : 0.022) + (g.flight > 0 ? (1 - c) * 0.018 : 0),
-    // the head stays level: it rides a little against the bob
-    hd: [0.25 * k + g.lean * 1.6 * k, -bob * 0.25],
-    fa: arm(t + 0.5), ba: arm(t),
-    fl: foot(b, g, t, -0.3 * k), bl: foot(b, g, t + 0.5, 0.4 * k),
+    hd: [0.25 * k + g.lean * 1.6 * k + (0.12 + 0.5 * (g.headBob ?? 0)) * k * land, -bob * 0.3 - 0.1 * k * land],
+    fa: arm(t), ba: arm(t + 0.5),
+    // the feet step on their own tracks: placed so the near and far strides read the same length
+    // on screen through the three-quarter turn (the near hip sits nearer the viewer, so further back)
+    fl: foot(b, g, t, 1.85 * k), bl: foot(b, g, t + 0.5, -1.65 * k),
     sway: (g.flight > 0 ? 1.1 : 0.35) + 0.35 * Math.sin(TAU * 2 * t),
     bounce: -bob * 0.4,
     // the hips rock over the loaded leg, the shoulders roll with them
-    flags: { sx: (g.sway ?? 0) * Math.sin(TAU * t), roll: (g.roll ?? 0) * Math.sin(TAU * t), aoN: g.armOut ?? 0, aoF: g.armOut ?? 0 },
+    flags: { sx: (g.sway ?? 0) * Math.sin(TAU * (t - 0.04)), roll: (g.roll ?? 0) * Math.sin(TAU * t), aoN: g.armOut ?? 0, aoF: g.armOut ?? 0 },
   };
   return p;
+}
+
+/** a gait part way between two (a jog between the walk and the run) */
+export function mixGait(a: Gait, b: Gait, u: number): Gait {
+  const m = (x: number | undefined, y: number | undefined) => (x ?? 0) + ((y ?? 0) - (x ?? 0)) * u;
+  return {
+    stride: m(a.stride, b.stride), stance: m(a.stance, b.stance), lift: m(a.lift, b.lift), bob: m(a.bob, b.bob), lean: m(a.lean, b.lean),
+    swing: m(a.swing, b.swing), elbow: m(a.elbow, b.elbow), elbowSwing: m(a.elbowSwing, b.elbowSwing), drop: m(a.drop, b.drop), kick: m(a.kick, b.kick),
+    flight: m(a.flight, b.flight), hand: u < 0.5 ? a.hand : b.hand, sway: m(a.sway, b.sway), roll: m(a.roll, b.roll), armOut: m(a.armOut, b.armOut), headBob: m(a.headBob, b.headBob),
+  };
 }
 
 // ------------------------------------------------------------------ ladder climb (back view)
@@ -263,45 +309,127 @@ function climbTurn(b: Build, u: number): Pose {
 
 // ------------------------------------------------------------------ idle
 
+/** one breath over 0..1: in (eased), a held beat at the top, a longer slower breath out */
+export const breath = (t: number) => { t = frac(t); return t < 0.38 ? smooth(t / 0.38) : t < 0.48 ? 1 : 1 - smooth((t - 0.48) / 0.48); };
+
+/**
+ * Standing about (a 4 s loop): one slow breath (the chest rises, the shoulders lift and the arms
+ * with them, the head rides up a hair), the weight drifting off one leg onto the other and back, the
+ * loose hands swinging a beat behind the body like pendulums. Each of the cast stands their own way.
+ */
 function idle(b: Build, t: number, id: string): Pose {
-  const k = K(b), br = Math.sin(TAU * t), sh = Math.sin(TAU * t + 0.8);
+  const k = K(b), br = breath(t), brs = br * 2 - 1, sh = Math.sin(TAU * t + 0.8), shLag = Math.sin(TAU * t + 0.2);
   const p = stand(b);
-  // weight settled on the back leg, a slow breath, the arms hanging loose and swaying a touch
-  p.hip = [0.35 * k * sh, b.hipH - 0.35 - Math.max(0, -br) * 0.35];
-  p.lean = 0.02 + br * 0.012;
-  p.sq = 1 + br * 0.018;
+  // weight settled on the back leg; it drifts across and back over the loop
+  p.hip = [0.35 * k * sh, b.hipH - 0.35 - (1 - br) * 0.3];
+  p.lean = 0.02 - br * 0.012;
+  p.sq = 1 + br * 0.022;
+  p.hd = [0.06 * k * shLag, 0.18 * k * br];
   p.fl = { f: [-2.2 * k, b.ankleH], fa: 0 };
   p.bl = { f: [2.4 * k, b.ankleH], fa: 0.05 };
-  p.fa = { a: 0.08 + br * 0.04 + sh * 0.02, e: 0.34 - br * 0.05, hand: 'relax' };
-  p.ba = { a: -0.08 - br * 0.03, e: 0.28 + br * 0.04, hand: 'relax' };
-  p.sway = 0.2 + 0.2 * br;
+  p.fa = { a: 0.08 + br * 0.035 - shLag * 0.025, e: 0.34 - br * 0.04, hand: 'relax', dev: -0.15 * shLag };
+  p.ba = { a: -0.08 - br * 0.02 + shLag * 0.02, e: 0.28 + br * 0.03, hand: 'relax' };
+  p.sway = 0.2 + 0.2 * brs;
   const hip = p.hip;
   if (id === 'jenna') {
-    // hands clasped in front, rocking gently on her heels, a little head tilt
-    p.fa = { ik: [hip[0] + 3.4 * k, hip[1] + 1.4 * k + br * 0.2], hand: 'relax' };
-    p.ba = { ik: [hip[0] + 3.2 * k, hip[1] + 1.1 * k + br * 0.2], hand: 'relax' };
-    p.hip = [hip[0] + 0.3 * k * Math.sin(TAU * t * 2), hip[1]];
-    p.hd = [0.3 * k * sh, 0];
-    p.fl = { f: [-1.4 * k, b.ankleH], fa: 0 };
-    p.bl = { f: [1.2 * k, b.ankleH + Math.max(0, br) * 0.6], fa: Math.max(0, br) * 0.25 };
+    // hands clasped in front, rocking gently heel to toe, a little head tilt
+    const rock = Math.sin(TAU * t * 2);
+    p.fa = { ik: [hip[0] + 3.4 * k, hip[1] + 1.4 * k + br * 0.25], hand: 'relax' };
+    p.ba = { ik: [hip[0] + 3.2 * k, hip[1] + 1.1 * k + br * 0.25], hand: 'relax' };
+    p.hip = [hip[0] + 0.3 * k * rock, hip[1] + Math.max(0, rock) * 0.25 * k];
+    p.hd = [0.3 * k * sh, 0.15 * k * br];
+    p.fl = { f: [-1.4 * k, b.ankleH + Math.max(0, rock) * 0.5 * k], fa: -Math.max(0, rock) * 0.3 };
+    p.bl = { f: [1.2 * k, b.ankleH + Math.max(0, rock) * 0.5 * k], fa: -Math.max(0, rock) * 0.3 };
     p.flags = { aoN: -3.2, aoF: -3.2, sx: 0.4 * k * sh };
   } else if (id === 'aroha') {
     // a hand on her hip, weight on the back leg, calm and watchful
-    p.fa = { ik: [hip[0] + 0.6 * k, hip[1] + 2.6 * k], hand: 'fist' };
+    p.fa = { ik: [hip[0] + 0.6 * k, hip[1] + 2.6 * k + br * 0.2], hand: 'fist' };
     p.flags = { aoN: 2.6, sx: 0.5 * k };
-    p.lean = 0.0 + br * 0.01;
+    p.lean = 0.0 - br * 0.01;
   } else if (id === 'joshu') {
     // fists on his hips, chest out, rocking on his sea legs; the belly rises and falls
     p.fa = { ik: [hip[0] + 0.4 * k, hip[1] + 2.4 * k], hand: 'fist' };
     p.ba = { ik: [hip[0] - 0.2 * k, hip[1] + 2.4 * k], hand: 'fist' };
-    p.lean = -0.04 + br * 0.015;
-    p.sq = 1 + br * 0.03;
+    p.lean = -0.04 - br * 0.015;
+    p.sq = 1 + br * 0.034;
     p.fl = { f: [-2.6 * k, b.ankleH], fa: 0 };
     p.bl = { f: [2.8 * k, b.ankleH], fa: 0 };
-    p.flags = { aoN: 3.2, aoF: 3.2, sx: 0.7 * k * Math.sin(TAU * t), roll: 0.03 * Math.sin(TAU * t) };
+    p.flags = { aoN: 3.2, aoF: 3.2, sx: 0.7 * k * Math.sin(TAU * t * 2), roll: 0.03 * Math.sin(TAU * t * 2) };
   } else {
     p.flags = { sx: 0.3 * k * sh };
   }
+  return p;
+}
+
+// ------------------------------------------------------------------ starting off, turning round
+
+/** the clip's own frame for a character (own clips, e.g. Aroha's walk, included) at phase t */
+const at7 = (id: string, anim: string, b: Build, t: number) => {
+  const n = framesOf7(id, anim);
+  return pose7(id, anim, b, ((Math.round(t * n) % n) + n) % n);
+};
+/** the cast's own leg yaw (screen px per ground px along the stride) */
+export const LEG_K = LEG_YAW;
+
+/**
+ * Setting off (idle → walk, distance-driven): the weight rocks over onto the front foot and the body
+ * tips forward into the first step, then the back foot peels off the ground and swings through to the
+ * walk's first heel strike, the arms easing into their swing. The front foot stays planted the whole
+ * way (it slides back exactly as far as the body moves: DIST7.walkStart), so nothing skates.
+ */
+function walkStart(b: Build, u: number, id: string): Pose {
+  const k = K(b);
+  const rest = at7(id, 'idle', b, 0), w0 = at7(id, 'walk', b, 0);
+  const e = smooth(u);
+  // the planted foot: straight from where it stood to where the walk has it
+  const bf = rest.bl.f, wf = w0.bl.f;
+  const bl = { f: [bf[0] + (wf[0] - bf[0]) * u, bf[1] + (wf[1] - bf[1]) * smooth((u - 0.5) / 0.5)] as P2, fa: (rest.bl.fa ?? 0) + ((w0.bl.fa ?? 0) - (rest.bl.fa ?? 0)) * smooth((u - 0.4) / 0.6) };
+  // the stepping foot: heel peels, the foot swings low through and reaches for the heel strike
+  const sw = smooth((u - 0.12) / 0.88), arc = Math.sin(Math.PI * Math.max(0, Math.min(1, (u - 0.1) / 0.9)));
+  const nf = rest.fl.f, wn = w0.fl.f;
+  const fl = { f: [nf[0] + (wn[0] - nf[0]) * sw, nf[1] + (wn[1] - nf[1]) * sw + arc * 2 * k] as P2, fa: u < 0.45 ? -0.6 * smooth(u / 0.3) : -0.6 + 0.9 * smooth((u - 0.45) / 0.55) };
+  // the hips: over the planted foot first (the weight shift), then falling forward into the stride
+  const shift = Math.sin(Math.PI * Math.min(1, u * 1.4)) * 0.55 * k;
+  const hip: P2 = [rest.hip[0] + (w0.hip[0] - rest.hip[0]) * e, rest.hip[1] + (w0.hip[1] - rest.hip[1]) * e - 0.25 * k * Math.sin(Math.PI * u)];
+  const lean = rest.lean + (w0.lean - rest.lean) * e + 0.05 * Math.sin(Math.PI * Math.min(1, u * 1.2));
+  const sx = -shift + ((w0.flags?.sx ?? 0) * e);
+  const A: Pose = { ...rest, hip, lean, fl, bl, flags: { ...(rest.flags ?? {}), sx } };
+  const B: Pose = { ...w0, hip, lean, fl, bl, flags: { ...(w0.flags ?? {}), sx } };
+  // the upper body (arms, shoulders, head) eases from the stance into the swing in 3D
+  A.mix = { p: B, u: smooth((u - 0.05) / 0.85) };
+  return A;
+}
+/** screen px the body travels while setting off: as far as the planted foot slides back */
+const walkStartDist = (b: Build, id: string) => Math.max(2, (at7(id, 'idle', b, 0).bl.f[0] - at7(id, 'walk', b, 0).bl.f[0]) * LEG_YAW);
+
+/** the yaw at which the cast face the viewer (a hair toward the way they're going, for the flip) */
+const FRONT_YAW = Math.PI / 2 - 0.1;
+/**
+ * Turning round on the spot (the Actor draws the first half facing the old way and the second half
+ * facing the new way, so the flip happens with the body square to the viewer and doesn't show): the
+ * body swings round to face the camera and on round, the legs pivoting under it with a little step
+ * each side, the hanging arms lagging the turn, the head leading it.
+ */
+function turn(b: Build, u: number): Pose {
+  const k = K(b);
+  // 0 → 1 (facing the viewer) → 0, the head a beat ahead of the body
+  const tri = 1 - Math.abs(2 * u - 1);
+  const yb = smooth(Math.min(1, tri * 1.25));
+  const p = stand(b, { lean: 0.02 - 0.03 * yb });
+  p.hip = [0, b.hipH - 0.35 - 0.45 * k * Math.sin(Math.PI * tri)];
+  const step = (a: number, c: number) => Math.max(0, Math.sin(Math.PI * Math.max(0, Math.min(1, (u - a) / (c - a)))));
+  const sN = step(0.08, 0.46), sF = step(0.54, 0.92);
+  // feet: from the stance in to under the body and out again on the other side
+  p.fl = { f: [(-2.2 + 2.6 * yb) * k, b.ankleH + sN * 1.2 * k], fa: -0.3 * sN };
+  p.bl = { f: [(2.4 - 2.8 * yb) * k, b.ankleH + sF * 1.2 * k], fa: -0.3 * sF };
+  // the arms swing out a little and trail the turn
+  const lagA = Math.sin(Math.PI * u);
+  p.fa = { a: 0.1 - 0.12 * lagA, e: 0.3 + 0.1 * lagA, hand: 'relax' };
+  p.ba = { a: -0.06 + 0.1 * lagA, e: 0.26, hand: 'relax' };
+  const yaw = YAW + (FRONT_YAW - YAW) * yb;
+  p.flags = { yaw, lyaw: YAW * 0.5 + (yaw - YAW * 0.5) * yb, aoN: 0.6 * lagA, aoF: 0.6 * lagA };
+  p.look = tri > 0.45 ? 'cam' : 'fwd';
+  p.sway = 0.4 + 0.5 * tri;
   return p;
 }
 
@@ -646,6 +774,31 @@ function cameraPose(b: Build, u: number, crouch: boolean, walk: number | null, t
   return p;
 }
 
+/**
+ * Bringing the camera up (t 0 → 1): both hands find it on its strap, then it comes up to the eye fast
+ * and decelerating, the head ducking a touch to meet the viewfinder and settling; the knees soften as
+ * it comes up. Lowering is the reverse with a breath out at the end (the shoulders drop).
+ */
+function cameraRaise(b: Build, t: number, crouch: boolean): Pose {
+  const k = K(b);
+  const g = smooth(t / 0.32), l = 1 - Math.pow(1 - Math.max(0, Math.min(1, (t - 0.22) / 0.62)), 2.4);
+  const p = cameraPose(b, 0.35 * g + 0.65 * l, crouch, null);
+  const settle = bump(t, 0.68, 1, 0.14);
+  p.hd = [(p.hd?.[0] ?? 0) + 0.2 * k * settle, (p.hd?.[1] ?? 0) - 0.35 * k * settle];
+  p.hip = [p.hip[0], p.hip[1] - 0.35 * k * bump(t, 0.15, 0.75, 0.2)];
+  return p;
+}
+function cameraLower(b: Build, t: number, crouch: boolean): Pose {
+  const k = K(b);
+  const l = 1 - smooth(t / 0.62), g = 1 - smooth((t - 0.45) / 0.55);
+  const p = cameraPose(b, Math.min(0.35, 0.35 * g) + 0.65 * l, crouch, null);
+  const out = bump(t, 0.5, 1, 0.2);
+  p.hip = [p.hip[0], p.hip[1] - 0.3 * k * out];
+  p.hd = [p.hd?.[0] ?? 0, (p.hd?.[1] ?? 0) - 0.2 * k * out];
+  p.sq = (p.sq ?? 1) - 0.012 * out;
+  return p;
+}
+
 const POSES7: Record<string, (b: Build, t: number, id: string) => Pose> = {
   idle,
   steer: (b, t) => steer(b, t),
@@ -661,10 +814,15 @@ const POSES7: Record<string, (b: Build, t: number, id: string) => Pose> = {
   climbOff: (b, t) => climbTurn(b, 1 - t),
   camera: (b, t) => cameraPose(b, 1, false, null, t),
   cameraCrouch: (b, t) => cameraPose(b, 1, true, null, t),
-  cameraUp: (b, t) => cameraPose(b, t, false, null),
-  cameraDown: (b, t) => cameraPose(b, 1 - t, false, null),
-  cameraUpC: (b, t) => cameraPose(b, t, true, null),
-  cameraDownC: (b, t) => cameraPose(b, 1 - t, true, null),
+  cameraUp: (b, t) => cameraRaise(b, t, false),
+  cameraDown: (b, t) => cameraLower(b, t, false),
+  cameraUpC: (b, t) => cameraRaise(b, t, true),
+  cameraDownC: (b, t) => cameraLower(b, t, true),
+  cameraRaise: (b, t) => cameraRaise(b, t, false),
+  cameraLower: (b, t) => cameraLower(b, t, false),
+  jog: (b, t, id) => gait(b, t, JOG(b, id)),
+  walkStart: (b, t, id) => walkStart(b, t, id),
+  turn: b => turn(b, 0),
   cameraWalk: (b, t) => cameraPose(b, 1, false, t),
   cameraCrouchWalk: (b, t) => cameraPose(b, 1, true, t),
   photograph: (b, t) => cameraPose(b, 1, false, null, t),
@@ -708,6 +866,8 @@ export function pose7(id: string, anim: string, b: Build, frame: number): Pose {
   const fn = POSES7[anim];
   if (!fn) return animePose(id, anim, b, frame);
   if (anim === 'climb' || anim === 'climbIdle' || anim === 'carryPupClimb') return climbPose(b, frame, anim === 'carryPupClimb');
+  // the turn samples the middle of each frame's slot (no frame is the stance it starts from)
+  if (anim === 'turn') return turn(b, (frame + 0.5) / ANIMS7.turn.frames);
   const info = ANIMS7[anim];
   const n = info.frames;
   const t = n <= 1 ? 0 : info.loop ? frame / n : frame / (n - 1);
@@ -724,6 +884,8 @@ export function animInfo7(b: Build, anim: string, id = 'mori'): AnimInfo7 | null
   if (DIST7[base]) return { ...info, dist: DIST7[base](b, id, v) };
   if (anim === 'walk') return { ...info, dist: gaitDist(WALK(b, id)) };
   if (anim === 'run') return { ...info, dist: gaitDist(RUN(b, id)) };
+  if (anim === 'jog') return { ...info, dist: gaitDist(JOG(b, id)) };
+  if (anim === 'walkStart') return { ...info, dist: walkStartDist(b, id) };
   if (anim === 'cameraWalk') return { ...info, dist: gaitDist(CAM_GAIT(b, false)) };
   if (anim === 'cameraCrouchWalk') return { ...info, dist: gaitDist(CAM_GAIT(b, true)) };
   return info;

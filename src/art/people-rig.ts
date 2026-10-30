@@ -98,7 +98,8 @@ export interface Pose {
   fl: LegP;
   bl: LegP;
   props?: PropP[];
-  look?: 'fwd' | 'up' | 'down';
+  /** head direction: 'cam' turns the face to the viewer, 'away' glances back over the shoulder (V7) */
+  look?: 'fwd' | 'up' | 'down' | 'cam' | 'away';
   /** parts routed to the front buffer: 'armF', 'armB' */
   front?: string[];
   /** draw the front leg after the torso (knee in front of the belly) */
@@ -116,6 +117,10 @@ export interface Pose {
   flags?: Record<string, number>;
   /** V7: a real object in the hands (src/art/v7/held.ts draws it where the pose put the hands) */
   held?: { kind: string; /** fill level, count, open/closed... per kind */ v?: number; /** animation phase 0..1 */ t?: number };
+  /** V7: blend this pose (or `a`, when given) toward `p` in 3D (joint positions, not angles), u 0..1
+   *  (a little past 1 overshoots): crossfades between clips that pose the arms in different ways (talk
+   *  gestures to hands at rest). Either side may itself be a blend. */
+  mix?: { a?: Pose; p: Pose; u: number };
 }
 
 export interface Build {

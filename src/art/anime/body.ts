@@ -140,7 +140,7 @@ export function paintAnimeBody(ch: AnimeChar, pose: Pose, anim: string, t: numbe
     ay: OY - tr.oy,
     hx: Math.round(nt[0]) - tr.ox,
     hy: Math.round(nt[1]) - tr.oy,
-    look: pose.look,
+    look: pose.look === 'cam' || pose.look === 'away' ? 'fwd' : pose.look,
     hand: [Math.round(hw[0]) - tr.ox, Math.round(hw[1]) - tr.oy],
     headBehind: pose.headBehind || undefined,
     hrot: pose.flags?.hrot,

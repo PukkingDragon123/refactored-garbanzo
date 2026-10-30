@@ -15,7 +15,7 @@ import { approach, clamp, rand } from '../core/math';
 
 // ------------------------------------------------------------------ art binding (src/art/people.ts, src/art/emotes.ts)
 
-export type Look = 'fwd' | 'up' | 'down' | 'back';
+export type Look = 'fwd' | 'up' | 'down' | 'back' | 'cam' | 'away';
 export interface BodyFrameArt { back: PixelBuffer; front: PixelBuffer | null; ax: number; ay: number; hx: number; hy: number; look?: Look; hand?: [number, number]; headBehind?: boolean; hrot?: number; hflip?: boolean; hair?: number; pts?: Record<string, [number, number]> }
 export interface PeopleArt {
   ANIMS: Record<string, { frames: number; fps: number; loop: boolean; dist?: number; talk?: string }>;

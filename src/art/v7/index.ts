@@ -104,7 +104,7 @@ export function renderBody(id: string, anim: string, frame: number): Frame7 {
 
 export function renderHead(id: string, o: HeadOpts7): { buf: PixelBuffer; ax: number; ay: number } {
   const [cid, outfit] = parse(id);
-  if (cid === 'chunk') return renderChunkHead({ ...o, look: o.look === 'back' ? 'fwd' : o.look });
+  if (cid === 'chunk') return renderChunkHead({ ...o, look: o.look === 'up' || o.look === 'down' ? o.look : 'fwd' });
   const { wear, key } = dress(cid, outfit);
   return renderHead7(cid, o, wear, key);
 }
