@@ -29,6 +29,8 @@ import type { Built } from './content';
 import { decodeStrokes, encodeStrokes, rasterStroke, simplify, MAX_STROKES } from './ink';
 import type { InkStroke } from './ink';
 import { prewarmNotebookMap } from './map';
+import { hasAnim7 } from '../../../art/v7/anim-contract';
+import { animInfo } from '../../../world/actor';
 
 const SMAX = 4, BR = 3;
 const SHADE = col('#2a1808'), WHITE = col('#fffaf0'), EDGE = col('#8a6a40'), DIM = col('#0c0806');
@@ -52,6 +54,10 @@ interface Turn {
 interface Stroke { slot: number; id: string; tool: 'pen' | 'pencil' | 'eraser'; pts: number[] }
 interface Rect { x: number; y: number; w: number; h: number }
 const inR = (r: Rect, x: number, y: number) => x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
+
+/** the player, as far as the notebook needs him (his pose while he takes it out and reads) */
+interface Holder { poseOverride: string | null; vx: number }
+const clipMs = (anim: string) => { const i = animInfo(anim, 'mori'); return Math.max(250, Math.min(1600, (i.frames / Math.max(1, i.fps)) * 1000)); };
 
 let nb: Notebook | null = null;
 /** open (resolves when it has been put away) */
@@ -132,15 +138,25 @@ class Notebook {
     this.target = null;
     game.ui.modalLayer.appendChild(this.root);
     game.ui.modalOpen++;
-    game.covered++;
-    requestAnimationFrame(() => { this.bg.style.opacity = '1'; });
+    // Mori takes the notebook out of his pocket in the world first (the pullNote clip), then it comes
+    // up into view and the world freezes behind it
+    const sc = game.scene as unknown as { player?: Holder; cutscene?: boolean } | null;
+    const p = sc?.player;
+    if (p && !sc?.cutscene && hasAnim7('pullNote') && !reduced()) {
+      const ms = clipMs('pullNote');
+      this.who = { p, prev: p.poseOverride ?? null };
+      p.vx = 0;
+      p.poseOverride = 'pullNote';
+      this.openT = -(ms * 0.7) / 1000;
+      audio.play('rustle', { vol: 0.4, pitch: 1.15 });
+      setTimeout(() => { if (p.poseOverride === 'pullNote') p.poseOverride = hasAnim7('noteRead') ? 'noteRead' : this.who?.prev ?? null; }, ms);
+    }
     this.bindInput();
     this.offMark = onQuestMark(() => { this.rebuild(true); this.dirty = true; });
     window.addEventListener('resize', this.onResize);
     prewarmNotebookMap();
     this.last = performance.now();
     requestAnimationFrame(this.loop);
-    paperSfx('slide', 0.8);
   }
 
   // ------------------------------------------------------------ sizes and layout
@@ -193,7 +209,8 @@ class Notebook {
   /** where things are this frame (art px) */
   private geo() {
     const spine0 = this.spread ? Math.round(this.CW / 2) : Math.round((this.CW - PW) / 2);
-    const top0 = Math.max(this.spread ? 18 : 22, Math.round((this.CH - PH) / 2) - 8);
+    // held a little low, as you'd hold a notebook to read it
+    const top0 = Math.max(this.spread ? 18 : 22, Math.round((this.CH - PH) * (this.spread ? 0.5 : 0.6)) - 8);
     // closed (and sliding): centred on the cover
     const shut = 1 - Math.min(1, this.openK * 1.0);
     const ox = this.spread ? Math.round(-(PW / 2) * easeInOut(shut)) : 0;
@@ -318,12 +335,20 @@ class Notebook {
   };
 
   private openT = 0;
+  private shown = false;
+  private coveredOn = false;
+  private putting = false;
+  private who: { p: Holder; prev: string | null } | null = null;
   private update(dt: number) {
     const R = reduced();
     // opening: up out of the pocket, the band off, the cover over
     if (this.phase === 'opening') {
+      const t0 = this.openT;
       this.openT += dt * (R ? 8 : 1);
       const t = this.openT;
+      if (t0 < 0 && t >= 0 || (t0 === 0 && !this.shown)) { this.shown = true; this.bg.style.opacity = '1'; paperSfx('slide', 0.8); }
+      if (t < 0) return;
+      if (t >= 0.45 && !this.coveredOn) { this.coveredOn = true; game.covered++; }
       const k0 = Math.min(1, t / 0.45);
       this.slideK = backOut(k0);
       if (t > 0.45 && this.bandK === 0) audio.play('pluck', { vol: 0.35, pitch: 0.55 });
@@ -343,6 +368,17 @@ class Notebook {
       this.openK = 1 - easeInOut(Math.min(1, t / 0.4));
       if (t > 0.4 && this.bandK === 1) audio.play('pluck', { vol: 0.3, pitch: 0.5 });
       this.bandK = 1 - Math.max(0, Math.min(1, (t - 0.4) / 0.15));
+      if (t >= 0.55 && !this.putting) {
+        // the world comes back as the notebook goes down, and Mori puts it away (the putNote clip)
+        this.putting = true;
+        if (this.coveredOn) { this.coveredOn = false; game.covered = Math.max(0, game.covered - 1); }
+        const w = this.who;
+        if (w && hasAnim7('putNote') && !R) {
+          w.p.poseOverride = 'putNote';
+          audio.play('rustle', { vol: 0.35, pitch: 1.05 });
+          setTimeout(() => { if (w.p.poseOverride === 'putNote') w.p.poseOverride = w.prev; }, clipMs('putNote'));
+        } else if (w && (w.p.poseOverride === 'noteRead' || w.p.poseOverride === 'pullNote')) w.p.poseOverride = w.prev;
+      }
       const k2 = Math.max(0, Math.min(1, (t - 0.55) / 0.32));
       this.slideK = 1 - k2 * k2;
       this.dirty = true;
@@ -703,7 +739,7 @@ class Notebook {
       if (st === undefined) return;
       const right = this.spread ? st >= vs[1] : st >= vs[0];
       const here = vs.some(v => this.built.slots[v]?.section === sec.id);
-      const y = top + 14 + i * 34;
+      const y = top + (this.spread ? 14 : 40) + i * 34;
       const art = tabArt(sec.color, sec.id, right ? 'r' : 'l');
       const out = here ? 3 : 0;
       const x = right ? spine + PW + (st === cur ? 0 : tR) - 4 + out : spine - (this.spread ? PW : 0) - (this.spread ? tL : 0) - art.w + 4 - out;
@@ -1048,7 +1084,9 @@ class Notebook {
     window.removeEventListener('resize', this.onResize);
     this.root.remove();
     game.ui.modalOpen = Math.max(0, game.ui.modalOpen - 1);
-    game.covered = Math.max(0, game.covered - 1);
+    if (this.coveredOn) { this.coveredOn = false; game.covered = Math.max(0, game.covered - 1); }
+    const w = this.who;
+    if (w && !this.putting && (w.p.poseOverride === 'noteRead' || w.p.poseOverride === 'pullNote')) w.p.poseOverride = w.prev;
     guardInput(300);
     if (this.saveT > 0) game.persist();
     this.closedRes();
