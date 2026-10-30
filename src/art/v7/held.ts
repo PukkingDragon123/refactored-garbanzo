@@ -518,6 +518,36 @@ const PACK: Record<string, { body: Ramp6; lid: Ramp6; roll?: Ramp6 }> = {
   aroha: { body: R6('#2a1e0c', '#5a4418', '#86692a', '#b08e40', '#caa85a', '#e4c67c'), lid: R6('#0e0806', '#22140c', '#341e12', '#48291a', '#5c3624', '#744832') },
 };
 
+/**
+ * Mori's note paper: a little field notebook (green board covers, cream pages, an elastic band) out of
+ * his pocket. v 0 = closed, pinched in the near fingers; 1 = open in both hands at the chest, tipped
+ * up toward his face (the viewer sees the back cover and the page edges).
+ */
+const NOTE = { cover: R6('#0a140c', '#16281a', '#243e28', '#345638', '#4a704a', '#66905e'), paper: R6('#4a4234', '#8a806a', '#b8ae94', '#ded4b8', '#f2ead2', '#fffbea'), band: R6('#1a0806', '#3a120c', '#5a1e14', '#7a2c1e', '#9a3c2a', '#b85440') };
+HELD7.note = (s, J, P, _ch, hN, hF, pts) => {
+  if (!hN) return;
+  const v = Math.max(0, Math.min(1, P.held?.v ?? 0));
+  // closed: lying in the fingers; open: between the hands, the pages facing up at the reader
+  const c0 = vadd(hN.grip, vsc(hN.n, 0.5));
+  const c1 = add3(hF ? vlerp(hN.palm, hF.palm, 0.5) : hN.palm, vsc(UP, 0.9));
+  const c = vlerp(c0, c1, v);
+  const n1 = vnorm(vadd(vsc(UP, 0.8), vsc(J.fwd, -0.55)));
+  const nrm = vnorm(vlerp(hN.n, n1, v));
+  const across = vnorm(vsub(vlerp(hN.s, J.lat, v), vsc(nrm, vdot(vlerp(hN.s, J.lat, v), nrm))));
+  const along = vnorm(vcross(nrm, across));
+  const W = 1.25 + 1.45 * v, L = 1.75 + 0.15 * v, T = 0.55 - 0.25 * v;
+  s.solid('box', c, vsc(along, L), vsc(nrm, T), vsc(across, W), GH.obj, h => {
+    if (h.t === 1) {
+      // the page side once it's open (a gutter down the middle, faint ruled lines), else the cover
+      if (h.q[1] > 0 && v > 0.5) return Math.abs(h.q[2]) < 0.08 ? cel(NOTE.paper, h.l, -0.35) : cel(NOTE.paper, h.l, frac(h.q[0] * 2.6) < 0.2 ? -0.1 : 0.12);
+      return Math.abs(h.q[2] - 0.55) < 0.12 && v < 0.5 ? cel(NOTE.band, h.l, 0.05) : cel(NOTE.cover, h.l, 0.05, true);
+    }
+    // the edges: page block, the covers' rims
+    return Math.abs(h.q[1]) > 0.7 ? cel(NOTE.cover, h.l, -0.1) : cel(NOTE.paper, h.l, 0.1);
+  });
+  pts.load = c;
+};
+
 // aliases the story might use
 HELD7.wood = HELD7.firewood;
 HELD7.sticks = HELD7.firewood;
