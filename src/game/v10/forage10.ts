@@ -13,6 +13,7 @@ import { count, remove } from '../inventory';
 import { bucket } from './store';
 import { fx10 } from './skills10';
 import { energy, maxEnergy, restore, spend, addAilment } from './energy';
+import { hunger } from '../v12/hunger';
 import { audio } from '../../core/audio';
 import { itemIconURL } from '../../art/itemicons';
 
@@ -134,7 +135,7 @@ export function canEat(id: string): { ok: boolean; reason?: string } {
   const fi = foodInfo(id);
   if (!fi.edible) return { ok: false, reason: 'You can’t eat that.' };
   if (count(id) < 1) return { ok: false, reason: 'None left.' };
-  if (!fi.buff && energy() >= maxEnergy() - 0.5) return { ok: false, reason: 'You’re full. Save it for later.' };
+  if (!fi.buff && energy() >= maxEnergy() - 8) return { ok: false, reason: 'You’re full. Save it for later.' };
   return { ok: true };
 }
 
@@ -158,6 +159,8 @@ function roll(fi: FoodInfo): PoisonFx {
 }
 
 const pick = (a: string[]) => a[Math.floor(Math.random() * a.length)];
+/** V12: eating shows as floating text by Mori (lazy: the float module may import the game) */
+const floatTextLazy = (text: string, style: 'happy' | 'think' | 'sad') => void import('../../ui/v12/float').then(m => m.floatText({ text, style, ms: 2400 }));
 const GAMBLE_OK = ['Mm. Tastes fine. I think. Fingers crossed.', 'Not bad! Hopefully those aren’t famous last words.', '...No tingling, no burning. That’s good, right?'];
 const FX_LINES: Record<Exclude<PoisonFx, 'none'>, string[]> = {
   stomach: ['Ooh. My stomach is NOT happy about that.', 'Urgh. That was a mistake. A big, gurgly mistake.'],
@@ -190,12 +193,12 @@ export function eatFood(id: string, o: { quiet?: boolean } = {}): EatResult {
   audio.play('munch', { vol: 0.6 });
   setTimeout(() => audio.play('gulp', { vol: 0.4 }), 380);
   const icon = `<img src="${itemIconURL(id, 2)}" style="width:1.5em;height:1.5em;vertical-align:-0.35em;image-rendering:pixelated">`;
-  const plus = gain > 0 ? ` · <b>+${gain}</b> energy` : '';
+  const plus = '';
   if (fx === 'none') {
     m.body?.setExpr('happy', 1.4);
     m.body?.react('bounce');
     const buff = fi.buff === 'steady' ? ' · steady hands next trip' : fi.buff === 'quiet' ? ' · light feet next trip' : '';
-    if (!o.quiet) game.ui.toast(`Ate ${icon} <b>${d.name}</b>${plus}${buff}`, 'FOOD', 'teal', 2600);
+    if (!o.quiet) floatTextLazy(`Ate: ${d.name}.${fi.buff === 'steady' ? ' Steady hands next trip.' : fi.buff === 'quiet' ? ' Light feet next trip.' : ''} ${hunger() < 0.3 ? 'Full.' : hunger() < 0.65 ? 'Better.' : 'Still hungry...'}`, 'happy'); void buff; void icon;
     if (fi.verdict === 'unknown') setTimeout(() => game.ui.bubbles.bark(m.id, pick(GAMBLE_OK), { expr: 'thinking' } as never), 500);
   } else {
     const sev = 1 - res * 0.5;
@@ -227,7 +230,7 @@ export function quickEat(): EatResult | null {
   const need = maxEnergy() - energy();
   const ids = [...new Set(game.save.inv.map(s => s.id))];
   const safe = ids.map(id => ({ id, fi: foodInfo(id) })).filter(x => x.fi.edible && x.fi.verdict === 'safe' && x.fi.energy > 0);
-  if (need < 1) { game.ui.toast('You’re not hungry.', 'FOOD', '', 1600); return null; }
+  if (need < 1) { floatTextLazy('I’m not hungry. Save it for later.', 'think'); return null; }
   if (!safe.length) {
     const risky = ids.some(id => foodInfo(id).verdict === 'unknown');
     audio.play('wrong', { vol: 0.4 });

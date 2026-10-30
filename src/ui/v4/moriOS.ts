@@ -39,7 +39,7 @@ import { AERO_CSS } from '../v7/aeroCss';
 import { Spring, Fx, sfx, canvas, R, E, icon, cloudSprite, clamp, bubSprite } from '../v7/aeroFx';
 import { VCursor } from '../v7/aeroCursor';
 import { gi, glyphURL, batteryGi } from '../v7/aeroGlyphs';
-import { UNLOCK_BY_ID, installed, unlockable, isFresh, markInstalled, markOpened } from './moriApps';
+import { UNLOCK_BY_ID, installed, unlockable, isFresh, markInstalled, markOpened, HIDDEN_APPS } from './moriApps';
 import { bookOpen } from '../v11/paper/book';
 import { osSkinVars } from '../v7/osSkin';
 
@@ -1158,7 +1158,7 @@ export async function openMoriOS(o: { report: boolean; field?: boolean; app?: st
   const pendingOpen: Record<string, () => void> = {};
   const queued = (id: string) => dlCur === id || queue.includes(id);
   /** worth a button: installed, downloading, or its unlock is met (it downloads on demand) */
-  const available = (id: string) => installed(id) || queued(id) || !UNLOCK_BY_ID[id] || UNLOCK_BY_ID[id].when();
+  const available = (id: string) => !HIDDEN_APPS.has(id) && (installed(id) || queued(id) || !UNLOCK_BY_ID[id] || UNLOCK_BY_ID[id].when());
   /** balloons sit above the installer while it's up */
   const stackBal = () => { if (bal) bal.style.bottom = dlEl ? `calc(var(--bar) + ${dlEl.offsetHeight + 22}px)` : ''; };
   const checkUnlocks = () => {
