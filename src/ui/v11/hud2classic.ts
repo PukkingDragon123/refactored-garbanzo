@@ -1,5 +1,5 @@
-// V12 hides the HUD (src/ui/hud2.ts is now a no-HUD that floats its moments as text). The V11 HUD is
-// kept here, unused, so it can come back.
+// The HUD is back (src/ui/hud2.ts mounts this when CLASSIC_HUD is on); dialogue, barks and pickups
+// still float in the world. The time of day is the brass pocket watch (src/ui/v12/watch.ts).
 //
 // V11 HUD, pixel art in the spirit of Dave the Diver: chunky, present, readable, every piece a small
 // canvas painted in art pixels and shown at 3x (2x on phones), so nothing is ever smooth.
@@ -30,7 +30,8 @@ import { installPaper, scrap, stamp, paperSfx, escHtml as esc, setTransitionFocu
 import { Art, col, dith, shadeC, mixC, spriteURL, PX } from './paper/px';
 import { drawText, wrapText } from './paper/pxfont';
 import { PxW, outlined, tw, plate, hudScale } from './hudpx';
-import { hudHour, paintDial } from './hudclock';
+import { hudHour } from './hudclock';
+import { drawWatch, watchSize } from '../v12/watch';
 
 const OUT = col('#140c06'), CREAM = col('#fff1cc'), INKC = col('#2a2440'), PENC = col('#6a6458');
 
@@ -193,7 +194,7 @@ export class Hud2Classic {
   readonly root: HTMLElement;
   private hr: HTMLElement;
   private rpW: PxW;
-  private dialW: PxW;
+  private watchCv: HTMLCanvasElement;
   private noteBox: HTMLElement;
   private noteW: PxW;
   private banW: PxW;
@@ -251,7 +252,9 @@ export class Hud2Classic {
     const row = this.hr.appendChild(el('div', 'row'));
     this.rpW = new PxW(row, 'rp');
     this.rpW.el.title = 'Research points';
-    this.dialW = new PxW(row, 'dial');
+    this.watchCv = row.appendChild(document.createElement('canvas'));
+    this.watchCv.className = 'hx dial';
+    this.watchCv.title = 'The time (Mori\'s pocket watch)';
     this.noteBox = this.hr.appendChild(el('div', 'hq off'));
     this.noteW = new PxW(this.noteBox, 'note');
     this.noteBox.addEventListener('click', e => { e.stopPropagation(); if (this.openT <= 0 && document.body.classList.contains('touchmode')) { this.reveal(6); return; } this.openJournal(); });
@@ -462,9 +465,18 @@ export class Hud2Classic {
       outlined(a, rpTxt, 24, 20, CREAM, OUT, { face: 'block', scale: 2, spacing: 1 });
     });
     // the sun-and-moon dial
+    // the pocket watch: brass case, cream dial, blued hands on the time of day
     const hour = hudHour();
-    this.dialW.el.classList.toggle('off', hour === null);
-    if (hour !== null) this.dialW.draw(72, 44, a => paintDial(a, hour, game.save.day || 1, this.t));
+    this.watchCv.classList.toggle('off', hour === null);
+    if (hour !== null) {
+      const S = 30, ws = watchSize(S), sc = hudScale();
+      if (this.watchCv.width !== ws.w) { this.watchCv.width = ws.w; this.watchCv.height = ws.h; }
+      this.watchCv.style.width = ws.w * sc + 'px';
+      this.watchCv.style.height = ws.h * sc + 'px';
+      const g = this.watchCv.getContext('2d')!;
+      g.clearRect(0, 0, ws.w, ws.h);
+      drawWatch(g, 0, 0, S, 1, { mode: 'clock', hour });
+    }
     // the quest note
     if (this.noteDirty && this.noteQ) { this.noteDirty = false; this.paintNote(); }
     // the kit

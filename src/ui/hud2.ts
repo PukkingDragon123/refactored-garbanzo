@@ -1,3 +1,6 @@
+// The classic HUD is back (CLASSIC_HUD): the objective note, research stamp, pocket-watch clock, place
+// banner, kit and status plate are src/ui/v11/hud2classic.ts, and this class forwards to it. With
+// CLASSIC_HUD off it is the V12 no-HUD below.
 // V12: no HUD. There is no status plate, quest note, corner kit, film counter, research stamp, place
 // banner or controls line on screen any more; what the player needs is in the world or on Mori (inspect
 // him for the camera, the backpack and the notebook). Hud2 keeps the V2 API (setPlace, setKeys,
@@ -23,6 +26,11 @@ import { itemIcon } from '../art/itemicons';
 import { setTransitionFocus } from './v11/paper';
 import { floatSky, floatNotice, floatPickup, moriAnchor } from './v12/float';
 import { markQuestDone } from './v12/notebook';
+import { Hud2Classic } from './v11/hud2classic';
+import { setBodyHud } from './v10/bodyhud';
+
+/** the objective note, research stamp, clock, place banner, kit and status plate on screen */
+export const CLASSIC_HUD = true;
 
 /** the island's field laptop on the belt (see game/v9/research9.ts) */
 export interface HudLaptop {
@@ -60,8 +68,16 @@ export class Hud2 {
   private holdT = 0;
   private acc = 0;
   private bannerT = 0;
+  private classic: Hud2Classic | null = null;
 
   constructor(parent: HTMLElement, o: HudOpts) {
+    if (CLASSIC_HUD) {
+      setBodyHud('auto');
+      this.classic = new Hud2Classic(parent, o);
+      this.root = this.classic.root;
+      this.lastRp = game.save.rp;
+      return;
+    }
     this.root = parent.appendChild(el('div', 'h2'));
     this.root.style.display = 'none';
     this.onBackpack = o.onBackpack;
@@ -92,6 +108,7 @@ export class Hud2 {
   // ---------------------------------------------------------------- API
   /** a new place (or a new day): its name floats in the sky for a moment */
   setPlace(place: string, sub = '') {
+    if (this.classic) return this.classic.setPlace(place, sub);
     const day = game.save.day || 1;
     if (place === lastPlace && day === lastDay) return;
     const newDay = day !== lastDay && lastDay >= 0 && /day/i.test(sub);
@@ -104,23 +121,25 @@ export class Hud2 {
     void floatSky(place, '', newDay ? `Day ${day}` : '', 2400, { soft: true });
   }
   /** (the controls line is gone) */
-  setKeys(_html: string) { /* */ }
+  setKeys(html: string) { this.classic?.setKeys(html); }
   /** the field laptop on Mori's belt: L opens it */
-  setLaptop(l: HudLaptop | null) { this.lap = l; }
+  setLaptop(l: HudLaptop | null) { this.lap = l; this.classic?.setLaptop(l); }
   /** (nothing to show or hide) */
-  show(_on: boolean) { /* */ }
+  show(on: boolean) { this.classic?.show(on); }
 
   /** Mori's backpack on screen (for things flying into it), relative to the UI root */
   packPos(): [number, number] {
+    if (this.classic) return this.classic.packPos();
     const a = moriAnchor()();
     if (a) return [a[0], a[1] + 30];
     const p = game.ui.root.getBoundingClientRect();
     return [p.width * 0.5, p.height * 0.7];
   }
-  bumpPack() { /* */ }
+  bumpPack() { this.classic?.bumpPack(); }
 
   /** a big moment ("NEW PLACE ON THE MAP"): a notice near Mori */
   banner(title: string, sub = '') {
+    if (this.classic) return this.classic.banner(title, sub);
     const now = performance.now();
     if (now - this.bannerT < 600) return;
     this.bannerT = now;
@@ -129,6 +148,7 @@ export class Hud2 {
 
   /** watch the tracked quest: a finished step gets its pen tick in the notebook and the next one floats up */
   refresh(force = false) {
+    this.classic?.refresh(force);
     const q = trackedQuest();
     if (!q) { this.lastQuest = ''; this.lastStep = -1; return; }
     const i = currentStepIndex(q);
@@ -136,13 +156,19 @@ export class Hud2 {
     if (q.id === this.lastQuest && i > this.lastStep && this.lastStep >= 0) {
       for (let k = this.lastStep; k < i; k++) markQuestDone(q.id, k);
       const st = q.steps[i];
-      floatNotice(st ? st.text : 'All done!', 3600, { tag: st ? 'Next' : 'Done', accent: '#9ff0dc' });
+      if (!this.classic) floatNotice(st ? st.text : 'All done!', 3600, { tag: st ? 'Next' : 'Done', accent: '#9ff0dc' });
     }
     this.lastQuest = q.id;
     this.lastStep = i;
   }
 
   update(dt: number) {
+    if (this.classic) {
+      this.classic.update(dt);
+      this.acc += dt;
+      if (this.acc >= 0.25) { this.acc = 0; this.refresh(); }
+      return;
+    }
     const s = game.save;
     const sc = game.scene as SceneLike;
     const inp = game.input;
@@ -161,6 +187,7 @@ export class Hud2 {
 
   /** "+2 Flax" with the item's icon, rising off the spot it was picked up */
   flyItem(id: string, n: number, name: string, cssX: number, cssY: number) {
+    if (this.classic) { this.classic.flyItem(id, n, name, cssX, cssY); this.refresh(); return; }
     let buf = null;
     try { buf = itemIcon(id); } catch { buf = null; }
     floatPickup(`+${n} ${name}`, cssX, cssY, buf ? { key: id, buf } : null);
@@ -168,6 +195,7 @@ export class Hud2 {
   }
 
   destroy() {
+    if (this.classic) { this.classic.destroy(); return; }
     setQuestNotice(null);
     setTransitionFocus(null);
     this.root.remove();

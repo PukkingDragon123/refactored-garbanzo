@@ -31,7 +31,11 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
 
 ## V12 design: zero traditional UI and a clear loop (always)
 
-- **No HUD, no panels, no menu boxes.** Everything the player needs is in the world or on objects:
+- **HUD (user, latest): the classic HUD is back**, every piece a detailed physical pixel-art object.
+  It includes the pinned objective note, the research stamp, the pocket-watch clock, the place
+  banner, the kit and Mori's status plate (`src/ui/v11/hud2classic.ts`, mounted by `src/ui/hud2.ts`
+  via `CLASSIC_HUD`). There are still no dialogue boxes or menu boxes; everything else is in the
+  world or on objects:
   - **Text:** all text floats in the world. Dialogue is simple floating text by the speaker, with
     lively per-letter animation: shouts shake and grow, whispers waver, scared text trembles. The same
     goes for barks, prompts and notices. No dialogue boxes, no toasts.
