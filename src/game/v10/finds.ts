@@ -8,7 +8,7 @@
 import { defineItem } from '../items';
 import type { Point10 } from '../sites10/kit';
 import { PixelBuffer } from '../../art/pixel';
-import { hex, mix, shade } from '../../art/color';
+import { hex, mix, shade, type C } from '../../art/color';
 import { Rng } from '../../core/math';
 import type { Sprite } from '../../art/jungle-core';
 
@@ -128,31 +128,118 @@ export const FINDS10 = {
 
 // ------------------------------------------------------------------ little sprites for finds on the ground
 const S = (b: PixelBuffer, ax: number, ay: number): Sprite => { b.outline(hex('#140c08')); return { buf: b, ax, ay }; };
+/** a heap of dirt over the bottom of a find: a hand-shaped top edge (top[x] = first dirt row), lit crumbs on top, pebbles */
+function dirt(b: PixelBuffer, top: number[]) {
+  const D = [hex('#3a2c20'), hex('#54402c'), hex('#6e573c'), hex('#8a7050')];
+  for (let x = 0; x < b.w; x++) {
+    const t = top[Math.min(top.length - 1, x)];
+    for (let y = t; y < b.h; y++) b.set(x, y, y === t ? D[3] : y === t + 1 ? D[2] : (x * 5 + y * 3) % 7 === 0 ? D[0] : D[1]);
+  }
+  for (let x = 1; x < b.w - 1; x += 4) b.set(x, b.h - 1, D[0]);
+}
 export const findArt = {
-  /** a jar with a coloured fill (water, mud) set down on the ground: where to take a sample */
+  /** a puddle of coloured water or mud with a ragged rim and a sky glint: where to take a sample */
   sampleSpot(col: string): Sprite {
-    const b = new PixelBuffer(14, 12);
-    const c = hex(col);
-    b.ellipse(7, 9, 6, 2.4, shade(c, -0.25));
-    b.ellipse(7, 8.5, 4.5, 1.6, c);
-    for (let i = 0; i < 4; i++) b.set(3 + i * 2.5, 9 + (i % 2), mix(c, hex('#ffffff'), 0.5));
-    return S(b, 7, 11);
+    const b = new PixelBuffer(16, 8);
+    const c = hex(col), rim = shade(c, -0.3), deep = shade(c, -0.15);
+    // ragged extents per row, hand-picked so it never reads as an ellipse
+    const rows: [number, number][] = [[5, 10], [3, 12], [2, 14], [1, 13], [3, 11]];
+    rows.forEach(([x0, x1], j) => { for (let x = x0; x <= x1; x++) b.set(x, 2 + j, j === 0 || x === x0 || x === x1 ? rim : j > 2 ? deep : c); });
+    for (const [x, y] of [[5, 3], [6, 3], [9, 4], [10, 4], [11, 4]]) b.set(x, y, mix(c, hex('#ffffff'), 0.55));
+    b.set(4, 6, hex('#5a4a38')); b.set(12, 6, hex('#5a4a38')); b.set(8, 7, hex('#4a3a2a'));
+    return S(b, 8, 7);
   },
   /** a crumbly patch of soil / rock with a trowel mark */
   dig(col: string): Sprite {
-    const b = new PixelBuffer(18, 8);
+    const b = new PixelBuffer(18, 9);
     const c = hex(col), rng = new Rng(col.length * 7);
-    for (let x = 1; x < 17; x++) { const h = 2 + Math.round(Math.sin(x * 0.6) + rng.next() * 2); for (let y = 8 - h; y < 8; y++) b.set(x, y, rng.next() < 0.25 ? shade(c, -0.2) : c); }
-    b.rect(8, 2, 1, 4, hex('#9aa3a5'));
-    return S(b, 9, 7);
+    for (let x = 1; x < 17; x++) { const h = 2 + Math.round(Math.sin(x * 0.6) + rng.next() * 2); for (let y = 9 - h; y < 9; y++) b.set(x, y, y === 9 - h ? shade(c, 0.18) : rng.next() < 0.25 ? shade(c, -0.2) : c); }
+    // loose clods and a trowel stuck in, handle up
+    for (const [x, y] of [[2, 6], [3, 6], [15, 5], [14, 6]]) b.set(x, y, shade(c, -0.3));
+    b.rect(8, 1, 1, 3, hex('#6a4a2a')); b.set(8, 4, hex('#9aa3a5')); b.set(9, 4, hex('#c8cfd0')); b.set(8, 5, hex('#7a8385'));
+    return S(b, 9, 8);
   },
-  /** something small glinting half buried */
+  /** something small half buried, catching the light: an angular chip in a heap of dirt */
   glint(col: string): Sprite {
-    const b = new PixelBuffer(10, 6);
-    b.ellipse(5, 4, 4, 1.6, hex('#4a3a2a'));
-    b.ellipse(5, 3.2, 2.2, 1.2, hex(col));
-    b.set(4, 2, hex('#ffffff'));
-    return S(b, 5, 5);
+    const b = new PixelBuffer(12, 8);
+    const c = hex(col);
+    // the chip: hand-cut, lit edge top-left, dark underside
+    const chip = ['..322.', '.32221', '322211', '.2211.'];
+    const ramp = [shade(c, -0.45), shade(c, -0.2), c, mix(c, hex('#ffffff'), 0.45)];
+    chip.forEach((row, j) => { for (let i = 0; i < row.length; i++) if (row[i] !== '.') b.set(3 + i, 2 + j, ramp[+row[i]]); });
+    dirt(b, [6, 6, 5, 5, 6, 6, 5, 5, 5, 6, 6, 7]);
+    b.set(4, 1, hex('#ffffff')); b.set(4, 0, mix(c, hex('#ffffff'), 0.7)); b.set(3, 1, mix(c, hex('#ffffff'), 0.7));
+    return S(b, 6, 7);
+  },
+  /** a fossil weathering out of the ground, each kind drawn by hand */
+  fossil(kind: 'ammonite' | 'vertebra' | 'tooth' | 'leaf' | 'shell'): Sprite {
+    const bone = [hex('#6a5a42'), hex('#9a8a68'), hex('#c8b890'), hex('#ece0c0')];
+    const stone = [hex('#5a5048'), hex('#7a6e62'), hex('#9a8e80'), hex('#bab0a0')];
+    const maps: Record<string, { map: string[]; ramp: C[]; w: number; h: number; mound: number[] }> = {
+      // a coiled shell, ribbed on the outer whorl, its lower half still in the scree
+      ammonite: { ramp: stone, w: 14, h: 11, mound: [9, 8, 8, 7, 7, 7, 7, 8, 8, 8, 7, 8, 9, 9], map: [
+        '....3332.....',
+        '..33212121...',
+        '.3212222121..',
+        '.31211112121.',
+        '3212100121210',
+        '3212103121210',
+        '3212111121210',
+        '.21221122110.',
+        '.2112222110..',
+        '..11111100...',
+      ] },
+      // a vertebra on its side: the spool, the spine, the little wings
+      vertebra: { ramp: bone, w: 12, h: 10, mound: [8, 8, 8, 7, 8, 8, 8, 8, 7, 8, 8, 9], map: [
+        '....32.....',
+        '....321....',
+        '...3221....',
+        '.3332221...',
+        '33222221100',
+        '32222211...',
+        '.2211110...',
+        '..1.10.....',
+      ] },
+      // a long, slightly hooked fang, root end buried
+      tooth: { ramp: [hex('#3a3430'), hex('#6a645c'), hex('#b8b0a0'), hex('#ecead8')], w: 9, h: 11, mound: [8, 8, 7, 7, 8, 8, 8, 9, 9], map: [
+        '..3......',
+        '..32.....',
+        '..321....',
+        '.3221....',
+        '.3221....',
+        '.32211...',
+        '.22211...',
+        '..2111...',
+        '..2110...',
+      ] },
+      // a split slab with a fern frond pressed into it
+      leaf: { ramp: stone, w: 16, h: 9, mound: [8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8], map: [
+        '...333332222...',
+        '.33322222222211',
+        '3322202020222110',
+        '3220200020202110',
+        '3202000002020110',
+        '2220200020201100',
+        '.222202020211100',
+        '..1111111111100.',
+      ] },
+      // a scallop: a fan of ribs, hinge down
+      shell: { ramp: [hex('#7a6e58'), hex('#a89878'), hex('#d8d0b8'), hex('#f2ecd8')], w: 11, h: 9, mound: [8, 8, 7, 7, 7, 7, 7, 7, 7, 8, 8], map: [
+        '...33223...',
+        '..3322332..',
+        '.332233221.',
+        '33223322321',
+        '23223322211',
+        '.122112211.',
+        '..1110111..',
+        '...1...1...',
+      ] },
+    };
+    const m = maps[kind];
+    const b = new PixelBuffer(m.w, m.h);
+    m.map.forEach((row, j) => { for (let i = 0; i < row.length; i++) if (row[i] !== '.') b.set(i, j, m.ramp[+row[i]]); });
+    dirt(b, m.mound);
+    return S(b, Math.floor(m.w / 2), m.h - 1);
   },
   /** a fern-like plant to sample */
   plant(col: string, h = 18): Sprite {

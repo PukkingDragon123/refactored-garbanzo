@@ -412,28 +412,142 @@ export function paintMushrooms(seed: number, glow = false) {
   return { buf, ax: W / 2, ay: H };
 }
 
+/** cheap integer hash to 0..1, for hand-placed-looking flecks */
+const hash01 = (x: number, y: number, s: number) => {
+  let n = (x * 374761393 + y * 668265263 + s * 1442695041) | 0;
+  n = Math.imul(n ^ (n >>> 13), 1274126177);
+  return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+};
+
+/**
+ * A rock, cut the way a pixel artist cuts one: an irregular chiselled silhouette that sits flat on
+ * its base, broken into a few flat-lit facets (light from the upper left) with a bright lip where a
+ * facet turns to the light and a dark crease where it turns away, a sun-caught rim, chips knocked
+ * out of the edge, cracks with a lit lip, grain flecks, and moss only on the faces that look up.
+ */
 export function paintRock(seed: number, w: number, h: number, ramp: C[] = PAL.stone, moss = 0.5) {
-  const rng = new Rng(seed);
+  const rng = new Rng(seed * 7 + 3);
   const buf = new PixelBuffer(w, h);
-  const cx = w / 2, cy = h * 0.62;
-  buf.ellipseFn(cx, cy, w / 2 - 1, h * 0.62 - 1, (x, y, nx, ny) => {
-    const e = Math.hypot(nx, ny) + (fbm2(x * 0.2, y * 0.2, 2, seed) - 0.5) * 0.3;
-    if (e > 1 || y > h - 1) return -1;
-    const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
-    let l = -nx * 0.5 - ny * 0.6 + nz * 0.4 + (fbm2(x * 0.3, y * 0.3, 2, seed + 1) - 0.5) * 0.5 + (bayer(x, y) - 0.5) * 0.3;
-    let c = ramp[clamp(Math.round((l * 0.5 + 0.5) * (ramp.length - 1)), 0, ramp.length - 1)];
-    if (moss > 0 && ny < -0.2 && fbm2(x * 0.25, y * 0.5, 2, seed + 2) > 1 - moss) c = PAL.moss[clamp(Math.round(3 + l * 2), 2, 6)];
-    return c;
+  const top = ramp.length - 1, base = h - 1;
+  const cx = w * rng.range(0.42, 0.58);
+
+  // 1. the outline: angular vertices over the top, a flat footing, a few chips knocked inward
+  const pts: number[] = [rng.range(0.5, w * 0.1), base + 1];
+  const k = rng.int(6, 9);
+  const lean = rng.range(-0.15, 0.15);
+  let prevX = pts[0], prevY = pts[1];
+  for (let i = 0; i <= k; i++) {
+    const a = Math.PI * (1 - i / k) + rng.range(-0.1, 0.1);
+    const rx = (w / 2 - 1) * rng.range(0.8, 1), ry = (h - 2) * rng.range(0.7, 1);
+    const s = Math.pow(Math.max(0, Math.sin(a)), 0.78);
+    const x = clamp(cx + Math.cos(a) * rx + lean * (1 - s) * w * 0.2, 0.5, w - 0.5);
+    const y = clamp(base - s * ry, 0.5, base);
+    if (i > 0 && rng.chance(0.35)) {
+      // a chip: a notch pulled in toward the middle between two vertices
+      const mx = (prevX + x) / 2, my = (prevY + y) / 2;
+      const dx = cx - mx, dy = base * 0.55 - my, dl = Math.hypot(dx, dy) || 1, d = rng.range(1.2, Math.min(4, h * 0.15));
+      pts.push(mx + (dx / dl) * d, my + (dy / dl) * d);
+    }
+    pts.push(x, y);
+    prevX = x; prevY = y;
+  }
+  pts.push(w - rng.range(0.5, w * 0.1), base + 1);
+
+  // 2. facets: a few planes, each with its own facing, picked by nearest seed (straight cut edges)
+  const nf = clamp(Math.round((w * h) / 240), 3, 8);
+  const fx: number[] = [], fy: number[] = [], fl: number[] = [], fup: boolean[] = [];
+  const L = [-0.55, -0.72, 0.42];
+  for (let i = 0; i < nf; i++) {
+    const sx = rng.range(w * 0.08, w * 0.92), sy = rng.range(h * 0.1, h * 0.95);
+    let nx = (sx - cx) / (w / 2) + rng.range(-0.45, 0.45);
+    let ny = (sy - base * 0.62) / (h * 0.6) - 0.35 + rng.range(-0.4, 0.4);
+    let nz = 0.75;
+    const nl = Math.hypot(nx, ny, nz);
+    nx /= nl; ny /= nl; nz /= nl;
+    fx.push(sx); fy.push(sy);
+    fl.push(nx * L[0] + ny * L[1] + nz * L[2]);
+    fup.push(ny < -0.45);
+  }
+  const W = w, cell = new Int8Array(w * h).fill(-1);
+  const level = (x: number, y: number) => {
+    const c = cell[y * W + x];
+    if (c < 0) return -1;
+    const occl = Math.pow(y / h, 5) * 0.45;
+    return clamp(Math.round((fl[c] * 0.62 + 0.42 - occl) * top + (bayer(x, y) - 0.5) * 0.4), 1, top - 1);
+  };
+  buf.polyFn(pts, (x, y) => {
+    let best = 0, bd = Infinity;
+    for (let i = 0; i < nf; i++) { const d = (x - fx[i]) ** 2 + ((y - fy[i]) * 1.25) ** 2; if (d < bd) { bd = d; best = i; } }
+    cell[y * W + x] = best;
+    return ramp[0];
   });
-  // crack lines
-  for (let i = 0; i < rng.int(0, 2); i++) {
-    let x = rng.range(w * 0.3, w * 0.7), y = rng.range(h * 0.3, h * 0.6);
-    for (let s = 0; s < h * 0.4; s++) {
-      buf.paint(x, y, ramp[1]);
-      x += rng.range(-0.8, 0.8);
+
+  // 3. paint the facets, their lips and creases, the rim and the grain
+  const inside = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && cell[y * W + x] >= 0;
+  const topY = new Int16Array(w).fill(h);
+  for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) if (inside(x, y)) { topY[x] = y; break; }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (!inside(x, y)) continue;
+    let l = level(x, y);
+    const c = cell[y * W + x];
+    const up = inside(x, y - 1) ? cell[(y - 1) * W + x] : -2, left = inside(x - 1, y) ? cell[y * W + x - 1] : -2;
+    if (up === -2 || left === -2) {
+      // the silhouette rim: bright where it faces the sun, otherwise left alone for the outline
+      if (up === -2 && x < cx + w * 0.15 && hash01(x, y, seed) > 0.18) l = Math.min(top, l + 2);
+      else if (up === -2) l = Math.min(top, l + 1);
+    } else if (up !== c || left !== c) {
+      // a lip where this face turns to the light, a crease where it turns away; soft turns get neither
+      const other = up !== c ? up : left, diff = fl[c] - fl[other];
+      if (diff > 0.14) l = Math.min(top, l + 1);
+      else if (diff < -0.14) l = Math.max(0, l - 1);
+    }
+    // grain: a few flecks, lighter and darker, sometimes in pairs
+    const g = hash01(x, y, seed + 11);
+    if (g < 0.035) l = Math.min(top - 1, l + 1);
+    else if (g > 0.965) l = Math.max(1, l - 1);
+    if (g > 0.985 && inside(x + 1, y)) buf.set(x + 1, y, ramp[Math.max(1, l - 1)]);
+    // the footing sits in shadow
+    if (y >= base - 1) l = Math.max(1, l - 1);
+    buf.set(x, y, ramp[l]);
+  }
+
+  // 4. cracks: a stepped dark line with a lit lip on its sunward side
+  const cracks = rng.int(w * h > 500 ? 1 : 0, w * h > 1400 ? 3 : 1);
+  for (let i = 0; i < cracks; i++) {
+    let x = Math.round(rng.range(w * 0.25, w * 0.75));
+    let y = topY[x] + rng.int(1, 3);
+    const len = rng.range(h * 0.25, h * 0.6), drift = rng.sign();
+    for (let s = 0; s < len && inside(x, y); s++) {
+      buf.set(x, y, ramp[0]);
+      if (inside(x - 1, y) && cell[y * W + x - 1] >= 0) buf.set(x - 1, y, ramp[Math.min(top, level(x - 1, y) + 2)]);
+      if (rng.chance(0.4)) x += drift * (rng.chance(0.8) ? 1 : -1);
       y += 1;
+      if (rng.chance(0.15)) {
+        // a short side branch
+        let bx = x, by = y;
+        for (let j = 0; j < rng.int(2, 4) && inside(bx, by); j++) { buf.set(bx, by, ramp[1]); bx -= drift; by += rng.chance(0.5) ? 1 : 0; }
+      }
     }
   }
+
+  // 5. moss: clumps on the up-facing faces near the top, with a dark lip where it hangs over
+  if (moss > 0) {
+    for (let x = 0; x < w; x++) {
+      if (topY[x] >= h) continue;
+      const depth = Math.round((fbm2(x * 0.18, seed * 0.1, 2, seed + 2) - (1 - moss)) * 9);
+      if (depth <= 0) continue;
+      for (let d = 0; d < depth; d++) {
+        const y = topY[x] + d;
+        if (!inside(x, y)) break;
+        const c = cell[y * W + x];
+        if (!fup[c] && d > 1) break;
+        const lit = x < cx ? 1 : 0;
+        buf.set(x, y, PAL.moss[clamp((d === 0 ? 4 : 3) + lit - (d > 2 ? 1 : 0) + (hash01(x, y, seed + 5) < 0.12 ? 1 : 0), 1, 5)]);
+        if (d === depth - 1 && inside(x, y + 1)) buf.set(x, y + 1, PAL.moss[1]);
+      }
+    }
+  }
+
   buf.outline(c => shade(c, -0.6));
   return { buf, ax: w / 2, ay: h };
 }

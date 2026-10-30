@@ -194,7 +194,7 @@ export const GROTTO: Site10 = {
         take: { item: 'taonga_toggle', verb: 'Reach into the crevice', time: 2.4, line: 'Something green... a carved stone. Greenstone. It’s beautiful.', aroha: 'Pounamu. Someone wore that close to their heart. We take it home to my koro: he will know whose family it belongs to.' } },
       { id: 'pt:gr:lichen', kind: 'plant', name: 'Cave lichen', x: 1600, art: () => findArt.plant('#a8b4a0', 10), take: { item: 'plt_cavelichen', verb: 'Scrape a little lichen', tools: ['knife'], time: 1.6 } },
       { id: 'pt:gr:lime', kind: 'sample', name: 'Grotto limestone', x: 1730, art: () => findArt.dig('#c8c0a8'), take: { item: 'smp_limestone', verb: 'Chip a rock sample', tools: ['trowel'], time: 1.8 } },
-      { id: 'fos_shell', kind: 'fossil', name: 'Fossil scallop', x: 1812, art: () => findArt.glint('#d8d0b8'), take: { item: 'fos_shell', verb: 'Prise out the fossil shell', tools: ['knife'], time: 2.2, line: 'A shell. In the rock. This whole cave was a seabed once.' } },
+      { id: 'fos_shell', kind: 'fossil', name: 'Fossil scallop', x: 1812, art: () => findArt.fossil('shell'), take: { item: 'fos_shell', verb: 'Prise out the fossil shell', tools: ['knife'], time: 2.2, line: 'A shell. In the rock. This whole cave was a seabed once.' } },
       { id: 'cave:gr:sump', kind: 'cave', name: 'The breathing sump', x: 2250, photo: { w: 120, h: 50 }, note: 'The water rises and sinks with the tide: the sump opens to the sea.' },
     ],
   },

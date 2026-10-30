@@ -21,14 +21,56 @@ export const fossilGround = (x: number) => G + Math.sin(x * 0.011) * 3 + Math.si
 const BAND: C[] = [hex('#3c3430'), hex('#5a4a40'), hex('#7a6252'), hex('#9a7c62'), hex('#b8987a'), hex('#d0b494'), hex('#e2cca8')];
 const STRATA: C[] = [hex('#a8583a'), hex('#d8c8a0'), hex('#6a6a6a'), hex('#c89a6a'), hex('#e8dcc0'), hex('#8a5a42')];
 
-/** the great skeleton in the cliff: a legged serpent's spine, ribs, skull and fangs, set in darker matrix */
-function skeleton(): { buf: PixelBuffer; ax: number; ay: number } {
+/** hand-drawn bone pieces: 3 lit bone, 2 bone, 1 shaded bone, 0 dark bone, k dark hollow (socket, nostril) */
+const VERT = ['..32...', '...21..', '..3221.', '.332210', '3322210', '3222110', '.21110.', '..0.0..'];
+const VERT_TAIL = ['.3.', '321', '210', '.0.'];
+const SKULL = [
+  '........33332222..................',
+  '.....3333222222222211.............',
+  '...33322222222222222221111........',
+  '..3322222kkkk22222222222221111....',
+  '.332222kkkkkkk2222222222222222111.',
+  '.32222kkkkkkkk22221122222222k22210',
+  '322222kkkkkkk222211122222222222210',
+  '3222222kkkk222221110222222222211..',
+  '2221111111111111111111111111111100',
+  '213030303030303030303030303030300.',
+  '22222222222222222222222211110.....',
+  '.2222211111111111111111110........',
+  '..11100000000000000000000.........',
+];
+
+/** the great skeleton in the cliff: a legged serpent's spine, ribs, skull and fangs, set in a dug-back pocket of darker matrix */
+export function skeleton(): { buf: PixelBuffer; ax: number; ay: number } {
   const w = 470, h = 120;
   const b = new PixelBuffer(w, h);
-  const bone = [hex('#8a7a5a'), hex('#b8a47a'), hex('#d8c8a0'), hex('#efe2c0')], mat = hex('#2e2620');
-  const spine = (t: number): [number, number] => [20 + t * 400, 62 + Math.sin(t * 7.2) * 18 + Math.sin(t * 2.1) * 8];
-  // the dark matrix around the bones (where the rock was dug back)
-  for (let i = 0; i <= 200; i++) { const [x, y] = spine(i / 200); b.ellipse(x, y, 12, 22, mat); }
+  const bone = [hex('#8a7a5a'), hex('#b8a47a'), hex('#d8c8a0'), hex('#efe2c0')];
+  const mat = [hex('#1e1814'), hex('#2e2620'), hex('#3c3229'), hex('#4c4034')];
+  const rng = new Rng(4711);
+  const spineY = (x: number) => { const t = (x - 20) / 400; return 62 + Math.sin(t * 7.2) * 18 + Math.sin(t * 2.1) * 8; };
+  const spine = (t: number): [number, number] => [20 + t * 400, spineY(20 + t * 400)];
+  const stamp = (map: string[], x0: number, y0: number) => {
+    map.forEach((row, j) => { for (let i = 0; i < row.length; i++) {
+      const ch = row[i];
+      if (ch === '.') continue;
+      b.set(x0 + i, y0 + j, ch === 'k' ? mat[0] : bone[+ch]);
+    } });
+  };
+  // the dug-back pocket: chiselled in steps, an overhang shadow along the top, a lit ledge along the bottom
+  let up = 14, dn = 15;
+  const [skx, sky] = spine(1);
+  for (let x = 8; x < Math.min(w, skx + 40); x++) {
+    if (x % 4 === 0) { up = clamp(up + rng.int(-2, 2), 10, 19); dn = clamp(dn + rng.int(-2, 2), 11, 20); }
+    const inSkull = x > skx - 8;
+    const cy = inSkull ? sky : spineY(Math.min(x, skx));
+    const y0 = Math.round(cy - (inSkull ? 13 : up)), y1 = Math.round(cy + (inSkull ? 12 : dn));
+    for (let y = y0; y <= y1; y++) {
+      const d = y - y0, e = y1 - y;
+      b.set(x, y, d < 2 ? mat[0] : e < 1 ? mat[3] : e < 3 ? mat[2] : (x * 7 + y * 13) % 23 === 0 ? mat[2] : mat[1]);
+    }
+    // chisel marks on the pocket floor
+    if (rng.chance(0.06)) for (let k = 0; k < 3; k++) b.set(x + k, y1 - 3 - k, mat[2]);
+  }
   // ribs
   for (let i = 4; i < 70; i++) {
     const t = i / 80, [x, y] = spine(t), [x2, y2] = spine(t + 0.004);
@@ -36,24 +78,25 @@ function skeleton(): { buf: PixelBuffer; ax: number; ay: number } {
     const len = 18 * Math.sin(Math.min(1, t * 2.2) * Math.PI * 0.9) + 4;
     for (const side of [1, -1]) for (let k = 0; k < len; k++) {
       const c = k / len;
-      b.set(x + (nx / nl) * k * side + c * c * 4, y + (ny / nl) * k * side + c * 3, bone[k < 2 ? 3 : 1 + (k % 2)]);
+      b.set(x + (nx / nl) * k * side + c * c * 4, y + (ny / nl) * k * side + c * 3, bone[k < 2 ? 3 : side > 0 ? 1 + (k % 2) : 1]);
     }
   }
-  // vertebrae
-  for (let i = 0; i <= 64; i++) { const [x, y] = spine(i / 64); b.ellipse(x, y, 3.2, 4.2, bone[2]); b.set(x - 1, y - 2, bone[3]); b.set(x + 1, y + 2, bone[0]); }
-  // four legs
+  // vertebrae, each one drawn, shrinking into the tail
+  for (let x = 20; x < skx - 4; x += 6) {
+    const y = Math.round(spineY(x)), tail = x < 70;
+    stamp(tail ? VERT_TAIL : VERT, Math.round(x) - (tail ? 1 : 3), y - (tail ? 2 : 4));
+  }
+  // four legs: upper bone, joint, lower bone and splayed toes
   for (const t of [0.22, 0.3, 0.62, 0.7]) {
     const [x, y] = spine(t);
     let px = x, py = y + 4;
-    for (let k = 0; k < 26; k++) { px += 0.25; py += 1; b.set(px, py, bone[2]); b.set(px + 1, py, bone[1]); }
-    for (let k = 0; k < 10; k++) { b.set(px + k, py + (k % 3 === 0 ? 1 : 0), bone[2]); }
+    for (let k = 0; k < 13; k++) { px += 0.35; py += 1; b.set(px, py, bone[2]); b.set(px + 1, py, bone[1]); b.set(px - 1, py, bone[3]); }
+    b.set(px, py + 1, bone[3]); b.set(px + 1, py + 1, bone[2]);
+    for (let k = 0; k < 12; k++) { px -= 0.1; py += 1; b.set(px, py, bone[2]); b.set(px + 1, py, bone[0]); }
+    for (const [dx, dy] of [[1, 0], [2, 1], [3, 1], [4, 2], [-1, 1], [-2, 2]]) b.set(px + dx, py + dy, bone[dx > 2 ? 3 : 2]);
   }
-  // the skull: long, with a row of fangs
-  const [sx, sy] = spine(1);
-  b.ellipse(sx + 18, sy - 2, 22, 11, mat);
-  b.ellipse(sx + 16, sy - 3, 19, 8, bone[2]);
-  b.ellipse(sx + 10, sy - 5, 4, 3, mat);
-  for (let k = 0; k < 9; k++) { const fx = sx + 4 + k * 3.6; for (let j = 0; j < 4 + (k % 3); j++) b.set(fx, sy + 4 + j, j > 2 ? bone[3] : bone[2]); }
+  // the skull: long, low, eye socket and nostril, a row of fangs along the jaw
+  stamp(SKULL, Math.round(skx) - 4, Math.round(sky) - 7);
   b.outline(hex('#1a1410'));
   return { buf: b, ax: 0, ay: h - 1 };
 }
@@ -136,10 +179,10 @@ export const FOSSILS: Site10 = {
     points: [
       { id: 'fos:fo:skeleton', kind: 'fossil', name: 'The great skeleton', x: 1180, y: TERRACE - 6, photo: { w: 470, h: 120 }, note: 'A whole serpent in the cliff, longer than a bus, with four legs.' },
       { id: 'lm:fo:strata', kind: 'landmark', name: 'The banded gorge', x: 640, photo: { w: 260, h: 200, dy: 40 }, note: 'Every stripe of rock is a flood or an eruption.' },
-      { id: 'fos_vertebra', kind: 'fossil', name: 'Loose vertebra', x: 1260, y: TERRACE, art: () => findArt.glint('#d8c8a0'),
+      { id: 'fos_vertebra', kind: 'fossil', name: 'Loose vertebra', x: 1260, y: TERRACE, art: () => findArt.fossil('vertebra'),
         take: { item: 'fos_vertebra', verb: 'Lift the loose vertebra (heavy)', time: 3, line: 'Oof. It’s like carrying a bowling ball. A bowling ball that was ALIVE.', aroha: 'That one fell out of the cliff on its own. You can take it. The rest stays.' } },
-      { id: 'fos_ammonite', kind: 'fossil', name: 'Ammonite in the scree', x: 760, art: () => findArt.glint('#c8b8a0'), take: { item: 'fos_ammonite', verb: 'Pick up the coiled stone', time: 1.6, line: 'An ammonite! This cliff used to be the bottom of the sea.' } },
-      { id: 'fos_leaf', kind: 'fossil', name: 'Fern imprint', x: 1700, y: HIGH, art: () => findArt.glint('#9a9078'), take: { item: 'fos_leaf', verb: 'Split the slab', tools: ['trowel'], time: 2.4, line: 'A fern. Exactly like the ones in Fernwood. Fifty million years, and it hasn’t changed its outfit.' } },
+      { id: 'fos_ammonite', kind: 'fossil', name: 'Ammonite in the scree', x: 760, art: () => findArt.fossil('ammonite'), take: { item: 'fos_ammonite', verb: 'Pick up the coiled stone', time: 1.6, line: 'An ammonite! This cliff used to be the bottom of the sea.' } },
+      { id: 'fos_leaf', kind: 'fossil', name: 'Fern imprint', x: 1700, y: HIGH, art: () => findArt.fossil('leaf'), take: { item: 'fos_leaf', verb: 'Split the slab', tools: ['trowel'], time: 2.4, line: 'A fern. Exactly like the ones in Fernwood. Fifty million years, and it hasn’t changed its outfit.' } },
       { id: 'pt:fo:scree', kind: 'sample', name: 'Banded rock', x: 600, art: () => findArt.dig('#a87a5a'), take: { item: 'smp_scree', verb: 'Take a rock sample', tools: ['trowel'], time: 1.8 } },
       { id: 'cave:fo:cleft', kind: 'cave', name: 'The cleft', x: 2230, y: HIGH, photo: { w: 80, h: 60 }, note: 'A crack in the gorge head. Cold air, and a faint green glow, come up out of it.' },
     ],

@@ -1,3 +1,5 @@
+import { findArt } from '../game/v10/finds';
+import { skeleton } from '../game/sites10/fossils';
 import { showGallery, GalleryItem } from './gallery';
 import * as F from '../art/flora';
 import * as L from '../art/landscape';
@@ -131,6 +133,20 @@ export function runGallery(name: string) {
   if (name === 'beasts') { void beastGallery(); return; }
   if (name === 'tiger') { void tigerGallery(); return; }
   const items: GalleryItem[] = [];
+  if (name === 'rocks') {
+    const sizes: [number, number][] = [[16, 9], [22, 12], [30, 20], [36, 22], [50, 30], [64, 40], [90, 60], [140, 100]];
+    sizes.forEach(([w, h], i) => items.push({ name: `rock ${w}x${h}`, buf: F.paintRock(31 + i * 17, w, h, PAL.stone, i % 3 ? 0.5 : 0).buf }));
+    items.push({ name: 'sand rock', buf: F.paintRock(77, 60, 36, PAL.sand, 0).buf });
+  }
+  if (name === 'fossils') {
+    for (const k of ['ammonite', 'vertebra', 'tooth', 'leaf', 'shell'] as const) items.push({ name: k, buf: findArt.fossil(k).buf });
+    items.push({ name: 'glint', buf: findArt.glint('#d8c8a0').buf });
+    items.push({ name: 'puddle', buf: findArt.sampleSpot('#5a7a8a').buf });
+    items.push({ name: 'dig', buf: findArt.dig('#a87a5a').buf });
+  }
+  if (name === 'skeleton') {
+    items.push({ name: 'skeleton', buf: skeleton().buf });
+  }
   if (name === 'flora') {
     items.push({ name: 'treefern', buf: F.paintTreeFern(3, { height: 90 }).buf });
     items.push({ name: 'treefern-silver', buf: F.paintTreeFern(7, { height: 60, silver: true }).buf });
@@ -223,5 +239,5 @@ export function runGallery(name: string) {
       items.push({ name: id + ' sp', buf: FA.drawMammal(ms, id === 'shieldback' ? FA.mammalPoses.ball() : id === 'quillhog' ? FA.mammalPoses.quill(1) : id === 'sailglider' ? FA.mammalPoses.glide() : id === 'delver' ? FA.mammalPoses.dig(0) : FA.mammalPoses.leap()) });
     }
   }
-  showGallery(items, name === 'land' ? 2 : name === 'chars' ? 5 : name === 'fauna' ? 4 : 3);
+  showGallery(items, name === 'fossils' ? 8 : name === 'land' ? 2 : name === 'chars' ? 5 : name === 'fauna' ? 4 : 3);
 }
