@@ -966,7 +966,7 @@ export class CookSet implements SetScene {
         const kx = this.knifeX - cam, ky = p.y + 12 - lift;
         shadowOval(px, kx + 2, p.y + 8, 3, 2, 0.6);
         knife(px, kx, ky);
-        drawHand(px, 'grip', kx, ky, { rot: 3, from: [kx + 60, H + 40] });
+        drawHand(px, 'knife', kx, ky, { rot: 3, from: [kx + 60, H + 40] });
         break;
       }
       case 'add':

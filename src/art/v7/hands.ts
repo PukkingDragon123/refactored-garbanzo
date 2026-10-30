@@ -57,6 +57,10 @@ const SHAPES: Record<string, Shape> = {
   claw: { f: [F(0.25, 0.6), F(0.2, 0.62), F(0.26, 0.64), F(0.32, 0.66)], spread: 0.24, t1: [0.4, 0.88, 0.3], t2: [0.55, 0.6, 0.55], creases: 3 },
   // thumbs up
   thumb: { f: [F(1.5, 1.7), F(1.55, 1.75), F(1.55, 1.7), F(1.5, 1.65)], spread: 0, t1: [0.3, 0.55, 0.2], t2: [0.05, 0.98, 0], creases: 1, knuckles: true },
+  // a knife: three fingers round the handle, the index laid along the spine, the thumb on the side
+  knife: { f: [F(0.22, 0.16), F(1.1, 1.25), F(1.12, 1.22), F(1.08, 1.18)], spread: 0, t1: [0.55, 0.45, 0.7], t2: [0.6, -0.15, 0.72], creases: 1, knuckles: true },
+  // a brush held like a pen: thumb and index meeting at the ferrule, the middle finger under it, the rest tucked
+  brush: { f: [F(0.62, 0.55), F(0.9, 0.8), F(1.25, 1.35), F(1.32, 1.45)], spread: 0.02, t1: [0.72, 0.55, 0.42], t2: [0.72, 0.05, 0.68], creases: 1 },
 };
 export const HAND_SHAPES = Object.keys(SHAPES);
 
@@ -129,6 +133,32 @@ export function handFrame(wr: V3, el: V3, J: J3, near: boolean, arm: ArmP | unde
  * Draw a hand. `mat` paints the palm and the back of the hand, `fmat` the fingers and thumb (bare
  * fingers out of fingerless gloves); `fk` fattens the fingers (insulated gloves).
  */
+/**
+ * The bones of a posed hand: each finger's knuckle, middle joint and tip (index → little), and the
+ * thumb's root, joint and tip, in world space.
+ */
+export function handBones(H: HandFrame, arm: ArmP | undefined): { fingers: [V3, V3, V3][]; thumb: [V3, V3, V3] } {
+  const { d, n, k, P } = H;
+  const sh = SHAPES[arm?.hand ?? 'relax'] ?? SHAPES.relax;
+  const sv = H.s;
+  const fingers: [V3, V3, V3][] = [];
+  const spread = (arm?.spread ?? 1) * sh.spread;
+  for (let i = 0; i < 4; i++) {
+    const [a1, a2] = sh.f[i];
+    const sp = spread * SPL[i];
+    const b0 = vnorm(vadd(vsc(d, Math.cos(sp)), vsc(sv, Math.sin(sp))));
+    const bend = (a: number): V3 => vnorm(vadd(vsc(b0, Math.cos(a)), vsc(n, Math.sin(a))));
+    const kn = P(KNX[i], OFF[i] * (1 + Math.max(0, spread) * 0.6), 0.06);
+    const m = vadd(kn, vsc(bend(a1), LEN[i] * 0.54 * k));
+    fingers.push([kn, m, vadd(m, vsc(bend(a1 + a2), LEN[i] * 0.5 * k))]);
+  }
+  // the thumb, from the heel of the hand on the thumb side
+  const tb = P(0.62, 0.86, 0.22);
+  const dir = (w: V3) => vnorm(vadd(vsc(d, w[0]), vadd(vsc(sv, w[1]), vsc(n, w[2]))));
+  const tm = vadd(tb, vsc(dir(sh.t1), 0.95 * k));
+  return { fingers, thumb: [tb, tm, vadd(tm, vsc(dir(sh.t2), 0.72 * k))] };
+}
+
 export function drawHand7(s: Scene3D, wr: V3, el: V3, J: J3, near: boolean, arm: ArmP | undefined, hand: number, g: number, mat: Mat, fmat: Mat = mat, fk = 1): HandFrame {
   const H = handFrame(wr, el, J, near, arm, hand);
   const { d, n, k, P } = H;
@@ -140,25 +170,13 @@ export function drawHand7(s: Scene3D, wr: V3, el: V3, J: J3, near: boolean, arm:
   s.ellipsoid(P(1.25, 0.03, 0), vsc(d, 1.12 * k), vsc(sv, 1.02 * k), vsc(n, 0.52 * k), g, mat);
   s.ellipsoid(P(0.75, 0.55, 0.12), vsc(d, 0.6 * k), vsc(sv, 0.5 * k), vsc(n, 0.42 * k), g, mat);
   const fr = 0.46 * k * fk;
-  const axes: [V3, V3, V3][] = [];
-  const spread = (arm?.spread ?? 1) * sh.spread;
-  for (let i = 0; i < 4; i++) {
-    const [a1, a2] = sh.f[i];
-    const sp = spread * SPL[i];
-    const b0 = vnorm(vadd(vsc(d, Math.cos(sp)), vsc(sv, Math.sin(sp))));
-    const bend = (a: number): V3 => vnorm(vadd(vsc(b0, Math.cos(a)), vsc(n, Math.sin(a))));
-    const kn = P(KNX[i], OFF[i] * (1 + Math.max(0, spread) * 0.6), 0.06);
-    const m = vadd(kn, vsc(bend(a1), LEN[i] * 0.54 * k));
-    const tip = vadd(m, vsc(bend(a1 + a2), LEN[i] * 0.5 * k));
+  const bones = handBones(H, arm);
+  const axes = bones.fingers;
+  for (const [kn, m, tip] of axes) {
     s.limb(kn, m, fr, fr * 0.95, g, seg(fmat, 0, 0.54));
     s.limb(m, tip, fr * 0.95, fr * 0.8, g, seg(fmat, 0.54, 1));
-    axes.push([kn, m, tip]);
   }
-  // thumb: from the heel of the hand on the thumb side
-  const tb = P(0.62, 0.86, 0.22);
-  const dir = (w: V3) => vnorm(vadd(vsc(d, w[0]), vadd(vsc(sv, w[1]), vsc(n, w[2]))));
-  const tm = vadd(tb, vsc(dir(sh.t1), 0.95 * k));
-  const tt = vadd(tm, vsc(dir(sh.t2), 0.72 * k));
+  const [tb, tm, tt] = bones.thumb;
   s.limb(tb, tm, fr * 1.14, fr * 1.02, g, seg(fmat, 0, 0.56));
   s.limb(tm, tt, fr * 1.02, fr * 0.84, g, seg(fmat, 0.56, 1));
   // creases between the fingers, on the side the camera sees (lying on the nearer finger's surface)

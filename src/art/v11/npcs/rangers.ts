@@ -268,6 +268,7 @@ const ROSIE_HEAD: HeadDef7 = {
     brimHat({ y: 11.8, r: 9.4, crown: [3.4, 4.9], col: RO.hat, band: CL.red, tilt: 0.16, droop: 0.25 })(s, W, o);
   },
   eyePaint: freckleEye,
+  face: { ...HEADS7.jenna.face, freckles: true },
 };
 /** dot eyes with a dusting of freckles across the cheeks */
 function freckleEye(mark: FaceMark, x: number, y: number, inner: 1 | -1, _far: boolean, eye: HeadExpr7['eye'], ex: HeadExpr7, d: HeadDef7) {

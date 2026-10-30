@@ -230,7 +230,8 @@ export class Scene3D {
   /** tapered limb from a (radius ra) to b (radius rb): a sweep of spheres */
   limb(a: V3, b: V3, ra: number, rb: number, g: number, mat: Mat) {
     const d = vsub(b, a), L = vlen(d), k = this.k;
-    const n = Math.max(2, Math.ceil((L * k) / 0.4));
+    // spheres spaced to a fraction of the radius (the silhouette stays smooth, big limbs stay cheap)
+    const n = Math.max(2, Math.ceil((L * k) / Math.max(0.4, Math.min(ra, rb) * k * 0.3)));
     const ax = vnorm(L > 1e-4 ? d : [0, -1, 0]);
     // a stable frame around the axis for the angle coordinate
     const ref: V3 = Math.abs(ax[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
@@ -255,6 +256,8 @@ export class Scene3D {
       if (best <= this.z[i]) continue;
       const nrm = vnorm([px - bc[0], py - bc[1], best - bc[2]]);
       void br;
+      // t along the axis from the surface point itself (continuous, so thin bands and seams stay crisp)
+      if (L > 1e-4) bt = Math.max(0, Math.min(1, ((px - a[0]) * d[0] + (py - a[1]) * d[1] + (best - a[2]) * d[2]) / (L * L)));
       H.n = nrm; H.p = [px, py, best]; H.t = bt; H.l = vdot(nrm, LIGHT7); H.x = x; H.y = y;
       H.q = [bt, Math.atan2(vdot(nrm, e2), vdot(nrm, e1)), vdot(nrm, ax)];
       const col = mat(H);
@@ -319,14 +322,18 @@ export class Scene3D {
    */
   finish(o: { ink: C; line?: number; depthLine?: number; /** per group: how far its edge lines go toward the ink (small parts, e.g. hands, read cleaner darker) */ inkK?: Record<number, number>; /** rim light strength (0 = none) */ rim?: number } = { ink: 0xff201418 }): { back: PixelBuffer; front: PixelBuffer | null; ox: number; oy: number } {
     const W = this.w, Hh = this.h, z = this.z, g = this.grp, src = this.col.slice();
-    const out = this.col, nx = this.nx, ny = this.ny, lit = this.lit;
+    const out = this.col, nx = this.nx, lit = this.lit;
     const lineK = o.line ?? 0.55, dl = o.depthLine ?? 2.2, ik = o.inkK, rim = o.rim ?? 0.5;
-    for (let y = 0; y < Hh; y++) for (let x = 0; x < W; x++) {
+    const back = new PixelBuffer(W, Hh), front = new PixelBuffer(W, Hh);
+    if (this.bx1 < 0) return { back, front: null, ox: this.ox, oy: this.oy };
+    // only the drawn area (and the ring of outline round it) needs looking at
+    const X0 = Math.max(0, this.bx0 - 1), X1 = Math.min(W - 1, this.bx1 + 1), Y0 = Math.max(0, this.by0 - 1), Y1 = Math.min(Hh - 1, this.by1 + 1);
+    for (let y = Y0; y <= Y1; y++) for (let x = X0; x <= X1; x++) {
       const i = y * W + x;
       if (!g[i]) continue;
       let line = -1, contact = false, edgeR = false;
-      for (const [dx, dy] of N4) {
-        const X = x + dx, Y = y + dy;
+      for (let q = 0; q < 4; q++) {
+        const dx = N4X[q], dy = N4Y[q], X = x + dx, Y = y + dy;
         if (X < 0 || Y < 0 || X >= W || Y >= Hh) { if (dx > 0 || dy < 0) edgeR = true; continue; }
         const j = Y * W + X;
         if (!g[j]) { if (dx > 0 || (dy < 0 && nx[i] > 0.1)) edgeR = true; continue; }
@@ -341,21 +348,18 @@ export class Scene3D {
       else if (rim > 0 && edgeR && nx[i] > 0.25 && lit[i] < 0.5) out[i] = mix(src[i], shade(src[i], 0.75), rim * Math.min(1, (nx[i] - 0.1) * 2));
     }
     // silhouette outline (tinted by the neighbour, its weight picked by how the form meets the light)
-    const filled = new Uint8Array(W * Hh);
-    for (let i = 0; i < W * Hh; i++) filled[i] = g[i] ? 1 : 0;
-    const back = new PixelBuffer(W, Hh), front = new PixelBuffer(W, Hh);
     let anyFront = false;
-    for (let y = 0; y < Hh; y++) for (let x = 0; x < W; x++) {
+    for (let y = Y0; y <= Y1; y++) for (let x = X0; x <= X1; x++) {
       const i = y * W + x;
-      if (filled[i]) {
+      if (g[i]) {
         if (this.lay[i]) { front.data[i] = out[i]; anyFront = true; } else back.data[i] = out[i];
         continue;
       }
       let nb = -1;
-      for (const [dx, dy] of N4) {
-        const X = x + dx, Y = y + dy;
+      for (let q = 0; q < 4; q++) {
+        const X = x + N4X[q], Y = y + N4Y[q];
         if (X < 0 || Y < 0 || X >= W || Y >= Hh) continue;
-        if (filled[Y * W + X]) { nb = Y * W + X; break; }
+        if (g[Y * W + X]) { nb = Y * W + X; break; }
       }
       if (nb >= 0) {
         // 0 = the form faces the light here (a soft tinted line), 1 = turned away into shadow (deep ink)
@@ -369,4 +373,4 @@ export class Scene3D {
   }
 }
 
-const N4: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+const N4X = [1, -1, 0, 0], N4Y = [0, 0, 1, -1];

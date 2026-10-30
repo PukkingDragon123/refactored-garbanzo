@@ -318,7 +318,7 @@ export class DigSet implements SetScene {
     if (lifting <= 0) {
       const press = this.working ? 1 : 0;
       this.drawTool(px, this.tool, this.tx, this.ty + press, false);
-      drawHand(px, 'grip', this.tx, this.ty + 22 + press, { rot: 3, from: [this.tx + 50, c.H + 40] });
+      drawHand(px, this.tool === 'brush' ? 'brush' : 'grip', this.tx, this.ty + 22 + press, { rot: 3, from: [this.tx + 50, c.H + 40] });
     } else drawHand(px, 'open', this.ox + ob.w / Z / 2, this.oy + ob.h / Z / 2 - lifting * 10 + 2, { from: [this.ox + ob.w / Z / 2 + 30, c.H + 40] });
     // prompts, and the find's progress as little bone pips under the watch
     if (this.lift < 0) {

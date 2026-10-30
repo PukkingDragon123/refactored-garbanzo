@@ -155,21 +155,57 @@ export const JENNA7: Char7 = {
   skin: GIRL_SKIN, ink: hex('#24141a'),
   torso(p) {
     const l = L(p);
-    // big cream sailor-ish collar and the sweater's ribbed hem
-    if (p.hh > 0.8 && (p.f > 0.5 || p.hh > 0.9)) return cel(J.collar, l, 0.1);
-    if (p.hh < 0.2) return (Math.floor((p.z + 10) * 1.4) % 2 === 0) ? cel(J.top, l, -0.25) : cel(J.top, l);
-    // a little cat print on the chest
-    if (p.f > 2.4 && p.hh > 0.52 && p.hh < 0.66 && Math.abs(p.z + 0.8) < 1.1) return cel(J.collar, l, 0.2);
+    // the big cream sailor collar: a navy stripe round its edge, a red ribbon bow at the front
+    if (p.hh > 0.8 && (p.f > 0.5 || p.hh > 0.9)) {
+      if (p.f > 2.2 && Math.abs(p.hh - 0.8) < 0.05 && Math.abs(p.z) < 1.3) return Math.abs(p.z) < 0.35 ? cel(RIBBON, l, -0.2) : cel(RIBBON, l, 0.15, true);
+      if (p.hh < 0.83) return cel(J.collar, l, -0.45);
+      if (p.hh < 0.86 && p.hh > 0.84) return cel(J.skirt, l, 0.2);
+      return cel(J.collar, l, 0.1);
+    }
+    // the ribbed hem and the sweater's soft knit (a fine rib up the body)
+    if (p.hh < 0.2) return fr((p.z + 10) * 1.4) < 0.5 ? cel(J.top, l, -0.25) : cel(J.top, l, 0.05);
+    // a little cat print on the chest: a cream cat face with two ears
+    if (p.f > 2.4 && p.hh > 0.52 && p.hh < 0.68 && Math.abs(p.z + 0.8) < 1.1) {
+      if (p.hh > 0.64 && Math.abs(Math.abs(p.z + 0.8) - 0.7) > 0.28) return cel(J.top, l);
+      return Math.abs(p.hh - 0.58) < 0.015 && Math.abs(Math.abs(p.z + 0.8) - 0.4) < 0.15 ? cel(J.skirt, l, 0) : cel(J.collar, l, 0.2);
+    }
+    if (fr((p.z + 10) * 1.6) < 0.16 && l > -0.3) return cel(J.top, l, -0.14);
     return cel(J.top, l);
   },
   upperArm(p) { return cel(J.top, L(p), lb(p)); },
-  foreArm(p) { return p.t > 0.8 ? cel(J.top, L(p), lb(p) - 0.3) : cel(J.top, L(p), lb(p)); },
+  // ribbed cuffs pushed up a little
+  foreArm(p) { return p.t > 0.8 ? (fr(p.hit.q[1] * 1.6) < 0.4 ? cel(J.top, L(p), lb(p) - 0.38) : cel(J.top, L(p), lb(p) - 0.12)) : cel(J.top, L(p), lb(p)); },
   hands(p) { return cel(GIRL_SKIN, L(p), lb(p) + 0.1); },
-  thigh(p) { return cel(J.legs, L(p), lb(p) + 0.1); },
-  shin(p) { return cel(J.legs, L(p), lb(p) + 0.1); },
-  shoe(p) { return p.hit.q[1] < -0.45 ? J.shoe[1] : cel(J.shoe, L(p), lb(p) + 0.1); },
-  skirt: { len: 9, flare: 3.2, top: 3.6, mat: p => (Math.sin(Math.atan2(p.z, p.f) * 7) > 0.55 ? cel(J.skirt, L(p), -0.3) : cel(J.skirt, L(p), 0.05)) },
+  // dark tights with a soft sheen down the lit side of the leg
+  thigh(p) { return sheen(J.legs, p); },
+  shin(p) { return sheen(J.legs, p); },
+  // Mary-Jane shoes: a strap over the instep, a buttoned side, a stitched sole, a polished toe
+  shoe(p) {
+    const q = p.hit.q, l = L(p), b = lb(p);
+    if (q[1] < -0.45) return J.shoe[1];
+    if (q[1] < -0.3) return cel(J.shoe, l, b - 0.3);
+    if (Math.abs(q[0] + 0.1) < 0.14 && q[1] > -0.1) return Math.abs(q[2]) < 0.3 && q[2] > 0 ? cel(BRASS, l, 0.2, true) : cel(J.shoe, l, b - 0.25);
+    if (q[0] > 0.5 && l + b > 0.45) return J.shoe[5];
+    return cel(J.shoe, l, b + 0.1);
+  },
+  // the pleated skirt: each pleat a lit face, a shadowed face and a crisp fold line, a white stripe above the hem
+  skirt: {
+    len: 9, flare: 3.2, top: 3.6, mat: p => {
+      const l = L(p), u = fr((Math.atan2(p.z, p.f) / (Math.PI * 2)) * 14);
+      if (p.t > 0.8 && p.t < 0.85) return cel(J.collar, l, -0.1);
+      if (p.t > 0.94) return cel(J.skirt, l, -0.35);
+      if (u < 0.1) return cel(J.skirt, l, -0.55);
+      return u < 0.5 ? cel(J.skirt, l, 0.18) : cel(J.skirt, l, -0.12);
+    },
+  },
 };
+const RIBBON = R6('#200406', '#4a0c12', '#7a1820', '#a8262e', '#cc4040', '#ee7a6a');
+/** stockings and tights: a streak of sheen down the leg where it faces the light */
+function sheen(r: Ramp6, p: Part): C {
+  const l = L(p), b = lb(p) + 0.1;
+  if (l + b > 0.55 && Math.abs(Math.cos(p.hit.q[1]) + 0.35) < 0.14) return r[5];
+  return cel(r, l, b);
+}
 
 // ------------------------------------------------------------------ Aroha
 // (her body, kit and moves live in aroha7.ts)
@@ -212,9 +248,17 @@ export const JOSHU7: Char7 = {
     return hair ? cel(JOSHU_SKIN, L(p), lb(p) - 0.45) : cel(JOSHU_SKIN, L(p), lb(p));
   },
   hands(p) { return cel(JOSHU_SKIN, L(p), lb(p) + 0.05); },
-  thigh(p) { return cel(Jo.trousers, L(p), lb(p)); },
-  shin(p) { return p.t > 0.45 ? cel(Jo.boot, L(p), lb(p) + 0.1) : cel(Jo.trousers, L(p), lb(p)); },
-  shoe(p) { return p.hit.q[1] < -0.45 ? Jo.boot[0] : cel(Jo.boot, L(p), lb(p) + 0.1, true); },
+  // heavy wool trousers with a side seam, tucked into sea boots with a turned-down top and a rubber shine
+  thigh(p) { return Math.abs(Math.cos(p.hit.q[1]) - 0.9) < 0.06 ? cel(Jo.trousers, L(p), lb(p) - 0.4) : cel(Jo.trousers, L(p), lb(p)); },
+  shin(p) {
+    const l = L(p), t = p.t, b = lb(p);
+    if (t < 0.38) return cel(Jo.trousers, l, b);
+    if (t < 0.45) return t < 0.4 ? cel(Jo.trousers, l, b - 0.45) : cel(Jo.trousers, l, b + 0.15); // the trouser leg bunched over the boot
+    if (t < 0.55) return t > 0.53 ? cel(Jo.boot, l, b - 0.5) : cel(Jo.boot, l, b + 0.3, true); // the boot's turned-down top
+    if (l + b > 0.55 && Math.abs(Math.cos(p.hit.q[1]) + 0.4) < 0.12) return Jo.boot[5];
+    return cel(Jo.boot, l, b + 0.1);
+  },
+  shoe(p) { return p.hit.q[1] < -0.45 ? Jo.boot[0] : p.hit.q[1] < -0.3 ? cel(Jo.boot, L(p), lb(p) - 0.3) : cel(Jo.boot, L(p), lb(p) + 0.1, true); },
 };
 
 export const CAST7: Record<string, Char7> = { mori: MORI7, jenna: JENNA7, aroha: AROHA7, joshu: JOSHU7 };

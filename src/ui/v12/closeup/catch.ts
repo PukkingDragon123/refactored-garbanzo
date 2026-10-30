@@ -224,7 +224,7 @@ export class CatchSet implements SetScene {
     ellipse(px, this.sx, this.sy, sh + 3, sh, (nx, ny, _u, _v, fx, fy) => (dith(fx, fy) < (0.55 - lift * 0.25) * (1 - (nx * nx + ny * ny) * 0.4) ? mix(px.data[fy * px.w + fx], hex('#0a0604'), 0.55) : -1));
     const wig = this.done >= 0 && this.done < 0.6 ? Math.sin(t * 30) * 0.5 : 0;
     const hx = this.sx - lift * 10 + wig, hy = this.sy - lift * 22;
-    drawHand(px, 'open', hx, hy, { from: [hx + 40, c.H + 50] });
+    drawHand(px, this.cupping ? 'cup' : 'open', hx, hy, { from: [hx + 40, c.H + 50] });
     if (this.done < 0 && this.t < 5) c.prompt(px, c.touch ? 'SLOWLY... TAP TO CUP IT' : 'MOVE SLOWLY, CLICK TO CUP', c.W / 2, c.H - 14, c.touch ? 'mouse' : 'SPACE');
     // the tries left: three little glass jars by the watch
     for (let i = 0; i < 3; i++) {
