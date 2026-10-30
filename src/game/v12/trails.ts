@@ -489,7 +489,8 @@ function arrive(S: SceneTrails, loc: string) {
   f.snapCamera();
   void (async () => {
     try {
-      await sleep(250);
+      // (walk in as the fade lifts)
+      for (let k = 0; k < 40 && game.r.post.fade > 0.35; k++) await sleep(75);
       const to = e.at === 'W' && !e.arm ? 92 : e.at === 'E' && !e.arm ? W - 92 : p.x + p.facing * 26;
       const fade = (async () => { for (let k = 0; k <= 10; k++) { p.alpha = Math.max(p.alpha, k / 10); await sleep(40); } })();
       await Promise.race([p.walkTo(to, 56), sleep(2600)]);
