@@ -106,6 +106,14 @@ const now = () => performance.now() / 1000;
 let reduced = false;
 try { reduced = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { /* */ }
 
+// V12: the old text furniture never shows (the dialogue panel, the toast stack, the caption and title
+// card boxes, the V1 HUD, the region-map button); their callers float their text instead
+try {
+  const st = document.createElement('style');
+  st.textContent = `#ui > .hud, #ui > .toasts, #ui > .dialogue, #ui > .caption, #ui > .titlecard, #ui .v10-mapb, #ui .hm-keys { display: none !important; }`;
+  document.head.appendChild(st);
+} catch { /* */ }
+
 // ---------------------------------------------------------------- the overlay canvas
 let cv: HTMLCanvasElement | null = null;
 let g: CanvasRenderingContext2D | null = null;
@@ -535,9 +543,10 @@ const bubbles = () => (game as unknown as { ui?: { bubbles?: BubblesLike } }).ui
 /** CSS point of a world point on the gameplay plane */
 export function worldToCss(x: number, y: number): [number, number] | null {
   const r = (game as unknown as { r?: { projectX(x: number, p: number): number; projectY(y: number, p: number): number; VW: number; VH: number } }).r;
-  if (!r || !rootRect) return null;
+  const R = rootRect ?? (game as unknown as { ui?: { root?: HTMLElement } }).ui?.root?.getBoundingClientRect();
+  if (!r || !R) return null;
   const sx = r.projectX(x, 1), sy = r.projectY(y, 1);
-  return [(sx / r.VW) * rootRect.width, (sy / r.VH) * rootRect.height];
+  return [(sx / r.VW) * R.width, (sy / r.VH) * R.height];
 }
 /** Mori's head (the player), wherever he is */
 export function moriAnchor(): Anchor {
@@ -1025,16 +1034,36 @@ export function floatPromptRect(): DOMRect | null {
 let skyBusy: Promise<void> = Promise.resolve();
 let lastSky = '';
 let lastSkyT = 0;
+let skyCur: Item[] = [];
+let skyCurSoft = false;
+let hardPending = 0;
+const skyLive = () => skyCur.some(p => !p.gone);
 /**
  * Big pixel words in the sky: an area name when you arrive, a chapter / day card. The chapter word in
  * small caps, the name in big two-tone block letters that drop in one by one, the subtitle in Mori's
- * hand; then the letters lift off and vanish. One at a time (later ones wait their turn).
+ * hand; then the letters lift off and vanish. One at a time: title cards queue; a `soft` one (an area
+ * name) is skipped while anything else is up and gives way at once to a title card.
  */
-export function floatSky(title: string, sub = '', chapter = '', ms = 3000): Promise<void> {
-  const key = (chapter + '|' + title).toLowerCase();
-  const t = performance.now();
-  if (key === lastSky && t - lastSkyT < 20000) return Promise.resolve();
-  lastSky = key; lastSkyT = t;
+export function floatSky(title: string, sub = '', chapter = '', ms = 3000, o: { soft?: boolean } = {}): Promise<void> {
+  if (o.soft) {
+    const key = (chapter + '|' + title).toLowerCase();
+    const t = performance.now();
+    if (key === lastSky && t - lastSkyT < 20000) return Promise.resolve();
+    // a moment's grace, so a title card at the start of a scene wins over the place name
+    return new Promise<void>(res => setTimeout(() => {
+      if (hardPending > 0 || skyLive()) { res(); return; }
+      lastSky = key; lastSkyT = performance.now();
+      void showSky(title, sub, chapter, ms, true).then(res, res);
+    }, 700));
+  }
+  hardPending++;
+  if (skyCurSoft) for (const p of skyCur) leave(p, true);
+  const run = () => showSky(title, sub, chapter, ms, false).finally(() => { hardPending--; });
+  const p = skyBusy.then(run, run);
+  skyBusy = p.catch(() => {});
+  return p;
+}
+function showSky(title: string, sub: string, chapter: string, ms: number, soft: boolean): Promise<void> {
   const run = async () => {
     if (!layer()) return;
     fitLayer();
@@ -1056,16 +1085,16 @@ export function floatSky(title: string, sub = '', chapter = '', ms = 3000): Prom
     tIt.style = 'say';
     tIt.voice = 0;
     for (const p of pieces) add(p);
-    try { audio.play('whoosh' as never, { vol: 0.25, pitch: 0.8 }); } catch { /* */ }
+    skyCur = pieces;
+    skyCurSoft = soft;
+    try { audio.play('whoosh' as never, { vol: soft ? 0.12 : 0.25, pitch: 0.8 }); } catch { /* */ }
     const typedAll = Promise.all(pieces.map(p => p.typed));
     await Promise.race([typedAll, new Promise(r => setTimeout(r, 4000))]);
     await new Promise(r => setTimeout(r, Math.max(900, ms - 900)));
     for (const p of pieces) leave(p);
     await Promise.all(pieces.map(p => p.done));
   };
-  const p = skyBusy.then(run, run);
-  skyBusy = p.catch(() => {});
-  return p;
+  return run();
 }
 
 /** a caption low on the screen (narration: "An hour later...") */
@@ -1093,6 +1122,7 @@ export function clearFloats(kinds?: string[], instant = false) {
   }
   if (instant) items = items.filter(i => !i.gone);
   if (!kinds || kinds.includes('prompt')) { promptIt = null; promptKey = ''; }
+  if (!kinds || kinds.includes('option')) for (const set of [...optionSets]) set.cancel?.();
 }
 
 // ---------------------------------------------------------------- public: answers
@@ -1112,7 +1142,7 @@ export interface FloatChoiceOpts {
   /** where the column floats when an option names no anchor (default: over Mori) */
   anchor?: Anchor | null;
 }
-interface OptionSet { opts: Item[]; groups: { key: string; ids: number[]; anchor: Anchor | null; name: Gl[] | null; nameW: number; nameCol: string }[]; sel: number; picked: number; t0: number }
+interface OptionSet { cancel?: () => void; opts: Item[]; groups: { key: string; ids: number[]; anchor: Anchor | null; name: Gl[] | null; nameW: number; nameCol: string }[]; sel: number; picked: number; t0: number }
 let optionSets: OptionSet[] = [];
 
 function placeOptions(set: OptionSet, placed: Rect[], top: number, bot: number) {
@@ -1209,6 +1239,7 @@ export function floatChoices(options: FloatOption[], o: FloatChoiceOpts = {}): P
     window.addEventListener('keydown', kd, true);
     window.addEventListener('pointerdown', pd, true);
     window.addEventListener('pointermove', pm, true);
+    set.cancel = () => finish(null);
     const frame = () => {
       if (fin) return;
       const t = now() - set.t0;

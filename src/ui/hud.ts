@@ -1,4 +1,5 @@
-// Heads-up displays for camp and expeditions.
+// Heads-up displays for camp and expeditions (V1). V12 has no HUD: these still build their readouts
+// so older scenes can write to them, but they are never put on screen.
 
 import { game } from '../game/game';
 import { objective } from '../game/story';
@@ -7,7 +8,8 @@ import { iconURL } from './icons';
 import { el } from './ui';
 
 export function campHud(_scene?: unknown) {
-  const h = game.ui.hud;
+  // (detached: never on screen)
+  const h = el('div');
   const s = game.save;
   const o = objective();
   const ready = readyFactCount();
@@ -17,7 +19,7 @@ export function campHud(_scene?: unknown) {
       ${ready ? `<div class="meter panel" style="color:var(--amber2)">${ready} fact${ready > 1 ? 's' : ''} ready to deduce</div>` : ''}</div></div>
     <div class="hud-tr"><div class="objective panel"><span class="t">${o.t}</span>${o.text}</div></div>
     <div class="hint panel"><span class="key">A</span><span class="key">D</span> walk &nbsp; <span class="key">E</span> / click interact &nbsp; <span class="key">J</span> Field Guide</div>`;
-  h.classList.remove('hidden');
+  game.ui.hud.classList.add('hidden');
 }
 
 export const GADGETS = [
@@ -39,9 +41,9 @@ export interface ExpHudRefs {
 }
 
 export function expeditionHud(siteName: string, timeLabel: string): ExpHudRefs {
-  const h = game.ui.hud;
+  // (detached: never on screen)
+  const h = el('div');
   const o = objective();
-  h.innerHTML = '';
   const tl = h.appendChild(el('div', 'hud-tl'));
   const site = tl.appendChild(el('div', 'hud-site panel', `<b>${siteName}</b><span class="clock">${timeLabel}</span>`));
   const meters = tl.appendChild(el('div', 'hud-meters'));
@@ -58,6 +60,6 @@ export function expeditionHud(siteName: string, timeLabel: string): ExpHudRefs {
   });
   const hint = h.appendChild(el('div', 'hint panel', `<span class="key">RMB</span>/<span class="key">Q</span> camera &nbsp;<span class="key">Click</span> shoot &nbsp;<span class="key">Wheel</span> zoom &nbsp;<span class="key">V</span> photo/video<br><span class="key">S</span> crouch / hide in bushes &nbsp;<span class="key">1-5</span>+<span class="key">F</span> place gadget &nbsp;<span class="key">E</span> collect &nbsp;<span class="key">J</span> guide`));
   setTimeout(() => { hint.style.transition = 'opacity 1s'; hint.style.opacity = '0'; }, 14000);
-  h.classList.remove('hidden');
+  game.ui.hud.classList.add('hidden');
   return { film, gadgets, aware, awareBar: aware.querySelector('.bar > div') as HTMLElement, awareLabel: aware.querySelector('.lbl') as HTMLElement, obj, clock: site.querySelector('.clock') as HTMLElement };
 }

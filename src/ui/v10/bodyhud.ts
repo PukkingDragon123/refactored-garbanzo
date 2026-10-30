@@ -39,7 +39,8 @@ body.touchmode .h2 .bh { top: 6px; left: 6px; }
 `;
 
 let styled = false;
-let mode: 'auto' | 'always' | 'never' = 'auto';
+// V12: no HUD and no stamina, so the plate is hidden unless something asks for it again
+let mode: 'auto' | 'always' | 'never' = 'never';
 /** show the body HUD always / never / on expeditions only (default) */
 export function setBodyHud(m: 'auto' | 'always' | 'never') { mode = m; }
 const shown = () => (mode === 'always' ? true : mode === 'never' ? false : onExpedition());
@@ -245,6 +246,8 @@ function paintChip(a: Art, kind: 'stomach' | 'dizzy', left: number, t: number) {
 
 /** add the status plate and the edge tints to the HUD root */
 export function mountBodyHud(root: HTMLElement, _who?: HTMLElement): BodyHud {
+  // V12: hidden (nothing mounted) unless setBodyHud('always' | 'auto') brings it back
+  if (mode === 'never') return { ownsPack: () => false, update() { /* */ }, destroy() { /* */ }, cheer() { /* */ } };
   if (!styled) { document.head.appendChild(el('style', '', CSS)); styled = true; }
   const vign = (key: string, hex: string, k: number) => pxCanvas(`vign:${key}`, a => {
     const c = col(hex);
