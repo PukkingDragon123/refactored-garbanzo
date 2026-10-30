@@ -11,9 +11,9 @@
 // for the gesture (open palms up explaining, a fanned wave, a pointing finger, fists).
 // Everything here is a pure function of the clip phase, so the frames cache like any other clip.
 
-import type { Build, Pose, ArmP, P2 } from '../people-rig';
+import type { Build, Pose, ArmP, LegP, P2 } from '../people-rig';
 import { stand, crouchP } from '../anime/anims';
-import { ANIMS7, POSES7, gait, gaitOf, shoulder, wHead, wHang, bump, smooth, lerp2, pulse, K } from './anims7';
+import { ANIMS7, POSES7, POSES7V, pose7, at7, wHead, wHang, bump, smooth, lerp2, pulse, K } from './anims7';
 
 const TAU = Math.PI * 2;
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
@@ -22,15 +22,16 @@ const mix = (a: number, b: number, u: number) => a + (b - a) * u;
 const overshoot = (u: number, o = 0.18) => { u = clamp01(u); return 1 - Math.cos(u * Math.PI * 0.5 * 1.45) * (1 - u) + Math.sin(u * Math.PI) * o * (1 - u); };
 
 /** the character's own resting stance (from their idle: Jenna's heels together, Joshu's wide sea legs) */
-function base(b: Build, id: string, t = 0): Pose {
+export function base(b: Build, id: string, t = 0): Pose {
   const k = K(b), br = Math.sin(TAU * t);
   const p = stand(b);
   p.hip = [0.25 * k * Math.sin(TAU * t + 0.8), b.hipH - 0.35 - Math.max(0, -br) * 0.3];
   p.lean = 0.02 + br * 0.01;
   p.sq = 1 + br * 0.015;
-  const wide = id === 'joshu' ? 1.25 : id === 'jenna' ? 0.7 : 1;
-  p.fl = { f: [-2.2 * k * wide, b.ankleH], fa: 0 };
-  p.bl = { f: [2.4 * k * wide, b.ankleH], fa: 0.05 };
+  // feet where their own idle puts them (so easing in and out of these from the idle never slides a foot)
+  const r = at7(id, 'idle', b, 0);
+  p.fl = { f: [r.fl.f[0], r.fl.f[1]], fa: r.fl.fa ?? 0 };
+  p.bl = { f: [r.bl.f[0], r.bl.f[1]], fa: r.bl.fa ?? 0 };
   p.fa = { a: 0.08 + br * 0.03, e: 0.32, hand: 'relax' };
   p.ba = { a: -0.06, e: 0.28, hand: 'relax' };
   p.sway = 0.2 + 0.15 * br;
@@ -170,22 +171,7 @@ function scared(b: Build, t: number, id: string): Pose {
   return p;
 }
 
-/** laughing: the shoulders bounce, a hand on the belly, the head goes back on the big ones */
-function laugh(b: Build, t: number, id: string): Pose {
-  const k = K(b);
-  const p = base(b, id, 0);
-  const ha = Math.abs(Math.sin(TAU * 3 * t)), big = smooth((Math.sin(TAU * t) + 0.2) / 0.8);
-  p.hip = [p.hip[0], p.hip[1] - 0.4 * k * ha];
-  p.lean = -0.05 - 0.1 * big + 0.03 * ha;
-  p.sq = 1 - 0.02 * ha;
-  p.hd = [-0.3 * k * big, 0.3 * k * ha];
-  p.look = big > 0.6 ? 'up' : 'fwd';
-  p.fa = { ik: wHead(b, p, 4.4, -16.4 + ha * 0.6), hand: 'flat', palm: 'in' };
-  p.ba = id === 'joshu' ? { ik: wHead(b, p, 3.8, -18.4 + ha * 0.5), hand: 'flat', palm: 'in' } : { ik: wHang(b, p, 0.8), hand: 'relax' };
-  W(p, { wN: 1, wF: 1, zN: 2.8 * k, zF: -1 * k });
-  p.front = ['armF'];
-  return p;
-}
+// laughing: anims-talk.ts (with the other ways of talking)
 
 /** angry: fists clenched at the sides, shaking, a stamp of the foot, leaning in */
 function angry(b: Build, t: number, id: string): Pose {
@@ -293,28 +279,44 @@ function land(b: Build, u: number, id: string): Pose {
   return p;
 }
 /**
- * Coming to a stop from a walk (or a run): momentum carries the body on past the rest pose, the arms
- * swing on through, then everything settles back; the feet close up.
+ * Coming to a stop, from the very stride the feet were in (the variant names the clip and frame the
+ * stop leaves: 'walkStop~walk.7', 'walkStop~jog.2'). Momentum carries the body on over the feet and
+ * the arms swing on through and past the rest pose before they settle (3D blend, a little overshoot);
+ * the knees give as it brakes. The foot in the air comes down where the stance wants it, then the
+ * other one takes one small lifted step into place: no foot slides along the ground.
  */
-function stopFrom(b: Build, u: number, id: string, run: boolean): Pose {
+function stopFrom(b: Build, u: number, id: string, run: boolean, v: string): Pose {
   const k = K(b);
-  const from = run ? gait(b, 0.25, gaitOf(id).run(b)) : gait(b, 0.25, gaitOf(id).walk(b));
-  const rest = id === 'jenna' || id === 'joshu' || id === 'aroha' ? POSES7.idle(b, 0, id) : base(b, id, 0);
-  const e = smooth(u);
-  const p: Pose = { ...rest };
-  p.hip = lerp2(from.hip, rest.hip, e);
-  p.fl = { f: lerp2(from.fl.f, rest.fl.f, smooth(u * 1.4)), fa: mix(from.fl.fa ?? 0, rest.fl.fa ?? 0, e) };
-  p.bl = { f: lerp2(from.bl.f, rest.bl.f, smooth(u * 1.2)), fa: mix(from.bl.fa ?? 0, rest.bl.fa ?? 0, e) };
-  // the lean: forward past rest on the momentum (a run first brakes back), then settle
-  const over = Math.sin(u * Math.PI) * (1 - u * 0.4);
-  p.lean = mix(from.lean, rest.lean, e) + (run ? (u < 0.35 ? -0.12 * Math.sin((u / 0.35) * Math.PI) : 0.1 * over) : 0.07 * over);
-  p.hd = [0.3 * k * over, -0.25 * k * over];
-  p.sq = 1 - 0.025 * Math.sin(u * Math.PI);
-  // swinging arms (only if the rest pose hangs them) follow through forward and back
-  if (!rest.fa.ik) p.fa = { a: (rest.fa.a ?? 0) + 0.45 * over * (run ? 1.3 : 1), e: (rest.fa.e ?? 0.3) + 0.25 * over, hand: 'relax', dev: -0.3 * Math.cos(u * Math.PI) };
-  if (!rest.ba.ik) p.ba = { a: (rest.ba.a ?? 0) + 0.3 * over, e: (rest.ba.e ?? 0.3) + 0.2 * over, hand: 'relax' };
-  p.sway = 0.3 + 0.6 * over;
-  return p;
+  let src = run ? 'run' : 'walk', fi = 3;
+  if (v) { const i = v.lastIndexOf('.'); if (i > 0) { src = v.slice(0, i); fi = +v.slice(i + 1) || 0; } }
+  const from = pose7(id, src, b, fi);
+  const rest = at7(id, 'idle', b, 0);
+  const hard = run || src === 'run' ? 1 : src === 'jog' ? 0.6 : 0;
+  // which foot moves first: the one in the air (or the one behind)
+  const yN = from.fl.f[1], yF = from.bl.f[1];
+  const nearFirst = yN > yF + 0.3 || (Math.abs(yN - yF) <= 0.3 && from.fl.f[0] < from.bl.f[0]);
+  const step = (f0: LegP, f1: LegP, a: number, c: number): LegP => {
+    const w = clamp01((u - a) / (c - a)), e = smooth(w);
+    const d = Math.abs(f1.f[0] - f0.f[0]);
+    const air = Math.max(0, f0.f[1] - f1.f[1]) * (1 - e);
+    const lift = d < 0.6 * k ? 0 : Math.sin(Math.PI * w) * Math.min(1.3 * k, 0.25 * d + 0.4 * k);
+    // toes down as the foot peels off, a touch up as it reaches to land
+    const toe = lift > 0 ? -0.35 * Math.sin(Math.PI * Math.min(1, w * 1.6)) + 0.2 * Math.sin(Math.PI * clamp01((w - 0.55) / 0.45)) : 0;
+    return { f: [mix(f0.f[0], f1.f[0], e), f1.f[1] + air + lift], fa: mix(f0.fa ?? 0, f1.fa ?? 0, e) + toe };
+  };
+  const fl = nearFirst ? step(from.fl, rest.fl, 0, 0.5) : step(from.fl, rest.fl, 0.4, 0.9);
+  const bl = nearFirst ? step(from.bl, rest.bl, 0.4, 0.9) : step(from.bl, rest.bl, 0, 0.5);
+  // the hips: carried on a little past the feet, the knees giving as the body brakes, then settling
+  const e = smooth(u), over = Math.sin(Math.PI * Math.min(1, u * 1.5)) * (1 - u);
+  const hip: P2 = [mix(from.hip[0], rest.hip[0], e) + (0.6 + 0.5 * hard) * k * over, mix(from.hip[1], rest.hip[1], e) - (0.4 + 0.8 * hard) * k * bump(u, 0, 0.75, 0.25)];
+  // the lean: on past upright with the momentum (a run first brakes, leaning back), then settle
+  const brake = hard ? -0.12 * hard * Math.sin(Math.PI * clamp01(u / 0.35)) * (u < 0.35 ? 1 : 0) : 0;
+  const lm = (0.07 + 0.05 * hard) * Math.sin(Math.PI * u) * (1 - u * 0.4) + brake;
+  const sx = mix(from.flags?.sx ?? 0, rest.flags?.sx ?? 0, e);
+  const A: Pose = { ...from, hip, fl, bl, lean: from.lean + lm, hd: [(from.hd?.[0] ?? 0) + 0.3 * k * over, from.hd?.[1] ?? 0], flags: { ...(from.flags ?? {}), sx }, sway: 0.3 + 0.6 * over };
+  const B: Pose = { ...rest, hip, fl, bl, lean: rest.lean + lm, hd: [(rest.hd?.[0] ?? 0) + 0.3 * k * over, rest.hd?.[1] ?? 0], flags: { ...(rest.flags ?? {}), sx }, sway: 0.3 + 0.6 * over };
+  // the arms and shoulders swing on through the rest pose and back (follow-through)
+  return { ...A, mix: { a: A, p: B, u: u >= 1 ? 1 : overshoot(u, 0.16) } };
 }
 
 // ------------------------------------------------------------------ registration
@@ -327,15 +329,14 @@ Object.assign(ANIMS7, {
   think: { frames: 8, fps: 4, loop: true },
   surprised: { frames: 8, fps: 16, loop: false },
   scared: { frames: 8, fps: 10, loop: true },
-  laugh: { frames: 12, fps: 12, loop: true },
   angry: { frames: 10, fps: 10, loop: true },
   celebrate: { frames: 12, fps: 12, loop: true },
   cheer: { frames: 8, fps: 8, loop: true },
   jump: { frames: 6, fps: 18, loop: false },
   fall: { frames: 6, fps: 8, loop: true },
   land: { frames: 6, fps: 20, loop: false },
-  walkStop: { frames: 6, fps: 20, loop: false },
-  runStop: { frames: 8, fps: 20, loop: false },
+  walkStop: { frames: 8, fps: 20, loop: false, phased: true },
+  runStop: { frames: 10, fps: 20, loop: false, phased: true },
 });
 
 Object.assign(POSES7, {
@@ -346,14 +347,14 @@ Object.assign(POSES7, {
   think: (b: Build, t: number, id: string) => think(b, t, id),
   surprised: (b: Build, t: number, id: string) => surprised(b, t, id),
   scared: (b: Build, t: number, id: string) => scared(b, t, id),
-  laugh: (b: Build, t: number, id: string) => laugh(b, t, id),
   angry: (b: Build, t: number, id: string) => angry(b, t, id),
   celebrate: (b: Build, t: number, id: string) => celebrate(b, t, id),
   cheer: (b: Build, t: number, id: string) => cheer(b, t, id),
   jump: (b: Build, t: number, id: string) => jump(b, t, id),
   fall: (b: Build, t: number, id: string) => fall(b, t, id),
   land: (b: Build, t: number, id: string) => land(b, t, id),
-  walkStop: (b: Build, t: number, id: string) => stopFrom(b, t, id, false),
-  runStop: (b: Build, t: number, id: string) => stopFrom(b, t, id, true),
 });
+// the stops take the stride they leave as a variant: 'walkStop~walk.7' (plain 'walkStop' works too)
+POSES7V.walkStop = (b, t, id, v) => stopFrom(b, t, id, false, v);
+POSES7V.runStop = (b, t, id, v) => stopFrom(b, t, id, true, v);
 void crouchP;

@@ -23,6 +23,9 @@ const LEG_YAW = Math.cos(YAW * 0.5);
 export interface AnimInfo7 extends AnimInfo {
   /** screen px travelled per cycle (distance-driven clips) */
   dist?: number;
+  /** a transition that picks up where the clip it leaves was: the Actor names the variant after that
+   *  clip and its frame ('walkStop~walk.7'), so a stop starts from the stride the feet were in */
+  phased?: boolean;
   /** the clip the Actor plays instead of `talk` while this one is the idle (keep hands on the job) */
   talk?: string;
 }
@@ -87,22 +90,22 @@ type GaitSet = { walk: (b: Build) => Gait; run: (b: Build) => Gait; jog?: (b: Bu
 const GAITS: Record<string, GaitSet> = {
   // Mori: easy-going naturalist, loose arms, a relaxed lope when he runs
   mori: {
-    walk: b => ({ stride: b.thigh * 1.45, stance: 0.6, lift: 2.2 * K(b), bob: 0.8 * K(b), lean: 0.05, swing: 0.34, elbow: 0.16, elbowSwing: 0.28, drop: 0.3 * K(b), kick: 0.2, flight: 0, hand: 'relax', sway: 0.35 * K(b) }),
+    walk: b => ({ stride: b.thigh * 1.7, stance: 0.6, lift: 2.2 * K(b), bob: 0.85 * K(b), lean: 0.05, swing: 0.36, elbow: 0.16, elbowSwing: 0.28, drop: 0.3 * K(b), kick: 0.2, flight: 0, hand: 'relax', sway: 0.35 * K(b) }),
     run: b => ({ stride: b.thigh * 2.2, stance: 0.36, lift: 5.4 * K(b), bob: 1.2 * K(b), lean: 0.22, swing: 0.62, elbow: 1.2, elbowSwing: 0.25, drop: 1.1 * K(b), kick: 1, flight: 0.9 * K(b), hand: 'relax', sway: 0.25 * K(b) }),
   },
   // Jenna: quick light steps with a bounce and a hip sway, hands a little out from her sides
   jenna: {
-    walk: b => ({ stride: b.thigh * 1.15, stance: 0.58, lift: 2.8 * K(b), bob: 1.25 * K(b), lean: 0.0, swing: 0.34, elbow: 0.75, elbowSwing: 0.35, drop: 0.35 * K(b), kick: 0.5, flight: 0, hand: 'relax', sway: 0.55 * K(b), roll: 0.05, armOut: 1.1 }),
+    walk: b => ({ stride: b.thigh * 1.4, stance: 0.58, lift: 2.8 * K(b), bob: 1.25 * K(b), lean: 0.0, swing: 0.34, elbow: 0.75, elbowSwing: 0.35, drop: 0.35 * K(b), kick: 0.5, flight: 0, hand: 'relax', sway: 0.55 * K(b), roll: 0.05, armOut: 1.1 }),
     run: b => ({ stride: b.thigh * 1.75, stance: 0.38, lift: 5.2 * K(b), bob: 1.4 * K(b), lean: 0.14, swing: 0.7, elbow: 1.0, elbowSwing: 0.45, drop: 0.9 * K(b), kick: 1.3, flight: 0.9 * K(b), hand: 'open', sway: 0.45 * K(b), armOut: 1.7 }),
   },
   // Aroha: upright and grounded, long smooth strides; runs like an athlete
   aroha: {
-    walk: b => ({ stride: b.thigh * 1.65, stance: 0.62, lift: 2.0 * K(b), bob: 0.5 * K(b), lean: -0.01, swing: 0.3, elbow: 0.16, elbowSwing: 0.2, drop: 0.25 * K(b), kick: 0.2, flight: 0, hand: 'relax', sway: 0.4 * K(b), roll: 0.02 }),
+    walk: b => ({ stride: b.thigh * 1.8, stance: 0.62, lift: 2.0 * K(b), bob: 0.5 * K(b), lean: -0.01, swing: 0.3, elbow: 0.16, elbowSwing: 0.2, drop: 0.25 * K(b), kick: 0.2, flight: 0, hand: 'relax', sway: 0.4 * K(b), roll: 0.02 }),
     run: b => ({ stride: b.thigh * 2.5, stance: 0.33, lift: 6.4 * K(b), bob: 1.0 * K(b), lean: 0.3, swing: 0.8, elbow: 1.45, elbowSwing: 0.2, drop: 1.2 * K(b), kick: 1, flight: 1.2 * K(b), hand: 'grip' }),
   },
   // Joshu: a heavy sailor's roll, short strides rocking side to side, arms held out round the belly
   joshu: {
-    walk: b => ({ stride: b.thigh * 1.05, stance: 0.64, lift: 1.6 * K(b), bob: 0.45 * K(b), lean: -0.05, swing: 0.24, elbow: 0.36, elbowSwing: 0.15, drop: 0.3 * K(b), kick: 0, flight: 0, hand: 'relax', sway: 1.1 * K(b), roll: 0.09, armOut: 1.8 }),
+    walk: b => ({ stride: b.thigh * 1.25, stance: 0.64, lift: 1.6 * K(b), bob: 0.45 * K(b), lean: -0.05, swing: 0.24, elbow: 0.36, elbowSwing: 0.15, drop: 0.3 * K(b), kick: 0, flight: 0, hand: 'relax', sway: 1.1 * K(b), roll: 0.09, armOut: 1.8 }),
     run: b => ({ stride: b.thigh * 1.5, stance: 0.46, lift: 3.2 * K(b), bob: 1.3 * K(b), lean: 0.08, swing: 0.5, elbow: 1.1, elbowSwing: 0.2, drop: 0.9 * K(b), kick: 0.3, flight: 0.3 * K(b), hand: 'fist', sway: 0.8 * K(b), roll: 0.07, armOut: 2.2 }),
   },
 };
@@ -117,7 +120,7 @@ const JOG = (b: Build, id = 'mori'): Gait => {
   const gs = gaitOf(id);
   if (gs.jog) return gs.jog(b);
   const g = mixGait(gs.walk(b), gs.run(b), 0.5);
-  return { ...g, stance: 0.44, flight: 0.35 * K(b), elbow: Math.max(g.elbow, 1.05), lean: g.lean * 0.8, hand: 'relax' };
+  return { ...g, stride: Math.max(g.stride, b.thigh * 1.95), stance: 0.41, flight: 0.45 * K(b), elbow: Math.max(g.elbow, 1.1), lean: g.lean * 0.8, hand: 'relax' };
 };
 
 /** px travelled per cycle on screen: a foot slides back S over the stance, in the legs' yaw */
@@ -364,7 +367,7 @@ function idle(b: Build, t: number, id: string): Pose {
 // ------------------------------------------------------------------ starting off, turning round
 
 /** the clip's own frame for a character (own clips, e.g. Aroha's walk, included) at phase t */
-const at7 = (id: string, anim: string, b: Build, t: number) => {
+export const at7 = (id: string, anim: string, b: Build, t: number) => {
   const n = framesOf7(id, anim);
   return pose7(id, anim, b, ((Math.round(t * n) % n) + n) % n);
 };
@@ -890,6 +893,23 @@ export function animInfo7(b: Build, anim: string, id = 'mori'): AnimInfo7 | null
   if (anim === 'cameraCrouchWalk') return { ...info, dist: gaitDist(CAM_GAIT(b, true)) };
   return info;
 }
+
+// ------------------------------------------------------------------ crossfades
+
+/**
+ * `blend~from:fi>to:ti`: a short crossfade in 3D from a frame of one clip to a frame of another. The
+ * Actor uses them to ease into and out of the clips it lays over the stance (talking, gestures, idle
+ * fidgets), from wherever the body was. Both ends may be any clip, variants and blends included.
+ */
+ANIMS7.blend = { frames: 4, fps: 22, loop: false };
+const clipAt = (s: string): [string, number] => { const i = s.lastIndexOf(':'); return i < 0 ? [s, 0] : [s.slice(0, i), +s.slice(i + 1) || 0]; };
+POSES7V.blend = (b, t, id, v) => {
+  const j = v.lastIndexOf('>');
+  const [fa, fi] = clipAt(j < 0 ? v : v.slice(0, j)), [ta, ti] = clipAt(j < 0 ? 'idle:0' : v.slice(j + 1));
+  const A = pose7(id, fa, b, fi), B = pose7(id, ta, b, ti);
+  const n = ANIMS7.blend.frames;
+  return { ...A, mix: { a: A, p: B, u: smooth((Math.round(t * (n - 1)) + 1) / n) } };
+};
 
 // building blocks for the clips registered from other files (anims-life.ts, anims-hands.ts)
 export { POSES7, gaitOf, shoulder, wHead, wHang, hang, bump, smooth, lerp2, add2, pulse, ease, frac, K };
