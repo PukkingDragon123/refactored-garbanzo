@@ -16,6 +16,9 @@ import type { C } from '../../art/color';
 import { plant } from '../../art/jungle-plants';
 import { findArt } from '../v10/finds';
 import { rumour, addNote } from '../v10/regions';
+import { paintTerraceWall, paintRuaPit, paintHearth, paintCollapsedStair } from '../../art/pa';
+import { A } from '../assets';
+import { rand } from '../../core/math';
 
 const W = 2300, G = 278;
 /** terraces: each step up a stone stair 40 px wide and 22 px high */
@@ -31,30 +34,12 @@ export const ruinsGround = (x: number) => {
 
 const STONE: C[] = [hex('#3a3a36'), hex('#54544c'), hex('#6e6c62'), hex('#8a887a'), hex('#a6a492'), hex('#c2bea8')];
 const WOOD: C[] = [hex('#2a140c'), hex('#4a2414'), hex('#6a3420'), hex('#8a462a'), hex('#a85a34')];
+const hash = (a: number, b: number) => ((Math.sin(a * 127.1 + b * 311.7) * 43758.5453) % 1 + 1) % 1;
 
-/** a retaining wall of fitted stones, mossy along the top */
+/** a retaining wall of fitted stones, mossy along the top (painted in src/art/pa.ts) */
 function stoneWall(w: number, h: number, seed: number) {
-  const b = new PixelBuffer(w, h);
-  const rng = new Rng(seed);
-  let y = 0;
-  while (y < h) {
-    const rh = rng.int(5, 9);
-    let x = -rng.int(0, 8);
-    while (x < w) {
-      const sw = rng.int(8, 18), tone = rng.int(1, 4);
-      for (let yy = y; yy < Math.min(h, y + rh - 1); yy++) for (let xx = Math.max(0, x); xx < Math.min(w, x + sw - 1); xx++) {
-        const edge = yy === y || xx === x;
-        b.set(xx, yy, edge ? STONE[tone + 1] : STONE[clamp(tone + Math.round(bayer(xx, yy) - 0.5), 0, 5)]);
-      }
-      x += sw;
-    }
-    y += rh;
-  }
-  for (let x = 0; x < w; x++) for (let k = 0; k < 2 + Math.round(fbm2(x * 0.1, seed, 2, seed) * 3); k++) b.set(x, k, mix(PAL.moss[3], PAL.moss[5], rng.next()));
-  b.outline(hex('#141410'));
-  return { buf: b, ax: 0, ay: h - 1 };
+  return paintTerraceWall(w, h, seed);
 }
-
 /** a carved pou: a post of red-brown wood with spirals and a manaia face, standing (tilted) or fallen */
 function pou(seed: number, h: number, fallen: boolean) {
   const w = 16, b = new PixelBuffer(fallen ? h + 4 : w + 4, fallen ? w + 4 : h + 4);
@@ -64,8 +49,15 @@ function pou(seed: number, h: number, fallen: boolean) {
     let c = WOOD[clamp(Math.round(2 + (s < 4 ? 1 : s > 11 ? -1 : 0) + (bayer(s, t) - 0.5)), 0, 4)];
     // spirals (koru) and notches in each band, an eye of pāua shell in the face band
     const cx = 8, cy = 7, dx = s - cx, dy = inBand - cy, r = Math.hypot(dx, dy), a = Math.atan2(dy, dx);
-    if (band % 2 === 0 && r < 6 && Math.abs(((r - a * 0.9) % 2.2 + 2.2) % 2.2) < 0.7) c = WOOD[0];
+    const koru = (rr: number, aa: number) => band % 2 === 0 && rr < 6 && Math.abs(((rr - aa * 0.9) % 2.2 + 2.2) % 2.2) < 0.7;
+    if (koru(r, a)) c = WOOD[0];
+    // the lower lip of each groove catches the light
+    else if (koru(Math.hypot(dx, dy - 1), Math.atan2(dy - 1, dx))) c = WOOD[4];
     if (band % 2 === 1 && (s + inBand) % 4 === 0) c = WOOD[0];
+    else if (band % 2 === 1 && (s + inBand) % 4 === 1) c = WOOD[3];
+    // weather checks running up the grain, moss creeping up from the foot
+    if (Math.abs(s - 5 - (seed % 5)) < 0.5 && hash(t >> 3, seed) < 0.5) c = WOOD[0];
+    if (t < 6 + (seed % 4) && bayer(s, t) < 0.5 - t * 0.06) c = PAL.moss[2 + (s % 2)];
     if (band === 1 && Math.hypot(dx + 2, dy) < 1.6) c = hex('#6ab8a8');
     if (rng.next() < 0.03) c = mix(c, PAL.moss[3], 0.6);
     if (fallen) b.set(t + 2, s + 2, c); else b.set(s + 2, h - 1 - t + 2, c);
@@ -136,11 +128,8 @@ export const RUINS: Site10 = {
     }
     // palisade stumps along the upper terrace, the hearth, the storage pits
     for (let x = 1540; x < 2200; x += rng.range(22, 40)) { const hh = rng.int(10, 24); const c = sprite(`pa:stake:${hh}`, () => pou(hh, hh, false)); if (c) main.add(new Prop(c.f, x, ruinsGround(x) + 2, -2, { tint: packColor(0.7, 0.62, 0.55, 1) })); }
-    main.add(new Custom(-1.5, rr => {
-      for (const x of [900, 960, 1020]) { const y = ruinsGround(x); rr.rect(x - 14, y, 28, 5, packColor(0.06, 0.05, 0.04, 1)); rr.rect(x - 14, y, 28, 1, packColor(0.35, 0.28, 0.2, 1)); }
-      const hx = 1120, hy = ruinsGround(hx);
-      for (let i = 0; i < 7; i++) rr.rect(hx - 14 + i * 4, hy - 2 - (i % 2), 4, 3, packColor(0.42, 0.42, 0.38, 1));
-    }));
+    for (const x of [900, 960, 1020]) propAt(f, `pa:rua:${x}`, () => paintRuaPit(30, x), x, ruinsGround(x) + 1, -1.5);
+    propAt(f, 'pa:hearth', () => paintHearth(5), 1120, ruinsGround(1120) + 2, -1.5);
     // pou: two still standing (leaning), one fallen across the court
     propAt(f, 'pa:pou1', () => pou(11, 90, false), 820, ruinsGround(820) + 3, -2.5, { tint: packColor(0.9, 0.85, 0.82, 1) });
     propAt(f, 'pa:pou2', () => pou(12, 64, false), 1660, ruinsGround(1660) + 3, -2.5, { tint: packColor(0.9, 0.85, 0.82, 1) });
@@ -148,17 +137,23 @@ export const RUINS: Site10 = {
     // the great carving
     propAt(f, 'pa:carving', carving, 1320, ruinsGround(1320) + 3, -3);
     // the collapsed stair at the top end: broken steps going down into the dark
-    main.add(new Custom(-2, rr => {
+    {
       const x0 = 2200, y0 = ruinsGround(x0);
-      rr.rect(x0 + 10, y0 + 1, 80, 60, packColor(0.04, 0.035, 0.03, 1));
-      for (let i = 0; i < 5; i++) rr.rect(x0 + 14 + i * 9, y0 + 3 + i * 7, 10, 3, packColor(0.42, 0.41, 0.37, 1));
+      const cs = sprite('pa:downstair', () => ({ buf: paintCollapsedStair(84, 62, 9), ax: 0, ay: 0 } as never));
+      if (cs) main.add(new Prop(cs.f, x0 + 8, y0, -2));
+    }
+    // leaves spinning down through the light
+    main.add(new Custom(30, () => {}, dt => {
+      if (!rand.chance(dt * 1.6)) return;
+      const x = f.st.cam.x + rand.range(-320, 320);
+      main.particles.spawn({ frame: A.dot2, x, y: ruinsGround(x) - rand.range(150, 230), vx: rand.range(-4, 6) + f.st.wind * 6, vy: rand.range(8, 16), life: rand.range(8, 12), color: rand.chance(0.5) ? [0.62, 0.5, 0.22] : [0.42, 0.55, 0.22], alpha: 1, alpha1: 0.8, wobble: 10, wobbleF: 1.2, size: 0.8, floorY: ruinsGround(x) + 2 });
     }));
     // pā vines with red flowers on the walls, ferns, hide spots, light through the trees
     for (const x of [470, 640, 1250, 1720]) propAt(f, `pa:vine:${x % 3}`, () => { const s = plant('flowers', 700 + (x % 3), 26); s.buf.map(c => (c >>> 24 ? (((c & 255) > (c >> 8 & 255)) ? hex('#c8302a') : c) : c)); return s; }, x, ruinsGround(x) + 2, 1.2);
     undergrowth(f, main, 0, W, 0.9, G0, 341, { plants: ['fern', 'crownfern', 'kiokio', 'moss', 'astelia', 'flax', 'kawakawa', 'grass'], fungi: ['bracket', 'coral'], wood: ['rock', 'roots', 'litter', 'stump'] });
     for (const x of [380, 1400, 2000]) hideBush(f, x, G0, x, 0.8);
     shafts(f, main, [{ x: 520, w: 50, a: 0.16 }, { x: 1300, w: 70, a: 0.12 }, { x: 1980, w: 50, a: 0.18 }], [1, 0.94, 0.75], -50, 360, 0.9);
-    frontFoliage(f, 260, W, [180, 300], ['fronds', 'leaves', 'flax'], 1.35, G + 112, 351);
+    frontFoliage(f, 260, W, [180, 300], ['fronds', 'flax', 'grass'], 1.35, G + 112, 351);
     frontFoliage(f, 260, W, [300, 500], ['vines', 'branch'], 1.35, -40, 352, { hang: true });
     for (const x of [300, 1240, 2080]) f.pois.push({ kind: 'rock', x, y: ruinsGround(x) - 4 }, { kind: 'fruit', x: x + 30, y: ruinsGround(x + 30), amount: 15 });
     void bigFrame; void r;
