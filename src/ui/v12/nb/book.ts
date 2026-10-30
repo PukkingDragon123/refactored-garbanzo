@@ -57,7 +57,11 @@ const inR = (r: Rect, x: number, y: number) => x >= r.x && y >= r.y && x < r.x +
 
 /** the player, as far as the notebook needs him (his pose while he takes it out and reads) */
 interface Holder { poseOverride: string | null; vx: number }
-const clipMs = (anim: string) => { const i = animInfo(anim, 'mori'); return Math.max(250, Math.min(1600, (i.frames / Math.max(1, i.fps)) * 1000)); };
+const clipMs = (anim: string) => {
+  let ms = 1000;
+  try { const i = animInfo(anim, 'mori'); ms = (Number(i?.frames) / Math.max(1, Number(i?.fps) || 1)) * 1000; } catch { /* no actors */ }
+  return Number.isFinite(ms) ? Math.max(250, Math.min(1600, ms)) : 1000;
+};
 
 let nb: Notebook | null = null;
 /** open (resolves when it has been put away) */
@@ -142,12 +146,14 @@ class Notebook {
     // up into view and the world freezes behind it
     const sc = game.scene as unknown as { player?: Holder; cutscene?: boolean } | null;
     const p = sc?.player;
-    if (p && !sc?.cutscene && hasAnim7('pullNote') && !reduced()) {
+    // (only when nobody else is posing him: inspecting Mori plays noteRead / putNote itself)
+    if (p && !p.poseOverride && !sc?.cutscene && hasAnim7('pullNote') && !reduced()) {
       const ms = clipMs('pullNote');
       this.who = { p, prev: p.poseOverride ?? null };
       p.vx = 0;
       p.poseOverride = 'pullNote';
-      this.openT = -(ms * 0.7) / 1000;
+      // (on the wall clock: the clip plays in the world's own time, however slowly frames come)
+      this.pullEnd = performance.now() + ms * 0.7;
       audio.play('rustle', { vol: 0.4, pitch: 1.15 });
       setTimeout(() => { if (p.poseOverride === 'pullNote') p.poseOverride = hasAnim7('noteRead') ? 'noteRead' : this.who?.prev ?? null; }, ms);
     }
@@ -156,6 +162,7 @@ class Notebook {
     window.addEventListener('resize', this.onResize);
     prewarmNotebookMap();
     this.last = performance.now();
+    (window as unknown as { __nb12?: unknown }).__nb12 = this;
     requestAnimationFrame(this.loop);
   }
 
@@ -329,15 +336,23 @@ class Notebook {
   private loop = (now: number) => {
     if (this.dead) return;
     // (window.__nbSlow slows the notebook's clock: for capturing the animations frame by frame)
-    const dt = Math.min(0.05, (now - this.last) / 1000) * ((window as unknown as { __nbSlow?: number }).__nbSlow ?? 1);
+    const dt = Math.min(0.1, (now - this.last) / 1000) * ((window as unknown as { __nbSlow?: number }).__nbSlow ?? 1);
     this.last = now;
     this.t += dt;
-    this.update(dt);
-    if (this.dirty) { this.dirty = false; this.render(); }
+    // (one bad frame must never strand the notebook open over a frozen game)
+    try {
+      this.update(dt);
+      if (this.dirty) { this.dirty = false; this.render(); }
+    } catch (e) {
+      if (!this.errs++) console.error('[notebook]', e);
+      if (this.errs > 30 && !this.dead) { this.finish(); return; }
+    }
     requestAnimationFrame(this.loop);
   };
 
   private openT = 0;
+  private pullEnd = 0;
+  private errs = 0;
   private shown = false;
   private coveredOn = false;
   private putting = false;
@@ -346,11 +361,10 @@ class Notebook {
     const R = reduced();
     // opening: up out of the pocket, the band off, the cover over
     if (this.phase === 'opening') {
-      const t0 = this.openT;
+      if (performance.now() < this.pullEnd) return;
+      if (!this.shown) { this.shown = true; this.bg.style.opacity = '1'; paperSfx('slide', 0.8); }
       this.openT += dt * (R ? 8 : 1);
       const t = this.openT;
-      if (t0 < 0 && t >= 0 || (t0 === 0 && !this.shown)) { this.shown = true; this.bg.style.opacity = '1'; paperSfx('slide', 0.8); }
-      if (t < 0) return;
       if (t >= 0.45 && !this.coveredOn) { this.coveredOn = true; game.covered++; }
       const k0 = Math.min(1, t / 0.45);
       this.slideK = backOut(k0);
