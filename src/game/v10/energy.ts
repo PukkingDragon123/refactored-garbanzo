@@ -96,7 +96,7 @@ export function onSpend(fn: SpendFn): () => void {
 }
 
 /** V12: what an old energy cost becomes in hunger (food trouble counts in full, effort a little) */
-const SPEND_K: Record<string, number> = { poison: 1, stomach: 1 };
+const SPEND_K: Record<string, number> = { poison: 1, stomach: 1, dev: 1 };
 
 /** an old energy cost: a little hunger (poison and a bad stomach: a lot). Never a blackout. */
 export function spend(n: number, why = ''): void {
@@ -345,7 +345,15 @@ export function tickBody(dt: number, s: FieldLike) {
     if (p.ground === 'water' || p.wadeK < 0.95) { act = 'wade'; activity = 'walk+wade'; }
   }
   if (!exp && act === 'idle') act = 'rest';
-  tickHunger(dt, { act, live, out: exp });
+  // the old "energy cost" gear and skills now make the work less hungry (boots for walking, gloves for
+  // climbing, a wetsuit for swimming, the lantern at night, a bigger "max energy" = a slower stomach)
+  const gf = gearMod?.gearFx;
+  let k = fx10.energyMult() * (100 / (100 + Math.max(0, fx10.maxEnergyBonus())));
+  if (act === 'walk' || act === 'wade') k *= gf?.energyMult() ?? 1;
+  else if (act === 'climb') k *= fx10.climbMult() * (gf?.climbEnergyMult() ?? 1);
+  else if (act === 'swim') k *= fx10.swimMult() * (gf?.swimEnergyMult() ?? 1);
+  if ((s as { lampOn?: boolean }).lampOn) k *= gf?.nightEnergyMult() ?? 1;
+  tickHunger(dt, { act, live, out: exp, k: Math.max(0.3, Math.min(1.5, k)) });
   lastX = p.x; lastY = p.y;
   // ---- ailments (they run at camp too: a stomach ache doesn't care where you are)
   if (dt > 0 && !s.cutscene) updateAilments(dt, s);

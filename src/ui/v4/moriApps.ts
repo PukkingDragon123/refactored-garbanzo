@@ -46,10 +46,17 @@ export const UNLOCKS: AppUnlock[] = [
 ];
 export const UNLOCK_BY_ID: Record<string, AppUnlock> = Object.fromEntries(UNLOCKS.map(u => [u.id, u]));
 
+/**
+ * V12: the laptop is for research (develop the day's photos, the encyclopedia, the blueprints); the
+ * apps that clutter that are hidden, not deleted: the toys (Plankton Sort, Bubble Pop), JennaShell, the
+ * Recycle Bin, Files, ZEA Mail (the agency's mail; its points still arrive) and Camera Import (Upload
+ * Everything does it in one go). Take an id out of here to bring an app back.
+ */
+export const HIDDEN_APPS = new Set(['plankton', 'bubbles', 'term', 'bin', 'files', 'mail', 'cam']);
 /** on the desktop now */
-export const installed = (id: string) => BASE_APPS.includes(id) || st().got.includes(id);
+export const installed = (id: string) => !HIDDEN_APPS.has(id) && (BASE_APPS.includes(id) || st().got.includes(id));
 /** unlocked by progress but not downloaded yet */
-export const unlockable = (): AppUnlock[] => UNLOCKS.filter(u => !st().got.includes(u.id) && u.when());
+export const unlockable = (): AppUnlock[] => UNLOCKS.filter(u => !HIDDEN_APPS.has(u.id) && !st().got.includes(u.id) && u.when());
 /** installed but never opened (the NEW badge) */
 export const isFresh = (id: string) => st().fresh.includes(id);
 export function markInstalled(id: string) {

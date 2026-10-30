@@ -105,13 +105,13 @@ let quietFn: () => boolean = () => false;
  * doing, and his stomach growls now and then once he's hungry. `live` false (a cutscene, a menu)
  * pauses it. `out`: away from camp (only there can he starve).
  */
-export function tickHunger(dt: number, o: { act: HungerActivity; live: boolean; out: boolean }): void {
+export function tickHunger(dt: number, o: { act: HungerActivity; live: boolean; out: boolean; k?: number }): void {
   away = o.out;
   if (!o.live || !(dt > 0)) return;
   const s = S();
   // (at camp it never gets past "too hungry": Joshu always has something on the fire)
   const cap = o.out ? 1 : TOO_HUNGRY + 0.05;
-  if (s.h < cap) s.h = Math.min(cap, s.h + (PER_HOUR[o.act] * dt) / 180);
+  if (s.h < cap) s.h = Math.min(cap, s.h + (PER_HOUR[o.act] * (o.k ?? 1) * dt) / 180);
   check(false);
   if (s.h >= PECKISH) {
     nextGrowl -= dt;

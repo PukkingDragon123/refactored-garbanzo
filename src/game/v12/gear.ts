@@ -60,14 +60,27 @@ const OPENS: Record<string, string> = {
   wetsuit: 'Opens the long cold dive through the grotto sump to the Deep',
 };
 
+/** an old "energy" effect line, read in V12 terms (energy costs are how quickly Mori gets hungry now) */
+export function v12Effect(e: string): string {
+  return e
+    .replace(/\s*·?\s*sprinting −\d+%,?\s*\d*%?\s*faster/i, '')
+    .replace(/All energy costs −(\d+)%/i, 'Hard work makes you $1% less hungry')
+    .replace(/([A-Za-z][A-Za-z &]*?) costs? (\d+)% less energy/i, (_m, a: string, n: string) => `${a} makes you ${n}% less hungry`)
+    .replace(/([A-Za-z][A-Za-z &]*?) −(\d+)% energy/i, (_m, a: string, n: string) => `${a} makes you ${n}% less hungry`)
+    .replace(/\+\d+ max energy/i, 'your stomach lasts longer')
+    .replace(/restores (\d+)% more energy/i, 'fills you $1% more')
+    .replace(/energy/gi, 'hunger');
+}
+
 let patched = false;
 /** (idempotent) the gear blueprints describe the trail they open; the climbing rope sheet exists */
 export function registerTrailGear() {
   if (patched) return;
   patched = true;
+  for (const d of Object.values(BLUEPRINTS)) if (d.effect && /energy|sprint/i.test(d.effect)) d.effect = v12Effect(d.effect);
   for (const [id, line] of Object.entries(OPENS)) {
     const d = BLUEPRINTS[id];
-    if (d) d.effect = line + (d.effect && !/energy/i.test(d.effect) ? `; ${d.effect.charAt(0).toLowerCase()}${d.effect.slice(1)}` : '');
+    if (d) d.effect = line + (d.effect ? `; ${d.effect.charAt(0).toLowerCase()}${d.effect.slice(1)}` : '');
   }
   defineBlueprint({
     id: 'climbing_rope', name: 'Climbing rope', kind: 'equipment', by: 'joshu', source: 'research', rp: 50, hours: 12,

@@ -1250,7 +1250,7 @@ export async function cookAtCamp(cd: CampLike, meal: 'breakfast' | 'dinner' | 's
   if (firstTime && !game.save.tools.includes('billy')) { give('billy', 1); }
   if (meal === 'snack') {
     const s = serveDish(r, { eatNow: true });
-    game.ui.toast(`${ITEMS[r.dish]?.name ?? r.dish}: <b>+${s.ate} energy</b>${s.packed ? ` · ${s.packed} packed for later` : ''}${s.dropped ? ` · ${s.dropped} on the ground (no room)` : ''}`, 'COOKING', 'teal', 4200);
+    game.ui.toast(`${ITEMS[r.dish]?.name ?? r.dish}: <b>a full belly</b>${s.packed ? ` · ${s.packed} packed for later` : ''}${s.dropped ? ` · ${s.dropped} on the ground (no room)` : ''}`, 'COOKING', 'teal', 4200);
     if (firstTime) cd.s.bark('joshu', 'Here. My old billy can. Cook for yourself out there, lad.', { expr: 'happy' });
   }
   return r;
@@ -1262,7 +1262,7 @@ export async function cookInField(): Promise<CookResult | null> {
   const r = out.result;
   if (!r) return null;
   const s = serveDish(r, { eatNow: true });
-  game.ui.toast(`${ITEMS[r.dish]?.name ?? r.dish}: <b>+${s.ate} energy</b>${s.packed ? ` · ${s.packed} packed` : ''}`, 'COOKING', 'teal', 4200);
+  game.ui.toast(`${ITEMS[r.dish]?.name ?? r.dish}: <b>a full belly</b>${s.packed ? ` · ${s.packed} packed` : ''}`, 'COOKING', 'teal', 4200);
   return r;
 }
 

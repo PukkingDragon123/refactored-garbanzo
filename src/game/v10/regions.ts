@@ -176,7 +176,8 @@ export function discover(d: Omit<Discovery, 'day'>, quiet = false): boolean {
   const s = S();
   if (s.disc.some(x => x.id === d.id)) return false;
   s.disc.push({ ...d, day: dayNumber() });
-  if (!quiet && game.ui) game.ui.toast(`Map: <b>${d.name}</b> noted${d.kind === 'species' ? '' : ` (${KIND_WORD[d.kind]})`}.`, 'MAP', 'teal', 2600);
+  // (V12: the map is hidden: a short floating note by Mori instead of a map toast)
+  if (!quiet && game.ui) void import('../../ui/v12/float').then(m => m.floatNotice(`Noted: ${d.name}${d.kind === 'species' ? '' : ` (${KIND_WORD[d.kind]})`}`, 2400));
   changed();
   persistSoon();
   return true;
@@ -339,4 +340,6 @@ export function islandLocAt(x: number): string {
 
 // the Region Map paints itself in a background worker: start it a little after boot so the first
 // time the map is opened it is already painted
-if (typeof window !== 'undefined') window.setTimeout(() => { void import('../../ui/v10/regionmap-art').then(m => m.prewarmMap()).catch(() => {}); }, 25000);
+// (V12: the Region Map is hidden, so it isn't painted in the background either; true brings it back)
+const PREWARM_MAP = false;
+if (PREWARM_MAP && typeof window !== 'undefined') window.setTimeout(() => { void import('../../ui/v10/regionmap-art').then(m => m.prewarmMap()).catch(() => {}); }, 25000);
