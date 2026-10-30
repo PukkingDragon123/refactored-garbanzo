@@ -17,7 +17,6 @@
 
 import { game } from '../../game/game';
 import { bucket } from '../../game/v10/store';
-import { floatNotice } from './float';
 
 export interface NotebookOpts {
   page?: 'quests' | 'guide' | 'people' | 'map' | 'sketch' | string;
@@ -99,7 +98,9 @@ export function markQuestDone(questId: string, step?: number): void {
   } catch { /* no save yet */ }
   markFns.forEach(f => { try { f(questId, step); } catch (e) { console.error(e); } });
   const now = performance.now();
-  if (!current && now - lastNotice > 2500) { lastNotice = now; try { floatNotice('noted', 1800); } catch { /* no world yet */ } }
+  // (the tracked quest's next step floats up from the HUD module; a quiet "noted" for the others)
+  const tracked = (game.save as unknown as { tracked?: string | null } | null)?.tracked === questId && step !== undefined;
+  if (!current && !tracked && now - lastNotice > 2500) { lastNotice = now; void import('./float').then(m => m.floatNotice('noted', 1800)).catch(() => { /* no world yet */ }); }
 }
 
 // ---------------------------------------------------------------- keys: J quests, G field guide, K people

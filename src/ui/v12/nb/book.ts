@@ -235,6 +235,9 @@ class Notebook {
   }
   private slotFor(o: NotebookOpts): number | null {
     const A = this.built.anchors, S = this.built.starts;
+    // the pen waiting to tick something off wins over "open at the tracked quest" (J, the inspect pick)
+    const fr = this.built.fresh;
+    if (fr && A[fr] !== undefined && !o.entry && !o.person && (!o.page || o.page === 'quests') && (!o.quest || o.quest === trackedQuest()?.id)) return A[fr];
     if (o.quest && A['q:' + o.quest] !== undefined) return A['q:' + o.quest];
     if (o.entry && A[o.entry] !== undefined) return A[o.entry];
     if (o.person && A['p:' + o.person] !== undefined) return A['p:' + o.person];
