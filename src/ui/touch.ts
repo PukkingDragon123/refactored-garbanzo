@@ -263,7 +263,9 @@ export function setupTouch() {
   // walking layout (diamond): Jump (A) bottom-right, Use (B) left of it, Camera above, Crouch below-left
   const jump = btn(R, { cls: 'big', icon: 'jump', label: 'JUMP', code: 'Space', hold: true, pos: [0, 8] });
   const use = btn(R, { cls: 'big amber', icon: 'hand', label: 'USE', code: 'KeyE', pos: [22, 0] });
+  // V12: no camera button: tap Mori and pick his camera to equip it (LOWER still puts it away while it's up)
   const cam = btn(R, { cls: 'wood', icon: 'cam', label: 'CAM', code: 'KeyQ', pos: [3, 30] });
+  cam.b.hidden = true;
   const crouch = btn(R, { cls: 'wood sm', icon: 'crouch', label: 'DUCK', code: 'KeyS', hold: true, pos: [44, 3] });
   // camera layout: big red shutter, hold-breath, lower camera, video mode
   const shoot = btn(R, { cls: 'big red', icon: 'rec', label: 'SNAP', pos: [0, 8], tap: () => { inp.shutter = true; } });
@@ -282,7 +284,7 @@ export function setupTouch() {
   btn(top, { cls: 'wood sm', icon: 'book', label: 'JOURNAL', code: 'KeyJ' });
   btn(top, { cls: 'wood sm', icon: 'menu', label: 'MENU', code: 'Escape' });
 
-  const walkSet = [jump, use, cam, crouch], camSet = [shoot, breath, lower, mode];
+  const walkSet = [jump, use, crouch], camSet = [shoot, breath, lower, mode];
 
   // ---------- per-frame context ----------
   let lastCam: boolean | null = null, lastNear = '';

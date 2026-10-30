@@ -21,6 +21,7 @@ import { updateQuests } from '../quests';
 import { addClue } from '../research';
 import { CLUE_BY_ID } from '../species';
 import { openBackpack } from '../../ui/backpack';
+import { inspectMori, moriAt } from '../../ui/v12/inspect';
 import { eatFood } from '../v10/forage10';
 import { A } from '../assets';
 import { rand } from '../../core/math';
@@ -251,7 +252,11 @@ export abstract class WorldScene implements Scene {
       if (it.enabled && !it.enabled()) continue;
       if (Math.abs(wx - it.x) < it.w + 4 && wy > it.y - it.h * 2 - 8 && wy < it.y + 8) this.hovered = it;
     }
-    game.r.canvas.style.cursor = this.hovered ? 'pointer' : '';
+    // V12: Mori himself is clickable (inspect him: his camera, backpack and note paper)
+    const overMori = !camUp && this.player.state === 'normal' && moriAt(wx, wy);
+    // (his upper body is his; low down, a thing he stands at keeps the click)
+    if (overMori && this.hovered && (wy < this.player.y - this.player.height * 0.4 || Math.abs(this.hovered.x - this.player.x) > 8)) this.hovered = null;
+    game.r.canvas.style.cursor = this.hovered || overMori ? 'pointer' : '';
     this.updateMarks();
     const near = nearestInteractable(this.interact, this.player.x, this.player.y);
     this.nearIt = near;
@@ -268,8 +273,13 @@ export abstract class WorldScene implements Scene {
       this.runAction(near);
       return;
     }
+    // V12: Tab / I (or a click on Mori) inspects him; the pack, camera and notebook are picked from him
     if (this.allowPack && (inp.keyHit('KeyI') || inp.keyHit('Tab'))) {
-      this.openPack();
+      void inspectMori();
+      return;
+    }
+    if (inp.click(0) && overMori && this.allowPack && !this.hovered) {
+      void inspectMori();
       return;
     }
     if (inp.click(0) && this.clickToWalk && this.player.state === 'normal') {

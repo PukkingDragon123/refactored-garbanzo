@@ -886,16 +886,42 @@ export class PackScene {
       rowW = x - 10;
       row.style.width = rowW + 'px'; row.style.height = rowH + 'px';
     }
-    // stack the lines above the item (below it when there's no room above)
+    // where the block of words goes: beside the pack (or the chest) on the item's side, level with it,
+    // a dotted line to it; above the item when it lies on the ground (or there's no room beside)
     const total = lines.reduce((a, l) => a + l.w.wH + l.gap, 0) + (row ? rowH + 3 : 0);
-    const [cx, top] = this.toWords(r.x + r.w / 2, r.y);
-    const [, bot] = this.toWords(r.x, r.y + r.h);
+    const bw = Math.max(rowW, ...lines.map(l => l.w.wW));
     const WW = Math.ceil(window.innerWidth / this.ws), WH = Math.ceil(window.innerHeight / this.ws);
-    let y = Math.round(top - 4 - total);
-    if (y < 4) y = Math.round(bot + 4);
-    y = Math.min(y, WH - total - 4);
+    const [ix0, iy0] = this.toWords(r.x, r.y), [ix1, iy1] = this.toWords(r.x + r.w, r.y + r.h);
+    const icx = (ix0 + ix1) / 2, icy = (iy0 + iy1) / 2;
+    let bx: number, by: number, align: 'left' | 'right' | 'center' = 'center', lead: [number, number, number] | null = null;
+    const box = ref.where === 'pack' || ref.tool ? { x: this.PX, y: this.PY, w: this.L.W, h: this.L.H } : ref.where === 'stash' && this.CL ? { x: this.CX, y: this.CY, w: this.CL.W, h: this.CL.H } : null;
+    let beside = false;
+    if (box) {
+      const [bx0, by0] = this.toWords(box.x, box.y), [bx1] = this.toWords(box.x + box.w, box.y + box.h);
+      const leftRoom = bx0 - 10, rightRoom = WW - bx1 - 10;
+      const preferLeft = icx < (bx0 + bx1) / 2;
+      const side = preferLeft ? (leftRoom >= bw ? 'L' : rightRoom >= bw ? 'R' : '') : rightRoom >= bw ? 'R' : leftRoom >= bw ? 'L' : '';
+      if (side) {
+        beside = true;
+        by = Math.round(Math.max(4, Math.min(WH - total - 4, icy - total / 2)));
+        if (side === 'L') { bx = Math.round(bx0 - 8 - bw); align = 'right'; lead = [bx + bw + 2, ix0 - 2, Math.round(icy)]; }
+        else { bx = Math.round(bx1 + 8); align = 'left'; lead = [ix1 + 2, bx - 2, Math.round(icy)]; }
+      } else {
+        // no room beside (a tall narrow screen): above the pack, or below it
+        bx = Math.round(Math.max(4, Math.min(WW - bw - 4, icx - bw / 2)));
+        by = Math.round(by0 - 4 - total);
+        if (by < 4) by = Math.round(this.toWords(0, box.y + box.h)[1] + 4);
+      }
+    }
+    if (!beside && !box) {
+      bx = Math.round(Math.max(4, Math.min(WW - bw - 4, icx - bw / 2)));
+      by = Math.round(iy0 - 4 - total);
+      if (by < 4) by = Math.round(iy1 + 4);
+      by = Math.min(by, WH - total - 4);
+    }
+    let y = by!;
     const place = (e: HTMLElement, w: number, h: number) => {
-      const x = Math.max(4, Math.min(WW - w - 4, Math.round(cx - w / 2)));
+      const x = align === 'left' ? bx! : align === 'right' ? bx! + bw - w : Math.round(bx! + (bw - w) / 2);
       at(e, x, y);
       y += h;
       this.words.appendChild(e);
@@ -903,6 +929,20 @@ export class PackScene {
     };
     for (const l of lines) { place(l.w, l.w.wW, l.w.wH + l.gap); }
     if (row) { y += 3; place(row, rowW, rowH); }
+    // the dotted leader from the words to the item, with a little arrowhead
+    if (lead && Math.abs(lead[1] - lead[0]) > 3) {
+      const [a, b2, ly] = lead;
+      const x0 = Math.min(a, b2), len = Math.abs(b2 - a);
+      const ln = new PixelBuffer(len + 1, 5);
+      for (let i = 0; i <= len; i++) if (i % 3 !== 2) { ln.set(i, 2, 0xff9ae6ff); ln.set(i, 3, 0xff06101a); }
+      const tipX = b2 > a ? len : 0, d = b2 > a ? -1 : 1;
+      for (let k = 1; k <= 2; k++) { ln.set(tipX + d * k, 2 - k, 0xff9ae6ff); ln.set(tipX + d * k, 2 + k, 0xff9ae6ff); }
+      const c = cv(ln);
+      at(c, x0, ly - 2);
+      c.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 240, delay: 120, fill: 'backwards', easing: 'steps(3)' });
+      this.words.appendChild(c);
+      this.info.push(c);
+    }
   }
 
   /** a word floating up from a spot (eaten, refused, no room) */

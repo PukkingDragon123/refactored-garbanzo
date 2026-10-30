@@ -270,11 +270,12 @@ export function paintPack(L: PackLayout): PixelBuffer {
   // ---- a luggage tag on a string from the front-left corner
   const tx = bd.x + 4, ty = bd.y + bd.h - 6;
   b.line(tx + 3, ty, tx - 2, ty + 7, H('#c8b88a'));
-  const tag = new PixelBuffer(13, 9);
-  tag.rectFn(0, 0, 13, 9, (x, y) => (x + y < 2 || (x > 10 && y < 2 - (12 - x)) ? -1 : rp([H('#8a7448'), H('#b89c64'), H('#d8c08a'), H('#ecdcae')], 0.75 - y * 0.03 + (noise(x, y, 7) > 0.9 ? -0.15 : 0), x, y)));
-  tag.set(2, 2, H('#5a4a2a'));
   const nm = pxTextBuf('MORI', { font: 'tiny', color: '#3a2a14' });
-  tag.blit(nm, 4, 1);
+  const tw = nm.w + 7;
+  const tag = new PixelBuffer(tw, 9);
+  tag.rectFn(0, 0, tw, 9, (x, y) => (x + y < 2 || (x > tw - 3 && y < 2 - (tw - 1 - x)) ? -1 : rp([H('#8a7448'), H('#b89c64'), H('#d8c08a'), H('#ecdcae')], 0.75 - y * 0.03 + (noise(x, y, 7) > 0.9 ? -0.15 : 0), x, y)));
+  tag.set(2, 2, H('#5a4a2a'));
+  tag.blit(nm, 5, 1);
   tag.outline(OUT);
   b.blit(tag, tx - 8, ty + 6);
   return b;
@@ -330,8 +331,14 @@ export function paintLidOpen(L: PackLayout): PixelBuffer {
     const ix = x - m.x, iy = y - m.y;
     let c = rp(UNDER, 0.3, x, y);
     // the map
-    if (ix > 6 && ix < 40 && iy > 4 && iy < 18) c = (ix === 18 || ix === 29) ? H('#b8a888') : rp([H('#c8b894'), H('#ddd0b0'), H('#efe6cc')], 0.6 - iy * 0.02 + ((ix * 7 + iy * 3) % 11 === 0 ? -0.3 : 0), x, y);
-    if (ix > 9 && ix < 38 && iy > 8 && iy < 16 && noise(ix, iy, 5) > 0.82) c = H('#6a8a5a');
+    if (ix > 6 && ix < 40 && iy > 3 && iy < 18) {
+      // a folded chart: blue sea, a green island with a dotted trail, the fold lines
+      const land = vnoise(ix, iy, 5, 12) > 0.5 && ix > 12 && ix < 36 && iy > 6 && iy < 16;
+      c = land ? rp([H('#5a7a3a'), H('#7a9a4a'), H('#9ab866')], 0.6 - iy * 0.03, x, y) : rp([H('#7a9ab0'), H('#9ab8c8'), H('#bcd2dc')], 0.55 + ((ix + iy) % 5 === 0 ? 0.25 : 0), x, y);
+      if (land && (ix + iy * 2) % 4 === 0 && Math.abs(iy - 11 - Math.sin(ix * 0.4) * 2) < 1) c = H('#b83a2a');
+      if (ix === 18 || ix === 29) c = mix(c, H('#2a3a4a'), 0.3);
+      if (ix === 7 || ix === 39 || iy === 4 || iy === 17) c = H('#e8dcc0');
+    }
     // the pencil
     if (iy >= 6 && iy <= 7 && ix > 48 && ix < 76) c = ix < 51 ? H('#e88a8a') : ix < 53 ? IRON[3] : ix > 72 ? (ix > 74 ? H('#3a3a3a') : H('#e8c89a')) : iy === 6 ? H('#f6d248') : H('#c89a1c');
     // the mesh over it all
