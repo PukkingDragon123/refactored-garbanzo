@@ -1,18 +1,21 @@
-// V11 Backpack: a tile grid laid over the inventory.
+// V11 Backpack: a tile grid laid over the inventory. V12: a fixed 5x3 block space.
 //
 // game.save.inv stays the list of stacks (inventory.add / remove / count work exactly as before);
 // each stack also remembers where it sits in the pack (Stack.p: compartment, cell, rotation), so the
 // layout rides along in the save with no extra bookkeeping. New stacks drop onto the lowest free spot
 // that takes their footprint (src/game/v11/footprints.ts, rotated if that is what fits); a stack that
 // has no room is refused (inventory.add returns less, fits() says no). Stacks removed from the list
-// simply vanish from the grid. Stacks that lost their spot (the pack changed, an old save, a module
-// that pushed onto the list directly) are put back when the pack is next looked at (reconcile), and
-// whatever still has no room spills out onto the ground (the Backpack screen shows it there).
+// simply vanish from the grid. Stacks that lost their spot (an old save, a module that pushed onto
+// the list directly) are put back when the pack is next looked at (reconcile), and whatever still has
+// no room spills out onto the ground (the Backpack scene shows it lying there).
 //
-// The pack grows with the upgrades at Jenna's bench (src/game/v10/campgear.ts 'pack': the flax straps
-// let it take one more row, the kelp-leather side pockets add two 2x2 pouches, the driftwood frame
-// makes the main compartment wider and deeper) and with the Packing skills (a pocket inside the lid).
-// Tools never take grid room: they ride in their own loops, sheaths and pockets (TOOL_SLOTS).
+// V12: the pack no longer grows. It is Mori's old canvas rucksack with fifteen compartments sewn into
+// it (5 across, 3 deep), so what goes out on the trail is a choice. An old save's bigger pack (the V11
+// bench upgrades, side pouches and lid pocket) is fitted in once (migratePack): keepsakes first, then
+// food and lures, then the rest biggest first; what has no room goes into the camp stash chest
+// (src/game/v11/stash.ts), and what the chest can't take waits beside the pack (it comes out on the
+// ground the next time the pack is opened). Tools never take grid room: they hang in their own loops
+// and straps on the outside (TOOL_SLOTS).
 //
 // The same engine (Container) runs the camp stash chest (src/game/v11/stash.ts).
 
@@ -21,30 +24,17 @@ import { ITEMS } from '../items';
 import type { ItemKind } from '../items';
 import { setPackModel } from '../inventory';
 import type { Stack, Place } from '../inventory';
-import { hasSkill } from '../skills';
-import { fx10 } from '../v10/skills10';
 import { footprint, cells, cellCount } from './footprints';
-import type * as GearMod from '../v10/campgear';
 
 export type { Place };
 export interface Area { id: string; cols: number; rows: number }
 
-// campgear imports the inventory, so it comes in lazily (no import cycle at load time)
-let gearMod: typeof GearMod | null = null;
-void import('../v10/campgear').then(m => { gearMod = m; }).catch(() => {});
-
-/** the pack's compartments right now */
+/** V12: the block space sewn into the pack */
+export const PACK_COLS = 5, PACK_ROWS = 3;
+const MAIN: Area[] = [{ id: 'main', cols: PACK_COLS, rows: PACK_ROWS }];
+/** the pack's compartments (V12: always the one 5x3 block space) */
 export function packAreas(): Area[] {
-  const lv = gearMod?.gearLevel('pack') ?? 0;
-  const legacy = (hasSkill('pack1') ? 1 : 0) + (hasSkill('pack2') ? 1 : 0);
-  const cols = lv >= 3 ? 7 : 6;
-  const rows = Math.min(7, 4 + (lv >= 1 ? 1 : 0) + (lv >= 3 ? 1 : 0) + legacy);
-  const out: Area[] = [{ id: 'main', cols, rows }];
-  if (lv >= 2) out.push({ id: 'sideL', cols: 2, rows: 2 }, { id: 'sideR', cols: 2, rows: 2 });
-  let lid = 0;
-  try { lid = Math.min(cols, Math.round(fx10.packSlots())); } catch { lid = 0; }
-  if (lid > 0) out.push({ id: 'lid', cols: lid, rows: 1 });
-  return out;
+  return MAIN;
 }
 
 // ---------------------------------------------------------------- the placement engine
@@ -217,12 +207,58 @@ const bigSide = (id: string) => { const f = footprint(id); return Math.max(f.w, 
 /** Mori's pack */
 export const PACK = new Container(packAreas, () => game.save.inv);
 
+// ---------------------------------------------------------------- V12: fitting an old save in
+
+/** what gets a place first when an old, bigger pack is fitted into the 5x3 block space */
+const KEEP: Partial<Record<ItemKind, number>> = { key: 0, food: 1, lure: 2 };
+const migrated = new WeakSet<object>();
+
+/**
+ * Fit an old save's pack into the 5x3 block space (once per save, on first use). Nothing moves when
+ * every stack already sits inside the grid. Otherwise the pack is repacked: keepsakes, then food and
+ * lures, then the rest biggest first; what has no room goes to the camp stash chest, and what the
+ * chest can't take stays unplaced (the Backpack scene puts it on the ground beside the pack).
+ */
+export function migratePack(): void {
+  const sv = game.save as unknown as object | null;
+  if (!sv || migrated.has(sv)) return;
+  migrated.add(sv);
+  const list = game.save.inv;
+  if (!list?.length || !PACK.occ().bad.length) return;
+  const rank = (s: Stack) => KEEP[ITEMS[s.id]?.kind ?? 'material'] ?? 3;
+  const order = list.slice().sort((a, b) => rank(a) - rank(b) || cellCount(b.id) - cellCount(a.id) || bigSide(b.id) - bigSide(a.id));
+  for (const s of order) s.p = undefined;
+  const { occ } = PACK.occ(order);
+  const out: Stack[] = [];
+  for (const s of order) {
+    const p = ITEMS[s.id] ? PACK.findSpot(occ, s.id) : null;
+    if (!p) { out.push(s); continue; }
+    s.p = p;
+    PACK.mark(occ, s.id, p, list.indexOf(s) + 1);
+  }
+  if (!out.length) return;
+  console.info(`[pack] fitted an old pack into ${PACK_COLS}x${PACK_ROWS}: ${out.length} stack(s) to the camp chest`);
+  // the chest module imports this one: it comes in lazily
+  void import('./stash').then(m => {
+    for (const s of out) {
+      if (ITEMS[s.id]?.kind === 'key') continue;
+      const i = list.indexOf(s);
+      if (i < 0) continue;
+      const got = m.stashAdd(s.id, s.n);
+      if (got >= s.n) list.splice(i, 1);
+      else s.n -= got;
+    }
+    // (what is still unplaced comes out on the ground the next time the pack is opened: reconcile)
+    game.persist();
+  }).catch(e => console.warn('[pack] migrate', e));
+}
+
 // the inventory asks the grid whether new stacks fit (see src/game/inventory.ts)
 setPackModel({
-  place: s => PACK.place(s),
-  room: (id, k) => PACK.room(id, k),
+  place: s => { migratePack(); return PACK.place(s); },
+  room: (id, k) => { migratePack(); return PACK.room(id, k); },
   cells: () => PACK.totalCells(),
-  free: () => PACK.free(),
+  free: () => { migratePack(); return PACK.free(); },
 });
 
 // gifts with no room land on the ground (src/game/v11/ground.ts listens to inventory.give)

@@ -1,340 +1,464 @@
-// Title screen and the opening voyage cutscene.
+// The title: a cinematic of the Kittiwake under way across the open sea toward the misty island at
+// golden hour, with Mori at the bow and Chunk beside him in the wind. No UI: the game's name is a
+// cloud formation in the sky (titlecloud.ts) and the options are floating words in the air ahead of
+// the bow (src/ui/v12/floatmenu.ts).
+//
+//   - opening: tight on Mori at the bow, the lens on him; the camera cranes back and up, the name
+//     gathers in the sky out of wind-blown puffs, then the options drift in
+//   - idle: a slow handheld drift; the boat pitches on the swell, the bow wave curls and flings
+//     spray, the wake trails astern, gulls kite in the head wind over the bow
+//   - Settings: the camera drops to the deck beside Mori and Chunk (the sea and sky rack out of
+//     focus) and the settings float beside them; Credits: it tilts up into the sky
+//   - Continue / New expedition: the words blow away and the camera pushes on toward the island
+//
+// The boat is the ship scene's art (src/art/ship5) at full size; the sea, sky and under-way effects
+// are the ship scene's too (src/world/ocean, ocean-sky, src/game/v4/underway).
 
-import type { Renderer } from '../../gfx/renderer';
+import type { Frame, Renderer } from '../../gfx/renderer';
 import type { Scene } from '../game';
 import { game } from '../game';
 import { packColor } from '../../gfx/renderer';
 import { Stage } from '../../world/stage';
+import type { Layer } from '../../world/stage';
 import { Custom } from '../../world/props';
 import { local } from '../assets';
 import { Ocean, BAND_P, applySeaEnv, updater, Weather } from '../../world/ocean';
 import { Sky } from '../../world/ocean-sky';
-import { paintBirds } from '../../art/ocean-sky';
 import { glowSprite, softBar } from '../../art/ocean';
-import { paintBoatExterior, BOAT_LAYOUT } from '../../art/boat';
-import { paintFarIsles, paintNearIsles } from '../../art/archipelago';
-import { shrinkPixels } from '../../art/people-heads';
-import { damp } from '../../core/math';
-
-const SEA_Y = BOAT_LAYOUT.pivot[1];
-import { el } from '../../ui/ui';
+import { paintFarIsles } from '../../art/archipelago';
+import { paintShip4, S4, FLOORS, CUTLINE, MOUNTS, PIVOT5 } from '../../art/ship5';
+import type { Ship4Art } from '../../art/ship5';
+import { paintBoatParts, deckY } from '../../art/boat';
+import { Actor } from '../../world/actor';
+import { renderAny } from '../../art/beasts';
+import { registerAnim7, POSES7 } from '../../art/v7/anims7';
+import { Underway } from '../v4/underway';
+import type { ShipScene4 } from '../v4/ship';
+import { cineState } from '../v11/cine';
+import { bayer, clamp, damp } from '../../core/math';
+import { PixelBuffer } from '../../art/pixel';
+import { hex } from '../../art/color';
 import { audio } from '../../core/audio';
 import { hasSave, newSave, clearSave } from '../save';
 import { continueV4, goShip4 } from './flow';
-import { pxIconCss, pxIconURL } from '../../ui/pxicons';
-import { GFX_HINT, GFX_LABEL, applyGfxPrefs, loadGfxPrefs, saveGfxPrefs } from '../../gfx/quality';
-import { installPaper, paperTex, edgeClip, tape, svgInk, underline, INK_RED, spriteURL, col } from '../../ui/v11/paper';
+import { CloudTitle } from './titlecloud';
+import { FloatMenu, textLines } from '../../ui/v12/floatmenu';
+import type { FloatPage } from '../../ui/v12/floatmenu';
+import { settingsPage, creditsPage } from '../../ui/v12/settingsmenu';
 
-const CSS = `
-.t3 { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
-.t3-bar { position: absolute; left: 0; right: 0; height: 13%; background: #050308; transition: height 2.4s cubic-bezier(.7,0,.2,1); z-index: 2; }
-.t3-bar.top { top: 0; } .t3-bar.bot { bottom: 0; }
-.t3.open .t3-bar { height: 4.2%; }
-.t3-logo { position: absolute; left: 5vw; top: 9vh; opacity: 0; transform: translateY(-14px); transition: opacity 1.2s, transform 1.4s cubic-bezier(.2,.9,.3,1); z-index: 3; }
-.t3.logo .t3-logo { opacity: 1; transform: none; }
-#ui .t3, #ui .t3 * { font-size-adjust: none; }
-.t3-logo small { display: block; font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 18.6667px; letter-spacing: 0.9em; color: #9ff0dc;
-  text-shadow: 0 2px 0 #10302c, 2px 0 0 #10302c, -2px 0 0 #10302c, 0 -2px 0 #10302c; margin: 0 0 0.35em 0.25em; }
-.t3-logo h1 { margin: 0; font-family: 'Jersey 15', 'Pixelify Sans', var(--pix); font-weight: 400; font-size: 108px; line-height: 0.9; letter-spacing: 0.03em;
-  color: #fff0cc; position: relative;
-  text-shadow: 4px 0 0 #2a1424, -4px 0 0 #2a1424, 0 4px 0 #2a1424, 0 -4px 0 #2a1424, 4px 4px 0 #2a1424, -4px 4px 0 #2a1424, 0 8px 0 #c0643a, 0 12px 0 #7a2e2a, 4px 12px 0 #2a1424, -4px 12px 0 #2a1424, 0 16px 0 #2a1424, 8px 20px 0 rgba(0,0,0,0.35); }
-@media (max-width: 1100px), (max-height: 640px) { .t3-logo h1 { font-size: 81px; } }
-@media (max-width: 700px) { .t3-logo h1 { font-size: 54px; text-shadow: 2px 0 0 #2a1424, -2px 0 0 #2a1424, 0 2px 0 #2a1424, 0 -2px 0 #2a1424, 0 6px 0 #c0643a, 0 8px 0 #2a1424; } }
-.t3-logo h1 i { font-style: normal; position: absolute; inset: 0; color: transparent; background: linear-gradient(100deg, transparent 44%, rgba(255,255,255,0.85) 44% 47%, transparent 47% 49%, rgba(255,255,255,0.6) 49% 50%, transparent 50%) -200% 0 / 200% 100% no-repeat;
-  -webkit-background-clip: text; background-clip: text; text-shadow: none; animation: t3shine 5.5s 2s steps(24) infinite; }
-@keyframes t3shine { 0% { background-position: -120% 0; } 45%, 100% { background-position: 220% 0; } }
-.t3-logo p { margin: 22px 0 0 4px; font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 18.6667px; line-height: 22px; color: #ffe4c8; letter-spacing: 1px; text-shadow: 2px 2px 0 #2a1424; max-width: 34em; }
-.t3-logo p b { color: #ffc86a; font-weight: 400; }
-.t3-menu { position: absolute; left: 5vw; bottom: 9vh; width: clamp(240px, 30vw, 360px); padding: 1.1em 1.1em 1em; display: flex; flex-direction: column; gap: 0.55em;
-  opacity: 0; transform: translateX(-30px); transition: opacity 0.8s, transform 0.9s cubic-bezier(.2,.9,.3,1); pointer-events: none; z-index: 3; }
-.t3.menu .t3-menu { opacity: 1; transform: none; pointer-events: auto; }
-.t3-menu .btn { width: 100%; font-size: 1.05em; white-space: nowrap; padding: 0.55em 0.8em; text-align: left; display: flex; align-items: center; gap: 0.6em; }
-.t3-menu .btn .ic { width: 1.6em; height: 1.6em; image-rendering: pixelated; flex: none; background: var(--ic) center / contain no-repeat; }
-.t3-menu .btn::after { content: ${pxIconCss('play', 2)}; margin-left: auto; opacity: 0; transform: translateX(-6px); transition: opacity 0.15s, transform 0.15s; font-size: 0.8em; }
-.t3-menu .btn:hover::after, .t3-menu .btn:focus-visible::after { opacity: 1; transform: none; }
-.t3-menu .hd { font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 0.78em; letter-spacing: 0.2em; color: #6a4a2a; text-align: center; margin-bottom: 0.2em; }
-/* V11: the menu is a page torn out of the expedition log, taped to the screen */
-#ui .t3-menu.paper { border: 0 !important; border-image: none !important; box-shadow: none !important; background-size: 256px 256px !important; padding: 30px 28px 26px; gap: 2px; image-rendering: pixelated;
-  filter: drop-shadow(8px 10px 0 rgba(0,0,0,0.5)); width: 340px; }
-#ui .t3-menu.paper .hd { font-family: var(--pp-label); font-size: 16px; line-height: 18px; letter-spacing: 4px; margin-bottom: 8px; color: #5a4a34; }
-#ui .t3-menu.paper .btn { position: relative; border: 0 !important; border-image: none !important; background: none !important; color: #2a2440 !important; text-shadow: none !important;
-  font-family: var(--pp-hand) !important; font-size-adjust: none; text-transform: none; letter-spacing: 0; font-size: 30px !important; line-height: 38px; font-weight: 700; padding: 2px 6px !important; -webkit-font-smoothing: none; }
-#ui .t3-menu.paper .btn * { font-size-adjust: none; }
-#ui .t3-menu.paper .btn .ic { filter: brightness(0.25) sepia(1) hue-rotate(200deg); width: 30px; height: 30px; }
-#ui .t3-menu.paper .btn::after { display: none; }
-#ui .t3-menu.paper .btn .ul { position: absolute; left: 44px; right: 10%; bottom: 0; height: 8px; opacity: 0; transition: opacity 0.15s steps(2); }
-#ui .t3-menu.paper .btn:hover .ul, #ui .t3-menu.paper .btn:focus-visible .ul { opacity: 1; }
-#ui .t3-menu.paper .btn:hover, #ui .t3-menu.paper .btn:focus-visible { transform: translateX(4px); filter: none; outline: none; }
-#ui .t3-menu.paper .pp-tape { left: 40%; top: -10px; }
-.t3-foot { position: absolute; right: 2.2vw; bottom: 5.4%; font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 18.6667px; color: #ffe4c8; opacity: 0; transition: opacity 1s 1s; text-shadow: 0 2px 0 #000; z-index: 3; }
-.t3.menu .t3-foot { opacity: 0.75; }
-.t3-skip { position: absolute; right: 2.2vw; bottom: 1.2%; font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 18.6667px; color: #fff; opacity: 0.55; z-index: 4; }
-.t3.menu .t3-skip { display: none; }
-.t3-cap { position: absolute; left: 0; right: 0; bottom: 18%; text-align: center; font-family: 'Jersey 10', 'Silkscreen', var(--pix); font-size: 18.6667px; color: #fff4e0; letter-spacing: 0.25em;
-  text-shadow: 0 2px 0 #000; opacity: 0; transition: opacity 1.2s; z-index: 3; }
-.t3-cap.on { opacity: 0.9; }
-.settings { width: min(460px, 92vw); padding: 1.4em 1.6em; display: flex; flex-direction: column; gap: 1em; }
-#ui .settings, #ui .settings * { font-size-adjust: none; }
-.settings label { display: grid; grid-template-columns: 8em 1fr 3em; gap: 0.8em; align-items: center; font-family: var(--pp-head); font-size: 18.6667px; line-height: 24px; }
-.settings input[type=range] { width: 100%; -webkit-appearance: none; appearance: none; height: 16px; background: transparent; cursor: pointer; }
-.settings input[type=range]::-webkit-slider-runnable-track { height: 8px; background: #6a4a2a; box-shadow: inset 0 0 0 2px #2a1a10, inset 0 4px 0 0 #3a2614; }
-.settings input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 20px; margin-top: -6px; background: #8ed06a; box-shadow: inset 0 0 0 2px #1f3a1c, inset -2px -4px 0 2px #3f7a34; border: 0; border-radius: 0; }
-.settings input[type=range]::-moz-range-track { height: 8px; background: #6a4a2a; box-shadow: inset 0 0 0 2px #2a1a10; }
-.settings input[type=range]::-moz-range-thumb { width: 14px; height: 20px; background: #8ed06a; box-shadow: inset 0 0 0 2px #1f3a1c; border: 0; border-radius: 0; }
-.settings .gfx-row { display: grid; grid-template-columns: 8em 1fr; gap: 0.8em; align-items: center; font-family: var(--pp-head); font-size: 18.6667px; }
-.settings .gfx-row .seg { display: flex; gap: 0.35em; }
-.settings .gfx-row .seg .btn { flex: 1; min-width: 0; font-size: 0.88em; padding: 0.38em 0.2em; text-align: center; }
-.settings .gfx-hint { margin: -0.55em 0 0 11.3em; font-family: var(--pp-head); font-size: 18.6667px; line-height: 20px; opacity: 0.82; min-height: 2.6em; }
-.settings input[type=checkbox] { -webkit-appearance: none; appearance: none; width: 24px; height: 24px; margin: 0; justify-self: start; cursor: pointer; background: #f2e4bc; box-shadow: inset 0 0 0 2px #2a1a10, inset 2px 2px 0 2px #c8b48a; }
-.settings input[type=checkbox]:checked { background: var(--set-check) center / 100% 100% no-repeat, #f2e4bc; image-rendering: pixelated; }
-@media (max-width: 520px) { .settings .gfx-row { grid-template-columns: 1fr; gap: 0.4em; } .settings .gfx-hint { margin-left: 0; } }
-.settings .dev-row { display: flex; flex-direction: column; gap: 0.3em; padding-top: 0.7em; background: repeating-linear-gradient(90deg, #b89a6a 0 4px, transparent 4px 8px) left top / 100% 2px no-repeat; }
-.settings .dev-row .btn { display: flex; align-items: center; gap: 0.6em; text-align: left; font-size: 0.9em; }
-.settings .dev-row .btn .ic { width: 1.4em; height: 1.4em; flex: none; image-rendering: pixelated; background: var(--ic) center / contain no-repeat; }
-.settings .dev-row small { font-family: var(--pp-head); font-size: 18.6667px; color: #a8382a; line-height: 20px; }
-.credits { width: min(560px, 92vw); padding: 1.4em 1.6em; font-family: var(--pp-hand); font-size: 20px; line-height: 24px; font-size-adjust: none; }
-#ui .credits *, #ui .confirm * { font-size-adjust: none; }
-.confirm p { font-family: var(--pp-hand); font-size: 20px; line-height: 24px; }
-.confirm { width: min(420px, 92vw); padding: 1.4em 1.6em; display: flex; flex-direction: column; gap: 1em; }
-.confirm .row { display: flex; gap: 10px; justify-content: flex-end; }
-`;
-let styled = false;
+export { openSettings } from '../../ui/v12/settingsmenu';
 
-// small pixel icons for the menu buttons
-const MICONS: Record<string, string[]> = {
-  play: ['.#......', '.##.....', '.###....', '.####...', '.####...', '.###....', '.##.....', '.#......'],
-  compass: ['..####..', '.#....#.', '#..#...#', '#..##..#', '#..##..#', '#...#..#', '.#....#.', '..####..'],
-  gear: ['...##...', '.#.##.#.', '..####..', '###..###', '###..###', '..####..', '.#.##.#.', '...##...'],
-  scroll: ['.######.', '#......#', '.#.##.#.', '.#....#.', '.#.##.#.', '.#....#.', '#......#', '.######.'],
-};
-function micon(name: string) {
-  const c = document.createElement('canvas');
-  c.width = 10; c.height = 10;
-  const x = c.getContext('2d')!;
-  for (const [o, f] of [[1, 'rgba(0,0,0,0.5)'], [0, '#fff8e0']] as const) {
-    x.fillStyle = f;
-    MICONS[name].forEach((row, j) => { for (let i = 0; i < 8; i++) if (row[i] === '#') x.fillRect(i + o, j + o, 1, 1); });
-  }
-  return `url(${c.toDataURL()})`;
+const PIVOT = PIVOT5;
+/** Mori and Chunk at the bow (boat-local x) */
+const MORI_X = 494, CHUNK_X = 515;
+
+type ShotName = 'intro' | 'menu' | 'settings' | 'credits' | 'depart';
+interface Shot { x: number; y: number; zoom: number; focus: number | null; dof: number; /** the name's screen offset (px, + = down) */ sky: number }
+
+// Mori in the wind at the bow: his idle, with the hair streaming and the jacket hem trailing in the
+// gusts (the clip registers once, the first time the title runs)
+let clipped = false;
+function registerWindClip() {
+  if (clipped) return;
+  clipped = true;
+  registerAnim7('titleWind', { frames: 12, fps: 4, loop: true }, (b, t, id) => {
+    const p = POSES7.idle(b, t, id);
+    const gust = 0.5 + 0.5 * Math.sin(t * Math.PI * 2) * Math.sin(t * Math.PI * 4 + 1);
+    p.sway = (p.sway ?? 0) + 0.9 + gust * 1.1;
+    p.flags = { ...(p.flags ?? {}), hair: gust > 0.5 ? 2 : 1 };
+    return p;
+  });
 }
 
-interface Puff { x: number; y: number; vx: number; vy: number; r: number; a: number; t: number; life: number }
-interface Streak { x: number; y: number; len: number; sp: number; a: number; ph: number }
-interface Gull { x: number; y: number; vx: number; ph: number; s: number }
+interface Gull { x: number; y: number; vx: number; vy: number; hx: number; hy: number; ph: number; mode: 'kite' | 'leave'; t: number; s: number }
 
-/**
- * V3 title: a cinematic of the Kittiwake punching through a wind-whipped dusk sea toward a
- * mysterious volcanic archipelago; a carved guardian watches from the headland.
- */
 export class TitleScene implements Scene {
   st!: Stage;
   weather = new Weather();
   ocean!: Ocean;
   sky!: Sky;
+  underway!: Underway;
   t = 0;
   root!: HTMLElement;
-  private boatX = 330;
-  private boatRot = 0;
-  private stage = 0;
-  private puffs: Puff[] = [];
-  private streaks: Streak[] = [];
-  private gulls: Gull[] = [];
-  private nextFlash = 5;
-  private nextSplash = 1;
+  private art!: Ship4Art;
+  private fr: Record<string, Frame> = {};
+  private parts: Record<string, Frame[]> = {};
+  private main!: Layer;
+  rot = 0;
+  bob = 0;
+  private mori!: Actor;
+  private chunk!: Actor;
+  private cloud!: CloudTitle;
+  private cloudSmall!: CloudTitle;
+  private cloudT0 = 3.2;
+  private menu: FloatMenu | null = null;
+  private caption: FloatMenu | null = null;
+  private shotName: ShotName = 'intro';
+  private shotFrom: Shot | null = null;
+  private shotT = 0;
+  private shotDur = 1;
   private skipped = false;
-  private onKey = () => this.skip();
+  private leaving = false;
+  private puffs: { x: number; y: number; vx: number; vy: number; r: number; a: number; t: number; life: number }[] = [];
+  private gulls: Gull[] = [];
+  private gullFr: Record<string, Frame[]> = {};
+  private nextChunk = 6;
+  private nextLook = 9;
+  private onKey = (e: KeyboardEvent) => { if (!this.skipped && !e.repeat) this.skip(); };
+  private onPointer = () => { audio.unlock(); if (!this.skipped) this.skip(); };
 
   enter() {
-    if (!styled) { document.head.appendChild(el('style', '', CSS)); styled = true; }
-    const r = game.r;
+    registerWindClip();
     const st = this.st = new Stage('day', { shade: 0 });
-    st.minX = -4000; st.maxX = 8000; st.minY = -2000; st.maxY = 2000;
+    st.minX = -4000; st.maxX = 8000; st.minY = -3000; st.maxY = 3000;
     const w = this.weather;
-    w.storm = 0.24; w.wind = -1; w.sunX = 0.8; w.sunY = 0.34; w.cruise = 34;
+    // a fair evening with a working sea: a little chop, a steady head wind, the sun low on the right
+    w.storm = 0.1; w.wind = -1; w.sunX = 0.9; w.sunY = 0.32;
     st.envHook = env => {
       applySeaEnv(env, w);
-      // golden-hour grade with violet shadows
-      env.gain = [env.gain[0] * 1.1, env.gain[1] * 0.93, env.gain[2] * 0.88];
-      env.lift = [env.lift[0] + 0.035, env.lift[1] + 0.008, env.lift[2] + 0.06];
-      env.saturation *= 1.06;
-      env.contrast *= 1.05;
+      // golden hour: warm highlights, violet shadows, a lot of bloom off the water
+      env.gain = [env.gain[0] * 1.1, env.gain[1] * 0.95, env.gain[2] * 0.84];
+      env.lift = [env.lift[0] + 0.015, env.lift[1] - 0.004, env.lift[2] + 0.04];
+      env.exposure *= 0.95;
+      env.saturation *= 1.1;
+      env.contrast *= 1.08;
       env.vignette = Math.max(env.vignette, 0.55);
-      env.bloom = Math.max(env.bloom, 0.75);
+      env.bloom = Math.max(env.bloom, 0.7);
+      env.bloomThreshold = Math.min(env.bloomThreshold, 0.82);
     };
-    this.ocean = new Ocean({ y: SEA_Y, horizon: SEA_Y - 96, seed: 9, weather: w });
+    this.ocean = new Ocean({ y: S4.WATER, horizon: S4.WATER - 26, seed: 9, weather: w });
     this.sky = new Sky({ weather: w, horizon: this.ocean.horizon, horizonP: BAND_P.horizon, seed: 12 });
     this.sky.birds = true;
     this.sky.auto = false;
-    this.sky.onStrike = big => audio.play('thunder', { vol: big ? 0.35 : 0.18 });
     st.addScreenLayer('sky').add(this.sky);
 
-    // far islands + volcano smoke
-    const far = paintFarIsles(), near = paintNearIsles();
-    const fFar = local.add('t3:far', far.buf, 0, far.buf.h), fFarG = local.add('t3:farg', far.glow, 0, far.glow.h);
-    const fNear = local.add('t3:near', near.buf, 0, near.buf.h), fNearG = local.add('t3:nearg', near.glow, 0, near.glow.h);
-    const puffF = local.add('t3:puff', glowSprite(32, 1.6), 16, 16);
-    const barF = local.add('t3:bar', softBar(64, 10), 32, 5);
-    const horizonScreen = (rr: Renderer) => rr.projectY(this.ocean.horizon, BAND_P.horizon);
-    const PF = 0.035, PN = 0.14;
-    const FX = 330 * PF - 460, NX = 330 * PN - 380;
+    // the name in the sky
+    this.cloud = new CloudTitle('ZEALANDIA', { cell: 7, seed: 5, delay: 0.2, spread: 2.8 });
+    this.cloudSmall = new CloudTitle('PROJECT', { cell: 2.6, puff: 0.8, seed: 9, gap: 1.5, cirrus: true, delay: 2.4, spread: 1.4, wisps: 0.4 });
+    const glow = paintGoldenSky();
+    this.skyGlow = local.add('t4:skyglow', glow, 0, glow.h);
+    st.addScreenLayer('title', 0.5).add(new Custom(0, rr => this.drawTitle(rr)));
+
+    // the misty island ahead, its volcano breathing smoke
+    const far = paintFarIsles(960, 120, 7);
+    const fFar = local.add('t4:far', far.buf, 0, far.buf.h), fFarG = local.add('t4:farg', far.glow, 0, far.glow.h);
+    const puffF = local.add('t4:puff', glowSprite(32, 1.6), 16, 16);
+    const barF = local.add('t4:bar', softBar(64, 10), 32, 5);
+    const PF = 0.035;
     st.addLayer('isles-far', PF, 0, 0.35, 0).add(new Custom(0, rr => {
-      const by = rr.wy(horizonScreen(rr) + 2);
-      rr.draw(fFar, FX, by);
+      const by = rr.wy(rr.projectY(this.ocean.horizon, BAND_P.horizon) + 2);
+      const fx = rr.wx(rr.VW * 0.66) - far.buf.w * 0.62;
+      rr.draw(fFar, fx, by);
       rr.emissive(1);
-      const fl = 0.75 + 0.25 * Math.sin(this.t * 2.3) * Math.sin(this.t * 0.9);
-      rr.draw(fFarG, FX, by, 1, 1, 0, packColor(1, 1, 1, fl));
+      rr.draw(fFarG, fx, by, 1, 1, 0, packColor(1, 1, 1, 0.55 + 0.2 * Math.sin(this.t * 1.7)));
       rr.emissive();
       const [cx, cy] = far.crater!;
-      rr.light(FX + cx, by - far.buf.h + cy, 60, 1, 0.45, 0.2, 0.8 * fl);
       for (const p of this.puffs) {
         const k = p.t / p.life;
         const a = p.a * Math.sin(Math.PI * Math.min(1, k * 1.2));
-        rr.draw(puffF, FX + cx + p.x, by - far.buf.h + cy + p.y, p.r * 1.7, p.r * 1.4, 0, packColor(0.7 + k * 0.15, 0.58 + k * 0.18, 0.66 + k * 0.14, a * 0.85));
+        rr.draw(puffF, fx + cx + p.x, by - far.buf.h + cy + p.y, p.r * 1.7, p.r * 1.4, 0, packColor(0.86 + k * 0.1, 0.7 + k * 0.14, 0.72 + k * 0.1, a * 0.7));
       }
-      // haze band hugging the far waterline
-      rr.draw(barF, FX + 480, by - 4, 18, 1.2, 0, packColor(0.86, 0.66, 0.74, 0.35));
+      // sea mist lying along the island's foot, drifting
+      for (let i = 0; i < 6; i++) {
+        const mx = fx + 160 + ((this.t * (3 + i * 1.3) + i * 170) % 760);
+        rr.draw(barF, mx, by - 2 - (i % 3) * 4, 5 + (i % 3) * 2, 1.4 + (i % 2) * 0.6, 0, packColor(1, 0.84, 0.82, 0.22));
+      }
+      rr.draw(barF, fx + 590, by - 3, 16, 1.6, 0, packColor(1, 0.86, 0.84, 0.3));
     }, dt => {
-      if (Math.random() < dt * 5) this.puffs.push({ x: (Math.random() - 0.5) * 8, y: 0, vx: -7 - Math.random() * 4, vy: -2.2 - Math.random() * 1.5, r: 0.55, a: 0.55 + Math.random() * 0.3, t: 0, life: 9 + Math.random() * 5 });
+      if (Math.random() < dt * 4) this.puffs.push({ x: (Math.random() - 0.5) * 8, y: 0, vx: -6 - Math.random() * 4, vy: -2 - Math.random() * 1.4, r: 0.5, a: 0.45 + Math.random() * 0.25, t: 0, life: 9 + Math.random() * 5 });
       for (const p of this.puffs) { p.t += dt; p.x += p.vx * dt * (1 + p.t * 0.25); p.y += p.vy * dt; p.vy *= 1 - dt * 0.15; p.r += dt * 0.22; }
       this.puffs = this.puffs.filter(p => p.t < p.life);
     }));
-    for (const b of ['horizon'] as const) st.addLayer('sea-' + b, BAND_P[b], 0, 0.6, 0).add(this.ocean.band(b));
-    st.addLayer('isles-near', PN, 0, 0.45, 0).add(new Custom(0, rr => {
-      const by = rr.wy(horizonScreen(rr) + 3);
-      rr.draw(fNear, NX, by);
-      rr.emissive(1);
-      const eyes = 0.55 + 0.45 * Math.max(0, Math.sin(this.t * 0.7));
-      rr.draw(fNearG, NX, by, 1, 1, 0, packColor(1, 1, 1, eyes));
-      rr.emissive();
-      for (const [ex, ey] of near.eyes!) rr.light(NX + ex, by - near.buf.h + ey, 10, 0.5, 1, 0.9, 0.9 * eyes);
-      // drifting sea mist across the headland foot
-      for (let i = 0; i < 3; i++) {
-        const mx = NX + ((this.t * (6 + i * 3) + i * 300) % 1100) - 80;
-        rr.draw(barF, mx, by - 6 - i * 5, 5 + i, 1.6, 0, packColor(0.9, 0.74, 0.8, 0.22));
-      }
-      // surf line where the islands meet the sea
-      for (let i = 0; i < 8; i++) {
-        rr.draw(barF, NX + i * 130 + Math.sin(this.t * 0.8 + i) * 6, by - 1, 2.6, 0.6, 0, packColor(0.95, 0.85, 0.85, 0.55));
-      }
-    }));
-    for (const b of ['far', 'mid'] as const) st.addLayer('sea-' + b, BAND_P[b], 0, 0.6, 0).add(this.ocean.band(b));
 
-    // the Kittiwake, shrunk with the same feature-preserving filter the people use
-    const ext = paintBoatExterior({});
-    const K = 0.3;
-    const sb = shrinkPixels(ext.buf, ext.ax, ext.ay, K);
-    const fBoat = local.add('t3:boat', sb.buf, sb.ax, sb.ay);
-    const sg = ext.glow ? shrinkPixels(ext.glow, ext.ax, ext.ay, K) : null;
-    const fBoatG = sg ? local.add('t3:boatg', sg.buf, sg.ax, sg.ay) : null;
-    const main = st.addLayer('main', 1, 0, 1, 0);
-    main.add(new Custom(0, rr => {
-      const y = this.ocean.heightAt(this.boatX) + 3;
-      rr.draw(fBoat, this.boatX, y, 1, 1, this.boatRot);
-      if (fBoatG) { rr.emissive(1); rr.draw(fBoatG, this.boatX, y, 1, 1, this.boatRot, packColor(1, 1, 1, 0.8)); rr.emissive(); }
-      // mast and wheelhouse lamps
-      rr.light(this.boatX + 20, y - 70, 40, 1, 0.8, 0.5, 0.7);
+    // the sea, back to front (the distant bands barely move vertically)
+    for (const b of ['horizon', 'far', 'mid'] as const) st.addLayer('sea-' + b, BAND_P[b], 0, 0.6, 0, b === 'mid' ? 0.85 : BAND_P[b]).add(this.ocean.band(b));
+    // under way: the ship scene's bow wave, wake and wind lines (it only needs the boat's pose)
+    const host = {
+      weather: w, ocean: this.ocean, engineOn: true, fishDraw: null, hullA: 1, bridgeA: 1,
+      shipToWorld: (x: number, y: number) => this.shipToWorld(x, y),
+    };
+    this.underway = new Underway(host as unknown as ShipScene4);
+    st.addLayer('wind-far', 0.7, 0, 0, 0.2, 0.85).add(new Custom(0, rr => this.underway.drawWind(rr, 'far')));
+    // gulls hanging in the head wind behind the boat plane
+    st.addLayer('gulls', 0.92, 0, 0.8, 0, 0.95).add(new Custom(0, rr => this.drawGulls(rr), dt => this.updateGulls(dt)));
+
+    // the Kittiwake at full size, rocking on the swell
+    this.art = paintShip4({});
+    const A4 = this.art;
+    for (const k of ['house', 'hull', 'bridgeExt', 'deckFront'] as const) {
+      const sp = A4[k];
+      this.fr[k] = local.add('t4:' + k, sp.buf, 0, 0);
+      if (sp.glow) this.fr[k + 'G'] = local.add('t4:' + k + 'G', sp.glow, 0, 0);
+    }
+    const bp = paintBoatParts({});
+    for (const k of ['radar', 'flag'] as const) this.parts[k] = bp[k].map((sp, i) => local.add(`t4:${k}${i}`, sp.buf, sp.ax, sp.ay));
+    const main = this.main = st.addLayer('main', 1, 0, 1, 0);
+    main.xf = [PIVOT[0], PIVOT[1], 0, 0, 0];
+    const draw = (rr: Renderer, k: string, a = 1, glow = false) => {
+      const f = this.fr[k];
+      if (!f) return;
+      if (glow) rr.emissive(1);
+      rr.draw(f, 0, 0, 1, 1, 0, a < 1 ? packColor(1, 1, 1, a) : 0xffffffff);
+      if (glow) rr.emissive();
+    };
+    main.add(new Custom(-8, rr => draw(rr, 'house')));
+    main.add(new Custom(-7, rr => {
+      const rd = this.parts.radar, fl = this.parts.flag;
+      if (rd?.length) rr.draw(rd[Math.floor(this.t * 4) % rd.length], MOUNTS.radar[0], MOUNTS.radar[1]);
+      if (fl?.length) rr.draw(fl[Math.floor(this.t * 8) % fl.length], MOUNTS.flag[0], MOUNTS.flag[1]);
     }));
-    st.addLayer('sea-near', BAND_P.near, 0, 0.6, 0).add(this.ocean.band('near'));
-    st.addLayer('sea-front', BAND_P.front, 0, 0.5, 0).add(this.ocean.band('front'));
+    main.add(new Custom(81, rr => {
+      draw(rr, 'hull'); draw(rr, 'bridgeExt');
+      // the windows warm with the cabin lamps as the light goes
+      draw(rr, 'hullG', 0.35, true); draw(rr, 'bridgeExtG', 0.35, true);
+    }));
+    main.add(new Custom(90, rr => draw(rr, 'deckFront')));
+    main.add(new Custom(100, rr => {
+      rr.light(424, 7, 26, 1, 0.95, 0.85, 0.35);
+      rr.light(276, 40, 70, 1, 0.8, 0.5, 0.35);
+      // the low sun catching Mori and Chunk from ahead
+      rr.light(MORI_X + 40, 40, 90, 1, 0.78, 0.5, 0.45);
+    }));
+    st.terrain.addGround(FLOORS.deck, 'bridge');
+    // Mori at the bow looking ahead, Chunk sitting up beside him like a figurehead
+    const mori = this.mori = new Actor('mori', MORI_X, Math.round(deckY(MORI_X)), 1);
+    mori.terrain = st.terrain;
+    mori.layer = main;
+    mori.idleAnim = 'titleWind';
+    mori.setAnim('titleWind');
+    mori.z = 40;
+    const chunk = this.chunk = new Actor('chunk', CHUNK_X, Math.round(deckY(CHUNK_X)), 1);
+    chunk.terrain = st.terrain;
+    chunk.layer = main;
+    chunk.idleAnim = 'sit';
+    chunk.setAnim('sit');
+    chunk.z = 45;
+    main.add(mori);
+    main.add(chunk);
+
+    // the near sea in front of the hull, the bow wave and wake on it, the wind lines over the deck
+    st.addLayer('sea-near', BAND_P.near, 0, 0.6, 0, 1).add(this.ocean.band('near'));
+    st.layer('sea-near').add(new Custom(10, rr => this.underway.drawNear(rr)));
+    st.addLayer('sea-front', BAND_P.front, 0, 0.5, 0, 1).add(this.ocean.band('front'));
+    st.addLayer('wind-near', 1.1, 0, 0, 0.2, 1).add(new Custom(0, rr => this.underway.drawWind(rr, 'near')));
     st.layer('sea-horizon').add(updater(dt => { w.update(dt); this.ocean.update(dt); }));
 
-    // wind: streaks, spray motes and a gull flock on a screen layer in front of everything
-    const gullFr = paintBirds().map((b, i) => local.add('t3:gull' + i, b, 3, 1));
-    for (let i = 0; i < 70; i++) this.streaks.push({ x: Math.random() * 900, y: Math.random() * 360, len: 8 + Math.random() * 46, sp: 160 + Math.random() * 260, a: 0.12 + Math.random() * 0.28, ph: Math.random() * 6 });
-    const wind = st.addScreenLayer('wind', 1);
-    wind.add(new Custom(0, rr => {
-      const g = 0.6 + w.gust * 0.8;
-      for (const s of this.streaks) {
-        const yy = s.y + Math.sin(this.t * 1.7 + s.ph) * 3;
-        rr.rect(s.x, yy, s.len, 1, packColor(1, 0.94, 0.9, s.a * g));
-        rr.rect(s.x + s.len * 0.2, yy - 1, s.len * 0.4, 1, packColor(1, 0.94, 0.9, s.a * 0.35 * g));
-      }
-      for (const b of this.gulls) {
-        const fr = gullFr[Math.floor(this.t * 7 + b.ph) % 3];
-        rr.draw(fr, b.x, b.y + Math.sin(this.t * 2 + b.ph) * 2, b.s, b.s, 0, packColor(0.16, 0.12, 0.2, 0.9));
-      }
-    }, dt => {
-      const g = 0.7 + w.gust * 0.6;
-      for (const s of this.streaks) {
-        s.x -= s.sp * g * dt;
-        if (s.x + s.len < 0) { s.x = game.r.VW + Math.random() * 80; s.y = Math.random() * game.r.VH; }
-      }
-      for (const b of this.gulls) b.x += b.vx * dt;
-      this.gulls = this.gulls.filter(b => b.x > -40 && b.x < game.r.VW + 60);
-      if (this.gulls.length === 0 && Math.random() < dt * 0.12) {
-        const y0 = 40 + Math.random() * 70, n = 4 + Math.floor(Math.random() * 4), dir = Math.random() < 0.5 ? -1 : 1;
-        for (let i = 0; i < n; i++) this.gulls.push({ x: (dir < 0 ? game.r.VW + 20 : -20) + i * 9 * -dir, y: y0 + Math.abs(i - n / 2) * 4, vx: dir * (26 + Math.random() * 4), ph: i * 1.3, s: 1 + (i % 2) * 0.2 });
-      }
-    }));
+    // camera: tight on Mori at the bow
+    const s0 = this.shot('intro');
+    Object.assign(st.cam, { x: s0.x, y: s0.y, zoom: s0.zoom, tx: s0.x, ty: s0.y, tzoom: s0.zoom, locked: true });
+    this.shotFrom = { ...s0 };
+    this.shotT = 0; this.shotDur = 0.01;
 
-    // camera: start tight on the boat in darkness, then pull back to reveal the islands
-    st.cam.x = st.cam.tx = this.boatX - 20;
-    st.cam.y = st.cam.ty = 150;
-    st.cam.zoom = st.cam.tzoom = 2.3;
-    st.cam.follow = 0.6; st.cam.zoomLerp = 0.45;
-
-    // DOM
-    this.root = el('div', 't3');
-    this.root.innerHTML = `<div class="t3-bar top"></div><div class="t3-bar bot"></div>
-      <div class="t3-logo"><small>PROJECT</small><h1>ZEALANDIA<i>ZEALANDIA</i></h1><p>Shipwrecked on a lost continent where <b>serpents</b> rule. Bring back the photographs.</p></div>
-      <div class="t3-cap"></div>
-      <div class="t3-foot">Click for sound &middot; V3</div><div class="t3-skip">Click to skip</div>`;
-    const menu = this.root.appendChild(el('div', 't3-menu panel paper'));
-    installPaper();
-    // (the skin's .panel rules are !important, so these have to be too)
-    menu.style.setProperty('background', `${paperTex('journal')} 0 0 / 256px`, 'important');
-    menu.style.setProperty('clip-path', edgeClip(11, { top: 'torn', right: 'deckle', bottom: 'deckle', left: 'perforated', amp: 0.7 }), 'important');
-    menu.insertAdjacentHTML('beforeend', tape({ seed: 4 }));
-    menu.appendChild(el('div', 'hd', 'EXPEDITION LOG'));
-    let ulN = 0;
-    const btn = (label: string, icon: string, cls: string, fn: () => void) => {
-      const b = el('button', 'btn ' + cls, `<span class="ic"></span><span>${label}</span><span class="ul">${svgInk(100, 6, [{ d: underline(100, { seed: ++ulN }), c: INK_RED, w: 1.8 }], { stretch: true, w: '100%', h: '100%' })}</span>`);
-      (b.querySelector('.ic') as HTMLElement).style.setProperty('--ic', micon(icon));
-      b.onclick = e => { e.stopPropagation(); audio.unlock(); fn(); };
-      b.onmouseenter = () => audio.play('ui', { vol: 0.25, pitch: 1.3 });
-      menu.appendChild(b);
-      return b;
-    };
-    const cont = hasSave();
-    if (cont) btn('Continue', 'play', '', () => { audio.play('ui'); continueV4(); });
-    btn('New expedition', 'compass', cont ? 'ghost' : '', () => { audio.play('ui'); if (cont) this.confirmNew(); else this.startNew(); });
-    btn('Settings', 'gear', 'ghost', () => { audio.play('uiOpen'); openSettings(); });
-    btn('Credits', 'scroll', 'ghost', () => { audio.play('uiOpen'); openCredits(); });
-    this.root.addEventListener('pointerdown', () => { audio.unlock(); this.skip(); });
-    this.root.style.pointerEvents = 'auto';
+    // the overlay root (the floating words live in it; cleared with the scene)
+    this.root = document.createElement('div');
+    this.root.className = 't4';
+    this.root.style.cssText = 'position:absolute;inset:0;pointer-events:auto';
+    this.root.addEventListener('pointerdown', this.onPointer);
     window.addEventListener('keydown', this.onKey);
     game.ui.sceneLayer.appendChild(this.root);
     audio.setAmbience('ocean');
     audio.setMusic('title');
+    // warm the gull frames
+    for (const [anim, n] of [['hover', 4], ['glide', 2], ['fly', 6]] as const) {
+      this.gullFr[anim] = [];
+      for (let i = 0; i < n; i++) {
+        const o = renderAny('sackjaw', anim, i);
+        this.gullFr[anim].push(local.add(`t4:gull.${anim}.${i}`, o.buf, o.ax, o.ay));
+      }
+    }
+    for (let i = 0; i < 3; i++) this.gulls.push(this.newGull(i));
   }
 
-  /** jump straight to the finished reveal */
-  skip() {
-    if (this.skipped) return;
-    this.skipped = true;
-    this.t = Math.max(this.t, 9);
-    this.st.cam.tzoom = 1; this.st.cam.zoomLerp = 2.5;
-    game.fadeTo(0, 3);
-    this.root.classList.add('open', 'logo', 'menu');
-    this.cap('');
+  // ---------------------------------------------------------------- the boat
+
+  shipToWorld(x: number, y: number): [number, number] {
+    const c = Math.cos(this.rot), sn = Math.sin(this.rot);
+    const dx = x - PIVOT[0], dy = y - PIVOT[1];
+    return [PIVOT[0] + dx * c - dy * sn, PIVOT[1] + this.bob + dx * sn + dy * c];
   }
 
-  private cap(text: string) {
-    const c = this.root.querySelector('.t3-cap') as HTMLElement;
-    if (!text) { c.classList.remove('on'); return; }
-    c.textContent = text;
-    c.classList.add('on');
+  // ---------------------------------------------------------------- camera
+
+  private deck() { return deckY(MORI_X); }
+  /** a named camera shot for the current view size */
+  private shot(n: ShotName): Shot {
+    const VW = game.r.VW, VH = game.r.VH;
+    const deck = this.deck();
+    switch (n) {
+      case 'intro': return { x: MORI_X + 14, y: deck - 44, zoom: 2.2, focus: 1, dof: 1.1, sky: -10 };
+      // wide: the bow a little right of centre, the open sea ahead for the words, the sky for the name
+      case 'menu': { const z = 1.1; return { x: MORI_X + (30 - VW * 0.1) / z, y: deck - (VH * 0.16) / z, zoom: z, focus: null, dof: 0, sky: 0 }; }
+      // down on the deck beside them: they sit on the left third, the settings float on the right
+      case 'settings': { const z = 1.6; return { x: MORI_X + (VW * 0.16) / z, y: deck - (VH * 0.2) / z, zoom: z, focus: 1, dof: 0.9, sky: -78 }; }
+      // up into the sky
+      case 'credits': return { x: MORI_X - VW * 0.12, y: deck - VH * 0.15 - 150, zoom: 1, focus: null, dof: 0, sky: 40 };
+      // pushing on toward the island
+      case 'depart': return { x: MORI_X + 120, y: deck - VH * 0.12, zoom: 1.35, focus: 0.3, dof: 0.6, sky: -50 };
+    }
+  }
+  private go(n: ShotName, secs: number) {
+    const c = this.st.cam;
+    const was = this.shot(this.shotName);
+    this.shotFrom = { x: c.x, y: c.y, zoom: c.zoom, focus: was.focus, dof: was.dof, sky: this.skyDY };
+    this.shotName = n;
+    this.shotT = 0;
+    this.shotDur = Math.max(0.01, secs);
+  }
+  private direct(dt: number) {
+    const c = this.st.cam, to = this.shot(this.shotName), from = this.shotFrom ?? to;
+    this.shotT += dt;
+    const k = clamp(this.shotT / this.shotDur, 0, 1);
+    const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+    const T = this.t;
+    // a slow handheld drift, a breath of zoom, and a little of the boat's heave
+    const sx = Math.sin(T * 0.11) * 5 + Math.sin(T * 0.067 + 1) * 3;
+    const sy = Math.sin(T * 0.13 + 2) * 2.5 + this.bob * 0.3;
+    const zb = 1 + Math.sin(T * 0.05) * 0.012;
+    c.locked = true;
+    c.x = from.x + (to.x - from.x) * e + sx;
+    c.y = from.y + (to.y - from.y) * e + sy;
+    c.zoom = from.zoom * Math.pow(to.zoom / from.zoom, e) * zb;
+    // the lens: on Mori close in, everything sharp wide
+    this.skyDY = from.sky + (to.sky - from.sky) * e;
+    const dof = (from.dof ?? 0) + ((to.dof ?? 0) - (from.dof ?? 0)) * e;
+    const focus = to.focus ?? from.focus;
+    if (focus !== null && dof > 0.02) { cineState.focus = focus; cineState.dof = dof; } else cineState.focus = null;
   }
 
-  confirmNew() {
-    const box = el('div', 'confirm panel', `<h2>Start over?</h2><p>This replaces your current expedition, photos and Field Guide progress.</p>`);
-    const row = box.appendChild(el('div', 'row'));
-    const no = el('button', 'btn ghost', 'Keep my save');
-    const yes = el('button', 'btn', 'Start a new expedition');
-    row.append(no, yes);
-    const close = game.ui.modal(box);
-    no.onclick = () => close();
-    yes.onclick = () => { close(); clearSave(); this.startNew(); };
+  // ---------------------------------------------------------------- the name in the sky
+
+  /** where the name hangs on screen (it rides a little parallax as the camera moves) */
+  private skyDY = -10;
+  private titleXY(r: Renderer): [number, number] {
+    const m = this.shot('menu');
+    const v = r.view;
+    // a touch of parallax with the camera's drift, and each shot's own place for it
+    const x = r.VW / 2 - this.cloud.w / 2 + 8 - (v.x - m.x) * 0.04;
+    const y = Math.max(6, r.VH * 0.05) + this.skyDY;
+    return [x, y];
+  }
+  private skyGlow!: Frame;
+  private drawTitle(r: Renderer) {
+    // the golden-hour sky: deep blue overhead through violet and rose to gold at the horizon
+    const hy = Math.round(r.projectY(this.ocean.horizon, BAND_P.horizon)) + 4;
+    const g = this.skyGlow;
+    for (let x = 0; x < r.VW; x += g.w) r.draw(g, x, hy);
+    if (hy - g.h > 0) r.rect(0, 0, r.VW, hy - g.h + 1, packColor(0.17, 0.2, 0.42, 0.62));
+    if (this.t < this.cloudT0) return;
+    const [x, y] = this.titleXY(r);
+    // the word stays crisp (it sits on the focus plane for the lens) unless the camera is on the deck
+    const near = this.shotName === 'settings' ? 1 : 0.5;
+    r.screen(0, 0, 0.5, near);
+    this.cloudSmall.draw(r, x + 30, y - 9);
+    this.cloud.draw(r, x, y + 4);
+    r.screen(0, 0, 0.5, 1);
+  }
+
+  // ---------------------------------------------------------------- gulls
+
+  private newGull(i: number): Gull {
+    const hx = MORI_X - 40 + i * 50 + Math.random() * 30, hy = 4 - i * 9 - Math.random() * 12;
+    return { x: hx + 300 + i * 80, y: hy - 30, vx: -40, vy: 0, hx, hy, ph: Math.random() * 6, mode: 'kite', t: 0, s: 1 };
+  }
+  private updateGulls(dt: number) {
+    for (let i = 0; i < this.gulls.length; i++) {
+      const g = this.gulls[i];
+      g.t += dt;
+      if (g.mode === 'kite') {
+        // hanging in the head wind: holding station over the bow, slipping and correcting
+        const tx = g.hx + Math.sin(this.t * 0.4 + g.ph) * 18, ty = g.hy + Math.sin(this.t * 0.7 + g.ph * 2) * 7 + this.bob * 0.5;
+        g.vx = damp(g.vx, (tx - g.x) * 0.9, 1.4, dt);
+        g.vy = damp(g.vy, (ty - g.y) * 0.9, 1.4, dt);
+        if (g.t > 14 + g.ph * 3 && Math.random() < dt * 0.08) { g.mode = 'leave'; g.t = 0; }
+      } else {
+        // peel off astern on the wind
+        g.vx = damp(g.vx, -90, 0.8, dt);
+        g.vy = damp(g.vy, 10 + Math.sin(g.t * 2) * 12, 1, dt);
+        if (g.t > 8) this.gulls[i] = this.newGull(i);
+      }
+      g.x += g.vx * dt;
+      g.y += g.vy * dt;
+    }
+  }
+  private drawGulls(r: Renderer) {
+    for (const g of this.gulls) {
+      const leaving = g.mode === 'leave';
+      const anim = leaving ? (Math.sin(g.t * 1.3 + g.ph) > 0 ? 'glide' : 'fly') : Math.sin(this.t * 0.5 + g.ph) > 0.4 ? 'glide' : 'hover';
+      const fr = this.gullFr[anim];
+      if (!fr?.length) continue;
+      const f = fr[Math.floor(this.t * (anim === 'glide' ? 3 : 9) + g.ph * 3) % fr.length];
+      // kiting gulls face into the wind (ahead, +x); leaving ones turn and run with it
+      r.draw(f, g.x, g.y, leaving ? -g.s : g.s, g.s, 0, packColor(1, 0.92, 0.84, 1));
+    }
+  }
+
+  // ---------------------------------------------------------------- menus
+
+  private anchor() {
+    // in the air ahead of the bow, over the open water
+    const r = game.r;
+    if (this.shotName === 'settings') return { x: r.VW * 0.53, y: r.VH * 0.47 };
+    if (this.shotName === 'credits') return { x: r.VW * 0.5, y: r.VH * 0.75 };
+    return { x: r.VW * 0.63, y: r.VH * 0.6 };
+  }
+  private showMenu(focus?: string) {
+    const page = this.mainPage();
+    if (focus) page.focus = focus;
+    if (!this.menu) this.menu = new FloatMenu({ page, parent: this.root, anchor: () => this.anchorEased(), align: 'left' });
+    else { this.menu.align = 'left'; this.menu.show(page); }
+  }
+  /** the menu's anchor glides between its spots as the camera moves */
+  private anc: { x: number; y: number } | null = null;
+  private anchorEased() {
+    const a = this.anchor();
+    if (!this.anc) this.anc = { ...a };
+    const k = 1 - Math.exp(-(game.rdt || 1 / 60) * 3);
+    this.anc.x += (a.x - this.anc.x) * k;
+    this.anc.y += (a.y - this.anc.y) * k;
+    // the words ride the camera's drift a little, like something in the scene
+    const v = game.r.view, m = this.shot(this.shotName);
+    return { x: this.anc.x - (v.x - m.x) * 0.6, y: this.anc.y - (v.y - m.y) * 0.6 };
+  }
+  private mainPage(): FloatPage {
+    const items: FloatPage['items'] = [];
+    const cont = hasSave();
+    if (cont) items.push({ id: 'continue', label: 'Continue', sub: `Day ${game.save.day ?? 1}`, pick: () => this.depart(() => continueV4()) });
+    items.push({ id: 'new', label: 'New expedition', pick: () => (cont ? this.confirmNew() : this.depart(() => this.startNew())) });
+    items.push({ id: 'settings', label: 'Settings', pick: () => this.openSettingsHere() });
+    items.push({ id: 'credits', label: 'Credits', tone: 'quiet', pick: () => this.openCredits() });
+    return { items };
+  }
+  private confirmNew() {
+    audio.play('whoosh', { vol: 0.1, pitch: 0.9 });
+    this.menu?.show({
+      heading: 'Start over?',
+      focus: 'keep',
+      onBack: () => this.showMenu('new'),
+      items: [
+        ...textLines(['This replaces your expedition,', 'your photos and your field guide.']),
+        { id: 'keep', label: 'Keep my save', gap: 4, pick: () => this.showMenu('new') },
+        { id: 'fresh', label: 'Start fresh', tone: 'danger', pick: () => this.depart(() => { clearSave(); this.startNew(); }) },
+      ],
+    });
+  }
+  private openSettingsHere() {
+    audio.play('whoosh', { vol: 0.1, pitch: 1.2 });
+    this.go('settings', 2.4);
+    this.menu?.show(settingsPage(() => { game.persist(); this.go('menu', 2.4); this.showMenu('settings'); }));
+  }
+  private openCredits() {
+    audio.play('whoosh', { vol: 0.1, pitch: 0.8 });
+    this.go('credits', 3);
+    if (this.menu) this.menu.align = 'center';
+    this.menu?.show(creditsPage(() => { this.go('menu', 2.6); this.showMenu('credits'); }));
+  }
+  private depart(fn: () => void) {
+    if (this.leaving) return;
+    this.leaving = true;
+    audio.play('whoosh', { vol: 0.14, pitch: 0.7 });
+    void this.menu?.close();
+    this.go('depart', 2.6);
+    setTimeout(fn, 450);
   }
   startNew() {
     game.save = newSave();
@@ -343,112 +467,94 @@ export class TitleScene implements Scene {
     goShip4();
   }
 
+  /** jump to the finished reveal */
+  skip() {
+    if (this.skipped) return;
+    this.skipped = true;
+    if (this.shotName === 'intro') this.go('menu', 1.8);
+    this.cloudT0 = Math.min(this.cloudT0, this.t);
+    // the name still gathers, just quickly
+    this.cloud.t = Math.max(this.cloud.t, this.cloud.done - 1.4);
+    this.cloudSmall.t = Math.max(this.cloudSmall.t, this.cloudSmall.done - 1.2);
+    void this.caption?.close();
+    this.caption = null;
+    if (!this.menu) setTimeout(() => { if (!this.leaving) this.showMenu(); }, 500);
+  }
+
   update(dt: number) {
     // slow cinematic fade-in (game.go starts a quick one after enter)
-    if (this.t === 0 && !this.skipped) { game.r.post.fade = 1; game.fadeTo(0, 0.35); }
+    if (this.t === 0 && !this.skipped) { game.r.post.fade = 1; game.fadeTo(0, 0.4); }
     this.t += dt;
-    const st = this.st;
-    // the boat ploughs forward slowly; bow pitches with the swell
-    this.boatX += 5 * dt;
-    const hA = this.ocean.heightAt(this.boatX - 70), hB = this.ocean.heightAt(this.boatX + 70);
-    this.boatRot = damp(this.boatRot, Math.atan2(hB - hA, 140) * 0.8, 4, dt);
-    this.nextSplash -= dt;
-    void this.nextSplash;
-    // distant lightning inside the clouds over the islands
-    this.nextFlash -= dt;
-    if (this.nextFlash <= 0) { this.nextFlash = 6 + Math.random() * 9; this.sky.flash({ x: 0.55 + Math.random() * 0.35, big: false }); }
-    // cinematic beats
     const T = this.t;
+    // beats of the opening
     if (!this.skipped) {
-      if (this.stage === 0 && T > 1.2) { this.stage = 1; this.cap('Day 21 · somewhere south of the charts'); }
-      if (this.stage === 1 && T > 3.2) { this.stage = 2; st.cam.tzoom = 1; this.cap(''); this.root.classList.add('open'); }
-      if (this.stage === 2 && T > 5.4) { this.stage = 3; this.root.classList.add('logo'); audio.play('uiOpen', { vol: 0.5 }); }
-      if (this.stage === 3 && T > 7.4) { this.stage = 4; this.root.classList.add('menu'); this.skipped = true; }
+      if (T > 1.0 && !this.caption) {
+        this.caption = new FloatMenu({ page: { items: textLines(['Day 21  ·  somewhere south of the charts']) }, parent: this.root, passive: true, anchor: () => ({ x: game.r.VW * 0.5, y: game.r.VH * 0.84 }), align: 'center' });
+      }
+      if (T > 2.6 && this.shotName === 'intro') this.go('menu', 7.5);
+      if (T > 4.6 && this.caption) { void this.caption.close(); this.caption = null; }
+      if (T > 9.4) { this.skipped = true; this.showMenu(); }
     }
-    st.cam.tx = this.boatX - 120 + Math.sin(T * 0.07) * 30;
-    st.cam.ty = 150 + Math.sin(T * 0.11) * 4;
-    st.update(dt);
+    if (T > this.cloudT0) { this.cloud.update(dt); this.cloudSmall.update(dt); }
+    // the boat: pitching on the swell, heaving with it
+    const hA = this.ocean.heightAt(PIVOT[0] - 160), hB = this.ocean.heightAt(PIVOT[0] + 160);
+    this.rot = damp(this.rot, Math.atan2(hB - hA, 320) * 0.5 + Math.sin(T * 0.55) * 0.006, 3, dt);
+    this.bob = clamp((this.ocean.heightAt(PIVOT[0]) - S4.WATER) * 0.35, -20, 20);
+    if (!Number.isFinite(this.bob)) this.bob = 0;
+    if (this.main.xf) { this.main.xf[2] = this.rot; this.main.xf[4] = this.bob; }
+    this.ocean.setMask(CUTLINE.map(([x, y]) => this.shipToWorld(x, y)));
+    this.underway.update(dt);
+    // the sun sits low over the horizon, wherever the camera looks
+    const hy = game.r.projectY(this.ocean.horizon, BAND_P.horizon) / game.r.VH;
+    this.weather.sunY = clamp(hy - 0.19, 0.06, 0.9);
+    // little lives: Mori glances up at the gulls (and at the name when it forms); Chunk fidgets
+    this.nextLook -= dt;
+    if (T > 5.4 && T < 5.5 && !this.mori.look) { this.mori.look = 'up'; setTimeout(() => { if (this.mori.look === 'up') this.mori.look = null; }, 2600); }
+    if (this.nextLook <= 0) {
+      this.nextLook = 7 + Math.random() * 8;
+      this.mori.look = 'up';
+      setTimeout(() => { if (this.mori.look === 'up') this.mori.look = null; }, 1400 + Math.random() * 900);
+    }
+    this.nextChunk -= dt;
+    if (this.nextChunk <= 0) {
+      this.nextChunk = 6 + Math.random() * 7;
+      const a = Math.random();
+      void this.chunk.play(a < 0.4 ? 'tilt' : a < 0.75 ? 'sniff' : 'proud', 'sit');
+    }
+    this.st.update(dt);
     audio.update(dt);
   }
   render(r: Renderer, dt: number) {
+    this.direct(game.rdt || dt);
     this.st.updateCamera(dt, r);
     this.st.render(r, dt);
   }
   exit() {
     window.removeEventListener('keydown', this.onKey);
+    this.menu?.destroy();
+    this.caption?.destroy();
     this.root.remove();
     this.st.clear();
+    cineState.focus = null;
   }
 }
 
-export function openSettings() {
-  // (also opened from the pause menu in a game that never showed the title screen)
-  if (!styled) { document.head.appendChild(el('style', '', CSS)); styled = true; }
-  const s = game.save.settings;
-  document.documentElement.style.setProperty('--set-check', `url(${spriteURL('setCheck', 12, 12, a => { const c = col('#2f6b2a'); for (let i = 0; i < 4; i++) { a.put(2 + i, 6 + i, c); a.put(2 + i, 5 + i, c); } for (let i = 0; i < 6; i++) { a.put(5 + i, 8 - i, c); a.put(5 + i, 9 - i, c); } })})`);
-  const box = el('div', 'settings panel', '<h2>Settings</h2>');
-  const row = (label: string, v: number, on: (v: number) => void) => {
-    const l = el('label', '', `<span>${label}</span><input type="range" min="0" max="100" value="${Math.round(v * 100)}"><span>${Math.round(v * 100)}</span>`);
-    const inp = l.querySelector('input') as HTMLInputElement, out = l.querySelectorAll('span')[1] as HTMLElement;
-    inp.id = 'set-' + label.toLowerCase();
-    inp.oninput = () => { out.textContent = inp.value; on(+inp.value / 100); };
-    box.appendChild(l);
-  };
-  row('Music', s.music, v => { s.music = v; audio.musicVolume = v; });
-  row('Sound', s.sfx, v => { s.sfx = v; audio.sfxVolume = v; audio.play('ui', { vol: 0.6 }); });
-  row('Resolution', s.quality, v => { s.quality = Math.max(0.35, v); game.r.quality = s.quality; window.dispatchEvent(new Event('resize')); });
-  // graphics: the quality preset and the lens options (kept for this browser, whatever the save)
-  const gp = loadGfxPrefs();
-  const apply = () => { saveGfxPrefs(gp); applyGfxPrefs(game.r, gp); };
-  const gRow = el('div', 'gfx-row', '<span>Graphics</span><div class="seg" role="radiogroup" aria-label="Graphics quality"></div>');
-  const seg = gRow.querySelector('.seg') as HTMLElement;
-  const hint = el('small', 'gfx-hint');
-  const paint = () => {
-    for (const b of Array.from(seg.children) as HTMLElement[]) {
-      const on = b.dataset.l === gp.level;
-      b.className = on ? 'btn' : 'btn ghost';
-      b.setAttribute('aria-checked', String(on));
-    }
-    hint.textContent = GFX_HINT[gp.level];
-  };
-  for (const l of ['low', 'medium', 'high'] as const) {
-    const b = el('button', 'btn ghost', GFX_LABEL[l]);
-    b.dataset.l = l;
-    b.id = 'set-gfx-' + l;
-    b.setAttribute('role', 'radio');
-    b.onclick = () => { gp.level = l; apply(); audio.play('ui', { vol: 0.6 }); paint(); };
-    seg.appendChild(b);
+/** the golden-hour sky as a translucent wash over the day sky: an 8 px wide strip, tiled, the bands
+ *  between its colours ordered-dithered (bottom = the horizon) */
+function paintGoldenSky(): PixelBuffer {
+  const H = 300, W = 8;
+  const stops: [string, number][] = [
+    ['#2a346c', 0.64], ['#36407e', 0.6], ['#4a4890', 0.56], ['#664f96', 0.52], ['#845896', 0.48], ['#a2608e', 0.44],
+    ['#c26a84', 0.4], ['#da7a78', 0.38], ['#ec9070', 0.36], ['#f6aa6c', 0.34], ['#ffc272', 0.3], ['#ffd68a', 0.26],
+  ];
+  const cols = stops.map(([h, a]) => hex(h, Math.round(a * 255)));
+  const b = new PixelBuffer(W, H);
+  const n = cols.length - 1;
+  for (let y = 0; y < H; y++) {
+    // more rows of warm colour low down, where the light is
+    const t = Math.pow(y / (H - 1), 0.75) * n;
+    const i = Math.floor(t), f = t - i;
+    for (let x = 0; x < W; x++) b.set(x, y, cols[Math.min(n, f > bayer(x, y) ? i + 1 : i)]);
   }
-  paint();
-  box.append(gRow, hint);
-  const check = (label: string, on: boolean, set: (v: boolean) => void) => {
-    const l = el('label', '', `<span>${label}</span><input type="checkbox"${on ? ' checked' : ''}><span></span>`);
-    const inp = l.querySelector('input') as HTMLInputElement;
-    inp.id = 'set-' + label.toLowerCase().replace(/\s+/g, '-');
-    inp.onchange = () => { set(inp.checked); apply(); audio.play('ui', { vol: 0.5 }); };
-    box.appendChild(l);
-  };
-  check('Film grain', gp.grain, v => { gp.grain = v; });
-  check('Vignette', gp.vignette, v => { gp.vignette = v; });
-  // developer / test tools (lazy-loaded: nothing of it runs unless opened)
-  const dev = el('div', 'dev-row', `<button class="btn ghost"><span class="ic"></span><span>Developer tools</span></button><small>Test tool: jump to any scene, skip quests, cheats, saves. Not part of the game.</small>`);
-  const devBtn = dev.querySelector('button') as HTMLButtonElement;
-  (dev.querySelector('.ic') as HTMLElement).style.setProperty('--ic', `url(${pxIconURL('wrench', 2)})`);
-  devBtn.onclick = () => { audio.play('uiOpen'); void import('../../debug/devpanel').then(m => m.openDevPanel()); };
-  box.appendChild(dev);
-  const done = el('button', 'btn', 'Done');
-  box.appendChild(done);
-  const close = game.ui.modal(box, () => game.persist());
-  done.onclick = () => close();
-}
-
-function openCredits() {
-  const box = el('div', 'credits panel', `<h2>Project Zealandia</h2>
-    <p>A pixel-art wildlife photography and ecosystem research game. Every sprite, landscape, creature and sound is generated in code at load time: procedural pixel art, a WebGL2 lighting renderer and synthesized WebAudio.</p>
-    <p>Inspired by the cosy exploration of <i>Dave the Diver</i> and the real sunken continent of Zealandia. The animals are fictional: an evolutionary thought experiment in a world where serpents, not birds, became the dominant animals.</p>
-    <p style="opacity:0.7;font-size:0.9em">Controls: A/D move, Shift run, S crouch/hide, Space jump, W climb, E interact, right mouse or Q camera, click shoot, wheel zoom, V video, 1-5 and F gadgets, J Field Guide, Esc pause.</p>`);
-  const done = el('button', 'btn', 'Close');
-  box.appendChild(done);
-  const close = game.ui.modal(box);
-  done.onclick = () => close();
+  return b;
 }
