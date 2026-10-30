@@ -255,6 +255,8 @@ export class Actor implements Drawable {
   private hopPend = 0;
   /** who is talking right now (listeners nearby glance at them) */
   static speaking = new Set<Actor>();
+  /** updated at least once (a facing set while placing them doesn't turn them round) */
+  private onStage = false;
 
   constructor(readonly id: string, x: number, y: number, facing = 1) {
     this.x = x;
@@ -460,7 +462,8 @@ export class Actor implements Drawable {
     // turning round: when the facing flips while standing or walking, the body swings round through
     // facing the viewer instead of snapping over (first half drawn the old way)
     if (this.facing !== this.lastFacing) {
-      if (this.visible && !this.once && TURN_BASE.has(clipBase(this.anim)) && this.holdFrame === null && this.hasClip('turn')) {
+      // (not when placed facing some way before they've been on stage)
+      if (this.onStage && this.visible && !this.once && TURN_BASE.has(clipBase(this.anim)) && this.holdFrame === null && this.hasClip('turn')) {
         this.turnFace = this.lastFacing;
         this.layIt('turn', [{ anim: 'turn', loop: false }]);
         this.blinking = Math.max(this.blinking, 0.1);
@@ -669,6 +672,7 @@ export class Actor implements Drawable {
       this.hairV += (w * w * (tgt - this.hairX) - 2 * z * w * this.hairV) * h;
       this.hairX += this.hairV * h;
     }
+    this.onStage = true;
   }
 
   private frameIndex() {

@@ -289,7 +289,9 @@ function stopFrom(b: Build, u: number, id: string, run: boolean, v: string): Pos
   const k = K(b);
   let src = run ? 'run' : 'walk', fi = 3;
   if (v) { const i = v.lastIndexOf('.'); if (i > 0) { src = v.slice(0, i); fi = +v.slice(i + 1) || 0; } }
-  const from = pose7(id, src, b, fi);
+  // (a blended source pose, e.g. setting off: take the side it was nearer, so the feet below are ours)
+  const f0 = pose7(id, src, b, fi);
+  const from: Pose = f0.mix ? { ...(f0.mix.u < 0.5 ? f0.mix.a ?? f0 : f0.mix.p), mix: undefined } : f0;
   const rest = at7(id, 'idle', b, 0);
   const hard = run || src === 'run' ? 1 : src === 'jog' ? 0.6 : 0;
   // which foot moves first: the one in the air (or the one behind)
