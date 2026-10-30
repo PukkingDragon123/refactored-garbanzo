@@ -185,7 +185,8 @@ const JOSHU: HeadDef7 = {
   extras(s, W) {
     // the full Santa beard, moustache and the red skipper's cap
     const beard = R6('#6a6462', '#9a948e', '#c8c2ba', '#ece6de', '#f8f4ee', '#ffffff');
-    const bm = (h: Hit) => { const curl = Math.sin(h.x * 1.7 + h.y * 0.9) > 0.6; return curl ? beard[2] : cel(beard, h.l, 0.1, true); };
+    // wavy strands of beard falling in clumps (at the sprite's pixel density)
+    const bm = (h: Hit) => { const curl = Math.sin(h.x * 0.75 + Math.sin(h.y * 0.5) * 1.6) > 0.7; return curl ? (h.l > 0.3 ? beard[3] : beard[2]) : cel(beard, h.l, 0.1, true); };
     s.ellipsoid(W([2.4, 3.2, 0]), W([4.2, 0, 0]), [0, 4.2, 0], W([0, 0, 5.0]), 10, bm);
     s.ellipsoid(W([2.6, -0.8, 0]), W([4.4, 0, 0]), [0, 4.0, 0], W([0, 0, 4.4]), 10, bm);
     s.ellipsoid(W([3.4, -4.2, 0]), W([3.2, 0, 0]), [0, 2.8, 0], W([0, 0, 3.2]), 10, bm);
