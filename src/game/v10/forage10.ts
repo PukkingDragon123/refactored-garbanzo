@@ -15,6 +15,7 @@ import { fx10 } from './skills10';
 import { energy, maxEnergy, restore, spend, addAilment } from './energy';
 import { audio } from '../../core/audio';
 import { itemIconURL } from '../../art/itemicons';
+import { hunger } from '../v12/hunger';
 
 export type Tox = 0 | 1 | 2;
 export interface FoodDef {
@@ -134,7 +135,8 @@ export function canEat(id: string): { ok: boolean; reason?: string } {
   const fi = foodInfo(id);
   if (!fi.edible) return { ok: false, reason: 'You can’t eat that.' };
   if (count(id) < 1) return { ok: false, reason: 'None left.' };
-  if (!fi.buff && energy() >= maxEnergy() - 0.5) return { ok: false, reason: 'You’re full. Save it for later.' };
+  // (V12: hunger decides; the old energy bar only when he isn't hungry at all)
+  if (!fi.buff && energy() >= maxEnergy() - 0.5 && hunger() < 0.05) return { ok: false, reason: 'You’re full. Save it for later.' };
   return { ok: true };
 }
 
