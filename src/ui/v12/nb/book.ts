@@ -20,10 +20,9 @@ import { nbSave, onQuestMark } from '../notebook';
 import type { NotebookOpts } from '../notebook';
 import { trackedQuest } from '../../../game/quests';
 import {
-  PW, PH, C, paperArt, coverArt, bandArt, handArt, toolStandArt, toolHoldArt, tabArt, ribbonAt, showThrough, outlined, hand, handW, COVER_HEX,
+  PW, PH, C, paperArt, coverArt, bandArt, handArt, toolStandArt, toolHoldArt, tabArt, ribbonAt, showThrough, outlined, hand, handW, COVER_HEX, leatherArt,
 } from './art';
 import type { ToolKind } from './art';
-import { coverArtOf } from '../../v11/paper/textures';
 import type { Page, Ctx } from './flow';
 import { buildAll } from './content';
 import type { Built } from './content';
@@ -309,7 +308,8 @@ class Notebook {
 
   private loop = (now: number) => {
     if (this.dead) return;
-    const dt = Math.min(0.05, (now - this.last) / 1000);
+    // (window.__nbSlow slows the notebook's clock: for capturing the animations frame by frame)
+    const dt = Math.min(0.05, (now - this.last) / 1000) * ((window as unknown as { __nbSlow?: number }).__nbSlow ?? 1);
     this.last = now;
     this.t += dt;
     this.update(dt);
@@ -541,7 +541,7 @@ class Notebook {
     let a = this.boardCache.get(k);
     if (a) return a;
     a = new Art(w, h);
-    const tile = coverArtOf('leather', COVER_HEX);
+    const tile = leatherArt();
     const base = col(COVER_HEX), out = mixC(base, col('#000000'), 0.66), lt = mixC(base, col('#ffffff'), 0.2);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const e = x === 0 || y === 0 || x === w - 1 || y === h - 1;

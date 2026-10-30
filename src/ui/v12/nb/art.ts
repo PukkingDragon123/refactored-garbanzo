@@ -7,7 +7,7 @@
 // strikes, arrows) as pixel paths so the pen can draw them on stroke by stroke.
 
 import { Art, col, dith, bayer, mixC, shadeC } from '../../v11/paper/px';
-import { paperTileArt, coverArtOf } from '../../v11/paper/textures';
+import { paperTileArt } from '../../v11/paper/textures';
 import { drawText, textWidth } from '../../v11/paper/pxfont';
 import { rasterStrokes } from '../../v11/paper/ink';
 import { DOODLES } from '../../v11/paper/sketch';
@@ -467,10 +467,29 @@ export function barAt(a: Art, x: number, y: number, w: number, h: number, k: num
 // ---------------------------------------------------------------- the cover
 
 export const COVER_HEX = '#6a4a2c';
+let leatherT: Art | null = null;
+/** the notebook's leather (a seamless 128 px tile): soft patches of wear, a fine pebbled grain with
+ *  its bumps lit from the upper left, the odd dark pore; a few tones, ordered dithering between them */
+export function leatherArt(): Art {
+  if (leatherT) return leatherT;
+  const a = new Art(128, 128);
+  const tones = ['#3a2614', '#4a321c', '#583e24', '#664a2c', '#745636', '#866644'].map(c => col(c));
+  for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
+    const patch = fbm(x / 32, y / 32, 71, 3, 4);
+    const grain = fbm(x / 2.6, y / 2.6, 13, 2, 128 / 2.6 | 0);
+    const lit = fbm((x + 1) / 2.6, (y + 1) / 2.6, 13, 2, 128 / 2.6 | 0) - grain;
+    let l = 2.4 + (patch - 0.5) * 2.4 + lit * 5;
+    if (hash2(x, y, 3) < 0.012) l -= 1.4;
+    const i = Math.max(0, Math.min(5, Math.floor(l + bayer(x, y) - 0.5)));
+    a.put(x, y, tones[i]);
+  }
+  leatherT = a;
+  return a;
+}
 /** the closed notebook's front board: worn leather, stitched edges, a paper label, scratches, a ring, a sticker */
 export function coverArt(w: number, h: number): Art {
   const a = new Art(w, h);
-  const tile = coverArtOf('leather', COVER_HEX);
+  const tile = leatherArt();
   const base = col(COVER_HEX), out = shadeC(base, -0.66), lt = shadeC(base, 0.22), dk = shadeC(base, -0.32);
   const R = 3;
   const inside = (x: number, y: number) => {
@@ -532,9 +551,9 @@ export function coverArt(w: number, h: number): Art {
   const t1 = 'FIELD NOTES';
   hand(a, t1, lx + Math.round((lw - handW(t1, { block: true })) / 2), ly + 14, col('#2a2440'), { block: true });
   const t2 = 'Mori';
-  hand(a, t2, lx + Math.round((lw - handW(t2, { bold: true, scale: 2 })) / 2), ly + 33, col('#26408a'), { bold: true, scale: 2 });
+  hand(a, t2, lx + Math.round((lw - handW(t2, { bold: true, scale: 2 })) / 2) - 6, ly + 33, col('#26408a'), { bold: true, scale: 2 });
   const t3 = 'no. 3';
-  hand(a, t3, lx + lw - handW(t3) - 6, ly + 22, C.pencil, { pencil: true });
+  hand(a, t3, lx + lw - handW(t3) - 5, ly + lh - 4, C.pencil, { pencil: true });
   // a round sticker (a fern), half peeled and scuffed
   const sx = Math.round(w * 0.7), sy = Math.round(h * 0.62), sr = 12;
   for (let y = -sr; y <= sr; y++) for (let x = -sr; x <= sr; x++) {
