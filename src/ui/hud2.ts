@@ -75,6 +75,8 @@ export class Hud2 {
     if (CLASSIC_HUD) {
       setBodyHud('never'); // the top-left status plate is gone (user)
       this.classic = new Hud2Classic(parent, o);
+      // no research-point counter on screen (user): research shows up in the notebook and the laptop
+      this.classic.root.querySelector<HTMLElement>('.hr .rp')?.style.setProperty('display', 'none');
       this.root = this.classic.root;
       this.lastRp = game.save.rp;
       return;
