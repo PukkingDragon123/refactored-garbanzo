@@ -1,21 +1,39 @@
 // V11 HUD pixel helpers: every HUD widget is a small canvas painted in art pixels (bitmap text,
-// Bresenham shapes, ordered dithering) and shown at a whole-number scale (3 CSS px per art pixel on
-// desktop, 2 on phones and small windows), so the HUD is crisp pixel art whatever the fonts do.
+// Bresenham shapes, ordered dithering) and shown at a whole number of DEVICE pixels per art pixel, so
+// the HUD is crisp pixel art whatever the fonts do.
 //
-//   hudScale()                     the current HUD pixel scale (2 or 3)
+// The HD remaster: art pixels are about half the size they were (2 CSS px on a desktop at DPR 1 where
+// they were 3; 4 device px on a DPR 3 phone where they were 6), and every widget is painted at about
+// 1.5x the art size, so it keeps its size on screen and gains the detail.
+//
+//   hudDev()                       device pixels per art pixel (a whole number)
+//   hudScale()                     CSS px per art pixel (hudDev() / devicePixelRatio; may be fractional)
 //   new PxW(parent, cls)           a widget canvas: w.draw(w, h, art => ...) repaints it (same size
 //                                  reuses its buffer), w.el is the canvas, w.s the scale it's shown at
 //   outlined(art, text, x, y, c, outline, o)   bitmap text with a 1 px outline all round
-//   sky colours, dither helpers for gauges
+//   hudText(art, text, x, y, o)    the HUD's own pixel faces: 'caps' (9 px capitals, 2 px stems) and
+//                                  'num' (11 px numerals for counters), shaded top to bottom, with a
+//                                  ring and a drop; hudTextW() measures them
+//   sky colours, dither helpers for gauges, rivets, stitching, leather and brass
 
 import { Art, col, dith, shadeC, mixC } from './paper/px';
 import { drawText, textWidth } from './paper/pxfont';
 import type { TextOpts } from './paper/pxfont';
 
-export function hudScale(): number {
+/** the CSS px per art pixel the old HUD used (3 desktop, 2 phones and small windows, 4 huge screens) */
+function oldCss(): number {
   const w = window.innerWidth, h = window.innerHeight;
   if (w >= 2300 && h >= 1250) return 4;
   return w >= 1100 && h >= 640 ? 3 : 2;
+}
+/** device pixels per HUD art pixel: two thirds of the old size, rounded to whole device pixels */
+export function hudDev(): number {
+  const dpr = window.devicePixelRatio || 1;
+  return Math.max(1, Math.round((oldCss() * dpr) / 1.5));
+}
+/** CSS px per HUD art pixel (whole device pixels, so it can be fractional in CSS px) */
+export function hudScale(): number {
+  return hudDev() / (window.devicePixelRatio || 1);
 }
 
 export class PxW {
@@ -113,4 +131,180 @@ export function gaugeColor(f: number): [number, number, number] {
   const k = Math.max(0, Math.min(1, (f - stops[i][0]) / (stops[i + 1][0] - stops[i][0])));
   const c = mixC(col(stops[i][1]), col(stops[i + 1][1]), k);
   return [c, shadeC(c, -0.3), shadeC(c, 0.35)];
+}
+
+// ---------------------------------------------------------------- the HUD's pixel faces
+// 'caps': 9 px capitals with 2 px stems (place names, the name ribbon, labels that need weight)
+// 'num':  11 px numerals for the counters (research points, film, energy)
+// Both are hand-placed bitmaps; hudText shades them top to bottom (light, base, dark) and rings them.
+const CAPS: Record<string, string> = {
+  A: '..##..|.####.|##..##|##..##|##..##|######|##..##|##..##|##..##',
+  B: '#####.|##..##|##..##|##..##|#####.|##..##|##..##|##..##|#####.',
+  C: '.####.|##..##|##....|##....|##....|##....|##....|##..##|.####.',
+  D: '####..|##.##.|##..##|##..##|##..##|##..##|##..##|##.##.|####..',
+  E: '######|##....|##....|##....|#####.|##....|##....|##....|######',
+  F: '######|##....|##....|##....|#####.|##....|##....|##....|##....',
+  G: '.####.|##..##|##....|##....|##.###|##..##|##..##|##..##|.#####',
+  H: '##..##|##..##|##..##|##..##|######|##..##|##..##|##..##|##..##',
+  I: '####|.##.|.##.|.##.|.##.|.##.|.##.|.##.|####',
+  J: '...###|....##|....##|....##|....##|....##|##..##|##..##|.####.',
+  K: '##..##|##..##|##.##.|####..|###...|####..|##.##.|##..##|##..##',
+  L: '##....|##....|##....|##....|##....|##....|##....|##....|######',
+  M: '##...##|###.###|#######|##.#.##|##.#.##|##...##|##...##|##...##|##...##',
+  N: '##..##|###.##|###.##|######|##.###|##.###|##..##|##..##|##..##',
+  O: '.####.|##..##|##..##|##..##|##..##|##..##|##..##|##..##|.####.',
+  P: '#####.|##..##|##..##|##..##|#####.|##....|##....|##....|##....',
+  Q: '.####.|##..##|##..##|##..##|##..##|##..##|##.###|##..##|.##.##',
+  R: '#####.|##..##|##..##|##..##|#####.|####..|##.##.|##..##|##..##',
+  S: '.####.|##..##|##....|##....|.####.|....##|....##|##..##|.####.',
+  T: '######|..##..|..##..|..##..|..##..|..##..|..##..|..##..|..##..',
+  U: '##..##|##..##|##..##|##..##|##..##|##..##|##..##|##..##|.####.',
+  V: '##..##|##..##|##..##|##..##|##..##|##..##|.####.|.####.|..##..',
+  W: '##...##|##...##|##...##|##...##|##.#.##|##.#.##|#######|###.###|##...##',
+  X: '##..##|##..##|##..##|.####.|..##..|.####.|##..##|##..##|##..##',
+  Y: '##..##|##..##|##..##|.####.|..##..|..##..|..##..|..##..|..##..',
+  Z: '######|....##|...##.|...##.|..##..|.##...|.##...|##....|######',
+  '0': '.####.|##..##|##..##|##.###|######|###.##|##..##|##..##|.####.',
+  '1': '..##..|.###..|####..|..##..|..##..|..##..|..##..|..##..|######',
+  '2': '.####.|##..##|....##|....##|...##.|..##..|.##...|##....|######',
+  '3': '.####.|##..##|....##|....##|..###.|....##|....##|##..##|.####.',
+  '4': '...##.|..###.|.####.|##.##.|##.##.|######|...##.|...##.|...##.',
+  '5': '######|##....|##....|#####.|....##|....##|....##|##..##|.####.',
+  '6': '.####.|##..##|##....|##....|#####.|##..##|##..##|##..##|.####.',
+  '7': '######|....##|....##|...##.|...##.|..##..|..##..|..##..|..##..',
+  '8': '.####.|##..##|##..##|##..##|.####.|##..##|##..##|##..##|.####.',
+  '9': '.####.|##..##|##..##|##..##|.#####|....##|....##|##..##|.####.',
+  '/': '....##|....##|...##.|...##.|..##..|.##...|.##...|##....|##....',
+  '.': '..|..|..|..|..|..|..|##|##',
+  ',': '..|..|..|..|..|..|..|##|##',
+  ':': '..|..|##|##|..|..|##|##|..',
+  '-': '....|....|....|....|####|....|....|....|....',
+  '+': '......|......|..##..|..##..|######|..##..|..##..|......|......',
+  "'": '##|##|.#|..|..|..|..|..|..',
+  '’': '##|##|.#|..|..|..|..|..|..',
+  '!': '##|##|##|##|##|##|..|##|##',
+  '?': '.####.|##..##|....##|...##.|..##..|..##..|......|..##..|..##..',
+  '&': '.###..|##.##.|##.##.|.###..|.##.##|##.##.|##..##|##.##.|.##.##',
+};
+const NUM: Record<string, string> = {
+  '0': '..###..|.##.##.|##...##|##...##|##...##|##...##|##...##|##...##|##...##|.##.##.|..###..',
+  '1': '...##..|..###..|.####..|...##..|...##..|...##..|...##..|...##..|...##..|...##..|.######',
+  '2': '.#####.|##...##|.....##|.....##|....##.|...##..|..##...|.##....|##.....|##.....|#######',
+  '3': '.#####.|##...##|.....##|.....##|.....##|..####.|.....##|.....##|.....##|##...##|.#####.',
+  '4': '....##.|...###.|..####.|.##.##.|##..##.|##..##.|#######|....##.|....##.|....##.|....##.',
+  '5': '#######|##.....|##.....|##.....|######.|.....##|.....##|.....##|.....##|##...##|.#####.',
+  '6': '..####.|.##....|##.....|##.....|######.|##...##|##...##|##...##|##...##|##...##|.#####.',
+  '7': '#######|.....##|.....##|....##.|....##.|...##..|...##..|..##...|..##...|..##...|..##...',
+  '8': '.#####.|##...##|##...##|##...##|.##.##.|..###..|.##.##.|##...##|##...##|##...##|.#####.',
+  '9': '.#####.|##...##|##...##|##...##|##...##|.######|.....##|.....##|.....##|....##.|.####..',
+  '/': '.....##|.....##|....##.|....##.|...##..|...##..|..##...|.##....|.##....|##.....|##.....',
+  '+': '.......|.......|.......|...##..|...##..|.######|...##..|...##..|.......|.......|.......',
+  '-': '.......|.......|.......|.......|.......|.#####.|.......|.......|.......|.......|.......',
+  '.': '..|..|..|..|..|..|..|..|..|##|##',
+};
+export type HudFace = 'caps' | 'num';
+interface HG { w: number; on: boolean[][] }
+const hudGl = new Map<string, HG | null>();
+function hudGlyph(face: HudFace, ch: string): HG | null {
+  const k = face + ch;
+  if (hudGl.has(k)) return hudGl.get(k)!;
+  let src: string | null = (face === 'num' ? NUM[ch] ?? CAPS[ch] : CAPS[ch]) ?? null;
+  if (!src) {
+    const base = ch.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+    src = CAPS[base] ?? null;
+  }
+  const g = src ? { w: src.split('|')[0].length, on: src.split('|').map(r => [...r].map(c => c === '#')) } : null;
+  hudGl.set(k, g);
+  return g;
+}
+const hasMacron = (ch: string) => /̄/.test(ch.normalize('NFD'));
+/** a HUD face's cap height */
+export const hudCapH = (face: HudFace) => (face === 'num' ? 11 : 9);
+/** width of a line in a HUD face (art px, the ring not included) */
+export function hudTextW(text: string, face: HudFace = 'caps', spacing = 1): number {
+  let w = 0;
+  for (const ch of text.toUpperCase()) {
+    const g = ch === ' ' ? null : hudGlyph(face, ch);
+    w += (g ? g.w : 4) + spacing;
+  }
+  return Math.max(0, w - spacing);
+}
+export interface HudTextOpts {
+  face?: HudFace;
+  /** fill: one colour, a ramp [light, base, dark] shaded top to bottom, or a function */
+  c?: number | [number, number, number] | ((x: number, y: number, row: number) => number);
+  /** 1 px ring (8 neighbours); null for none */
+  ring?: number | null;
+  /** a hard drop under the ring, this many px down (default 1) */
+  drop?: number;
+  dropC?: number;
+  spacing?: number;
+}
+/** draw a line in a HUD face with its TOP at y; returns the advance */
+export function hudText(a: Art, text: string, x: number, y: number, o: HudTextOpts = {}): number {
+  const face = o.face ?? 'caps', sp = o.spacing ?? 1, H = hudCapH(face);
+  const fill = o.c ?? col('#fff1cc');
+  const pts: [number, number, number][] = [];
+  let cx = Math.round(x);
+  const y0 = Math.round(y);
+  for (const ch of text.toUpperCase()) {
+    const g = ch === ' ' ? null : hudGlyph(face, ch);
+    if (!g) { cx += 4 + sp; continue; }
+    g.on.forEach((row, j) => row.forEach((v, i) => { if (v) pts.push([cx + i, y0 + j, j]); }));
+    if (face === 'caps' && hasMacron(ch)) for (let i = 1; i < g.w - 1; i++) pts.push([cx + i, y0 - 2, 0]);
+    cx += g.w + sp;
+  }
+  const ring = o.ring === undefined ? col('#140c06') : o.ring;
+  if (ring !== null) {
+    const drop = o.drop ?? 1, dc = o.dropC ?? ring;
+    for (let d = drop; d >= 1; d--) for (const [px, py] of pts) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) a.put(px + dx, py + dy + d, dc);
+    for (const [px, py] of pts) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) a.put(px + dx, py + dy, ring);
+  }
+  for (const [px, py, row] of pts) {
+    let c: number;
+    if (Array.isArray(fill)) c = row < Math.round(H * 0.3) ? fill[0] : row >= Math.round(H * 0.72) ? fill[2] : fill[1];
+    else if (typeof fill === 'function') c = fill(px, py, row);
+    else c = fill;
+    a.put(px, py, c);
+  }
+  return cx - Math.round(x) - sp;
+}
+/** a light / base / dark ramp for hudText from one colour */
+export const ramp3 = (c: number): [number, number, number] => [shadeC(c, 0.35), c, shadeC(c, -0.22)];
+
+// ---------------------------------------------------------------- physical bits
+/** a hash for texture noise (0..1) */
+export const hnoise = (x: number, y: number, s = 0) => {
+  let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(s | 0, 1442695041)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+};
+/** a domed rivet: a 3x3 head lit from the top left, a dark rim, a contact shadow down-right */
+export function rivet(a: Art, x: number, y: number, c = col('#c8962e')) {
+  const L = shadeC(c, 0.5), D = shadeC(c, -0.45), O = col('#2a1806');
+  a.px(x + 2, y + 1, col('#000000', 0.4)); a.px(x + 1, y + 2, col('#000000', 0.4)); a.px(x + 2, y + 2, col('#000000', 0.3));
+  a.put(x - 1, y - 1, c); a.put(x, y - 1, L); a.put(x + 1, y - 1, D);
+  a.put(x - 1, y, L); a.put(x, y, shadeC(c, 0.8)); a.put(x + 1, y, D);
+  a.put(x - 1, y + 1, D); a.put(x, y + 1, D); a.put(x + 1, y + 1, O);
+}
+/** leather: a grained fill with pores and a few scuffs, by the base colour */
+export function leatherAt(x: number, y: number, base: number): number {
+  const n = hnoise(x, y, 7), m = hnoise(x >> 1, y >> 2, 3);
+  if (n > 0.94) return shadeC(base, -0.3);
+  if (n < 0.04) return shadeC(base, 0.16);
+  return m > 0.72 ? shadeC(base, -0.1) : m < 0.12 ? shadeC(base, 0.06) : base;
+}
+/** brushed brass for a light term l (0 dark .. 1 lit), dithered between six tones */
+export const BRASS6 = ['#3a2408', '#6a4416', '#9a6a22', '#c8962e', '#e8c45a', '#fff0a8'].map(h => col(h));
+export function brassAt(x: number, y: number, l: number): number {
+  const v = Math.max(0, Math.min(5, l * 5 + (dith(x, y, 0.5) ? 0.3 : -0.3)));
+  return BRASS6[Math.round(v)];
+}
+/** a paper / card texture: a fibre speckle over the base */
+export function paperAt(x: number, y: number, base: number, k = 1): number {
+  const n = hnoise(x, y, 11), f = hnoise(x >> 2, y, 5);
+  if (n > 1 - 0.025 * k) return shadeC(base, -0.16);
+  if (f > 0.86) return shadeC(base, -0.05 * k);
+  if (n < 0.03 * k) return shadeC(base, 0.25);
+  return base;
 }
