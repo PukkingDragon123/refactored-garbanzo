@@ -11,9 +11,12 @@ import { renderBody7, Frame7 } from './body';
 import { renderHead7, HeadOpts7 } from './head';
 import { CAST7, INFO7 } from './cast';
 import { ANIMS7, pose7, animInfo7, clip7, framesOf7 } from './anims7';
+import { IDLE_VARIETY } from './anims-acts';
 // clips registered beside the core set: secondary motion for the everyday clips, hands and carrying
 import './anims-life';
 import './anims-hands';
+import './anims-acts';
+import './anims-talk';
 // Aroha's own body, head and moves, and the cast's combat set (both register into the rig on import)
 import './aroha7';
 import './combat7';
@@ -55,18 +58,26 @@ const CHUNK_TRANS: Record<string, Record<string, string>> = {
   sleep: { idle: 'getUp', walk: 'getUp', run: 'getUp' },
 };
 // V7 extras: turning onto / off a ladder, raising / lowering the camera
-const ON_FOOT = ['idle', 'walk', 'run', 'crouch', 'crouchWalk', 'brace', 'slip'];
+const ON_FOOT = ['idle', 'walk', 'jog', 'run', 'crouch', 'crouchWalk', 'brace', 'slip'];
 const TRANS7: Record<string, Record<string, string>> = {};
 const tr = (from: string[], to: string[], clip: string) => { for (const f of from) for (const t of to) (TRANS7[f] ??= {})[t] = clip; };
 tr(ON_FOOT, ['climb'], 'climbOn');
 tr(['climb'], ON_FOOT, 'climbOff');
-tr(['idle', 'walk', 'run', 'brace', 'slip'], ['camera', 'cameraWalk'], 'cameraUp');
+tr(['idle', 'walk', 'jog', 'run', 'brace', 'slip'], ['camera', 'cameraWalk'], 'cameraUp');
 tr(['crouch', 'crouchWalk'], ['cameraCrouch', 'cameraCrouchWalk'], 'cameraUpC');
 tr(['camera', 'cameraWalk'], ['idle', 'walk', 'run', 'brace', 'slip'], 'cameraDown');
 tr(['cameraCrouch', 'cameraCrouchWalk'], ['crouch', 'crouchWalk', 'idle', 'walk'], 'cameraDownC');
 // secondary motion (anims-life.ts): a stop carries on past the rest pose and settles; a landing squashes
-tr(['walk'], ['idle'], 'walkStop');
+tr(['walk', 'jog'], ['idle'], 'walkStop');
 tr(['run'], ['idle'], 'runStop');
+// setting off: the weight rocks onto the front foot and the first step swings through (distance-driven)
+tr(['idle'], ['walk'], 'walkStart');
+// turning to present himself when he's inspected (V12), and back
+tr(['idle', 'talk'], ['inspect', 'inspectCamera', 'inspectPack', 'inspectNote'], 'inspectFace');
+tr(['inspect', 'inspectCamera', 'inspectPack', 'inspectNote'], ['idle', 'walk', 'talk'], 'inspectBack');
+// the note paper out of the pocket and back
+tr(['idle', 'talk'], ['noteRead'], 'pullNote');
+tr(['noteRead'], ['idle', 'walk', 'talk'], 'putNote');
 tr(['fall', 'jump'], ['idle'], 'land');
 // the slingshot: out of the belt into the ready stance and back; drawn (from the ready stance, or
 // straight from standing) up to the held aim (combat7.ts)
@@ -104,9 +115,15 @@ export function renderBody(id: string, anim: string, frame: number): Frame7 {
 
 export function renderHead(id: string, o: HeadOpts7): { buf: PixelBuffer; ax: number; ay: number } {
   const [cid, outfit] = parse(id);
-  if (cid === 'chunk') return renderChunkHead({ ...o, look: o.look === 'back' ? 'fwd' : o.look });
+  if (cid === 'chunk') return renderChunkHead({ ...o, look: o.look === 'up' || o.look === 'down' ? o.look : 'fwd' });
   const { wear, key } = dress(cid, outfit);
   return renderHead7(cid, o, wear, key);
+}
+
+/** the fidgets a character drops into now and then while standing about (the Actor plays them) */
+export function idleVariety(id: string): string[] {
+  const c = parse(id)[0];
+  return c === 'chunk' ? [] : IDLE_VARIETY[c] ?? IDLE_VARIETY.default;
 }
 
 export function renderPortrait(id: string, expr: string, o: { mouth?: 0 | 1 | 2; blink?: boolean } = {}): PixelBuffer {
