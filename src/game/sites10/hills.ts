@@ -25,9 +25,9 @@ import * as Lsc from '../../art/landscape';
 import { hex, mix } from '../../art/color';
 import type { Sprite } from '../../art/jungle-core';
 import type { Interactable } from '../../world/npc';
-import { clamp, rand } from '../../core/math';
+import { clamp, rand, smoothstep } from '../../core/math';
 import { HP } from '../../art/v11/hills/kit';
-import { paintTor, paintBoulder, paintScreeStone, paintBluff } from '../../art/v11/hills/rocks';
+import { paintTor, paintBoulder, paintScreeStone, paintBluff, paintCairn } from '../../art/v11/hills/rocks';
 import type { TorArt } from '../../art/v11/hills/rocks';
 import { paintTussock, paintSpaniard, paintDaisy, paintHebe, paintWindTree, paintCushion } from '../../art/v11/hills/plants';
 import { paintFireRing, paintLeanTo, paintDryingRack, paintWoodpile } from '../../art/v11/hills/camp';
@@ -36,7 +36,7 @@ import { fgPlant, soften } from '../../art/v11/forest/fg';
 import { GroundCover } from '../v11/forest/fx';
 import type { Mover } from '../v11/forest/fx';
 import { HILLS, HSPOT, TORS, BLUFF, SCREE, TARN, hgroundY, hzoneAt, hzoneName, screeAt, persp, tarnAt } from '../v11/hills/layout';
-import { Gusts, WindStreaks, SeedDrift, MistBank, RidgePour, CloudShadows, TarnGlints } from '../v11/hills/fx';
+import { Gusts, WindStreaks, SeedDrift, MistBank, RidgePour, CloudShadows, TarnGlints, WindProp } from '../v11/hills/fx';
 import { findArt } from '../v10/finds';
 import '../v11/hills/items';
 
@@ -120,13 +120,14 @@ function build(f: FieldScene) {
   const valleyMist = st.addLayer('vmist', 0.11, 0.35, 0, 0, 0.11);
   valleyMist.add(new MistBank(0, fy(0.11, 186), 3, 0.5, 0, 13, 760, 80, '#e6edf2'));
   // the tussock ranges, rank after rank
-  const band = (name: string, p: number, sy: number, o: { seed: number; amp: number; freq: number; k: number; haze: number; bush?: number; rock?: number; rise?: number; red?: number }, fogK: number) => {
+  const band = (name: string, p: number, sy: number, o: { seed: number; amp: number; freq: number; k: number; haze: number; bush?: number; rock?: number; rise?: number; red?: number; drop?: number }, fogK: number) => {
     const span = layerSpan(st, p, 60);
     const H = 230;
     const base = 120;
-    const rise = o.rise ?? 0;
+    const rise = o.rise ?? 0, drop = o.drop ?? 0;
     const buf = paintHillBand({ W: span.w, H, seed: o.seed, base, amp: o.amp, freq: o.freq, k: o.k, fog, haze: o.haze, bush: o.bush, rock: o.rock, red: o.red,
-      rise: rise ? (x => rise * clamp((span.x0 + x) / p / W - 0.3, 0, 1)) : undefined });
+      // the land climbs east to the tops, then (from Te Tihi) falls away into the long view
+      rise: rise || drop ? (x => { const u = (span.x0 + x) / p / W; return rise * clamp(u - 0.3, 0, 1) - drop * smoothstep(0.82, 0.97, u); }) : undefined });
     const lay = st.addLayer(name, p, fogK, 0.25 + o.k * 0.3, 0, p);
     addWide(lay, buf, span.x0, fy(p, sy) - base);
     return lay;
@@ -134,9 +135,11 @@ function build(f: FieldScene) {
   band('hills4', 0.16, 204, { seed: 91, amp: 58, freq: 0.006, k: 0.1, haze: 0.3, bush: 0.6, rock: 0.3, red: 0.15 }, 0.2);
   const h3 = band('hills3', 0.26, 216, { seed: 92, amp: 64, freq: 0.0055, k: 0.35, haze: 0.18, bush: 0.75, rock: 0.5, red: 0.2 }, 0.13);
   h3.add(new MistBank(5, fy(0.26, 186), 7, 0.3, 0, 17, 700, 90, '#e8eef2', x => 0.5 + 0.5 * clamp(x / (W * 0.26) - 0.2)));
-  const h2 = band('hills2', 0.42, 230, { seed: 93, amp: 62, freq: 0.0048, k: 0.6, haze: 0.08, bush: 0.5, rock: 0.7, rise: 40, red: 0.3 }, 0.06);
+  const h2 = band('hills2', 0.42, 230, { seed: 93, amp: 62, freq: 0.0048, k: 0.6, haze: 0.08, bush: 0.5, rock: 0.7, rise: 40, red: 0.3, drop: 46 }, 0.06);
   h2.add(new MistBank(5, fy(0.42, 200), 12, 0.2, 0, 19, 640, 90, '#eef2f4', x => clamp(x / (W * 0.42) - 0.25) * 1.4));
-  band('hills1', 0.62, 244, { seed: 94, amp: 56, freq: 0.0042, k: 0.9, haze: 0.03, bush: 0.25, rock: 0.85, rise: 70, red: 0.3 }, 0.03);
+  const h1 = band('hills1', 0.62, 244, { seed: 94, amp: 56, freq: 0.0042, k: 0.9, haze: 0.03, bush: 0.25, rock: 0.85, rise: 70, red: 0.3, drop: 84 }, 0.03);
+  // a sea of cloud filling the valleys below the ridge top (the long view east)
+  h1.add(new MistBank(5, fy(0.62, 236), 9, 0.32, 0, 23, 680, 80, '#eef2f4', x => smoothstep(0.8, 0.95, x / (W * 0.62)) * 1.3));
 
   // ---------------------------------------------------------------- the near-back: the slope behind the walk line
   const pb = 0.84;
@@ -161,11 +164,16 @@ function build(f: FieldScene) {
         back.add(new Prop(fr, bx(x), by(x) + 4, rng.next(), { tint: packColor(0.84, 0.87, 0.9, 1) }));
       }
     }
+    // Te Tihi: wind-carved rock fins along the skyline behind the ridge top
+    for (const [x, w, h] of [[2950, 44, 64], [3035, 30, 88], [3120, 52, 58], [3300, 36, 96], [3375, 58, 70]] as const) {
+      const fr = frameOf(`fin:${x}`, () => paintBoulder(3300 + x, w, h, { lichen: 0.6, moss: 0.1 }));
+      back.add(new Prop(fr, bx(x), by(x) + 6, 1.5, { tint: packColor(0.8, 0.84, 0.9, 1) }));
+    }
     // a dense band of tussock along the slope's foot
     for (let x = 0; x < W + 200; x += rng.range(10, 22)) {
       const v = rng.int(0, 3), red = hzoneAt(x) === 'tors' ? rng.chance(0.3) : rng.chance(0.15);
       const fr = frameOf(`btu:${v}:${red ? 1 : 0}`, () => paintTussock(500 + v, 30 + v * 4, { red }));
-      back.add(new Prop(fr, bx(x), by(x) + 6 + rng.range(0, 4), 2 + rng.next(), { sway: 0.7, flip: rng.chance(0.5), tint: packColor(0.86, 0.88, 0.9, 1) }));
+      back.add(new WindProp(fr, bx(x), by(x) + 6 + rng.range(0, 4), 2 + rng.next(), { sway: 0.7, flip: rng.chance(0.5), tint: packColor(0.86, 0.88, 0.9, 1), wx: x }));
     }
   }
 
@@ -193,6 +201,12 @@ function build(f: FieldScene) {
     const gyMax = Math.max(...Array.from({ length: 40 }, (_, i) => hgroundY(BLUFF.x0 + (i / 39) * bw)));
     const bl = paintBluff(bw, BLUFF.h, 7300, { x: BLUFF.mouthX - BLUFF.x0, w: BLUFF.mouthW, h: BLUFF.mouthH });
     main.add(new Prop({ ...bigFrame(r, bl.buf), ax: 0, ay: bl.buf.h - 1 }, BLUFF.x0, gyMax + 3, -9));
+    // big greywacke blocks fallen from the crag, lodged in the talus on both flanks
+    const sky = (bx: number) => { for (let y = 0; y < bl.buf.h; y++) if (bl.buf.data[y * bl.buf.w + bx] >>> 24) return y; return bl.buf.h - 1; };
+    [[0.06, 40, 26], [0.11, 30, 20], [0.835, 52, 34], [0.885, 38, 24], [0.93, 46, 28], [0.965, 30, 18]].forEach(([u, w, h], i) => {
+      const bx = Math.round(u * bw), wy = gyMax + 3 - (bl.buf.h - 1) + Math.max(sky(bx - Math.round(w / 3)), sky(bx), sky(bx + Math.round(w / 3)));
+      propAt(f, `hl:tb:${i}`, () => paintBoulder(7400 + i, w, h, { ramp: HP.greywacke, lichen: 0.6, moss: 0.2 }), BLUFF.x0 + bx, wy + Math.round(h * 0.3), -8.8);
+    });
     // cliff birds nest on its ledges
     for (const x of [2420, 2480, 2830, 2890, 2940]) f.pois.push({ kind: 'nest', x, y: gyMax - rng.range(120, 220) });
   }
@@ -267,6 +281,8 @@ function build(f: FieldScene) {
     }));
     f.pois.push({ kind: 'den', x: cx + 40, y: hgroundY(cx + 40) });
   }
+  // the summit cairn at the lookout on Te Tihi
+  propAt(f, 'hl:cairn', () => paintCairn(77, 48), HSPOT.lookout - 8, hgroundY(HSPOT.lookout - 8) + 3, -6.6);
   // wind-bent beech at the bush line (on the walk line, behind)
   for (const [x, v] of [[60, 0], [250, 1], [430, 2], [600, 1]] as const) {
     const fr = frameOf(`wt:${v}`, () => paintWindTree(320 + v, 90 + v * 16, 120 + v * 20));
@@ -313,7 +329,7 @@ function build(f: FieldScene) {
     const s = sprite(`hl:hide:${x % 3}`, () => paintTussock(1500 + (x % 3), 48, { red: x % 2 === 0 }));
     const y = hgroundY(x) + 3;
     if (s) {
-      main.add(new Prop(s.f, x, y, 66, { sway: 0.8 }));
+      main.add(new WindProp(s.f, x, y, 66, { sway: 0.8 }));
       f.occluders.push({ mask: s.s.buf, x, y, ax: s.s.ax, ay: s.s.ay, sx: 1, sy: 1, p: 1, z: 66 });
     }
     f.pois.push({ kind: 'cover', x, y, w: 18 });
@@ -330,7 +346,8 @@ function build(f: FieldScene) {
     const fr = z === 'scree' ? (k < 0.7 ? stones[rng.int(0, 3)] : k < 0.85 ? bould[0] : tus(false, 26))
       : k < 0.46 ? tus(rng.chance(0.25), rng.range(26, 46)) : k < 0.54 ? spn(rng.range(24, 34)) : k < 0.58 ? dsy() : k < 0.68 ? bould[rng.int(0, 1)] : k < 0.82 ? stones[rng.int(0, 3)] : z === 'bush' ? heb() : cush();
     const sc = 0.9 + (P - 1) * 0.22;
-    main.add(new Prop(fr, x, hgroundY(x) + dd, 60 + dd * 0.02, { sway: k < 0.6 ? 0.6 : 0, flip: rng.chance(0.5), sx: sc, sy: sc }));
+    const o = { flip: rng.chance(0.5), sx: sc, sy: sc };
+    main.add(k < 0.6 ? new WindProp(fr, x, hgroundY(x) + dd, 60 + dd * 0.02, { ...o, sway: 0.6 }) : new Prop(fr, x, hgroundY(x) + dd, 60 + dd * 0.02, o));
   }
 
   // ---- POIs for the wildlife
@@ -358,9 +375,10 @@ function build(f: FieldScene) {
     const k = rng.next(), v = rng.int(0, 2);
     const fr = k < 0.6 ? frameOf(`ftu:${v}`, () => soften(paintTussock(1700 + v, 86 + v * 12, { red: v === 1 }), 1, dark, 0.5))
       : k < 0.85 ? frameOf(`fsp:${v}`, () => soften(paintSpaniard(1710 + v, 70 + v * 8, { spike: false }), 1, dark, 0.5))
-        : frameOf(`fbo:${v}`, () => soften(paintBoulder(1720 + v, 120 + v * 30, 60 + v * 14), 2, dark, 0.6));
-    const X = x * pf, y = (hgroundY(x) + 150) + rng.range(4, 18), flip = rng.chance(0.5);
-    front.add(new Prop(fr, X, y, rng.next(), { sway: k < 0.85 ? 0.5 : 0, flip }));
+        : frameOf(`ffbo:${v}`, () => soften(paintBoulder(1720 + v, 130 + v * 34, 96 + v * 20, { lichen: 0.5 }), 2, dark, 0.6));
+    // the near boulders are big and sunk deep, running out of the bottom of the frame
+    const X = x * pf, y = (hgroundY(x) + 150) + rng.range(4, 18) + (k >= 0.85 ? 46 : 0), flip = rng.chance(0.5);
+    front.add(k < 0.85 ? new WindProp(fr, X, y, rng.next(), { sway: 0.5, flip, wx: x }) : new Prop(fr, X, y, rng.next(), { flip }));
     f.occluders.push({ mask: fr.sprite.buf, x: X, y, ax: fr.sprite.ax, ay: fr.sprite.ay, sx: flip ? -1 : 1, sy: 1, p: pf, z: 0 });
   }
   const front2 = st.addLayer('front2', 1.65, 0, 0.3, 0, 1.65);
@@ -368,7 +386,7 @@ function build(f: FieldScene) {
     if (Math.abs(x - HSPOT.fire) < 260) continue;
     const v = rng.int(0, 1);
     const fr = frameOf(`fn:${v}`, () => soften(paintTussock(1800 + v, 120, { red: v === 1 }), 3, dark, 0.75));
-    front2.add(new Prop(fr, x * 1.65, hgroundY(x) + 190, 0, { sway: 0.4, flip: rng.chance(0.5) }));
+    front2.add(new WindProp(fr, x * 1.65, hgroundY(x) + 190, 0, { sway: 0.4, flip: rng.chance(0.5), wx: x }));
   }
   // wind streaks fly across in front of everything
   const air = st.addLayer('wind', 1.08, 0, 0, 0.4, 1.08);

@@ -14,13 +14,18 @@ import { hex } from '../../../art/color';
 import { Rng, clamp, noise1, rand, smoothstep } from '../../../core/math';
 import { audio } from '../../../core/audio';
 import { hgroundY, windAt, TARN, persp } from './layout';
+import { Prop } from '../../../world/props';
+import type { PropOpts } from '../../../world/props';
+
+/** the scene's wind (read by the tussock) */
+let GUST_NOW: Gusts | null = null;
 
 /** the wind: gust strength 0..1, rolling in waves; drives st.wind (sway) */
 export class Gusts implements Drawable {
   z = -100;
   k = 0;
   private sfxT = 3;
-  constructor(readonly base = 0.7) {}
+  constructor(readonly base = 0.7) { GUST_NOW = this; }
   update(dt: number, st: Stage) {
     const t = st.time;
     const g = clamp((noise1(t * 0.18, 901) - 0.42) * 2.4 + (noise1(t * 0.9, 902) - 0.5) * 0.5, 0, 1);
@@ -34,6 +39,28 @@ export class Gusts implements Drawable {
     }
   }
   draw() {}
+}
+
+/**
+ * Tussock (or any grass) that leans downwind and rolls with the gusts: each gust runs across the
+ * slope as a wave from west to east, so a whole stand flattens in a sweep and springs back up behind
+ * it, with a quick flutter in the blades on top. wx: the world x the wind is read at (for a parallax
+ * layer, its gameplay-plane x).
+ */
+export class WindProp extends Prop {
+  readonly wx: number;
+  constructor(frame: Frame, x: number, y: number, z = 0, o: PropOpts & { wx?: number } = {}) {
+    super(frame, x, y, z, o);
+    this.wx = o.wx ?? x;
+  }
+  draw(r: Renderer, st: Stage) {
+    if (this.hidden) return;
+    const g = GUST_NOW?.k ?? 0, e = windAt(this.wx), t = st.time;
+    const wave = Math.max(0, Math.sin(this.wx * 0.0065 - t * 2.2 + this.phase * 0.08)) ** 2;
+    const lean = (0.25 + 0.75 * g * wave) * e * 1.6;
+    const flutter = Math.sin(t * this.swaySpeed * 2.6 + this.phase) * (0.25 + 0.35 * g) + Math.sin(t * 7.1 + this.phase * 3) * 0.14 * g * wave;
+    r.drawSway(this.frame, this.x, this.y, this.sx, this.sy, this.sway * (lean * 2.2 + flutter), this.tint);
+  }
 }
 
 /** thin bright streaks of wind flying across the view (strongest in the gusts) */

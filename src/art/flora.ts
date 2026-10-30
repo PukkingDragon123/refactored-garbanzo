@@ -425,7 +425,7 @@ const hash01 = (x: number, y: number, s: number) => {
  * facet turns to the light and a dark crease where it turns away, a sun-caught rim, chips knocked
  * out of the edge, cracks with a lit lip, grain flecks, and moss only on the faces that look up.
  */
-export function paintRock(seed: number, w: number, h: number, ramp: C[] = PAL.stone, moss = 0.5) {
+export function paintRock(seed: number, w: number, h: number, ramp: C[] = PAL.stone, moss = 0.5, o: RockOpts = {}) {
   const rng = new Rng(seed * 7 + 3);
   const buf = new PixelBuffer(w, h);
   const top = ramp.length - 1, base = h - 1;
@@ -433,7 +433,7 @@ export function paintRock(seed: number, w: number, h: number, ramp: C[] = PAL.st
 
   // 1. the outline: angular vertices over the top, a flat footing, a few chips knocked inward
   const pts: number[] = [rng.range(0.5, w * 0.1), base + 1];
-  const k = rng.int(6, 9);
+  const k0 = rng.int(6, 9), k = o.verts ?? k0;
   const lean = rng.range(-0.15, 0.15);
   let prevX = pts[0], prevY = pts[1];
   for (let i = 0; i <= k; i++) {
@@ -454,7 +454,7 @@ export function paintRock(seed: number, w: number, h: number, ramp: C[] = PAL.st
   pts.push(w - rng.range(0.5, w * 0.1), base + 1);
 
   // 2. facets: a few planes, each with its own facing, picked by nearest seed (straight cut edges)
-  const nf = clamp(Math.round((w * h) / 240), 3, 8);
+  const nf = o.facets ?? clamp(Math.round((w * h) / 240), 3, 8);
   const fx: number[] = [], fy: number[] = [], fl: number[] = [], fup: boolean[] = [];
   const L = [-0.55, -0.72, 0.42];
   for (let i = 0; i < nf; i++) {
@@ -549,8 +549,10 @@ export function paintRock(seed: number, w: number, h: number, ramp: C[] = PAL.st
   }
 
   buf.outline(c => shade(c, -0.6));
-  return { buf, ax: w / 2, ay: h };
+  return { buf, ax: w / 2, ay: h, cell, fl, fup, cx };
 }
+/** paintRock's extras for big rocks: more vertices round the silhouette, more facets */
+export interface RockOpts { verts?: number; facets?: number }
 
 export function paintLog(seed: number, len: number, r: number) {
   const W = Math.ceil(len + 4), H = Math.ceil(r * 2 + 6);

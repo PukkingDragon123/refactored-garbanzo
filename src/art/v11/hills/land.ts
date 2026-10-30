@@ -79,8 +79,18 @@ export function paintHillBand(o: HillBandOpts): PixelBuffer {
       // rock outcrops near the crests and on the steep faces
       const ro = fbm2(x * 0.03, y * 0.05, 3, seed + 17);
       if ((o.rock ?? 0.5) > 0 && ro > 1 - (o.rock ?? 0.5) * 0.3 - Math.abs(slope) * 0.2 && d < 40 + Math.abs(slope) * 60) {
-        c = pick(rock, 4 + lit * 2.6 + (fbm2(x * 0.15, y * 0.15, 2, seed) - 0.5) * 2 + (bayer(x, y) - 0.5));
+        // bedded outcrop: tilted strata, each bed lit along its upper lip and dark under its overhang
+        const sy = y + x * 0.18 + fbm1(x * 0.02, 2, seed + 19) * 6;
+        const bedH = 3 + Math.round(k * 3), bv = ((sy % bedH) + bedH) % bedH;
+        const bedL = bv < 1 ? 1.2 : bv >= bedH - 1 ? -1.4 : 0;
+        c = pick(rock, 4 + lit * 2.6 + bedL * (0.4 + k * 0.6) + (fbm2(x * 0.15, y * 0.15, 2, seed) - 0.5) * 1.4 + (bayer(x, y) - 0.5));
+      } else if (k > 0.3 && ro > 1 - (o.rock ?? 0.5) * 0.3 - 0.1 && d < 90 + Math.abs(slope) * 80 && fbm2(x * 0.05, d * 0.02, 2, seed + 23) > 0.5) {
+        // scree fans spilling down from under the outcrops: grey stones on the tussock
+        if (hp(x, y, seed + 29) < 0.55) c = pick(rock, 3.4 + lit * 1.6 + (hp(x, y, seed + 31) - 0.5) * 3 + (bayer(x, y) - 0.5));
       }
+      // aerial perspective: the valleys fill with haze below the crests (stepped and dithered, never smooth)
+      const hz = Math.round((smoothstep(30, 200, d) * (0.55 - k * 0.45) + (bayer(x, y) - 0.5) * 0.25) * 4) / 4;
+      if (hz > 0) c = mix(c, o.fog, Math.min(0.75, hz * 0.6));
       b.data[y * W + x] = c;
     }
   }
@@ -91,9 +101,14 @@ export function paintHillBand(o: HillBandOpts): PixelBuffer {
       const top = T(x), s = 4 + k * 10 + hash2(x, 5, seed) * (4 + k * 8);
       let yy = top + 2;
       let rw = s;
+      // a little tor: up to three cut blocks, each a squat polygon with a lit top and a shadowed right face
       for (let r = 0; r < 3; r++) {
-        const rh = s * 0.45;
-        b.ellipseFn(x + (hash2(x, r, seed) - 0.5) * 3, yy - rh * 0.5, rw * 0.55, rh * 0.6, (px, py) => pick(rock, 4 + ((px - x) * -0.5 + (py - yy) * -0.4) / rw * 3 + (bayer(px, py) - 0.5)));
+        const rh = s * 0.45, bx = x + (hash2(x, r, seed) - 0.5) * 3, hw = rw * 0.55;
+        const j = (n: number) => (hash2(x, r * 9 + n, seed + 5) - 0.5) * Math.max(1, rw * 0.18);
+        const pts = [bx - hw + j(0), yy + 0.5, bx - hw * 0.8 + j(1), yy - rh * 0.75 + j(2) * 0.5, bx - hw * 0.25 + j(3), yy - rh + j(4) * 0.3,
+          bx + hw * 0.45 + j(5), yy - rh * 0.95 + j(6) * 0.3, bx + hw + j(7), yy - rh * 0.5 + j(8) * 0.5, bx + hw * 0.95 + j(9), yy + 0.5];
+        const ty = yy - rh * 0.62, rx = bx + hw * 0.3;
+        b.polyFn(pts, (px, py) => pick(rock, (py < ty ? 6 : px > rx ? 2.6 : 4.2) + (k > 0.5 ? (hash2(px, py, seed + 7) - 0.5) * 1.2 : 0) + (bayer(px, py) - 0.5) * 0.6));
         yy -= rh * 0.85;
         rw *= 0.7;
       }
