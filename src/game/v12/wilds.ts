@@ -156,7 +156,7 @@ function chargeAct(a: Animal, dt: number): boolean | void {
     const jumped = p.y < pg - 18;
     if (Math.abs(a.x - p.x) < 16 && Math.abs(a.y - p.y) < 30 && !jumped && !moriHidden(f) && (m.hit ?? 0) === 0) {
       m.hit = 1;
-      hitMori(f, a.x - m.dir * 20, { sev: c.sev, drop: tier >= 2 || rand.chance(0.5) });
+      hitMori(f, a.x - m.dir * 20, { sev: tier === 0 ? 1 : c.sev, drop: tier >= 2 || (tier === 1 && rand.chance(0.5)) });
       aroha(f, c.sev >= 3 ? 'Off the track! Get BEHIND something!' : 'Jump it, or get out of its line!');
     }
     if (Math.abs(a.x - m.x0) > 280 || m.t > 1.7 || (moriHidden(f) && Math.abs(a.x - p.x) > 30)) { m.ph = 2; m.t = 0; }
@@ -334,6 +334,8 @@ class WaspNest implements Drawable {
 
 // ---------------------------------------------------------------- the per-scene controller
 let curLoc: string | null = null;
+/** per animal: not again before this scene time */
+const COOL = new WeakMap<Animal, number>();
 let lastAroha = 0;
 function aroha(f: FieldScene, text: string) {
   const a = f.actors.get('aroha');
@@ -366,6 +368,9 @@ class Wilds implements Drawable {
     this.t += dt;
     if (f.cutscene || game.ui.blocking) return;
     curLoc = this.loc;
+    // the Thunderbird's ridge during the hunt: everything else keeps its head down
+    const tb = game.save.flags;
+    if (this.loc === 'hills' && p.x > 2400 && tb['tb:storm'] && !tb['tb:driven'] && !tb['tb:tagged']) return;
     if (!this.warned && this.tier >= 2 && this.t > 4 && !hasSling() && !hasCloak()) {
       this.warned = true;
       aroha(f, 'Up here with no sling and no cloak? We’re the slowest thing on the hill. Careful.');
@@ -377,19 +382,19 @@ class Wilds implements Drawable {
     for (const a of f.animals) {
       if (a.dead || a.gone || a.hidden > 0.5 || a.act === 'attack' || a.juvenile) continue;
       const m = a.mem as Mem;
-      if ((m.wcool ?? 0) > this.t) continue;
+      if ((COOL.get(a) ?? 0) > this.t) continue;
       const d = Math.abs(a.x - p.x);
       if (CHARGERS[a.species]) {
         // tier 1: only when he's right on top of it and it has seen him; tier 2: its whole patch
         const R = this.tier >= 2 ? 150 : 85;
         if (H || d > R || !a.noticed || a.fear > 0.4 || a.act === 'eat' || a.act === 'lure-go') continue;
         a.anger = Math.min(1, a.anger + (this.tier >= 2 ? 0.35 : 0.2) * (bare ? 1.6 : 1));
-        if (a.anger > 0.6) { a.mem = {}; a.setAct('attack', 6); (a.mem as Mem).wcool = this.t + 9; }
+        if (a.anger > 0.6) { a.mem = {}; a.setAct('attack', 6); COOL.set(a, this.t + (this.tier >= 2 ? 9 : 14)); }
       } else if (a.species === 'galehawk' && a.medium === 'air') {
         const nearNest = f.pois.some(q => (q.kind === 'nest' || q.kind === 'perch') && Math.abs(q.x - p.x) < 220);
         const chance = this.tier >= 2 ? 0.1 : nearNest ? 0.06 : 0;
         if (H || d > 260 || rand.next() > chance * (bare ? 1.5 : 1)) continue;
-        a.mem = {}; a.setAct('attack', 6); (a.mem as Mem).wcool = this.t + 14;
+        a.mem = {}; a.setAct('attack', 6); COOL.set(a, this.t + 14);
       }
     }
   }
@@ -399,6 +404,7 @@ class Wilds implements Drawable {
 
 /** the harder wilds in a field scene (called for every scene as it opens) */
 export function attachWilds(f: FieldScene, loc: string | null) {
+  curLoc = loc;
   const tier = tierOf(loc);
   if (!loc || tier === 0 || !f.main || !f.player) return;
   // the Thunderbird's ridge: during the hunt the other animals keep their heads down

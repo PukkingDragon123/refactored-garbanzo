@@ -45,6 +45,8 @@ const F = (k: string) => !!game.save.flags[k];
 const pick = <T,>(a: T[]): T => a[Math.floor(rand.next() * a.length)];
 const setF = (k: string) => { game.save.flags[k] = true; game.persist(); };
 type GuideHolder = { guide: unknown };
+/** the walk line's height, held level past the ends of the scene (the terrain says 10000 out there) */
+const groundAt = (f: FieldScene, x: number) => f.st.terrain.groundY(clamp(x, 16, f.site.width - 16));
 
 // ---------------------------------------------------------------- frames (per scene atlas)
 const frames = new Map<string, Frame>();
@@ -193,8 +195,8 @@ class Storm implements Drawable {
     for (const d of this.drops) {
       d.y += d.v * dt;
       d.x -= d.v * 0.33 * dt;
-      const gy = ter.groundY(d.x);
-      if (d.y >= gy) {
+      const gy = ter.groundY(clamp(d.x, 16, this.f.site.width - 16));
+      if (d.y >= gy || d.y > st.cam.y + 280) {
         if (this.splashes.length < 60 && rand.chance(0.6)) this.splashes.push({ x: d.x, y: gy, t: 0 });
         d.x = rand.range(x0, x1 + 60); d.y = st.cam.y - rand.range(160, 240);
       }
@@ -291,7 +293,7 @@ class Pouakai implements Drawable {
     const prev = cam.onShot;
     cam.onShot = p => { prev?.(p); this.onShot(); };
   }
-  get gy() { return this.f.st.terrain.groundY(this.x); }
+  get gy() { return groundAt(this.f, this.x); }
   get present() { return this.state !== 'away'; }
 
   /** the storm comes over the ridge and it rides in on it */
@@ -302,7 +304,7 @@ class Pouakai implements Drawable {
     this.state = 'arrive';
     this.st = 0;
     this.x = this.f.player.x + 520;
-    this.y = this.f.st.terrain.groundY(this.x) - 260;
+    this.y = groundAt(this.f, this.x) - 260;
     this.facing = -1;
     this.hits = 0;
     this.downs = 0;
@@ -338,12 +340,12 @@ class Pouakai implements Drawable {
       case 'arrive': {
         this.setPose('soar', 0.4);
         this.x += (cx + 120 - this.x) * Math.min(1, dt * 0.8);
-        this.y += (this.gy - 175 - this.y) * Math.min(1, dt * 0.8);
+        this.y += (this.gy - 150 - this.y) * Math.min(1, dt * 0.8);
         if (this.st > 3.2) { this.go('circle'); this.lastAttack = this.t; }
         break;
       }
       case 'circle': {
-        const tx = cx + Math.sin(this.t * 0.42) * 170, ty = this.gy - 168 + Math.sin(this.t * 0.9) * 14;
+        const tx = cx + Math.sin(this.t * 0.42) * 170, ty = this.gy - 142 + Math.sin(this.t * 0.9) * 12;
         const vx = (tx - this.x) * Math.min(1, dt * 1.3);
         this.x += vx; this.y += (ty - this.y) * Math.min(1, dt * 1.3);
         if (Math.abs(vx) > 0.2) this.facing = vx > 0 ? 1 : -1;
@@ -365,7 +367,7 @@ class Pouakai implements Drawable {
       case 'shadow': {
         // it climbs and its shadow slides over the tussock and settles on Mori
         this.setPose('soar', 0.4);
-        this.y += (this.gy - 205 - this.y) * Math.min(1, dt * 1.5);
+        this.y += (this.gy - 178 - this.y) * Math.min(1, dt * 1.5);
         this.x += (p.x - this.x) * Math.min(1, dt * 0.9);
         this.shadowX += (p.x - this.shadowX) * Math.min(1, dt * 3);
         if (this.st > 1.5) {
@@ -396,7 +398,7 @@ class Pouakai implements Drawable {
         const T = 0.55, k = Math.min(1, this.st / T), e = k * k;
         this.pose = 'dive'; this.frame = 0;
         this.x = this.x0 + (this.tx - this.x0) * e;
-        this.y = this.y0 + (this.f.st.terrain.groundY(this.tx) - 26 - this.y0) * e;
+        this.y = this.y0 + (groundAt(this.f, this.tx) - 26 - this.y0) * e;
         if (k >= 1) this.impact();
         break;
       }
@@ -411,7 +413,7 @@ class Pouakai implements Drawable {
       }
       case 'climb': {
         this.setPose('flap', 0.1);
-        this.y += (this.gy - 175 - this.y) * Math.min(1, dt * 1.4);
+        this.y += (this.gy - 150 - this.y) * Math.min(1, dt * 1.4);
         this.x += this.facing * 60 * dt;
         if (this.st > 1.4) { this.go('circle'); this.lastAttack = this.t; }
         break;
@@ -420,7 +422,7 @@ class Pouakai implements Drawable {
         const T = 1.8, k = Math.min(1, this.st / T), e = 1 - (1 - k) * (1 - k);
         this.facing = this.tx >= this.x0 ? 1 : -1;
         this.x = this.x0 + (this.tx - this.x0) * e;
-        const gy = this.f.st.terrain.groundY(this.tx);
+        const gy = groundAt(this.f, this.tx);
         this.y = this.y0 + (gy - 60 - this.y0) * e;
         this.setPose('flap', 0.12);
         if (k >= 1) {
@@ -493,7 +495,7 @@ class Pouakai implements Drawable {
   }
   private impact() {
     const f = this.f, p = f.player;
-    const gy = f.st.terrain.groundY(this.tx);
+    const gy = groundAt(f, this.tx);
     this.x = this.tx; this.y = gy;
     f.st.shake(5, 0.45);
     sfx11('thud', { x: this.x, vol: 1, pitch: 0.5 });
@@ -599,7 +601,7 @@ class Pouakai implements Drawable {
       const sh = frameOf('shadow', thunderbirdShadow);
       const a = this.state === 'shadow' ? clamp(this.st / 0.6, 0, 1) : 1;
       const gx = this.state === 'shadow' ? this.shadowX : this.tx;
-      r.draw(sh, Math.round(gx), Math.round(this.f.st.terrain.groundY(gx) - 2), 1, 1, 0, packColor(1, 1, 1, 0.75 * a));
+      r.draw(sh, Math.round(gx), Math.round(groundAt(this.f, gx) - 2), 1, 1, 0, packColor(1, 1, 1, 0.75 * a));
     }
     const fr = birdFr(this.pose, this.frame);
     r.draw(fr, Math.round(this.x), Math.round(this.y), this.facing, 1);
@@ -614,7 +616,7 @@ class Pouakai implements Drawable {
 // ================================================================ the hide cloak, worn
 /** a crouching, cloaked Mori turns into a clump of tussock */
 class CloakDrape implements Drawable {
-  z = 47;
+  z = 51;
   constructor(readonly f: FieldScene) {}
   draw(r: Renderer) {
     const p = this.f.player;
@@ -648,6 +650,8 @@ function buildArena(f: FieldScene, ctl: HuntCtl) {
   const bx = ARENA.blind, by = ter.groundY(bx);
   const blind = frameOf('blind', paintBlind);
   f.main.add({ z: 49, draw: (r: Renderer) => r.draw(blind, bx, by + 3) } as Drawable);
+  // tucked inside it, Mori is behind the thatch (only his eyes at the slot)
+  f.main.add({ z: 52, draw: (r: Renderer) => { const p = f.player; if (p.state === 'hide' && Math.abs(p.x - bx) < 40) r.draw(blind, bx, by + 3); } } as Drawable);
   f.player.hides.push({ x: bx, y: by, w: 56, cover: 0.92 });
   f.pois.push({ kind: 'cover', x: bx, y: by, w: 40 } as never);
   // the bait stone, a flat slab of granite
@@ -704,6 +708,11 @@ export function startEncounter(f: FieldScene, o: { feeding?: boolean } = {}) {
   if (!b) return false;
   for (const [p, i] of TB_ALL) birdFr(p, i);
   b.begin();
+  // straight into it: already circling overhead, the storm on top of them
+  b.state = 'circle';
+  b.x = f.player.x + 90;
+  b.y = groundAt(f, b.x) - 142;
+  if (ctl.storm) ctl.storm.k = 0.8;
   if (o.feeding) {
     b.baitOut = true;
     b.state = 'feed';
@@ -711,6 +720,11 @@ export function startEncounter(f: FieldScene, o: { feeding?: boolean } = {}) {
     b.y = f.st.terrain.groundY(b.x);
     b.facing = -1;
     if (ctl.storm) ctl.storm.k = 0.85;
+    // Mori already tucked into the blind, watching it feed
+    const p = f.player, h = p.hides.find(q => q.x === ARENA.blind);
+    p.x = ARENA.blind; p.y = f.st.terrain.groundY(p.x); p.vx = 0;
+    if (h) { p.state = 'hide'; p.hideSpot = h; }
+    f.snapCamera();
   }
   return true;
 }
