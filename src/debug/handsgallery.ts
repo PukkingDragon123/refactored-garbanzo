@@ -4,8 +4,12 @@
 //   &anims=idle:0,walk:3 clip:frame pairs (a bare clip shows every frame of it)
 //   &outfit=winter      what they wear (default: their everyday clothes)
 //   &scale=4            zoom
+//   &heads=happy,neutral/2,neutral@back,neutral~2:0,neutral~0:1
+//                       head-only items: expr[/mouth][@look][~swing:lift] (the hair physics' quantised state)
+//   &anims=-            no body frames (heads only)
 import { PixelBuffer } from '../art/pixel';
 import { showGallery, GalleryItem } from './gallery';
+import type { Look } from '../art/v7/head';
 
 export async function handsGallery(q: URLSearchParams) {
   const V7 = await import('../art/v7');
@@ -17,7 +21,14 @@ export async function handsGallery(q: URLSearchParams) {
   const t0 = performance.now();
   for (const id of ids) {
     const art = outfit ? `${id}@${outfit}` : id;
+    for (const hs of (q.get('heads') ?? '').split(',').filter(Boolean)) {
+      const m = /^([a-z]+)(?:\/(\d))?(?:@([a-z]+))?(?:~(-?[\d.]+):(-?[\d.]+))?$/i.exec(hs);
+      if (!m) continue;
+      const h = V7.renderHead(art, { expr: m[1], mouth: (+(m[2] ?? 0) as 0 | 1 | 2), blink: false, look: (m[3] ?? 'fwd') as Look, hair: +(m[4] ?? 0), hairY: +(m[5] ?? 0) });
+      items.push({ name: `${id} ${hs}`, buf: h.buf });
+    }
     for (const a of anims) {
+      if (a === '-') continue;
       const [anim, f] = a.split(':');
       const n = V7.animFor(art, anim)?.frames ?? 1;
       const frames = f === undefined ? [...Array(n).keys()] : [+f];

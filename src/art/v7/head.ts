@@ -6,7 +6,7 @@
 
 import { PixelBuffer } from '../pixel';
 import { C, hex, mix } from '../color';
-import { Scene3D, V3, Hit, cel, Ramp6, vadd } from './raster';
+import { Scene3D, V3, Hit, cel, Ramp6, vadd, vsub, vsc, vlen, vnorm, vlerp } from './raster';
 import { YAW, BACK_YAW, PX7 } from './body';
 import { isFem7 } from './face7';
 import { trimPair } from '../people-rig';
@@ -16,9 +16,23 @@ import { paintFaceMid7 } from './facemid';
 const R6 = (...h: string[]): Ramp6 => h.map(v => hex(v));
 export type Look = 'fwd' | 'up' | 'down' | 'back' | 'cam' | 'away';
 const frac = (v: number) => v - Math.floor(v);
-export interface HeadOpts7 { expr: string; mouth: 0 | 1 | 2; blink: boolean; look: Look; hair?: number }
+/**
+ * `hair`: how far the hair trails behind (-1 flicked forward .. 2 streaming back), `hairY`: how far it
+ * lifts (-1 slammed down .. 1 floating up). Both come quantised from the Actor's hair spring
+ * (src/world/hairphys.ts), so the head cache stays bounded.
+ */
+export interface HeadOpts7 { expr: string; mouth: 0 | 1 | 2; blink: boolean; look: Look; hair?: number; hairY?: number }
 
-export interface Lock { a: V3; b: V3; r0: number; r1: number; sway?: number }
+/**
+ * A lock of hair: a tapered tube from its root `a` (radius r0) to its tip `b` (r1). `sway` is the old
+ * single-axis push of the tip (kept for the heads that use it). The rest opt into the hair physics:
+ *  - `m` bends the lock through a mid point (radius `rm` there: puffy tails pinched at the tie);
+ *  - `dyn` (0 stiff .. 1 free) lets it swing with the head's hair state: it rotates about its root
+ *    toward the pull (back and forth on screen, up on a jump, down on a landing), the tip half more
+ *    than the root half so it curves, splays out as it lifts, and never sinks into the skull;
+ *  - `tie` ties a ribbon bow round the root in that ramp; `band` lays an anime shine band across it at t.
+ */
+export interface Lock { a: V3; b: V3; r0: number; r1: number; sway?: number; m?: V3; rm?: number; dyn?: number; tie?: Ramp6; band?: number }
 
 /**
  * Outfit head wear (beanies, hoods, goggles, head lamps): drawn over the head, with the hair it
@@ -142,9 +156,22 @@ const MORI: HeadDef7 = {
   ],
 };
 
+/** Jenna's ribbons: the same red as the bow on her sailor collar */
+const JENNA_RIBBON = R6('#200406', '#4a0c12', '#7a1820', '#a8262e', '#cc4040', '#ee7a6a');
+/** one of her twin tails (side s: +1 near, -1 far): a puffy main clump and a thinner one flicking out past it */
+const jennaTail = (s: 1 | -1): Lock[] => [
+  { a: [-2.5, 5.7, 4.0 * s], m: [-3.3, 2.5, 5.3 * s], b: [-3.7, -2.6, 5.5 * s], r0: 1.15, rm: 2.15, r1: 0.3, dyn: 1, tie: JENNA_RIBBON, band: 0.34 },
+  { a: [-2.4, 5.3, 4.3 * s], m: [-2.9, 1.6, 6.0 * s], b: [-2.2, -1.3, 6.7 * s], r0: 0.9, rm: 1.3, r1: 0.25, dyn: 0.9 },
+];
+
+/**
+ * Jenna: soft side-swept bangs from a parting on the far side, a little ahoge springing off the crown,
+ * cheek-length locks framing the face, and two short low twin tails tied with red ribbons. Grey-brown,
+ * cool mauve in the shadows and warm toward the light, with a bright shine band.
+ */
 const JENNA: HeadDef7 = {
   skin: GIRL_SKIN,
-  hair: R6('#241a1a', '#4a3434', '#6a5050', '#8a6c6a', '#a88a86', '#c8aca6'),
+  hair: R6('#221820', '#46303a', '#6a4e52', '#8e6e6a', '#b6927e', '#e8cca8'),
   ink: hex('#24141a'),
   skull: [[0.1, 7.8, 0], [4.6, 5.2, 4.1]],
   jaw: [[1.5, 4.4, 0], [3.2, 2.9, 2.8]],
@@ -158,13 +185,27 @@ const JENNA: HeadDef7 = {
   shell: [[-0.5, 8.9, 0], [5.4, 5.9, 5.0]],
   cut: q => q[0] > 0.22 && q[1] < 0.34,
   locks: [
-    // blunt bangs
-    ...[-3, -1.5, 0, 1.5, 3].map((z): Lock => ({ a: [2.6, 12.4, z], b: [5.1, 9.4, z * 1.1], r0: 1.6, r1: 0.6 })),
-    // the bob: long side and back locks down to the jaw, flicking out at the ends
-    { a: [1.2, 10, 4.6], b: [2.2, 2.6, 5.4], r0: 1.8, r1: 0.7, sway: 0.5 }, { a: [1.2, 10, -4.6], b: [2.2, 2.6, -5.4], r0: 1.8, r1: 0.7, sway: 0.5 },
-    { a: [-1.4, 10, 4.4], b: [-1.6, 1.8, 5.6], r0: 2.2, r1: 0.8, sway: 1 }, { a: [-1.4, 10, -4.4], b: [-1.6, 1.8, -5.6], r0: 2.2, r1: 0.8, sway: 1 },
-    { a: [-3.8, 9.6, 2], b: [-5, 1.6, 2.8], r0: 2.4, r1: 0.9, sway: 1 }, { a: [-3.8, 9.6, -2], b: [-5, 1.6, -2.8], r0: 2.4, r1: 0.9, sway: 1 },
-    { a: [-2.6, 13.4, 0], b: [-3.2, 14.6, 0.6], r0: 1.2, r1: 0.3 },
+    // side-swept bangs: clumps of uneven length sweeping from the parting across the forehead, the
+    // longest curling down past the near brow (rooted under 13, so they show under a beanie)
+    { a: [2.0, 12.9, -2.0], m: [4.2, 12.0, -0.6], b: [5.3, 9.9, 0.6], r0: 1.9, rm: 1.5, r1: 0.3, dyn: 0.12, band: 0.3 },
+    { a: [2.4, 12.8, -0.6], m: [4.6, 11.5, 1.0], b: [5.2, 9.1, 2.2], r0: 1.8, rm: 1.4, r1: 0.3, dyn: 0.12, band: 0.3 },
+    { a: [2.4, 12.6, 0.8], m: [4.4, 11.0, 2.5], b: [4.7, 8.5, 3.5], r0: 1.7, rm: 1.3, r1: 0.3, dyn: 0.15, band: 0.3 },
+    { a: [2.0, 12.4, 2.4], m: [3.4, 10.6, 3.8], b: [3.5, 8.0, 4.5], r0: 1.5, rm: 1.2, r1: 0.3, dyn: 0.15, band: 0.26 },
+    { a: [2.6, 12.6, -1.4], b: [5.4, 10.5, -1.9], r0: 1.3, r1: 0.3, dyn: 0.1, band: 0.25 },
+    { a: [2.2, 12.8, -3.0], m: [3.9, 11.6, -3.4], b: [4.6, 10.0, -3.8], r0: 1.5, rm: 1.2, r1: 0.35, dyn: 0.12, band: 0.3 },
+    // cheek-length locks framing the face, tips curling in toward the chin, a finer strand in front
+    { a: [1.6, 10.6, 4.4], m: [2.2, 6.8, 5.0], b: [3.0, 3.8, 4.4], r0: 1.6, rm: 1.3, r1: 0.3, dyn: 0.3, band: 0.22 },
+    { a: [1.6, 10.6, -4.4], m: [2.2, 7.0, -5.0], b: [3.0, 4.4, -4.4], r0: 1.5, rm: 1.2, r1: 0.3, dyn: 0.3, band: 0.22 },
+    { a: [2.4, 10.4, 3.9], b: [3.4, 5.4, 4.5], r0: 1.0, r1: 0.25, dyn: 0.25 },
+    { a: [2.4, 10.4, -3.9], b: [3.2, 6.0, -4.5], r0: 0.9, r1: 0.25, dyn: 0.25 },
+    // the back gathered down toward the ties, covering the head down to the nape
+    { a: [-4.0, 9.6, 1.8], b: [-3.0, 4.8, 3.4], r0: 2.2, r1: 1.3 },
+    { a: [-4.0, 9.6, -1.8], b: [-3.0, 4.8, -3.4], r0: 2.2, r1: 1.3 },
+    { a: [-4.6, 9.2, 0], b: [-3.4, 3.8, 0], r0: 2.2, r1: 1.4 },
+    // the twin tails
+    ...jennaTail(1), ...jennaTail(-1),
+    // a little ahoge springing up off the crown and hooking over
+    { a: [0.2, 14.3, -0.2], m: [0.5, 16.9, 0.6], b: [0.6, 16.5, 2.5], r0: 0.55, rm: 0.5, r1: 0.2, dyn: 0.7 },
   ],
   browHidden: true,
 };
@@ -256,11 +297,57 @@ export const HEAD_SCALE_MAN7 = 0.75, HEAD_SCALE_WOMAN7 = 0.78;
 const FACE_STYLE7: 'mid' | 'simple' = 'mid';
 
 /**
+ * Whether a head (as worn: hoods hide locks) has locks that swing with the hair physics. The Actor
+ * runs its 2D hair spring only for these, so every other head keeps its single sway and its cache.
+ */
+export function hairDyn7(id: string, wear?: HeadWear7): boolean {
+  const d = HEADS7[id];
+  return !!d && d.locks.some((l, i) => (l.dyn ?? 0) > 0 && !wear?.hideLock?.(l, i));
+}
+
+/**
+ * A lock's centre line (root, bend, tip) under the hair physics. `F` is the pull in head space (the
+ * screen-space swing and lift turned into the head's frame). Each half of the lock turns about its
+ * start toward the pull (the tip half twice as far, so the lock curves the way real hair lags), the
+ * tip half stretches a touch when the hair slams down, and the bend and the tip are kept out of the
+ * skull (never deeper in than they rest) and on their own side of the head (twin tails don't swing
+ * across the throat).
+ */
+function bendLock(l: Lock, F: V3, lift: number, d: HeadDef7): [V3, V3, V3] {
+  const m0 = l.m ?? vlerp(l.a, l.b, 0.5);
+  const w = l.dyn ?? 0;
+  if (w <= 0 || (!F[0] && !F[1] && !F[2])) return [l.a, m0, l.b];
+  // a lift splays a lock out from the middle of the head, a slam pulls it in a little
+  const side = Math.sign(l.b[2]) * Math.min(1, Math.abs(l.b[2]) / 3);
+  const Fl: V3 = [F[0], F[1], F[2] + side * lift * (lift > 0 ? 0.5 : 0.25)];
+  const turn = (dir: V3, k: number): V3 => {
+    let v = vadd(dir, vsc(Fl, w * k));
+    if (vlen(v) < 0.35) v = vadd(v, vsc(dir, 0.35));
+    return vnorm(v);
+  };
+  const [sc, sr] = d.skull;
+  const R: V3 = [sr[0] + 0.7, sr[1] + 0.7, sr[2] + 0.7];
+  const depth = (p: V3) => Math.hypot((p[0] - sc[0]) / R[0], (p[1] - sc[1]) / R[1], (p[2] - sc[2]) / R[2]);
+  const keep = (p: V3, rest: V3): V3 => {
+    let q = p;
+    const r0 = Math.min(1, depth(rest)), r1 = depth(q);
+    if (r1 < r0 && r1 > 1e-3) { const f = r0 / r1; q = [sc[0] + (q[0] - sc[0]) * f, sc[1] + (q[1] - sc[1]) * f, sc[2] + (q[2] - sc[2]) * f]; }
+    const zmin = Math.abs(l.a[2]) > 2 ? 0.75 * Math.min(Math.abs(l.a[2]), Math.abs(rest[2])) : 0;
+    if (zmin && Math.sign(q[2]) * Math.sign(l.a[2]) * Math.abs(q[2]) < zmin) q = [q[0], q[1], Math.sign(l.a[2]) * zmin];
+    return q;
+  };
+  const L1 = vlen(vsub(m0, l.a)), L2 = vlen(vsub(l.b, m0)) * (1 + Math.max(0, -lift) * 0.08 * w);
+  const m = keep(vadd(l.a, vsc(turn(vnorm(vsub(m0, l.a)), 0.5), L1)), m0);
+  const b = keep(vadd(m, vsc(turn(vnorm(vsub(l.b, m0)), 1), L2)), l.b);
+  return [l.a, m, b];
+}
+
+/**
  * A head, optionally dressed in outfit head wear (`wk` names it for the cache), at `hs` of its
  * volumes' size. The buffer is at the rig's pixel density (PX7 px per world px; `k` says so).
  */
 export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '', hs = HEAD_SCALE7): { buf: PixelBuffer; ax: number; ay: number; k: number } {
-  const key = `${id}|${wk}|${o.expr}|${o.mouth}|${o.blink ? 1 : 0}|${o.look}|${o.hair ?? 0}|${hs}`;
+  const key = `${id}|${wk}|${o.expr}|${o.mouth}|${o.blink ? 1 : 0}|${o.look}|${o.hair ?? 0}|${o.hairY ?? 0}|${hs}`;
   const hit = cache.get(key);
   if (hit) return hit;
   const d = HEADS7[id] ?? MORI;
@@ -347,9 +434,68 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
     return c;
   };
   if (!wear?.hideShell) s.ellipsoid(W(d.shell[0]), Wv([d.shell[1][0], 0, 0]), Wv([0, d.shell[1][1], 0]), Wv([0, 0, d.shell[1][2]]), 3, shellM);
-  const sway = o.hair ?? 0;
+  const sway = o.hair ?? 0, lift = o.hairY ?? 0;
+  // world → head space for directions (undo the yaw, then the pitch)
+  const Winv = (v: V3): V3 => {
+    const x = v[0] * ca + v[2] * sa, z = -v[0] * sa + v[2] * ca, y = v[1];
+    return [x * cp + y * sp, -x * sp + y * cp, z];
+  };
+  // the hair physics' pull in head space: the swing trails the hair behind her ON SCREEN (the buffer's
+  // -x, whichever way the head is turned), the lift raises it
+  const pull: V3 = sway || lift ? Winv([-sway * 0.5, lift * 0.65, 0]) : [0, 0, 0];
+  /** a physics lock's material: the strand grooves (finer on fat clumps) and its shine band, `t` along the whole lock */
+  const dynM = (l: Lock, i: number, ta: number, tb: number) => {
+    const base = lockM(i), gk = 2.6 * Math.max(1, (l.rm ?? l.r0) / 1.4);
+    return (h: Hit): C => {
+      h.t = ta + h.t * (tb - ta);
+      const groove = Math.sin(h.q[1] * gk + i * 1.9) > 0.78;
+      if (groove) return mix(cel(HR, h.l, 0.05), HR[1], 0.6);
+      if (l.band !== undefined && h.l > 0.12) {
+        const dt = h.t - l.band, saw = frac(h.q[1] * 0.9 + i * 0.37) * 0.06;
+        if (dt > -0.05 - saw && dt < 0.045) return h.l > 0.5 && dt > -0.02 && dt < 0.025 ? HR[5] : HR[4];
+      }
+      return base(h);
+    };
+  };
+  /** a ribbon bow tied round a lock's root, facing the viewer: two loops (a dark eye in each), the knot, two short ends */
+  const bow = (p: V3, side: number, R: Ramp6) => {
+    const u = vnorm(Winv([1, 0, 0])), view = vnorm(Winv([0, 0, 1]));
+    // the near bow sits on the viewer's side of its tail; the far one stays round the back of the head
+    // (it only peeks out past the silhouette, never through the cheek)
+    const near = W([0, 0, side])[2] > -0.1;
+    const kn = vadd(vadd(p, [near ? 0 : -0.4, 0, side * (near ? 0.6 : 0.8)]), vsc(view, near ? 0.8 : 0));
+    const loopM = (h: Hit): C => (h.n[2] > 0.84 ? R[1] : cel(R, h.l, 0.12, true));
+    for (const g of [-1, 1]) {
+      const ax = vnorm(vadd(vsc(u, g), [0, 0.4, 0]));
+      const c = vadd(kn, vsc(ax, 1.25));
+      s.ellipsoid(W(c), W(vsc(ax, 1.2)), W([0, 0.85, 0]), W(vsc(view, 0.6)), 6, loopM);
+      s.limb(W(vadd(kn, vsc(u, g * 0.3))), W(vadd(vadd(kn, vsc(u, g * 0.9)), [0, -1.7, 0])), 0.45, 0.3, 6, h => cel(R, h.l, 0));
+    }
+    s.ellipsoid(W(kn), W([0.65, 0, 0]), W([0, 0.65, 0]), W([0, 0, 0.65]), 6, h => cel(R, h.l, 0.3, true));
+  };
+  /** a lock that bends (and swings with the physics): two tapered halves through its bend point */
+  const dynLock = (l: Lock, i: number) => {
+    let [a, m, b] = bendLock(l, pull, lift, d);
+    let r0 = l.r0, rm = l.rm ?? (l.r0 + l.r1) / 2, ta = 0, tm = 0.5;
+    const tk = wear?.tuck;
+    if (tk !== undefined && a[1] > tk) {
+      // tucked under a brim: the lock starts where it comes out from under it
+      if (m[1] < tk) {
+        const u = (a[1] - tk) / (a[1] - m[1]);
+        a = vlerp(a, m, u); r0 += (rm - r0) * u; ta = u * 0.5;
+      } else if (b[1] < tk) {
+        const u = (m[1] - tk) / (m[1] - b[1]);
+        a = vlerp(m, b, u); r0 = rm + (l.r1 - rm) * u; ta = 0.5 + u * 0.5;
+        m = vlerp(a, b, 0.5); rm = (r0 + l.r1) / 2; tm = (ta + 1) / 2;
+      } else return;
+    }
+    s.limb(W(a), W(m), r0, rm, 3, dynM(l, i, ta, tm));
+    s.limb(W(m), W(b), rm, l.r1, 3, dynM(l, i, tm, 1));
+    if (l.tie && ta === 0) bow(a, Math.sign(a[2]) || 1, l.tie);
+  };
   d.locks.forEach((l, i) => {
     if (wear?.hideLock?.(l, i)) return;
+    if (l.m || l.dyn || l.tie || l.band !== undefined) { dynLock(l, i); return; }
     const tip: V3 = vadd(l.b, [-(l.sway ?? 0) * sway * 1.2, (l.sway ?? 0) * sway * 0.3, 0]);
     let a = l.a, r0 = l.r0;
     const tk = wear?.tuck;
@@ -440,7 +586,7 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
     }
   }
   // the hair's edge over the face is inked in the hair's own dark, not the skin's red-brown (no streak down the cheek)
-  const r = s.finish({ ink: mix(d.ink, d.hair[0], 0.6), depthLine: 1.6, rim: 0.55, inkK: { 1: 0.8, 3: 0.6 } });
+  const r = s.finish({ ink: mix(d.ink, d.hair[0], 0.6), depthLine: 1.6, rim: 0.55, inkK: { 1: 0.8, 3: 0.6, 6: 0.75 } });
   for (const [x, y, c] of marks) r.back.data[y * BW + x] = c;
   const tr = trimPair(r.back, null, 1);
   const out = { buf: tr.a, ax: BOX - tr.ox, ay: BOY - tr.oy, k: PX7 };

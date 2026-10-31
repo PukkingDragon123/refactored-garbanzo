@@ -12,6 +12,7 @@ import { atlas, A } from '../game/assets';
 import { game } from '../game/game';
 import { audio } from '../core/audio';
 import { approach, clamp, rand } from '../core/math';
+import { HairPhys, HairSpec } from './hairphys';
 
 // ------------------------------------------------------------------ art binding (src/art/people.ts, src/art/emotes.ts)
 
@@ -22,8 +23,10 @@ export interface PeopleArt {
   CHAR_ANIMS: Record<string, string[]>;
   CHAR_INFO: Record<string, { name: string; short: string; voice: number; height: number }>;
   renderBody(id: string, anim: string, frame: number): BodyFrameArt;
-  renderHead(id: string, o: { expr: string; mouth: 0 | 1 | 2; blink: boolean; look: Look; hair?: number }): { buf: PixelBuffer; ax: number; ay: number; k?: number };
+  renderHead(id: string, o: { expr: string; mouth: 0 | 1 | 2; blink: boolean; look: Look; hair?: number; hairY?: number }): { buf: PixelBuffer; ax: number; ay: number; k?: number };
   renderPortrait(id: string, expr: string, o?: { mouth?: 0 | 1 | 2; blink?: boolean }): PixelBuffer;
+  /** long locks that swing on the 2D hair spring (hairphys.ts): its tuning, or null (the old single sway) */
+  hairPhys?(id: string): HairSpec | null;
   /** per-character anim table (e.g. the pug has his own frame counts) */
   animFor?(id: string, anim: string): { frames: number; fps: number; loop: boolean; dist?: number; talk?: string; phased?: boolean } | null;
   /** the fidgets a character drops into now and then while standing about */
@@ -100,12 +103,12 @@ function bodyFrame(id: string, anim: string, frame: number): BodyCache | null {
   return b;
 }
 
-function headFrame(id: string, expr: string, mouth: 0 | 1 | 2, blink: boolean, look: Look, hair = 0): Frame | null {
+function headFrame(id: string, expr: string, mouth: 0 | 1 | 2, blink: boolean, look: Look, hair = 0, hairY = 0): Frame | null {
   if (!people) return null;
-  const key = `${id}|${expr}|${mouth}|${blink ? 1 : 0}|${look}|${hair}`;
+  const key = `${id}|${expr}|${mouth}|${blink ? 1 : 0}|${look}|${hair}${hairY ? '^' + hairY : ''}`;
   let f = headCache.get(key);
   if (!f) {
-    const h = people.renderHead(id, { expr, mouth, blink, look, hair });
+    const h = people.renderHead(id, { expr, mouth, blink, look, hair, hairY });
     f = dense(atlas.add('ph:' + key, h.buf, h.ax, h.ay), h.k ?? 1);
     headCache.set(key, f);
   }
@@ -259,6 +262,8 @@ export class Actor implements Drawable {
   /** hair follow-through: a quick spring after the body (lags, overshoots a touch, settles) */
   private hairX = 0;
   private hairV = 0;
+  /** long locks (twin tails): their own 2D spring (swing and lift), for heads that opt in */
+  private hairP: HairPhys | null = null;
   /** anticipation: a hop waits out the dip before it leaves the ground */
   private hopDelay = 0;
   private hopPend = 0;
@@ -556,7 +561,7 @@ export class Actor implements Drawable {
   /** current frame of the playing clip */
   currentFrame() { return this.frameIndex(); }
 
-  update(dt: number) {
+  update(dt: number, st?: Stage) {
     // locomotion clips advance by distance travelled, so planted feet (and hands on a ladder) never skate
     const inf = animInfo(this.anim, this.id) as { frames: number; fps: number; dist?: number };
     const moved = Number.isFinite(this.lastPX) ? Math.min(12, Math.hypot(this.x - this.lastPX, this.y - this.lastPY)) : 0;
@@ -681,6 +686,19 @@ export class Actor implements Drawable {
       this.hairV += (w * w * (tgt - this.hairX) - 2 * z * w * this.hairV) * h;
       this.hairX += this.hairV * h;
     }
+    // long locks that opt in (twin tails): a 2D spring after the head itself, as it is drawn (the walk's
+    // bob, a hop, a turn), in the scene's wind
+    const spec = people?.hairPhys?.(this.artId) ?? null;
+    if (!spec) this.hairP = null;
+    else {
+      if (this.hairP?.spec !== spec) this.hairP = new HairPhys(spec);
+      const [sa, sf, f] = this.shown();
+      const bc = bodyCache.get(`${this.artId}.${sa}.${sf}`);
+      if (bc) {
+        const hx = this.x + this.ox + f * (bc.hx - bc.ax) * this.sqx, hy = this.y + this.oy + this.hop + (bc.hy - bc.ay) * this.sqy;
+        this.hairP.update(dt, hx, hy, f, { wind: st?.wind, bias: bc.hair });
+      }
+    }
     this.onStage = true;
   }
 
@@ -786,8 +804,9 @@ export class Actor implements Drawable {
     const lk: Look = this.look ?? (this.lookTarget ? this.autoLook : null) ?? (b.look !== 'fwd' ? b.look : this.autoLook ?? this.glance?.look ?? 'fwd');
     const expr = this.expr;
     const blink = this.blinking > 0;
-    const hair = this.canLay ? clamp(Math.round(this.hairX * 2) / 2, -1, 2) : b.hair;
-    const head = headFrame(art, expr, this.mouth, blink, lk, hair);
+    const hp = this.hairP;
+    const hair = hp ? hp.swing : this.canLay ? clamp(Math.round(this.hairX * 2) / 2, -1, 2) : b.hair;
+    const head = headFrame(art, expr, this.mouth, blink, lk, hair, hp ? hp.lift : 0);
     const nod = this.nodT > 0 ? Math.sin((this.nodT / 0.35) * Math.PI) * 1.5 : 0;
     const hx = x + f * (b.hx - b.ax) * this.sqx, hy = y + (b.hy - b.ay) * this.sqy + nod;
     const sx = f * this.sqx, sy = this.sqy;
