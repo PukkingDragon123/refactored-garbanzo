@@ -284,7 +284,7 @@ export function buildSwamp(f: FieldScene): SwampRuntime {
     else if (k < 0.34 && cov > 0.3) { const v = rng.int(0, 3); fr = frameOf(`pk:${v}`, () => paintPukio(620 + v, 26 + v * 5)); }
     else { const v = rng.int(0, 5); fr = frameOf(`rp:${v}`, () => paintRaupo(630 + v, 46 + v * 8 + (cov < 0.3 ? 12 : 0))); }
     if (k < 0.08 && d < 2 && !inHollow(x)) main.add(new Prop(fr, x, gy, -5.4 + rng.next() * 0.3, { sway: 0.4, flip: rng.chance(0.5), tint: packColor(0.9, 0.95, 0.93, 1) }));
-    else reeds.add(fr, x, gy, rng.chance(0.5), packColor(0.9, 0.95, 0.93, 1));
+    else reeds.add(fr, x, gy, rng.chance(0.5), packColor(0.9, 0.95, 0.93, 1), k < 0.22 ? 'reed' : k < 0.34 ? 'bush' : 'reed');
   }
 
   // ---------------------------------------------------------------- the ways across: boardwalks, logs, stones
@@ -369,11 +369,12 @@ export function buildSwamp(f: FieldScene): SwampRuntime {
   for (let x = 20; x < SW.W - 10; x += rng.range(10, 22)) {
     const d = swDepth(x);
     if (rng.next() > 0.8 || byHut(x, 58)) continue;
-    backCover.add(d > 1 || rng.chance(0.5) ? reedTuft() : tuft(['sedge', 'grass', 'sedge', 'kiokio'], [20, 34]), x, swGround(x) + (d > 1 ? Math.min(d, 8) : 1), rng.chance(0.5));
+    const rt = d > 1 || rng.chance(0.5);
+    backCover.add(rt ? reedTuft() : tuft(['sedge', 'grass', 'sedge', 'kiokio'], [20, 34]), x, swGround(x) + (d > 1 ? Math.min(d, 8) : 1), rng.chance(0.5), undefined, rt ? 'reed' : 'grass');
   }
   for (let x = 16; x < SW.W - 10; x += rng.range(18, 40)) {
     const d = swDepth(x);
-    frontCover.add(d > 1 ? reedTuft() : tuft(['sedge', 'moss', 'grass', 'sedge', 'lily'], [12, 22]), x + rng.range(-4, 4), swBase(x) + rng.range(5, 10) + (d > 1 ? 4 : 0), rng.chance(0.5));
+    frontCover.add(d > 1 ? reedTuft() : tuft(['sedge', 'moss', 'grass', 'sedge', 'lily'], [12, 22]), x + rng.range(-4, 4), swBase(x) + rng.range(5, 10) + (d > 1 ? 4 : 0), rng.chance(0.5), undefined, d > 1 ? 'reed' : 'grass');
   }
   // further toward the camera: raupō clumps and pukio in the water and on the hummocks, stumps, logs
   for (let x = 30; x < SW.W; x += rng.range(22, 48)) {
@@ -385,7 +386,7 @@ export function buildSwamp(f: FieldScene): SwampRuntime {
       : k < 0.72 ? frameOf(`fp:${v % 3}`, () => paintPukio(810 + (v % 3), 22 + (v % 3) * 6))
         : k < 0.8 ? frameOf(`fs:${v % 3}`, () => paintStump(820 + (v % 3), 10 + (v % 3) * 4, 10 + (v % 3) * 5))
           : k < 0.9 ? tuft(['sedge', 'flax', 'lily'], [16, 28]) : frameOf(`fx2:${v % 2}`, () => plant('flax', 830 + (v % 2), 24));
-    main.add(new Prop(fr, x, swBase(x) + dd, 60 + dd * 0.02, { sway: k < 0.72 || k > 0.8 ? 0.5 : 0, flip: rng.chance(0.5) }));
+    main.add(new Prop(fr, x, swBase(x) + dd, 60 + dd * 0.02, { sway: k < 0.72 || k > 0.8 ? 0.5 : 0, flip: rng.chance(0.5), foliage: k < 0.55 ? 'reed' : k < 0.72 ? 'bush' : k < 0.8 ? false : k < 0.9 ? 'grass' : 'reed' }));
   }
   // hide spots: the thickest raupō
   const hides: SwampRuntime['hides'] = [];
@@ -395,7 +396,7 @@ export function buildSwamp(f: FieldScene): SwampRuntime {
     const s = sprite(`sw:hide:${x % 3}`, () => paintRaupo(900 + (x % 3), 50, { heads: 3, width: 40 }));
     const y = swGround(x) + 3;
     if (s) {
-      hideCover.add(s.f, x, y, false);
+      hideCover.add(s.f, x, y, false, undefined, 'reed');
       f.occluders.push({ mask: s.s.buf, x, y, ax: s.s.ax, ay: s.s.ay, sx: 1, sy: 1, p: 1, z: 66 });
     }
     f.pois.push({ kind: 'cover', x, y, w: 18 });

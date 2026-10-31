@@ -9,6 +9,7 @@ import { packColor } from '../../../gfx/renderer';
 import { bigFrame } from '../../../gfx/atlas';
 import type { Drawable, Stage, Layer } from '../../../world/stage';
 import { Plant, swayAmp, windBend } from '../../../world/foliage';
+import type { FoliageKind } from '../../../world/foliage';
 import { game } from '../../game';
 import { A } from '../../assets';
 import * as L from '../../../art/landscape';
@@ -147,9 +148,10 @@ export class GroundCover implements Drawable {
   private list: Tuft[] = [];
   private sorted = false;
   constructor(public z: number, readonly movers: () => Mover[], readonly player: () => Mover | null) {}
-  add(f: Frame, x: number, y: number, flip: boolean, tint = 0xffffffff) {
+  /** kind: the plant physics kind (grass / fern by height when left out) */
+  add(f: Frame, x: number, y: number, flip: boolean, tint = 0xffffffff, kind?: FoliageKind) {
     const ph = rand.range(0, 10), sx = flip ? -1 : 1;
-    this.list.push({ f, x, y, sx, amp: swayAmp(0.7, f, 1, false), ph, tint, pl: new Plant(f.h < 24 ? 'grass' : 'fern', f, sx, 1, false, ph) });
+    this.list.push({ f, x, y, sx, amp: swayAmp(0.7, f, 1, false), ph, tint, pl: new Plant(kind ?? (f.h < 24 ? 'grass' : 'fern'), f, sx, 1, false, ph) });
     this.sorted = false;
   }
   update() {
