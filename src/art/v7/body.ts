@@ -240,7 +240,9 @@ export const PX7 = 2;
  * no longer fit his head.
  */
 export const DENS7: Record<string, number> = { mori: 1.5 };
-export const dens7 = (id: string) => DENS7[id] ?? PX7;
+/** every character at the same pixel size as Mori (one pixel grid across the cast) */
+export const CAST_DENS7 = 1.5;
+export const dens7 = (id: string) => DENS7[id] ?? CAST_DENS7;
 /** the side-view prop painter's canvas (world px), and the body's buffer at a density */
 const CW0 = 128, CH0 = 118, OX0 = 64, OY0 = 100;
 const canvas7 = (D: number) => ({ CW: Math.round(CW0 * D), CH: Math.round(CH0 * D), OX: Math.round(OX0 * D), OY: Math.round(OY0 * D) });
