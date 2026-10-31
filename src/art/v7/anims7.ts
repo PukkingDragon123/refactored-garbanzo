@@ -89,8 +89,10 @@ export interface Gait { stride: number; stance: number; lift: number; bob: numbe
 type GaitSet = { walk: (b: Build) => Gait; run: (b: Build) => Gait; jog?: (b: Build) => Gait };
 const GAITS: Record<string, GaitSet> = {
   // Mori: easy-going naturalist, loose arms, a relaxed lope when he runs
+  // (V12, user: "realistic"): his walk at full pace is a brisk human walk, about 135 steps a minute,
+  // long unhurried strides instead of quick short ones; slower, he shortens his steps (walkLevel7)
   mori: {
-    walk: b => ({ stride: b.thigh * 1.7, stance: 0.6, lift: 2.2 * K(b), bob: 0.85 * K(b), lean: 0.05, swing: 0.36, elbow: 0.16, elbowSwing: 0.28, drop: 0.3 * K(b), kick: 0.2, flight: 0, hand: 'relax', sway: 0.35 * K(b) }),
+    walk: b => ({ stride: b.thigh * 2.2, stance: 0.6, lift: 2.4 * K(b), bob: 1.0 * K(b), lean: 0.04, swing: 0.42, elbow: 0.2, elbowSwing: 0.3, drop: 0.5 * K(b), kick: 0.25, flight: 0, hand: 'relax', sway: 0.3 * K(b) }),
     run: b => ({ stride: b.thigh * 2.2, stance: 0.36, lift: 5.4 * K(b), bob: 1.2 * K(b), lean: 0.22, swing: 0.62, elbow: 1.2, elbowSwing: 0.25, drop: 1.1 * K(b), kick: 1, flight: 0.9 * K(b), hand: 'relax', sway: 0.25 * K(b) }),
   },
   // Jenna: quick light steps with a bounce and a hip sway, hands a little out from her sides
@@ -125,6 +127,32 @@ const JOG = (b: Build, id = 'mori'): Gait => {
 
 /** px travelled per cycle on screen: a foot slides back S over the stance, in the legs' yaw */
 export const gaitDist = (g: Gait) => (g.stride * LEG_YAW) / g.stance;
+
+/**
+ * The walk at a pace (live motion, the player): `g` is the speed as a fraction of the walk's own
+ * (1 = his walk, 0.4 an amble, 1.2 a hurried walk). People walk faster with longer strides AND
+ * quicker steps, so the stride grows with the square root of the pace and the cadence (set by the
+ * distance-driven phase) makes up the rest; slower, the arms swing less, the feet lift lower, the hips
+ * bob less and a little more of the cycle is spent on both feet. Clips name a pace as a variant:
+ * 'walk~0.5' (POSES7V.walk, DIST7.walk below).
+ */
+export function walkLevel7(b: Build, id: string, g: number): Gait {
+  const w = WALK(b, id);
+  const s = Math.sqrt(Math.max(0.1, g)), lo = Math.min(1, g);
+  return {
+    ...w,
+    stride: w.stride * s,
+    stance: Math.min(0.68, w.stance + 0.07 * (1 - lo)),
+    lift: w.lift * (0.5 + 0.5 * lo),
+    bob: w.bob * (0.3 + 0.7 * g),
+    drop: w.drop * (0.35 + 0.65 * g),
+    swing: w.swing * (0.4 + 0.6 * g),
+    elbowSwing: w.elbowSwing * (0.5 + 0.5 * lo),
+    kick: w.kick * lo,
+    lean: w.lean + 0.03 * (g - 1),
+    sway: (w.sway ?? 0) * (0.6 + 0.4 * lo),
+  };
+}
 
 function foot(b: Build, g: Gait, ph: number, base: number): LegP {
   ph = frac(ph);
@@ -380,15 +408,15 @@ export const LEG_K = LEG_YAW;
  * walk's first heel strike, the arms easing into their swing. The front foot stays planted the whole
  * way (it slides back exactly as far as the body moves: DIST7.walkStart), so nothing skates.
  */
-function walkStart(b: Build, u: number, id: string): Pose {
+function walkStart(b: Build, u: number, id: string, walk = 'walk'): Pose {
   const k = K(b);
-  const rest = at7(id, 'idle', b, 0), w0 = at7(id, 'walk', b, 0);
+  const rest = at7(id, 'idle', b, 0), w0 = pose7(id, walk, b, 0);
   const e = smooth(u);
   // the planted foot: straight from where it stood to where the walk has it
   const bf = rest.bl.f, wf = w0.bl.f;
   const bl = { f: [bf[0] + (wf[0] - bf[0]) * u, bf[1] + (wf[1] - bf[1]) * smooth((u - 0.5) / 0.5)] as P2, fa: (rest.bl.fa ?? 0) + ((w0.bl.fa ?? 0) - (rest.bl.fa ?? 0)) * smooth((u - 0.4) / 0.6) };
   // the stepping foot: heel peels, the foot swings low through and reaches for the heel strike
-  const sw = smooth((u - 0.12) / 0.88), arc = Math.sin(Math.PI * Math.max(0, Math.min(1, (u - 0.1) / 0.9)));
+  const sw = smooth((u - 0.2) / 0.8), arc = Math.sin(Math.PI * Math.max(0, Math.min(1, (u - 0.1) / 0.9)));
   const nf = rest.fl.f, wn = w0.fl.f;
   const fl = { f: [nf[0] + (wn[0] - nf[0]) * sw, nf[1] + (wn[1] - nf[1]) * sw + arc * 2 * k] as P2, fa: u < 0.45 ? -0.6 * smooth(u / 0.3) : -0.6 + 0.9 * smooth((u - 0.45) / 0.55) };
   // the hips: over the planted foot first (the weight shift), then falling forward into the stride
@@ -403,7 +431,7 @@ function walkStart(b: Build, u: number, id: string): Pose {
   return A;
 }
 /** screen px the body travels while setting off: as far as the planted foot slides back */
-const walkStartDist = (b: Build, id: string) => Math.max(2, (at7(id, 'idle', b, 0).bl.f[0] - at7(id, 'walk', b, 0).bl.f[0]) * LEG_YAW);
+const walkStartDist = (b: Build, id: string, walk = 'walk') => Math.max(2, (at7(id, 'idle', b, 0).bl.f[0] - pose7(id, walk, b, 0).bl.f[0]) * LEG_YAW);
 
 /** the yaw at which the cast face the viewer (a hair toward the way they're going, for the flip) */
 const FRONT_YAW = Math.PI / 2 - 0.1;
@@ -422,15 +450,20 @@ function turn(b: Build, u: number): Pose {
   p.hip = [0, b.hipH - 0.35 - 0.45 * k * Math.sin(Math.PI * tri)];
   const step = (a: number, c: number) => Math.max(0, Math.sin(Math.PI * Math.max(0, Math.min(1, (u - a) / (c - a)))));
   const sN = step(0.08, 0.46), sF = step(0.54, 0.92);
-  // feet: from the stance in to under the body and out again on the other side
-  p.fl = { f: [(-2.2 + 2.6 * yb) * k, b.ankleH + sN * 1.2 * k], fa: -0.3 * sN };
-  p.bl = { f: [(2.4 - 2.8 * yb) * k, b.ankleH + sF * 1.2 * k], fa: -0.3 * sF };
+  // feet: a pivot turn. One foot stays planted all the way round while the other steps twice on the
+  // spot (the sprite mirrors at the half-way point, where the near and far feet swap sides, so the
+  // planted one is the far foot first and the near foot after, and the stepping one the other way),
+  // and neither moves along the ground except in the air
+  const a1 = smooth((u - 0.08) / 0.38), a2 = smooth((u - 0.54) / 0.38);
+  p.fl = u < 0.5 ? { f: [(-2.2 - 0.1 * a1) * k, b.ankleH + sN * 1.2 * k], fa: -0.3 * sN } : { f: [-2.4 * k, b.ankleH], fa: 0 };
+  p.bl = u < 0.5 ? { f: [2.4 * k, b.ankleH], fa: 0.05 } : { f: [(2.3 + 0.1 * a2) * k, b.ankleH + sF * 1.2 * k], fa: -0.3 * sF };
   // the arms swing out a little and trail the turn
   const lagA = Math.sin(Math.PI * u);
   p.fa = { a: 0.1 - 0.12 * lagA, e: 0.3 + 0.1 * lagA, hand: 'relax' };
   p.ba = { a: -0.06 + 0.1 * lagA, e: 0.26, hand: 'relax' };
   const yaw = YAW + (FRONT_YAW - YAW) * yb;
-  p.flags = { yaw, lyaw: YAW * 0.5 + (yaw - YAW * 0.5) * yb, aoN: 0.6 * lagA, aoF: 0.6 * lagA };
+  // (the hips turn less than the chest: the planted foot stays put on screen)
+  p.flags = { yaw, lyaw: YAW * 0.5 + (yaw - YAW * 0.5) * yb * 0.45, aoN: 0.6 * lagA, aoF: 0.6 * lagA };
   p.look = tri > 0.45 ? 'cam' : 'fwd';
   p.sway = 0.4 + 0.5 * tri;
   return p;
@@ -908,8 +941,16 @@ POSES7V.blend = (b, t, id, v) => {
   const [fa, fi] = clipAt(j < 0 ? v : v.slice(0, j)), [ta, ti] = clipAt(j < 0 ? 'idle:0' : v.slice(j + 1));
   const A = pose7(id, fa, b, fi), B = pose7(id, ta, b, ti);
   const n = ANIMS7.blend.frames;
-  return { ...A, mix: { a: A, p: B, u: smooth((Math.round(t * (n - 1)) + 1) / n) } };
+  // (a fractional frame, from the live player, blends on continuously between the steps)
+  return { ...A, mix: { a: A, p: B, u: smooth((t * (n - 1) + 1) / n) } };
 };
+// the walk at a pace: 'walk~0.5' (walkLevel7), and setting off into it ('walkStart~0.5')
+const paceOf = (v: string) => (v && Number.isFinite(+v) ? +v : 0);
+POSES7V.walk = (b, t, id, v) => gait(b, t, paceOf(v) ? walkLevel7(b, id, paceOf(v)) : WALK(b, id));
+DIST7.walk = (b, id, v) => gaitDist(paceOf(v) ? walkLevel7(b, id, paceOf(v)) : WALK(b, id));
+POSES7V.walkStart = (b, t, id, v) => walkStart(b, t, id, paceOf(v) ? 'walk~' + v : 'walk');
+// (its frames run 0 .. n-1 over the clip, the last one the walk's first: n / (n - 1) of the foot's travel)
+DIST7.walkStart = (b, id, v) => walkStartDist(b, id, paceOf(v) ? 'walk~' + v : 'walk') * ANIMS7.walkStart.frames / (ANIMS7.walkStart.frames - 1);
 
 // building blocks for the clips registered from other files (anims-life.ts, anims-hands.ts)
 export { POSES7, gaitOf, shoulder, wHead, wHang, hang, bump, smooth, lerp2, add2, pulse, ease, frac, K };

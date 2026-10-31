@@ -264,7 +264,7 @@ export const JOSHU7: Char7 = {
 export const CAST7: Record<string, Char7> = { mori: MORI7, jenna: JENNA7, aroha: AROHA7, joshu: JOSHU7 };
 
 export const INFO7: Record<string, { name: string; short: string; voice: number; height: number }> = {
-  mori: { name: 'Mori', short: 'Mori', voice: 1, height: 62 },
+  mori: { name: 'Mori', short: 'Mori', voice: 1, height: 66 },
   jenna: { name: 'Jenna', short: 'Jenna', voice: 1.5, height: 57 },
   joshu: { name: 'Joshu', short: 'Joshu', voice: 0.62, height: 72 },
   aroha: { name: 'Aroha', short: 'Aroha', voice: 1.12, height: 61 },

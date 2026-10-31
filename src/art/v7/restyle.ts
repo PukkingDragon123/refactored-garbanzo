@@ -20,6 +20,10 @@ export function restyle7(ch: Char7): Char7 {
   const hit = memo.get(ch);
   if (hit) return hit;
   const b = ch.build, kid = isChild(b);
+  // Mori, the player (user: "more skinny and human ... not that skinny, just realistic"): an ordinary
+  // fit young man rather than the other men's broad, heavy frame: real shoulders, a natural chest and
+  // arms, legs with muscle on them, on longer limbs and a natural neck, about six and a half heads tall
+  if (REAL7.has(ch.id)) return realBuild(ch);
   // grown men (user: "men more manly"): broader shoulders and chest, a thicker neck, full-weight arms
   // and legs, a sturdier stretch; women and children keep the slender build
   const man = !kid && !isFem7(ch.id);
@@ -52,9 +56,49 @@ export function restyle7(ch: Char7): Char7 {
   return r;
 }
 
+/** the realistic, slim-to-average build (Mori) */
+const REAL7 = new Set(['mori']);
+function realBuild(ch: Char7): Char7 {
+  const b = ch.build, L = 1.2;
+  const build: Build = {
+    ...b,
+    hipH: (b.hipH - b.ankleH) * L + b.ankleH,
+    thigh: b.thigh * L,
+    shin: b.shin * L,
+    torso: b.torso * 1.07,
+    neck: b.neck + 1.1,
+    // the shoulders sit a touch lower (a longer neck line, no hunch)
+    shY: b.shY * 0.94,
+    upArm: b.upArm * 1.08,
+    foreArm: b.foreArm * 1.08,
+  };
+  const r: Char7 = {
+    ...ch,
+    build,
+    // shoulders about two heads across, a chest with some depth, a waist that tapers a little
+    shW: ch.shW * 1.04,
+    chest: [ch.chest[0] * 1.0, ch.chest[1] * 1.0],
+    waist: [ch.waist[0] * 0.96, ch.waist[1] * 0.95],
+    pelvis: [ch.pelvis[0] * 0.98, ch.pelvis[1] * 0.98],
+    neckR: ch.neckR * 1.02,
+    // arms of a man who carries his own kit: upper arm with some bulk, tapering to the wrist
+    armR: [ch.armR[0] * 0.98, ch.armR[1] * 0.95, ch.armR[2] * 0.94],
+    // the thigh full, the calf shaped, a slimmer ankle
+    legR: [ch.legR[0] * 1.0, ch.legR[1] * 0.98, ch.legR[2] * 0.94],
+    skirt: ch.skirt ? { ...ch.skirt, len: ch.skirt.len * 1.06 } : undefined,
+  };
+  memo.set(ch, r);
+  memo.set(r, r);
+  return r;
+}
+/** Mori's head: a touch smaller than the other men's (realistic proportions), the face still reading
+ *  at his density */
+export const HEAD_SCALE_REAL7 = 0.74;
+
 /** how large a character's head is drawn (fraction of its volumes) */
 export function headScale7(id: string): number {
   const ch = CAST7[id];
   if (ch && isChild(ch.build)) return 0.9;
+  if (REAL7.has(id)) return HEAD_SCALE_REAL7;
   return isFem7(id, HEADS7[id]) ? HEAD_SCALE_WOMAN7 : HEAD_SCALE_MAN7;
 }
