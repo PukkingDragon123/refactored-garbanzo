@@ -23,6 +23,10 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
   props need irregular hand-shaped silhouettes, readable form shading, texture, cracks and
   highlights. If the code draws with `arc` or `ellipse`, it's only for a rough base that is then
   hand-detailed, never the final look.
+- Everything feels organic and alive (user: "every asset shape and detail felt handdrawn organic
+  and interactive add plant physics and wind"). Plants, grass, ferns, reeds, vines and leaves sway in
+  the scene's wind with gusts, and bend away when Mori or animals walk through them, then spring back.
+  New foliage opts into the shared plant physics.
 - Characters (user): faces are the mid face (`src/art/v7/facemid.ts`), realistic plus anime and
   between the two the user rejected. The fine anime face (`face7.ts`) was too high-res and uncanny,
   and the old dot face ugly; both are kept unused. Men have a narrow almond eye with a strong lid,
