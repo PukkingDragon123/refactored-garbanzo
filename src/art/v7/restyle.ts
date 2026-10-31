@@ -20,6 +20,10 @@ export function restyle7(ch: Char7): Char7 {
   const hit = memo.get(ch);
   if (hit) return hit;
   const b = ch.build, kid = isChild(b);
+  // Mori, the player (user: "more skinny and human"): a lean young man, not the other men's broad
+  // frame. Narrower shoulders and a flatter, narrower chest, slim arms and legs on long limbs, a
+  // natural neck (longer and slimmer than the sailors'), about six and a half heads tall
+  if (LEAN7.has(ch.id)) return leanBuild(ch);
   // grown men (user: "men more manly"): broader shoulders and chest, a thicker neck, full-weight arms
   // and legs, a sturdier stretch; women and children keep the slender build
   const man = !kid && !isFem7(ch.id);
@@ -52,9 +56,47 @@ export function restyle7(ch: Char7): Char7 {
   return r;
 }
 
+/** the lean, realistically proportioned build (Mori) */
+const LEAN7 = new Set(['mori']);
+function leanBuild(ch: Char7): Char7 {
+  const b = ch.build, L = 1.2;
+  const build: Build = {
+    ...b,
+    hipH: (b.hipH - b.ankleH) * L + b.ankleH,
+    thigh: b.thigh * L,
+    shin: b.shin * L,
+    torso: b.torso * 1.07,
+    neck: b.neck + 1.1,
+    // the shoulders sit a touch lower on a slimmer frame (a longer neck line, no hunch)
+    shY: b.shY * 0.92,
+    upArm: b.upArm * 1.08,
+    foreArm: b.foreArm * 1.08,
+  };
+  const r: Char7 = {
+    ...ch,
+    build,
+    shW: ch.shW * 0.94,
+    chest: [ch.chest[0] * 0.9, ch.chest[1] * 0.88],
+    waist: [ch.waist[0] * 0.9, ch.waist[1] * 0.88],
+    pelvis: [ch.pelvis[0] * 0.92, ch.pelvis[1] * 0.92],
+    neckR: ch.neckR * 0.9,
+    armR: ch.armR.map(v => v * 0.82) as Char7['armR'],
+    legR: ch.legR.map(v => v * 0.86) as Char7['legR'],
+    hand: ch.hand * 0.94,
+    skirt: ch.skirt ? { ...ch.skirt, len: ch.skirt.len * 1.06 } : undefined,
+  };
+  memo.set(ch, r);
+  memo.set(r, r);
+  return r;
+}
+/** Mori's head on his lean build: a touch smaller than the other men's (realistic proportions), the
+ *  face still reading at his density */
+export const HEAD_SCALE_LEAN7 = 0.74;
+
 /** how large a character's head is drawn (fraction of its volumes) */
 export function headScale7(id: string): number {
   const ch = CAST7[id];
   if (ch && isChild(ch.build)) return 0.9;
+  if (LEAN7.has(id)) return HEAD_SCALE_LEAN7;
   return isFem7(id, HEADS7[id]) ? HEAD_SCALE_WOMAN7 : HEAD_SCALE_MAN7;
 }

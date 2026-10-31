@@ -7,7 +7,7 @@
 import { PixelBuffer } from '../pixel';
 import { C, hex, mix } from '../color';
 import { Scene3D, V3, Hit, cel, Ramp6, vadd, vsub, vsc, vlen, vnorm, vlerp } from './raster';
-import { YAW, BACK_YAW, PX7 } from './body';
+import { YAW, BACK_YAW, dens7 } from './body';
 import { isFem7 } from './face7';
 import { trimPair } from '../people-rig';
 import { AROHA_HEAD } from './aroha7';
@@ -352,8 +352,8 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
   if (hit) return hit;
   const d = HEADS7[id] ?? MORI;
   const ex = EXPR[o.expr] ?? EXPR.neutral;
-  // buffer px per head unit
-  const k = PX7 * hs;
+  // buffer px per head unit (at the character's own density)
+  const D = dens7(id), k = D * hs;
   const BW = Math.ceil(HW * k), BH = Math.ceil(HH * k), BOX = Math.round(HOX * k), BOY = Math.round(HOY * k);
   const s = new Scene3D(BW, BH, BOX, BOY, k);
   // the head turns a little further toward the camera than the body, so both eyes read; 'cam' looks
@@ -542,7 +542,7 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
     // the old simple face (user: "the old simple face before"): dot eyes, two-pixel brows, a
     // small mouth, each face pixel a PX7 x PX7 block so it reads at the body's world-pixel size.
     // (paintFace7, the anime face, is kept unused in face7.ts.)
-    const B = PX7;
+    const B = Math.max(1, Math.round(D));
     const blk = (cx: number, cy: number): FaceMark => (dx, dy, c) => {
       const X = Math.round(cx) + Math.round(dx) * B, Y = Math.round(cy) + Math.round(dy) * B;
       for (let j = 0; j < B; j++) for (let i = 0; i < B; i++) put(X + i, Y + j, c);
@@ -589,7 +589,7 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
   const r = s.finish({ ink: mix(d.ink, d.hair[0], 0.6), depthLine: 1.6, rim: 0.55, inkK: { 1: 0.8, 3: 0.6, 6: 0.75 } });
   for (const [x, y, c] of marks) r.back.data[y * BW + x] = c;
   const tr = trimPair(r.back, null, 1);
-  const out = { buf: tr.a, ax: BOX - tr.ox, ay: BOY - tr.oy, k: PX7 };
+  const out = { buf: tr.a, ax: BOX - tr.ox, ay: BOY - tr.oy, k: D };
   if (cache.size > 600) cache.clear();
   cache.set(key, out);
   return out;

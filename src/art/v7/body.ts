@@ -228,9 +228,19 @@ function mixJ(A: J3, B: J3, u: number): J3 {
  * in the world as before. Frames say so in `k`.
  */
 export const PX7 = 2;
-/** the side-view prop painter's canvas (world px), and the body's buffer at PX7 */
+/**
+ * A character's own density, where it isn't PX7. Mori, the player, is drawn a little coarser (user:
+ * "a little lower resolution"): 1.5 buffer px per world px, between the cast's fine 2x and the
+ * world's 1x. He is rasterised at that density (never resampled when drawn), so each of his pixels is
+ * one clean texel the renderer scales like any other sprite: at zoom 1 on 1080p and at the close-up
+ * zoom of 1.5 on 720p that is exactly 2 x 2 device px. Any coarser (1.25) and the mid face's clusters
+ * no longer fit his head.
+ */
+export const DENS7: Record<string, number> = { mori: 1.5 };
+export const dens7 = (id: string) => DENS7[id] ?? PX7;
+/** the side-view prop painter's canvas (world px), and the body's buffer at a density */
 const CW0 = 128, CH0 = 118, OX0 = 64, OY0 = 100;
-const CW = CW0 * PX7, CH = CH0 * PX7, OX = OX0 * PX7, OY = OY0 * PX7;
+const canvas7 = (D: number) => ({ CW: Math.round(CW0 * D), CH: Math.round(CH0 * D), OX: Math.round(OX0 * D), OY: Math.round(OY0 * D) });
 
 /**
  * Held 3D props and other extra drawing registered by other modules (Aroha's slingshot, a grenade):
@@ -245,12 +255,13 @@ export interface Frame7 {
   back: PixelBuffer; front: PixelBuffer | null; ax: number; ay: number; hx: number; hy: number; hand: [number, number]; look?: 'fwd' | 'up' | 'down' | 'back' | 'cam' | 'away'; headBehind?: boolean; hrot?: number; hflip?: boolean; hair?: number;
   /** named points on the sprite (buffer px, sub-pixel): the palms ('handN', 'handF') and the held object's own (held.ts) */
   pts?: Record<string, [number, number]>;
-  /** buffer px per world px (PX7): every coordinate above is in buffer px */
+  /** buffer px per world px (PX7, or the character's own: dens7): every coordinate above is in buffer px */
   k?: number;
 }
 
 export function renderBody7(ch: Char7, pose0: Pose): Frame7 {
-  const s = new Scene3D(CW, CH, OX, OY, PX7);
+  const D = dens7(ch.id), { CW, CH, OX, OY } = canvas7(D);
+  const s = new Scene3D(CW, CH, OX, OY, D);
   // a blend toward another pose (Pose.mix): joints mixed in 3D, the rest (hand shapes, props) eased over
   const J = liftPose(ch, pose0);
   const pose = flatPose(pose0);
@@ -353,18 +364,18 @@ export function renderBody7(ch: Char7, pose0: Pose): Frame7 {
   for (const h of HELD7) { const f = h(s, J, pose, ch); if (f) posts.push(f); }
 
   const r = s.finish({ ink: ch.ink, inkK: HAND_INK, rim: 0.5 });
-  if (pose.props?.length) drawProps(ch, pose, J, r.back, r.front ?? (r.front = new PixelBuffer(CW, CH)));
+  if (pose.props?.length) drawProps(ch, pose, J, r.back, r.front ?? (r.front = new PixelBuffer(CW, CH)), D);
   if (posts.length) { const fr = r.front ?? (r.front = new PixelBuffer(CW, CH)); for (const f of posts) f(r.back, fr); }
   const tr = trimPair(r.back, r.front, 1);
   const nt = J.neckTop;
   return {
     back: tr.a, front: tr.b,
     ax: OX - tr.ox, ay: OY - tr.oy,
-    hx: Math.round(OX + nt[0] * PX7) - tr.ox, hy: Math.round(OY - nt[1] * PX7) - tr.oy,
-    hand: [Math.round(OX + J.wrN[0] * PX7) - tr.ox, Math.round(OY - J.wrN[1] * PX7) - tr.oy],
+    hx: Math.round(OX + nt[0] * D) - tr.ox, hy: Math.round(OY - nt[1] * D) - tr.oy,
+    hand: [Math.round(OX + J.wrN[0] * D) - tr.ox, Math.round(OY - J.wrN[1] * D) - tr.oy],
     look: pose.flags?.back ? 'back' : pose.look, headBehind: pose.headBehind || undefined, hrot: pose.flags?.hrot, hflip: (pose.flags?.hrot ?? 0) < 0 || undefined,
-    pts: Object.fromEntries(Object.entries(pts).map(([k, p]) => [k, [OX + p[0] * PX7 - tr.ox, OY - p[1] * PX7 - tr.oy] as [number, number]])),
-    k: PX7,
+    pts: Object.fromEntries(Object.entries(pts).map(([k, p]) => [k, [OX + p[0] * D - tr.ox, OY - p[1] * D - tr.oy] as [number, number]])),
+    k: D,
   };
 }
 
@@ -433,14 +444,16 @@ const HAND_INK: Record<number, number> = { [G.handN]: 0.62, [G.handF]: 0.62 };
  * Held props reuse the side-view prop painter, placed at the projected 3D hands (absolute props are
  * squeezed toward the body by the yaw). 'back' props go behind the body, the rest over it.
  */
-function drawProps(ch: Char7, pose: Pose, J: J3, back: PixelBuffer, front: PixelBuffer) {
+function drawProps(ch: Char7, pose: Pose, J: J3, back: PixelBuffer, front: PixelBuffer, D: number) {
+  const { CW, CH, OX, OY } = canvas7(D);
   const b = { ...ch.build, shF: 0, shB: 0, legF: 0, legB: 0 };
   const J2 = solve(b, pose);
   J2.wrF = [J.wrN[0], J.wrN[1]];
   J2.wrB = [J.wrF[0], J.wrF[1]];
   const k = Math.cos(J.yaw);
   for (const pr of pose.props ?? []) {
-    // painted at the world's density, then each pixel laid as a PX7 block on the body's finer grid
+    // painted at the world's density, then laid on the body's grid (each world pixel a block of the
+    // buffer pixels whose centres fall in it)
     const c = new Canvas(CW0, CH0, OX0, OY0);
     const q: PropP = pr.t ? { ...pr } : { ...pr, x: pr.x * k };
     const x = { c, J: J2, P: pose, b, ch: ch as unknown as CharDef, anim: '', t: 0 } as unknown as Ctx;
@@ -449,12 +462,15 @@ function drawProps(ch: Char7, pose: Pose, J: J3, back: PixelBuffer, front: Pixel
     const z = pr.z ?? 'hand';
     const dst = pr.front ? front : back;
     const d = c.back.data;
-    for (let i = 0; i < d.length; i++) {
-      const v = d[i];
-      if (!(v >>> 24)) continue;
-      const x0 = (i % CW0) * PX7, y0 = Math.floor(i / CW0) * PX7;
-      for (let dy = 0; dy < PX7; dy++) for (let dx = 0; dx < PX7; dx++) {
-        const j = (y0 + dy) * CW + x0 + dx;
+    for (let y = 0; y < CH; y++) {
+      const sy = Math.floor(OY0 - (OY - (y + 0.5)) / D);
+      if (sy < 0 || sy >= CH0) continue;
+      for (let x = 0; x < CW; x++) {
+        const sx = Math.floor((x + 0.5 - OX) / D + OX0);
+        if (sx < 0 || sx >= CW0) continue;
+        const v = d[sy * CW0 + sx];
+        if (!(v >>> 24)) continue;
+        const j = y * CW + x;
         if (z === 'back' && (dst.data[j] >>> 24)) continue;
         dst.data[j] = v;
       }
