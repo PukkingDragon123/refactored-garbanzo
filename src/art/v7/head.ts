@@ -439,7 +439,8 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
       drop.forEach((row, j) => { for (let i = 0; i < 2; i++) if (row[i] !== '.') { const X = Math.floor(sx) + i, Y = Math.floor(sy) - 2 + j; if (X >= 0 && Y >= 0 && X < BW && Y < BH && s.grp[Y * BW + X]) marks.push([X, Y, dc[row[i]]]); } });
     }
   }
-  const r = s.finish({ ink: d.ink, depthLine: 1.6, rim: 0.55 });
+  // the hair's edge over the face is inked in the hair's own dark, not the skin's red-brown (no streak down the cheek)
+  const r = s.finish({ ink: mix(d.ink, d.hair[0], 0.6), depthLine: 1.6, rim: 0.55, inkK: { 1: 0.8, 3: 0.6 } });
   for (const [x, y, c] of marks) r.back.data[y * BW + x] = c;
   const tr = trimPair(r.back, null, 1);
   const out = { buf: tr.a, ax: BOX - tr.ox, ay: BOY - tr.oy, k: PX7 };
