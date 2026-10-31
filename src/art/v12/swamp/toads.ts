@@ -25,7 +25,7 @@ const GANIMS = {
   idle: { frames: 6, fps: 1.4, loop: true },
   walk: { frames: 4, fps: 4, loop: true },
   hop: { frames: 4, fps: 5, loop: false },
-  call: { frames: 6, fps: 4.5, loop: true },
+  call: { frames: 8, fps: 5, loop: true },
   threat: { frames: 4, fps: 6, loop: true },
   tongue: { frames: 3, fps: 9, loop: false },
   hide: { frames: 2, fps: 1, loop: true },
@@ -38,10 +38,10 @@ function gpose(anim: string, f: number, n: number): GP {
   const p: GP = { crouch: 0, lift: 0, stretch: 0, sac: 0, rear: 0, puff: 0, mouth: 0, flat: 0, air: 0, breathe: 0, step: 0 };
   const t = f / n;
   switch (anim) {
-    case 'idle': p.breathe = [0, 0.35, 0.7, 0.35, 0, 0][f]; p.sac = [0.04, 0.1, 0.04, 0, 0.06, 0.1][f]; break;
+    case 'idle': p.breathe = [0, 0.35, 0.7, 0.35, 0, 0][f]; break;
     case 'walk': p.step = Math.sin(t * TAU); p.crouch = 0.2; p.lift = Math.abs(Math.sin(t * TAU)) * 1.5; break;
     case 'hop': p.crouch = [1, 0, 0, 0.7][f]; p.stretch = [0, 1, 0.3, 0][f]; p.air = [0, 0.4, 1, 0][f]; p.flat = f === 3 ? 0.25 : 0; break;
-    case 'call': p.sac = [0.2, 0.5, 0.85, 1, 0.82, 0.45][f]; p.rear = 0.18; p.breathe = p.sac * 0.6; break;
+    case 'call': p.sac = [0.2, 0.5, 0.85, 1, 1, 0.95, 0.82, 0.45][f]; p.rear = 0.18; p.breathe = p.sac * 0.6; break;
     case 'threat': p.rear = [0.5, 0.85, 1, 0.9][f]; p.puff = [0.6, 0.9, 1, 0.95][f]; break;
     case 'tongue': p.mouth = [0.7, 1, 0.5][f]; p.stretch = [0.4, 0.6, 0.2][f]; p.rear = 0.3; break;
     case 'hide': p.flat = 1; p.crouch = 0.8; p.breathe = f * 0.3; break;
@@ -60,9 +60,9 @@ function wartField(x: number, y: number, s: number): number {
     const h = hh(cx, cy, s);
     if (h > 0.62) continue;
     const px = (cx + 0.25 + hh(cx, cy, s + 1) * 0.5) * 3.4, py = (cy + 0.25 + hh(cx, cy, s + 2) * 0.5) * 3.2;
-    const r = 0.9 + hh(cx, cy, s + 3) * 1.3 + (h < 0.08 ? 0.8 : 0);
+    const r = 0.9 + hh(cx, cy, s + 3) * 1.3 + (h < 0.06 ? 0.8 : 0);
     const dx = (x - px) / r, dy = (y - py) / r, d = dx * dx + dy * dy;
-    if (d < 1 && d < best) { best = d; lx = dx; ly = dy; big = h < 0.08 ? 1 : 0; }
+    if (d < 1 && d < best) { best = d; lx = dx; ly = dy; big = h < 0.06 && hh(cx, cy, s + 4) < 0.45 ? 1 : 0; }
   }
   if (best > 1) return NaN;
   return (-lx * 0.55 - ly * 0.75) * 0.32 + (big ? 2 : 0);
@@ -71,17 +71,19 @@ function wartField(x: number, y: number, s: number): number {
 function gdraw(sk: Sk, anim: string, frame: number, eye: BeastEye, juv: boolean) {
   const n = GANIMS[anim as keyof typeof GANIMS]?.frames ?? 1;
   const P = gpose(anim, frame, n);
-  const k = juv ? 0.6 : 1;
+  // (bigger than Mori: he's 62 px tall, it sits 66 px high and stretches 120 px long)
+  const k = juv ? 0.8 : 1.36;
   const M = {
     skin: sk.m(rmp('#5c5a2c', { n: 8, dark: 0.66, light: 0.42, cool: 0.4, warm: 0.4 }), { edge: 1 }),
     blot: sk.m(rmp('#3a3a1e', { n: 7, dark: 0.6, light: 0.36, cool: 0.4 }), { edge: 1 }),
     pale: sk.m(rmp('#86803e', { n: 7, dark: 0.55, light: 0.42, warm: 0.5 }), { edge: 1 }),
     wart: sk.m(rmp('#7a6a34', { n: 7, dark: 0.55, light: 0.5, warm: 0.6 }), { edge: 1 }),
-    rust: sk.m(rmp('#b0602a', { n: 6, dark: 0.5, light: 0.45, warm: 0.6 }), { edge: 1 }),
+    rust: sk.m(rmp('#94582c', { n: 6, dark: 0.5, light: 0.4, warm: 0.5 }), { edge: 1 }),
     belly: sk.m(rmp('#d8c890', { n: 6, dark: 0.45, light: 0.45 }), { edge: 1 }),
     gland: sk.m(rmp('#6e6232', { n: 7, dark: 0.6, light: 0.45, warm: 0.5 }), { edge: 1, spec: 0.2 }),
     crest: sk.m(rmp('#4a4424', { n: 6, dark: 0.6, light: 0.4 }), { edge: 1 }),
-    sac: sk.m(rmp('#e6d6a4', { n: 6, dark: 0.4, light: 0.62, warm: 0.3 }), { spec: 0.65, edge: 1 }),
+    sac: sk.m(rmp('#d4c290', { n: 7, dark: 0.5, light: 0.55, warm: 0.3 }), { spec: 0.65, edge: 1 }),
+    vein: sk.m(rmp('#b07a6a', { n: 6, dark: 0.5, light: 0.4 }), { spec: 0.4, edge: 0 }),
     mouth: sk.m(rmp('#6a2a24', { n: 5, dark: 0.5 }), { edge: 0 }),
     tongue: sk.m(rmp('#d86a72', { n: 5, dark: 0.5, light: 0.4 }), { spec: 0.5 }),
     toe: sk.m(rmp('#8a7a46', { n: 6, dark: 0.55, light: 0.45 }), { edge: 1 }),
@@ -153,17 +155,21 @@ function gdraw(sk: Sk, anim: string, frame: number, eye: BeastEye, juv: boolean)
     sk.paint(px, py, M.crest, -0.25, gpart);
   }
   // the vocal sac: from a wrinkled pale throat to a balloon bigger than the head
-  if (P.sac > 0.02) {
+  if (P.sac > 0.12) {
     sk.np();
     const r = (3 + P.sac * 14) * k;
     const sx = hx + (6 + P.sac * 7) * k, sy = hy + (9 + P.sac * 2) * k + r * 0.35;
-    sk.ell(sx, sy, r * 1.08, r, M.sac, { z: 14, rz: r * 0.9 });
-    const spart = sk.pid;
-    // stretch lines curving round it
-    for (let a = 0.6; a < 2.6; a += 0.5) for (let t = -0.8; t <= 0.8; t += 0.08) {
-      const rr = r * (0.55 + Math.abs(t) * 0.4);
-      sk.paint(sx + Math.cos(a + t * 0.5) * rr * 0.9, sy + Math.sin(t) * rr * 0.8, 0, -0.08, spart);
-    }
+    // the stretched skin: fine creases running round it from the throat, pink veins showing through,
+    // and the speckles of the throat pulled wide apart
+    sk.ell(sx, sy, r * 1.08, r, (q: Px) => {
+      const ang = Math.atan2(q.y - (hy + 6 * k), q.x - (hx - 2 * k));
+      const crease = Math.abs(Math.sin(ang * 9 + q.u * 1.5)) < 0.12;
+      if (crease) q.l -= 0.12;
+      const vn = noise2((q.x + 60) / 3.2, (q.y + 60) / 3.2, 19);
+      if (vn > 0.47 && vn < 0.5) return M.vein;
+      if (hh(q.x * 0.5, q.y * 0.5, 23) < 0.05) q.l -= 0.18;
+      return M.sac;
+    }, { z: 14, rz: r * 0.9 });
   }
   // the mouth: a long lipped line from the snout back under the eye; thrown open for the tongue
   const mx0 = hx + 19 * k, my0 = hy + 4 * k, mx1 = hx - 4 * k, my1 = hy + 3.5 * k;
@@ -185,20 +191,21 @@ function gdraw(sk: Sk, anim: string, frame: number, eye: BeastEye, juv: boolean)
   sk.ell(ex, ey, 6.6 * k, 5.4 * k, skinFill, { z: 10 });
   sk.np();
   sk.tube([[ex - 7 * k, ey - 3 * k], [ex - 1 * k, ey - 6 * k], [ex + 6 * k, ey - 4.5 * k]], t => (1.8 - t * 0.6) * k, M.crest, { z: 12 });
-  const e = drawEye(sk, ex + 1, ey, { ...GEYE, r: juv ? 2.4 : 3.6 }, eye);
+  const e = drawEye(sk, ex + 1, ey, { ...GEYE, r: juv ? 2.8 : 4 }, eye);
   // the nostril
   sk.over(hx + 17 * k, hy - 1 * k, hex('#141008'));
+  sk.over(hx + 17 * k + 1, hy - 1 * k, hex('#141008'));
   arm(true);
   hind(true);
   return { head: [hx, hy - 16 * k] as V2, eye: e };
 }
 
 export const BELLOWTOAD: SpeciesDef = {
-  name: 'Giant Bellowtoad', kind: 'amphibian', len: 86, height: 50,
+  name: 'Giant Bellowtoad', kind: 'amphibian', len: 118, height: 68,
   anims: GANIMS,
-  canvas: (anim) => (anim === 'hop' ? { w: 170, h: 100, ox: 92, oy: 88 } : { w: 150, h: 96, ox: 70, oy: 86 }),
+  canvas: (anim) => (anim === 'hop' ? { w: 230, h: 136, ox: 124, oy: 120 } : { w: 204, h: 130, ox: 96, oy: 118 }),
   draw: gdraw,
-  eyeFor: (anim, f) => (anim === 'sleep' ? 'closed' : anim === 'idle' && f === 4 ? 'closed' : anim === 'call' && (f === 2 || f === 3) ? 'closed' : anim === 'threat' || anim === 'tongue' ? 'angry' : anim === 'hop' ? 'alert' : 'open'),
+  eyeFor: (anim, f) => (anim === 'sleep' ? 'closed' : anim === 'idle' && f === 4 ? 'closed' : anim === 'call' && f >= 3 && f <= 5 ? 'closed' : anim === 'threat' || anim === 'tongue' ? 'angry' : anim === 'hop' ? 'alert' : 'open'),
 };
 
 // ================================================================== the Ember Toad

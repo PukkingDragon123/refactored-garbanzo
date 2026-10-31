@@ -90,6 +90,56 @@ export function paintRaupo(seed: number, h: number, o: { heads?: number; dry?: n
   return trimSprite({ buf: b, ax: Math.round(cx), ay: gy + 1 });
 }
 
+// ---------------------------------------------------------------- lily pads
+/** a raft of lily pads lying on the water, seen low across it (squashed): each pad its own size and
+ *  turn, cut to the middle by its notch, its edge wavy and a little torn, veins running out from the
+ *  stalk; the older pads ragged, gone red at the rim and curling up at the far edge; a bud, or a bloom
+ *  of pointed petals round a gold heart (anchor: the middle of the raft) */
+export function paintLilyPads(seed: number, w: number, bloom = 0): Sprite {
+  const rng = new Rng(seed * 41 + 3);
+  const H = Math.round(w * 0.5) + 10, W = w + 10;
+  const b = new PixelBuffer(W, H);
+  const cx = W / 2, cy = H / 2;
+  const n = 2 + Math.floor(w / 12) + rng.int(0, 2);
+  const pads = Array.from({ length: n }, () => ({ x: cx + rng.range(-w * 0.4, w * 0.4), y: cy + rng.range(-H * 0.22, H * 0.22), r: rng.range(w * 0.12, w * 0.24), notch: rng.range(0, Math.PI * 2), old: rng.chance(0.3), s: rng.int(1, 999) }));
+  pads.sort((a, c) => a.y - c.y);
+  for (const q of pads) {
+    const R = q.r, ry = R * 0.4;
+    for (let y = Math.floor(q.y - ry - 2); y <= q.y + ry + 2; y++) for (let x = Math.floor(q.x - R - 2); x <= q.x + R + 2; x++) {
+      const u = (x + 0.5 - q.x) / R, v = (y + 0.5 - q.y) / ry, r = Math.hypot(u, v);
+      const ang = Math.atan2(v, u);
+      const edge = 1 + (noise1(ang * 2.2 + q.s, q.s) - 0.5) * 0.16 - (q.old && hash2(Math.floor(ang * 9), 1, q.s) < 0.25 ? 0.12 : 0);
+      if (r > edge) continue;
+      const da = Math.abs(((ang - q.notch + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+      if (da < 0.22 * (0.4 + r) && r > 0.12) continue;
+      const rim = r > edge - 0.16;
+      const curl = q.old && rim && v < -0.2;
+      const vein = Math.abs(Math.sin(ang * 3.5 + q.notch)) < 0.09 && r > 0.15 && !rim;
+      let t = 4 - r * 1.3 + (-u * 0.5 - v * 0.6) * 0.9 + (vein ? 1.1 : 0) + dz(x, y, 0.5) + (hash2(x, y, q.s) < 0.04 ? -1 : 0);
+      if (rim && !curl) t -= 1.2;
+      set(b, x, y, curl ? pk(SWP.lilyRed, 2 + (v < -0.6 ? 1 : 0)) : q.old && rim ? pk(SWP.lilyRed, 1) : pk(SWP.lily, t));
+    }
+    // the far rim catching the light where it lifts off the water
+    for (let a = -2.6; a < -0.5; a += 0.08) set(b, q.x + Math.cos(a) * R * 0.98, q.y + Math.sin(a) * ry * 0.98, q.old ? pk(SWP.lilyRed, 3) : pk(SWP.lily, 7));
+  }
+  if (bloom) {
+    // a bloom on the nearest pad: pointed petals hand-placed round a gold heart, white or pink
+    const q = pads[pads.length - 1], ramp = bloom > 1 ? SWP.bloomPink : SWP.bloom;
+    const fx = Math.round(q.x + q.r * 0.15), fy = Math.round(q.y - 1);
+    const petals: [number, number, number][] = [[-3, 0, 2], [-2, -1, 3], [-1, -2, 4], [0, -3, 4], [1, -2, 4], [2, -1, 3], [3, 0, 2], [-2, 1, 1], [2, 1, 1], [0, -1, 3], [-1, -1, 3], [1, -1, 3]];
+    for (const [dx, dy, k] of petals) set(b, fx + dx, fy + dy, pk(ramp, k));
+    set(b, fx - 1, fy - 4, pk(ramp, 3)); set(b, fx + 1, fy - 4, pk(ramp, 4));
+    set(b, fx, fy - 1, pk(SWP.bloomGold, 2)); set(b, fx - 1, fy, pk(SWP.bloomGold, 1)); set(b, fx + 1, fy, pk(SWP.bloomGold, 1));
+  } else if (rng.chance(0.4)) {
+    // a bud on its stalk, poking out of the water beside the raft
+    const bx = Math.round(cx + rng.range(-w * 0.3, w * 0.3)), by = Math.round(cy);
+    for (let j = 0; j < 5; j++) set(b, bx, by - j, pk(SWP.lily, 3));
+    set(b, bx, by - 5, pk(SWP.bloomPink, 2)); set(b, bx, by - 6, pk(SWP.bloomPink, 3)); set(b, bx - 1, by - 5, pk(SWP.lily, 4)); set(b, bx + 1, by - 5, pk(SWP.lily, 5));
+  }
+  outlineSel(b, 0.3);
+  return trimSprite({ buf: b, ax: Math.round(cx), ay: Math.round(cy) });
+}
+
 // ---------------------------------------------------------------- pukio, the swamp sedge on its pedestal
 export function paintPukio(seed: number, size: number): Sprite {
   const rng = new Rng(seed * 13 + 5);
@@ -278,34 +328,66 @@ export function paintStump(seed: number, w: number, h: number): Sprite {
 }
 
 // ---------------------------------------------------------------- stepping logs and stones
-/** a stepping log (anchor: the top of the log at its west end); top(x) is the log's top at local x */
+/** a stepping log or a fallen trunk (anchor: the top of the log at its west end); top(x) is the log's
+ *  top at local x. Bark in long plates split by dark furrows, a carpet of moss on top with clumps and
+ *  ferns sprouting from it and strands hanging down the side, broken branch stubs, bracket fungi,
+ *  lichen, and the underside black and slimy where the water reaches it; the ends cut or snapped,
+ *  showing their rings */
 export function paintStepLog(seed: number, len: number, dia: number): { buf: PixelBuffer; ax: number; ay: number; top: (x: number) => number } {
-  const W = len + 4, H = dia + 8;
+  const T = 8, W = len + 6, H = dia + T + 10;
   const b = new PixelBuffer(W, H);
-  const T = 3;
-  const topAt = (x: number) => T + Math.round(Math.sin(x * 0.05 + seed) * 0.8 + (x / len - 0.5) * 1.2);
+  const rr = (x: number) => dia / 2 * (1 + (noise1(x / 30, seed) - 0.5) * 0.18 + Math.exp(-(((x - len * 0.37) / 10) ** 2)) * 0.12);
+  const midY = (x: number) => T + dia / 2 + Math.sin(x * 0.03 + seed) * 0.6 + (x / len - 0.5) * 1.2;
+  const topAt = (x: number) => Math.round(midY(x) - rr(x));
   for (let x = 0; x < len; x++) {
-    const t0 = topAt(x);
     const end = Math.min(x, len - 1 - x);
-    const jag = end < 3 ? Math.floor(hash2(x, 2, seed) * 3) * (3 - end) : 0;
-    for (let y = t0 + (end < 2 ? jag : 0); y < t0 + dia - (end < 2 ? jag : 0); y++) {
-      const v = (y - t0) / dia * 2 - 1;
-      const l = -v * 1.5 + Math.sqrt(Math.max(0, 1 - v * v)) * 0.4;
-      // bark ridges running along the log
-      const ridge = Math.sin((y - t0) * 2.1 + noise1(x / 9, seed) * 3) > 0.6 ? -1 : 0;
-      let c = pk(SWP.wood, 4 + l * 1.8 + ridge + dz(x, y, 0.6));
-      // the cut ends: rings
-      if (end < 3) { const rr = Math.abs(v) * 4 + end * 0.5; c = pk(SWP.plank, 6 + (Math.floor(rr * 1.6) % 2 ? -2 : 0) - end); }
-      // moss along the top, wet and black under the waterline
-      if (y - t0 < 2 && hash2(x, y, seed) < 0.7) c = pk(SWP.sphag, 3 + (y - t0 === 0 ? 1 : 0) + (hash2(x, 5, seed) < 0.2 ? 1 : 0));
-      if (v > 0.45) c = mix(c, pk(SWP.wood, 0), 0.6);
-      set(b, x + 2, y, c);
+    const r = rr(x), my = midY(x);
+    const jag = end < 4 ? (hash2(Math.floor(x / 2), 2, seed) < 0.5 ? 1 : 0) * (4 - end) : 0;
+    for (let y = Math.round(my - r) + jag; y < Math.round(my + r) - (end < 2 ? jag : 0); y++) {
+      const v = (y + 0.5 - my) / r;
+      const l = -v * 1.6 + Math.sqrt(Math.max(0, 1 - v * v)) * 0.5;
+      // bark plates stretched along the log, with dark furrows between
+      const pu = x / 7 + noise1(y / 2 + seed, seed + 1) * 0.8, pv = (y - my) / 1.8;
+      const seam = Math.abs(Math.sin(pv * Math.PI + Math.floor(pu) * 1.7)) < 0.18 || Math.abs((pu % 1) - 0.5) > 0.46;
+      let c = pk(SWP.wood, 4.2 + l * 1.9 + (seam ? -1.6 : 0) + (hash2(x, y, seed + 3) < 0.07 ? 0.8 : 0) + dz(x, y, 0.6));
+      // the cut (or snapped) ends: rings
+      if (end < 3) { const ring = Math.hypot(v * 4, (x < len / 2 ? x : len - 1 - x) * 0.2); c = pk(SWP.plank, 6.5 + (Math.floor(ring * 1.8) % 2 ? -2 : 0) - end * 0.6 + (v < -0.5 ? 1 : 0)); }
+      // lichen spots on the lit side
+      else if (v < 0.1 && hash2(x >> 1, y, seed + 4) < 0.025) c = pk(SWP.lichen, 2 + (hash2(x, y, seed + 5) < 0.5 ? 1 : 0));
+      // the waterline: wet, black, a film of slime
+      if (v > 0.5) c = mix(c, v > 0.8 && hash2(x, y, seed + 6) < 0.2 ? pk(SWP.duck, 1) : pk(SWP.wood, 0), 0.55 + (v - 0.5));
+      set(b, x + 3, y, c);
     }
-    // a bracket fungus on the side
-    if (hash2(Math.floor(x / 6), 9, seed) < 0.08 && x > 6 && x < len - 6) { set(b, x + 2, t0 + dia * 0.4, pk(SWP.raupoDry, 5)); set(b, x + 3, t0 + dia * 0.4, pk(SWP.raupoDry, 4)); }
+    // the moss carpet on top: patchy, rising in clumps, wet strands hanging down the side
+    const mossK = noise1(x / 16, seed + 7);
+    if (mossK > 0.32 && end > 3) {
+      const t = topAt(x), lift = mossK > 0.6 ? Math.floor(hash2(x >> 1, 8, seed) * 3) : hash2(x, 8, seed) < 0.3 ? 1 : 0;
+      for (let k = -lift; k < 2 + (mossK > 0.55 ? 1 : 0); k++) set(b, x + 3, t + k, pk(SWP.sphag, 4 - k * 0.7 + (k === -lift ? 1.2 : 0) + (hash2(x, k, seed + 9) < 0.2 ? -1 : 0)));
+      if (hash2(x, 10, seed) < 0.06 * mossK) { const L = 2 + Math.floor(hash2(x, 11, seed) * 5); for (let j = 0; j < L; j++) set(b, x + 3, t + 3 + j, pk(SWP.sphag, 3 - j * 0.3)); }
+    }
+  }
+  // ferns sprouting from the moss, and broken branch stubs
+  for (let x = 14; x < len - 14; x += 26 + Math.floor(hash2(x, 12, seed) * 40)) {
+    const t = topAt(x);
+    if (hash2(x, 13, seed) < 0.55) {
+      for (let f = -2; f <= 2; f++) {
+        const a = -Math.PI / 2 + f * 0.42, L = 5 + (2 - Math.abs(f)) * 2;
+        for (let j = 0; j < L; j++) { const px = x + 3 + Math.cos(a) * j, py = t - 1 + Math.sin(a) * j + j * j * 0.06; set(b, px, py, pk(SWP.raupo, 5 + (j & 1) - (f < 0 ? 0 : 1))); if (j > 1 && j % 2 === 0) set(b, px + (f < 0 ? -1 : 1), py, pk(SWP.raupo, 4)); }
+      }
+    } else {
+      const ang = -Math.PI / 2 + (hash2(x, 14, seed) - 0.5) * 1.6, L = 4 + Math.floor(hash2(x, 15, seed) * 6);
+      for (let j = 0; j < L; j++) for (let w = 0; w < 2; w++) set(b, x + 3 + Math.cos(ang) * j + w, t + 1 + Math.sin(ang) * j, pk(SWP.wood, 4 + (w === 0 ? 1.5 : -0.5)));
+      set(b, x + 3 + Math.cos(ang) * L, t + 1 + Math.sin(ang) * L, pk(SWP.plank, 8));
+    }
+  }
+  // bracket fungi stepping down the side
+  for (let x = 20; x < len - 20; x += 50 + Math.floor(hash2(x, 16, seed) * 60)) {
+    if (hash2(x, 17, seed) > 0.5) continue;
+    const y0 = Math.round(midY(x) - rr(x) * 0.1);
+    for (let k = 0; k < 2; k++) { const fy = y0 + k * 3, fx = x + 3 + k * 2; set(b, fx - 1, fy, pk(SWP.raupoDry, 5)); set(b, fx, fy, pk(SWP.raupoDry, 6)); set(b, fx + 1, fy, pk(SWP.raupoDry, 5)); set(b, fx + 2, fy, pk(SWP.raupoDry, 4)); set(b, fx, fy + 1, pk(SWP.raupoDry, 2)); set(b, fx + 1, fy + 1, pk(SWP.raupoDry, 2)); }
   }
   outlineSel(b, 0.5);
-  return { buf: b, ax: 2, ay: T, top: x => topAt(x - 2) - T };
+  return { buf: b, ax: 3, ay: T, top: x => topAt(x) - T };
 }
 /** a flat-topped stepping stone, sunk in the water, with a moss cap; anchor the middle of its top */
 export function paintStepStone(seed: number, w: number): { buf: PixelBuffer; ax: number; ay: number } {

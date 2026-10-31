@@ -147,7 +147,7 @@ const KEEP = new WeakMap<Animal, { cool: number }>();
 export const toadKeep = (a: Animal) => { let k = KEEP.get(a); if (!k) { k = { cool: 0 }; KEEP.set(a, k); } return k; };
 /** the toad's home (its island) and its lie (in the water beside it) */
 const homeX = (a: Animal) => (a.home[0] + a.home[1]) / 2;
-const lieX = (a: Animal) => homeX(a) + 52;
+const lieX = (a: Animal) => homeX(a) + 70;
 const gy = (a: Animal, x: number) => a.host.terrain.groundY(x);
 
 /** one heavy hop toward x; true on landing */
@@ -177,7 +177,7 @@ SPECIALS[TOAD_ID] = {
   call(a) {
     a.vx = 0; a.anim = 'call'; a.hidden = 0;
     // a boom at the top of each swell
-    const k = Math.floor(a.actT / 1.35);
+    const k = Math.floor(a.actT / 1.6);
     if (k !== a.mem.boom) { a.mem.boom = k; SWAMP_CTX.boom(a); }
     if (SWAMP_CTX.rain() < 0.3 || dayNow(a)) return false;
     if (a.actT > a.actDur) return false;
@@ -191,7 +191,7 @@ SPECIALS[TOAD_ID] = {
     if (Math.floor(a.actT * 8) !== Math.floor((a.actT - dt) * 8)) a.x += Math.floor(a.actT * 8) % 2 ? 0.6 : -0.6;
     if (a.actT < a.actDur) return;
     const d = dist(a);
-    if (d.dx < 130 && d.dy < 40 && !SWAMP_CTX.hidden()) { a.setAct('lash', 0.8); a.mem.tx = p.x; a.mem.ty = p.y - 22; return; }
+    if (d.dx < 170 && d.dy < 40 && !SWAMP_CTX.hidden()) { a.setAct('lash', 0.8); a.mem.tx = p.x; a.mem.ty = p.y - 26; return; }
     toadKeep(a).cool = 2; return false;
   },
   /** the lash: the tongue thrown out to where Mori stood, then reeled back */
@@ -237,7 +237,7 @@ HOOKS[TOAD_ID] = {
   decide(a) {
     if (a.act === 'warn' || a.act === 'lash' || (a.act === 'hop' && a.mem.hx0 !== undefined)) return false;
     const d = dist(a);
-    if (d.dx < 112 && d.dy < 34 && !SWAMP_CTX.hidden() && toadKeep(a).cool <= 0) { a.setAct('warn', 1.1); return true; }
+    if (d.dx < 140 && d.dy < 34 && !SWAMP_CTX.hidden() && toadKeep(a).cool <= 0) { a.setAct('warn', 1.1); return true; }
     // calling, and something moves near: it falls silent and stares
     if (a.act === 'call' && SWAMP_CTX.quietT < 0.5) { toadKeep(a).cool = 4; a.setAct('sit', 8); a.showEmote('question', 1.4, true); return true; }
     return false;

@@ -81,6 +81,12 @@ const DRY: [number, number, number][] = [
   [POOL.isle0, POOL.isle1, -8], [8446, 8496, -1], [9104, 9154, -1], [5370, 5470, -2], [5770, 5910, -2], [6390, 6550, -2], [6620, 6700, 0], [CHANNEL.isle0, CHANNEL.isle1, -4],
 ];
 const edge = (x: number, a: number, b: number, r = 22) => smoothstep(a - r, a + 2, x) * (1 - smoothstep(b - 2, b + r, x));
+/** the water level down in the hollow and the channel (null elsewhere) */
+export function swHollow(x: number): { level: number; cx: number; hw: number } | null {
+  if (x > POOL.x0 && x < POOL.x1) return { level: swBase0(x) + POOL.dip, cx: (POOL.x0 + POOL.x1) / 2, hw: (POOL.x1 - POOL.x0) / 2 - 30 };
+  if (x > CHANNEL.x0 && x < CHANNEL.x1) return { level: swBase0(x) + CHANNEL.dip, cx: (CHANNEL.x0 + CHANNEL.x1) / 2, hw: (CHANNEL.x1 - CHANNEL.x0) / 2 - 30 };
+  return null;
+}
 /** wading depth at the walk line (0 on the banks, < 0 on an island) */
 export function swDepth(x: number): number {
   let d = 0;

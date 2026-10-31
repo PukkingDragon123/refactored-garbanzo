@@ -45,9 +45,10 @@ import type { RegionPost } from '../trails';
 import { addHunger } from '../hunger';
 import { floatText } from '../../../ui/v12/float';
 import { SWP } from '../../../art/v12/swamp/kit';
-import { paintSwampFloor } from '../../../art/v12/swamp/floor';
-import { paintRaupo, paintPukio, paintTiKouka, paintDrownedTree, paintStump, paintStepLog, paintStepStone, paintBoardwalk, paintMaimai, paintPeatBank, paintWhare } from '../../../art/v12/swamp/props';
-import { SW, SW_SPOT, POOL, CHANNEL, WALKS, LOGS, STONES, MAIMAI, swBase, swBase0, swGround, swDepth, swWet, swCanopy, swZone, deckY, maimaiY } from './layout';
+import { paintSwampFloor, swampIsWater } from '../../../art/v12/swamp/floor';
+import { wpersp } from '../../../art/v11/woods/floor';
+import { paintLilyPads, paintRaupo, paintPukio, paintTiKouka, paintDrownedTree, paintStump, paintStepLog, paintStepStone, paintBoardwalk, paintMaimai, paintPeatBank, paintWhare } from '../../../art/v12/swamp/props';
+import { SW, SW_SPOT, POOL, CHANNEL, WALKS, LOGS, STONES, MAIMAI, swBase, swBase0, swGround, swDepth, swWet, swCanopy, swZone, swHollow, deckY, maimaiY } from './layout';
 import { Ripples, FrontWater, SwampRain, MarshBubbles, Mosquitoes, MarshLights } from './fx';
 import { attachToads, installToadBody } from './toads';
 import { SWAMP_POINTS } from './quests';
@@ -204,7 +205,7 @@ export function buildSwamp(f: FieldScene): SwampRuntime {
   // ---------------------------------------------------------------- the gameplay plane: the floor
   const main = st.addLayer('main', 1, 0, 1, 0);
   f.main = main;
-  const floor = { base: swBase, wet: swWet, depth: swDepth, rows: 200, seed: 1931 };
+  const floor = { base: swBase, wet: swWet, depth: swDepth, rows: 200, seed: 1931, hollow: swHollow };
   for (let x0 = 0; x0 < SW.W; x0 += 1000) {
     const w = Math.min(1000, SW.W - x0);
     const ch = paintSwampFloor(floor, x0, w);
@@ -219,6 +220,14 @@ export function buildSwamp(f: FieldScene): SwampRuntime {
   }
   const ripples = new Ripples();
   main.add(ripples);
+  // lily pads in rafts on the open water, smaller with distance (each raft its own prop)
+  for (let x = 700; x < SW.W - 200; x += rng.range(18, 46)) {
+    const dd = rng.range(4, 150);
+    if (swampIsWater(floor, x, dd) < 0.12 || swampIsWater(floor, x + 14, dd) < 0.12 || swampIsWater(floor, x - 14, dd) < 0.12) continue;
+    const P = wpersp(dd), v = rng.int(0, 7), bloom = v === 6 ? 1 : v === 7 ? 2 : 0;
+    const w = Math.round((16 + (v % 3) * 6) * Math.min(1.6, P * 0.8) / 2) * 2;
+    main.add(new Prop(frameOf(`lily:${v}:${w}`, () => paintLilyPads(1600 + v * 7 + w, w, bloom)), x, swBase(x) + dd, -8.4 + dd * 0.0005, { flip: rng.chance(0.5) }));
+  }
   main.add(new MarshBubbles(ripples));
   // the hollow's and the channel's back banks: peat cut in layers, roots, seeps
   for (const [a, b, s] of [[POOL.x0 - 4, POOL.x1 + 4, 2001], [CHANNEL.x0 - 4, CHANNEL.x1 + 4, 2002]] as const) {
@@ -251,6 +260,17 @@ export function buildSwamp(f: FieldScene): SwampRuntime {
     main.add(new Prop(frameOf(`stump:${v}`, () => paintStump(500 + v, 12 + v * 4, 14 + v * 6)), x, swGround(x) + 2, -5.4));
     f.pois.push({ kind: 'perch', x, y: swGround(x) - 16 - v * 6 });
   }
+  // (the plants Mori and the animals push through bend away from them and spring back, and sway in
+  // the gusts: GroundCover, the woods' ground cover; each plant stays its own prop)
+  const movers = (): Mover[] => {
+    const out: Mover[] = [{ x: f.player.x, y: f.player.y, vx: f.player.vx }];
+    for (const a of f.actors.values()) if (a.visible) out.push({ x: a.x, y: a.y, vx: a.walking ? a.facing * 40 : 0 });
+    for (const an of f.animals) if (!an.dead && !an.gone && an.medium === 'ground') out.push({ x: an.x, y: an.y, vx: an.vx });
+    return out;
+  };
+  const me = () => ({ x: f.player.x, y: f.player.y, vx: f.player.vx });
+  const reeds = new GroundCover(-5.3, movers, me);
+  main.add(reeds);
   // behind the walk line: tī kōuka, flax, pukio and raupō beds (raupō thickest in the open beds)
   for (let x = 30; x < SW.W - 30; x += rng.range(26, 70)) {
     if (nearGiant(x, 18)) continue;
@@ -261,7 +281,8 @@ export function buildSwamp(f: FieldScene): SwampRuntime {
     else if (k < 0.22 && d < 3) { const v = rng.int(0, 3); fr = frameOf(`fx:${v}`, () => plant('flax', 610 + v, 30 + v * 4)); }
     else if (k < 0.34 && cov > 0.3) { const v = rng.int(0, 3); fr = frameOf(`pk:${v}`, () => paintPukio(620 + v, 26 + v * 5)); }
     else { const v = rng.int(0, 5); fr = frameOf(`rp:${v}`, () => paintRaupo(630 + v, 46 + v * 8 + (cov < 0.3 ? 12 : 0))); }
-    main.add(new Prop(fr, x, gy, -5.4 + rng.next() * 0.3, { sway: 0.55, flip: rng.chance(0.5), tint: packColor(0.9, 0.95, 0.93, 1) }));
+    if (k < 0.08 && d < 2 && !inHollow(x)) main.add(new Prop(fr, x, gy, -5.4 + rng.next() * 0.3, { sway: 0.4, flip: rng.chance(0.5), tint: packColor(0.9, 0.95, 0.93, 1) }));
+    else reeds.add(fr, x, gy, rng.chance(0.5), packColor(0.9, 0.95, 0.93, 1));
   }
 
   // ---------------------------------------------------------------- the ways across: boardwalks, logs, stones
@@ -336,13 +357,6 @@ export function buildSwamp(f: FieldScene): SwampRuntime {
   }
 
   // ---------------------------------------------------------------- the floor in front: in depth
-  const movers = (): Mover[] => {
-    const out: Mover[] = [{ x: f.player.x, y: f.player.y, vx: f.player.vx }];
-    for (const a of f.actors.values()) if (a.visible) out.push({ x: a.x, y: a.y, vx: a.walking ? a.facing * 40 : 0 });
-    for (const an of f.animals) if (!an.dead && !an.gone && an.medium === 'ground') out.push({ x: an.x, y: an.y, vx: an.vx });
-    return out;
-  };
-  const me = () => ({ x: f.player.x, y: f.player.y, vx: f.player.vx });
   const backCover = new GroundCover(-2.4, movers, me), frontCover = new GroundCover(58, movers, me);
   main.add(backCover); main.add(frontCover);
   const tuft = (kinds: PlantKind[], sizes: [number, number]) => {
@@ -372,11 +386,13 @@ export function buildSwamp(f: FieldScene): SwampRuntime {
   }
   // hide spots: the thickest raupō
   const hides: SwampRuntime['hides'] = [];
+  const hideCover = new GroundCover(66, movers, me);
+  main.add(hideCover);
   for (const x of [520, 1560, 2480, 3420, SW_SPOT.poolHide, 5960, 7360, 8840]) {
     const s = sprite(`sw:hide:${x % 3}`, () => paintRaupo(900 + (x % 3), 50, { heads: 3, width: 40 }));
     const y = swGround(x) + 3;
     if (s) {
-      main.add(new Prop(s.f, x, y, 66, { sway: 0.7 }));
+      hideCover.add(s.f, x, y, false);
       f.occluders.push({ mask: s.s.buf, x, y, ax: s.s.ax, ay: s.s.ay, sx: 1, sy: 1, p: 1, z: 66 });
     }
     f.pois.push({ kind: 'cover', x, y, w: 18 });
@@ -387,7 +403,7 @@ export function buildSwamp(f: FieldScene): SwampRuntime {
   main.add(new FrontWater(() => {
     const out: [number, number][] = [[f.player.x, 13]];
     if (f.guide) out.push([f.guide.a.x, 12]);
-    for (const a of f.animals) if (!a.gone && !a.dead && a.medium === 'ground') out.push([a.x, a.species === 'bellowtoad' ? 44 : 12]);
+    for (const a of f.animals) if (!a.gone && !a.dead && a.medium === 'ground') out.push([a.x, a.species === 'bellowtoad' ? 64 : 12]);
     return out;
   }));
   const shade = new WoodsShade(clock, swCanopy, swGround);
@@ -445,7 +461,7 @@ export function buildSwamp(f: FieldScene): SwampRuntime {
     const g = (c: [number, number, number], m: [number, number, number], s: number): [number, number, number] => [c[0] + (m[0] - c[0]) * s, c[1] + (m[1] - c[1]) * s, c[2] + (m[2] - c[2]) * s];
     env.fogBottom = g([...env.fogBottom], [0.5 - night * 0.36, 0.56 - night * 0.4, 0.5 - night * 0.36], 0.35 + k * 0.25);
     env.fogTop = g([...env.fogTop], [0.48 - night * 0.36, 0.55 - night * 0.4, 0.54 - night * 0.36], 0.3 + k * 0.3);
-    env.exposure *= 1 - k * 0.14;
+    env.exposure *= (1 - k * 0.12 * (1 - night * 0.6)) * (1 + night * 0.16);
     env.saturation *= 1 - k * 0.18;
     env.waterAxis = Math.round(swBase(f.player ? f.player.x : SW_SPOT.enter)) - 1;
   };

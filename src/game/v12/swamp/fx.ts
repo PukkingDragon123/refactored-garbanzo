@@ -108,11 +108,11 @@ export class SwampRain implements Drawable {
   }
   draw(r: Renderer) {
     if (this.k < 0.02) return;
-    const c1 = packColor(0.72, 0.8, 0.84, 0.32 * clamp(this.k * 1.4)), c2 = packColor(0.85, 0.9, 0.95, 0.42 * clamp(this.k * 1.4));
+    const c1 = packColor(0.74, 0.82, 0.86, 0.45 * clamp(this.k * 1.4)), c2 = packColor(0.88, 0.93, 0.97, 0.6 * clamp(this.k * 1.4));
     for (const d of this.drops) {
       const x = Math.round(d.x), y = Math.round(d.y);
-      r.rect(x, y, 1, 2, c1);
-      r.rect(x - 1, y + 2, 1, 2, c2);
+      r.rect(x + 1, y - 3, 1, 3, c1);
+      r.rect(x, y, 1, 3, c2);
     }
   }
 }

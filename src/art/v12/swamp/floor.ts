@@ -13,6 +13,7 @@ import { mix, shade } from '../../color';
 import { clamp, fbm2, hash2, noise1, noise2, smoothstep } from '../../../core/math';
 import { wrealZ } from '../../v11/woods/floor';
 import { SWP, pk, dz, cellAt, CELL } from './kit';
+void cellAt; void CELL;
 
 export interface SwampFloor {
   /** the walk line (the water's surface or the bank) */
@@ -24,6 +25,9 @@ export interface SwampFloor {
   /** rows painted below the walk line */
   rows: number;
   seed: number;
+  /** the water level of a hollow at x (its pool or channel), or null: where the walk line comes down
+   *  a hollow's side, the plane in front is a peat bank face down to that level, and water below it */
+  hollow?: (x: number) => { level: number; cx: number; hw: number } | null;
 }
 export interface SwampChunk { x0: number; y0: number; base: PixelBuffer; water: PixelBuffer }
 
@@ -65,29 +69,16 @@ function waterPixel(F: SwampFloor, x: number, y: number, dd: number, e: number) 
       return;
     }
   }
-  // lily pads in the open water, in perspective (squashed), each with its notch and veins
-  if (e > 0.12) {
-    const id = cellAt(x, v * 2.7, 13, 13, s + 9, 0.34, 0.34, 0.5);
-    if (id >= 0) {
-      const ang = Math.atan2(CELL.ny, CELL.nx), notch = hash2(Math.floor(CELL.cx), Math.floor(CELL.cy), s + 10) * Math.PI * 2;
-      let da = Math.abs(((ang - notch + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
-      if (da > 0.32 || CELL.r < 0.12) {
-        const rim = CELL.r > 0.72;
-        const curl = id < 0.18 && rim && CELL.ny < 0;
-        let t = 4.2 - CELL.r * 1.6 + (-CELL.nx * 0.6 - CELL.ny * 0.9) * 1.1 + dz(x, y, 0.5);
-        // veins: lines radiating from the centre
-        const vein = Math.abs(Math.sin(ang * 4 + notch)) < 0.1 && CELL.r > 0.08 && !rim;
-        if (vein) t += 1;
-        let c2 = curl ? pk(SWP.lilyRed, 2 + (CELL.ny < -0.5 ? 1 : 0)) : pk(SWP.lily, t);
-        if (rim && !curl) c2 = shade(c2, -0.12);
-        // a bloom on one pad in eight: white or pink petals round a gold heart
-        if (id > 0.88 && CELL.r < 0.2) c2 = CELL.r < 0.05 ? pk(SWP.bloomGold, 1 + (CELL.ny < 0 ? 1 : 0)) : pk(id > 0.94 ? SWP.bloomPink : SWP.bloom, 3 - CELL.r * 8 + (CELL.ny < 0 ? 1 : 0));
-        OUT.c = c2; OUT.water = false;
-        return;
-      }
-      void da; da = 0;
-    }
-  }
+  // (the lily pads are props of their own, laid on the water by the scene: ./props.ts paintLilyPads)
+}
+
+/** is the plane at (x, row dd) open water (> 0), the way the floor paints it (for laying pads on it) */
+export function swampIsWater(F: SwampFloor, x: number, dd: number): number {
+  const top = F.base(x), ho = F.hollow?.(x) ?? null;
+  if (!ho) return swampWaterAt(F, x, dd);
+  const L = Math.max(ho.level, top), q = top + dd - L;
+  if (q < 0) return -1;
+  return (ho.hw * Math.sqrt(Math.max(0, 1 - (q / 150) ** 2)) - Math.abs(x - ho.cx)) / 60;
 }
 
 function bankPixel(F: SwampFloor, x: number, y: number, dd: number, e: number) {
@@ -104,9 +95,10 @@ function bankPixel(F: SwampFloor, x: number, y: number, dd: number, e: number) {
     return;
   }
   // sphagnum cushions, red-tipped, on the wetter banks
-  const sp = fbm2(x / 24, v / 9, 3, s + 13) + (F.wet(x) - 0.4) * 0.3;
-  if (sp > 0.6) {
-    const t = (sp - 0.6) * 8;
+  // (ragged at the edges: the cushions are clumps of little stems, not blobs)
+  const sp = fbm2(x / 24, v / 9, 3, s + 13) + (F.wet(x) - 0.4) * 0.3 + (noise2(x / 3.5, v / 1.8, s + 12) - 0.5) * 0.3;
+  if (sp > 0.64) {
+    const t = (sp - 0.64) * 8;
     let c = pk(SWP.sphag, 2.6 + t + (noise2(x / 1.6, v / 1.1, s + 14) - 0.5) * 2.2 + dz(x, y, 0.7));
     if (hash2(x, y, s + 15) < 0.05) c = pk(SWP.sphagRed, 1 + hash2(x, y, s + 16) * 3);
     OUT.c = c; OUT.water = false;
@@ -123,6 +115,19 @@ function bankPixel(F: SwampFloor, x: number, y: number, dd: number, e: number) {
   // raupō stubble: dark broken stems poking up out of the peat
   if (hash2(x, Math.floor(v / 2.5), s + 19) < 0.022) c = pk(SWP.raupoDry, 1);
   if (hash2(x, Math.floor(v / 2.5) - 1, s + 19) < 0.022) c = pk(SWP.raupoDry, 3);
+  OUT.c = c; OUT.water = false;
+}
+
+/** a hollow's near bank: cut peat in layers going down into the water, roots, seeps, a lip of moss */
+function facePixel(F: SwampFloor, x: number, y: number, top: number, L: number) {
+  const s = F.seed, h = Math.max(1, L - top), k = (y - top) / h;
+  const layer = Math.sin(y * 0.6 + noise1(x / 24, s + 31) * 4) + (noise2(x / 12, y / 3, s + 32) - 0.5) * 1.3;
+  let c = pk(SWP.mud, 4.4 - k * 2.4 + (layer > 0.8 ? 1 : layer < -0.9 ? -1 : 0) + dz(x, y, 0.7));
+  if (y - top < 2) c = pk(SWP.sphag, 4 - (y - top) + (hash2(x, y, s + 33) < 0.15 ? 1 : 0));
+  else if (noise1(x / 4, s + 34) > 0.8) c = hash2(x, y, s + 35) < 0.1 ? pk(SWP.sheen, 2) : pk(SWP.mud, 1);
+  // roots hanging out of the face
+  if (Math.abs(Math.sin(x * 0.45 + noise1(y / 5, s + 36) * 2)) < 0.07 && hash2(x >> 2, 0, s + 37) < 0.4 && k < 0.85) c = pk(SWP.wood, 4);
+  if (L - y < 3) c = pk(SWP.peat, 1 + (L - y === 2 && hash2(x, 4, s + 38) < 0.3 ? 4 : 0));
   OUT.c = c; OUT.water = false;
 }
 
@@ -146,12 +151,25 @@ export function paintSwampFloor(F: SwampFloor, x0: number, w: number): SwampChun
   for (let x = x0; x < x0 + w; x++) {
     const top = Math.round(F.base(x));
     const bot = top + F.rows;
+    const ho = F.hollow?.(x) ?? null;
+    const L = ho ? Math.round(Math.max(ho.level, top)) : null;
+    const isle = F.depth(x) < -1;
     for (let y = top - 4; y < bot; y++) {
       if (y < y0) continue;
       const d = y - top;
       OUT.c = 0;
       if (d < 0) { if (!lipPixel(F, x, d)) continue; }
-      else {
+      else if (L !== null) {
+        // down a hollow's side: the near bank's face, then its water reaching toward the camera
+        if (y < L) facePixel(F, x, y, top, L);
+        else {
+          // the pool is an oval: wide at the far bank, narrowing toward the camera, a mud beach round it
+          const q = y - L, hw = ho!.hw * Math.sqrt(Math.max(0, 1 - (q / 150) ** 2)) + (noise1(q / 7 + x / 40, F.seed + 39) - 0.5) * 14;
+          const e = (hw - Math.abs(x - ho!.cx)) / 60;
+          if (e > 0 && !(isle && q < 12 + noise1(x / 6, F.seed + 40) * 8)) waterPixel(F, x, y, q, Math.max(0.15, e)); else bankPixel(F, x, y, q, e > 0 ? -0.05 : e * 0.5);
+        }
+        if (d > 90) OUT.c = shade(OUT.c, -smoothstep(90, 220, d) * 0.2);
+      } else {
         const e = swampWaterAt(F, x, d);
         if (e > 0) waterPixel(F, x, y, d, e); else bankPixel(F, x, y, d, e);
         if (d > 90) OUT.c = shade(OUT.c, -smoothstep(90, 220, d) * 0.2);

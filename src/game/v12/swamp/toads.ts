@@ -42,12 +42,12 @@ class ToadBody extends BeastBody {
     super.draw(r, a);
     const ext = a.act === 'lash' ? a.mem.ext ?? 0 : 0;
     if (ext <= 0.02) return;
-    const mx = a.x + a.facing * 38, my = a.y - 22;
+    const mx = a.x + a.facing * 52, my = a.y - 30;
     const tx = a.mem.tx ?? mx + a.facing * 120, ty = a.mem.ty ?? my;
     let dx = tx - mx, dy = ty - my;
     const L0 = Math.hypot(dx, dy) || 1;
     if (Math.sign(dx) !== a.facing) { dx = a.facing * L0; dy = 0; }
-    const L = Math.min(132, L0) * ext;
+    const L = Math.min(150, L0) * ext;
     const ux = dx / L0, uy = Math.max(-0.45, Math.min(0.45, dy / L0));
     const dark = packColor(0.42, 0.12, 0.14, 1), mid = packColor(0.84, 0.4, 0.44, 1), top = packColor(0.96, 0.66, 0.68, 1);
     for (let s = 0; s < L; s += 1) {
@@ -76,6 +76,8 @@ export function attachToads(f: FieldScene) {
   const toad = () => f.animals.find(a => a.species === TOAD_ID && !a.gone && !a.dead) ?? null;
   const gloves = () => gateOk('gloves');
   let seen = false, hinted = false, flashed = false, touchT = 0;
+  // (testing: the toads' view of the scene, from the console)
+  (window as unknown as { __swamp?: unknown }).__swamp = { ctx: SWAMP_CTX, rain: () => swampRuntime()?.rain.k };
 
   // ---- what the giant toad hears and feels
   SWAMP_CTX.rain = () => swampRuntime()?.rain.k ?? 0;
@@ -106,7 +108,7 @@ export function attachToads(f: FieldScene) {
     f.sfx('whoosh', a.x, 0.7, 1.5);
     const dx = p.x - a.x;
     const jumped = p.y < swGround(p.x) - 14;
-    if (Math.sign(dx) === a.facing && Math.abs(dx) < 136 && Math.abs(p.y - a.y) < 42 && !jumped && !moriHidden(f)) {
+    if (Math.sign(dx) === a.facing && Math.abs(dx) < 196 && Math.abs(p.y - a.y) < 42 && !jumped && !moriHidden(f)) {
       void floatText({ text: 'THWAP!', x: p.x, y: p.y - 44, style: 'shout', ms: 800 });
       hitMori(f, a.x, { sev: 2, drop: rand.chance(0.35) });
       if (f.guide) setTimeout(() => game.ui.bubbles.bark('aroha', 'When it rears up, MOVE! Back off, or get into the raupō!', { style: 'shout', expr: 'worried' } as never), 900);
