@@ -22,6 +22,7 @@
 // the guitar sounds through a Karplus-Strong synth (guitarsynth.ts), Hana plays the bass line under
 // you, the pocket watch runs down the song, and the stamp says how it went.
 
+import { FIRST_PERSON_HANDS } from './hands';
 import { game } from '../../../game/game';
 import { audio } from '../../../core/audio';
 import type { Music } from '../../../core/audio';
@@ -210,8 +211,8 @@ export class GuitarSet implements SetScene {
       if (hash(ia, ib, 5) < 0.06) t -= 0.12;
       return rd(FLAX, t, fx, fy);
     });
-    // Mori's thigh under the body: olive canvas, a twill, folds pulling toward the knee
-    area(bg, bodyX0 - 10, cy, W, H, (u, v, fx, fy) => {
+    // (no first-person body: Mori's thigh under the guitar is not drawn, user rule; kept off)
+    if (FIRST_PERSON_HANDS) area(bg, bodyX0 - 10, cy, W, H, (u, v, fx, fy) => {
       // the thigh's top edge rounds over toward the knee, under the waist of the guitar
       const k = (u - bodyX0) / (W - bodyX0);
       const top = cy + 26 + 18 * (k - 0.5) * (k - 0.5) - k * 6 + Math.sin(u * 0.07) * 1.5;
