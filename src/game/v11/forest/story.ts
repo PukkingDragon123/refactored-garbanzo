@@ -180,7 +180,8 @@ export class ForestStory implements ForestHooks {
         { who: 'aroha', text: 'Don’t joke about tigers in here.', expr: 'serious' },
       ]);
     });
-    this.trigger('x:log', () => !this.busy && !f.cutscene && this.p.y < fgroundY(this.p.x) - 30 && !!f.guide, async () => {
+    this.trigger('x:log', () => !this.busy && !f.cutscene && this.p.x > 1490 && this.p.x < 2020 && this.p.y < fgroundY(this.p.x) - 30 && !!f.guide, // only up on the fallen kauri (the region has other high routes)
+      async () => {
       await this.say([{ who: 'aroha', text: 'Kauri fall maybe once in a thousand years. And then the whole forest grows on them. Ferns, moss, baby trees... a log like this is a nursery.', expr: 'happy' }]);
     });
     // the Cerebral Tiger: the first time the group comes in together with Aroha
