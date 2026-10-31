@@ -63,6 +63,9 @@ export const HOOKS: Record<string, { onThreat?: (a: Animal) => boolean; tick?: (
 
 let UID = 0;
 
+/** V12 big regions: scenes longer than this let far animals sleep (src/game/v12/region.ts) */
+const FAR_SCENE = 9000, FAR_AWAY = 1500;
+
 export class Animal implements Drawable {
   z = 30;
   readonly uid = ++UID;
@@ -566,9 +569,11 @@ export class Animal implements Drawable {
 
   // ================================================================ per frame
   update(dt: number, st: Stage) {
-    void st;
     if (!this.host || !this.eco) return;
     if (this.held) { this.body?.update(dt, this); return; }
+    // V12 big regions: in a map many screens long an animal far off the camera waits (its mind and its
+    // body sleep until Mori comes near again)
+    if (st && this.host.maxX > FAR_SCENE && Math.abs(this.x - st.cam.x) > FAR_AWAY) return;
     this.actT += dt;
     this.emoteCd -= dt;
     if (this.emote) { this.emote.t += dt; if (this.emote.t > this.emote.dur) this.emote = null; }
@@ -617,6 +622,7 @@ export class Animal implements Drawable {
 
   draw(r: Renderer) {
     if (this.gone || !this.body) return;
+    if (this.host && this.host.maxX > FAR_SCENE && (this.x < r.visibleX0(360) || this.x > r.visibleX1(360))) return;
     this.body.draw(r, this);
   }
 

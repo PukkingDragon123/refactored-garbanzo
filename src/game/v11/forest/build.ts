@@ -76,7 +76,9 @@ export function buildForest(f: ForestScene) {
   const tick = (what: string) => { if ((window as unknown as { __ftime?: boolean }).__ftime) console.log(`[T] forest ${what} ${Math.round(performance.now() - T0)} ms`); };
   // V12: the forest is the west end of the Te Wao Nui region (./region.ts): the far forest, the hedge and
   // the foreground run on along the whole walk; Fernwood and the falls lay their own gameplay planes
-  st.minX = 0; st.maxX = REGION_W; st.minY = -250; st.maxY = FOREST.maxY;
+  // (Day 1, the search for Joshu, ends at the ridge: only the forest itself is built)
+  const RW = f.day1 ? FOREST.W : REGION_W;
+  st.minX = 0; st.maxX = RW; st.minY = f.day1 ? FOREST.minY : -250; st.maxY = FOREST.maxY;
   st.waterY = null;
   const rng = new Rng(1111);
 
@@ -131,14 +133,14 @@ export function buildForest(f: ForestScene) {
     const span = layerSpan(st, pb, 60);
     // giants and tree ferns standing just behind the hedge
     const bx = (x: number) => x * pb;
-    for (let x = 60; x < REGION_W + 300; x += rng.range(230, 420)) {
+    for (let x = 60; x < RW + 300; x += rng.range(230, 420)) {
       const kind = (['kauri', 'rimu', 'kahikatea', 'rata'] as GiantKind[])[rng.int(0, 3)];
       const w = rng.range(44, 82);
       const H = Math.round(gy + 170);
       const fr = frameOf(`bg:${kind}:${Math.round(w / 6)}:${rng.int(0, 2)}`, () => paintGiant(kind, 300 + Math.round(w), w, H, { epiphytes: 0.8, fadeTop: 90 }));
       back.add(new Prop(fr, bx(x), gy + 3, -2 + rng.next(), { flip: rng.chance(0.5), tint: packColor(0.84, 0.9, 0.88, 1) }));
     }
-    for (let x = 20; x < REGION_W + 200; x += rng.range(60, 140)) {
+    for (let x = 20; x < RW + 200; x += rng.range(60, 140)) {
       const k = rng.next();
       const kind = k < 0.62 ? 'treefern' : k < 0.82 ? 'nikau' : 'broadleaf';
       const h = kind === 'treefern' ? rng.range(110, 190) : kind === 'nikau' ? rng.range(150, 230) : rng.range(200, 300);
@@ -324,47 +326,50 @@ export function buildForest(f: ForestScene) {
   const front = st.addLayer('front', pf, 0, 0.45, 0, pf);
   const dark = FP.canopy[0];
   const fyB = layerY(pf, 372) + 6, fyT = layerY(pf, -6);
+  // (the framing rides up with the walk where it climbs: the ridge, the top of Fernwood. Not down into
+  // the gullies, where the camera stays up on the bridges)
+  const rise = (x: number, p: number) => Math.min(0, fgroundY(x) - FOREST.G) * p;
   const occ = (s: Sprite, x: number, y: number, flip: boolean, p: number) => f.occluders.push({ mask: s.buf, x, y, ax: s.ax, ay: s.ay, sx: flip ? -1 : 1, sy: 1, p, z: 0 });
   // rising from the bottom of the frame: tree fern sprays, big leaves, fronds
   // (never in front of the story's spots: the prints, the scrap, the boot, Joshu, the fords)
   const keep = [FSPOT.prints, FSPOT.scrap, FSPOT.boot, FSPOT.joshu, FORD.x, GULLY.x, FSPOT.exit + 60, ...REGION_KEEP];
-  for (let x = 120; x < REGION_W + 300; x += rng.range(160, 300)) {
+  for (let x = 120; x < RW + 300; x += rng.range(160, 300)) {
     const k = rng.next(), v = rng.int(0, 2);
     if (keep.some(q => Math.abs(q - x) < 150)) continue;
     const fr = k < 0.45 ? frameOf(`fs:${v}`, () => fgFernSpray(1500 + v, 76 + v * 14, false, 1, dark, 0.62))
       : k < 0.7 ? frameOf(`fl:${v}`, () => fgPlant('leaves', 1510 + v, 92 + v * 12, 1, dark, 0.66))
         : k < 0.88 ? frameOf(`ff:${v}`, () => fgPlant('fronds', 1520 + v, 100, 1, dark, 0.64))
           : frameOf(`fm:${v}`, () => fgPlant('monstera', 1530 + v, 90, 1, dark, 0.66));
-    const X = x * pf, flip = rng.chance(0.5), y = fyB + rng.range(4, 22);
+    const X = x * pf, flip = rng.chance(0.5), y = fyB + rise(x, pf) + rng.range(4, 22);
     front.add(new Prop(fr, X, y, rng.next(), { sway: 0.45, flip }));
     occ(fr.sprite, X, y, flip, pf);
   }
   // hanging into the top of the frame: fronds, vines, canopy clumps carried on up
-  for (let x = 60; x < REGION_W + 300; x += rng.range(140, 260)) {
+  for (let x = 60; x < RW + 300; x += rng.range(140, 260)) {
     const k = rng.next(), v = rng.int(0, 2);
     if (REGION_HANG_SKIP.some(([a, b]) => x > a && x < b)) continue;
     const fr = k < 0.4 ? frameOf(`fh:${v}`, () => fgFernSpray(1540 + v, 66 + v * 10, true, 1, dark, 0.6))
       : k < 0.7 ? frameOf(`fv:${v}`, () => fgVines(1550 + v, 80, 70 + v * 20, 1, dark, 0.6))
         : frameOf(`fc:${v}`, () => soften(canopyClump(1560 + v, 200, 70, { above: 260 }), 1, dark, 0.58));
-    const X = x * pf, flip = rng.chance(0.5), y = k < 0.7 ? fyT - 14 + rng.range(-8, 4) : fyT + 10 + rng.range(-8, 8);
+    const X = x * pf, flip = rng.chance(0.5), y = rise(x, pf) + (k < 0.7 ? fyT - 14 + rng.range(-8, 4) : fyT + 10 + rng.range(-8, 8));
     front.add(new Prop(fr, X, y, 2 + rng.next(), { sway: 0.25, flip }));
   }
   // giant trunks passing close by
   for (const x of [470, 2930, 4120, 5250, FW0 + 560, FW0 + 2140, FW0 + 3420, FA0 + 460, FA0 + 980]) {
     const fr = frameOf(`ft:${x}`, () => fgTrunk(x % 2 ? 'kauri' : 'rimu', x, 96, 560, 2, dark, 0.8));
     const X = x * pf;
-    front.add(new Prop(fr, X, fyB + 30, 4));
-    occ(fr.sprite, X, fyB + 30, false, pf);
+    front.add(new Prop(fr, X, fyB + 30 + rise(x, pf), 4));
+    occ(fr.sprite, X, fyB + 30 + rise(x, pf), false, pf);
   }
   // even nearer: a few huge soft leaves in the corners of the frame
   const pn = 1.7;
   const near = st.addLayer('front2', pn, 0, 0.3, 0, pn);
   const nyB = layerY(pn, 380) + 10;
-  for (let x = 400; x < REGION_W + 300; x += rng.range(620, 1100)) {
+  for (let x = 400; x < RW + 300; x += rng.range(620, 1100)) {
     const v = rng.int(0, 1);
     if (keep.some(q => Math.abs(q - x) < 200)) continue;
     const fr = frameOf(`fn:${v}`, () => fgPlant(v ? 'fronds' : 'leaves', 1570 + v, 96, 3, dark, 0.86));
-    near.add(new Prop(fr, x * pn, nyB + 24, 0, { sway: 0.3, flip: rng.chance(0.5) }));
+    near.add(new Prop(fr, x * pn, nyB + 24 + rise(x, pn), 0, { sway: 0.3, flip: rng.chance(0.5) }));
   }
 
   tick('front');
@@ -383,7 +388,7 @@ export function buildForest(f: ForestScene) {
   }
   st.terrain.addGround(pts, 'ground');
   // ---------------------------------------------------------------- the rest of the region
-  buildRegion(f);
+  if (!f.day1) buildRegion(f);
   tick('region');
   void clamp; void mix; void (0 as unknown as C);
 }
