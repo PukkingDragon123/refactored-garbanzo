@@ -33,6 +33,9 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
   straight thick brows, a jaw built from the head's volumes (cheekbones, jaw angle, firm chin; no
   painted stripe), a smaller head (0.75) and a broader build (`restyle.ts`). Women and girls are
   listed in `FEM7`.
+- **Never show the player's first-person hands** (user: "never ever show player first person
+  hand"). Close-ups show the tools and what they touch, not Mori's hands or sleeves
+  (`FIRST_PERSON_HANDS = false` in `src/ui/v12/closeup/hands.ts`, `HANDS3D.enabled = false`).
 - Never use emoji. Use painted pixel icons (`src/ui/pxicons.ts`).
 - Never show the HD close-up face as a small profile portrait in the HUD.
 - The quality bar is the best scenes in the game, such as the palm beach and the great forest.
