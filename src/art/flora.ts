@@ -5,32 +5,61 @@ import { PixelBuffer } from './pixel';
 import { C, hex, mix, shade, withAlpha } from './color';
 import { PAL, OUTLINE } from './palettes';
 import { Rng, bayer, clamp, fbm2, noise1, TAU } from '../core/math';
+import { organicShrub, organicLog, organicMushrooms } from './organic';
+import { leaf as leafAt, outlineSel } from './jungle-core';
 
 type P = [number, number];
 
-/** Dense leaf mass: many small shaded leaves inside an ellipse, lit from upper-left. */
+/**
+ * Dense leaf mass: a lumpy, never-elliptical envelope filled with clusters of pointed leaves. A dark
+ * core first so it never shows holes, then the leaves, grouped in clumps: each clump takes its tone
+ * from which way it faces (lit from the upper left), each leaf points out from its clump and droops a
+ * little, and the brightest are drawn last, so the mass reads as bunches of leaves with form.
+ */
 export function foliage(
   buf: PixelBuffer, cx: number, cy: number, rx: number, ry: number, ramp: C[], rng: Rng,
   leaf = 2.2, density = 1, lx = -0.55, bias = 0,
 ) {
-  const n = Math.floor((rx * ry * 3.1) / (leaf * leaf) * 0.9 * density) + 4;
-  const leaves: { x: number; y: number; r: number; l: number }[] = [];
-  for (let i = 0; i < n; i++) {
-    const a = rng.range(0, TAU), d = Math.sqrt(rng.next());
-    const x = cx + Math.cos(a) * rx * d, y = cy + Math.sin(a) * ry * d;
+  const s = rng.int(1, 9999);
+  const env = (a: number) => 0.8 + fbm2(Math.cos(a) * 1.4 + 3, Math.sin(a) * 1.4 + 3, 2, s) * 0.42;
+  const inside = (x: number, y: number, k: number) => {
     const nx = (x - cx) / rx, ny = (y - cy) / ry;
-    const l = -ny * 0.55 + nx * lx * 0.45 + (1 - d) * 0.25 + rng.range(-0.18, 0.18) + bias;
-    leaves.push({ x, y, r: leaf * rng.range(0.7, 1.35), l });
-  }
-  leaves.sort((a, b) => a.l - b.l);
+    return Math.hypot(nx, ny) < env(Math.atan2(ny, nx)) * k;
+  };
   const top = ramp.length - 1;
-  for (const lf of leaves) {
-    const idx = clamp(Math.round((lf.l * 0.5 + 0.5) * top), 0, top);
-    const base = ramp[idx];
-    const hi = ramp[Math.min(top, idx + 1)];
-    buf.ellipseFn(lf.x, lf.y, lf.r * 1.25, lf.r * 0.85, (x, y, nx, ny) => (ny < -0.3 && nx < 0.4 && idx < top ? hi : base));
-    void bayer;
+  // the dark core
+  for (let y = Math.floor(cy - ry); y <= cy + ry; y++) for (let x = Math.floor(cx - rx); x <= cx + rx; x++) if (inside(x + 0.5, y + 0.5, 0.78)) buf.set(x, y, ramp[1]);
+  // clumps, then the leaves in them
+  const nc = clamp(Math.round((rx * ry) / (leaf * leaf * 10)), 3, 22);
+  const clumps: { x: number; y: number; r: number; l: number }[] = [];
+  for (let i = 0, tries = 0; i < nc && tries < nc * 20; tries++) {
+    const x = cx + rng.range(-rx, rx), y = cy + rng.range(-ry, ry);
+    if (!inside(x, y, 0.92)) continue;
+    const nx = (x - cx) / rx, ny = (y - cy) / ry;
+    clumps.push({ x, y, r: leaf * rng.range(2.4, 3.6), l: -ny * 0.55 + nx * lx * 0.45 + rng.range(-0.2, 0.2) + bias });
+    i++;
   }
+  const n = Math.floor((rx * ry * 3.1) / (leaf * leaf) * 0.95 * density) + 4;
+  const leaves: { x: number; y: number; a: number; l: number }[] = [];
+  for (let i = 0; i < n && clumps.length; i++) {
+    const a0 = rng.range(0, Math.PI * 2), r0 = Math.sqrt(rng.next());
+    const x = cx + Math.cos(a0) * rx * r0, y = cy + Math.sin(a0) * ry * r0;
+    if (!inside(x, y, 1.02)) continue;
+    // each leaf belongs to the nearest clump and takes its tone
+    let c = clumps[0], bd = Infinity;
+    for (const q of clumps) { const dd = (q.x - x) ** 2 + (q.y - y) ** 2; if (dd < bd) { bd = dd; c = q; } }
+    const d = Math.sqrt(bd);
+    // out from the clump and from the mass, drooping a little
+    const ox = (x - cx) / rx + (x - c.x) / c.r * 0.6, oy = (y - cy) / ry + (y - c.y) / c.r * 0.6 + 0.35;
+    const edge = Math.min(1, d / c.r);
+    leaves.push({ x, y, a: Math.atan2(oy, ox) + rng.range(-0.35, 0.35), l: c.l + edge * (c.l > 0 ? 0.12 : -0.1) + rng.range(-0.12, 0.12) });
+  }
+  leaves.sort((p, q) => p.l - q.l);
+  for (const lf of leaves) {
+    const idx = clamp(Math.round((lf.l * 0.5 + 0.5) * top) + 1, 1, top);
+    leafAt(buf, lf.x, lf.y, lf.a, leaf * rng.range(1.35, 1.85), leaf * rng.range(0.95, 1.2), ramp, idx, 'point');
+  }
+  void bayer;
 }
 
 /**
@@ -321,29 +350,12 @@ export function paintGroundFern(seed: number, size: number, ramp: C[] = PAL.fern
   return { buf, ax: cx, ay: H };
 }
 
-/** Round leafy bush - also used as a hiding spot. */
+/** Leafy bush (also a hiding spot): grown from forked stems into sprays of leaves (art/organic.ts). */
 export function paintBush(seed: number, w: number, h: number, ramp: C[] = PAL.leafDeep, flowers?: C[]) {
   const rng = new Rng(seed);
   const buf = new PixelBuffer(w, h);
-  const n = rng.int(3, 5);
-  for (let i = 0; i < n; i++) {
-    const rx = w * rng.range(0.22, 0.34), ry = h * rng.range(0.32, 0.45);
-    const x = w * (0.2 + (i / (n - 1 || 1)) * 0.6) + rng.range(-3, 3);
-    const y = h - ry - rng.range(0, h * 0.25);
-    foliage(buf, x, y, rx, ry, ramp, rng, 2.1, 1.2);
-  }
-  // flatten bottom
-  for (let y = h - 2; y < h; y++) for (let x = 0; x < w; x++) if (buf.opaque(x, y - 2)) buf.set(x, y, ramp[1]);
-  if (flowers) {
-    for (let i = 0; i < w / 5; i++) {
-      const x = rng.range(3, w - 3), y = rng.range(3, h * 0.7);
-      if (!buf.opaque(x, y)) continue;
-      buf.set(x, y, flowers[5]);
-      buf.set(x + 1, y, flowers[4]);
-      buf.set(x, y + 1, flowers[3]);
-    }
-  }
-  buf.outline(c => shade(c, -0.55));
+  organicShrub(buf, rng, { x: w / 2, y: h - 1, w: w - 8, h: h - 4, ramp, base: 4, flowers, leaf: [Math.max(3, h * 0.13), Math.max(2, h * 0.08)] });
+  outlineSel(buf, 0.55);
   return { buf, ax: w / 2, ay: h };
 }
 
@@ -394,22 +406,9 @@ export function paintRata(seed: number, w: number, h: number) {
   return buf;
 }
 
+/** a clump of mushrooms with hand-shaped caps (art/organic.ts) */
 export function paintMushrooms(seed: number, glow = false) {
-  const rng = new Rng(seed);
-  const W = 18, H = 12;
-  const buf = new PixelBuffer(W, H);
-  const n = rng.int(2, 4);
-  for (let i = 0; i < n; i++) {
-    const x = 3 + i * 4 + rng.range(-1, 1), hgt = rng.range(3, 8), cr = rng.range(1.8, 3.2);
-    for (let y = H - 1; y > H - hgt; y--) buf.set(x, y, glow ? PAL.glowCyan[4] : PAL.white[5]);
-    const cy = H - hgt;
-    buf.ellipseFn(x, cy, cr, cr * 0.6, (_x, _y, nx, ny) => {
-      if (ny > 0.3) return -1;
-      if (glow) return ny < -0.3 ? PAL.glowCyan[6] : PAL.glowCyan[5];
-      return ny < -0.35 ? PAL.canvasOrange[6] : nx > 0.3 ? PAL.canvasOrange[3] : PAL.canvasOrange[5];
-    });
-  }
-  return { buf, ax: W / 2, ay: H };
+  return organicMushrooms(seed, glow);
 }
 
 /** cheap integer hash to 0..1, for hand-placed-looking flecks */
@@ -554,27 +553,9 @@ export function paintRock(seed: number, w: number, h: number, ramp: C[] = PAL.st
 /** paintRock's extras for big rocks: more vertices round the silhouette, more facets */
 export interface RockOpts { verts?: number; facets?: number }
 
+/** a fallen log: broken end, sawn ringed face, bark plates, knots, a stub, moss (art/organic.ts) */
 export function paintLog(seed: number, len: number, r: number) {
-  const W = Math.ceil(len + 4), H = Math.ceil(r * 2 + 6);
-  const buf = new PixelBuffer(W, H);
-  const cy = H - r - 1;
-  for (let x = 2; x < W - 2; x++) {
-    for (let y = Math.floor(cy - r); y <= cy + r; y++) {
-      const ny = (y + 0.5 - cy) / r;
-      if (Math.abs(ny) > 1) continue;
-      let l = -ny * 0.8 + (fbm2(x * 0.1, y * 0.4, 3, seed) - 0.5) * 1.0 + (bayer(x, y) - 0.5) * 0.3;
-      let c = PAL.bark[clamp(Math.round((l * 0.5 + 0.5) * 6), 1, 6)];
-      if (ny < -0.35 && fbm2(x * 0.08, y * 0.2, 2, seed + 7) > 0.42) c = PAL.moss[clamp(Math.round(3 + l * 2 - ny), 2, 6)];
-      buf.set(x, y, c);
-    }
-  }
-  // end cap rings
-  buf.ellipseFn(W - 3, cy, 2.5, r, (_x, _y, nx, ny) => {
-    const d = Math.hypot(nx, ny);
-    return d > 0.8 ? PAL.bark[2] : Math.floor(d * 4) % 2 ? PAL.bark[5] : PAL.bark[6];
-  });
-  buf.outline(c => shade(c, -0.6));
-  return { buf, ax: W / 2, ay: H };
+  return organicLog(seed, len, r);
 }
 
 /** Hanging liana / vine strand. */

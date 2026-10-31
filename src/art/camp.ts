@@ -3,6 +3,7 @@
 import { PixelBuffer } from './pixel';
 import { C, hex, mix, shade, rgba, withAlpha } from './color';
 import { PAL, OUTLINE } from './palettes';
+import { organicCrate, organicBarrel } from './organic';
 import { Rng, bayer, clamp, fbm2, noise1 } from '../core/math';
 
 const O = OUTLINE;
@@ -290,47 +291,14 @@ export function paintWheels(r = 11) {
   return out;
 }
 
+/** a plank crate built board by board (art/organic.ts) */
 export function paintCrate(w = 18, h = 14, stencil = true, seed = 4) {
-  const buf = new PixelBuffer(w, h);
-  const B = PAL.bark;
-  buf.rectFn(0, 0, w, h, (x, y) => {
-    const plank = Math.floor(y / 4);
-    let l = 0.1 + (noise1(x * 0.4 + plank * 7, seed) - 0.5) * 0.4 + (y % 4 === 0 ? -0.4 : 0);
-    if (x === 0 || y === 0) l += 0.3;
-    if (x === w - 1 || y === h - 1) l -= 0.5;
-    return B[clamp(Math.round((l * 0.5 + 0.5) * 6) + 1, 1, 7)];
-  });
-  // frame
-  for (let x = 0; x < w; x++) {
-    buf.set(x, 0, B[6]);
-    buf.set(x, h - 1, B[2]);
-  }
-  for (let y = 0; y < h; y++) {
-    buf.set(0, y, B[5]);
-    buf.set(w - 1, y, B[2]);
-    buf.set(Math.round((y / h) * (w - 1)), y, B[4]);
-  }
-  if (stencil) {
-    buf.rect(w / 2 - 3, h / 2 - 1, 6, 1, withAlpha(PAL.white[4], 255));
-    buf.rect(w / 2 - 2, h / 2 + 1, 4, 1, withAlpha(PAL.white[4], 255));
-  }
-  buf.outline(O);
-  return { buf, ax: w / 2, ay: h };
+  return organicCrate(w, h, stencil, seed);
 }
 
+/** a painted stave barrel with iron hoops (art/organic.ts) */
 export function paintBarrel(color: C[] = PAL.blue) {
-  const W = 12, H = 17;
-  const buf = new PixelBuffer(W, H);
-  buf.rectFn(1, 1, W - 2, H - 2, (x, y) => {
-    const nx = (x + 0.5 - W / 2) / (W / 2 - 1);
-    let l = -nx * 0.8 + (bayer(x, y) - 0.5) * 0.3;
-    if (y === 4 || y === H - 5) l -= 0.5;
-    return color[clamp(Math.round((l * 0.5 + 0.5) * 6), 0, 6)];
-  });
-  buf.rect(2, 1, W - 4, 1, color[6]);
-  buf.set(W / 2 - 1, 2, PAL.metal[2]);
-  buf.outline(O);
-  return { buf, ax: W / 2, ay: H };
+  return organicBarrel(color);
 }
 
 /** Log bench */

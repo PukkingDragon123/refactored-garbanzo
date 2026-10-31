@@ -1014,6 +1014,18 @@ export interface BigLeafOpts {
   /** only paint where the destination is empty (0) / everywhere (default) */
   mode?: 0 | 1;
   wrapW?: number;
+  /** a hand-drawn margin: px of waviness, with the odd nibble bitten out (0 = smooth) */
+  edge?: number;
+  /** 0..1: the leaf turned on its midrib, the far (shadow) half foreshortened */
+  fold?: number;
+  /** monstera-style splits running in from the margin along the veins, per side */
+  splits?: number;
+}
+
+/** smooth 1-D value noise for leaf margins */
+function noiseE(x: number, seed: number) {
+  const i = Math.floor(x), f = x - i, k = f * f * (3 - 2 * f);
+  return hash2(i, 7, seed) * (1 - k) + hash2(i + 1, 7, seed) * k;
 }
 
 /**
@@ -1042,6 +1054,9 @@ export function bigLeaf(buf: PixelBuffer, o: BigLeafOpts) {
   const mode1 = o.mode === 1;
   const step = L > 40 ? 0.7 : 0.5;
   const vsp = veins > 0 ? L / (veins + 1) : 0;
+  const eA = o.edge ?? 0, fold = o.fold ?? 0, nSp = o.splits ?? 0;
+  const eS = Math.floor(Math.abs(o.x * 13.7 + o.y * 7.3 + L)) % 997;
+  const spl = nSp > 0 ? L * 0.8 / (nSp + 1) : 0;
   for (let u = 0; u <= L; u += step) {
     const t = u / L;
     const bend = droop * L * 0.5 * t * t;
@@ -1051,11 +1066,27 @@ export function bigLeaf(buf: PixelBuffer, o: BigLeafOpts) {
     const tl = Math.hypot(tx, ty);
     const nx = -ty / tl, ny = tx / tl;
     const facing = nx * LIGHT[0] + ny * LIGHT[1];
-    const hw = Math.max(0.6, profile(shape, t) * hw0);
+    const hw1 = Math.max(0.6, profile(shape, t) * hw0);
     const aoT = o.ao ? o.ao * Math.max(0, 1 - t * 3) : 0;
-    for (let v = -hw; v <= hw; v += step) {
+    // each half its own width: the margin wavers and is nibbled, the far half foreshortens
+    const side = (s: number) => {
+      let w = hw1 * (s > 0 ? 1 + fold * 0.12 : 1 - fold * 0.42);
+      if (eA > 0 && t > 0.04 && t < 0.97) {
+        w += eA * (noiseE(u * 0.42 + (s > 0 ? 0 : 40), eS) - 0.5) * 2 * Math.min(1, t * 6);
+        if (noiseE(u * 1.3 + (s > 0 ? 70 : 90), eS + 1) > 0.86) w -= eA * 1.6;
+      }
+      return Math.max(0.6, w);
+    };
+    const litPos = facing >= 0;
+    const hwP = side(litPos ? 1 : -1), hwN = side(litPos ? -1 : 1);
+    for (let v = -hwN; v <= hwP; v += step) {
       const lit = v * facing > 0;
       const av = Math.abs(v);
+      const hw = v >= 0 ? hwP : hwN;
+      if (spl > 0 && t > 0.2 && t < 0.86 && av > hw * 0.5) {
+        const q = (u - av * 0.5 + (v >= 0 ? 0 : spl * 0.5)) / spl;
+        if (Math.abs(q - Math.round(q)) * spl < Math.max(0.7, L / 60) * (0.4 + (av / hw) * 0.8)) continue;
+      }
       let tone = lit ? 0 : -1;
       if (av < 0.6 && t < 0.92) tone = lit ? ribT : ribT - 1;
       else if (vsp > 0) {

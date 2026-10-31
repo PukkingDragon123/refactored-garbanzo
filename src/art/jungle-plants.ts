@@ -9,6 +9,7 @@ import {
   outlineSel, trimSprite, bigLeaf, flower, occlude, mix, shade, hex, withA, despeckle,
 } from './jungle-core';
 import { astelia } from './jungle-trees';
+import { organicShrub } from './organic';
 
 export type PlantKind =
   | 'fern' | 'crownfern' | 'kiokio' | 'umbrellafern' | 'kidneyfern' | 'flax' | 'kawakawa' | 'taro' | 'grass' | 'sedge'
@@ -300,16 +301,8 @@ function shrub(seed: number, size: number, berries = true): Sprite {
   const S = size;
   const buf = canvas(S * 1.6 + 12, S + 10);
   const x = buf.w / 2, y = buf.h - 2;
-  for (let i = 0; i < 4; i++) tube(buf, [[x + rng.range(-3, 3), y], [x + rng.range(-S * 0.4, S * 0.4), y - S * 0.5]], t => 1.8 - t, JP.bark, 3);
-  const cl = crown(buf, rng, { cx: x, cy: y - S * 0.48, rx: S * 0.7, ry: S * 0.45, ramp: rng.chance(0.5) ? JP.canopy : JP.canopyOlive, n: rng.int(4, 6), lo: 1, hi: 4, shape: 'oval', len: [3, 5], wid: [2.5, 3], density: 0.85, flatBottom: 0.6, size: [0.4, 0.6] });
-  if (berries) for (let i = 0; i < S * 0.5; i++) {
-    const c = cl[rng.int(0, cl.length - 1)];
-    const bx = c.x + rng.range(-c.rx, c.rx) * 0.8, by = c.y + rng.range(-c.ry, c.ry) * 0.8;
-    if (!buf.opaque(bx, by)) continue;
-    buf.set(bx, by, rc(JP.orange, 6));
-    buf.set(bx + 1, by, rc(JP.orange, 4));
-    buf.set(bx, by + 1, rc(JP.orange, 3));
-  }
+  // grown from forked stems into sprays of leaves, never a heap of round lumps (art/organic.ts)
+  organicShrub(buf, rng, { x, y, w: S * 1.4, h: S * 0.78, ramp: rng.chance(0.5) ? JP.canopy : JP.canopyOlive, base: 5, bark: JP.bark, leaf: [Math.max(3.5, S * 0.12), Math.max(2.2, S * 0.07)], berries: berries ? JP.orange : undefined });
   return done(buf, x, y + 1);
 }
 

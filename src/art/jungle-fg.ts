@@ -61,7 +61,9 @@ function leaves(seed: number, H: number, monstera = false): Sprite {
     const ang = (side < 0 ? Math.PI * 0.72 : Math.PI * 0.28) + rng.range(-0.2, 0.2) - side * 0.3;
     bigLeaf(buf, {
       x: tipx, y: tipy, ang: ang - side * 0.5, len: l.len, wid: l.len * (monstera ? 0.85 : 0.62), ramp: FG_TARO, base: 3 + l.layer, shape: monstera ? 'heart' : 'point',
-      droop: 0.35, veins: monstera ? 7 : 9, rib: 1, ao: 0.5, rng, holes: monstera ? rng.int(3, 6) : 0, tears: monstera ? rng.int(3, 5) : rng.int(0, 2),
+      droop: 0.35, veins: monstera ? 7 : 9, rib: 1, ao: 0.5, rng, holes: monstera ? rng.int(1, 3) : 0, tears: monstera ? 0 : rng.int(0, 2),
+      // hand-drawn: a wavering, nibbled margin, the leaf turned on its rib, monstera split along its veins
+      edge: monstera ? 0.8 : 0.9 + rng.range(0, 0.5), fold: rng.range(0.1, 0.5), splits: monstera ? rng.int(2, 3) : 0,
     });
   }
   return finish(buf, x, y);
