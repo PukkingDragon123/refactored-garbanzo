@@ -42,7 +42,7 @@ import type { TBArt } from '../../art/v12/thunderbird';
 
 // ---------------------------------------------------------------- how dangerous is this place
 const TIER: Record<string, number> = {
-  fernwood: 1, canopy: 1, falls: 1, mangrove: 1, coast: 1, grotto: 1,
+  fernwood: 1, canopy: 1, falls: 1, mangrove: 1, coast: 1, grotto: 1, swamp: 1,
   hills: 2, ruins: 2, fossils: 2, glowforest: 2, geovalley: 2, unknown: 2,
 };
 export const tierOf = (loc: string | null) => (loc ? TIER[loc] ?? 0 : 0);

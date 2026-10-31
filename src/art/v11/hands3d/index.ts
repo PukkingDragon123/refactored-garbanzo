@@ -599,7 +599,8 @@ export function prewarmHands3d(who: Who | Who[], sides: Side[] = ['right', 'left
 
 /** global switch: false brings back the classic 2D pixel hands in the minigames */
 export const HANDS3D = {
-  enabled: true,
+  /** off: the player's first-person hands are never shown (user) */
+  enabled: false,
   /** shading debug: 0 off, 1 clay, 2 regions, 3 AO, 4 normals */
   debug: 0,
   /** force the close-ups' render scale (null: each close-up's own choice; ?h3dpx=2 sets it) */

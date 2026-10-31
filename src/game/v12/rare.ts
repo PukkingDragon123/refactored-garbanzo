@@ -42,6 +42,8 @@ export const RARE: RareSpot[] = [
   { loc: 'fernwood', species: 'pteramander', x: 2010, y: [232, 300], times: ['dusk', 'night'], still: 12, goal: 'down at the frog pool after dark, crouch by the water', hint: 'Something with wings comes down to the frog pool at night. Get low by the water, and wait.' },
   { loc: 'fernwood', species: 'sailglider', x: 3790, y: [0, 140], times: ['dusk', 'night', 'dawn'], still: 14, goal: 'up on the high limb at dusk, sit still among the ferns', hint: 'Sail possums glide between these two kauri. Up here, at dusk. Don’t move a muscle.' },
   { loc: 'falls', species: 'galehawk', x: 3000, y: [-40, 70], times: ['dawn', 'day', 'dusk'], still: 12, goal: 'on the top auk ledge, keep still and watch the sky', hint: 'The gale hawk hunts off this cliff. Sit tight up here and let it come past.' },
+  // ---- V12 Te Repo Raupō: the high way, the old maimai over the raupō beds
+  { loc: 'swamp', species: 'snakestork', x: 3420, y: [96, 150], times: ['dawn', 'day', 'dusk'], still: 12, goal: 'up on the old maimai over the raupō, sit still and watch the water', hint: 'Serpent storks fish the raupō beds. Up here they can\'t see you. Sit, and wait.' },
   { loc: 'mangrove', species: 'titan', x: 1800, times: ['dawn', 'day', 'dusk', 'night'], still: 18, goal: 'deep in the channels, hidden in cover, for a long time', hint: 'Something enormous moves under this water. If you want to see it, you hide. For a long time.', needs: 'hide_cloak' },
 ];
 

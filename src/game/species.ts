@@ -7,6 +7,7 @@ import { FISH9 } from './v9/species-fish';
 import { WILD9 } from './v9/species-wild';
 import { TIGER_SPECIES } from './v11/species-tiger';
 import { TORHOPPER_SPECIES } from './v11/species-hills';
+import { BELLOWTOAD_SPECIES, EMBER_SPECIES } from './v12/swamp/species';
 
 export type SiteId = 'fernwood' | 'canopy' | 'falls' | 'mangrove' | 'coast';
 export type Group = 'Serpent' | 'Bird' | 'Mammal' | 'Reptile' | 'Amphibian' | 'Fish' | 'Crustacean' | 'Mollusc' | 'Insect' | 'Parasite' | 'Arachnid' | 'Worm' | 'Cnidarian';
@@ -358,6 +359,8 @@ SPECIES.unshift(...SEA9, ...SHORE9, ...FISH9, ...WILD9);
 SPECIES.push(TIGER_SPECIES);
 // V11: the Rocky Hills' grazer
 SPECIES.push(TORHOPPER_SPECIES);
+// V12: Te Repo Raupō's toads
+SPECIES.push(BELLOWTOAD_SPECIES, EMBER_SPECIES);
 
 export const SPECIES_BY_ID: Record<string, Species> = Object.fromEntries(SPECIES.map(s => [s.id, s]));
 export const CLUE_BY_ID: Record<string, ClueDef> = Object.fromEntries(CLUES.map(c => [c.id, c]));
