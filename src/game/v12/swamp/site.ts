@@ -272,8 +272,10 @@ export function buildSwamp(f: FieldScene): SwampRuntime {
   const reeds = new GroundCover(-5.3, movers, me);
   main.add(reeds);
   // behind the walk line: tī kōuka, flax, pukio and raupō beds (raupō thickest in the open beds)
+  // (the whare on the hidden island stands clear of them, so it reads from down in the channel)
+  const byHut = (x: number, r: number) => Math.abs(x - CHANNEL.hut) < r;
   for (let x = 30; x < SW.W - 30; x += rng.range(26, 70)) {
-    if (nearGiant(x, 18)) continue;
+    if (nearGiant(x, 18) || byHut(x, 72)) continue;
     const cov = swCanopy(x), k = rng.next(), d = swDepth(x);
     const gy = swGround(x) + (d > 1 ? Math.min(d, 6) : 1);
     let fr;
@@ -366,7 +368,7 @@ export function buildSwamp(f: FieldScene): SwampRuntime {
   const reedTuft = () => { const v = rng.int(0, 4); return frameOf(`rt:${v}`, () => paintRaupo(700 + v, 22 + v * 5, { heads: v % 2, width: 18 })); };
   for (let x = 20; x < SW.W - 10; x += rng.range(10, 22)) {
     const d = swDepth(x);
-    if (rng.next() > 0.8) continue;
+    if (rng.next() > 0.8 || byHut(x, 58)) continue;
     backCover.add(d > 1 || rng.chance(0.5) ? reedTuft() : tuft(['sedge', 'grass', 'sedge', 'kiokio'], [20, 34]), x, swGround(x) + (d > 1 ? Math.min(d, 8) : 1), rng.chance(0.5));
   }
   for (let x = 16; x < SW.W - 10; x += rng.range(18, 40)) {
@@ -377,6 +379,7 @@ export function buildSwamp(f: FieldScene): SwampRuntime {
   for (let x = 30; x < SW.W; x += rng.range(22, 48)) {
     const dd = rng.range(18, 170);
     const k = rng.next();
+    if (byHut(x, 60) && dd < 70) continue;
     const v = rng.int(0, 5);
     const fr = k < 0.55 ? frameOf(`fr:${v}`, () => paintRaupo(800 + v, 34 + v * 9, { width: 30 + v * 4 }))
       : k < 0.72 ? frameOf(`fp:${v % 3}`, () => paintPukio(810 + (v % 3), 22 + (v % 3) * 6))

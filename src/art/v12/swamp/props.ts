@@ -474,7 +474,7 @@ export function paintBoardwalk(len: number, deck: (x: number) => number, water: 
  *  ground(x) the walk line under it; ladders at local x `ups` */
 export function paintMaimai(len: number, deck: (x: number) => number, ground: (x: number) => number, ups: number[], seed: number): { buf: PixelBuffer; y0: number } {
   let y0 = 1e9, y1 = -1e9;
-  for (let x = 0; x <= len; x++) { y0 = Math.min(y0, deck(x) - 34); y1 = Math.max(y1, ground(x) + 2); }
+  for (let x = 0; x <= len; x++) { y0 = Math.min(y0, deck(x) - 42); y1 = Math.max(y1, ground(x) + 2); }
   y0 = Math.floor(y0); y1 = Math.ceil(y1);
   const W = len + 4, H = y1 - y0 + 2;
   const b = new PixelBuffer(W, H);
@@ -499,19 +499,33 @@ export function paintMaimai(len: number, deck: (x: number) => number, ground: (x
     set(b, x, y, seam ? pk(SWP.plank, 3) : pk(SWP.plank, 7 + (hash2(x, 3, seed) - 0.5) * 2));
     set(b, x, y + 1, pk(SWP.plank, 4)); set(b, x, y + 2, pk(SWP.wood, 2));
   }
-  // the hide box at the west end: raupō bundles lashed to a frame, a slot to look out of
+  // the hide at the west end: raupō bundles of every height lashed to a frame, bulging, ragged-topped,
+  // stray blades sticking up out of them, a lean-to of brush over the top and a slot to look out of
   const hx0 = 6, hx1 = Math.min(len - 6, 46);
+  const hTop = (x: number) => {
+    const bundle = Math.floor((x - hx0) / 3);
+    return 22 + Math.floor(hash2(bundle, 4, seed) * 5) + Math.round(Math.sin((x - hx0) / (hx1 - hx0) * Math.PI) * 2);
+  };
   for (let x = hx0; x <= hx1; x++) {
-    const top = Y(deck(x)) - 24 - (x < hx0 + 3 || x > hx1 - 3 ? 0 : Math.round(hash2(x, 4, seed) * 2));
-    for (let y = top; y < Y(deck(x)); y++) {
-      const slot = y > top + 7 && y < top + 11 && x > hx0 + 8 && x < hx1 - 8;
-      if (slot) { set(b, x, y, pk(SWP.wood, 0)); continue; }
-      const bundle = Math.floor((x - hx0) / 3);
-      const lash = (y - top) % 9 === 4;
-      set(b, x, y, lash ? pk(SWP.flaxRope, 2 + ((x & 1) ? 1 : 0)) : pk(SWP.thatch, 3 + ((x - hx0) % 3 === 0 ? -1 : (x - hx0) % 3 === 1 ? 1 : 0) + (bundle % 2 ? 0.5 : 0) + dz(x, y, 0.5)));
+    const ht = hTop(x), base = Y(deck(x)), top = base - ht;
+    const bulge = Math.round(Math.sin((x - hx0) * 0.9) * 0.6);
+    for (let y = top; y < base; y++) {
+      const slot = y > base - 17 && y < base - 13 && x > hx0 + 8 && x < hx1 - 8;
+      if (slot) { set(b, x, y, pk(SWP.wood, (x + y) % 5 === 0 ? 1 : 0)); continue; }
+      const lash = (base - y) % 9 === 5;
+      const tone = 3 + ((x - hx0) % 3 === 0 ? -1.2 : (x - hx0) % 3 === 1 ? 1 : 0) + (Math.floor((x - hx0) / 3) % 2 ? 0.4 : -0.2) + dz(x, y, 0.5) + (y < top + 3 ? 1 : 0);
+      set(b, x + (y > base - 4 ? 0 : bulge), y, lash ? pk(SWP.flaxRope, 2 + ((x & 1) ? 1 : 0)) : pk(SWP.thatch, tone));
     }
-    // ragged tops of the bundles
-    if (hash2(x, 5, seed) < 0.6) set(b, x, Y(deck(x)) - 25 - (hash2(x, 6, seed) < 0.4 ? 1 : 0), pk(SWP.thatch, 5));
+    // frayed tips, and now and then a long blade sticking up out of the bundle
+    set(b, x, top - 1, pk(SWP.thatch, 5 + (hash2(x, 5, seed) < 0.4 ? 1 : 0)));
+    if (hash2(x, 6, seed) < 0.16) { const L = 3 + Math.floor(hash2(x, 7, seed) * 6), lean = hash2(x, 8, seed) < 0.5 ? -0.3 : 0.3; for (let j = 0; j < L; j++) set(b, x + Math.round(j * lean), top - 2 - j, pk(SWP.raupoDry, 3 + (j > L - 3 ? 2 : 0))); }
+  }
+  // the brush lean-to over it: twigs and old fern laid over two poles, drooping at the front
+  for (let x = hx0 - 3; x <= hx1 + 4; x++) {
+    const t = (x - hx0 + 3) / (hx1 - hx0 + 7);
+    const y0 = Y(deck(hx0)) - 30 - Math.round((1 - t) * 4) + Math.round(Math.sin(x * 0.7) * 0.8);
+    for (let k = 0; k < 3; k++) if (hash2(x, k + 20, seed) < 0.75) set(b, x, y0 + k, k === 0 ? pk(SWP.raupoDry, 4 + (hash2(x, 21, seed) < 0.3 ? 1 : 0)) : pk(SWP.wood, 3 + (hash2(x, k, seed) < 0.3 ? 1 : 0)));
+    if (hash2(x, 22, seed) < 0.2) for (let j = 1; j < 4; j++) set(b, x, y0 + 2 + j, pk(SWP.raupoDry, 2));
   }
   // ladders: two rails and rungs
   for (const lx of ups) {
@@ -589,7 +603,7 @@ export function paintWhare(seed: number): Sprite {
       const row = Math.floor((y - top) / 5);
       const comb = Math.sin(x * 2.3 + row * 1.7 + noise1(y / 2, seed) * 2);
       const l = (x < cx ? 1 : -0.6) + (comb > 0.5 ? 1 : comb < -0.6 ? -1 : 0) + ((y - top) % 5 === 4 ? -1 : 0);
-      set(b, x, y, pk(SWP.thatch, 4 + l + dz(x, y, 0.6) - (y - top) * 0.03));
+      set(b, x, y, pk(SWP.thatch, 4.6 + l + dz(x, y, 0.6) - (y - top) * 0.03));
     }
     if (hash2(x, 2, seed) < 0.5) set(b, x, top - (hash2(x, 3, seed) < 0.3 ? 1 : 0), pk(SWP.sphag, 3 + (x & 1)));
   }
