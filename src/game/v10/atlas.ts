@@ -5,6 +5,14 @@
 import type { LocationDef } from './regions';
 
 import { GRID_W, GRID_H } from './atlasgeo';
+import { toWorld } from '../v12/region';
+
+/** V12 big regions (src/game/v12/region.ts): a place played as a stretch of a region scene opens that
+ *  scene with Mori at the stretch's offset (`at` is the place's own x) */
+const inForest = (loc: string, enter: number) => async (at?: number) => {
+  const x = toWorld(loc, at !== undefined && Number.isFinite(at) ? at : enter);
+  await (await import('../v11/forest')).goForest({ x });
+};
 // (the map's size and geometry live in atlasgeo.ts, free of the game, so the map painter's worker can use them)
 export { GRID_W, GRID_H, MAP_W, MAP_H, GRID_K, COAST, ISLETS, ZONES10, RIVERS } from './atlasgeo';
 export type { Zone10 } from './atlasgeo';
@@ -116,7 +124,7 @@ export const ATLAS: AtlasLoc[] = [
   // ------------------------------------------------------------ the V2 expedition sites
   {
     id: 'fernwood', name: 'Fernwood Floor', sub: 'Te Ngāhere', region: 'interior', kind: 'site', pos: P(430, 198),
-    scene: { type: 'site', site: 'fernwood' }, difficulty: 2, xr: [0, 4400],
+    scene: { type: 'custom', go: inForest('fernwood', 90) }, difficulty: 2, xr: [0, 4400],
     path: PATH([380, 162], [404, 186], [432, 200], [458, 210], [470, 214]), knots: [0, 1300, 2600, 3900, 4400],
     routes: [
       { from: 'isle-track', at: 6860, label: 'Follow the track deeper into the bush', hours: 1, energy: 10, kind: 'walk', say: 'The track just... keeps going. Into the ferns.' },
@@ -133,7 +141,7 @@ export const ATLAS: AtlasLoc[] = [
   },
   {
     id: 'falls', name: 'Thunder Falls', sub: 'Te Wai Whatitiri', region: 'interior', kind: 'site', pos: P(512, 246),
-    scene: { type: 'site', site: 'falls' }, difficulty: 3, xr: [0, 3300],
+    scene: { type: 'custom', go: inForest('falls', 90) }, difficulty: 3, xr: [0, 3300],
     path: PATH([476, 222], [500, 238], [520, 256], [538, 276]),
     routes: [{ from: 'fernwood', at: 4360, label: 'Follow the stream uphill toward the roar', hours: 1.5, energy: 14, kind: 'walk', say: 'Hear that? That’s not thunder. That’s water.' }],
     desc: 'Where the river drops off the plateau. Auks nest in the cliffs; dippers walk under the water.', terrain: 'Plunge pool, cliff ledges',

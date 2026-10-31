@@ -12,6 +12,12 @@
 // Wao Nui's ridge end splits for Fernwood and the Rocky Hills; Fernwood for the canopy and the falls...
 //
 // field10.ts calls installTrails() for every field scene once the V10 day loop is running.
+//
+// V12 big regions (./region.ts): neighbouring places are one long scene now (Te Wao Nui runs on into
+// Fernwood and the falls). The trails between them are gone: you walk them. A trail end in a region
+// sits at its part's offset ('W' / 'E' of a stretch in the middle of a region is a signposted crossroads,
+// not an edge), and a region's own crossroads also carry planks for its tiers (up onto a limb or a ledge,
+// down into a creek gully: registerPosts) and for the way along the main path.
 
 import { game } from '../game';
 import type { FieldScene } from '../scenes/field';
@@ -34,6 +40,7 @@ import { paintSignpost, paintKeyHint } from './signpost';
 import type { ArmSpec, ArmBox } from './signpost';
 import { hourOfClock, LATE_HOUR, DARK_HOUR } from './clock';
 import { showWatch } from '../../ui/v12/watch';
+import { regionOf, sceneLocOf } from './region';
 
 export type Arm = 'up' | 'down';
 export type TrailKind = 'path' | 'climb' | 'swim' | 'wade' | 'dive' | 'tunnel';
@@ -61,13 +68,12 @@ export const TRAILS: TrailDef[] = [
   T('beach-forest', { loc: 'isle-stream', at: 3918, arm: 'up' }, { loc: 'forest', at: 'W' }, 0.25, 'path', { say: 'Up the stream, into the trees. Te Wao Nui.' }),
   T('beach-mangrove', { loc: 'isle-stream', at: 3918, arm: 'down' }, { loc: 'mangrove', at: 'W' }, 0.75, 'wade', { gate: 'staff', say: 'The water’s getting darker. And warmer. I don’t love either of those things.' }),
   T('cave-grotto', { loc: 'isle-cave', at: 5250, arm: 'down' }, { loc: 'grotto', at: 'W' }, 0.25, 'swim', { gate: 'snorkel', say: 'There’s a current under the glowworms. It goes somewhere. Deep breath...' }),
-  T('track-fernwood', { loc: 'isle-track', at: 'E' }, { loc: 'fernwood', at: 'W' }, 0.5, 'path', { say: 'The bush track just... keeps going. Into the ferns.' }),
-  // ---- Te Wao Nui, the great forest: its ridge end splits
-  T('forest-fernwood', { loc: 'forest', at: 'E', arm: 'up' }, { loc: 'fernwood', at: 'W', arm: 'up' }, 0.5, 'path', { say: 'Up over the ridge. The ferns on the other side are taller than the trees here.' }),
-  T('forest-hills', { loc: 'forest', at: 'E' }, { loc: 'hills', at: 'W' }, 1, 'climb', { gate: 'grip', say: 'Up and out of the forest, onto the open tops.' }),
-  // ---- Fernwood: the kauri and the stream
-  T('fernwood-canopy', { loc: 'fernwood', at: 'E', arm: 'up' }, { loc: 'canopy', at: 'W' }, 0.75, 'climb', { gate: 'gloves', say: 'Okay. Don’t look down. Don’t look down. Don’t... I looked down.' }),
-  T('fernwood-falls', { loc: 'fernwood', at: 'E' }, { loc: 'falls', at: 'W' }, 0.5, 'path', { say: 'Hear that? That’s not thunder. That’s water.' }),
+  T('track-fernwood', { loc: 'isle-track', at: 'E' }, { loc: 'fernwood', at: 'W', arm: 'down' }, 0.5, 'path', { say: 'The bush track just... keeps going. Into the ferns.' }),
+  // ---- Te Wao Nui, the great forest region (Te Wao Nui, Fernwood, the falls: one walk, ./region.ts):
+  // the crossroads on the ridge between Te Wao Nui and Fernwood
+  T('forest-hills', { loc: 'forest', at: 'E', arm: 'up' }, { loc: 'hills', at: 'W' }, 1, 'climb', { gate: 'grip', say: 'Up and out of the forest, onto the open tops.' }),
+  // ---- Fernwood: up the giant kauri
+  T('fernwood-canopy', { loc: 'fernwood', at: 4060, arm: 'up' }, { loc: 'canopy', at: 'W' }, 0.75, 'climb', { gate: 'gloves', say: 'Okay. Don’t look down. Don’t look down. Don’t... I looked down.' }),
   // ---- the falls
   T('falls-hills', { loc: 'falls', at: 620, arm: 'up' }, { loc: 'hills', at: 'W', arm: 'down' }, 0.75, 'climb', { gate: 'grip', say: 'Up through the last of the trees. There’s sky up there. A LOT of sky.' }),
   T('falls-fossils', { loc: 'falls', at: 'E' }, { loc: 'fossils', at: 'W' }, 1, 'climb', { gate: 'rope', say: 'The rock up here is striped like a cake. Every stripe is a million years.' }),
@@ -113,6 +119,9 @@ export function depthOf(loc: string): number {
     while (q.length) {
       const cur = q.shift()!;
       for (const t of TRAILS) for (const [x, y] of [[t.a, t.b], [t.b, t.a]] as const) if (x.loc === cur && !d.has(y.loc)) { d.set(y.loc, d.get(cur)! + 1); q.push(y.loc); }
+      // (the stretches of a region are a walk apart: the next one along is a step deeper)
+      const rg = regionOf(cur);
+      if (rg) for (const p of rg.r.parts) if (!d.has(p.loc) && Math.abs(rg.r.parts.indexOf(p) - rg.r.parts.indexOf(rg.part)) === 1) { d.set(p.loc, d.get(cur)! + 1); q.push(p.loc); }
     }
     depthMap = d;
   }
@@ -130,8 +139,18 @@ export function hourNow(f?: FieldScene | null): number {
 }
 
 // ---------------------------------------------------------------- the scene's trail ends
-interface EndRef { t: TrailDef; side: 'a' | 'b'; end: TrailEnd }
-interface Junction { x: number; edge: 'W' | 'E' | null; ends: EndRef[]; sign: Prop | null; arms: ArmBox[]; armIts: Interactable[]; specs: (EndRef | { info: string; go: number; dir: 'left' | 'right' })[] }
+/** a trail end in this scene; `at` is where it is in the scene (a region stretch's end is a crossroads) */
+interface EndRef { t: TrailDef; side: 'a' | 'b'; end: TrailEnd; at: 'W' | 'E' | number }
+/** an info plank: Mori just walks that way along the path */
+interface InfoArm { info: string; go: number; dir: 'left' | 'right' }
+/** a region's own branch at a crossroads: up onto a limb or a ledge, down into a gully (no trail, no
+ *  fade: Mori climbs or scrambles there himself) */
+export interface TierArm { tier: string; mark: Arm; dir: 'left' | 'right'; label: string; go: (f: FieldScene) => Promise<void> | void }
+export interface RegionPost { x: number; arms: (TierArm | InfoArm)[] }
+type Spec = EndRef | InfoArm | TierArm;
+const isEnd = (s: Spec): s is EndRef => 't' in s;
+const isTier = (s: Spec): s is TierArm => 'tier' in s;
+interface Junction { x: number; edge: 'W' | 'E' | null; ends: EndRef[]; sign: Prop | null; arms: ArmBox[]; armIts: Interactable[]; specs: Spec[] }
 interface SceneTrails {
   f: FieldScene;
   W: number;
@@ -151,10 +170,24 @@ function endsIn(loc: string): EndRef[] {
   const island = loc === 'island';
   for (const t of TRAILS) for (const side of ['a', 'b'] as const) {
     const e = t[side];
-    if (island ? isIsland(location(e.loc)) : e.loc === loc) out.push({ t, side, end: e });
+    if (island ? isIsland(location(e.loc)) : sceneLocOf(e.loc) === loc) out.push({ t, side, end: e, at: sceneAt(e) });
   }
   return out;
 }
+/** where a trail end is in its scene: a region stretch's local x is offset, and its ends in the middle
+ *  of the region are crossroads a little way in (only the region's own two ends are edges) */
+export function sceneAt(e: TrailEnd): 'W' | 'E' | number {
+  const rg = regionOf(e.loc);
+  if (!rg) return e.at;
+  const { r, part } = rg;
+  if (e.at === 'W') return part.x0 <= 0 ? 'W' : part.x0 + 60;
+  if (e.at === 'E') return part.x0 + part.w >= r.W ? 'E' : part.x0 + part.w - 60;
+  return part.x0 + e.at;
+}
+
+/** a region scene's own crossroads (set by the region's builder before the trails go in) */
+const posts = new WeakMap<FieldScene, RegionPost[]>();
+export function registerPosts(f: FieldScene, list: RegionPost[]) { posts.set(f, [...(posts.get(f) ?? []), ...list]); }
 
 /** the beach's own signposts (camp and the crossroads), with planks along the walk too */
 const ISLAND_INFO: { x: number; arms: { info: string; go: number; dir: 'left' | 'right' }[] }[] = [
@@ -180,13 +213,13 @@ export function installTrails(f: FieldScene, loc: string | 'island') {
   const byKey = new Map<string, Junction>();
   const jn = (x: number, edge: 'W' | 'E' | null): Junction => ({ x, edge, ends: [], sign: null, arms: [], armIts: [], specs: [] });
   for (const r of ends) {
-    if (r.end.at === 'W' || r.end.at === 'E') {
-      const k = r.end.at;
+    if (r.at === 'W' || r.at === 'E') {
+      const k = r.at;
       if (!r.end.arm) S.edge[k] = r;
       if (!byKey.has(k)) byKey.set(k, jn(k === 'W' ? 120 : W - 120, k));
       byKey.get(k)!.ends.push(r);
     } else {
-      const x = r.end.at;
+      const x = r.at;
       let j = [...byKey.values()].find(q => !q.edge && Math.abs(q.x - x) < 200);
       if (!j) { j = jn(x, null); byKey.set('x' + x, j); }
       j.ends.push(r);
@@ -195,6 +228,13 @@ export function installTrails(f: FieldScene, loc: string | 'island') {
   if (loc === 'island') for (const s of ISLAND_INFO) {
     let j = [...byKey.values()].find(q => !q.edge && Math.abs(q.x - s.x) < 200);
     if (!j) { j = jn(s.x, null); byKey.set('i' + s.x, j); }
+    j.x = s.x;
+    for (const a of s.arms) j.specs.push(a);
+  }
+  // a region's crossroads: its tiers and the way along
+  for (const s of posts.get(f) ?? []) {
+    let j = [...byKey.values()].find(q => !q.edge && Math.abs(q.x - s.x) < 200);
+    if (!j) { j = jn(s.x, null); byKey.set('p' + s.x, j); }
     j.x = s.x;
     for (const a of s.arms) j.specs.push(a);
   }
@@ -219,7 +259,7 @@ function armSpecFor(S: SceneTrails, j: Junction, r: EndRef): ArmSpec {
   const shut = deeper && !gateOk(r.t.gate);
   // the planks balance the post: at an edge the branches point away from the edge plank; in the
   // middle of a scene the up branch points one way and the down branch the other
-  const dir: 'left' | 'right' = !r.end.arm ? (r.end.at === 'W' ? 'left' : 'right')
+  const dir: 'left' | 'right' = !r.end.arm ? (r.at === 'W' ? 'left' : 'right')
     : j.edge === 'W' ? 'right' : j.edge === 'E' ? 'left' : r.end.arm === 'up' ? 'right' : 'left';
   void S;
   return { text: SIGN[to.loc] ?? (location(to.loc)?.name ?? to.loc).toUpperCase(), dir, mark: r.end.arm, lock: shut && r.t.gate ? GATES[r.t.gate].icon : null };
@@ -227,13 +267,15 @@ function armSpecFor(S: SceneTrails, j: Junction, r: EndRef): ArmSpec {
 
 function buildSign(S: SceneTrails, j: Junction, i: number, under: boolean) {
   const f = S.f;
+  const island = isIslandScene(f);
   // planks: up branches, the edge / walk planks, down branches
   const ups = j.ends.filter(r => r.end.arm === 'up'), downs = j.ends.filter(r => r.end.arm === 'down'), edges = j.ends.filter(r => !r.end.arm);
-  const info = j.specs.filter((s): s is { info: string; go: number; dir: 'left' | 'right' } => 'info' in s);
-  const order: Junction['specs'] = [...ups, ...edges, ...info, ...downs];
+  const info = j.specs.filter((s): s is InfoArm => 'info' in s);
+  const tiers = j.specs.filter(isTier);
+  const order: Junction['specs'] = [...ups, ...tiers.filter(t => t.mark === 'up'), ...edges, ...info, ...tiers.filter(t => t.mark === 'down'), ...downs];
   j.specs = order;
   if (under || !order.length) return;
-  const specs: ArmSpec[] = order.map(s => ('info' in s ? { text: s.info, dir: s.dir } : armSpecFor(S, j, s)));
+  const specs: ArmSpec[] = order.map(s => ('info' in s ? { text: s.info, dir: s.dir } : isTier(s) ? { text: s.tier, dir: s.dir, mark: s.mark } : armSpecFor(S, j, s)));
   const key = `v12sign:${f.site.id}:${i}:` + specs.map(s => `${s.text}${s.dir}${s.mark ?? ''}${s.lock ?? ''}`).join('|');
   const art = paintSignpost(specs, Math.round(j.x));
   const fr = local.add(key, art.buf, art.ax, art.ay);
@@ -248,9 +290,9 @@ function buildSign(S: SceneTrails, j: Junction, i: number, under: boolean) {
     const x0 = j.x + b.x0, x1 = j.x + b.x1, y1 = gy + 1 + b.y1;
     const it: Interactable = {
       x: (x0 + x1) / 2, y: y1 - 5, w: Math.max(6, (x1 - x0) / 2 - 4), h: 0,
-      get label() { return 'info' in s ? `Along the beach to ${s.info.toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}` : armLabel(s); },
+      get label() { return 'info' in s ? `${island ? 'Along the beach' : 'Along the path'} to ${s.info.toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}` : isTier(s) ? s.label : armLabel(s); },
       standX: j.x + ((x0 + x1) / 2 < j.x ? -14 : 14),
-      action: () => ('info' in s ? walkAlong(f, s.go) : takeTrail(f, s.t, s.side)),
+      action: () => ('info' in s ? walkAlong(f, s.go) : isTier(s) ? takeTier(f, s) : takeTrail(f, s.t, s.side)),
     };
     j.armIts.push(it);
     f.interact.push(it);
@@ -275,8 +317,9 @@ function readSign(S: SceneTrails, j: Junction) {
   const parts: string[] = [];
   for (const s of j.specs) {
     if ('info' in s) { parts.push(`${s.dir === 'left' ? 'West' : 'East'}: ${s.info.toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}`); continue; }
+    if (isTier(s)) { parts.push(`${s.mark === 'up' ? 'Up' : 'Down'}: ${s.tier.toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}`); continue; }
     const to = s.t[other(s.side)];
-    const way = s.end.arm === 'up' ? 'Up' : s.end.arm === 'down' ? 'Down' : s.end.at === 'W' ? 'West' : 'East';
+    const way = s.end.arm === 'up' ? 'Up' : s.end.arm === 'down' ? 'Down' : s.at === 'W' ? 'West' : 'East';
     const deeper = depthOf(to.loc) >= depthOf(s.end.loc);
     const shut = deeper && s.t.gate && !gateOk(s.t.gate) ? ` (needs ${GATES[s.t.gate].gear})` : '';
     parts.push(`${way}: ${placeName(to.loc)}, ${hoursText(s.t.hours)}${shut}`);
@@ -290,6 +333,8 @@ function groundAt(f: FieldScene, x: number) { return f.st.terrain.surfaceBelow(x
 /** an info plank on the beach: Mori just walks that way */
 function walkAlong(f: FieldScene, x: number) {
   const p = f.player;
+  // (in a big region the place can be screens away: he sets off that way, the rest is your walk)
+  if (!isIslandScene(f)) x = p.x + Math.max(-420, Math.min(420, x - p.x));
   void p.walkTo(Math.max(p.minX, Math.min(p.maxX, x)), 60).catch(() => {});
 }
 
@@ -311,10 +356,12 @@ function update(S: SceneTrails, dt: number, ownWest: boolean) {
     const inp = game.input;
     const want: Arm | null = inp.hit('up') ? 'up' : inp.hit('down') ? 'down' : null;
     if (want) {
-      const r = S.near.specs.find((s): s is EndRef => !('info' in s) && s.end.arm === want);
+      const r = S.near.specs.find((s): s is EndRef => isEnd(s) && s.end.arm === want);
       if (r) { void takeTrail(f, r.t, r.side); return; }
+      const tr = S.near.specs.find((s): s is TierArm => isTier(s) && s.mark === want);
+      if (tr) { void takeTier(f, tr); return; }
     }
-    if (!S.told && !game.save.flags['v12:signTip'] && S.near.specs.some(s => !('info' in s) && !!s.end.arm)) {
+    if (!S.told && !game.save.flags['v12:signTip'] && S.near.specs.some(s => (isEnd(s) && !!s.end.arm) || isTier(s))) {
       S.told = true;
       game.save.flags['v12:signTip'] = true;
       readSign(S, S.near);
@@ -349,14 +396,29 @@ function drawHints(S: SceneTrails, rr: import('../../gfx/renderer').Renderer) {
     if (S.near !== j) continue;
     const h = hints();
     j.specs.forEach((s, k) => {
-      if ('info' in s || !s.end.arm) return;
+      const mark = isTier(s) ? s.mark : isEnd(s) ? s.end.arm : undefined;
+      if (!mark) return;
       const b = j.arms[k];
       if (!b) return;
       const right = b.x1 > 0 && Math.abs(b.x1) >= Math.abs(b.x0);
       const bob = Math.round(Math.sin(S.t * 5 + k) * 1.5);
       const x = right ? j.x + b.x1 + 8 : j.x + b.x0 - 8;
-      rr.fxDraw(s.end.arm === 'up' ? h.up : h.down, x, gy + (b.y0 + b.y1) / 2 + bob, 1, 1, 0, packColor(1, 1, 1, 1), 1, false);
+      rr.fxDraw(mark === 'up' ? h.up : h.down, x, gy + (b.y0 + b.y1) / 2 + bob, 1, 1, 0, packColor(1, 1, 1, 1), 1, false);
     });
+  }
+}
+
+// ---------------------------------------------------------------- taking a tier (inside a region)
+async function takeTier(f: FieldScene, a: TierArm): Promise<void> {
+  if (busy || f.cutscene || game.ui.blocking) return;
+  busy = true;
+  try {
+    audio.play('rustle', { vol: 0.3 });
+    await a.go(f);
+  } catch (e) {
+    console.error('[trails] takeTier', e);
+  } finally {
+    busy = false;
   }
 }
 
@@ -411,14 +473,15 @@ export async function takeTrail(f: FieldScene, t: TrailDef, side: 'a' | 'b'): Pr
   f.cutscene = true;
   const p = f.player;
   const W = f.site.width;
+  const hereAt = sceneAt(here);
   try {
     f.cam?.raise(false);
     if (deeper && t.say) void floatText({ text: t.say, style: 'say', ms: 2600 });
     // the day starts properly the moment Mori sets off along a trail
     if (dayPhase() === 'morning') leaveCamp(there.loc);
     // walk off: over the edge, or into the branch at the post
-    if (here.at === 'W' && !here.arm) { p.minX = -80; await Promise.race([p.walkTo(-28, 60), sleep(2400)]); }
-    else if (here.at === 'E' && !here.arm) { p.maxX = W + 80; await Promise.race([p.walkTo(W + 28, 60), sleep(2400)]); }
+    if (hereAt === 'W' && !here.arm) { p.minX = -80; await Promise.race([p.walkTo(-28, 60), sleep(2400)]); }
+    else if (hereAt === 'E' && !here.arm) { p.maxX = W + 80; await Promise.race([p.walkTo(W + 28, 60), sleep(2400)]); }
     else {
       const j = scenes.get(f)?.junctions.find(q => q.ends.some(r => r.t === t));
       const sx = j?.x ?? p.x;
@@ -460,6 +523,8 @@ async function arrivalX(e: TrailEnd): Promise<number> {
 async function sceneWidth(loc: string): Promise<number> {
   const L = location(loc);
   if (!L) return 2400;
+  const rg = regionOf(loc);
+  if (rg) return rg.part.w;
   if (L.scene.type === 'island') return ISLE_W;
   if (L.scene.type === 'custom') return loc === 'forest' ? (await import('../v11/forest/layout')).FOREST.W : 2400;
   const def = await siteDef(L.scene.type === 'ocean' ? 'deep' : L.scene.site);
@@ -470,21 +535,21 @@ async function sceneWidth(loc: string): Promise<number> {
 function arrive(S: SceneTrails, loc: string) {
   const a = pend;
   if (!a) return;
-  const here = loc === 'island' ? isIsland(location(a.loc)) : a.loc === loc;
+  const here = loc === 'island' ? isIsland(location(a.loc)) : sceneLocOf(a.loc) === loc;
   if (!here) return;
   pend = null;
-  const f = S.f, p = f.player, e = a.end;
+  const f = S.f, p = f.player, e = a.end, eAt = sceneAt(e);
   const W = S.W;
   f.cutscene = true;
-  if (e.at === 'W' && !e.arm) { S.armed.W = false; p.x = 14; p.facing = 1; }
-  else if (e.at === 'E' && !e.arm) { S.armed.E = false; p.x = W - 14; p.facing = -1; }
+  if (eAt === 'W' && !e.arm) { S.armed.W = false; p.x = 14; p.facing = 1; }
+  else if (eAt === 'E' && !e.arm) { S.armed.E = false; p.x = W - 14; p.facing = -1; }
   else {
     const j = S.junctions.find(q => q.ends.some(r => r.t === a.t));
-    p.x = j?.x ?? (typeof e.at === 'number' ? e.at : p.x);
+    p.x = j?.x ?? (typeof eAt === 'number' ? eAt : p.x);
     p.facing = p.x < W / 2 ? 1 : -1;
     p.alpha = 0;
-    if (e.at === 'W') S.armed.W = false;
-    if (e.at === 'E') S.armed.E = false;
+    if (eAt === 'W') S.armed.W = false;
+    if (eAt === 'E') S.armed.E = false;
   }
   p.y = groundAt(f, p.x);
   f.snapCamera();
@@ -492,7 +557,7 @@ function arrive(S: SceneTrails, loc: string) {
     try {
       // (walk in as the fade lifts)
       for (let k = 0; k < 40 && game.r.post.fade > 0.35; k++) await sleep(75);
-      const to = e.at === 'W' && !e.arm ? 92 : e.at === 'E' && !e.arm ? W - 92 : p.x + p.facing * 26;
+      const to = eAt === 'W' && !e.arm ? 92 : eAt === 'E' && !e.arm ? W - 92 : p.x + p.facing * 26;
       const fade = (async () => { for (let k = 0; k <= 10; k++) { p.alpha = Math.max(p.alpha, k / 10); await sleep(40); } })();
       await Promise.race([p.walkTo(to, 56), sleep(2600)]);
       await fade;

@@ -17,6 +17,7 @@ import { DayClock, envAt, lightKAt } from '../../v4/islefx';
 import { FOREST, FSPOT, fgroundY, fzoneName, mudAt, wetAt, canopyAt, baseY } from './layout';
 import type { ForestShade, GroundCover } from './fx';
 import { A } from '../../assets';
+import { REGION_W, REGION_SPAWNS, REGION_INSECTS, regionTick } from './region';
 
 export interface ForestHooks { enter(): Promise<void>; update(dt: number): void; exit?(): void }
 
@@ -68,9 +69,9 @@ export class ForestScene extends FieldScene {
     let me: ForestScene | null = null;
     const tod = todOf(o.dayT);
     const site: FieldSite = {
-      id: 'forest' as never, name: 'Te Wao Nui', width: FOREST.W, camY: 176, followY: true, minY: FOREST.minY, maxY: FOREST.maxY,
+      id: 'forest' as never, name: 'Te Wao Nui', width: REGION_W, camY: 176, followY: true, minY: -250, maxY: FOREST.maxY,
       spawnX: o.x ?? FSPOT.enter, exitX: FSPOT.exit, waterY: null, ambience: 'forest', music: 'none', ground: 'leaves',
-      noGuide: o.day1, noExit: true, spawns: SPAWNS, build: () => o.build(me!),
+      noGuide: o.day1, noExit: true, spawns: [...SPAWNS, ...REGION_SPAWNS], build: () => o.build(me!),
       insects: [
         { kind: 'butterfly', x: [80, 900], y: [120, 200], n: 6, times: ['day', 'dawn'] },
         { kind: 'dragonfly', x: [700, 860], y: [170, 214], n: 4, times: ['day', 'dusk'] },
@@ -81,6 +82,7 @@ export class ForestScene extends FieldScene {
         { kind: 'lanternbeetle', x: [1400, 5000], y: [200, 214], n: 6, times: ['night'] },
         { kind: 'weta', x: [1400, 3000], y: [205, 214], n: 2, times: ['dusk', 'night'] },
         { kind: 'ant', x: [300, 5600], y: [212, 214], n: 8 },
+        ...(o.day1 ? [] : REGION_INSECTS),
       ],
     };
     super(site, tod);
@@ -153,6 +155,7 @@ export class ForestScene extends FieldScene {
     if (!cam.locked) cam.tzoom = damp(cam.tzoom, this.zoomBase, 3, dt);
     super.update(dt);
     if (!cam.locked && !this.cam.active) cam.ty = Math.min(p.y, fgroundY(p.x)) - 34;
+    regionTick(this, dt);
     // dappled shade on everyone
     const sh = this.shade;
     if (sh) {
@@ -196,6 +199,8 @@ export class ForestScene extends FieldScene {
     await super.enter();
     this.st.cam.tzoom = this.st.cam.zoom = this.zoomBase;
     this.player.speedK = 0.9;
+    // (Day 1 is the search for Joshu: the walk ends at the ridge)
+    if (this.day1) this.player.maxX = FOREST.W - 12;
     this.player.ground = 'leaves';
     audio.setAmbience('forest', this.night);
     audio.setMusic('none' as never);

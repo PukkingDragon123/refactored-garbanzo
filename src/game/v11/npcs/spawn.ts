@@ -34,6 +34,7 @@ import { count } from '../../inventory';
 import { findArt } from '../../v10/finds';
 import { addShootTarget } from '../predators-core';
 import { hasSlingshot } from '../predators';
+import { toWorld } from '../../v12/region';
 import { registerNpcArt } from '../../../art/v11/npcs/register';
 import * as PL from '../../../art/v11/npcs/places';
 import { hasMet, PEOPLE } from '../social';
@@ -328,11 +329,11 @@ function helixTrap(r: TripRun, loc: string, x: number) {
 }
 
 // ================================================================== Fernwood and the mangroves
-function fernwood(f: FieldScene, r: TripRun | null) {
+function fernwood(f: FieldScene, r: TripRun | null, ox = 0) {
   if (!r) return;
   const g = groundFn(f, r);
   // the fallen tōtara across the stream (cut once Mori takes his block)
-  const tx = 1320;
+  const tx = ox + 1320;
   prop(f, 'n:totara', () => PL.fallenTotara(false), tx, g(tx) + 3, -3, () => !F('n:totaraCut'));
   prop(f, 'n:totaraCut', () => PL.fallenTotara(true), tx, g(tx) + 3, -3, () => F('n:totaraCut'));
   r.addFind({
@@ -341,8 +342,8 @@ function fernwood(f: FieldScene, r: TripRun | null) {
     when: () => questStatus('q_timber') === 'active' && !F('n:totaraCut') && count('q_totara') === 0,
     after: () => setF('n:totaraCut'),
   });
-  helixTrap(r, 'fernwood', 1900);
-  maybeTeo(f, r, g, 700);
+  helixTrap(r, 'fernwood', ox + 1900);
+  maybeTeo(f, r, g, ox + 700);
 }
 function mangrove(f: FieldScene, r: TripRun | null) {
   if (!r) return;
@@ -467,6 +468,8 @@ export async function spawnFor(f: FieldScene, loc: string | null, r: TripRun | n
     else if (loc === 'mangrove') mangrove(f, r);
     else if (loc === 'hills') await hills(f, r);
     else if (r && (loc === 'canopy' || loc === 'forest')) maybeTeo(f, r, groundFn(f, r), 900);
+    // (the forest scene runs on into Fernwood: the Te Wao Nui region, src/game/v12/region.ts)
+    if (loc === 'forest') fernwood(f, r, toWorld('fernwood', 0));
   } catch (e) { console.warn('[npcs] spawn', loc, e); }
   void sleep;
 }

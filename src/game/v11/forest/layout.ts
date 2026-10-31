@@ -46,6 +46,7 @@ export function fzoneAt(x: number): FZone {
   return x < 0 ? 'edge' : 'ridge';
 }
 export function fzoneName(x: number): [string, string] {
+  if (EXT && x >= FOREST.W) return EXT.zone(x);
   for (const [, a, b, n, s] of FZONES) if (x >= a && x < b) return [n, s];
   return ['Te Wao Nui', 'The Great Forest'];
 }
@@ -101,8 +102,29 @@ export function creekDip(x: number): number {
   return c < GULLY.w + 26 ? 5 * (1 - smoothstep(GULLY.w * 0.5, GULLY.w + 26, c)) : 0;
 }
 
+/**
+ * V12 the big region (src/game/v12/region.ts): Te Wao Nui runs on east into Fernwood Floor and Thunder
+ * Falls in the same scene. Past the forest's own end (x >= FOREST.W) the walk line, the canopy, the
+ * water and the place names are the next stretches' (set by ./region.ts), so everything that follows the
+ * ground (the camera, the shade, the air, the light) carries on along the whole region.
+ */
+export interface ForestExt {
+  base(x: number): number;
+  ground(x: number): number;
+  canopy(x: number): number;
+  wet(x: number): number;
+  zone(x: number): [string, string];
+}
+let EXT: ForestExt | null = null;
+export function setForestExt(e: ForestExt | null) { EXT = e; }
+
 /** the walk line without the water dips (the water surface level at the fords) */
 export function baseY(x: number): number {
+  if (EXT && x >= FOREST.W) return EXT.base(x);
+  return forestBaseRaw(x);
+}
+/** Te Wao Nui's own walk line (the seam with the next stretch matches it) */
+export function forestBaseRaw(x: number): number {
   const G = FOREST.G;
   let y = G + Math.sin(x * 0.0042 + 0.7) * 4 + Math.sin(x * 0.013 + 2) * 1.6 + (noise1(x / 90, 7) - 0.5) * 4;
   // the edge: up the bank from the beach path
@@ -118,6 +140,7 @@ export function baseY(x: number): number {
 
 /** world y of the walkable surface at x */
 export function fgroundY(x: number): number {
+  if (EXT && x >= FOREST.W) return EXT.ground(x);
   return baseY(x) + fordDip(x) + creekDip(x);
 }
 
@@ -137,6 +160,7 @@ export function mudAt(x: number): number {
 
 /** shallow water at the walk line (the fords) */
 export function wetAt(x: number): number {
+  if (EXT && x >= FOREST.W) return EXT.wet(x);
   const s = Math.abs(x - FORD.x);
   if (s < FORD.w + 10) return 1 - smoothstep(FORD.w - 4, FORD.w + 10, s);
   const c = Math.abs(x - GULLY.x);
@@ -146,6 +170,7 @@ export function wetAt(x: number): number {
 
 /** canopy cover overhead, 0..1 (thin at the forest edge and over the stream, deepest in the rātā grove) */
 export function canopyAt(x: number): number {
+  if (EXT && x >= FOREST.W) return EXT.canopy(x);
   const edge = smoothstep(80, 520, x);
   const gapStream = 1 - 0.35 * Math.exp(-(((x - FORD.x) / 120) ** 2));
   const gapGully = 1 - 0.25 * Math.exp(-(((x - GULLY.x) / 150) ** 2));

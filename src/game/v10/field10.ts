@@ -39,7 +39,9 @@ import { markerSprite, sprite, SWIM_DEPTH } from '../sites10/kit';
 import { POINTS10 } from './finds';
 import { installTrails } from '../v12/trails';
 import { attachLoop } from '../v12/loop';
-import { floatNotice } from '../../ui/v12/float';
+import { floatNotice, floatText } from '../../ui/v12/float';
+import { regionByScene, partAt, toLocal } from '../v12/region';
+import type { RegionDef } from '../v12/region';
 
 /** the V10 day loop has started (the V4 story's Day 1 is over), or a debug flag */
 export const v10Active = () => !!game.save.flags['v4:day1'] || !!game.save.flags['v10'];
@@ -345,15 +347,23 @@ class SiteRun extends TripRun {
   private drainT = 0;
   private lastY = 0;
   private dark = 0;
-  constructor(f: FieldScene, readonly locId: string) { super(f); }
-  get loc() { return this.locId; }
+  /** V12 big regions (src/game/v12/region.ts): a region scene plays several places; the one Mori is
+   *  in now is `loc` (the trip, the map, finds, events and rare animals all follow it) */
+  private region: RegionDef | null;
+  private part: string;
+  constructor(f: FieldScene, readonly locId: string) { super(f); this.region = regionByScene(locId); this.part = locId; }
+  get loc() { return this.region ? this.part : this.locId; }
   get L() { return location(this.locId)!; }
+  protected locAtX(x: number) { return this.region ? partAt(this.region, x).loc : this.locId; }
 
   async start() {
     const f = this.f, L = this.L;
-    const pend = arrivedAt(L.id);
+    const here = this.locAtX(f.player.x);
+    this.part = here;
+    game.save.flags['visit:' + here] = true;
+    const pend = arrivedAt(here);
     if (pend) markRoute(pend.from, pend.to);
-    if (findLocation(L.id)) setTimeout(() => { if (game.scene === f) audio.play('discover'); }, 3800);
+    if (findLocation(here)) setTimeout(() => { if (game.scene === f) audio.play('discover'); }, 3800);
     // V12: the ways on are walkable trails with signposted crossroads (the old route markers and the
     // "head back to camp" exit are only used where no trail leads)
     if (v10Active()) installTrails(f, L.id);
@@ -363,7 +373,10 @@ class SiteRun extends TripRun {
     }
     // finds
     const ex = (f.site as unknown as Site10).v10;
-    for (const pt of [...(POINTS10[L.id] ?? []), ...(ex?.points ?? [])]) this.addPoint(pt, this.pts);
+    // (a region's places' finds, each at its stretch's offset)
+    const parts = this.region?.parts ?? [{ loc: L.id, x0: 0, w: 0 }];
+    for (const part of parts) for (const pt of POINTS10[part.loc] ?? []) this.addPoint(part.x0 ? { ...pt, x: pt.x + part.x0 } : pt, this.pts);
+    for (const pt of ex?.points ?? []) this.addPoint(pt, this.pts);
     this.swims = ex?.swims ?? [];
     this.hazards = (ex?.hazards ?? []).map(h => ({ ...h, t: rand.range(0, h.period ?? 4), hit: 0, warned: false }));
     this.hard = ex?.hardClimbs ?? [];
@@ -371,7 +384,8 @@ class SiteRun extends TripRun {
     this.hookCamera(() => this.pts);
     this.addMapButton();
     this.installFrame();
-    revealMap(L.id, f.player.x - 160, f.player.x + 160);
+    const lx = toLocal(L.id, f.player.x);
+    revealMap(lx.loc, lx.x - 160, lx.x + 160);
     const { startEvents } = await import('./events');
     startEvents(this);
   }
@@ -401,8 +415,10 @@ class SiteRun extends TripRun {
     this.revealT -= dt;
     if (this.revealT <= 0) {
       this.revealT = 1;
-      revealMap(this.locId, p.x - 160, p.x + 160);
-      setLastPos(this.locId, p.x);
+      const lx = toLocal(this.locId, p.x);
+      if (this.region && lx.loc !== this.part) this.walkedInto(lx.loc);
+      revealMap(lx.loc, lx.x - 160, lx.x + 160);
+      setLastPos(lx.loc, lx.x);
       this.setClock(clockText(expeditionHour()));
     }
     if (f.cutscene || game.ui.blocking) return;
@@ -414,6 +430,18 @@ class SiteRun extends TripRun {
       if (h) this.drain(h.rate * dt, 'hard climb');
     }
     this.lastY = p.y;
+  }
+
+  /** walked on into the next place of the region: the trip, the map and the notebook know */
+  private walkedInto(loc: string) {
+    this.part = loc;
+    arrivedAt(loc);
+    game.save.flags['visit:' + loc] = true;
+    const first = !game.save.flags['v12:been:' + loc];
+    game.save.flags['v12:been:' + loc] = true;
+    if (findLocation(loc)) audio.play('discover', { vol: 0.5 });
+    if (first) void floatText({ text: rand.pick(['Somewhere new. Okay. Breathe. Look at EVERYTHING.', 'Nobody’s ever written this place down. Until now.', 'Whoa. Notebook. Camera. Go.']), style: 'happy', ms: 2800 });
+    game.persist();
   }
 
   private drain(n: number, why: string) {

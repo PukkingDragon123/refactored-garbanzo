@@ -18,6 +18,7 @@ import { paintGiantFeather, paintKillSite, gougeRock } from '../../../art/v12/th
 import type { TBArt } from '../../../art/v12/thunderbird';
 import { paintBoulder } from '../../../art/v11/hills/rocks';
 import { tbStep, tbActive, signsFound } from './quest';
+import { partsOf } from '../region';
 
 interface SignDef {
   loc: string;
@@ -62,11 +63,12 @@ function frameOf(key: string, make: () => TBArt): Frame {
 /** place this scene's sign (the quest is past the legend, and it hasn't been taken) */
 export function placeSigns(f: FieldScene, loc: string | null) {
   if (!loc || !tbActive()) return;
-  for (const d of SIGNS) {
-    if (d.loc !== loc) continue;
+  // (a region scene places all its places' signs, each along its own stretch: ../region.ts)
+  for (const part of partsOf(loc, f.site.width)) for (const d of SIGNS) {
+    if (d.loc !== part.loc) continue;
     const found = !!game.save.flags[d.flag];
     if (found && d.take) continue;
-    const x = d.at <= 1 ? Math.round(f.site.width * d.at) : d.at;
+    const x = part.x0 + (d.at <= 1 ? Math.round(part.w * d.at) : d.at);
     const y = f.st.terrain.groundY(x);
     const fr = frameOf(d.flag, d.art);
     const prop: Drawable & { dead?: boolean } = { z: 18, draw: (r: Renderer) => { if (!prop.dead) r.draw(fr, x, y + 2); } };

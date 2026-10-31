@@ -90,6 +90,8 @@ export interface WoodsCfg {
 
 export interface WoodsRuntime {
   clock: DayClock;
+  /** V12 big regions: where this stretch starts in the region's world x (0 for a scene of its own) */
+  ox: number;
   cfg: WoodsCfg;
   main: Layer;
   shade: WoodsShade | null;
@@ -99,6 +101,8 @@ export interface WoodsRuntime {
   frameOf(key: string, gen: () => Sprite): Frame & { sprite: Sprite };
   update(f: FieldScene, dt: number): void;
   enter(f: FieldScene): void;
+  /** the stretch's hide spots (a region scene hands them to the player itself) */
+  hides: { x: number; w: number; y: number; cover: number }[];
 }
 
 /** the island clock key for the scene's time of day (the expedition hour when there is one) */
@@ -260,23 +264,42 @@ export function woodsCamera(fs: FieldScene, G: (x: number) => number, dt: number
   cam.ty = Math.min(p.y, G(p.x)) - 34;
 }
 
-export function buildWoods(f: FieldScene, c: WoodsCfg, hour?: number): WoodsRuntime {
+/**
+ * V12 big regions: build a woods place as one stretch of a longer region scene (src/game/v12/region.ts),
+ * starting at world x `ox`. The region scene owns the far forest, the near-back hedge, the foreground
+ * framing, the light, the shade, the air and the camera (src/game/v11/forest/build.ts and scene.ts), so a
+ * stretch only lays its gameplay plane (the floor, the giants, the trees, the cover, the floor props, the
+ * sun rays and the water) at its offset, on the region's clock.
+ */
+export interface WoodsSeg {
+  ox: number;
+  clock: DayClock;
+  main: Layer;
+  /** local x where the floor's terrain is cut into separate pieces (a bridge's ends over a gully) */
+  cuts?: number[];
+}
+
+export function buildWoods(f: FieldScene, c: WoodsCfg, hour?: number, seg?: WoodsSeg): WoodsRuntime {
   const st = f.st;
   const FOG = c.fog ?? hex('#86ad9f');
   const rng = new Rng(c.seed);
-  const clock = new DayClock();
-  clock.set(clockForTod(f.tod, hour));
-  st.minX = 0; st.maxX = c.W; st.minY = c.minY; st.maxY = c.maxY;
+  const clock = seg?.clock ?? new DayClock();
+  if (!seg) clock.set(clockForTod(f.tod, hour));
+  if (!seg) { st.minX = 0; st.maxX = c.W; st.minY = c.minY; st.maxY = c.maxY; }
+  // (local x along the stretch -> world x; the floor functions take local x)
+  const O = seg?.ox ?? 0;
   const G = c.floor.ground, B = c.floor.base;
+  const inside = (x: number) => x >= O && x <= O + c.W;
+  const GW = (x: number) => G(x - O), BW = (x: number) => B(x - O);
   const frameOf = (key: string, gen: () => Sprite) => { const s = sprite(`wd${c.seed}:` + key, gen)!; return Object.assign(s.f, { sprite: s.s }); };
 
-  woodsFar(f, clock, { seed: c.seed, fog: FOG, backdrop: c.backdrop, open: c.open });
+  if (!seg) woodsFar(f, clock, { seed: c.seed, fog: FOG, backdrop: c.backdrop, open: c.open });
 
   // ---------------------------------------------------------------- the near-back: the hedge behind the walk line
   const pb = 0.88;
-  const back = st.addLayer('back', pb, 0.04, 0.6, 0, pb);
   const fernK = c.ferns ?? (() => 0.62);
-  {
+  if (!seg) {
+    const back = st.addLayer('back', pb, 0.04, 0.6, 0, pb);
     const gy = farY(pb);
     const span = layerSpan(st, pb, 60);
     const bx = (x: number) => x * pb;
@@ -301,18 +324,19 @@ export function buildWoods(f: FieldScene, c: WoodsCfg, hour?: number): WoodsRunt
   }
 
   // ---------------------------------------------------------------- the gameplay plane
-  const main = st.addLayer('main', 1, 0, 1, 0);
+  const main = seg?.main ?? st.addLayer('main', 1, 0, 1, 0);
   f.main = main;
   const CH = 1000;
   for (let x0 = 0; x0 < c.W; x0 += CH) {
     const w = Math.min(CH, c.W - x0);
     const ch = paintWoodsFloor(c.floor, x0, w);
     const base = bigFrame(game.r, ch.base), wat = bigFrame(game.r, ch.water);
+    const X0 = x0 + O;
     main.add(new Custom(-10, rr => {
-      if (x0 + w < rr.visibleX0(4) || x0 > rr.visibleX1(4)) return;
-      rr.draw(base, x0, ch.y0);
+      if (X0 + w < rr.visibleX0(4) || X0 > rr.visibleX1(4)) return;
+      rr.draw(base, X0, ch.y0);
       rr.water(0.42, 0.8);
-      rr.draw(wat, x0, ch.y0);
+      rr.draw(wat, X0, ch.y0);
       rr.water(0);
     }));
   }
@@ -322,8 +346,8 @@ export function buildWoods(f: FieldScene, c: WoodsCfg, hour?: number): WoodsRunt
     const gy = G(x);
     const H = Math.round(gy - c.minY + 60);
     const fr = frameOf(`giant:${x}`, () => paintGiant(kind, x + c.seed, w, H, { epiphytes: 1.2, vines: 1.2 }));
-    main.add(new Prop(fr, x, gy + 4, -6.5));
-    f.pois.push({ kind: 'trunk', x, y: gy, y1: gy - 220 }, { kind: 'branch', x: x + w * 0.4, y: gy - rng.range(90, 160) }, { kind: 'perch', x: x - w * 0.3, y: gy - rng.range(120, 200) });
+    main.add(new Prop(fr, x + O, gy + 4, -6.5));
+    f.pois.push({ kind: 'trunk', x: x + O, y: gy, y1: gy - 220 }, { kind: 'branch', x: x + O + w * 0.4, y: gy - rng.range(90, 160) }, { kind: 'perch', x: x + O - w * 0.3, y: gy - rng.range(120, 200) });
   }
   // tree ferns, nīkau and shrubs crowding between the giants
   const busy = (x: number, r: number) => c.giants.some(([gx, , w]) => Math.abs(gx - x) < w * 0.7 + r) || clear(x, r) || c.floor.channels.some(ch => Math.abs(ch.x - x) < 50);
@@ -334,10 +358,10 @@ export function buildWoods(f: FieldScene, c: WoodsCfg, hour?: number): WoodsRunt
     const h = kind === 'treefern' ? rng.range(120, 230) : kind === 'nikau' ? rng.range(170, 250) : rng.range(240, 330);
     const v = rng.int(0, 3);
     const fr = frameOf(`mt:${kind}:${v}:${Math.round(h / 20)}`, () => tree(kind as 'treefern', 800 + v * 13 + Math.round(h), h));
-    main.add(new Prop(fr, x, G(x) + 2, -5.6 + rng.next() * 0.3, { sway: kind === 'broadleaf' ? 0.15 : 0.7, flip: rng.chance(0.5) }));
-    if (kind === 'treefern') f.pois.push({ kind: 'trunk', x, y: G(x), y1: G(x) - h * 0.7 });
+    main.add(new Prop(fr, x + O, G(x) + 2, -5.6 + rng.next() * 0.3, { sway: kind === 'broadleaf' ? 0.15 : 0.7, flip: rng.chance(0.5) }));
+    if (kind === 'treefern') f.pois.push({ kind: 'trunk', x: x + O, y: G(x), y1: G(x) - h * 0.7 });
   }
-  const rt: WoodsRuntime = { clock, cfg: c, main, shade: null, covers: [], rng, frameOf, update: () => {}, enter: () => {} };
+  const rt: WoodsRuntime = { clock, ox: O, cfg: c, main, shade: null, covers: [], rng, frameOf, update: () => {}, enter: () => {}, hides: [] };
   c.dress?.(f, rt);
 
   // ---- ground cover: behind the walk line, and in front of it (over the feet)
@@ -365,23 +389,23 @@ export function buildWoods(f: FieldScene, c: WoodsCfg, hour?: number): WoodsRunt
   for (let x = 30; x < c.W - 10; x += rng.range(9, 20)) {
     if (wet(x) || clear(x, 0)) continue;
     if (rng.next() > 0.85) continue;
-    backCover.add(tuft(tall, [22, 44]), x, G(x) + 1, rng.chance(0.5));
+    backCover.add(tuft(tall, [22, 44]), x + O, G(x) + 1, rng.chance(0.5));
   }
   for (let x = 20; x < c.W - 10; x += rng.range(18, 40)) {
     if (wet(x) || clear(x, 0)) continue;
-    frontCover.add(tuft(low, [12, 24]), x + rng.range(-4, 4), G(x) + rng.range(4, 9), rng.chance(0.5));
+    frontCover.add(tuft(low, [12, 24]), x + O + rng.range(-4, 4), G(x) + rng.range(4, 9), rng.chance(0.5));
   }
   // hide spots in the thickest crown ferns
-  const hides: { x: number; w: number; y: number; cover: number }[] = [];
+  const hides = rt.hides;
   for (const x of c.hides) {
     const s = sprite(`wd${c.seed}:hide:${x % 3}`, () => plant('crownfern', 1300 + (x % 3), 44));
-    const y = G(x) + 3;
+    const y = G(x) + 3, X = x + O;
     if (s) {
-      main.add(new Prop(s.f, x, y, 66, { sway: 0.6 }));
-      f.occluders.push({ mask: s.s.buf, x, y, ax: s.s.ax, ay: s.s.ay, sx: 1, sy: 1, p: 1, z: 66 });
+      main.add(new Prop(s.f, X, y, 66, { sway: 0.6 }));
+      f.occluders.push({ mask: s.s.buf, x: X, y, ax: s.s.ax, ay: s.s.ay, sx: 1, sy: 1, p: 1, z: 66 });
     }
-    f.pois.push({ kind: 'cover', x, y, w: 18 });
-    hides.push({ x, w: 30, y, cover: 0.8 });
+    f.pois.push({ kind: 'cover', x: X, y, w: 18 });
+    hides.push({ x: X, w: 30, y, cover: 0.8 });
   }
   // the floor in front of the walk line: moss mounds, logs, stumps, ferns and fungi, in depth
   const mounds = [0, 1, 2].map(i => frameOf(`mound${i}`, () => paintMossMound(1400 + i, 22 + i * 14)));
@@ -395,27 +419,41 @@ export function buildWoods(f: FieldScene, c: WoodsCfg, hour?: number): WoodsRunt
     if ((c.floor.pools ?? []).some(p => poolAt(p, x, dd) > -0.25)) continue;
     const k = rng.next();
     const fr = k < 0.32 ? tuft(tall, [26, 44]) : k < 0.55 ? mounds[rng.int(0, 2)] : k < 0.66 ? logs[rng.int(0, 1)] : k < 0.72 ? stump : k < 0.8 ? roots : k < 0.88 ? fungi[rng.int(0, 2)] : tuft(low, [14, 22]);
-    main.add(new Prop(fr, x, B(x) + dd, 60 + dd * 0.02, { sway: k < 0.32 || k > 0.88 ? 0.5 : 0, flip: rng.chance(0.5), sx: rng.chance(0.5) ? -1 : 1 }));
+    main.add(new Prop(fr, x + O, B(x) + dd, 60 + dd * 0.02, { sway: k < 0.32 || k > 0.88 ? 0.5 : 0, flip: rng.chance(0.5), sx: rng.chance(0.5) ? -1 : 1 }));
   }
-  // ---- light, air and water
-  const shade = new WoodsShade(clock, c.canopy, G);
+  // ---- light, air and water (in a region the region's shade and air run along the whole walk)
+  const chW = c.floor.channels.map(ch => ({ ...ch, x: ch.x + O, at: (dd: number): [number, number] => { const [cx, hw] = ch.at(dd); return [cx + O, hw]; } }));
+  const canW = (x: number) => (inside(x) ? c.canopy(x - O) : 0);
+  const shade = new WoodsShade(clock, canW, GW);
   rt.shade = shade;
-  main.add(shade);
-  main.add(new WoodsWater(c.floor.channels, B));
-  main.add(new WoodsRays(clock, main, c.rays, G));
-  main.add(new WoodsAir(main, clock, c.canopy, G));
-  for (const [x, w] of c.rays) f.sunspots.push({ x: x - 40, w });
+  if (!seg) main.add(shade);
+  main.add(new WoodsWater(chW, BW));
+  main.add(new WoodsRays(clock, main, c.rays.map(([x, w, k]) => [x + O, w, k] as [number, number, number]), GW));
+  if (!seg) main.add(new WoodsAir(main, clock, c.canopy, G));
+  for (const [x, w] of c.rays) f.sunspots.push({ x: x + O - 40, w });
 
-  woodsFront(f, { W: c.W, G, keep: c.keep, hangSkip: c.hangSkip, frontTrunks: c.frontTrunks }, frameOf, rng);
+  if (!seg) woodsFront(f, { W: c.W, G, keep: c.keep, hangSkip: c.hangSkip, frontTrunks: c.frontTrunks }, frameOf, rng);
 
   // ---------------------------------------------------------------- terrain
+  // (a region stretch can cut its floor into pieces, for a bridge over a gully: ../forest/region.ts)
+  const cuts = seg?.cuts ?? [];
   const pts: [number, number][] = [];
-  for (let x = 0; x <= c.W; x += 6) pts.push([x, G(x)]);
-  st.terrain.addGround(pts, 'ground');
+  for (let x = 0; x <= c.W; x += 6) {
+    const cut = cuts.find(q => q > x - 6 && q <= x);
+    if (cut !== undefined && cut > 0 && pts.length) {
+      pts.push([cut + O, G(cut)]);
+      st.terrain.addGround(pts.splice(0), 'ground');
+      pts.push([cut + O, G(cut)]);
+    }
+    pts.push([x + O, G(x)]);
+  }
+  if (pts.length > 1) st.terrain.addGround(pts, 'ground');
+  if (seg) return rt;
 
   // ---------------------------------------------------------------- the light under the canopy, the camera
   installWoodsEnv(f, clock, c.canopy, B);
   rt.enter = (fs: FieldScene) => {
+    void inside;
     for (const h of hides) if (!fs.player.hides.some(q => q.x === h.x)) fs.player.hides.push(h);
     const cam = fs.st.cam;
     cam.zoom = cam.tzoom = WOODS_ZOOM;

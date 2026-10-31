@@ -17,6 +17,7 @@ import { arriveAtCamp, dayNumber, dayState } from './day';
 import * as Energy from './energy';
 import { energy, spend } from './energy';
 import { fx10 } from './skills10';
+import { regionOf } from '../v12/region';
 
 export type ReturnHow = 'walk' | 'blackout' | 'boat';
 
@@ -267,7 +268,8 @@ export async function returnToCamp(how: ReturnHow): Promise<void> {
     const x = isFieldScene(sc) ? sc.player.x : 0;
     if (loc) {
       const onBeach = isIslandScene(sc);
-      const hc = homeCost(loc, x);
+      // (in a region scene the place's own x: src/game/v12/region.ts)
+      const hc = homeCost(loc, x - (regionOf(loc)?.part.x0 ?? 0));
       if (pendingHow === 'blackout') s.hour += hc.hours * 1.4;
       else if (!onBeach) s.hour += hc.hours;
       s.trips.push({ day: s.day || dayNumber(), locs: [...s.trail], how: pendingHow, back: s.hour });

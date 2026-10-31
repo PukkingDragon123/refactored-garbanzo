@@ -257,6 +257,33 @@ export async function goLocation(id: string) {
   await ex.goExpedition(id);
   refill();
 }
+/** V12 big regions: into the Te Wao Nui region at world x (src/game/v12/region.ts), out on a trip from
+ *  camp; `high` stands Mori on the highest thing there (the limb, a ledge) instead of the floor */
+export async function goRegion(x: number, high = false, hour?: number) {
+  ensureLoop();
+  const { toLocal } = await import('../game/v12/region');
+  const here = toLocal('forest', x).loc;
+  for (const l of ['forest', here]) findLocation(l);
+  const d = dayState();
+  d.phase = 'out'; d.went = here; d.woke = dayNumber(); d.meals.breakfast = dayNumber();
+  if (hour !== undefined) game.save.vars['v10:hour'] = hour;
+  game.persist();
+  await idle();
+  const ex = await import('../game/v10/expedition');
+  await ex.goExpedition('forest', { at: x });
+  refill();
+  if (!high) return;
+  const { FieldScene } = await import('../game/scenes/field');
+  await sceneWhere(s => s instanceof FieldScene && !!(s as InstanceType<typeof FieldScene>).player && Math.abs((s as InstanceType<typeof FieldScene>).player.x - x) < 60);
+  const f = game.scene as InstanceType<typeof FieldScene>;
+  const s = f.st.terrain.surfaceBelow(x, -400);
+  if (!s) return;
+  const p = f.player;
+  p.x = x; p.y = s.y; p.vy = 0; p.onGround = true;
+  (p as unknown as { surface: unknown }).surface = s.s;
+  f.snapCamera();
+}
+
 export async function goTrip(id: string, stop = false) {
   ensureLoop();
   boatTo(6);
@@ -439,6 +466,23 @@ export async function chapters(): Promise<DevChapter[]> {
   // the Region Map
   const order = ['home', 'interior', 'south', 'east', 'ocean', 'isle2'];
   const locs = [...LOCATIONS].filter(l => !l.trip).sort((a, b) => order.indexOf(a.region) - order.indexOf(b.region));
+  // V12 big regions: the Te Wao Nui region (Te Wao Nui, Fernwood, Thunder Falls in one map), its tiers
+  out.push({ id: 'region', name: 'Te Wao Nui region (one big map)', points: ([
+    ['rg:start', 'The forest edge', 'West end, up the stream from the beach', 92, false],
+    ['rg:koawa', 'Te Kōawa bridge', 'The swing bridge; down: the creek (low way)', 3170, false],
+    ['rg:creek', 'Te Kōawa creek', 'The low way, under the bridge', 3470, false],
+    ['rg:ridge', 'The ridge crossroads', 'Hills up, bush track down, Fernwood on', 5990, false],
+    ['rg:frog', 'The frog gully bridge', 'Fernwood; down: the frog pool (low way)', 7730, false],
+    ['rg:pool', 'The frog pool', 'The low way, under the bridge', 8000, false],
+    ['rg:limbpost', 'The high limb crossroads', 'Fernwood; up: the vine to the limb', 9580, false],
+    ['rg:limb', 'The high limb', 'The high way between two kauri', 9760, true],
+    ['rg:kauri', 'The giant kauri', 'Up: the canopy; on: the falls', 10100, false],
+    ['rg:falls', 'Thunder Falls', 'The plunge pool', 11650, false],
+    ['rg:ledges', 'The top auk ledge', 'The high way up the cliff', 13400, true],
+  ] as [string, string, string, number, boolean][]).map(([id, name, sub, x, high]) => ({
+    id, name, sub, icon: 'map', run: () => goRegion(x, high),
+    variants: [{ label: 'Morning', run: () => goRegion(x, high, 7.5) }, { label: 'Dusk', run: () => goRegion(x, high, 17.6) }],
+  })) });
   out.push({ id: 'map', name: 'Region Map · Expeditions', points: locs.map(l => ({
     id: 'loc:' + l.id, name: l.name, sub: `${l.sub ? l.sub + ' · ' : ''}${l.region}${l.secret ? ' · secret' : ''}`, icon: l.kind === 'camp' ? 'flag' : l.kind === 'cave' ? 'moon' : 'map',
     run: () => goLocation(l.id),

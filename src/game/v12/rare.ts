@@ -10,6 +10,7 @@ import { Custom } from '../../world/props';
 import { audio } from '../../core/audio';
 import { SPECIES_BY_ID } from '../species';
 import { sceneTag } from '../v10/expedition';
+import { partsOf } from './region';
 import { floatText } from '../../ui/v12/float';
 
 export interface RareSpot {
@@ -26,6 +27,8 @@ export interface RareSpot {
   hint: string;
   /** V12 harder wilds: without this tool it's too dangerous: it comes, but it comes for Mori */
   needs?: 'hide_cloak' | 'slingshot';
+  /** V12 big regions: only on this tier (world y band Mori must stand in: up on a limb, down in a gully) */
+  y?: [number, number];
 }
 
 export const RARE: RareSpot[] = [
@@ -34,6 +37,11 @@ export const RARE: RareSpot[] = [
   { loc: 'canopy', species: 'lurevip', x: 2200, times: ['dusk', 'night'], still: 15, goal: 'after dusk on the high branches, wait in the dark', hint: 'After dark a little light dangles up here. Don’t chase it. Wait for it.' },
   { loc: 'falls', species: 'cragviper', x: 2480, times: ['day', 'dusk'], still: 12, goal: 'below the nesting cliff, crouch out of sight', hint: 'The crag vipers steal eggs from the auks up there. Keep low and still, they come down.', needs: 'slingshot' },
   { loc: 'falls', species: 'torrentdipper', x: 1300, times: ['dawn', 'day'], still: 10, goal: 'early, by the plunge pool, sit very still', hint: 'A dipper walks under the water here, early. Be a rock.' },
+  // ---- V12 the Te Wao Nui region's side branches (the low creek beds, the high limb, the top ledge)
+  { loc: 'forest', species: 'hunterbat', x: 3470, y: [236, 300], times: ['dusk', 'night'], still: 12, goal: 'down in Te Kōawa gully after dark, keep still by the creek', hint: 'Bats hunt the frogs down here at night. Under the bridge, by the water. Be a stone.' },
+  { loc: 'fernwood', species: 'pteramander', x: 2010, y: [232, 300], times: ['dusk', 'night'], still: 12, goal: 'down at the frog pool after dark, crouch by the water', hint: 'Something with wings comes down to the frog pool at night. Get low by the water, and wait.' },
+  { loc: 'fernwood', species: 'sailglider', x: 3790, y: [0, 140], times: ['dusk', 'night', 'dawn'], still: 14, goal: 'up on the high limb at dusk, sit still among the ferns', hint: 'Sail possums glide between these two kauri. Up here, at dusk. Don’t move a muscle.' },
+  { loc: 'falls', species: 'galehawk', x: 3000, y: [-40, 70], times: ['dawn', 'day', 'dusk'], still: 12, goal: 'on the top auk ledge, keep still and watch the sky', hint: 'The gale hawk hunts off this cliff. Sit tight up here and let it come past.' },
   { loc: 'mangrove', species: 'titan', x: 1800, times: ['dawn', 'day', 'dusk', 'night'], still: 18, goal: 'deep in the channels, hidden in cover, for a long time', hint: 'Something enormous moves under this water. If you want to see it, you hide. For a long time.', needs: 'hide_cloak' },
 ];
 
@@ -42,7 +50,8 @@ const locOf = (f: FieldScene) => sceneTag(f) ?? sceneTag(f.site) ?? (f.site as u
 /** watch this scene's rare spots */
 export function installRare(f: FieldScene) {
   const loc = locOf(f);
-  const spots = RARE.filter(r => r.loc === loc);
+  // (a region scene watches all its places' spots, each at its stretch's offset: ./region.ts)
+  const spots = partsOf(loc, f.site.width).flatMap(part => RARE.filter(r => r.loc === part.loc).map(r => (part.x0 ? { ...r, x: r.x + part.x0 } : r)));
   if (!spots.length) return;
   const st = spots.map(r => ({ r, t: 0, hinted: false, heard: false, came: false }));
   f.main.add(new Custom(0, () => {}, dt => {
@@ -50,7 +59,7 @@ export function installRare(f: FieldScene) {
     const p = f.player;
     for (const s of st) {
       if (s.came) continue;
-      const d = Math.abs(p.x - s.r.x);
+      const d = Math.abs(p.x - s.r.x) + (s.r.y && (p.y < s.r.y[0] || p.y > s.r.y[1]) ? 1000 : 0);
       const right = s.r.times.includes(f.tod);
       // the hint, once, as Mori reaches the spot
       if (!s.hinted && d < 260) {

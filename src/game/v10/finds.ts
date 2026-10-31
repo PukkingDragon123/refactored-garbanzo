@@ -11,6 +11,7 @@ import { PixelBuffer } from '../../art/pixel';
 import { hex, mix, shade, type C } from '../../art/color';
 import { Rng } from '../../core/math';
 import type { Sprite } from '../../art/jungle-core';
+import { fgroundY } from '../v11/forest/layout';
 
 // ------------------------------------------------------------------ taonga (returned to Te Kāinga)
 defineItem({ id: 'taonga_toggle', name: 'Pounamu toggle', kind: 'key', stack: 1, weight: 0.1, where: 'Sea Grotto',
@@ -268,8 +269,19 @@ export const POINTS10: Record<string, Point10[]> = {
   'isle-track': [
     { id: 'pt:tracksoil', kind: 'sample', name: 'Bush soil', x: 6400, art: () => findArt.dig('#3a2a1c'), take: { item: 'smp_soil', verb: 'Take a soil core', tools: ['trowel'], time: 1.8 } },
   ],
+  // ---- Te Wao Nui (V12: the west end of the forest region; the low way along Te Kōawa creek, from Day 2)
+  forest: [
+    { id: 'pt:fo:creek', kind: 'sample', name: 'Te Kōawa creek water', x: 3420, y: fgroundY(3420), art: () => findArt.sampleSpot('#5a9aa8'), note: 'Cold, clear water at the bottom of the gully, under the swing bridge.',
+      take: { item: 'smp_falls', verb: 'Fill a sample jar from the creek', tools: ['jar'], time: 1.6, line: 'Cold enough to hurt my fingers. It tastes of stone.' } },
+    { id: 'pt:fo:creekberries', kind: 'plant', name: 'Duskberries in the gully', x: 3590, y: fgroundY(3590), art: () => findArt.plant('#6a4a8a', 16), note: 'Duskberries grow where the gully keeps the damp: the low way pays.',
+      take: { item: 'berry_dusk', n: 3, verb: 'Pick the duskberries', time: 1.4, line: 'Plum and pine. My stomach says thank you.' } },
+  ],
   // ---- Fernwood Floor
   fernwood: [
+    // V12 the region's high way: the limb between the two kauri (found standing on it: the highest surface)
+    { id: 'lm:fw:limb', kind: 'landmark', name: 'The high limb', x: 3720, photo: { w: 220, h: 60, dy: 0 }, note: 'A road of branch between two kauri, high over the fern floor.' },
+    { id: 'pt:fw:limbberries', kind: 'plant', name: 'Goldcurrants on the high limb', x: 3830, art: () => findArt.plant('#e0b030', 14), note: 'A goldcurrant bush rooted in the moss on the limb, out of reach of anything on the ground.',
+      take: { item: 'berry_gold', n: 4, verb: 'Pick the goldcurrants growing on the limb', time: 1.4, line: 'Tart! Okay, that woke me up.' } },
     { id: 'lm:fw:kauri', kind: 'landmark', name: 'The giant kauri', x: 4000, photo: { w: 200, h: 300 }, note: 'The biggest tree I have ever seen. You can climb it to the canopy.' },
     { id: 'pt:fw:soil', kind: 'sample', name: 'Forest soil', x: 1060, art: () => findArt.dig('#2a1c12'), note: 'Soil laced with fungal threads.', take: { item: 'smp_soil', verb: 'Take a soil core', tools: ['trowel'], time: 1.8, line: 'Look at all these white threads. The whole floor is wired together.' } },
     { id: 'eco:fw:gully', kind: 'ecosystem', name: 'The frog gully', x: 2040, photo: { w: 200, h: 60 }, note: 'Moss frogs breed in the stream gully.' },
@@ -282,6 +294,8 @@ export const POINTS10: Record<string, Point10[]> = {
   ],
   // ---- Thunder Falls
   falls: [
+    // V12 the region's high way: the view off the top auk ledge
+    { id: 'lm:fa:topledge', kind: 'landmark', name: 'The view off the top ledge', x: 3060, photo: { w: 240, h: 140, dy: 20 }, note: 'From the top ledge the whole forest is laid out, back to the ridge and the sea.' },
     { id: 'lm:fa:falls', kind: 'landmark', name: 'Thunder Falls', x: 1464, photo: { w: 130, h: 300 }, note: 'The river drops off the plateau. Auks above, dippers behind.' },
     { id: 'pt:fa:water', kind: 'sample', name: 'Plunge pool water', x: 1240, art: () => findArt.sampleSpot('#6ab8c8'), take: { item: 'smp_falls', verb: 'Fill a sample jar at the pool', tools: ['jar'], time: 1.6 } },
   ],

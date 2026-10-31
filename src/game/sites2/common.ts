@@ -251,11 +251,11 @@ export function groundStrip(f: FieldScene, width: number, ground: Ground, top: C
 }
 
 /** Add a resource node with kit art (falls back to a marker). */
-export function node(f: FieldScene, key: string, kind: string, x: number, y?: number) {
+export function node(f: FieldScene, key: string, kind: string, x: number, y?: number, site?: string) {
   const s0 = sprite(`res:${kind}:0`, () => jcall<Sprite>('resourceSprite', kind, false, 1));
   const s1 = sprite(`res:${kind}:1`, () => jcall<Sprite>('resourceSprite', kind, true, 1));
   const art: NodeArt = { normal: s0?.f ?? A.blob, depleted: s1?.f ?? null, glow: s0?.g ?? null };
-  const n = new ResourceNode(`${f.site.id}:${key}`, kind, x, (y ?? f.st.terrain.groundY(x)) + 2, art);
+  const n = new ResourceNode(`${site ?? f.site.id}:${key}`, kind, x, (y ?? f.st.terrain.groundY(x)) + 2, art);
   f.addNode(n);
   return n;
 }
