@@ -420,7 +420,7 @@ export class FieldScene extends WorldScene implements WildHost {
   /** list who pushes the plants this frame: Mori, the animals on the ground, the people (world/foliage.ts) */
   private moveFoliage(dt: number) {
     const fo = this.st.foliage, p = this.player;
-    if (!fo.bits.length) fo.bits = A.leaves;
+    if (!fo.bits.length) { fo.bits = A.leaves; fo.dots = [A.dot2]; }
     fo.fx = this.main;
     fo.begin();
     if (!this.site.underwater) {

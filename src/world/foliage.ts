@@ -47,7 +47,7 @@ export class Wind {
   /** gust 0..1 at world x on the gameplay plane */
   gustAt(x: number): number {
     const u = x * this.dir - this.speed * this.t;
-    const front = clamp((noise1(u / 320, 71) - 0.42) * 2.6 + (noise1(u / 95, 72) - 0.5) * 0.45);
+    const front = clamp((noise1(u / 320, 71) - 0.45) * 2.2 + (noise1(u / 95, 72) - 0.5) * 0.45);
     const ripple = Math.max(0, Math.sin(u * 0.021)) ** 4 * 0.3;
     return clamp(front * this.gustiness + ripple);
   }
@@ -116,7 +116,9 @@ export class Plant {
     this.hw = Math.max(3, frame.w * ax * 0.42);
     this.up = frame.ay * ay;
     this.down = (frame.h - frame.ay) * ay;
-    this.max = S.push * (hang ? this.down : this.up);
+    // (tall reeds part, they don't lie flat: the travel is capped for big plants)
+    const h = hang ? this.down : this.up;
+    this.max = Math.min(S.push * h, 6 + h * 0.22);
     this.bits = bits ?? S.bits;
   }
   /** the push bend (world px at the free end) for a plant anchored at x, y this frame */
@@ -125,6 +127,8 @@ export class Plant {
     let dt = now - this.t;
     this.t = now;
     const F = st.foliage;
+    // far from the camera and at rest: nothing to simulate
+    if (this.rest && Math.abs(x - st.cam.x) > 640) return 0;
     if (!(dt > 0) || !F) return this.rest ? 0 : this.pb + this.shk * Math.sin(now * 43 + this.phase);
     if (dt > 0.05) dt = 0.05;
     let push = 0, hit: Mover | null = null;
@@ -179,8 +183,9 @@ export class Foliage {
   movers: Mover[] = [];
   /** the layer thrown leaves and petals fly on (the gameplay plane) */
   fx: Layer | null = null;
-  /** leaf / petal particle frames */
+  /** leaf particle frames, and plain specks for petals and seed */
   bits: Frame[] = [];
+  dots: Frame[] = [];
   private track = new WeakMap<object, { x: number; y: number; air: boolean }>();
   private sndT = 0;
   private n = 0;
@@ -234,11 +239,13 @@ export class Foliage {
   private burst(p: Plant, x: number, y: number, m: Mover, n: number) {
     const L = this.fx;
     if (!L || !this.bits.length) return;
+    const specks = (p.kind === 'flower' || p.kind === 'grass' || p.kind === 'reed') && this.dots.length > 0;
     for (let i = 0; i < n; i++) {
       const c = p.bits[rand.int(0, p.bits.length - 1)];
+      const fr = specks && (p.kind !== 'flower' || c[1] < 0.9 || rand.chance(0.7)) ? this.dots[rand.int(0, this.dots.length - 1)] : this.bits[rand.int(0, this.bits.length - 1)];
       const by = p.hang ? y + p.down * rand.range(0.3, 1) : y - p.up * rand.range(0.45, 1);
       L.particles.spawn({
-        frame: this.bits[rand.int(0, this.bits.length - 1)], x: x + rand.range(-p.hw, p.hw), y: by,
+        frame: fr, x: x + rand.range(-p.hw, p.hw), y: by,
         vx: m.vx * 0.35 + rand.range(-28, 28), vy: rand.range(-75, -25), ay: 95, life: rand.range(1.8, 3.2),
         color: c, alpha: 1, alpha1: 0.5, rot: rand.range(0, 6.28), vrot: rand.range(-5, 5), flutter: 1,
         size: rand.range(0.55, 0.9), floorY: y + rand.range(0, 5), onFloor: 'stop',

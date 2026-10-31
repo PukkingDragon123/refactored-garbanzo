@@ -832,31 +832,40 @@ function paintLog(buf: PixelBuffer, rng: Rng, x0: number, x1: number, cy: number
   const n = rp.length - 1;
   const len = x1 - x0;
   const ends = { l: rng.chance(0.5) ? 'cut' : 'broken', r: 'broken' };
+  const bow = (hash2(1, 2, o.seed) - 0.5) * r * 0.3;
   for (let x = Math.floor(x0); x <= x1; x++) {
     const t = (x - x0) / len;
-    const sagY = o.rotten ? Math.sin(t * Math.PI) * r * 0.25 : 0;
-    // broken end: jagged profile
-    let rr = r * (1 - 0.05 * Math.sin(t * 9));
+    const sagY = (o.rotten ? Math.sin(t * Math.PI) * r * 0.25 : 0) + Math.sin(t * Math.PI) * bow;
+    // a tapering trunk with a lumpy top (bark plates, burls); the broken end jagged
+    let rr = r * (1 - 0.05 * Math.sin(t * 9)) * (1.04 - t * 0.12);
+    const lump = (noise2(x * 0.22, 0.5, o.seed + 4) - 0.5) * Math.min(3, r * 0.35);
     if (t > 0.94) rr *= 0.6 + hash2(x, 0, o.seed) * 0.5;
     const cyy = cy + sagY;
-    for (let y = Math.floor(cyy - rr); y <= Math.ceil(cyy + rr); y++) {
+    for (let y = Math.floor(cyy - rr - lump); y <= Math.ceil(cyy + rr); y++) {
       const ny = (y + 0.5 - cyy) / rr;
-      if (Math.abs(ny) > 1) continue;
+      if (ny > 1 || ny < -1 - lump / rr) continue;
       let l = ny < -0.72 ? 1.4 : ny < -0.25 ? 0.7 : ny < 0.3 ? -0.2 : ny < 0.75 ? -1.1 : -1.7;
-      const ridge = Math.sin(y * 1.3 + noise2(x * 0.08, y * 0.3, o.seed) * 6);
-      if (ridge > 0.8) l -= 0.9;
-      else if (ridge > 0.55) l += 0.4;
+      // fissures running along the grain, broken into plates (not stripes)
+      const fis = noise2(x * 0.07, y * 0.6, o.seed);
+      const plate = noise2(x * 0.18 + Math.round(y * 0.45) * 7.7, 0, o.seed + 1);
+      l += (plate - 0.5) * 0.9;
+      if (fis < 0.3) l -= 1;
+      else if (fis < 0.36) l += 0.45;
       if (o.rotten && noise2(x * 0.15, y * 0.3, o.seed + 3) > 0.7) l -= 1;
       buf.set(x, y, rc(rp, n * 0.5 + l));
     }
   }
   // cut end with growth rings (left)
   if (ends.l === 'cut') {
-    buf.ellipseFn(x0, cy, r * 0.45, r, (_x, _y, nx, ny) => {
-      const d = Math.hypot(nx, ny);
-      if (d > 0.84) return rc(rp, n * 0.5 - 1.2);
-      return rc(JP.wood, o.rotten ? 3 + (Math.floor(d * 5) % 2) : 5 + (Math.floor(d * 6) % 2) + (ny < -0.3 ? 1 : 0));
-    });
+    // a sawn face with wobbly growth rings and a check crack (hand-shaped, not an ellipse)
+    for (let y = Math.floor(cy - r - 1); y <= cy + r + 1; y++) for (let x = Math.floor(x0 - r * 0.5); x <= x0 + r * 0.5; x++) {
+      const nx = (x + 0.5 - x0) / (r * 0.45), ny = (y + 0.5 - cy) / r, a = Math.atan2(ny, nx);
+      const d = Math.hypot(nx, ny) / (1 + (noise2(Math.cos(a) * 1.5 + 4, Math.sin(a) * 1.5, o.seed + 9) - 0.5) * 0.25);
+      if (d > 1) continue;
+      let c = d > 0.84 ? rc(rp, n * 0.5 - 1.2) : rc(JP.wood, o.rotten ? 3 + (Math.floor(d * 5 + noise2(a, 1, o.seed) * 0.8) % 2) : 5 + (Math.floor(d * 6 + noise2(a * 2, 1, o.seed) * 0.8) % 2) + (ny < -0.3 ? 1 : 0));
+      if (d > 0.15 && d < 0.84 && Math.abs(a - 0.5) < 0.12) c = rc(JP.wood, 1);
+      buf.set(x, y, c);
+    }
   } else {
     for (let y = Math.floor(cy - r); y <= cy + r; y++) {
       const jag = Math.round(hash2(y, 3, o.seed) * 4);
