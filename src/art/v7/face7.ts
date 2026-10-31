@@ -152,8 +152,9 @@ function brow7(put: Put, P: Pal, cx: number, cy: number, near: boolean, outer: 1
   for (let j = 0; j < n; j++) {
     const x = ox - outer * j, y = by + ys[j + (5 - n)];
     put(x, y, P.brow);
-    const thick = slit || (fem ? j >= n - 1 : j >= n - 2);
-    if (thick) put(x, y + 1, slit ? P.brow : P.brow2);
+    // a man's brow is heavy: a full double row (user: "more manly"); a woman's thickens only inside
+    const thick = slit || !fem || j >= n - 1;
+    if (thick) put(x, y + 1, slit || !fem ? P.brow : P.brow2);
     if (slit && j >= n - 3) put(x, y - 1, P.brow2);
   }
 }
@@ -169,10 +170,10 @@ const MOUTH: Record<string, string[]> = {
 };
 
 /** paint the face */
-export function paintFace7(put: Put, f: Face7) {
+export function paintFace7(put: Put, f: Face7, femIn?: boolean) {
   const { d, ex, eye, dir } = f;
   const P = palette(d);
-  const fem = d.face?.lash === 'f';
+  const fem = femIn ?? d.face?.lash === 'f';
   const slit = d.eyeStyle === 'slit';
   const browOn = !d.browHidden || ex.brow > 1 || slit;
   // eyes and brows: the near eye's outer corner is away from the look, the far eye's toward it
@@ -205,4 +206,85 @@ export function paintFace7(put: Put, f: Face7) {
   });
   // a lit lower lip under a closed mouth
   if (m === 'none' || m === 'smile') put(mx, my + rows.length, P.lipL);
+}
+
+// ------------------------------------------------------------------ the coarse face (user: "face not that high resolution")
+// The same features laid on the world-pixel grid (each face pixel a k x k block of the head's buffer),
+// so a face reads at the body's own pixel size instead of a fine anime decal. Men get heavier brows
+// laid flat and low, a stern line of a mouth and no lash flick; women a lighter brow, a lash flick
+// and a softer lip. paintFace7 (the fine face) is kept, unused, so it can come back.
+
+const FEM7 = new Set(['jenna', 'aroha', 'hine', 'rosie', 'celeste', 'sunny', 'ngaio', 'marge', 'hana', 'huia', 'ani', 'mere', 'pipi']);
+/** is this character drawn as a woman or girl (lighter brows, lash flicks, a softer build) */
+export function isFem7(id: string, d?: HeadDef7): boolean {
+  return FEM7.has(id) || d?.face?.lash === 'f';
+}
+
+export function paintFaceCoarse7(put: Put, f: Face7, k: number, fem: boolean) {
+  const { d, ex, eye, dir } = f;
+  const P = palette(d);
+  const slit = d.eyeStyle === 'slit';
+  const browOn = !d.browHidden || ex.brow > 1 || slit;
+  /** fill one world pixel (gx, gy) */
+  const Q = (gx: number, gy: number, c: C) => { for (let j = 0; j < k; j++) for (let i = 0; i < k; i++) put(gx * k + i, gy * k + j, c); };
+  for (const [c, near] of [[f.near, true], [f.far, false]] as const) {
+    if (!c) continue;
+    const gx = Math.round(c[0] / k), gy = Math.round(c[1] / k);
+    const outer = (near ? -dir : dir) as 1 | -1;
+    const w = near ? 2 : 1;
+    // columns from the back of the eye to the side it looks toward
+    const col = (i: number) => (w === 1 ? gx : dir > 0 ? gx - 1 + i : gx + 1 - i);
+    const lid = gy - 1;
+    const row = (y: number, cs: C[]) => cs.forEach((cc, i) => Q(col(i), y, cc));
+    const look = (back: C, front: C) => (w === 1 ? [front] : [back, front]);
+    if (slit) {
+      // narrowed under a heavy brow: one dark row, the iris at its front
+      row(gy, eye === 'closed' || eye === 'happy' ? look(P.L, P.L) : look(P.K, P.I));
+    } else if (eye === 'closed') row(gy, look(P.K, P.K));
+    else if (eye === 'happy') { row(lid, look(P.K, P.K)); Q(col(0), gy, P.S); }
+    else if (eye === 'half') { row(lid, look(P.L, P.L)); row(gy, look(P.K, P.I)); }
+    else {
+      row(lid, look(P.K, P.K));
+      row(gy, look(P.W, P.I));
+      if (eye === 'wide') row(gy + 1, look(P.w, P.i));
+      if (eye === 'angry') Q(col(w - 1) - outer, lid, P.K);
+      if (eye === 'sad') Q(col(0) + (w === 1 ? outer : 0), gy + 1, P.L);
+      // women's lashes flick up and out at the outer corner
+      if (fem && near) Q((outer > 0 ? Math.max(col(0), col(w - 1)) : Math.min(col(0), col(w - 1))) + outer, lid - 1, P.K);
+    }
+    // brows: a man's is a heavy flat bar sitting low; a woman's lighter and higher
+    if (browOn) {
+      const t = ex.browTilt;
+      const n = near ? 3 : 2;
+      const ys = t < 0 ? [0, 0, 1] : t > 0 ? [1, 0, -1] : [0, 0, 0];
+      const by = gy - (slit ? 2 : fem ? 3 : 2) - 1 - (ex.brow > 1 ? 1 : 0);
+      for (let j = 0; j < n; j++) {
+        const x = gx + outer * (near ? 1 : 0) - outer * j;
+        Q(x, by + ys[j + (3 - n)], fem ? P.brow2 : P.brow);
+      }
+      if (!fem && near) Q(gx - outer, by + ys[2] + 1, P.L); // the brow ridge's shadow at the inner end
+    }
+    if (ex.blush && near) Q(gx, gy + 2, P.blush);
+  }
+  // the nose: a shadow under the tip, away from the light
+  const nx = Math.round(f.nose[0] / k), ny = Math.round(f.nose[1] / k);
+  Q(nx, ny + 1, d.skin[2]);
+  // the mouth, on the world grid
+  const MC: Record<string, string[]> = {
+    none: fem ? ['l'] : ['lL'],
+    smile: fem ? ['l.l', '.L.'] : ['l.L', '.L.'],
+    open: ['D'],
+    o: ['D', 'D'],
+    frown: ['.L.', 'l.l'],
+    grit: ['DD'],
+    shout: ['DD', 'DT'],
+  };
+  const rows = MC[f.mouthShape] ?? MC.none;
+  // a man's mouth is a line of skin shadow, never a coloured lip
+  const pal: Record<string, C> = fem ? { L: P.lip, l: mix(P.lip, d.skin[2], 0.5), D: P.D, T: P.T } : { L: mix(P.lip, d.skin[1], 0.6), l: d.skin[2], D: P.D, T: P.T };
+  const mx = Math.round(f.mouth[0] / k), my = Math.round(f.mouth[1] / k);
+  const mw = rows[0].length, ax = (mw - 1) >> 1;
+  rows.forEach((r, j) => { for (let i = 0; i < mw; i++) if (r[i] !== '.') Q(mx + (i - ax) * dir, my + j, pal[r[i]]); });
+  // a man's jaw: a shadow under the cheekbone on the shadow side
+  if (!fem && f.near) Q(Math.round(f.near[0] / k) - dir, Math.round(f.near[1] / k) + 3, P.S);
 }

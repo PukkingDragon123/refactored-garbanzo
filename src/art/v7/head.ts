@@ -8,7 +8,7 @@ import { PixelBuffer } from '../pixel';
 import { C, hex, mix } from '../color';
 import { Scene3D, V3, Hit, cel, Ramp6, vadd } from './raster';
 import { YAW, BACK_YAW, PX7 } from './body';
-import { paintFace7 } from './face7';
+import { paintFace7, isFem7 } from './face7';
 import { trimPair } from '../people-rig';
 import { AROHA_HEAD } from './aroha7';
 
@@ -241,10 +241,13 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
   const Wv = (v: V3): V3 => W(v); // (linear)
   const E = (c: V3, r: V3, g: number, m: (h: Hit) => C | -1) => s.ellipsoid(W(c), Wv([r[0], 0, 0]), Wv([0, r[1], 0]), Wv([0, 0, r[2]]), g, m);
   const skinM = (bias = 0) => (h: Hit) => cel(d.skin, h.l, bias + 0.18);
-  // face volumes
+  // face volumes: a man's jaw and chin a little broader and squarer (user: "men more manly")
+  const fem = isFem7(id, d);
+  const jawR: V3 = fem ? d.jaw[1] : [d.jaw[1][0] * 1.08, d.jaw[1][1] * 1.06, d.jaw[1][2] * 1.12];
+  const chinR: V3 = fem ? d.chin[1] : [d.chin[1][0] * 1.1, d.chin[1][1] * 1.08, d.chin[1][2] * 1.15];
   E(d.skull[0], d.skull[1], 1, skinM());
-  E(d.jaw[0], d.jaw[1], 1, skinM(0.05));
-  E(d.chin[0], d.chin[1], 1, skinM(0.1));
+  E(d.jaw[0], jawR, 1, skinM(0.05));
+  E(d.chin[0], chinR, 1, skinM(0.1));
   E(d.nose[0], d.nose[1], 1, skinM(0.2));
   E(d.ear[0], d.ear[1], 2, skinM(-0.05));
   // hair in strand clusters: dark grooves between the clumps, a broken two-tone angel ring across the
@@ -314,7 +317,28 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
       near: visible(nearE) ? at2(nearE) : null, far: visible(farE) ? at2(farE) : null,
       mouth: at2(d.mouth), nose: at2([d.nose[0][0] + d.nose[1][0] * 0.85, d.nose[0][1] - d.nose[1][1] * 0.3, 0]),
       dir: ca * cp >= 0 ? 1 : -1, eye, mouthShape: mouth, ex, d,
-    });
+    }, fem);
+    // a man's jaw line (user: "more jaw line"): a shadow band along the underside of the jaw, from
+    // under the ear to the chin, and a short stroke up from the angle of the jaw
+    if (!fem) {
+      const jawC = mix(d.skin[1], d.skin[2], 0.35);
+      const bottom = new Int16Array(BW).fill(-1);
+      for (let x = 0; x < BW; x++) for (let y = BH - 1; y >= 0; y--) if (s.grp[y * BW + x] === 1) { bottom[x] = y; break; }
+      const cols = [...bottom.keys()].filter(x => bottom[x] >= 0);
+      if (cols.length > 4) {
+        const dirS = ca * cp >= 0 ? 1 : -1;
+        const x0 = cols[0], x1 = cols[cols.length - 1];
+        // the chin is the front end, the angle of the jaw the back end (a third of the way in)
+        const back = dirS > 0 ? x0 : x1, span = x1 - x0;
+        for (const x of cols) {
+          const u = Math.abs(x - back) / Math.max(1, span);
+          if (u < 0.18 || u > 0.92) continue;
+          marks.push([x, bottom[x], jawC]);
+        }
+        const ax = Math.round(back + dirS * span * 0.2), ay = bottom[ax];
+        if (ay >= 0) for (let j = 1; j <= Math.round(2 * PX7); j++) if (s.grp[(ay - j) * BW + ax] === 1) marks.push([ax, ay - j, jawC]);
+      }
+    }
     if (ex.sweat) {
       const [sx, sy] = px([0, 11, d.skull[1][2] * 0.9]);
       const drop = ['.w', 'wb', 'bb', '.b'], dc: Record<string, C> = { w: hex('#e8f8ff'), b: hex('#5ab0ec') };

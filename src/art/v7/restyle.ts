@@ -10,6 +10,7 @@ import type { Build } from '../people-rig';
 import type { Char7 } from './body';
 import { CAST7 } from './cast';
 import { HEAD_SCALE7 } from './head';
+import { isFem7 } from './face7';
 
 const memo = new WeakMap<Char7, Char7>();
 const isChild = (b: Build) => b.hipH < 21;
@@ -19,7 +20,10 @@ export function restyle7(ch: Char7): Char7 {
   const hit = memo.get(ch);
   if (hit) return hit;
   const b = ch.build, kid = isChild(b);
-  const L = kid ? 1.05 : 1.12, T = kid ? 1 : 1.04, A = kid ? 1.03 : 1.07;
+  // grown men (user: "men more manly"): broader shoulders and chest, a thicker neck, full-weight arms
+  // and legs, a sturdier stretch; women and children keep the slender build
+  const man = !kid && !isFem7(ch.id);
+  const L = kid ? 1.05 : man ? 1.08 : 1.12, T = kid ? 1 : 1.04, A = kid ? 1.03 : 1.07;
   const build: Build = {
     ...b,
     hipH: (b.hipH - b.ankleH) * L + b.ankleH,
@@ -33,8 +37,12 @@ export function restyle7(ch: Char7): Char7 {
   const r: Char7 = {
     ...ch,
     build,
-    armR: ch.armR.map(v => v * 0.95) as Char7['armR'],
-    legR: ch.legR.map(v => v * 0.96) as Char7['legR'],
+    shW: ch.shW * (man ? 1.12 : 1),
+    chest: man ? [ch.chest[0] * 1.08, ch.chest[1] * 1.1] : ch.chest,
+    waist: man ? [ch.waist[0] * 1.04, ch.waist[1] * 1.05] : ch.waist,
+    neckR: ch.neckR * (man ? 1.15 : 1),
+    armR: ch.armR.map(v => v * (man ? 1.06 : 0.95)) as Char7['armR'],
+    legR: ch.legR.map(v => v * (man ? 1.02 : 0.96)) as Char7['legR'],
     skirt: ch.skirt ? { ...ch.skirt, len: ch.skirt.len * (1 + (L - 1) * 0.6) } : undefined,
   };
   memo.set(ch, r);

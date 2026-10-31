@@ -23,6 +23,9 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
   props need irregular hand-shaped silhouettes, readable form shading, texture, cracks and
   highlights. If the code draws with `arc` or `ellipse`, it's only for a rough base that is then
   hand-detailed, never the final look.
+- Characters (user): keep the anime face (`src/art/v7/face7.ts` `paintFace7`). Men are visibly
+  masculine: a squarer jaw with a drawn jaw line, heavy brows, and broader shoulders, chest and neck
+  (`head.ts`, `restyle.ts`, with women and girls listed in `FEM7` in `face7.ts`).
 - Never use emoji. Use painted pixel icons (`src/ui/pxicons.ts`).
 - Never show the HD close-up face as a small profile portrait in the HUD.
 - The quality bar is the best scenes in the game, such as the palm beach and the great forest.
