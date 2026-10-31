@@ -448,7 +448,7 @@ export function raiseMood(c: VCtx, k: number) {
 // ------------------------------------------------------------------ lamps in the windows
 function lightsOn(L: Life, late: boolean) {
   const h = hourOf(L.c.f);
-  if (L.phase === 'night') return late && (h >= 22 || h < 1);
+  if (L.phase === 'night') return late && !(h >= 1 && h < 5.5);
   if (L.phase !== 'evening') return false;
   return h >= 18 || L.c.tod === 'dusk' || L.c.tod === 'night';
 }
