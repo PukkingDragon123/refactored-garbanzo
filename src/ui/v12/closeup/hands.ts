@@ -17,6 +17,10 @@ import { drawHand7, handFrame, handBones } from '../../../art/v7/hands';
 import type { J3 } from '../../../art/v7/body';
 import type { ArmP } from '../../../art/people-rig';
 
+/** the player's first-person hands are never shown (user): close-ups show only the tools and what
+ *  they touch. Kept so they can come back. */
+export const FIRST_PERSON_HANDS = false;
+
 export type Pose = 'grip' | 'open' | 'pinch' | 'cup' | 'knife' | 'brush';
 
 const R6 = (...h: string[]): Ramp6 => h.map(v => hex(v));
@@ -219,6 +223,7 @@ function sleeveParts(s: Scene3D, from: V3, wr: V3, r: number) {
 
 /** the jacket sleeve on its own, from (x0, y0) (off the edge of the set) to the wrist at (x1, y1), units */
 export function drawSleeve(px: PixelBuffer, x0: number, y0: number, x1: number, y1: number, r = 7) {
+  if (!FIRST_PERSON_HANDS) return;
   const from: V3 = [x0, -y0, 6], wr: V3 = [x1, -y1, 0];
   render(px, [Math.min(x0, x1) - r - 2, Math.min(y0, y1) - r - 2, Math.max(x0, x1) + r + 2, Math.max(y0, y1) + r + 2], 0, s => sleeveParts(s, from, wr, r));
 }
@@ -232,6 +237,7 @@ const sprites = new Map<string, { b: PixelBuffer; ax: number; ay: number }>();
 
 /** draw a gloved hand with its anchor at (x, y) units, the sleeve running in from o.from */
 export function drawHand(px: PixelBuffer, p: Pose, x: number, y: number, o: HandOpts = {}) {
+  if (!FIRST_PERSON_HANDS) return;
   const left = !!o.left, rot = o.rot ?? 0, r = o.r ?? 7, dark = o.dark ?? 0;
   // the anchor on the fine grid; the sleeve's start relative to it
   const fx = Math.round(x * Z), fy = Math.round(y * Z);

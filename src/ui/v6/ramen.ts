@@ -618,7 +618,7 @@ export async function runRamenPour(): Promise<Outcome> {
         }
       }
       // the kettle in Mori's hand (rotated sprite, nearest-neighbour), his sleeve out to the edge
-      const use3d = !!hands?.ready3d;
+      const use3d = !HANDS3D.enabled || !!hands?.ready3d; // no first-person hands: the bare kettle
       const kettle = use3d ? kettleBare : kettleHand;
       const ca = Math.cos(tilt), sa = Math.sin(tilt);
       for (let y = 0; y < CH; y++) for (let x = 100; x < CW; x++) {
