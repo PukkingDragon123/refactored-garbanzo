@@ -555,13 +555,13 @@ export async function runRamenPour(): Promise<Outcome> {
         const i = y * CW + x;
         if (SURF[i] !== 1) continue;
         const ks = Math.max(0, 1 - Math.hypot(x - 80, (y - 24) * 1.3) / 36) * 0.6;
-        const kc = Math.max(0, 1 - Math.hypot(x - 152, (y - 30) * 1.5) / 66) * cpow;
+        const kc = Math.max(0, 1 - Math.hypot(x - 124, (y - 32) * 1.4) / 74) * cpow;
         const k = Math.max(ks, kc);
         if (k < 0.04) continue;
         const sp = kc > ks ? 1.7 : 1, u = x * 0.2, v = y * 0.32;
         const n = Math.sin(u + Math.sin(v * 1.3 + t * 1.1 * sp) * 1.5 + t * 0.7 * sp) + Math.sin(v * 1.2 - Math.sin(u * 0.85 - t * 0.9 * sp) * 1.7 - t * 0.55 * sp);
         const c = 1 - Math.abs(n) * 0.9;
-        if (c > 0.78 && dith(x, y) < k * 1.7) buf[i] = mixc(buf[i], SUN_HOT, c > 0.9 ? 0.45 : 0.25);
+        if (c > 0.74 && dith(x, y) < k * 2) buf[i] = mixc(buf[i], SUN_HOT, c > 0.88 ? 0.58 : 0.3);
       }
       // the kettle's cast shadow on the counter: its silhouette laid down on the boards, soft-edged
       // and dithered, turning as it tips
@@ -585,7 +585,7 @@ export async function runRamenPour(): Promise<Outcome> {
       const inZone = L >= LINE_LO && L <= LINE_HI && !outcome;
       const lineCol = inZone ? (Math.floor(t * 8) % 2 ? hx('#ffe45a') : hx('#fff6c0')) : outcome === 'perfect' ? hx('#ffe45a') : mixc(hx('#b8341e'), hx('#ff6a3c'), outcome ? 0 : 0.5 + 0.5 * Math.sin(t * 6));
       // the golden broth's glow (strongest after a perfect pour)
-      const glow = Math.min(1, Math.max(0, (broth - 0.45) / 0.55) * (outcome === 'over' ? 0.6 : 1) + (outcome === 'perfect' ? joy * 0.3 : 0));
+      const glow = Math.min(1, Math.max(0, (broth - 0.35) / 0.5) * (outcome === 'over' ? 0.6 : 1) + (outcome === 'perfect' ? joy * 0.3 : 0));
       // inside the cup
       const Pk = surf(PUCK_TOP);
       const puckLevel = floating ? Math.max(PUCK_TOP, L - 0.02 - (1 - soak) * 0.08) : PUCK_TOP;
@@ -636,7 +636,7 @@ export async function runRamenPour(): Promise<Outcome> {
           if (wv < -0.25) w = mixc(w, SUN, Math.floor((-wv - 0.25) * 4 + dith(x, y)) / 3 * 0.32);
           else if (wv > 0.4 && dith(x, y) < (wv - 0.4) * 1.6) w = mixc(w, COOL, 0.2);
           // the golden broth glows
-          if (glow > 0) w = mixc(w, GLOW, Math.floor(glow * 3 * (0.7 + bk * 0.3) + dith(x, y)) / 3 * 0.28);
+          if (glow > 0) w = mixc(w, GLOW, Math.floor(glow * 3 * (0.7 + bk * 0.3) + dith(x, y)) / 3 * 0.42);
           // the sun reflected on the surface: a hot oval on the left, shivering with the ripples
           const rx0 = wu + 0.52 + gx * 3, ry0 = wv + 0.12 + gy * 3;
           const ro = rx0 * rx0 / 0.05 + ry0 * ry0 / 0.08;
@@ -786,7 +786,7 @@ export async function runRamenPour(): Promise<Outcome> {
           if (x < 0 || y < 0 || x >= CW || y >= CH) continue;
           const d = ((x + 0.5 - CX) / (RIM_RX + 20)) ** 2 + ((y + 0.5 - RIM_Y + 3) / (RIM_RY + 16)) ** 2;
           const r = ((x + 0.5 - CX) / RIM_RX) ** 2 + ((y + 0.5 - RIM_Y) / RIM_RY) ** 2;
-          if (d < 1 && r > 1) light(buf, y * CW + x, x, y, GLOW, (1 - d) * gp * 1.3, 0.3);
+          if (d < 1 && r > 1) light(buf, y * CW + x, x, y, GLOW, (1 - d) * gp * 1.8, 0.38);
         }
       }
       // the kettle in Mori's hand (rotated sprite, nearest-neighbour), his sleeve out to the edge
@@ -844,7 +844,7 @@ export async function runRamenPour(): Promise<Outcome> {
         const i = y * CW + x, v = buf[i];
         const lum = (R(v) * 77 + G(v) * 150 + B(v) * 29) >> 8;
         let c = v;
-        if (lum < 100) c = mixc(c, DUSK, Math.floor((100 - lum) / 100 * 3 + dith(x, y)) / 3 * 0.32);
+        if (lum < 84) c = mixc(c, DUSK, Math.floor((84 - lum) / 84 * 3 + dith(x, y)) / 3 * 0.26);
         else if (lum > 176) c = mixc(c, SUN_HOT, Math.floor((lum - 176) / 80 * 3 + dith(x, y)) / 3 * 0.18);
         const d = ((x - CW * 0.47) / (CW * 0.6)) ** 2 + ((y - CH * 0.5) / (CH * 0.66)) ** 2;
         const q = Math.min(3, Math.floor((d - 0.48) * 5 + dith(x, y)));
