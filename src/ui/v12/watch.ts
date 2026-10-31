@@ -24,6 +24,8 @@ export interface WatchOpts {
   secs?: number;
   /** 0..1 how hard it shakes (default: from t01 in the last quarter) */
   shake?: number;
+  /** clock mode: the sky window under the twelve (default on for cases of 34 px and up) */
+  sky?: boolean;
   /** the hands red (default: the last fifth of a countdown) */
   red?: boolean;
   /** seconds, for the shake and the glint (default: performance.now) */
@@ -183,6 +185,44 @@ export function drawWatch(ctx: CanvasRenderingContext2D, x: number, y: number, s
       const s = String(n), w = (s.length * (gw + 1) - 1) * m;
       const nx = Math.round(cx + Math.cos(a) * r - w / 2), ny = Math.round(cy + Math.sin(a) * r - (gh * m) / 2);
       for (let k = 0; k < s.length; k++) src[s[k]].forEach((row, yy) => { for (let xx = 0; xx < gw; xx++) if (row[xx] === '#') rect(nx + (k * (gw + 1) + xx) * m, ny + yy * m, m, m, INK); });
+    }
+  }
+  // ---- the sky window (clock mode): a domed aperture under the twelve, like a moon-phase watch,
+  // showing the island's sky for the hour: dawn pink, day blue, dusk orange, night navy with stars;
+  // the sun crosses it by day and a crescent moon by night, over a little hill horizon
+  if (clock && S >= 34 && opts.sky !== false) {
+    const h = (((opts.hour ?? 12) % 24) + 24) % 24;
+    const ww = Rd * 0.5, wh = Rd * 0.32, wcx = cx, wcy = Math.round(cy - Rd * 0.12);
+    const night = h < 5 || h >= 20.5, dawn = h >= 5 && h < 7, dusk = h >= 17 && h < 20.5;
+    const [top, bot] = night ? ['#0e1640', '#26306a'] : dawn ? ['#4a4a8a', '#f0a070'] : dusk ? ['#4a3a7a', '#f08a4a'] : ['#3a7ec8', '#a8d4f0'];
+    const inWin = (X: number, Y: number) => { const dx = (X + 0.5 - wcx) / ww, dy = (Y + 0.5 - wcy) / wh; return dy <= 0 && dx * dx + dy * dy <= 1; };
+    for (let Y = Math.floor(wcy - wh) - 1; Y <= wcy + 1; Y++) for (let X = Math.floor(wcx - ww) - 1; X <= wcx + ww + 1; X++) {
+      if (inWin(X, Y)) {
+        const t = (Y + 0.5 - (wcy - wh)) / wh;
+        px(X, Y, dith(X, Y) < t ? bot : top);
+      } else if (inWin(X - 1, Y) || inWin(X + 1, Y) || inWin(X, Y + 1) || inWin(X, Y - 1)) px(X, Y, BR[1]); // the brass lip
+    }
+    // stars at night (a few twinkle)
+    if (night || h >= 19.5 || h < 5.5) for (let i = 0; i < 9; i++) {
+      const sx = Math.round(wcx - ww * 0.85 + ((i * 37) % 17) / 17 * ww * 1.7), sy = Math.round(wcy - wh * 0.15 - ((i * 23) % 11) / 11 * wh * 0.8);
+      if (inWin(sx, sy) && (i % 3 !== 0 || Math.floor(T * 1.5 + i) % 2 === 0)) px(sx, sy, i % 4 === 0 ? '#fff6c0' : '#c8d0ff');
+    }
+    // the sun by day, the moon by night, riding an arc from the left horizon to the right
+    const day = h >= 6 && h < 18, u = day ? (h - 6) / 12 : (((h - 18) + 24) % 24) / 12;
+    const bx = wcx - ww * 0.72 + u * ww * 1.44, by = wcy - wh * 0.18 - Math.sin(u * Math.PI) * wh * 0.62;
+    const br = Math.max(1.6, wh * 0.3);
+    for (let Y = Math.floor(by - br - 1); Y <= by + br + 1; Y++) for (let X = Math.floor(bx - br - 1); X <= bx + br + 1; X++) {
+      if (!inWin(X, Y)) continue;
+      const d = Math.hypot(X + 0.5 - bx, Y + 0.5 - by);
+      if (day) {
+        if (d <= br) px(X, Y, X + Y < bx + by - 0.5 ? '#fff4b0' : '#ffc838');
+        else if (d <= br + 1 && dith(X, Y) < 0.5) px(X, Y, '#ffe890'); // a dithered glow
+      } else if (d <= br && Math.hypot(X + 0.5 - (bx + br * 0.55), Y + 0.5 - (by - br * 0.3)) > br * 0.85) px(X, Y, X + Y < bx + by ? '#fffbe8' : '#e8e0b8'); // a crescent
+    }
+    // a little island horizon along the bottom of the window
+    for (let X = Math.floor(wcx - ww); X <= wcx + ww; X++) {
+      const hh = 1 + Math.round(1 + Math.sin((X - wcx) * 0.5) * 0.8 + Math.sin((X - wcx) * 1.3 + 1) * 0.6);
+      for (let k = 0; k < hh; k++) if (inWin(X, wcy - k)) px(X, wcy - k, night ? '#14201a' : k === hh - 1 ? '#5a8a3a' : '#2e5426');
     }
   }
   // ---- the hands: tapered blued steel with a lit edge

@@ -1141,7 +1141,7 @@ export async function runEngineRepair(o: { onStep?: (k: string) => void | Promis
         if (pan && STAGES[si - 1] === k) return 1 - ease(Math.min(1, pan.t * 3));
         return 0;
       };
-      const use3d = !!hands?.ready3d;
+      const use3d = !HANDS3D.enabled || !!hands?.ready3d; // no first-person hands: the hands-free path
       const L3 = hands?.left ?? null, R3 = hands?.right ?? null;
       if (L3) L3.visible = false;
       if (R3) R3.visible = false;
