@@ -268,7 +268,8 @@ export abstract class WorldScene implements Scene {
       if (Math.abs(wx - it.x) < it.w + 4 && wy > it.y - it.h * 2 - 8 && wy < it.y + 8) this.hovered = it;
     }
     // V12: Mori himself is clickable (inspect him: his camera, backpack and note paper)
-    const overMori = !camUp && this.player.state === 'normal' && moriAt(wx, wy);
+    // clicking Mori no longer inspects him (user); Tab / I still do, and the kit's icons open the pack and camera
+    const overMori = false && !camUp && this.player.state === 'normal' && moriAt(wx, wy);
     // (his upper body is his; low down, a thing he stands at keeps the click)
     if (overMori && this.hovered && (wy < this.player.y - this.player.height * 0.4 || Math.abs(this.hovered.x - this.player.x) > 8)) this.hovered = null;
     game.r.canvas.style.cursor = this.hovered || overMori ? 'pointer' : '';
@@ -288,12 +289,8 @@ export abstract class WorldScene implements Scene {
       this.runAction(near);
       return;
     }
-    // V12: Tab / I (or a click on Mori) inspects him; the pack, camera and notebook are picked from him
+    // V12: Tab / I inspects him; the pack, camera and notebook are picked from him
     if (this.allowPack && (inp.keyHit('KeyI') || inp.keyHit('Tab'))) {
-      void inspectMori();
-      return;
-    }
-    if (inp.click(0) && overMori && this.allowPack && !this.hovered) {
       void inspectMori();
       return;
     }

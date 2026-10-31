@@ -63,7 +63,8 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
   - **Text:** all text floats in the world. Dialogue is simple floating text by the speaker, with
     lively per-letter animation: shouts shake and grow, whispers waver, scared text trembles. The same
     goes for barks, prompts and notices. No dialogue boxes, no toasts.
-  - **Mori:** click or tap Mori (or press Tab) to inspect him. The camera eases in close, and three
+  - **Mori:** press Tab or I to inspect him. Clicking or tapping Mori does nothing (user removed it);
+    the kit's icon buttons open the pack, guide and camera. The camera eases in close, and three
     things on him can be picked: the camera (equip or unequip), the backpack (floating UI over
     the world, never a first-person scene: the pack lifts off his back and opens in the air as a
     super-detailed pixel-art object with a 5×3 grid; items can be rotated) and the note paper (pulled
