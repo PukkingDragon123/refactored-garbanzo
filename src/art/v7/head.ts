@@ -286,7 +286,8 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
   // face volumes: a man's jaw and chin a little broader and squarer (user: "men more manly")
   const fem = isFem7(id, d);
   E(d.skull[0], d.skull[1], 1, skinM());
-  if (fem) {
+  // (children, drawn at a larger head scale, keep the soft round face)
+  if (fem || hs > 0.85) {
     E(d.jaw[0], d.jaw[1], 1, skinM(0.05));
     E(d.chin[0], d.chin[1], 1, skinM(0.1));
   } else {
@@ -306,9 +307,10 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
   }
   E(d.nose[0], d.nose[1], 1, skinM(0.2));
   // the ear: rim lit, the bowl inside it in shadow
-  E(d.ear[0], d.ear[1], 2, h => {
+  // (in the face group: no ink seam between the ear and the cheek, only its outline against the hair)
+  E(d.ear[0], d.ear[1], 1, h => {
     const q = h.q;
-    if (Math.abs(q[2]) > 0.8 && q[0] > -0.45 && q[0] < 0.25 && q[1] > -0.4 && q[1] < 0.3) return d.skin[2];
+    if (Math.abs(q[2]) > 0.8 && q[0] > -0.45 && q[0] < 0.25 && q[1] > -0.4 && q[1] < 0.3) return mix(d.skin[2], d.skin[3], 0.25);
     return cel(d.skin, h.l, 0.13);
   });
   // hair in strand clusters: dark grooves between the clumps, a broken two-tone angel ring across the
