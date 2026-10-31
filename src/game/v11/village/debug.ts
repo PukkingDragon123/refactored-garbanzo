@@ -69,6 +69,24 @@ const withCtx = async (fn: (m: typeof import('./ritual'), c: NonNullable<ReturnT
 export const story = () => withCtx((m, c) => m.storyByFire(c));
 export const offering = () => withCtx((m, c) => m.offering(c));
 export const blessing = () => withCtx((m, c) => m.blessing(c));
+/** V12 village life: load the village in a part of the day at an hour (everyone met, so they greet Mori by name) */
+export async function life(ph: 'morning' | 'midday' | 'evening' | 'night', tod: 'dawn' | 'day' | 'dusk' | 'night', hour: number, x = 1000) {
+  const L = await import('./life');
+  const ex = await import('../../v10/expedition');
+  for (const id of ['koro', 'huia', 'mere', 'tamati', 'manu', 'rawiri', 'hemi', 'hana', 'pipi', 'ani', 'mikaere']) setVf('met:' + id);
+  if (ex.currentExpedition()) ex.setExpeditionHour(hour);
+  L.forcePhase(ph);
+  return go(tod, x);
+}
+/** the side quests module (stageQuest, sideTalk, hawkPhoto...) */
+export const side = () => import('./sidequests');
+/** the village's part of the day, its hour, and where everyone is and what they're doing */
+export const lifeInfo = async () => (await import('./life')).LIFE_ZL.info();
+/** move the village to another part of the day: walking (or jump straight there) */
+export async function phase(p: 'morning' | 'midday' | 'evening' | 'night', jump = false) {
+  const L = await import('./life');
+  return jump ? L.LIFE_ZL.jump(p) : L.LIFE_ZL.phase(p);
+}
 /** set everything up for the festival and load the village after dark: the night plays */
 export async function festival() {
   stage('festival');

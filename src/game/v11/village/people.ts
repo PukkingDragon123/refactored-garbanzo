@@ -144,7 +144,7 @@ export function spawnVillagers(c: VCtx) {
     kidT -= dt;
     if (kidT <= 0 && !c.night) {
       kidT = rand.range(7, 14);
-      const kids = ['pipi', 'ani', 'mikaere'].map(id => c.vill[id]).filter(k => k && !k.held && Math.abs(k.a.x - f.player.x) < 260);
+      const kids = ['pipi', 'ani', 'mikaere'].map(id => c.vill[id]).filter(k => k && !k.held && k.a.visible && k.ext !== 'tag' && Math.abs(k.a.x - f.player.x) < 260);
       const k = kids.length ? rand.pick(kids) : null;
       if (k && !game.ui.bubbles.active) bark(k.id, rand.pick(KID_BARKS), { expr: 'excited' });
     }
@@ -152,7 +152,7 @@ export function spawnVillagers(c: VCtx) {
 }
 
 function tickRoutine(c: VCtx, rt: VillagerRT, dt: number) {
-  if (rt.held) return;
+  if (rt.held || rt.ext || !rt.a.visible) return;
   const a = rt.a;
   if (a.walking) return;
   rt.t -= dt;
@@ -190,7 +190,7 @@ function chatter(c: VCtx) {
   const p = c.f.player;
   const ok = CHATTER.filter(ch => {
     const A = c.vill[ch.a]?.a, B = c.vill[ch.b]?.a;
-    return A && B && !c.vill[ch.a].held && !c.vill[ch.b].held && Math.abs(A.x - B.x) < 150 && Math.abs((A.x + B.x) / 2 - p.x) < 280;
+    return A && B && A.visible && B.visible && !c.vill[ch.a].held && !c.vill[ch.b].held && Math.abs(A.x - B.x) < 150 && Math.abs((A.x + B.x) / 2 - p.x) < 280;
   });
   if (!ok.length) return;
   const ch = rand.pick(ok);
@@ -224,7 +224,8 @@ function addTalk(c: VCtx, id: string, a: Actor) {
   const f = c.f;
   (f.interact as Interactable[]).push({
     get x() { return a.x; }, get y() { return a.y; }, w: 14, h: 22, label: `Talk to ${villagerName(id)}`, get standX() { return a.x - 22 * a.facing; },
-    quest: () => questMark(id),
+    enabled: () => a.visible,
+    quest: () => questMark(id) || sideMark(id),
     action: async () => {
       if (f.cutscene || c.hold) return;
       f.cutscene = true;
@@ -235,7 +236,8 @@ function addTalk(c: VCtx, id: string, a: Actor) {
       if (!sitting) a.setAnim('talk');
       try {
         firstMeet(id);
-        await (TALK[id] ?? talkGeneric)(c, a);
+        const SQ = await import('./sidequests');
+        if (!(await SQ.sideTalk(c, id, a))) await (TALK[id] ?? talkGeneric)(c, a);
       } catch (e) { console.error(e); }
       finally {
         f.cutscene = false;
@@ -249,6 +251,11 @@ function addTalk(c: VCtx, id: string, a: Actor) {
     },
   } as Interactable);
 }
+
+/** V12 side quests: their marker (the module loads with the village; until then, nothing) */
+let sideMarkFn: ((id: string) => boolean) | null = null;
+export function setSideMark(fn: (id: string) => boolean) { sideMarkFn = fn; }
+const sideMark = (id: string) => !!sideMarkFn?.(id);
 
 /** the quest marker floats over whoever the tracked village quest needs next */
 function questMark(id: string): boolean {

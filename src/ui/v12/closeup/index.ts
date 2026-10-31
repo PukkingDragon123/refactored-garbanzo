@@ -1,14 +1,15 @@
 // V12 close-ups: the hands-on pixel-art scenes that replace the small in-world QTEs for the moments
 // worth zooming in on (cooking, digging out a find, pulling a plant, catching a critter, developing
 // photos). The old QTEs stay behind the 'v12:oldqte' save flag. Debug: zl.closeup('cook' | 'dig' |
-// 'pull' | 'catch' | 'dark'), or ?closeup=<kind> in the URL.
+// 'pull' | 'catch' | 'dark' | 'guitar'), or ?closeup=<kind> in the URL (guitar: ?closeup=guitar, or
+// guitar-hoki / guitar-manu for the other songs).
 
 import { game } from '../../../game/game';
 
 /** the close-ups are on (the save flag 'v12:oldqte' brings back the old QTEs) */
 export const closeupsOn = () => !game.save?.flags?.['v12:oldqte'];
 
-export type CloseupKind = 'cook' | 'dig' | 'fossil' | 'root' | 'pull' | 'flax' | 'catch' | 'frog' | 'crab' | 'dark';
+export type CloseupKind = 'cook' | 'dig' | 'fossil' | 'root' | 'pull' | 'flax' | 'catch' | 'frog' | 'crab' | 'dark' | 'guitar' | 'guitar-hoki' | 'guitar-manu';
 
 /** what a QTE call site asks for when the moment is worth a close-up */
 export interface CloseupSpec {
@@ -73,6 +74,7 @@ export async function debugCloseup(kind: CloseupKind = 'cook'): Promise<unknown>
   if (kind === 'catch') return closeupQte({ scene: 'catch', itemKind: 'insect' });
   if (kind === 'frog') return closeupQte({ scene: 'catch', itemKind: 'animal' });
   if (kind === 'crab') return closeupQte({ scene: 'catch', itemKind: 'shell' });
+  if (kind.startsWith('guitar')) return (await import('./guitar')).runGuitar({ song: kind.split('-')[1] ?? 'ahi', who: 'hana' });
   if (kind === 'dark') return (await import('./darkroom')).runDarkroom({ img: (game.save.raw as { img: string }[] | undefined)?.[0]?.img });
   return null;
 }
