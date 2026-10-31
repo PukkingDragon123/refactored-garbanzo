@@ -1049,7 +1049,8 @@ ACTS.carry = (a, dt) => {
 
 ACTS.climb = (a, dt) => {
   const tr = a.poi?.kind === 'trunk' ? a.poi : a.findPOI('trunk', 300);
-  if (!tr) return ACTS.wander(a, dt);
+  // no trunk anywhere near (a village, a beach): down to the ground rather than bouncing between climb and wander forever
+  if (!tr) { if (a.medium === 'trunk') { a.medium = 'ground'; a.settle(); } return ACTS.wander(a, dt); }
   if (a.medium !== 'trunk') {
     a.anim = 'walk';
     if (a.groundTo(tr.x, a.eco.walk, dt) || a.mem.blocked) { a.medium = 'trunk'; a.poi = tr; }

@@ -18,6 +18,10 @@ export async function bootNpcs() {
   booted = true;
   registerNpcArt();
   registerNpcQuests();
+  // Te Kāinga's quests are known everywhere (the HUD note and the notebook), and its side quests
+  // put their spots out on the trails
+  void import('../village/lore').then(m => m.registerVillageQuests()).catch(e => console.warn('[village] quests', e));
+  try { await (await import('../village/sidequests')).bootSideQuests(); } catch (e) { console.warn('[village] side quests', e); }
   const { onLocEnter } = await import('../../v10/field10');
   onLocEnter(spawnFor);
   window.addEventListener('keydown', e => {
