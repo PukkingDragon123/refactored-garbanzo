@@ -8,7 +8,7 @@ import { PixelBuffer } from '../pixel';
 import { C, hex, mix } from '../color';
 import { Scene3D, V3, Hit, cel, Ramp6, vadd } from './raster';
 import { YAW, BACK_YAW, PX7 } from './body';
-import { paintFace7, isFem7 } from './face7';
+import { isFem7 } from './face7';
 import { trimPair } from '../people-rig';
 import { AROHA_HEAD } from './aroha7';
 
@@ -211,6 +211,40 @@ const HW = 48, HH = 56, HOX = 24, HOY = 40;
  * proportions (about six heads tall, the head kept a touch large so faces read at game scale).
  * Children (index.ts passes their own) keep rounder, larger heads.
  */
+/**
+ * Joshu's eyes are always narrowed: a short dark slit sunk under a heavy brow ridge (a shadow row)
+ * with bushy pale brows pressing down on it. Anger slants the slit and drives the inner brow down onto
+ * it, sorrow lifts the inner brow and droops the outer corner, surprise raises the brows and opens
+ * the slit a pixel, a grin squeezes it into a crinkled arc, sleep is a soft lid line.
+ * `inner` is the screen direction toward the nose.
+ */
+function slitEye(mark: FaceMark, x: number, y: number, inner: 1 | -1, eye: HeadExpr7['eye'], ex: HeadExpr7, d: HeadDef7, eyeC: C, browC: C) {
+  const o = -inner;
+  const lid = mix(d.skin[1], eyeC, 0.35), browS = mix(browC, d.skin[1], 0.4), crease = mix(d.skin[2], d.skin[1], 0.6);
+  const t = ex.browTilt;
+  if (eye === 'wide') {
+    // brows up, the eye opened to a taller dot: about as wide-eyed as he gets
+    mark(x + inner, y - 3, browC); mark(x, y - 3, browC); mark(x + o, y - 2, browS);
+    mark(x, y, eyeC); mark(x, y - 1, eyeC);
+    return;
+  }
+  if (eye === 'happy') {
+    // squeezed into a grin: an arc under the brow, crow's feet at the outer corner
+    mark(x + inner, y - 2, browC); mark(x, y - 2, browC); mark(x + o, y - 2, browS);
+    mark(x, y - 1, eyeC); mark(x + inner, y, eyeC); mark(x + o, y, eyeC); mark(x + o * 2, y + 1, crease);
+    return;
+  }
+  // the heavy brow sits right on the eye: angry slants it down to the nose, sad lifts its inner end
+  if (t < 0) { mark(x + inner, y, browC); mark(x, y - 1, browC); mark(x + o, y - 2, browS); }
+  else if (t > 0) { mark(x + inner, y - 2, browC); mark(x, y - 1, browC); mark(x + o, y - 1, browS); }
+  else { mark(x + inner, y - 1, browC); mark(x, y - 1, browC); mark(x + o, y - 1, browS); }
+  if (eye === 'closed') { mark(x, y, lid); mark(x + o, y, lid); return; }
+  if (eye === 'sad') { mark(x, y, eyeC); mark(x + o, y + 1, lid); return; }
+  // the narrowed glare (neutral, half, angry): a two-pixel slit, its outer corner creased
+  mark(x, y, eyeC); mark(x + o, y, eyeC);
+  if (eye === 'angry') mark(x + o * 2, y - 1, crease);
+}
+
 export const HEAD_SCALE7 = 0.8;
 
 /**
@@ -313,31 +347,45 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
   const mouth = o.mouth === 2 ? 'shout' : o.mouth === 1 ? (ex.mouth === 'none' || ex.mouth === 'smile' || ex.mouth === 'frown' ? 'open' : ex.mouth) : ex.mouth;
   const at2 = (p: V3): [number, number] => { const q = px(p); return [q[0], q[1]]; };
   if (!back) {
-    paintFace7(put, {
-      near: visible(nearE) ? at2(nearE) : null, far: visible(farE) ? at2(farE) : null,
-      mouth: at2(d.mouth), nose: at2([d.nose[0][0] + d.nose[1][0] * 0.85, d.nose[0][1] - d.nose[1][1] * 0.3, 0]),
-      dir: ca * cp >= 0 ? 1 : -1, eye, mouthShape: mouth, ex, d,
-    }, fem);
-    // a man's jaw line (user: "more jaw line"): a shadow band along the underside of the jaw, from
-    // under the ear to the chin, and a short stroke up from the angle of the jaw
-    if (!fem) {
-      const jawC = mix(d.skin[1], d.skin[2], 0.35);
-      const bottom = new Int16Array(BW).fill(-1);
-      for (let x = 0; x < BW; x++) for (let y = BH - 1; y >= 0; y--) if (s.grp[y * BW + x] === 1) { bottom[x] = y; break; }
-      const cols = [...bottom.keys()].filter(x => bottom[x] >= 0);
-      if (cols.length > 4) {
-        const dirS = ca * cp >= 0 ? 1 : -1;
-        const x0 = cols[0], x1 = cols[cols.length - 1];
-        // the chin is the front end, the angle of the jaw the back end (a third of the way in)
-        const back = dirS > 0 ? x0 : x1, span = x1 - x0;
-        for (const x of cols) {
-          const u = Math.abs(x - back) / Math.max(1, span);
-          if (u < 0.18 || u > 0.92) continue;
-          marks.push([x, bottom[x], jawC]);
-        }
-        const ax = Math.round(back + dirS * span * 0.2), ay = bottom[ax];
-        if (ay >= 0) for (let j = 1; j <= Math.round(2 * PX7); j++) if (s.grp[(ay - j) * BW + ax] === 1) marks.push([ax, ay - j, jawC]);
+    // the old simple face (user: "the old simple face before"): dot eyes, two-pixel brows, a
+    // small mouth, each face pixel a PX7 x PX7 block so it reads at the body's world-pixel size.
+    // (paintFace7, the anime face, is kept unused in face7.ts.)
+    const B = PX7;
+    const blk = (cx: number, cy: number): FaceMark => (dx, dy, c) => {
+      const X = Math.round(cx) + Math.round(dx) * B, Y = Math.round(cy) + Math.round(dy) * B;
+      for (let j = 0; j < B; j++) for (let i = 0; i < B; i++) put(X + i, Y + j, c);
+    };
+    const eyeC = hex(d.eyeCol), browC = hex(d.brow);
+    for (const e of [nearE, farE]) {
+      if (!visible(e)) continue;
+      const [ex0, ey0] = at2(e);
+      const m = blk(ex0, ey0);
+      const inner = (e[2] > 0 ? 1 : -1) as 1 | -1;
+      if (d.eyeStyle === 'slit') { slitEye(m, 0, 0, inner, eye, ex, d, eyeC, browC); continue; }
+      if (d.eyePaint) { d.eyePaint(m, 0, 0, inner, e[2] < 0, eye, ex, d); continue; }
+      if (eye === 'dot' || eye === 'angry' || eye === 'sad' || eye === 'half') m(0, 0, eyeC);
+      else if (eye === 'wide') { m(0, 0, eyeC); m(0, -1, eyeC); }
+      else if (eye === 'closed') { m(0, 0, eyeC); m(-1, 0, eyeC); }
+      else if (eye === 'happy') { m(0, -1, eyeC); m(-1, 0, eyeC); m(1, 0, eyeC); }
+      else m(0, 0, eyeC);
+      // brows: two pixels, raised / tilted by the expression
+      if (!d.browHidden || ex.brow > 1) {
+        const by = -2 - (ex.brow > 1 ? 1 : 0), t = ex.browTilt;
+        m(-1, by + (t < 0 ? 0 : t > 0 ? 1 : 0), browC);
+        m(0, by + (t < 0 ? 1 : 0), browC);
       }
+      if (ex.blush) m(0, 2, mix(hex(d.blush), d.skin[3], 0.2));
+    }
+    {
+      const [mx0, my0] = at2(d.mouth);
+      const m = blk(mx0, my0);
+      const lip = mix(d.skin[1], hex('#6a2020'), 0.4), dark = hex('#4a1418');
+      if (d.mouthPaint) d.mouthPaint(m, 0, 0, mouth, ex, d);
+      else if (mouth === 'smile') { m(0, 0, lip); m(-1, -1, lip); }
+      else if (mouth === 'frown') { m(0, 0, lip); m(-1, 1, lip); }
+      else if (mouth === 'open' || mouth === 'o') m(0, 0, dark);
+      else if (mouth === 'grit') { m(0, 0, dark); m(-1, 0, dark); }
+      else if (mouth === 'shout') { m(0, 0, dark); m(0, 1, dark); m(-1, 0, dark); }
     }
     if (ex.sweat) {
       const [sx, sy] = px([0, 11, d.skull[1][2] * 0.9]);
