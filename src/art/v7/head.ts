@@ -187,15 +187,15 @@ const JENNA: HeadDef7 = {
   locks: [
     // side-swept bangs: clumps of uneven length sweeping from the parting across the forehead, the
     // longest curling down past the near brow (rooted under 13, so they show under a beanie)
-    { a: [2.0, 12.9, -2.0], m: [4.2, 12.0, -0.6], b: [5.3, 9.9, 0.6], r0: 1.9, rm: 1.5, r1: 0.3, dyn: 0.12 },
-    { a: [2.4, 12.8, -0.6], m: [4.6, 11.5, 1.0], b: [5.2, 9.1, 2.2], r0: 1.8, rm: 1.4, r1: 0.3, dyn: 0.12 },
-    { a: [2.4, 12.6, 0.8], m: [4.4, 11.0, 2.5], b: [4.7, 8.5, 3.5], r0: 1.7, rm: 1.3, r1: 0.3, dyn: 0.15 },
-    { a: [2.0, 12.4, 2.4], m: [3.4, 10.6, 3.8], b: [3.5, 8.0, 4.5], r0: 1.5, rm: 1.2, r1: 0.3, dyn: 0.15 },
-    { a: [2.6, 12.6, -1.4], b: [5.4, 10.5, -1.9], r0: 1.3, r1: 0.3, dyn: 0.1 },
-    { a: [2.2, 12.8, -3.0], m: [3.9, 11.6, -3.4], b: [4.6, 10.0, -3.8], r0: 1.5, rm: 1.2, r1: 0.35, dyn: 0.12 },
+    { a: [2.0, 12.9, -2.0], m: [4.2, 12.0, -0.6], b: [5.3, 9.9, 0.6], r0: 1.9, rm: 1.5, r1: 0.3, dyn: 0.12, band: 0.3 },
+    { a: [2.4, 12.8, -0.6], m: [4.6, 11.5, 1.0], b: [5.2, 9.1, 2.2], r0: 1.8, rm: 1.4, r1: 0.3, dyn: 0.12, band: 0.3 },
+    { a: [2.4, 12.6, 0.8], m: [4.4, 11.0, 2.5], b: [4.7, 8.5, 3.5], r0: 1.7, rm: 1.3, r1: 0.3, dyn: 0.15, band: 0.3 },
+    { a: [2.0, 12.4, 2.4], m: [3.4, 10.6, 3.8], b: [3.5, 8.0, 4.5], r0: 1.5, rm: 1.2, r1: 0.3, dyn: 0.15, band: 0.26 },
+    { a: [2.6, 12.6, -1.4], b: [5.4, 10.5, -1.9], r0: 1.3, r1: 0.3, dyn: 0.1, band: 0.25 },
+    { a: [2.2, 12.8, -3.0], m: [3.9, 11.6, -3.4], b: [4.6, 10.0, -3.8], r0: 1.5, rm: 1.2, r1: 0.35, dyn: 0.12, band: 0.3 },
     // cheek-length locks framing the face, tips curling in toward the chin, a finer strand in front
-    { a: [1.6, 10.6, 4.4], m: [2.2, 6.8, 5.0], b: [3.0, 3.8, 4.4], r0: 1.6, rm: 1.3, r1: 0.3, dyn: 0.3 },
-    { a: [1.6, 10.6, -4.4], m: [2.2, 7.0, -5.0], b: [3.0, 4.4, -4.4], r0: 1.5, rm: 1.2, r1: 0.3, dyn: 0.3 },
+    { a: [1.6, 10.6, 4.4], m: [2.2, 6.8, 5.0], b: [3.0, 3.8, 4.4], r0: 1.6, rm: 1.3, r1: 0.3, dyn: 0.3, band: 0.22 },
+    { a: [1.6, 10.6, -4.4], m: [2.2, 7.0, -5.0], b: [3.0, 4.4, -4.4], r0: 1.5, rm: 1.2, r1: 0.3, dyn: 0.3, band: 0.22 },
     { a: [2.4, 10.4, 3.9], b: [3.4, 5.4, 4.5], r0: 1.0, r1: 0.25, dyn: 0.25 },
     { a: [2.4, 10.4, -3.9], b: [3.2, 6.0, -4.5], r0: 0.9, r1: 0.25, dyn: 0.25 },
     // the back gathered down toward the ties, covering the head down to the nape
@@ -460,7 +460,10 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
   /** a ribbon bow tied round a lock's root, facing the viewer: two loops (a dark eye in each), the knot, two short ends */
   const bow = (p: V3, side: number, R: Ramp6) => {
     const u = vnorm(Winv([1, 0, 0])), view = vnorm(Winv([0, 0, 1]));
-    const kn = vadd(vadd(p, [0, 0, side * 0.6]), vsc(view, 0.8));
+    // the near bow sits on the viewer's side of its tail; the far one stays round the back of the head
+    // (it only peeks out past the silhouette, never through the cheek)
+    const near = W([0, 0, side])[2] > -0.1;
+    const kn = vadd(vadd(p, [near ? 0 : -0.4, 0, side * (near ? 0.6 : 0.8)]), vsc(view, near ? 0.8 : 0));
     const loopM = (h: Hit): C => (h.n[2] > 0.84 ? R[1] : cel(R, h.l, 0.12, true));
     for (const g of [-1, 1]) {
       const ax = vnorm(vadd(vsc(u, g), [0, 0.4, 0]));
