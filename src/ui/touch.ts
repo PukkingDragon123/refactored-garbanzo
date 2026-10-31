@@ -138,7 +138,6 @@ export function setupTouch() {
     if (camOn()) { inp.shutter = true; buzz(10); return; }
     const pr = floatPromptRect();
     if (pr && cx >= pr.left && cx <= pr.right && cy >= pr.top && cy <= pr.bottom) { tapKey('KeyE'); buzz(); return; }
-    if (onMori(cx, cy)) { buzz(); void import('./v12/inspect').then(m => m.inspectMori()); return; }
     // a click on the world there: walk to it, or use the thing tapped
     const r = canvas.getBoundingClientRect();
     inp.mx = ((cx - r.left) / r.width) * game.r.VW;
