@@ -6,6 +6,7 @@ import { Particles } from './particles';
 import { Terrain } from './terrain';
 import { TimeOfDay, TimePreset, timePreset, Mood } from './timeofday';
 import { clamp, damp, rand } from '../core/math';
+import { Wind, Foliage } from './foliage';
 
 export interface Drawable {
   z: number;
@@ -91,7 +92,12 @@ export class Stage {
   preset: TimePreset;
   env: Env;
   time = 0;
+  /** the scene's base wind strength (0.6 a breeze); the gust fronts on top live in windField */
   wind = 0.6;
+  /** the wind field every plant reads: st.wind plus gust waves rolling across in world x */
+  windField = new Wind();
+  /** plant physics: this frame's movers (filled by the scene), thrown leaves, rustles */
+  foliage = new Foliage();
   /** world bounds for the camera on the p=1 plane */
   minX = 0;
   maxX = 1000;
@@ -134,6 +140,7 @@ export class Stage {
 
   update(dt: number) {
     this.time += dt;
+    this.windField.update(this);
     for (const l of this.layers) {
       for (let i = l.items.length - 1; i >= 0; i--) {
         const d = l.items[i];

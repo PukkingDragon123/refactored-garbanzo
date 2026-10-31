@@ -8,6 +8,7 @@ import { game } from '../game';
 import type { FieldScene } from '../scenes/field';
 import type { Layer } from '../../world/stage';
 import { Prop, Custom } from '../../world/props';
+import type { FoliageKind } from '../../world/foliage';
 import { layerSpan, addSky, addClouds } from '../../world/scenery';
 import { local, A } from '../assets';
 import { PixelBuffer } from '../../art/pixel';
@@ -138,6 +139,18 @@ export function trees(f: FieldScene, layer: Layer, x0: number, x1: number, step:
   }
 }
 
+/** the plant physics kind of a jungle plant (world/foliage.ts) */
+export function plantFoliage(pk: PlantKind): FoliageKind {
+  switch (pk) {
+    case 'grass': case 'sedge': case 'moss': return 'grass';
+    case 'flax': case 'astelia': case 'lily': return 'reed';
+    case 'flowers': case 'lanternpod': return 'flower';
+    case 'shrub': case 'kawakawa': case 'taro': case 'pitcher': return 'bush';
+    case 'vine': return 'vine';
+    default: return 'fern';
+  }
+}
+
 /** Dense ground cover along the gameplay plane (and glowing fungi at night). */
 export function undergrowth(f: FieldScene, layer: Layer, x0: number, x1: number, density: number, ground: Ground, seed: number, mix0: { plants: PlantKind[]; fungi?: FungusKind[]; wood?: DeadwoodKind[] }, z = 1) {
   const rng = new Rng(seed);
@@ -145,13 +158,15 @@ export function undergrowth(f: FieldScene, layer: Layer, x0: number, x1: number,
   for (let x = x0; x < x1; x += rng.range(14, 30) / density) {
     const k = rng.next();
     let key: string, gen: () => Sprite;
-    if (k < 0.72 || (!mix0.fungi && !mix0.wood)) { const pk = mix0.plants[rng.int(0, mix0.plants.length - 1)]; const v = rng.int(0, 3); key = `pl:${pk}:${v}`; gen = () => plant(pk, 300 + v * 13); }
-    else if (k < 0.86 && mix0.fungi) { const fk = mix0.fungi[rng.int(0, mix0.fungi.length - 1)]; const v = rng.int(0, 2); key = `fu:${fk}:${v}`; gen = () => fungus(fk, 400 + v * 7); }
-    else { const wk = (mix0.wood ?? ['log'])[rng.int(0, (mix0.wood ?? ['log']).length - 1)]; const v = rng.int(0, 2); key = `dw:${wk}:${v}`; gen = () => deadwood(wk, 500 + v * 11); }
+    // plants sway and part around Mori; fungi barely stir; dead wood and rocks hold still
+    let sway = 0.9, fol: FoliageKind | false = false;
+    if (k < 0.72 || (!mix0.fungi && !mix0.wood)) { const pk = mix0.plants[rng.int(0, mix0.plants.length - 1)]; const v = rng.int(0, 3); key = `pl:${pk}:${v}`; gen = () => plant(pk, 300 + v * 13); fol = plantFoliage(pk); }
+    else if (k < 0.86 && mix0.fungi) { const fk = mix0.fungi[rng.int(0, mix0.fungi.length - 1)]; const v = rng.int(0, 2); key = `fu:${fk}:${v}`; gen = () => fungus(fk, 400 + v * 7); sway = 0.15; }
+    else { const wk = (mix0.wood ?? ['log'])[rng.int(0, (mix0.wood ?? ['log']).length - 1)]; const v = rng.int(0, 2); key = `dw:${wk}:${v}`; gen = () => deadwood(wk, 500 + v * 11); sway = 0; }
     const c = sprite(key, gen);
     if (!c) continue;
     const y = ground.y(x) + 2;
-    layer.add(new Prop(c.f, x, y, z + rng.next() * 0.5, { sway: 0.9, flip: rng.chance(0.5) }));
+    layer.add(new Prop(c.f, x, y, z + rng.next() * 0.5, { sway, flip: rng.chance(0.5), foliage: fol }));
     if (c.g) {
       const g = c.g;
       layer.add(new Custom(z + 0.6, rr => {
@@ -181,7 +196,7 @@ export function frontFoliage(f: FieldScene, x0: number, x1: number, step: [numbe
     if (!c) continue;
     const flip = rng.chance(0.5);
     const wx = x * p, wy = o.hang ? y : y + rng.range(-8, 16);
-    layer.add(new Prop(c.f, wx, wy, rng.next(), { sway: 0.5, flip, tint: o.tint ?? packColor(0.5, 0.58, 0.55, 1) }));
+    layer.add(new Prop(c.f, wx, wy, rng.next(), { sway: hangs ? 0.7 : 0.5, flip, hang: hangs, tint: o.tint ?? packColor(0.5, 0.58, 0.55, 1), foliage: hangs ? 'vine' : kind === 'grass' ? 'grass' : 'fern' }));
     f.occluders.push({ mask: c.s.buf, x: wx, y: wy, ax: c.s.ax, ay: c.s.ay, sx: flip ? -1 : 1, sy: 1, p: layer.p, z: 0 });
   }
   return layer;
@@ -192,7 +207,7 @@ export function hideBush(f: FieldScene, x: number, ground: Ground, seed: number,
   const c = sprite(`bush:${seed % 4}`, () => plant('shrub', 700 + (seed % 4) * 5, 44));
   const y = ground.y(x) + 2;
   if (c) {
-    f.main.add(new Prop(c.f, x, y, 70, { sway: 0.8 }));
+    f.main.add(new Prop(c.f, x, y, 70, { sway: 0.8, foliage: 'bush' }));
     f.occluders.push({ mask: c.s.buf, x, y, ax: c.s.ax, ay: c.s.ay, sx: 1, sy: 1, p: 1, z: 70 });
   }
   f.pois.push({ kind: 'cover', x, y, w: 18 });

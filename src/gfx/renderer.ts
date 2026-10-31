@@ -499,6 +499,10 @@ export class Renderer {
   get layerZoom() {
     return this.L.z;
   }
+  /** parallax factor of the current layer (1 = the gameplay plane, 0 = a screen layer) */
+  get layerP() {
+    return this.L.p;
+  }
   /** Screen-space x of a world x on an arbitrary parallax layer (no state change). */
   projectX(x: number, p: number) {
     const z = Math.pow(this.view.zoom, p);
@@ -613,7 +617,20 @@ export class Renderer {
 
   /** Draw with the top edge sheared horizontally by `sway` world px (wind-bent vegetation). */
   drawSway(fr: Frame, x: number, y: number, sx: number, sy: number, sway: number, color = WHITE) {
-    if (this.M) {
+    this.drawBend(fr, x, y, sx, sy, sway, color, 1);
+  }
+
+  /**
+   * Draw a sprite bent from its anchor (plants in the wind, pushed foliage). Rows above the anchor
+   * move by `bend` world px at the top edge, rows below it by -`bend` at the bottom edge, scaled by
+   * (distance / height) ^ curve, so a curve over 1 keeps the base planted and swings the tip. Each
+   * row's offset is rounded to whole art pixels and runs of equal rows go out as one quad: the
+   * sprite bends in crisp pixel steps, never a smeared shear.
+   */
+  drawBend(fr: Frame, x: number, y: number, sx: number, sy: number, bend: number, color = WHITE, curve = 1.6) {
+    const ak = Math.abs(sx) || 1;
+    const tip = bend / ak;
+    if (this.M || (tip < 0.5 && tip > -0.5)) {
       this.emit(this.scene, this.shadowMode, fr, x, y, sx, sy, 0, color, this.L.aux, this.mat);
       return;
     }
@@ -621,15 +638,27 @@ export class Renderer {
     const z = L.z;
     const cx = x * z + L.ox, cy = y * z + L.oy;
     const kx = sx * z, ky = sy * z;
-    const l = -fr.ax * kx, r = (fr.w - fr.ax) * kx;
-    const t = -fr.ay * ky, btm = (fr.h - fr.ay) * ky;
-    const X0 = cx + l, X1 = cx + r, Y0 = cy + t, Y1 = cy + btm;
-    const minX = Math.min(X0, X1) - Math.abs(sway * z), maxX = Math.max(X0, X1) + Math.abs(sway * z);
-    if (maxX < -2 || minX > this.VW + 2 || Math.max(Y0, Y1) < -2 || Math.min(Y0, Y1) > this.VH + 2) return;
-    // shear proportional to distance above the anchor
-    const hT = -t / Math.max(1e-3, btm - t), hB = -btm / Math.max(1e-3, btm - t);
-    const sT = sway * z * hT, sB = sway * z * hB;
-    this.writeQuad(this.scene, fr.tex, this.shadowMode, X0 + sT, Y0, X1 + sT, Y0, X1 + sB, Y1, X0 + sB, Y1, fr.u0, fr.v0, fr.u1, fr.v1, color, this.L.aux, this.mat);
+    const X0 = cx - fr.ax * kx, X1 = cx + (fr.w - fr.ax) * kx;
+    const Y0 = cy - fr.ay * ky, Y1 = cy + (fr.h - fr.ay) * ky;
+    const pad = Math.abs(bend * z) + 2;
+    if (Math.max(X0, X1) < -pad || Math.min(X0, X1) > this.VW + pad || Math.max(Y0, Y1) < -2 || Math.min(Y0, Y1) > this.VH + 2) return;
+    const H = fr.h, ay = fr.ay, step = ak * z;
+    const dv = (fr.v1 - fr.v0) / H;
+    const off = (i: number) => {
+      const d = ay - i - 0.5;
+      if (d > 0) return Math.round(tip * Math.pow(Math.min(1, d / H), curve));
+      return -Math.round(tip * Math.pow(Math.min(1, -d / H), curve));
+    };
+    const aux = this.L.aux, mat = this.mat, mode = this.shadowMode;
+    let i = 0;
+    while (i < H) {
+      const o = off(i);
+      let j = i + 1;
+      while (j < H && off(j) === o) j++;
+      const ya = cy + (i - ay) * ky, yb = cy + (j - ay) * ky, ox = o * step;
+      this.writeQuad(this.scene, fr.tex, mode, X0 + ox, ya, X1 + ox, ya, X1 + ox, yb, X0 + ox, yb, fr.u0, fr.v0 + i * dv, fr.u1, fr.v0 + j * dv, color, aux, mat);
+      i = j;
+    }
   }
 
   /** Draw a sub-rectangle (in texels) of a frame, positioned by its own top-left. */

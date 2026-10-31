@@ -15,6 +15,8 @@ import { bigFrame } from '../../gfx/atlas';
 import { game } from '../game';
 import { A } from '../assets';
 import type { Layer, Stage, Drawable } from '../../world/stage';
+import { plantFor, swayAmp, windBend } from '../../world/foliage';
+import type { Plant } from '../../world/foliage';
 import { Prop } from '../../world/props';
 import { sprite } from '../sites2/common';
 import { tree } from '../../art/jungle-trees';
@@ -43,7 +45,7 @@ function prune(l: Layer) {
   l.markDirty();
 }
 
-interface Item { f: Frame; x: number; y: number; s: number; flip: boolean; sway: number; ph: number; tint: number; sh: number }
+interface Item { f: Frame; x: number; y: number; s: number; flip: boolean; sway: number; ph: number; tint: number; sh: number; pl?: Plant | null; amp?: number }
 
 /** a batch of static props on one layer, drawn in order and culled by the visible x range */
 class Strip implements Drawable {
@@ -68,13 +70,14 @@ class Strip implements Drawable {
       }
       r.endShadows();
     }
-    const w = st.wind, t = st.time;
     for (const it of this.items) {
       if (it.x < x0 || it.x > x1) continue;
       const sx = it.flip ? -it.s : it.s;
       if (it.sway) {
-        const s = (Math.sin(t * 1.3 + it.ph) * 0.7 + Math.sin(t * 2.9 + it.ph * 1.7) * 0.3) * it.sway * (0.4 + w);
-        r.drawSway(it.f, it.x, it.y, sx, it.s, s, it.tint);
+        // the shared wind and plant physics (world/foliage.ts): gust waves, pushed by Mori and the animals
+        if (it.pl === undefined) { it.pl = plantFor(undefined, it.f, sx, it.s, it.sway, false, it.ph, r); it.amp = swayAmp(it.sway, it.f, it.s, false); }
+        const b = windBend(r, st, it.x, it.amp ?? 0, 1.3, it.ph) + (it.pl ? it.pl.push(r, st, it.x, it.y) : 0);
+        r.drawBend(it.f, it.x, it.y, sx, it.s, b, it.tint, it.pl?.curve ?? 1.6);
       } else r.draw(it.f, it.x, it.y, sx, it.s, 0, it.tint);
     }
   }

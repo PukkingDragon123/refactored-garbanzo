@@ -126,6 +126,7 @@ export function runGallery(name: string) {
   // V11 illustrated item art on its Backpack footprints (src/debug/items11.ts)
   if (name === 'items11') { void import('./items11').then(m => m.items11Gallery(new URLSearchParams(location.search))); return; }
   if (name === 'camp4') { void camp4Gallery(); return; }
+  if (name === 'organic') { void import('./organicGallery').then(m => m.organicGallery()); return; }
   if (name === 'hands') { void import('./handsgallery').then(m => m.handsGallery(new URLSearchParams(location.search))); return; }
   if (name === 'social') { void import('./socialgallery').then(m => m.runSocialGallery()).catch(e => { document.body.textContent = String(e?.stack ?? e); }); return; }
   if (name === 'npcs') { void import('./npcgallery').then(m => m.runNpcGallery()); return; }

@@ -12,7 +12,7 @@ import { A } from '../assets';
 import type { Layer } from '../../world/stage';
 import { Prop, Custom } from '../../world/props';
 import { layerSpan } from '../../world/scenery';
-import { sprite, jcall } from '../sites2/common';
+import { sprite, jcall, plantFoliage } from '../sites2/common';
 import * as SF from '../../art/ship4/furniture';
 import { tree, canopyClump } from '../../art/jungle-trees';
 import { plant, deadwood, fungus } from '../../art/jungle-plants';
@@ -130,13 +130,13 @@ export function dressIsland(s: IslandScene4, L: IsleLayers) {
     if (Math.abs(x - SPOT.creek) < 30) continue;
     const k = rng.next();
     const c = k < 0.4 ? sprite(`fp:fern:${x % 4}`, () => plant('fern', 600 + (x % 4))) : k < 0.55 ? sprite(`fp:crown:${x % 3}`, () => plant('crownfern', 610 + (x % 3))) : k < 0.7 ? sprite(`fp:kawa:${x % 3}`, () => plant('kawakawa', 620 + (x % 3))) : k < 0.8 ? sprite(`fp:moss:${x % 3}`, () => plant('moss', 630 + (x % 3))) : k < 0.9 ? sprite(`fp:log:${x % 2}`, () => deadwood('rottenlog', 640 + (x % 2))) : sprite(`fp:fun:${x % 3}`, () => fungus(x % 2 ? 'inkcap' : 'glowcap', 650 + (x % 3)));
-    if (c) main.add(new Prop(c.f, x, groundY(x) + 2, -2 + rng.next() * 0.5, { sway: 0.8, flip: rng.chance(0.5) }));
+    if (c) main.add(new Prop(c.f, x, groundY(x) + 2, -2 + rng.next() * 0.5, { sway: k < 0.8 ? 0.8 : 0, flip: rng.chance(0.5), foliage: k < 0.55 ? 'fern' : k < 0.7 ? 'bush' : k < 0.8 ? 'grass' : false }));
   }
   // flax and bush where the beach meets the land at the grove and the stream
   for (let x = 3540; x < 4060; x += rng.range(40, 90)) {
     if (Math.abs(x - SPOT.stream) < 80) continue;
     const c = sprite(`flx:${x % 3}`, () => plant('flax', 660 + (x % 3), 40));
-    if (c) main.add(new Prop(c.f, x, groundY(x) + 1, -3, { sway: 1.2 }));
+    if (c) main.add(new Prop(c.f, x, groundY(x) + 1, -3, { sway: 1.2, foliage: 'reed' }));
   }
 
   // ---------------------------------------------------------------- in front of the camera (p 1.25)
@@ -182,14 +182,14 @@ export function dressIsland(s: IslandScene4, L: IsleLayers) {
     const v = rng.int(0, 3);
     const size = kind === 'flax' ? rng.range(26, 38) : kind === 'flowers' ? rng.range(14, 22) : kind === 'astelia' ? 26 : kind === 'kawakawa' ? 30 : rng.range(16, 24);
     const c = sprite(`wl:${kind}:${v}:${Math.round(size / 4)}`, () => plant(kind, 800 + v * 7, size));
-    if (c) main.add(new Prop(c.f, x, groundY(x) + 2, -2.6 + rng.next() * 0.3, { sway: 1.1, flip: rng.chance(0.5) }));
+    if (c) main.add(new Prop(c.f, x, groundY(x) + 2, -2.6 + rng.next() * 0.3, { sway: 1.1, flip: rng.chance(0.5), foliage: plantFoliage(kind) }));
   }
   // mossy rocks with grass tufts at the headlands
   for (const x of [80, 210, 330, 4050, 4210, 4640, 5520, 5820]) {
     const c = sprite(`mrock:${x % 4}`, () => deadwood('rock', 820 + (x % 4), 34 + (x % 3) * 8));
     if (c) main.add(new Prop(c.f, x, groundY(x) + 3, -3.2, { flip: x % 2 === 1 }));
     const g = sprite(`mrg:${x % 3}`, () => plant('grass', 830 + (x % 3), 18));
-    if (g) main.add(new Prop(g.f, x + 8, groundY(x + 8) - 6, -3.1, { sway: 1 }));
+    if (g) main.add(new Prop(g.f, x + 8, groundY(x + 8) - 6, -3.1, { sway: 1, foliage: 'grass' }));
   }
   // more palms along the landing beach and the seal rocks
   for (const [x, h, lean] of [[1560, 230, 1], [1900, 175, -1], [2260, 205, 1], [4140, 215, -1], [4380, 185, 1], [5640, 225, -1]] as const) {

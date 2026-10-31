@@ -329,7 +329,7 @@ function build(f: FieldScene) {
     const s = sprite(`hl:hide:${x % 3}`, () => paintTussock(1500 + (x % 3), 48, { red: x % 2 === 0 }));
     const y = hgroundY(x) + 3;
     if (s) {
-      main.add(new WindProp(s.f, x, y, 66, { sway: 0.8 }));
+      main.add(new WindProp(s.f, x, y, 66, { sway: 0.8, foliage: 'grass' }));
       f.occluders.push({ mask: s.s.buf, x, y, ax: s.s.ax, ay: s.s.ay, sx: 1, sy: 1, p: 1, z: 66 });
     }
     f.pois.push({ kind: 'cover', x, y, w: 18 });
@@ -347,7 +347,9 @@ function build(f: FieldScene) {
       : k < 0.46 ? tus(rng.chance(0.25), rng.range(26, 46)) : k < 0.54 ? spn(rng.range(24, 34)) : k < 0.58 ? dsy() : k < 0.68 ? bould[rng.int(0, 1)] : k < 0.82 ? stones[rng.int(0, 3)] : z === 'bush' ? heb() : cush();
     const sc = 0.9 + (P - 1) * 0.22;
     const o = { flip: rng.chance(0.5), sx: sc, sy: sc };
-    main.add(k < 0.6 ? new WindProp(fr, x, hgroundY(x) + dd, 60 + dd * 0.02, { ...o, sway: 0.6 }) : new Prop(fr, x, hgroundY(x) + dd, 60 + dd * 0.02, o));
+    // (only the plants bend in the wind and part around you; the stones and boulders hold still)
+    const hard = stones.includes(fr) || bould.includes(fr);
+    main.add(!hard ? new WindProp(fr, x, hgroundY(x) + dd, 60 + dd * 0.02, { ...o, sway: k < 0.6 ? 0.6 : 0.35, foliage: k < 0.46 || z === 'scree' ? 'grass' : 'bush' }) : new Prop(fr, x, hgroundY(x) + dd, 60 + dd * 0.02, { ...o, foliage: false }));
   }
 
   // ---- POIs for the wildlife

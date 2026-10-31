@@ -218,7 +218,7 @@ export class CampScene extends FieldScene {
     for (let x = 640; x < 1280; x += rng.range(30, 70)) {
       const s = rng.chance(0.5) ? plant('grass', rng.int(1, 999), 18) : plant('sedge', rng.int(1, 999), 16);
       const f = fr(s);
-      if (f) main.add(new Prop(f, x, campGround(x) + 2, -1, { sway: 1.5 }));
+      if (f) main.add(new Prop(f, x, campGround(x) + 2, -1, { sway: 1.5, foliage: 'grass' }));
     }
     // jungle undergrowth
     for (let x = SPOTS.jungle - 20; x < CAMP_W; x += rng.range(22, 48)) {
@@ -227,7 +227,7 @@ export class CampScene extends FieldScene {
       const f = fr(s);
       const g = glowFr(s);
       const y = campGround(x) + 2;
-      if (f) main.add(new Prop(f, x, y, 1 + rng.next(), { sway: 0.8 }));
+      if (f) main.add(new Prop(f, x, y, 1 + rng.next(), { sway: k >= 0.65 && k < 0.8 ? 0 : 0.8, foliage: k >= 0.65 && k < 0.8 ? false : k < 0.45 || k >= 0.8 ? 'fern' : 'bush' }));
       if (g) main.add(new Custom(1.5, rr => { if (night) { rr.emissive(1); rr.draw(g, x, y); rr.emissive(); } }));
     }
     // foreground occluders at the jungle edge

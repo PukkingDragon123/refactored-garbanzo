@@ -4,6 +4,8 @@ import type { Frame, Renderer } from '../gfx/renderer';
 import { packColor, WHITE } from '../gfx/renderer';
 import type { Drawable, Stage } from './stage';
 import { rand } from '../core/math';
+import { plantFor, swayAmp, windBend } from './foliage';
+import type { FoliageKind, Plant } from './foliage';
 
 export interface PropOpts {
   sx?: number;
@@ -14,6 +16,15 @@ export interface PropOpts {
   tint?: number;
   emissive?: number;
   rot?: number;
+  /**
+   * plant physics: the kind of foliage this is (pushed by Mori and animals, leaves fly when you jump
+   * in), false to only sway; left out, a small swaying prop on the gameplay plane is a 'plant'
+   */
+  foliage?: FoliageKind | false;
+  /** hangs from its anchor (vines, moss): the free end is the bottom */
+  hang?: boolean;
+  /** colours of the leaves / petals it throws */
+  bits?: [number, number, number][];
 }
 
 export class Prop implements Drawable {
@@ -26,6 +37,12 @@ export class Prop implements Drawable {
   emissive?: number;
   rot: number;
   hidden = false;
+  /** the plant's spring (undefined until first drawn, null when it only sways) */
+  plant: Plant | null | undefined;
+  private fol: FoliageKind | false | undefined;
+  private bits?: [number, number, number][];
+  readonly hang: boolean;
+  private amp = -1;
   constructor(public frame: Frame, public x: number, public y: number, public z = 0, o: PropOpts = {}) {
     this.sx = (o.sx ?? 1) * (o.flip ? -1 : 1);
     this.sy = o.sy ?? 1;
@@ -34,14 +51,24 @@ export class Prop implements Drawable {
     this.tint = o.tint ?? WHITE;
     this.emissive = o.emissive;
     this.rot = o.rot ?? 0;
+    this.fol = o.foliage;
+    this.bits = o.bits;
+    this.hang = o.hang ?? this.frame.ay < this.frame.h * 0.35;
+    if (o.foliage === false) this.plant = null;
+  }
+  /** the wind's bend at the free end (world px); see world/foliage.ts */
+  windBend(r: Renderer, st: Stage): number {
+    if (this.amp < 0) this.amp = swayAmp(this.sway, this.frame, this.sy, this.hang);
+    return windBend(r, st, this.x, this.amp, this.swaySpeed, this.phase);
   }
   draw(r: Renderer, st: Stage) {
     if (this.hidden) return;
     if (this.emissive !== undefined) r.emissive(this.emissive);
-    if (this.sway) {
-      const w = st.wind;
-      const s = (Math.sin(st.time * this.swaySpeed + this.phase) * 0.7 + Math.sin(st.time * this.swaySpeed * 2.3 + this.phase * 1.7) * 0.3) * this.sway * (0.4 + w);
-      r.drawSway(this.frame, this.x, this.y, this.sx, this.sy, s, this.tint);
+    if (this.sway || this.fol) {
+      if (this.plant === undefined) this.plant = plantFor(this.fol, this.frame, this.sx, this.sy, this.sway, this.hang, this.phase, r, this.bits);
+      const pl = this.plant;
+      const b = (this.sway ? this.windBend(r, st) : 0) + (pl ? pl.push(r, st, this.x, this.y) : 0);
+      r.drawBend(this.frame, this.x, this.y, this.sx, this.sy, this.hang ? -b : b, this.tint, pl?.curve ?? 1.6);
     } else r.draw(this.frame, this.x, this.y, this.sx, this.sy, this.rot, this.tint);
     if (this.emissive !== undefined) r.emissive();
   }

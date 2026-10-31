@@ -383,6 +383,7 @@ export class FieldScene extends WorldScene implements WildHost {
     this.cam.lamp = this.lampOn ? 0.45 : 0;
     this.clickToWalk = !this.cam.active;
     super.update(dt);
+    this.moveFoliage(dt);
     this.cam.update(dt, this.st, p.x, p.eyeY, p.crouch || p.state === 'hide', this.animals);
     if (!this.cam.active && this.site.followY) this.st.cam.ty = p.y - 60;
     // V10: energy, the pack's weight, bad forage, the quick-eat key
@@ -414,6 +415,20 @@ export class FieldScene extends WorldScene implements WildHost {
     }
     audio.setDanger(danger);
     this.site.onUpdate?.(this, dt);
+  }
+
+  /** list who pushes the plants this frame: Mori, the animals on the ground, the people (world/foliage.ts) */
+  private moveFoliage(dt: number) {
+    const fo = this.st.foliage, p = this.player;
+    if (!fo.bits.length) fo.bits = A.leaves;
+    fo.fx = this.main;
+    fo.begin();
+    if (!this.site.underwater) {
+      fo.add(p, 7, p.height * 0.85, dt);
+      for (const a of this.animals) if (a.p === 1 && a.medium === 'ground' && a.hidden < 0.5) fo.add(a, 6 * a.scale, 16 * a.scale, dt);
+      for (const a of this.actors.values()) if (a.visible) fo.add(a, 6, 64, dt, true);
+    }
+    fo.end();
   }
 
   render(r: Renderer, dt: number) {

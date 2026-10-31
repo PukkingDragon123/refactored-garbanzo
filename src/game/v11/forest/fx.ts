@@ -8,6 +8,7 @@ import type { Renderer, Frame } from '../../../gfx/renderer';
 import { packColor } from '../../../gfx/renderer';
 import { bigFrame } from '../../../gfx/atlas';
 import type { Drawable, Stage, Layer } from '../../../world/stage';
+import { Plant, swayAmp, windBend } from '../../../world/foliage';
 import { game } from '../../game';
 import { A } from '../../assets';
 import * as L from '../../../art/landscape';
@@ -134,62 +135,35 @@ export class ForestShade implements Drawable {
 // ------------------------------------------------------------------ the ground cover
 
 export interface Mover { x: number; y: number; vx: number }
-interface Tuft { f: Frame; x: number; y: number; sx: number; h: number; bend: number; vel: number; ph: number; tint: number }
+interface Tuft { f: Frame; x: number; y: number; sx: number; amp: number; ph: number; tint: number; pl: Plant }
 
 /**
- * Ferns, sedges and seedlings along the walk line that bend away from whoever pushes through them
- * and spring back (a damped spring per tuft, driven by the movers near it, plus the wind).
+ * Ferns, sedges and seedlings along the walk line: each tuft is a plant in the shared plant physics
+ * (world/foliage.ts), leaning with the scene's gust waves, bending away from whoever pushes through
+ * it (the stage's movers) and springing back. Batched: only the tufts on screen are touched.
+ * (movers / player are kept for callers; the stage's foliage movers drive the push now.)
  */
 export class GroundCover implements Drawable {
   private list: Tuft[] = [];
   private sorted = false;
-  private rustleT = 0;
   constructor(public z: number, readonly movers: () => Mover[], readonly player: () => Mover | null) {}
   add(f: Frame, x: number, y: number, flip: boolean, tint = 0xffffffff) {
-    this.list.push({ f, x, y, sx: flip ? -1 : 1, h: f.h, bend: 0, vel: 0, ph: rand.range(0, 10), tint });
+    const ph = rand.range(0, 10), sx = flip ? -1 : 1;
+    this.list.push({ f, x, y, sx, amp: swayAmp(0.7, f, 1, false), ph, tint, pl: new Plant(f.h < 24 ? 'grass' : 'fern', f, sx, 1, false, ph) });
     this.sorted = false;
   }
-  update(dt: number, st: Stage) {
+  update() {
     if (!this.sorted) { this.list.sort((a, b) => a.x - b.x); this.sorted = true; }
-    const cx = st.cam.x, x0 = cx - 420, x1 = cx + 420;
-    const ms = this.movers();
-    const p = this.player();
-    let touched = 0;
-    // binary search for the first visible tuft
-    let lo = 0, hi = this.list.length;
-    while (lo < hi) { const m = (lo + hi) >> 1; if (this.list[m].x < x0) lo = m + 1; else hi = m; }
-    for (let i = lo; i < this.list.length; i++) {
-      const t = this.list[i];
-      if (t.x > x1) break;
-      const R = Math.max(8, t.f.w * 0.45);
-      let push = 0;
-      for (const m of ms) {
-        const dx = t.x - m.x;
-        if (Math.abs(dx) > R + 4 || Math.abs(m.y - t.y) > 26) continue;
-        const k = 1 - Math.abs(dx) / (R + 4);
-        push += Math.sign(dx || 1) * k * Math.min(10, t.h * 0.3) + m.vx * 0.02 * k;
-        if (m === p && Math.abs(m.vx) > 20) touched++;
-      }
-      const wind = Math.sin(st.time * 1.3 + t.ph) * (0.4 + st.wind) * t.h * 0.03;
-      // (sub-stepped so long frames can't blow the spring up)
-      const n = Math.min(8, Math.ceil(dt / 0.02)), h = dt / n, tgt = push + wind;
-      for (let s = 0; s < n; s++) {
-        t.vel += (tgt - t.bend) * 38 * h - t.vel * 5.5 * h;
-        t.bend += t.vel * h;
-      }
-      if (!(Math.abs(t.bend) < 24)) { t.bend = Math.max(-24, Math.min(24, t.bend || 0)); t.vel = 0; }
-    }
-    this.rustleT -= dt;
-    if (touched > 0 && this.rustleT <= 0 && p) { this.rustleT = rand.range(0.35, 0.7); audio.play('rustleBush', { vol: Math.min(0.35, 0.12 + touched * 0.05), pitch: rand.range(0.9, 1.2) }); }
   }
-  draw(r: Renderer) {
+  draw(r: Renderer, st: Stage) {
     const x0 = r.visibleX0(40), x1 = r.visibleX1(40);
     let lo = 0, hi = this.list.length;
     while (lo < hi) { const m = (lo + hi) >> 1; if (this.list[m].x < x0) lo = m + 1; else hi = m; }
     for (let i = lo; i < this.list.length; i++) {
       const t = this.list[i];
       if (t.x > x1) break;
-      r.drawSway(t.f, t.x, t.y, t.sx, 1, t.bend, t.tint);
+      const b = windBend(r, st, t.x, t.amp, 1.3, t.ph) + t.pl.push(r, st, t.x, t.y);
+      r.drawBend(t.f, t.x, t.y, t.sx, 1, b, t.tint, t.pl.curve);
     }
   }
 }

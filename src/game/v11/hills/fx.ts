@@ -53,13 +53,12 @@ export class WindProp extends Prop {
     super(frame, x, y, z, o);
     this.wx = o.wx ?? x;
   }
-  draw(r: Renderer, st: Stage) {
-    if (this.hidden) return;
+  windBend(_r: Renderer, st: Stage) {
     const g = GUST_NOW?.k ?? 0, e = windAt(this.wx), t = st.time;
     const wave = Math.max(0, Math.sin(this.wx * 0.0065 - t * 2.2 + this.phase * 0.08)) ** 2;
     const lean = (0.25 + 0.75 * g * wave) * e * 1.6;
     const flutter = Math.sin(t * this.swaySpeed * 2.6 + this.phase) * (0.25 + 0.35 * g) + Math.sin(t * 7.1 + this.phase * 3) * 0.14 * g * wave;
-    r.drawSway(this.frame, this.x, this.y, this.sx, this.sy, this.sway * (lean * 2.2 + flutter), this.tint);
+    return this.sway * (lean * 2.2 + flutter);
   }
 }
 
