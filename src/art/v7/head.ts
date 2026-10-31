@@ -11,6 +11,7 @@ import { YAW, BACK_YAW, PX7 } from './body';
 import { isFem7 } from './face7';
 import { trimPair } from '../people-rig';
 import { AROHA_HEAD } from './aroha7';
+import { paintFaceMid7 } from './facemid';
 
 const R6 = (...h: string[]): Ramp6 => h.map(v => hex(v));
 export type Look = 'fwd' | 'up' | 'down' | 'back' | 'cam' | 'away';
@@ -123,18 +124,21 @@ const MORI: HeadDef7 = {
   eye: [4.0, 6.8, 2.3],
   mouth: [4.6, 3.8, 0.3],
   eyeCol: '#1a0e10', brow: '#1a1216', blush: '#e89078',
-  shell: [[-0.5, 9.1, 0], [5.5, 5.8, 4.9]],
-  cut: q => q[0] > 0.3 && q[1] < 0.3,
+  shell: [[-0.5, 9.0, 0], [5.4, 5.6, 4.85]],
+  cut: q => q[0] > 0.3 && q[1] < 0.33,
   locks: [
-    // messy bangs sweeping across the forehead
-    { a: [2.2, 12.6, 2.6], b: [5.2, 9.4, 3.4], r0: 1.6, r1: 0.3 }, { a: [2.8, 13, 1], b: [5.8, 9.2, 1.4], r0: 1.7, r1: 0.3 },
-    { a: [2.8, 13, -1], b: [5.6, 9.6, -1.2], r0: 1.6, r1: 0.3 }, { a: [2.2, 12.6, -2.6], b: [4.8, 9.8, -3.4], r0: 1.5, r1: 0.3 },
+    // a swept fringe: pointed locks of uneven length over the forehead, clear of the brows, one dipping
+    // between them
+    { a: [2.4, 13.2, 2.6], b: [5.5, 10.5, 3.7], r0: 1.7, r1: 0.3 }, { a: [3.0, 13.5, 0.9], b: [6.0, 10.1, 1.6], r0: 1.8, r1: 0.3 },
+    { a: [3.0, 13.4, -0.8], b: [6.0, 9.5, -0.3], r0: 1.7, r1: 0.25 }, { a: [2.4, 13, -2.6], b: [5.1, 10.3, -3.5], r0: 1.6, r1: 0.3 },
     // spiky crown and back
     { a: [0.5, 13.6, 1.2], b: [1.4, 16.2, 2], r0: 1.6, r1: 0.3 }, { a: [-1.2, 13.6, -0.8], b: [-2.4, 16, -1.4], r0: 1.6, r1: 0.3, sway: 1 },
     { a: [-3, 12.4, 1.6], b: [-6.6, 13.6, 2.4], r0: 1.8, r1: 0.3, sway: 1 }, { a: [-3.6, 10.4, -1.6], b: [-7.4, 10.4, -2.4], r0: 1.8, r1: 0.3, sway: 1 },
     { a: [-3.6, 8.4, 1.8], b: [-6.4, 6.6, 3], r0: 1.6, r1: 0.3, sway: 1 }, { a: [-3.4, 7.6, -1.6], b: [-5.8, 5.4, -2.8], r0: 1.5, r1: 0.3, sway: 1 },
-    // sideburns over the ears
-    { a: [0.6, 9.6, 4.6], b: [1.4, 5.4, 4.8], r0: 1.2, r1: 0.3 }, { a: [0.6, 9.6, -4.6], b: [1.4, 5.4, -4.8], r0: 1.2, r1: 0.3 },
+    // short sideburns in front of the ears (the ear shows under them)
+    { a: [0.7, 9.8, 4.6], b: [1.5, 7.0, 4.7], r0: 1.2, r1: 0.3 }, { a: [0.7, 9.8, -4.6], b: [1.5, 7.0, -4.7], r0: 1.2, r1: 0.3 },
+    // layered clumps at the top front, lifting off the crown over the fringe
+    { a: [1.0, 14.0, 2.2], b: [4.4, 14.7, 3.2], r0: 1.6, r1: 0.3 }, { a: [1.4, 14.4, -1.4], b: [4.6, 15.2, -2.2], r0: 1.6, r1: 0.3 },
   ],
 };
 
@@ -246,6 +250,10 @@ function slitEye(mark: FaceMark, x: number, y: number, inner: 1 | -1, eye: HeadE
 }
 
 export const HEAD_SCALE7 = 0.8;
+/** grown men's heads (a touch smaller on the broader build) and women's */
+export const HEAD_SCALE_MAN7 = 0.75, HEAD_SCALE_WOMAN7 = 0.78;
+/** which sprite face: 'mid' (facemid.ts, the V12 face) or 'simple' (the old dot face, kept) */
+const FACE_STYLE7: 'mid' | 'simple' = 'mid';
 
 /**
  * A head, optionally dressed in outfit head wear (`wk` names it for the cache), at `hs` of its
@@ -277,13 +285,32 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
   const skinM = (bias = 0) => (h: Hit) => cel(d.skin, h.l, bias + 0.18);
   // face volumes: a man's jaw and chin a little broader and squarer (user: "men more manly")
   const fem = isFem7(id, d);
-  const jawR: V3 = fem ? d.jaw[1] : [d.jaw[1][0] * 1.08, d.jaw[1][1] * 1.06, d.jaw[1][2] * 1.12];
-  const chinR: V3 = fem ? d.chin[1] : [d.chin[1][0] * 1.1, d.chin[1][1] * 1.08, d.chin[1][2] * 1.15];
   E(d.skull[0], d.skull[1], 1, skinM());
-  E(d.jaw[0], jawR, 1, skinM(0.05));
-  E(d.chin[0], chinR, 1, skinM(0.1));
+  if (fem) {
+    E(d.jaw[0], d.jaw[1], 1, skinM(0.05));
+    E(d.chin[0], d.chin[1], 1, skinM(0.1));
+  } else {
+    // a man's lower face (anime-realistic): a slimmer jaw mass, the two sides of the jawbone running
+    // from a defined angle under the ear forward and down to a firm chin, and a cheekbone over each
+    // cheek, so the jaw reads from the silhouette and the cel shadow under it, never a painted line
+    const [jc, jr] = d.jaw, [cc, cr] = d.chin;
+    E([jc[0] + 0.3, jc[1] + 0.4, 0], [jr[0] * 0.92, jr[1] * 0.85, jr[2] * 0.85], 1, skinM(0.05));
+    for (const z of [-1, 1]) {
+      const gon: V3 = [jc[0] - jr[0] * 0.45, jc[1] - jr[1] * 0.3, z * jr[2] * 0.8];
+      const tip: V3 = [cc[0] - 0.05, cc[1] - cr[1] * 0.25, z * cr[2] * 0.5];
+      s.limb(W(gon), W(tip), jr[1] * 0.33, cr[1] * 0.7, 1, skinM(0.05));
+    }
+    E([cc[0] + 0.15, cc[1] - 0.1, 0], [cr[0] * 1.0, cr[1] * 1.05, cr[2] * 0.85], 1, skinM(0.1));
+    const ey = d.eye;
+    for (const z of [-1, 1]) E([ey[0] - 1.1, ey[1] - 1.15, z * (ey[2] + 0.75)], [1.3, 0.8, 1.0], 1, skinM(0.28));
+  }
   E(d.nose[0], d.nose[1], 1, skinM(0.2));
-  E(d.ear[0], d.ear[1], 2, skinM(-0.05));
+  // the ear: rim lit, the bowl inside it in shadow
+  E(d.ear[0], d.ear[1], 2, h => {
+    const q = h.q;
+    if (Math.abs(q[2]) > 0.8 && q[0] > -0.45 && q[0] < 0.25 && q[1] > -0.4 && q[1] < 0.3) return d.skin[2];
+    return cel(d.skin, h.l, 0.13);
+  });
   // hair in strand clusters: dark grooves between the clumps, a broken two-tone angel ring across the
   // crown and a fainter second band, lit tips on the locks (the rim light comes in the finish pass)
   const HR = d.hair;
@@ -294,7 +321,6 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
     if (groove || h.l < 0.18) return 0;
     const y = h.p[1], saw = frac(strand);
     if (y < ringY + 0.75 && y > ringY - 0.35 - saw * 0.9) return h.l > 0.55 && y > ringY - 0.1 && y < ringY + 0.45 ? HR[5] : HR[4];
-    if (h.l > 0.42 && y < ringY - 2.3 && y > ringY - 2.75 - saw * 0.5) return mix(cel(HR, h.l, 0.05), HR[4], 0.55);
     return 0;
   };
   const shellM = (h: Hit): C | -1 => {
@@ -346,7 +372,25 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
   const eye = o.blink && ex.eye !== 'happy' ? 'closed' : ex.eye;
   const mouth = o.mouth === 2 ? 'shout' : o.mouth === 1 ? (ex.mouth === 'none' || ex.mouth === 'smile' || ex.mouth === 'frown' ? 'open' : ex.mouth) : ex.mouth;
   const at2 = (p: V3): [number, number] => { const q = px(p); return [q[0], q[1]]; };
-  if (!back) {
+  if (!back && FACE_STYLE7 === 'mid') {
+    // the V12 face (facemid.ts): clean clusters on the buffer grid
+    const dirX = W([1, 0, 0])[0];
+    const nt: V3 = [d.nose[0][0] + d.nose[1][0] * 0.85, d.nose[0][1] - d.nose[1][1] * 0.1, d.nose[0][2]];
+    paintFaceMid7(put, {
+      near: visible(nearE) ? at2(nearE) : null,
+      far: visible(farE) ? at2(farE) : null,
+      nose: at2(nt),
+      mouth: at2(d.mouth),
+      dir: dirX >= 0 ? 1 : -1,
+      eye, mouthShape: mouth, ex, d, fem,
+    });
+  }
+  if (!back && FACE_STYLE7 === 'mid' && ex.sweat) {
+    const [sx, sy] = px([0, 11, d.skull[1][2] * 0.9]);
+    const drop = ['.w', 'wb', 'bb', '.b'], dc: Record<string, C> = { w: hex('#e8f8ff'), b: hex('#5ab0ec') };
+    drop.forEach((row, j) => { for (let i = 0; i < 2; i++) if (row[i] !== '.') { const X = Math.floor(sx) + i, Y = Math.floor(sy) - 2 + j; if (X >= 0 && Y >= 0 && X < BW && Y < BH && s.grp[Y * BW + X]) marks.push([X, Y, dc[row[i]]]); } });
+  }
+  if (!back && FACE_STYLE7 === 'simple') {
     // the old simple face (user: "the old simple face before"): dot eyes, two-pixel brows, a
     // small mouth, each face pixel a PX7 x PX7 block so it reads at the body's world-pixel size.
     // (paintFace7, the anime face, is kept unused in face7.ts.)

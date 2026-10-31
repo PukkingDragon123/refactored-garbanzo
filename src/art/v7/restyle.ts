@@ -2,14 +2,14 @@
 // villagers) from their own builds, so the clips (all parameterised by the build) follow:
 //  - longer legs and a slightly longer torso and neck: a slender young-adult figure instead of a chibi
 //  - arms long enough to reach mid-thigh, limbs a touch slimmer
-//  - heads drawn at HEAD_SCALE7 of their volumes (head.ts): about six heads tall, a little large
-//    for readability at game scale
+//  - heads drawn at HEAD_SCALE_MAN7 / HEAD_SCALE_WOMAN7 of their volumes (head.ts): about six and a
+//    half heads tall, the men's a touch smaller on their broader build
 // Children keep rounder proportions (a smaller stretch, larger heads).
 
 import type { Build } from '../people-rig';
 import type { Char7 } from './body';
 import { CAST7 } from './cast';
-import { HEAD_SCALE7 } from './head';
+import { HEADS7, HEAD_SCALE_MAN7, HEAD_SCALE_WOMAN7 } from './head';
 import { isFem7 } from './face7';
 
 const memo = new WeakMap<Char7, Char7>();
@@ -53,5 +53,6 @@ export function restyle7(ch: Char7): Char7 {
 /** how large a character's head is drawn (fraction of its volumes) */
 export function headScale7(id: string): number {
   const ch = CAST7[id];
-  return ch && isChild(ch.build) ? 0.9 : HEAD_SCALE7;
+  if (ch && isChild(ch.build)) return 0.9;
+  return isFem7(id, HEADS7[id]) ? HEAD_SCALE_WOMAN7 : HEAD_SCALE_MAN7;
 }
