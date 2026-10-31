@@ -246,4 +246,13 @@ export const ATLAS: AtlasLoc[] = [
     ],
     desc: 'Tors, scree and tussock above the bush line: a tarn, a bluff with a rock shelter the hunters use, and a ridge with the long view over everything. Wind, hawks and torhoppers.', terrain: 'Tussock, scree, granite tors', arriveX: 90,
   },
+  {
+    // (src/game/v12/swamp: the scene, its map in layout.ts; reached on foot down the drain from Te Wao
+    // Nui's wallows, or up out of the mangroves: src/game/v12/trails.ts)
+    id: 'swamp', name: 'Te Repo Raupō', sub: 'The Raupō Swamp', region: 'south', kind: 'ecosystem', pos: P(242, 206),
+    scene: { type: 'site', site: 'swamp' }, difficulty: 3, xr: [0, 9800],
+    path: PATH([280, 182], [262, 194], [242, 208], [222, 226], [200, 244]), knots: [0, 2300, 4600, 6800, 9800],
+    routes: [{ from: 'forest', at: 2600, enter: 90, label: 'Follow the wallows\' drain down into the swamp', hours: 1, energy: 12, kind: 'walk', say: 'The wallows drain away downhill... into a swamp.' }],
+    desc: 'Where Te Wao Nui\'s wallows drain away: a kahikatea swamp forest standing in black water, raupō beds, a dark hollow pool where something booms on wet nights, a stand of drowned trees, and a channel round a hidden island.', terrain: 'Peat water, raupō beds, old boardwalks', arriveX: 90,
+  },
 ];

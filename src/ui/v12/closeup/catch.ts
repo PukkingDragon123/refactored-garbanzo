@@ -11,9 +11,9 @@ import { runCloseup } from './stage';
 import type { Closeup, SetScene, CloseupResult } from './stage';
 import { PixelBuffer, hex, mix, rd, ramp, dith, hash, vnoise, clamp, clamp01, lerp, blit, shadowOval, pmap, up, area, ellipse, line, dot, Z } from './kit';
 import { drawHand } from './hands';
-import { BEETLE, BEETLE_PAL, FROG, FROG_PAL, CRAB, CRAB_PAL } from './sprites';
+import { BEETLE, BEETLE_PAL, FROG, FROG_PAL, CRAB, CRAB_PAL, TOAD_PAL } from './sprites';
 
-export type Critter = 'beetle' | 'frog' | 'crab';
+export type Critter = 'beetle' | 'frog' | 'crab' | 'toad';
 export interface CatchOpts { critter: Critter; item?: string; difficulty?: number; world?: [number, number] }
 
 const LITTER = [ramp('#3a1a0a', '#6a3414', '#9a5422', '#c47a34'), ramp('#2a2a0a', '#5a5414', '#8a7a24', '#b8a040'), ramp('#1a2a10', '#2e4a1a', '#4a6a24', '#6a8a34')];
@@ -21,6 +21,7 @@ const LITTER = [ramp('#3a1a0a', '#6a3414', '#9a5422', '#c47a34'), ramp('#2a2a0a'
 export function critterFor(item?: string, itemKind?: string): Critter {
   const id = (item ?? '').toLowerCase();
   if (/crab|shell|pipi|mussel|whelk/.test(id) || itemKind === 'shell') return 'crab';
+  if (/toad|embertox/.test(id)) return 'toad';
   if (/frog|newt|lizard|skink|gecko/.test(id) || itemKind === 'animal') return 'frog';
   return 'beetle';
 }
@@ -36,9 +37,11 @@ export class CatchSet implements SetScene {
   sx = 160; sy = 110; psx = 160; psy = 110; drop = 0; cupping = false; tries = 0; maxAlert = 0;
   t = 0; limit = 16; done = -1;
   constructor(readonly o: CatchOpts) {
-    const sets = { beetle: [BEETLE, BEETLE_PAL], frog: [FROG, FROG_PAL], crab: [CRAB, CRAB_PAL] } as const;
+    const sets = { beetle: [BEETLE, BEETLE_PAL], frog: [FROG, FROG_PAL], crab: [CRAB, CRAB_PAL], toad: [FROG, TOAD_PAL] } as const;
     const [fr, pal] = sets[o.critter];
     this.frames = fr.map(rows => { const b = pmap(rows as unknown as string[], pal as unknown as Record<string, string>); return b; });
+    // (V12 the ember toad: a frog in warning colours, and it behaves like one)
+    if (o.critter === 'toad') this.o = { ...o, critter: 'frog' };
     this.limit = 18 - (o.difficulty ?? 0.5) * 5;
   }
 

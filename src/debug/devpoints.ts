@@ -284,6 +284,40 @@ export async function goRegion(x: number, high = false, hour?: number) {
   f.snapCamera();
 }
 
+/** V12 Te Repo Raupō, the raupō swamp (src/game/v12/swamp): out on a trip from camp, at world x; `high`
+ *  stands Mori on the highest thing there (a boardwalk, the maimai, the log, the bridge); `rain` forces
+ *  the swamp's weather (true wet, false dry, undefined as the day has it); `gloves` makes the grip gloves */
+export async function goSwamp(x: number, o: { high?: boolean; hour?: number; rain?: boolean; gloves?: boolean } = {}) {
+  ensureLoop();
+  findLocation('swamp');
+  const d = dayState();
+  d.phase = 'out'; d.went = 'swamp'; d.woke = dayNumber(); d.meals.breakfast = dayNumber();
+  if (o.hour !== undefined) game.save.vars['v10:hour'] = o.hour;
+  delete game.save.flags['dev:swampRain']; delete game.save.flags['dev:swampDry'];
+  if (o.rain === true) game.save.flags['dev:swampRain'] = true;
+  if (o.rain === false) game.save.flags['dev:swampDry'] = true;
+  if (o.gloves) {
+    const bp = await import('../game/v11/blueprints');
+    bp.grantBlueprint('climbing_gloves', 'dev');
+    if (!bp.isBuilt('climbing_gloves')) bp.markMade('climbing_gloves');
+  }
+  game.persist();
+  await idle();
+  const ex = await import('../game/v10/expedition');
+  await ex.goExpedition('swamp', { at: x });
+  refill();
+  if (!o.high) return;
+  const { FieldScene } = await import('../game/scenes/field');
+  await sceneWhere(s => s instanceof FieldScene && !!(s as InstanceType<typeof FieldScene>).player && Math.abs((s as InstanceType<typeof FieldScene>).player.x - x) < 60);
+  const f = game.scene as InstanceType<typeof FieldScene>;
+  const s = f.st.terrain.surfaceBelow(x, -400);
+  if (!s) return;
+  const p = f.player;
+  p.x = x; p.y = s.y; p.vy = 0; p.onGround = true;
+  (p as unknown as { surface: unknown }).surface = s.s;
+  f.snapCamera();
+}
+
 export async function goTrip(id: string, stop = false) {
   ensureLoop();
   boatTo(6);
@@ -483,6 +517,30 @@ export async function chapters(): Promise<DevChapter[]> {
     id, name, sub, icon: 'map', run: () => goRegion(x, high),
     variants: [{ label: 'Morning', run: () => goRegion(x, high, 7.5) }, { label: 'Dusk', run: () => goRegion(x, high, 17.6) }],
   })) });
+  // V12 Te Repo Raupō, the raupō swamp (one big map), its tiers and its toads
+  const swT = (x: number, high = false, extra: { rain?: boolean; gloves?: boolean } = {}) => [
+    { label: 'Morning', run: () => goSwamp(x, { high, hour: 7.5, ...extra }) }, { label: 'Midday', run: () => goSwamp(x, { high, hour: 12, ...extra }) },
+    { label: 'Dusk', run: () => goSwamp(x, { high, hour: 18.6, ...extra }) }, { label: 'Night', run: () => goSwamp(x, { high, hour: 21.5, ...extra }) },
+  ];
+  out.push({ id: 'swamp', name: 'Te Repo Raupō, the raupō swamp (one big map)', points: [
+    { id: 'sw:edge', name: 'The swamp edge', sub: 'West end, down the drain from Te Wao Nui\'s wallows', icon: 'map', run: () => goSwamp(92), variants: swT(92) },
+    { id: 'sw:board', name: 'The kahikatea boardwalk', sub: 'Ngā Kahikatea: old planks over the black water', icon: 'map', run: () => goSwamp(1300, { high: true }), variants: swT(1300, true) },
+    { id: 'sw:black', name: 'The black water (the low way)', sub: 'Wading under the boardwalk among the buttresses', icon: 'map', run: () => goSwamp(1500), variants: swT(1500) },
+    { id: 'sw:raupo', name: 'The bulrush beds', sub: 'Te Raupō: the stepping logs, the maimai crossroads', icon: 'map', run: () => goSwamp(2660, { high: true }), variants: swT(2660, true) },
+    { id: 'sw:maimai', name: 'The maimai (the high way)', sub: 'The hunters\' hide and catwalk over the raupō', icon: 'map', run: () => goSwamp(3420, { high: true }), variants: swT(3420, true) },
+    { id: 'sw:pool', name: 'The dark pool: the Giant Bellowtoad', sub: 'Te Roto Pōuri, from the hide at the pool\'s edge', icon: 'heart', run: () => goSwamp(4396, { hour: 18.6, rain: true }), variants: [
+      { label: 'Dusk, rain', run: () => goSwamp(4396, { hour: 18.6, rain: true }) }, { label: 'Night, rain', run: () => goSwamp(4396, { hour: 21.5, rain: true }) },
+      { label: 'Night, dry', run: () => goSwamp(4396, { hour: 21.5, rain: false }) }, { label: 'Midday', run: () => goSwamp(4396, { hour: 12, rain: false }) },
+      { label: 'In its face', run: () => goSwamp(4500, { hour: 20, rain: true }) },
+    ] },
+    { id: 'sw:log', name: 'The fallen kahikatea', sub: 'The main path over the dark pool', icon: 'map', run: () => goSwamp(4560, { high: true, hour: 20, rain: true }), variants: swT(4560, true) },
+    { id: 'sw:embers', name: 'Ember toads', sub: 'Ngā Rākau Mate: the hummocks among the drowned trees', icon: 'map', run: () => goSwamp(5400, { hour: 11 }), variants: [
+      { label: 'Bare hands', run: () => goSwamp(5400, { hour: 11 }) }, { label: 'With gloves', run: () => goSwamp(5400, { hour: 11, gloves: true }) }, ...swT(5420),
+    ] },
+    { id: 'sw:island', name: 'The hidden island', sub: 'Te Motu Huna: the eel-fisher\'s whare, down in the channel', icon: 'map', run: () => goSwamp(7600), variants: swT(7600) },
+    { id: 'sw:bridge', name: 'The channel swing bridge', sub: 'The main path over the hidden island', icon: 'map', run: () => goSwamp(7500, { high: true }), variants: swT(7500, true) },
+    { id: 'sw:mouth', name: 'Te Ngutu Awa', sub: 'East end, the mudflats down to the mangroves', icon: 'map', run: () => goSwamp(9500), variants: swT(9500) },
+  ] });
   out.push({ id: 'map', name: 'Region Map · Expeditions', points: locs.map(l => ({
     id: 'loc:' + l.id, name: l.name, sub: `${l.sub ? l.sub + ' · ' : ''}${l.region}${l.secret ? ' · secret' : ''}`, icon: l.kind === 'camp' ? 'flag' : l.kind === 'cave' ? 'moon' : 'map',
     run: () => goLocation(l.id),

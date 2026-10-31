@@ -81,6 +81,10 @@ export const TRAILS: TrailDef[] = [
   // ---- the canopy, the old pā, the village
   T('canopy-ruins', { loc: 'canopy', at: 'E' }, { loc: 'ruins', at: 'W' }, 0.75, 'climb', { say: 'Those are walls. Somebody built walls up here.' }),
   T('mangrove-village', { loc: 'mangrove', at: 'E' }, { loc: 'village', at: 'W' }, 0.75, 'wade', { say: 'Someone cut steps into this bank. People live up here.' }),
+  // ---- V12 Te Repo Raupō, the raupō swamp (src/game/v12/swamp): down the drain from Te Wao Nui's
+  // wallows at its west end, up out of the mangroves at its east end
+  T('forest-swamp', { loc: 'forest', at: 2600, arm: 'down' }, { loc: 'swamp', at: 'W' }, 0.75, 'path', { gate: 'staff', say: 'The wallows drain away downhill... into a swamp. Black water and bulrushes, as far as I can see.' }),
+  T('mangrove-swamp', { loc: 'mangrove', at: 2000, arm: 'up' }, { loc: 'swamp', at: 'E' }, 0.75, 'wade', { gate: 'staff', say: 'Upstream the water goes still, and black, and the bulrushes are taller than me.' }),
   T('village-ruins', { loc: 'village', at: 'E' }, { loc: 'ruins', at: 'E' }, 0.75, 'path', { gate: 'blessing', say: 'With Koro’s blessing, then. Up the old track.' }),
   T('ruins-unknown', { loc: 'ruins', at: 'E', arm: 'down' }, { loc: 'unknown', at: 'E' }, 1, 'tunnel', { gate: 'rope', say: 'Tie it off. Twice. Okay. Three times.' }),
   // ---- the deep interior
@@ -97,7 +101,7 @@ const SIGN: Record<string, string> = {
   'isle-stream': 'THE BEACH', 'isle-cave': 'SEA CAVE', 'isle-track': 'BUSH TRACK', camp: 'CAMP',
   forest: 'TE WAO NUI', fernwood: 'FERNWOOD', canopy: 'THE CANOPY', falls: 'THE FALLS', hills: 'ROCKY HILLS',
   mangrove: 'MANGROVES', village: 'TE KĀINGA', ruins: 'THE OLD PĀ', fossils: 'BONE CLIFFS', glowforest: 'GLOW FOREST',
-  geovalley: 'HOT VALLEY', unknown: 'KOROKORO', grotto: 'SEA GROTTO', deep: 'THE DEEP', coast: 'SERPENT COAST',
+  geovalley: 'HOT VALLEY', unknown: 'KOROKORO', grotto: 'SEA GROTTO', deep: 'THE DEEP', coast: 'SERPENT COAST', swamp: 'TE REPO RAUPŌ',
 };
 const VERB: Record<TrailKind, string> = { path: 'Walk to', climb: 'Climb to', swim: 'Swim to', wade: 'Wade to', dive: 'Dive to', tunnel: 'Rope down to' };
 const ACT: Record<TrailKind, HungerActivity> = { path: 'walk', climb: 'climb', swim: 'swim', wade: 'wade', dive: 'swim', tunnel: 'climb' };
