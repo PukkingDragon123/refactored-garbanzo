@@ -147,6 +147,9 @@ export function lift(ch: Char7, pose: Pose, yaw0 = YAW): J3 {
   };
   const hip = vadd(P(J.hip), shift);
   const hpN = vadd(vadd(P(J.hipF), hpLat), shift), hpF = vadd(vsub(P(J.hipB), hpLat), shift);
+  // (the feet hang off the hips as they are before the twist: the hips turning with the arm swing
+  // swings the knees, never drags a planted foot across the ground)
+  const hpLat0 = vsc(latS, ch.hipW), hpN0 = vadd(vadd(P(J.hipF), hpLat0), shift), hpF0 = vadd(vsub(P(J.hipB), hpLat0), shift);
   const shN2 = vadd(vadd(shN, shift), [0, roll * ch.shW, 0]), shF2 = vadd(vadd(shFa, shift), [0, -roll * ch.shW, 0]);
   const ikN = !!pose.fa.ik, ikF = !!pose.ba.ik;
   // world-space fists (flags wN / wF): the arm's ik point is where the FIST should land, in world px
@@ -177,7 +180,7 @@ export function lift(ch: Char7, pose: Pose, yaw0 = YAW): J3 {
     shN: W(shN2), shF: W(shF2),
     elN: armPt(shN2, J.shF, J.elF, 1, aoN, ikN, 0.6), elF: armPt(shF2, J.shB, J.elB, -1, aoF, ikF, 0.6),
     wrN: armPt(shN2, J.shF, J.wrF, 1, aoN, ikN, 1), wrF: armPt(shF2, J.shB, J.wrB, -1, aoF, ikF, 1),
-    hpN: W(hpN), hpF: W(hpF), knN: legW(hpN, J.hipF, J.knF, 0.5), knF: legW(hpF, J.hipB, J.knB, 0.5), anN: legW(hpN, J.hipF, J.anF), anF: legW(hpF, J.hipB, J.anB),
+    hpN: W(hpN), hpF: W(hpF), knN: legW(hpN, J.hipF, J.knF, 0.5), knF: legW(hpF, J.hipB, J.knB, 0.5), anN: legW(hpN0, J.hipF, J.anF), anF: legW(hpF0, J.hipB, J.anB),
     up: W(upS), fwd: W(twist(fwS, tw * 0.5)), lat: W(twist(latS, tw * 0.5)), yaw, legFwd: Wl([1, 0, 0]), flags: pose.flags,
   } as J3;
   const T0 = W(hip);
@@ -356,7 +359,8 @@ export function renderBody7(ch: Char7, pose0: Pose): Frame7 {
   ch.extras?.(s, J, pose, ch);
   arm(true);
   // ---- whatever the hands are holding (held.ts), sitting in the hands it was posed for
-  const pts: Record<string, V3> = {};
+  // the ankles (the live player's feet are checked against the ground with these)
+  const pts: Record<string, V3> = { footN: J.anN, footF: J.anF };
   if (hN) pts.handN = (hN as HandFrame).palm;
   if (hF) pts.handF = (hF as HandFrame).palm;
   if (pose.held) drawHeld7(s, J, pose, ch, hN, hF, pts);

@@ -288,7 +288,8 @@ function land(b: Build, u: number, id: string): Pose {
 function stopFrom(b: Build, u: number, id: string, run: boolean, v: string): Pose {
   const k = K(b);
   let src = run ? 'run' : 'walk', fi = 3;
-  if (v) { const i = v.lastIndexOf('.'); if (i > 0) { src = v.slice(0, i); fi = +v.slice(i + 1) || 0; } }
+  // ('walk~0.5@7.25': the live player's stop names the exact sub-frame it leaves, after an @)
+  if (v) { const at = v.lastIndexOf('@'), i = at > 0 ? at : v.lastIndexOf('.'); if (i > 0) { src = v.slice(0, i); fi = +v.slice(i + 1) || 0; } }
   // (a blended source pose, e.g. setting off: take the side it was nearer, so the feet below are ours)
   const f0 = pose7(id, src, b, fi);
   const from: Pose = f0.mix ? { ...(f0.mix.u < 0.5 ? f0.mix.a ?? f0 : f0.mix.p), mix: undefined } : f0;
