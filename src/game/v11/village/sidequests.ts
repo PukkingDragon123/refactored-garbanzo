@@ -476,10 +476,11 @@ export async function campSong(host: { s: { player: { x: number; y: number; pose
 
 // ------------------------------------------------------------------ spots in the village
 function it(c: VCtx, o: Interactable) { (c.f.interact as Interactable[]).push(o); }
-function prop(f: FieldScene, key: string, gen: () => Sprite | null, x: number, y: number, z: number, when: () => boolean, glint = false) {
+function prop(f: FieldScene, key: string, gen: () => Sprite | null, x: number, y: number, z: number, when: () => boolean, glint = false, sway = 0) {
   const cc = sprite(key, gen);
   if (!cc) return;
-  const p = new Prop(cc.f, x, y, z);
+  // plants move with the scene's wind
+  const p = new Prop(cc.f, x, y, z, { sway, flip: sway > 0 && x % 2 === 0 });
   f.main.add(new Custom(z, (rr, st) => {
     if (!when()) return;
     p.draw(rr, st);
@@ -641,7 +642,7 @@ function itF(f: FieldScene, o: Interactable) { (f.interact as Interactable[]).pu
 function fernwood(f: FieldScene, g: Ground, ox: number) {
   // the paretaniwha bush by the stream
   const fx = ox + 1430;
-  prop(f, 'vil12:paretaniwha', () => LA.paretaniwha(931, 34), fx, g(fx) + 3, -1.6, () => true);
+  prop(f, 'vil12:paretaniwha', () => LA.paretaniwha(931, 34), fx, g(fx) + 3, -1.6, () => true, false, 0.9);
   itF(f, {
     x: fx, y: g(fx), w: 20, h: 26, standX: fx - 18,
     get label() { return !qf('flax:found') ? 'Look at the bronze harakeke' : 'Ease out an outer leaf'; },
@@ -665,7 +666,7 @@ function fernwood(f: FieldScene, g: Ground, ox: number) {
   } as Interactable);
   // kawakawa in the shade, two patches, a couple of handfuls a day each
   for (const [i, kx] of [[0, ox + 960], [1, ox + 1580]] as [number, number][]) {
-    prop(f, `vil12:kawakawa:${i}`, () => plant('kawakawa' as never, 950 + i, 26), kx, g(kx) + 3, -1.5, () => true);
+    prop(f, `vil12:kawakawa:${i}`, () => plant('kawakawa' as never, 950 + i, 26), kx, g(kx) + 3, -1.5, () => true, false, 0.8);
     itF(f, { x: kx, y: g(kx), w: 18, h: 20, standX: kx - 16, label: 'Pick kawakawa leaves', enabled: () => qv('kawa:' + i) !== dayNumber(), quest: () => active('v12_kumara') && !qf('kum:smoked') && count('kawakawa') < 4,
       action: () => busy(f, async () => {
         const ok = await f.player.doWork('kneel', 1.6);

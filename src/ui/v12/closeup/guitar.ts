@@ -4,7 +4,9 @@
 // with the grain running along it, the binding and purfling, a pāua rosette round the sound hole (the
 // cut edge of the top, a brace and the maker's label inside), the tortoiseshell pickguard worn pale by
 // years of picks, the rosewood bridge, the bone saddle and its pins. All of it lies on a woven flax mat
-// in the firelight. His gloved left hand holds the chord shapes on the neck; the right holds a pick
+// in the firelight. No hands (the player's own hands are never shown): the chord being held shows as
+// the strings pressed to their frets, each stop glinting pāua-green behind its fret wire, and every
+// strum is a streak of firelight sweeping across the strings over the sound hole
 // over the sound hole.
 //
 // A rhythm game. Notes slide along the strings from the headstock to the brass bar at the top of the
@@ -27,7 +29,6 @@ import { runCloseup } from './stage';
 import type { Closeup, SetScene, CloseupResult, Grade } from './stage';
 import { PixelBuffer, hex, mix, rd, ramp, dith, hash, vnoise, clamp, clamp01, lerp, area, ellipse, line, dot, blit, pmap, up, drawWord, wordW, Z } from './kit';
 import type { C, TextStyle } from './kit';
-import { drawHand } from './hands';
 import { GuitarSynth, CHORDS, SHAPES, OPEN } from './guitarsynth';
 import type { Voice } from './guitarsynth';
 
@@ -443,8 +444,10 @@ export class GuitarSet implements SetScene {
     if (!ch || ch === this.held) return;
     this.held = ch;
     this.lhLift = 1;
+    // the new shape lands on the strings in a little spray of glints
+    for (const [s, f] of SHAPES[ch] ?? []) { const x = this.fretX(f) - (this.fretX(f) - this.fretX(f - 1)) * 0.3; c.parts.burst('spark', x, this.strY(s, x), 3, 24, { c: ['#7ae0c8', '#fff6dc'], life: 0.35 }); }
     this.synth.squeak();
-    c.sfx('rustle', { vol: 0.06, pitch: 2.2 });
+    c.sfx('rustle', { vol: 0.06, pitch: 1.3 });
   }
   private win() { return { perfect: 0.075 / this.spb, good: 0.15 / this.spb }; }
   private nearest(kind: 'strum' | 'pluck', lane: number) {
@@ -611,12 +614,10 @@ export class GuitarSet implements SetScene {
     }
     // the strings over everything on the guitar
     this.strings(px);
-    // the chord hand: fingertips on the strings, the gloved hand reaching round the neck
-    this.leftHand(px);
-    // the picking hand and its pick
-    const rx = this.holeX - 4, ry = this.rh.y;
-    drawHand(px, 'pinch', rx, ry, { rot: 0, from: [rx + 34, ry + 120] });
-    ellipse(px, rx - 1, ry - 1.2, 1.6, 2.1, (nx, ny, _u, _v, fx, fy) => (nx * nx + ny * ny > 0.7 ? INK : rd(TORT, 0.5 - ny * 0.3 + vnoise(nx * 2, ny * 2, 3) * 0.4, fx, fy)));
+    // the chord: the strings pressed to their frets, each stop glinting
+    this.chordStops(px);
+    // the strum: firelight sweeping across the strings over the sound hole
+    this.strumGlint(px);
     // the chord tags hanging off a cord across the top
     this.drawTags(c, px);
     // key prompts for the first bars
@@ -688,24 +689,41 @@ export class GuitarSet implements SetScene {
     }
   }
 
-  private leftHand(px: PixelBuffer) {
+  /** the held chord's stops: each string bent down to its fret, a pāua glint behind the wire, the wire lit */
+  private chordStops(px: PixelBuffer) {
     const sh = SHAPES[this.held] ?? [];
-    const lift = this.lhLift * 3;
-    // fingertips (glove leather, a stitched seam) just behind each fret they hold
+    const lift = this.lhLift;
     for (const [s, f] of sh) {
-      const x = this.fretX(f) - (this.fretX(f) - this.fretX(f - 1)) * 0.35, y = this.strY(s, x) - lift;
-      ellipse(px, x, y, 2.1, 1.7, (nx, ny, _u, _v, fx, fy) => (nx * nx + ny * ny > 0.72 ? INK : rd(ramp('#4a2a12', '#74461e', '#9c622c', '#c48a46', '#e8bc78'), 0.62 - ny * 0.35 - nx * 0.15, fx, fy)));
-      line(px, x - 1.2, y + 0.6, x + 1.2, y + 0.6, hex('#efd9a8'), 1);
+      const xf = this.fretX(f), xb = this.fretX(f - 1);
+      const x = xf - (xf - xb) * 0.3, y = this.strY(s, x);
+      // the fret wire it's pressed against catches the light
+      area(px, xf - 0.6, y - 2.2, xf + 0.7, y + 2.2, (u, v, fx, fy) => (Math.abs(v - y) < 2.2 - Math.abs(u - xf) ? rd(NICKEL, 0.95, fx, fy) : -1));
+      // a stop: a small gem of light where the string meets the board, pulsing on the beat
+      const pulse = 0.5 + 0.5 * Math.max(0, 1 - ((this.beat % 1) + 1) % 1 * 3);
+      const r = 1.5 + pulse * 0.5 - lift * 0.6;
+      ellipse(px, x, y + 0.3, r + 0.9, r * 0.8 + 0.6, (nx, ny, _u, _v, fx, fy) => (dith(fx, fy) < 0.45 * (1 - (nx * nx + ny * ny)) ? mix(px.data[fy * px.w + fx], hex('#7ae0c8'), 0.6) : -1));
+      ellipse(px, x, y + 0.3, r, r * 0.8, (nx, ny, _u, _v, fx, fy) => {
+        const d = nx * nx + ny * ny;
+        if (d > 0.82) return INK;
+        return rd(PAUA, 0.85 - ny * 0.3 - nx * 0.2 + (d < 0.15 ? 0.3 : 0), fx, fy);
+      });
+      dot(px, x - r * 0.35, y - r * 0.2, hex('#ffffff'), 1);
     }
-    const fs = sh.map(s => s[1]);
-    const mid = fs.length ? (Math.min(...fs) + Math.max(...fs)) / 2 : 2;
-    const hx = this.fretX(mid) - 2, hy = this.cy + this.sp(hx) * 1.6 - lift;
-    drawHand(px, 'grip', hx, hy, { rot: 0, left: true, from: [hx - 36, hy + 110] });
-    // the fingertips that hold the shape show over the top of the fist
-    for (const [s, f] of sh) {
-      const x = this.fretX(f) - (this.fretX(f) - this.fretX(f - 1)) * 0.35, y = this.strY(s, x) - lift;
-      if (Math.abs(x - hx) < 9 && y > hy - 10) ellipse(px, x, y, 2.1, 1.7, (nx, ny, _u, _v, fx, fy) => (nx * nx + ny * ny > 0.72 ? INK : rd(ramp('#4a2a12', '#74461e', '#9c622c', '#c48a46', '#e8bc78'), 0.62 - ny * 0.35 - nx * 0.15, fx, fy)));
-    }
+  }
+  /** the strum: a streak of firelight running down (or up) across the six strings */
+  private strumGlint(px: PixelBuffer) {
+    if (this.rh.k >= 1 && this.strumHot <= 0) return;
+    const x = this.holeX - 2, y0 = this.rh.from, y1 = this.rh.to, k = this.rh.k;
+    const head = lerp(y0, y1, k), tail = lerp(y0, y1, Math.max(0, k - 0.45));
+    const a = Math.min(head, tail), b = Math.max(head, tail);
+    area(px, x - 6, a - 1, x + 6, b + 1, (u, v, fx, fy) => {
+      const w = 1 - Math.abs(u - x) / 6;
+      const t = (v - a) / Math.max(1, b - a);
+      const along = y1 > y0 ? t : 1 - t;
+      return dith(fx, fy) < w * (0.25 + along * 0.6) * Math.max(this.strumHot, 0.4) ? mix(px.data[fy * px.w + fx], hex('#ffe6a0'), 0.55) : -1;
+    });
+    // where the streak crosses a string, the string flashes
+    for (let i = 0; i < 6; i++) { const ys = this.strY(i, x); if (ys >= a - 0.5 && ys <= b + 0.5) line(px, x - 4, ys, x + 4, ys, hex('#fff6dc'), Math.max(1, Math.round(Z * 0.5))); }
   }
 
   private drawTags(c: Closeup, px: PixelBuffer) {
