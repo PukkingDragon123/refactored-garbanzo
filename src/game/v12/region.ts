@@ -4,13 +4,18 @@
 // speak of 'fernwood' or 'falls') with its own local x, so (loc, x) <-> region world x is just an offset.
 // The trails between the parts are gone: you walk them. The trails out of the region stay (trails.ts).
 //
-//   Te Wao Nui, the great forest (one map, 13,700 px, about an hour and a half of walking end to end):
+//   Te Wao Nui, the great forest (one map, 13,700 px; walking it end to end takes about an hour and a
+//   half of the day). ╬ a signposted crossroads, ↑↓ its tier planks, ⇡⇣ trails out of the region:
 //
-//   UPPER      [fallen kauri]                                   [the high limb]      [the auk ledges]
-//               1490-2020                                          9620-9960         12200-13690
-//   MAIN   beach ═ edge ═ ford ═ giants ═ wallows ═ (bridge) ═ grove ═ ridge ╬ over the ridge ═ fern grove ═ (bridge) ═ mamaku ═ kauri ╬ river bush ╬ FALLS ═ cliff shore ═> gorge
-//   LOWER                                     [Te Kōawa creek]                       [the frog pool]                       ╵
-//                                               3260-3680                              7790-8210                     the goat track
+//   HIGH          fallen kauri                                      the high limb             auk ledges ─ gorge
+//                 1490-2020                                         9630-9934                 12200-13690
+//                    ↑                                            ↑                          ↑
+//   MAIN   beach ═══ ford ═ giants ═ wallows ═╬═bridge═ rātā ═ ridge╬═ fern grove ═╬═bridge═ mamaku ═╬═ kauri╬═ bush ╬═ FALLS ═╬═ cliff ═⇢ Bone Cliffs
+//                                          ↓                     ⇡⇣               ↓                        ⇡       ⇡
+//   LOW                            Te Kōawa creek          hills / bush track    the frog pool          canopy   the tops
+//                                   3236-3704                                     7790-8210
+//   x      0                    3200              6000                     7756            9596  10110   11020   12200     13700
+//          └──────── Te Wao Nui ────────────────────┘└──────────── Fernwood Floor ──────────────┘└──── Thunder Falls ────┘
 //
 // This module is plain data (no game imports) so anything can ask where a place is.
 
