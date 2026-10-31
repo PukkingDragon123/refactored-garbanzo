@@ -8,7 +8,8 @@
 
 import { PixelBuffer } from '../pixel';
 import { renderBody7, Frame7 } from './body';
-import { renderHead7, HeadOpts7 } from './head';
+import { renderHead7, HeadOpts7, hairDyn7 } from './head';
+import type { HairSpec } from '../../world/hairphys';
 import { CAST7, INFO7 } from './cast';
 import { ANIMS7, pose7, animInfo7, clip7, framesOf7 } from './anims7';
 import { IDLE_VARIETY } from './anims-acts';
@@ -112,6 +113,22 @@ export function renderBody(id: string, anim: string, frame: number): Frame7 {
   if (cache.size > 900) cache.clear();
   cache.set(key, out);
   return out;
+}
+
+/**
+ * The hair spring's tuning for a character whose head (as dressed) has physics locks (twin tails), or
+ * null: the Actor then keeps the old single sway for them. Any head opts in by giving locks `dyn`.
+ */
+const hairSpecs = new Map<string, HairSpec | null>();
+export function hairPhys(id: string): HairSpec | null {
+  const [cid, outfit] = parse(id);
+  const key = `${cid}@${outfit}`;
+  let v = hairSpecs.get(key);
+  if (v === undefined) {
+    v = cid !== 'chunk' && hairDyn7(cid, dress(cid, outfit).wear) ? {} : null;
+    hairSpecs.set(key, v);
+  }
+  return v;
 }
 
 export function renderHead(id: string, o: HeadOpts7): { buf: PixelBuffer; ax: number; ay: number; k?: number } {
