@@ -580,6 +580,8 @@ export async function chapters(): Promise<DevChapter[]> {
     { id: 'v:lesson', name: 'Hue kiri lesson (rhythm game)', sub: 'Own hue kiri; pick a song and a tier', icon: 'star', run: async () => { const m = await vil(); m.stage('festival'); await m.go('dusk', 1950); await m.rhythm('awa', 'normal', false); } },
     { id: 'v:practice', name: 'Serpent dance practice with Aunty Hana', sub: 'The festival is being prepared', icon: 'heart', run: async () => { const m = await vil(); m.stage('kiri'); await m.go('day', 1150); await m.practice(); } },
     { id: 'v:festival', name: 'Te Pō o Hinerua (festival night)', sub: 'Everything ready: the night plays', icon: 'star', run: async () => { await (await vil()).festival(); } },
+    // V12 the village alive: its day in four parts (src/game/v11/village/life.ts)
+    { id: 'v:life', name: 'Village life through the day', sub: 'Chores, work and play, the fire and Hana’s guitar, bedtime', icon: 'sun', variants: ([['Morning chores', 'morning', 'dawn', 8.5, 640], ['Midday work and play', 'midday', 'day', 13, 1500], ['Evening at the fire', 'evening', 'dusk', 19.5, 1150], ['Night (asleep)', 'night', 'night', 23.5, 1760]] as const).map(([label, ph, tod, h, x]) => ({ label, run: async () => { const m = await vil(); m.stage('start'); await m.life(ph, tod, h, x); } })) },
   ] });
   return out;
 }

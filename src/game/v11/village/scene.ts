@@ -34,6 +34,7 @@ import { say, bark, sleep } from './ctx';
 import { W, G, RIVER, X } from './layout';
 import { spawnVillagers, defineVillagePeople, welcome } from './people';
 import { placeChores } from './chores';
+import { installLife, bindLifeCtx } from './life';
 import { registerVillageQuests, startVillageQuest, vf, setVf } from './lore';
 import { questStatus } from '../../quests';
 import './items';
@@ -274,6 +275,9 @@ export async function buildVillage(f: FieldScene) {
   placeChores(c);
   placeFire(c);
   placeReeds(c);
+  bindLifeCtx(villageCtx);
+  installLife(c);
+  (await import('./sidequests')).placeSideQuests(c);
   if (festival) await (await import('./festival')).stageFestival(c);
 }
 

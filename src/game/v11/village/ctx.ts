@@ -29,6 +29,8 @@ export interface VillagerRT {
   roam?: [number, number];
   /** scripted: the routine leaves this one alone */
   held: boolean;
+  /** V12 village life drives this one for now (walking to a new part of the day, going home, tag) */
+  ext?: 'go' | 'home' | 'tag';
 }
 
 export interface VCtx {
