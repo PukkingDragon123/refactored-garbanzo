@@ -7,6 +7,10 @@
 // clouds the water into golden broth and steam curls up. No words on screen: a pulsing keycap (or a
 // touch ring) shows how to pour, marching arrows mark the fill line, and the line glows gold while
 // the water is in the sweet spot.
+// The light: warm morning sun through the porthole is the key (a dithered shaft with dust motes in it,
+// a bright patch where it lands, glints on the kettle that slide as it tips, a rim on the cup, a sheen
+// on the water, caustics thrown up on the tiles); the sea gives a cool fill (shadows lean blue-teal, a
+// cool rim on the far edges); a split-tone grade and a dithered vignette finish it. A golden broth glows.
 
 import { openCloseup, CW, CH, rgb, hx, mixc, put, blend, ramp, dith, hash, R, G, B } from './closeup';
 import { Hold, loop } from '../v4/mini';
@@ -41,6 +45,56 @@ const halfW = (y: number) => RIM_RX + (BOT_RX - RIM_RX) * ((y - RIM_Y) / (BOT_Y 
 const PUCK_TOP = 0.34, PUCK_R = 0.74;
 
 // ------------------------------------------------------------------ static background: wall, porthole, counter, cup body
+// ------------------------------------------------------------------ light
+const PHX = 44, PHY = 30, PHR = 24;
+const SUN = hx('#ffd98a'), SUN_HOT = hx('#fff4d0'), COOL = hx('#7ea6c8'), DUSK = hx('#1c2238'), GLOW = hx('#ffc860'), VIG = hx('#0a0812');
+/** where the shaft lands on the counter */
+const LPX = 82, LPY = 120, LPRX = 34, LPRY = 12;
+/** the light's direction (toward it) on screen, for glints */
+const LANG = Math.atan2(-0.8, -0.6);
+const STEAM_LIT = hx('#ffe9b8'), STEAM_BACK = hx('#f6f0e6'), STEAM_COOL = hx('#d4dce4');
+/** what each base pixel is: 1 bare wall, 2 bare counter, 0 something standing on it */
+const SURF = new Uint8Array(CW * CH);
+const SH_TOP = PHY + PHR * 0.55;
+/** the shaft's centre and half-width at row y */
+const shaftAt = (y: number): [number, number] => { const f = Math.max(0, (y - SH_TOP) / (LPY - SH_TOP)); return [PHX + (LPX - PHX) * f, PHR * 0.85 + (LPRX - PHR * 0.85) * f]; };
+/** inside the sun shaft: 0 outside .. 1 in its heart */
+function shaft(x: number, y: number): number {
+  if (y < SH_TOP || y > LPY + LPRY) return 0;
+  if (Math.hypot(x - PHX, y - PHY) < PHR + 4) return 0;
+  if (y > LPY) { const d = ((x - LPX) / LPRX) ** 2 + ((y - LPY) / LPRY) ** 2; return d < 1 ? 1 - d * d : 0; }
+  const [cx, hw] = shaftAt(y);
+  const d = Math.abs(x - cx) / hw;
+  return d >= 1 ? 0 : 1 - d * d * d * d;
+}
+/** add a light in quantised, dithered steps (k 0..1, max = the strongest mix) */
+function light(buf: Uint32Array, i: number, x: number, y: number, col: number, k: number, max = 0.42) {
+  const q = Math.floor(Math.min(1, k) * 3 + dith(x, y)) / 3;
+  if (q > 0) buf[i] = mixc(buf[i], col, q * max);
+}
+/** the static light: the sea's cool glow round the porthole, the sun's patch on the counter, the dim
+ *  far corner, the shelf's and the jars' shadows on the tiles */
+function lightBase(b: Uint32Array) {
+  for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) {
+    const i = y * CW + x, s = SURF[i];
+    if (s === 1) {
+      const d = Math.hypot(x - PHX, (y - PHY) * 1.2);
+      if (d < 72) light(b, i, x, y, COOL, (72 - d) / 72, 0.3);
+      else if (x > 250) light(b, i, x, y, DUSK, (x - 250) / 70, 0.3);
+    } else if (s === 2) {
+      const d = ((x - LPX) / LPRX) ** 2 + ((y - LPY) / LPRY) ** 2;
+      if (d < 1) light(b, i, x, y, d < 0.5 ? SUN_HOT : SUN, d < 0.5 ? 1 : (1 - d) / 0.5 + 0.2, 0.5);
+      else if (x > 236) light(b, i, x, y, DUSK, (x - 236) / 84, 0.28);
+    }
+  }
+  for (let y = 30; y < 37; y++) for (let x = 218; x < CW; x++) { const i = y * CW + x; if (SURF[i] === 1 && dith(x, y) < 0.85 - (y - 30) * 0.12) b[i] = mixc(b[i], DUSK, 0.4); }
+  for (let j = 0; j < 6; j++) {
+    const x0 = 224 + j * 16;
+    for (let y = 15; y < 26; y++) for (let x = x0 + 10; x < x0 + 14; x++) { const i = y * CW + x; if (SURF[i] === 1 && dith(x, y) < 0.8 - (x - x0 - 10) * 0.2) b[i] = mixc(b[i], DUSK, 0.36); }
+    for (let x = x0; x < x0 + 10; x++) b[25 * CW + x] = mixc(b[25 * CW + x], INK, 0.4);
+  }
+}
+
 function paintBase(): Uint32Array {
   const b = new Uint32Array(CW * CH);
   const WALL = 62;
@@ -63,6 +117,7 @@ function paintBase(): Uint32Array {
       c = f < 0.035 ? WOOD[0] : f < 0.07 ? WOOD[1] : ramp(WOOD, lit, x, y);
     }
     b[y * CW + x] = c;
+    SURF[y * CW + x] = y < WALL ? 1 : 2;
   }
   // the counter's front edge where it meets the wall: a lit lip and a shadow line
   for (let x = 0; x < CW; x++) {
@@ -71,7 +126,7 @@ function paintBase(): Uint32Array {
     for (let k = 0; k < 4; k++) b[(WALL - 1 - k) * CW + x] = mixc(b[(WALL - 1 - k) * CW + x], TILE[0], 0.5 - k * 0.12);
   }
   // porthole: brass ring, blue sea and sky beyond, a window glint
-  const PX = 44, PY = 30, PR = 24;
+  const PX = PHX, PY = PHY, PR = PHR;
   for (let y = PY - PR - 3; y <= PY + PR + 3; y++) for (let x = PX - PR - 3; x <= PX + PR + 3; x++) {
     const d = Math.hypot(x + 0.5 - PX, y + 0.5 - PY);
     if (d > PR + 3 || y < 0) continue;
@@ -85,22 +140,31 @@ function paintBase(): Uint32Array {
       c = y < hz ? ramp(['#7aa8c4', '#9cc4dc', '#c4e0ee', '#e8f4fa'].map(hx), 0.3 + (hz - y) / 30, x, y)
         : ramp(['#16405a', '#225a78', '#347694', '#5292ae'].map(hx), 0.55 + Math.sin(x * 0.45 + y * 0.8) * 0.18 - (y - hz) / 30, x, y);
       if (y === hz) c = hx('#d8ecf4');
+      const sd = Math.hypot(x + 0.5 - (PX - 9), y + 0.5 - (hz - 3));
+      if (y < hz) { if (sd < 3) c = hx('#fffbe8'); else if (sd < 9) c = mixc(c, hx('#ffe2a0'), Math.floor((9 - sd) / 6 * 3 + dith(x, y)) / 3 * 0.7); }
+      else if (Math.abs(x + 0.5 - (PX - 9)) < 2 + (y - hz) * 0.45 && dith(x, y) < 0.5) c = mixc(c, hx('#ffd890'), 0.5);
       const g = (x - PX + 8) + (y - PY + 8);
       if (Math.abs(g) < 3 && d < PR - 4) c = mixc(c, hx('#ffffff'), 0.35);
     }
     b[y * CW + x] = c;
+    SURF[y * CW + x] = 0;
   }
   // a shelf with jars, top right
-  for (let x = 218; x < 320; x++) { b[26 * CW + x] = WOOD[4]; b[27 * CW + x] = WOOD[2]; b[28 * CW + x] = WOOD[1]; b[29 * CW + x] = mixc(TILE[1], WOOD[0], 0.4); }
+  for (let x = 218; x < 320; x++) { for (let y = 26; y < 30; y++) SURF[y * CW + x] = 0; b[26 * CW + x] = WOOD[4]; b[27 * CW + x] = WOOD[2]; b[28 * CW + x] = WOOD[1]; b[29 * CW + x] = mixc(TILE[1], WOOD[0], 0.4); }
   const JAR = [['#c86a3a', '#e8a06a'], ['#5a8a4a', '#8abe70'], ['#d8b040', '#f0d880'], ['#8a5aa0', '#b88ad0'], ['#3a6a9a', '#6a9ac8']];
   for (let i = 0; i < 6; i++) {
     const x0 = 224 + i * 16, [c0, c1] = JAR[i % JAR.length];
-    for (let y = 12; y < 26; y++) for (let x = x0; x < x0 + 10; x++) b[y * CW + x] = y < 14 ? hx('#5a4a3a') : y < 15 ? hx('#8a7a6a') : x < x0 + 2 ? hx(c1) : x > x0 + 8 ? mixc(hx(c0), INK, 0.3) : mixc(hx(c0), TILE[3], 0.2);
+    for (let y = 12; y < 26; y++) for (let x = x0; x < x0 + 10; x++) SURF[y * CW + x] = 0, b[y * CW + x] = y < 14 ? hx('#5a4a3a') : y < 15 ? hx('#8a7a6a') : x < x0 + 2 ? hx(c1) : x > x0 + 8 ? mixc(hx(c0), INK, 0.3) : mixc(hx(c0), TILE[3], 0.2);
   }
   // cup shadow on the counter, cast to the lower right away from the porthole
   for (let y = 130; y < 176; y++) for (let x = 100; x < 260; x++) {
     const d = ((x - 170) / 62) ** 2 + ((y - 160) / 14) ** 2;
     if (d < 1) b[y * CW + x] = mixc(b[y * CW + x], WOOD[0], (1 - d) ** 0.7 * 0.6);
+  }
+  // ambient occlusion where the cup meets the counter: a tight dark ring, dithered at its edge
+  for (let y = 138; y < CH; y++) for (let x = 100; x < 212; x++) {
+    const d = ((x + 0.5 - CX - 2) / (BOT_RX + 5)) ** 2 + ((y + 0.5 - BOT_Y - 2) / (BOT_RY + 3.5)) ** 2;
+    if (d < 1 && dith(x, y) < (1 - d) * 2.2) b[y * CW + x] = mixc(b[y * CW + x], hx('#120a06'), 0.5);
   }
   // the foil lid, peeled back and standing up off the far rim
   const LX = CX + 18, LY = RIM_Y - RIM_RY - 2, LRX = 34, LRY = 20;
@@ -112,12 +176,14 @@ function paintBase(): Uint32Array {
     const crink = Math.sin(x * 0.9 + y * 0.4) * Math.sin(y * 0.7 - x * 0.2) * 0.12;
     let c = ramp(STEEL, 0.55 - nx * 0.25 - ny * 0.2 + crink, x, y);
     if (nx * nx + ny * ny > 0.86) c = mixc(c, STEEL[1], 0.5);
+    else if (nx * nx + ny * ny > 0.66 && (nx < -0.25 || ny < -0.45)) c = mixc(c, SUN_HOT, 0.5);
     // printed label on the lid: red disc, a white wave and "NOODLE" dashes
     const dd = ((x - LX + 4) / 20) ** 2 + ((y - LY + 6) / 12) ** 2;
     if (dd < 1) c = ramp(LABEL, 0.6 - nx * 0.3, x, y);
     if (dd < 1 && Math.abs(y - LY + 6 - Math.sin((x - LX) * 0.3) * 2) < 1) c = PAPER[5];
     if (dd < 0.35 && y === LY - 11 && (x & 1)) c = hx('#ffe070');
     b[y * CW + x] = c;
+    SURF[y * CW + x] = 0;
   }
   // cup body: tapered paper cylinder, lit from the upper left, red label band with a white wave
   for (let y = RIM_Y - 2; y < BOT_Y + BOT_RY + 1; y++) {
@@ -143,19 +209,30 @@ function paintBase(): Uint32Array {
       } else c = ramp(PAPER, lit + (v > 0.9 ? -0.22 : 0) + (v < 0.06 ? 0.1 : 0), x, y);
       // the rolled rim bulges just under the lip
       if (v < 0.035) c = ramp(PAPER, lit + 0.25, x, y);
+      // rim light: the sun along the window-side edge, the sea's cool fill along the far one
+      if (nx < -0.9) c = mixc(c, SUN_HOT, 0.55); else if (nx < -0.82 && dith(x, y) < 0.5) c = mixc(c, SUN_HOT, 0.3);
+      else if (nx > 0.86) c = mixc(c, COOL, 0.38);
+      if (v > 0.9 && dith(x, y) < (v - 0.9) * 8) c = mixc(c, hx('#1a0e0a'), 0.35);
       if (Math.abs(x + 0.5 - (CX - hw)) < 1 || Math.abs(x + 0.5 - (CX + hw)) < 1 || y > bot - 1) c = mixc(c, INK, 0.6);
       b[y * CW + x] = c;
+      SURF[y * CW + x] = 0;
     }
   }
+  lightBase(b);
   return b;
 }
 
 // ------------------------------------------------------------------ gooseneck kettle (drawn upright, rotated at runtime)
 const KW = 96, KH = 70, KPX = 84, KPY = 30; // pivot = Mori's grip on the handle
 const TIP: [number, number] = [5, 22];
+/** per kettle pixel: what it is (1 body, 2 spout, 3 lid and knob, 4 handle), its normal (the body's
+ *  across-coordinate, or a surface angle), and how far from the tube's centre line it sits */
+const KM = new Uint8Array(KW * KH), KA = new Float32Array(KW * KH), KT = new Float32Array(KW * KH);
+/** the kettle's silhouette, softened, for its dithered cast shadow */
+const KMB = new Float32Array(KW * KH);
 function paintKettle(withHand = true): Uint32Array {
   const k = new Uint32Array(KW * KH);
-  const set = (x: number, y: number, c: number) => { x |= 0; y |= 0; if (x >= 0 && y >= 0 && x < KW && y < KH) k[y * KW + x] = c; };
+  const set = (x: number, y: number, c: number, m = 0, a = 0, tv = 0) => { x |= 0; y |= 0; if (x >= 0 && y >= 0 && x < KW && y < KH) { const i = y * KW + x; k[i] = c; KM[i] = m; KA[i] = a; KT[i] = tv; } };
   // body: a squat brushed-steel drum with rounded shoulders
   const BX = 58, BT = 22, BB = 66;
   for (let y = BT; y < BB; y++) for (let x = 30; x < 88; x++) {
@@ -165,19 +242,18 @@ function paintKettle(withHand = true): Uint32Array {
     if (Math.abs(nx) > 1) continue;
     const lit = 0.5 - nx * 0.38 + Math.sqrt(1 - nx * nx) * 0.22 - t * 0.08;
     let c = ramp(STEEL, lit, x, y);
-    // chrome streaks: a hard window highlight, a dark band, the counter's warm bounce low down
-    if (Math.abs(nx + 0.5) < 0.07 && t > 0.12 && t < 0.86) c = STEEL[6];
-    if (Math.abs(nx + 0.36) < 0.04 && t > 0.2 && t < 0.8) c = STEEL[5];
-    if (Math.abs(nx - 0.42) < 0.06) c = STEEL[1];
+    // (the window streaks are added live, so they slide as the kettle tips) the counter's warm bounce
+    // low down, the sun warming the near side, the sea's cool fill on the far side
     if (t > 0.76) c = mixc(c, WOOD[3], 0.35);
+    if (nx < -0.6) c = mixc(c, SUN, 0.2); else if (nx > 0.62) c = mixc(c, COOL, 0.3);
     // a red smear reflected from the cup's label
     if (nx < -0.1 && nx > -0.75 && t > 0.6 && t < 0.72) c = mixc(c, LABEL[3], 0.35);
     if (t < 0.05) c = STEEL[4];
-    set(x, y, c);
+    set(x, y, c, 1, nx, t);
   }
   // lid and black knob
-  for (let x = 42; x < 75; x++) { set(x, BT - 1, STEEL[5]); set(x, BT, STEEL[3]); set(x, BT + 1, STEEL[1]); }
-  for (let y = 14; y < 21; y++) for (let x = 53; x < 64; x++) { const r = ((x - 58.5) / 5.5) ** 2 + ((y - 17.5) / 3.5) ** 2; if (r < 1) set(x, y, y < 16 ? hx('#4a4246') : hx('#161214')); }
+  for (let x = 42; x < 75; x++) { set(x, BT - 1, STEEL[5], 3, -Math.PI / 2, 0.6); set(x, BT, STEEL[3]); set(x, BT + 1, STEEL[1]); }
+  for (let y = 14; y < 21; y++) for (let x = 53; x < 64; x++) { const r = ((x - 58.5) / 5.5) ** 2 + ((y - 17.5) / 3.5) ** 2; if (r < 1) set(x, y, y < 16 ? hx('#4a4246') : hx('#161214'), 3, Math.atan2((y - 17.5) / 3.5, (x - 58.5) / 5.5), Math.sqrt(r)); }
   // gooseneck spout: out of the body low on the left, a long S-curve up to a fine tip
   const P = [[36, 58], [26, 60], [18, 52], [14, 40], [10, 30], [TIP[0], TIP[1]]];
   for (let i = 0; i < P.length - 1; i++) {
@@ -190,14 +266,15 @@ function paintKettle(withHand = true): Uint32Array {
       const dx = -(y1 - y0), dy = x1 - x0, dl = Math.hypot(dx, dy) || 1;
       for (let q = -r; q <= r; q += 0.5) {
         const px = x + dx / dl * q, py = y + dy / dl * q;
-        set(px, py, ramp(STEEL, 0.62 - q / r * 0.42 + (Math.abs(q / r + 0.4) < 0.18 ? 0.3 : 0), px | 0, py | 0));
+        const sg = q < 0 ? -1 : 1;
+        set(px, py, ramp(STEEL, 0.56 - q / r * 0.42, px | 0, py | 0), 2, Math.atan2(dy / dl * sg, dx / dl * sg), Math.abs(q) / r);
       }
     }
   }
   // handle: a black loop on the right; Mori's hand wraps round the top of it
   for (let a = -Math.PI / 2; a <= Math.PI / 2; a += 0.015) {
     const x = 82 + Math.cos(a) * 11, y = 42 + Math.sin(a) * 18;
-    for (let r = -2.2; r <= 2.2; r += 0.5) set(x + Math.cos(a) * r, y + Math.sin(a) * r, r < -0.8 ? hx('#4a4246') : hx('#161214'));
+    for (let r = -2.2; r <= 2.2; r += 0.5) set(x + Math.cos(a) * r, y + Math.sin(a) * r, r < -0.8 ? hx('#4a4246') : hx('#161214'), 4, r < 0 ? a + Math.PI : a, Math.abs(r) / 2.2);
   }
   if (withHand) for (let y = 18; y < 42; y++) for (let x = 76; x < 96; x++) {
     const dx = (x - 86) / 9.6, dy = (y - 30) / 11;
@@ -212,6 +289,12 @@ function paintKettle(withHand = true): Uint32Array {
   const src = k.slice();
   const op = (x: number, y: number) => x >= 0 && y >= 0 && x < KW && y < KH && src[y * KW + x] >>> 24;
   for (let y = 0; y < KH; y++) for (let x = 0; x < KW; x++) if (!op(x, y) && (op(x + 1, y) || op(x - 1, y) || op(x, y + 1) || op(x, y - 1))) k[y * KW + x] = INK;
+  // the softened silhouette (a 5x5 box) for the cast shadow
+  for (let y = 0; y < KH; y++) for (let x = 0; x < KW; x++) {
+    let n = 0;
+    for (let j = -2; j <= 2; j++) for (let i = -2; i <= 2; i++) if (op(x + i, y + j)) n++;
+    KMB[y * KW + x] = n / 25;
+  }
   return k;
 }
 
@@ -460,6 +543,39 @@ export async function runRamenPour(): Promise<Outcome> {
 
       // ---------------------------------------------------------- draw
       buf.set(base);
+      // the sun's glitter on the sea in the porthole
+      for (let k = 0; k < 9; k++) {
+        const gy = PHY + 5 + hash(k, 31) * 16, gx = PHX - 9 + (hash(k, Math.floor(t * 5) + k) - 0.5) * (3 + (gy - PHY) * 0.9);
+        if (Math.hypot(gx - PHX, gy - PHY) < PHR - 2) put(buf, gx, gy, SUN_HOT);
+      }
+      // caustics: light thrown off the sea (round the porthole) and off the water in the cup (on the
+      // tiles behind it), a wobbling net that brightens when the stream churns the surface
+      const cpow = Math.min(1, L * 1.4) * (0.4 + flow * 0.6 + foam * 0.4);
+      for (let y = 1; y < 61; y++) for (let x = 60; x < 236; x++) {
+        const i = y * CW + x;
+        if (SURF[i] !== 1) continue;
+        const ks = Math.max(0, 1 - Math.hypot(x - 80, (y - 24) * 1.3) / 36) * 0.6;
+        const kc = Math.max(0, 1 - Math.hypot(x - 152, (y - 30) * 1.5) / 66) * cpow;
+        const k = Math.max(ks, kc);
+        if (k < 0.04) continue;
+        const sp = kc > ks ? 1.7 : 1, u = x * 0.2, v = y * 0.32;
+        const n = Math.sin(u + Math.sin(v * 1.3 + t * 1.1 * sp) * 1.5 + t * 0.7 * sp) + Math.sin(v * 1.2 - Math.sin(u * 0.85 - t * 0.9 * sp) * 1.7 - t * 0.55 * sp);
+        const c = 1 - Math.abs(n) * 0.9;
+        if (c > 0.78 && dith(x, y) < k * 1.7) buf[i] = mixc(buf[i], SUN_HOT, c > 0.9 ? 0.45 : 0.25);
+      }
+      // the kettle's cast shadow on the counter: its silhouette laid down on the boards, soft-edged
+      // and dithered, turning as it tips
+      const kca = Math.cos(tilt), ksa = Math.sin(tilt);
+      for (let y = 108; y < 142; y++) for (let x = 140; x < CW; x++) {
+        const i = y * CW + x;
+        if (SURF[i] !== 2) continue;
+        const sx = x - 26 + (y - 108) * 0.2, sy = (y - 108) / 0.42;
+        const dx = sx + 0.5 - KX, dy = sy + 0.5 - KY;
+        const lx = dx * kca - dy * ksa + KPX, ly = dx * ksa + dy * kca + KPY;
+        if (lx < 0 || ly < 0 || lx >= KW || ly >= KH) continue;
+        const k = KMB[(ly | 0) * KW + (lx | 0)];
+        if (k > 0.04 && dith(x, y) < k * 0.9) buf[i] = mixc(buf[i], DUSK, 0.42);
+      }
       // spilled broth on the counter (overflow)
       if (spill > 0) for (let y = 150; y < 178; y++) for (let x = 80; x < 260; x++) {
         const d = ((x - 160) / (78 * spill + 10)) ** 2 + ((y - 168) / (6 + 6 * spill)) ** 2 + (hash(x >> 2, y >> 1) - 0.5) * 0.3;
@@ -468,6 +584,8 @@ export async function runRamenPour(): Promise<Outcome> {
       // the fill line pulses until you pour, and glows gold while the water is in the sweet spot
       const inZone = L >= LINE_LO && L <= LINE_HI && !outcome;
       const lineCol = inZone ? (Math.floor(t * 8) % 2 ? hx('#ffe45a') : hx('#fff6c0')) : outcome === 'perfect' ? hx('#ffe45a') : mixc(hx('#b8341e'), hx('#ff6a3c'), outcome ? 0 : 0.5 + 0.5 * Math.sin(t * 6));
+      // the golden broth's glow (strongest after a perfect pour)
+      const glow = Math.min(1, Math.max(0, (broth - 0.45) / 0.55) * (outcome === 'over' ? 0.6 : 1) + (outcome === 'perfect' ? joy * 0.3 : 0));
       // inside the cup
       const Pk = surf(PUCK_TOP);
       const puckLevel = floating ? Math.max(PUCK_TOP, L - 0.02 - (1 - soak) * 0.08) : PUCK_TOP;
@@ -514,10 +632,17 @@ export async function runRamenPour(): Promise<Outcome> {
           const lit = -gx * 2.6 - gy * 1.8 + h0 * 0.15;
           w = lit > 0 ? mixc(w, hx('#fff6e0'), Math.min(0.55, lit * 0.9)) : mixc(w, hx('#4a2c14'), Math.min(0.45, -lit * 0.8));
           if (wv < -0.45) w = mixc(w, INNER[4], (-wv - 0.45) * 0.5);
-          // the porthole reflected on the surface: a bright oval on the left, wobbling with the ripples
+          // a wet sheen: the window's warm light along the far side, the sea's cool sky on the near side
+          if (wv < -0.25) w = mixc(w, SUN, Math.floor((-wv - 0.25) * 4 + dith(x, y)) / 3 * 0.32);
+          else if (wv > 0.4 && dith(x, y) < (wv - 0.4) * 1.6) w = mixc(w, COOL, 0.2);
+          // the golden broth glows
+          if (glow > 0) w = mixc(w, GLOW, Math.floor(glow * 3 * (0.7 + bk * 0.3) + dith(x, y)) / 3 * 0.28);
+          // the sun reflected on the surface: a hot oval on the left, shivering with the ripples
           const rx0 = wu + 0.52 + gx * 3, ry0 = wv + 0.12 + gy * 3;
-          if (rx0 * rx0 / 0.05 + ry0 * ry0 / 0.08 < 1 && (y & 1) === 0) w = mixc(w, hx('#eaf6fc'), 0.4);
+          const ro = rx0 * rx0 / 0.05 + ry0 * ry0 / 0.08;
+          if (ro < 0.45) w = SUN_HOT; else if (ro < 1 && dith(x, y) < 0.55) w = mixc(w, SUN_HOT, 0.6);
           if (lit > 0.5 && hash(x, y, Math.floor(t * 10)) < 0.4) w = hx('#ffffff');
+          else if (lit > 0.28 && hash(x, y, Math.floor(t * 8) + 7) < 0.14) w = SUN_HOT;
           // meniscus: the water climbs the wall in a bright line
           if (wr > 0.9) w = mixc(w, hx('#f8f4ea'), wr > 0.96 ? 0.7 : 0.35);
           // foam where the stream drums in
@@ -541,6 +666,10 @@ export async function runRamenPour(): Promise<Outcome> {
           const depth = (y - (RIM_Y - RIM_RY)) / (RIM_RY * 2 + DEPTH);
           const side = Math.abs((x + 0.5 - CX) / RIM_RX);
           c = ramp(INNER, 0.82 - depth * 1.1 - side * 0.18 + (x < CX ? 0.08 : -0.05), x, y);
+          // the sun climbs in over the far-left rim and lands on the right of the inner wall
+          const sx = (x + 0.5 - CX) / RIM_RX, sy = (y + 0.5 - RIM_Y) / RIM_RY;
+          if (sx > 0.35 && sy > -0.8 + (sx - 0.35) * 0.4 && sy < 0.15 + (sx - 0.35) * 1.2) c = mixc(c, SUN, Math.floor(Math.min(1, (sx - 0.35) * 3) * 3 + dith(x, y)) / 3 * 0.36);
+          else if (sx < -0.3 && dith(x, y) < 0.5) c = mixc(c, COOL, 0.16);
           // a wet band on the wall just above the water once it's been splashed
           if (L > 0.02 && y < S.cy && y > S.cy - S.ry - 4 && wet > 0.2) c = mixc(c, INNER[1], 0.35);
           const F = surf(LINE);
@@ -553,6 +682,11 @@ export async function runRamenPour(): Promise<Outcome> {
         }
         // the rolled rim lip: bright on top, a darker inner edge
         if (rn > 0.86) c = rn > 0.965 ? PAPER[1] : rn > 0.93 ? (y > RIM_Y ? PAPER[5] : PAPER[4]) : mixc(c, PAPER[0], 0.35);
+        if (rn > 0.93 && rn <= 0.965) {
+          if (x < CX - RIM_RX * 0.35 || (y < RIM_Y - RIM_RY * 0.55 && x < CX + RIM_RX * 0.3)) c = SUN_HOT;
+          else if (x > CX + RIM_RX * 0.55) c = mixc(c, COOL, 0.35);
+          if (glow > 0 && dith(x, y) < glow) c = mixc(c, GLOW, 0.4);
+        }
         put(buf, x, y, c);
       }
       // toppings: floating flakes (carrot, spring onion, fish-cake swirls, egg)
@@ -613,20 +747,81 @@ export async function runRamenPour(): Promise<Outcome> {
         for (let y = -s2.r; y <= s2.r; y++) for (let x = -s2.r; x <= s2.r; x++) {
           const d = (x * x + y * y) / (s2.r * s2.r);
           if (d > 1) continue;
-          if (dith(s2.x + x | 0, s2.y + y | 0) > 0.85 - d * 0.5) continue;
-          blend(buf, s2.x + x, s2.y + y, hx('#fbf8f2'), a * (1 - d * 0.5));
+          const X = s2.x + x | 0, Y = s2.y + y | 0;
+          if (dith(X, Y) > 0.85 - d * 0.5) continue;
+          // lit from behind by the window: glowing where it crosses the sun, pale near the glass, cool
+          // grey out in the room; its edge toward the light catches a bright rim
+          const sh = shaft(X, Y), back = Math.max(0, 1 - Math.hypot(X - PHX, Y - PHY) / 150);
+          let col = sh > 0.2 ? STEAM_LIT : back > 0.35 ? STEAM_BACK : STEAM_COOL;
+          let al = a * (1 - d * 0.5) * (1 + sh * 2.4 + back * 0.9);
+          if (d > 0.5 && x < 0 && y < 0) { col = mixc(col, SUN_HOT, 0.6); al *= 1.5; }
+          if (glow > 0 && Math.abs(X - CX) < RIM_RX && Y < RIM_Y + 4) col = mixc(col, GLOW, glow * 0.4);
+          blend(buf, X, Y, col, Math.min(0.7, al));
+        }
+      }
+      // the sun's shaft through the air (it shimmers with the sea), dust motes drifting in it
+      const shim = 0.88 + Math.sin(t * 0.9) * 0.06 + Math.sin(t * 2.3) * 0.04;
+      for (let y = Math.floor(SH_TOP); y <= LPY; y++) {
+        const [scx, shw] = shaftAt(y);
+        for (let x = Math.max(0, Math.floor(scx - shw)); x <= Math.min(CW - 1, Math.ceil(scx + shw)); x++) {
+          const s = shaft(x, y);
+          if (s <= 0) continue;
+          const ray = 0.72 + Math.sin((x - y * 0.36) * 0.5 + t * 0.35) * 0.28;
+          light(buf, y * CW + x, x, y, SUN, s * ray * shim * 0.95, 0.4);
+        }
+      }
+      for (let k = 0; k < 36; k++) {
+        const my = SH_TOP + 4 + ((hash(k, 21) * 90 + t * (2 + hash(k, 22) * 3)) % (LPY - SH_TOP - 4));
+        const [scx, shw] = shaftAt(my);
+        const mx = scx + (hash(k, 23) - 0.5) * 1.8 * shw + Math.sin(t * 0.5 + k * 1.3) * 3;
+        if (shaft(mx, my) < 0.35) continue;
+        const tw = Math.sin(t * (1.5 + hash(k, 24) * 3) + k * 1.7);
+        if (tw < -0.2) continue;
+        put(buf, mx, my, tw > 0.75 ? SUN_HOT : mixc(buf[(my | 0) * CW + (mx | 0)], SUN_HOT, 0.55));
+      }
+      // a golden broth glows: warm light spills round the cup
+      if (glow > 0.02) {
+        const gp = glow * (0.85 + Math.sin(t * 3) * 0.15);
+        for (let y = RIM_Y - RIM_RY - 20; y < RIM_Y + RIM_RY + 8; y++) for (let x = CX - RIM_RX - 22; x < CX + RIM_RX + 22; x++) {
+          if (x < 0 || y < 0 || x >= CW || y >= CH) continue;
+          const d = ((x + 0.5 - CX) / (RIM_RX + 20)) ** 2 + ((y + 0.5 - RIM_Y + 3) / (RIM_RY + 16)) ** 2;
+          const r = ((x + 0.5 - CX) / RIM_RX) ** 2 + ((y + 0.5 - RIM_Y) / RIM_RY) ** 2;
+          if (d < 1 && r > 1) light(buf, y * CW + x, x, y, GLOW, (1 - d) * gp * 1.3, 0.3);
         }
       }
       // the kettle in Mori's hand (rotated sprite, nearest-neighbour), his sleeve out to the edge
       const use3d = !HANDS3D.enabled || !!hands?.ready3d; // no first-person hands: the bare kettle
       const kettle = use3d ? kettleBare : kettleHand;
       const ca = Math.cos(tilt), sa = Math.sin(tilt);
+      const ns = -0.52 + (tilt - 0.18) * 0.85;
       for (let y = 0; y < CH; y++) for (let x = 100; x < CW; x++) {
         const dx = x + 0.5 - KX, dy = y + 0.5 - KY;
         const lx = dx * ca - dy * sa + KPX, ly = dx * sa + dy * ca + KPY;
         if (lx < 0 || ly < 0 || lx >= KW || ly >= KH) continue;
-        const v = kettle[(ly | 0) * KW + (lx | 0)];
-        if (v >>> 24) buf[y * CW + x] = v;
+        const li = (ly | 0) * KW + (lx | 0);
+        let v = kettle[li];
+        if (!(v >>> 24)) continue;
+        const m = use3d ? KM[li] : 0;
+        if (m === 1) {
+          // the window's streaks slide across the body as it tips, with the dark of the room beside them
+          const nx = KA[li], tt = KT[li], dd = Math.abs(nx - ns);
+          if (dd < 0.07 && tt > 0.1 && tt < 0.84) v = STEEL[6];
+          else if (dd < 0.16 && tt > 0.16 && tt < 0.78 && dith(x, y) < 0.5) v = STEEL[5];
+          else if (Math.abs(nx - ns - 0.2) < 0.035 && tt > 0.22 && tt < 0.7) v = STEEL[5];
+          else if (Math.abs(nx - ns - 0.92) < 0.06) v = STEEL[1];
+        } else if (m > 1) {
+          // the spout, the handle and the knob glint where their surface turns to face the light
+          const f = Math.cos(KA[li] - tilt - LANG), tv = KT[li];
+          if (m === 2) { if (f > 0.92 && tv > 0.3) v = STEEL[6]; else if (f > 0.72 && tv > 0.2 && dith(x, y) < 0.5) v = STEEL[5]; }
+          else if (f > 0.9 && tv > 0.3) v = hx('#a8a0a6'); else if (f > 0.7 && tv > 0.25 && dith(x, y) < 0.5) v = hx('#625a60');
+        }
+        buf[y * CW + x] = v;
+      }
+      if (use3d) {
+        // a star of light where the streak runs up under the shoulder
+        const [gx0, gy0] = rot(58 + ns * 22 - KPX, 28 - KPY, -tilt, KX, KY);
+        const tw = Math.sin(t * 3.1) * 0.5 + 0.5, n = 1 + Math.round(tw * 2);
+        for (let d = -n; d <= n; d++) { put(buf, gx0 + d, gy0, d === 0 ? hx('#ffffff') : SUN_HOT); put(buf, gx0, gy0 + d, d === 0 ? hx('#ffffff') : SUN_HOT); }
       }
       const [hx0, hy0] = rot(92 - KPX, 26 - KPY, -tilt, KX, KY);
       if (!use3d) for (let x = Math.round(hx0 - 1); x < CW; x++) {
@@ -643,10 +838,18 @@ export async function runRamenPour(): Promise<Outcome> {
       if (!outcome) paintGuide(buf, t, L, hold.down, iconA, touch);
       // a perfect pour: twinkles burst around the rim
       if (outcome === 'perfect') paintTwinkles(buf, t - outT);
-      // warm vignette
+      // the grade: shadows lean to the sea's cool blue, lights to the sun's warmth (each in quantised,
+      // dithered steps); then a dithered vignette in three hard steps
       for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) {
-        const d = ((x - CW / 2) / (CW * 0.62)) ** 2 + ((y - CH / 2) / (CH * 0.7)) ** 2;
-        if (d > 0.5) { const i = y * CW + x, v = buf[i], k = Math.min(0.55, (d - 0.5) * 0.85); buf[i] = rgb(R(v) * (1 - k), G(v) * (1 - k * 1.05), B(v) * (1 - k * 1.12)); }
+        const i = y * CW + x, v = buf[i];
+        const lum = (R(v) * 77 + G(v) * 150 + B(v) * 29) >> 8;
+        let c = v;
+        if (lum < 100) c = mixc(c, DUSK, Math.floor((100 - lum) / 100 * 3 + dith(x, y)) / 3 * 0.32);
+        else if (lum > 176) c = mixc(c, SUN_HOT, Math.floor((lum - 176) / 80 * 3 + dith(x, y)) / 3 * 0.18);
+        const d = ((x - CW * 0.47) / (CW * 0.6)) ** 2 + ((y - CH * 0.5) / (CH * 0.66)) ** 2;
+        const q = Math.min(3, Math.floor((d - 0.48) * 5 + dith(x, y)));
+        if (q > 0) c = mixc(c, VIG, q * 0.16);
+        buf[i] = c;
       }
       (window as unknown as { __ramen?: string }).__ramen = `${L.toFixed(3)} t${t.toFixed(1)} n${stream.length} s${steam.length}`;
       cu.present();

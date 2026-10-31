@@ -16,7 +16,7 @@ const CSS = `
 .cu-wrap.out { animation: cuOut 0.4s ease-in both; }
 @keyframes cuOut { to { opacity: 0; } }
 .cu-wrap canvas { image-rendering: pixelated; image-rendering: crisp-edges; animation: cuZoom 0.9s cubic-bezier(.2,.8,.3,1) both; }
-@keyframes cuZoom { from { transform: scale(1.35); filter: blur(6px) brightness(0.4); } to { transform: scale(1); filter: none; } }
+@keyframes cuZoom { from { transform: scale(1.35); filter: brightness(0.4); } to { transform: scale(1); filter: none; } }
 .cu-hint { position: absolute; left: 0; right: 0; bottom: 6%; text-align: center; font-family: 'Jersey 15', 'Pixelify Sans', monospace; font-size: clamp(14px, 2.2vw, 22px);
   color: rgba(255, 246, 228, 0.92); text-shadow: 0 2px 0 #000, 0 0 12px rgba(0,0,0,0.6); letter-spacing: 0.04em; opacity: 0; transition: opacity 0.6s; pointer-events: none; }
 .cu-hint.on { opacity: 1; }
