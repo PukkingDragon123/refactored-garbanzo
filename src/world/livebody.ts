@@ -118,7 +118,7 @@ export class LiveBody<A extends LiveArtFrame, F> {
     // the lean: into an acceleration, back against braking (none in the air)
     this.lean.step(ground ? clamp(af * 0.00045, -0.11, 0.13) : 0, dt);
     // the arms swing on with their own inertia (forward as he brakes, back as he sets off)
-    this.arm.step(ground ? clamp(-af * 0.0011, -0.24, 0.3) : 0, dt);
+    this.arm.step(ground ? clamp(-af * 0.0009, -0.2, 0.22) : 0, dt);
     // the knees: a wind-up held for its moment, landings kicked in as a velocity
     if (this.dipHold > 0) { this.dipHold -= dt; if (this.dipHold <= 0) this.dipTarget = 0; }
     this.dip.step(this.dipTarget, dt);

@@ -63,8 +63,8 @@ export function airPose7(b: Build, air: number): Pose {
   p.fl = { f: [lx(1.3 + 1.9 * tuck, -2.2), b.ankleH + (5.6 * tuck + 0.6 * (1 - reach)) * k], fa: 0.15 * tuck - 0.3 * reach };
   p.bl = { f: [lx(-1.6 - 1.2 * tuck, 2.4), b.ankleH + (3.8 * tuck + 0.9 * (1 - reach)) * k], fa: -0.55 * tuck - 0.3 * reach };
   // the arms: swung forward and up out of the take-off, out to the sides for balance as he falls
-  p.fa = { a: 0.55 + 0.75 * rise + 0.35 * tuck - 0.2 * reach, e: 0.55 - 0.2 * reach, hand: 'open', spread: 0.8 };
-  p.ba = { a: 0.15 + 0.55 * rise + 0.25 * tuck + 0.25 * reach, e: 0.4, hand: 'open', spread: 0.8 };
+  p.fa = { a: 0.35 + 0.45 * rise + 0.2 * tuck - 0.1 * reach, e: 0.4 - 0.15 * reach, hand: 'open', spread: 0.8 };
+  p.ba = { a: 0.1 + 0.3 * rise + 0.15 * tuck + 0.2 * reach, e: 0.35, hand: 'open', spread: 0.8 };
   p.flags = { aoN: 0.8 + 1.6 * reach, aoF: 0.8 + 1.6 * reach };
   p.hd = [0.2 * k, -0.15 * k * rise];
   // the shirt tails and hair lift as he drops, trail as he rises
@@ -124,6 +124,6 @@ export function applyMotion7(b: Build, p: Pose, m: Motion7): Pose {
     // the shirt tails trail an acceleration, swing forward on a stop
     sway += m.lean * 5;
   }
-  if (m.arm) { fa = swingArm(fa, m.arm, Math.max(0, m.arm) * 0.4); ba = swingArm(ba, m.arm * 0.85, Math.max(0, m.arm) * 0.35); }
+  if (m.arm) { fa = swingArm(fa, m.arm, Math.max(0, m.arm) * 0.2); ba = swingArm(ba, m.arm * 0.85, Math.max(0, m.arm) * 0.2); }
   return { ...p, hip, lean, fa, ba, fl, bl, hd, sway, flags, sq: (p.sq ?? 1) * (1 - 0.025 * (m.dip ?? 0)) };
 }
