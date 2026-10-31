@@ -16,6 +16,8 @@ import { hex, mix } from '../../color';
 import type { C } from '../../color';
 import type { Sprite } from '../../jungle-core';
 import { plant } from '../../jungle-plants';
+import { registerItemArt, ITEM_CELL } from '../itemart';
+import { beastFrame } from './animals';
 
 /** a sprite from a character map ('.' is clear), anchored bottom-centre unless told otherwise */
 function pm(rows: string[], pal: Record<string, string>, ax?: number, ay?: number): Sprite {
@@ -168,3 +170,61 @@ export const tauihu = (): Sprite => pm([
   '.....wweeeoww.....',
   '....wwwoooowww....',
 ], { o: '#1a0806', e: '#8a2416', E: '#d45a34', p: '#5ac0b0', w: '#5a3018' });
+
+// ------------------------------------------------------------------ pack icons for the side-quest things
+const ICON_INK = hex('#140a10');
+function icon(w: number, h: number, paint: (b: PixelBuffer) => void): () => HTMLCanvasElement {
+  return () => {
+    const b = new PixelBuffer(w * ITEM_CELL, h * ITEM_CELL);
+    paint(b);
+    b.outline(ICON_INK);
+    return b.toCanvas(1);
+  };
+}
+/** lay a sprite into an icon at a whole-number scale */
+function put(b: PixelBuffer, s: PixelBuffer, x: number, y: number, k = 1) {
+  for (let j = 0; j < s.h; j++) for (let i = 0; i < s.w; i++) { const c = s.data[j * s.w + i]; if (c >>> 24) for (let v = 0; v < k; v++) for (let u = 0; u < k; u++) b.set(x + i * k + u, y + j * k + v, c); }
+}
+let iconsDone = false;
+export function registerLifeItemArt() {
+  if (iconsDone) return;
+  iconsDone = true;
+  registerItemArt('q_kohatu', icon(1, 1, b => put(b, kohatu(0).buf, 0, 3, 2)), { w: 1, h: 1 });
+  registerItemArt('q_taewa', icon(2, 1, b => put(b, beastFrame('pig', 2, 'idle', 0).buf, 10, 3)), { w: 2, h: 1 });
+  // one bronze leaf, its red edge and pale midrib, curving up the cell
+  registerItemArt('q_paretaniwha', icon(1, 2, b => {
+    const BR = ['#3e1a0c', '#6a2c12', '#8e4418', '#b0622a', '#d08a44'].map(c => hex(c));
+    for (let y = 2; y < 46; y++) {
+      const t = (y - 2) / 44, cx = 12 + Math.sin(t * 2.6) * 4, hw = 1 + Math.sin(t * Math.PI) * 3.4;
+      for (let x = Math.floor(cx - hw); x <= Math.ceil(cx + hw); x++) {
+        const k = (x - (cx - hw)) / (2 * hw);
+        let i = Math.round(1 + k * 2.4 - t * 0.6 + ((x + y) % 2 ? 0.3 : 0));
+        if (Math.abs(x - cx) < 0.6) i = 4;
+        b.set(x, y, k > 0.86 ? hex('#a8281a') : BR[Math.max(0, Math.min(4, i))]);
+      }
+    }
+  }), { w: 1, h: 2 });
+  // Hana's guitar, upright: headstock and tuners, the neck and its frets, the burst body, the rosette
+  registerItemArt('vil_guitar', icon(1, 2, b => {
+    const SP = ['#5e3214', '#8a4e20', '#c8913e', '#deac58', '#f0c878'].map(c => hex(c));
+    const RW = hex('#2a1810'), RW2 = hex('#4e3222'), NI = hex('#c8ccd2'), BN = hex('#efe4c4');
+    for (let y = 1; y < 9; y++) for (let x = 9; x < 15; x++) b.set(x, y, (x + y) % 3 ? RW : RW2);
+    for (const y of [2, 4, 6]) { b.set(8, y, NI); b.set(7, y, BN); b.set(15, y, NI); b.set(16, y, BN); }
+    for (let x = 10; x < 14; x++) b.set(x, 9, BN);
+    for (let y = 10; y < 25; y++) for (let x = 10; x < 14; x++) b.set(x, y, (y - 10) % 3 === 2 ? NI : x === 10 ? RW2 : RW);
+    const prof = (y: number) => { const t = (y - 24) / 22; return t < 0 ? 0 : t < 0.3 ? 5 + t * 12 : t < 0.42 ? 8.6 - (t - 0.3) * 14 : t < 0.8 ? 6.9 + Math.sin((t - 0.42) / 0.38 * Math.PI * 0.5) * 3.6 : 10.5 - (t - 0.8) * 22; };
+    for (let y = 24; y < 47; y++) {
+      const hw = prof(y);
+      for (let x = Math.round(12 - hw); x <= Math.round(12 + hw); x++) {
+        const d = Math.abs(x - 12) / Math.max(1, hw);
+        let i = Math.round(3.6 - d * 3.2 - (y > 36 ? 0.3 : 0) + ((x + y) % 2 ? 0.3 : 0));
+        if (d > 0.92) i = 0;
+        b.set(x, y, SP[Math.max(0, Math.min(4, i))]);
+      }
+    }
+    for (let a = 0; a < 16; a++) { const t = a / 16 * Math.PI * 2; b.set(Math.round(12 + Math.cos(t) * 3), Math.round(30 + Math.sin(t) * 3), a % 2 ? hex('#3ab0a0') : hex('#5a6ac8')); }
+    for (let y = 28; y < 33; y++) for (let x = 10; x < 15; x++) if (Math.hypot(x - 12, y - 30) < 2.2) b.set(x, y, hex('#0a0604'));
+    for (let x = 9; x < 16; x++) b.set(x, 40, RW);
+    for (let y = 10; y < 41; y++) if (y % 2) b.set(12, y, hex('#e8e8e0'));
+  }), { w: 1, h: 2 });
+}

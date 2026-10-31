@@ -78,6 +78,8 @@ export async function life(ph: 'morning' | 'midday' | 'evening' | 'night', tod: 
   L.forcePhase(ph);
   return go(tod, x);
 }
+/** the side quests module (stageQuest, sideTalk, hawkPhoto...) */
+export const side = () => import('./sidequests');
 /** the village's part of the day, its hour, and where everyone is and what they're doing */
 export const lifeInfo = async () => (await import('./life')).LIFE_ZL.info();
 /** move the village to another part of the day: walking (or jump straight there) */

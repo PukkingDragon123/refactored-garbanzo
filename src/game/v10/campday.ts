@@ -7,6 +7,8 @@
 // camparrive.ts, story events in campevents.ts.
 
 import { game } from '../game';
+import { count } from '../inventory';
+import { questStatus } from '../quests';
 import { audio } from '../../core/audio';
 import { packColor } from '../../gfx/renderer';
 import { Custom } from '../../world/props';
@@ -289,6 +291,11 @@ export class CampDay implements CrewHost {
     st.it({ x: C10.fire + 18, y: groundY(C10.fire), w: 8, label: 'Cook something at the fire', standX: C10.fire + 30,
       enabled: () => free() && dayPhase() !== 'out' && !this.fireDue(),
       action: async () => { const { cookAtCamp } = await import('../../ui/v11/cooking'); await cookAtCamp(this, 'snack'); } } as never);
+    // V12: Hana's guitar, once she's given it: a song for the crew round the fire of an evening (once a night)
+    st.it({ x: C10.fire - 14, y: groundY(C10.fire), w: 8, label: 'Play a song for the crew', standX: C10.fire - 36,
+      enabled: () => free() && (dayPhase() === 'evening' || dayPhase() === 'night') && count('vil_guitar') > 0 && game.save.vars['v12g:campDay'] !== this.day,
+      quest: () => questStatus('v12_guitar') === 'active' && count('vil_guitar') > 0,
+      action: async () => { const { campSong } = await import('../v11/village/sidequests'); await campSong(this as never); this.s.hud?.refresh(true); } } as never);
     // the radio in Jenna's corner (once the agency is on the line)
     st.it({ x: C10.elec, y: groundY(C10.elec), w: 16, label: 'Radio the field office', standX: C10.elec + 22, enabled: () => free() && !!game.save.flags['v10:agency'], action: () => this.atRadio() });
   }
