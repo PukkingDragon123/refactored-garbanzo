@@ -68,6 +68,9 @@ export const TRAILS: TrailDef[] = [
   T('beach-forest', { loc: 'isle-stream', at: 3918, arm: 'up' }, { loc: 'forest', at: 'W' }, 0.25, 'path', { say: 'Up the stream, into the trees. Te Wao Nui.' }),
   T('beach-mangrove', { loc: 'isle-stream', at: 3918, arm: 'down' }, { loc: 'mangrove', at: 'W' }, 0.75, 'wade', { gate: 'staff', say: 'The water’s getting darker. And warmer. I don’t love either of those things.' }),
   T('cave-grotto', { loc: 'isle-cave', at: 5250, arm: 'down' }, { loc: 'grotto', at: 'W' }, 0.25, 'swim', { gate: 'snorkel', say: 'There’s a current under the glowworms. It goes somewhere. Deep breath...' }),
+  // V12 Te Rua Pōuri, the deep dark cave (src/game/v12/cave): up the dry chimney behind the glowworms,
+  // into the headland, and then down and down
+  T('cave-deepcave', { loc: 'isle-cave', at: 5250, arm: 'up' }, { loc: 'deepcave', at: 'W' }, 0.25, 'climb', { gate: 'lantern', say: 'Behind the glowworms there\'s a dry chimney going up... and cold air breathing out of it. From somewhere DEEP.' }),
   T('track-fernwood', { loc: 'isle-track', at: 'E' }, { loc: 'fernwood', at: 'W', arm: 'down' }, 0.5, 'path', { say: 'The bush track just... keeps going. Into the ferns.' }),
   // ---- Te Wao Nui, the great forest region (Te Wao Nui, Fernwood, the falls: one walk, ./region.ts):
   // the crossroads on the ridge between Te Wao Nui and Fernwood
@@ -101,7 +104,7 @@ const SIGN: Record<string, string> = {
   'isle-stream': 'THE BEACH', 'isle-cave': 'SEA CAVE', 'isle-track': 'BUSH TRACK', camp: 'CAMP',
   forest: 'TE WAO NUI', fernwood: 'FERNWOOD', canopy: 'THE CANOPY', falls: 'THE FALLS', hills: 'ROCKY HILLS',
   mangrove: 'MANGROVES', village: 'TE KĀINGA', ruins: 'THE OLD PĀ', fossils: 'BONE CLIFFS', glowforest: 'GLOW FOREST',
-  geovalley: 'HOT VALLEY', unknown: 'KOROKORO', grotto: 'SEA GROTTO', deep: 'THE DEEP', coast: 'SERPENT COAST', swamp: 'TE REPO RAUPŌ',
+  geovalley: 'HOT VALLEY', unknown: 'KOROKORO', grotto: 'SEA GROTTO', deep: 'THE DEEP', coast: 'SERPENT COAST', swamp: 'TE REPO RAUPŌ', deepcave: 'TE RUA PŌURI',
 };
 const VERB: Record<TrailKind, string> = { path: 'Walk to', climb: 'Climb to', swim: 'Swim to', wade: 'Wade to', dive: 'Dive to', tunnel: 'Rope down to' };
 const ACT: Record<TrailKind, HungerActivity> = { path: 'walk', climb: 'climb', swim: 'swim', wade: 'wade', dive: 'swim', tunnel: 'climb' };
@@ -150,11 +153,17 @@ interface InfoArm { info: string; go: number; dir: 'left' | 'right' }
 /** a region's own branch at a crossroads: up onto a limb or a ledge, down into a gully (no trail, no
  *  fade: Mori climbs or scrambles there himself) */
 export interface TierArm { tier: string; mark: Arm; dir: 'left' | 'right'; label: string; go: (f: FieldScene) => Promise<void> | void }
-export interface RegionPost { x: number; arms: (TierArm | InfoArm)[] }
+export interface RegionPost {
+  x: number;
+  /** V12 vertical maps (the deep cave): the post stands on the tier at this height (default: the top
+   *  walk line at x); posts at the same x on different tiers are separate crossroads */
+  y?: number;
+  arms: (TierArm | InfoArm)[];
+}
 type Spec = EndRef | InfoArm | TierArm;
 const isEnd = (s: Spec): s is EndRef => 't' in s;
 const isTier = (s: Spec): s is TierArm => 'tier' in s;
-interface Junction { x: number; edge: 'W' | 'E' | null; ends: EndRef[]; sign: Prop | null; arms: ArmBox[]; armIts: Interactable[]; specs: Spec[] }
+interface Junction { x: number; y?: number; edge: 'W' | 'E' | null; ends: EndRef[]; sign: Prop | null; arms: ArmBox[]; armIts: Interactable[]; specs: Spec[] }
 interface SceneTrails {
   f: FieldScene;
   W: number;
@@ -237,8 +246,9 @@ export function installTrails(f: FieldScene, loc: string | 'island') {
   }
   // a region's crossroads: its tiers and the way along
   for (const s of posts.get(f) ?? []) {
-    let j = [...byKey.values()].find(q => !q.edge && Math.abs(q.x - s.x) < 200);
-    if (!j) { j = jn(s.x, null); byKey.set('p' + s.x, j); }
+    const tier = (q: Junction) => (q.y === undefined && s.y === undefined) || (q.y !== undefined && s.y !== undefined && Math.abs(q.y - s.y) < 60);
+    let j = [...byKey.values()].find(q => !q.edge && Math.abs(q.x - s.x) < 200 && tier(q));
+    if (!j) { j = jn(s.x, null); j.y = s.y; byKey.set('p' + s.x + (s.y !== undefined ? ':' + s.y : ''), j); }
     j.x = s.x;
     for (const a of s.arms) j.specs.push(a);
   }
@@ -283,7 +293,7 @@ function buildSign(S: SceneTrails, j: Junction, i: number, under: boolean) {
   const key = `v12sign:${f.site.id}:${i}:` + specs.map(s => `${s.text}${s.dir}${s.mark ?? ''}${s.lock ?? ''}`).join('|');
   const art = paintSignpost(specs, Math.round(j.x));
   const fr = local.add(key, art.buf, art.ax, art.ay);
-  const gy = groundAt(f, j.x);
+  const gy = jGround(f, j);
   const prop = new Prop(fr, j.x, gy + 1, -2.2);
   f.main.add(prop);
   j.sign = prop;
@@ -329,10 +339,12 @@ function readSign(S: SceneTrails, j: Junction) {
     parts.push(`${way}: ${placeName(to.loc)}, ${hoursText(s.t.hours)}${shut}`);
   }
   audio.play('woodCreak', { vol: 0.25, pitch: 1.4 });
-  parts.forEach((p, i) => setTimeout(() => void floatText({ x: j.x, y: groundAt(S.f, j.x) - 90 - i * 2, text: p, style: 'say', ms: 3000 }), i * 900));
+  parts.forEach((p, i) => setTimeout(() => void floatText({ x: j.x, y: jGround(S.f, j) - 90 - i * 2, text: p, style: 'say', ms: 3000 }), i * 900));
 }
 
 function groundAt(f: FieldScene, x: number) { return f.st.terrain.surfaceBelow(x, -400)?.y ?? f.st.terrain.groundY(x); }
+/** where a crossroads' post stands (a vertical map's post on its own tier) */
+function jGround(f: FieldScene, j: Junction) { return j.y === undefined ? groundAt(f, j.x) : f.st.terrain.surfaceBelow(j.x, j.y - 12)?.y ?? j.y; }
 
 /** an info plank on the beach: Mori just walks that way */
 function walkAlong(f: FieldScene, x: number) {
@@ -353,7 +365,7 @@ function update(S: SceneTrails, dt: number, ownWest: boolean) {
   const free = !f.cutscene && !game.ui.blocking && !busy && (p.state === 'normal' || p.underwater);
   // the nearest signpost with branches
   S.near = null;
-  if (free && p.onGround) for (const j of S.junctions) if (Math.abs(p.x - j.x) < 30 && j.specs.length) { S.near = j; break; }
+  if (free && p.onGround) for (const j of S.junctions) if (Math.abs(p.x - j.x) < 30 && (j.y === undefined || Math.abs(p.y - jGround(f, j)) < 30) && j.specs.length) { S.near = j; break; }
   if (!free) { S.holdT = 0; return; }
   // pick a branch at a signpost: up / down
   if (S.near && !f.cam?.active) {

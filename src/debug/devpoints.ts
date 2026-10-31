@@ -318,6 +318,43 @@ export async function goSwamp(x: number, o: { high?: boolean; hour?: number; rai
   f.snapCamera();
 }
 
+/** V12 Te Rua Pōuri, the deep dark cave (src/game/v12/cave): out on a trip from camp, standing on a tier
+ *  at world x (the cave is tall: x alone doesn't say where). The storm lantern is made; `rope` false
+ *  leaves the climbing rope unmade (the deep pitches stay shut); `lunge` has the Ghost Gulper already
+ *  drawn to the shore (its tell, then the lunge); `pole` hangs the lantern on the caver's pole. */
+export async function goCave(x: number, tier: string, o: { hour?: number; rope?: boolean; lunge?: boolean; pole?: boolean; dim?: boolean } = {}) {
+  ensureLoop();
+  findLocation('deepcave');
+  const d = dayState();
+  d.phase = 'out'; d.went = 'deepcave'; d.woke = dayNumber(); d.meals.breakfast = dayNumber();
+  if (o.hour !== undefined) game.save.vars['v10:hour'] = o.hour;
+  const bp = await import('../game/v11/blueprints');
+  for (const id of ['storm_lantern', ...(o.rope === false ? [] : ['climbing_rope'])]) {
+    bp.grantBlueprint(id, 'dev');
+    if (!bp.isBuilt(id)) bp.markMade(id);
+  }
+  delete game.save.flags['dev:gulperNow']; delete game.save.flags['dev:gulperPole']; delete game.save.flags['dev:caveDim'];
+  if (o.lunge) game.save.flags['dev:gulperNow'] = true;
+  if (o.pole) game.save.flags['dev:gulperPole'] = true;
+  if (o.dim) game.save.flags['dev:caveDim'] = true;
+  game.persist();
+  await idle();
+  const ex = await import('../game/v10/expedition');
+  await ex.goExpedition('deepcave', { at: x });
+  refill();
+  const { FieldScene } = await import('../game/scenes/field');
+  await sceneWhere(s => s instanceof FieldScene && !!(s as InstanceType<typeof FieldScene>).player && ((s as InstanceType<typeof FieldScene>).site.id as string) === 'deepcave');
+  const f = game.scene as InstanceType<typeof FieldScene>;
+  const { floorOf } = await import('../game/v12/cave/layout');
+  const y = floorOf(tier, x);
+  const s = f.st.terrain.surfaceBelow(x, y - 6, 0);
+  const p = f.player;
+  p.x = x; p.y = s?.y ?? y; p.vy = 0; p.onGround = true;
+  if (s) (p as unknown as { surface: unknown }).surface = s.s;
+  const cam = f.st.cam;
+  cam.x = cam.tx = x; cam.y = cam.ty = p.y - 38;
+}
+
 export async function goTrip(id: string, stop = false) {
   ensureLoop();
   boatTo(6);
@@ -540,6 +577,25 @@ export async function chapters(): Promise<DevChapter[]> {
     { id: 'sw:island', name: 'The hidden island', sub: 'Te Motu Huna: the eel-fisher\'s whare, down in the channel', icon: 'map', run: () => goSwamp(7600), variants: swT(7600) },
     { id: 'sw:bridge', name: 'The channel swing bridge', sub: 'The main path over the hidden island', icon: 'map', run: () => goSwamp(7500, { high: true }), variants: swT(7500, true) },
     { id: 'sw:mouth', name: 'Te Ngutu Awa', sub: 'East end, the mudflats down to the mangroves', icon: 'map', run: () => goSwamp(9500), variants: swT(9500) },
+  ] });
+  // V12 Te Rua Pōuri, the deep dark cave (one tall map), its tiers, its bugs, its salamanders, its Gulper
+  const dcT = (x: number, tier: string, extra: { rope?: boolean; lunge?: boolean; pole?: boolean; dim?: boolean } = {}) => [
+    { label: 'Morning', run: () => goCave(x, tier, { hour: 8, ...extra }) }, { label: 'Afternoon', run: () => goCave(x, tier, { hour: 15, ...extra }) },
+    { label: 'Late (dusk outside)', run: () => goCave(x, tier, { hour: 17.8, ...extra }) },
+  ];
+  out.push({ id: 'deepcave', name: 'Te Rua Pōuri, the deep dark cave (one tall map)', points: [
+    { id: 'dc:mouth', name: 'The entrance', sub: 'Te Kūaha: up the chimney from the glowworm cave, moths in the twilight', icon: 'moon', run: () => goCave(60, 't0', { hour: 10 }), variants: [...dcT(60, 't0'), { label: 'No rope yet', run: () => goCave(60, 't0', { hour: 10, rope: false }) }] },
+    { id: 'dc:ladder', name: 'The old ladder', sub: 'The first drop, into the wētā hall', icon: 'map', run: () => goCave(1640, 't0', { hour: 10 }), variants: dcT(1640, 't0') },
+    { id: 'dc:weta', name: 'The wētā hall', sub: 'Ngā Wētā: wētā on every wall, and a big one that jumps at the light', icon: 'map', run: () => goCave(1150, 't1', { hour: 10 }), variants: dcT(1150, 't1') },
+    { id: 'dc:mid', name: 'Mid-descent: the squeeze and the fungus hall', sub: 'Te Kūititanga, under the scree chute', icon: 'map', run: () => goCave(520, 't2', { hour: 11 }), variants: [...dcT(520, 't2'), { label: 'The fungus hall', run: () => goCave(1150, 't2', { hour: 11 }) }] },
+    { id: 'dc:gallery', name: 'The crystal gallery (rare spot)', sub: 'Te Ana Tioata: crouch in the dark and wait', icon: 'heart', run: () => goCave(1590, 'g', { hour: 12 }), variants: dcT(1590, 'g') },
+    { id: 'dc:pitch', name: 'The rope pitch', sub: 'T2 to the dark stream (needs the climbing rope)', icon: 'map', run: () => goCave(2150, 't2', { hour: 12 }), variants: [...dcT(2150, 't2'), { label: 'No rope yet', run: () => goCave(2150, 't2', { hour: 12, rope: false }) }] },
+    { id: 'dc:stream', name: 'The dark stream: blind salamanders', sub: 'Te Awa Pōuri: shutter the lantern by the pools and wait', icon: 'heart', run: () => goCave(1150, 't3', { hour: 13 }), variants: [...dcT(1150, 't3'), { label: 'Lantern shuttered', run: () => goCave(1150, 't3', { hour: 13, dim: true }) }] },
+    { id: 'dc:wet', name: 'The wet pitch', sub: 'Ropes down beside the underground waterfall', icon: 'map', run: () => goCave(700, 'w1', { hour: 13 }), variants: dcT(700, 'w1') },
+    { id: 'dc:lake', name: 'The lake at the bottom', sub: 'Te Waha o te Pō: the caver\'s camp, the pole, the glowworm sky', icon: 'moon', run: () => goCave(560, 't4', { hour: 14 }), variants: [...dcT(560, 't4'), { label: 'The caver\'s camp', run: () => goCave(240, 't4', { hour: 14 }) }] },
+    { id: 'dc:lunge', name: 'The Ghost Gulper\'s lunge', sub: 'At the water\'s edge, lantern bright: watch the tell', icon: 'heart', run: () => goCave(760, 't4', { hour: 14, lunge: true }), variants: [
+      { label: 'Lunge', run: () => goCave(760, 't4', { hour: 14, lunge: true }) }, { label: 'Lure: lantern on the pole, hidden', run: () => goCave(680, 't4', { hour: 14, pole: true }) },
+    ] },
   ] });
   out.push({ id: 'map', name: 'Region Map · Expeditions', points: locs.map(l => ({
     id: 'loc:' + l.id, name: l.name, sub: `${l.sub ? l.sub + ' · ' : ''}${l.region}${l.secret ? ' · secret' : ''}`, icon: l.kind === 'camp' ? 'flag' : l.kind === 'cave' ? 'moon' : 'map',

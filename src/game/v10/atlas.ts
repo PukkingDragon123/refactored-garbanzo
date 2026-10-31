@@ -255,4 +255,13 @@ export const ATLAS: AtlasLoc[] = [
     routes: [{ from: 'forest', at: 2600, enter: 90, label: 'Follow the wallows\' drain down into the swamp', hours: 1, energy: 12, kind: 'walk', say: 'The wallows drain away downhill... into a swamp.' }],
     desc: 'Where Te Wao Nui\'s wallows drain away: a kahikatea swamp forest standing in black water, raupō beds, a dark hollow pool where something booms on wet nights, a stand of drowned trees, and a channel round a hidden island.', terrain: 'Peat water, raupō beds, old boardwalks', arriveX: 90,
   },
+  {
+    // (src/game/v12/cave: the scene, its map in layout.ts; reached up the dry chimney behind the glowworm
+    // cave's pool, with a storm lantern: src/game/v12/trails.ts)
+    id: 'deepcave', name: 'Te Rua Pōuri', sub: 'The Deep Dark Cave', region: 'home', kind: 'cave', pos: P(330, 128),
+    scene: { type: 'site', site: 'deepcave' }, difficulty: 4, xr: [0, 2400],
+    path: PATH([316, 118], [324, 124], [332, 132], [340, 140]),
+    routes: [{ from: 'isle-cave', at: 5250, enter: 30, label: 'Climb the dry chimney behind the glowworms', hours: 0.25, energy: 10, kind: 'climb', say: 'Cold air breathing out of the rock. From somewhere deep.' }],
+    desc: 'Behind the glowworm cave a dry chimney climbs into the headland and then drops, tier under tier, into the dark: wētā on every wall, a squeeze, a hall of glowing fungi, a gallery of crystals, a stream with pale blind salamanders, a waterfall, and at the bottom a black lake under a sky of glowworms. Something big lives in the lake.', terrain: 'Limestone, ladders, rope pitches', arriveX: 30,
+  },
 ];
