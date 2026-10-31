@@ -41,7 +41,9 @@ export function restyle7(ch: Char7): Char7 {
     chest: man ? [ch.chest[0] * 1.08, ch.chest[1] * 1.1] : ch.chest,
     waist: man ? [ch.waist[0] * 1.04, ch.waist[1] * 1.05] : ch.waist,
     neckR: ch.neckR * (man ? 1.15 : 1),
-    armR: ch.armR.map(v => v * (man ? 1.06 : 0.95)) as Char7['armR'],
+    armR: ch.armR.map(v => v * (man ? 1.06 : kid ? 0.88 : 0.95)) as Char7['armR'],
+    // children's hands in proportion to them (user: the kids' hands looked too big)
+    hand: ch.hand * (kid ? 0.68 : 1),
     legR: ch.legR.map(v => v * (man ? 1.02 : 0.96)) as Char7['legR'],
     skirt: ch.skirt ? { ...ch.skirt, len: ch.skirt.len * (1 + (L - 1) * 0.6) } : undefined,
   };
