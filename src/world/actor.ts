@@ -13,6 +13,8 @@ import { game } from '../game/game';
 import { audio } from '../core/audio';
 import { approach, clamp, rand } from '../core/math';
 import { HairPhys, HairSpec } from './hairphys';
+import { LiveBody, LiveMotion } from './livebody';
+import { FramePool } from './framepool';
 
 // ------------------------------------------------------------------ art binding (src/art/people.ts, src/art/emotes.ts)
 
@@ -31,6 +33,11 @@ export interface PeopleArt {
   animFor?(id: string, anim: string): { frames: number; fps: number; loop: boolean; dist?: number; talk?: string; phased?: boolean } | null;
   /** the fidgets a character drops into now and then while standing about */
   idleVariety?(id: string): string[];
+  /** live characters (the player): drawn continuously with physical motion (src/world/livebody.ts) */
+  isLive?(id: string): boolean;
+  renderLive?(id: string, anim: string, frame: number, mo: LiveMotion, from?: { anim: string; frame: number; u: number; mo?: LiveMotion }): BodyFrameArt;
+  quantMotion7?(m: LiveMotion): LiveMotion;
+  motionKey7?(m: LiveMotion): string;
   /** posture transition clip between two anims (sit down, stand up...) */
   transitionFor?(id: string, from: string, to: string): string | null;
   /** outfits: what a character wears (sprites, portraits and close-ups all follow it) */
@@ -51,7 +58,7 @@ export function bindActorArt(p: PeopleArt | null, e: EmoteArt | null) {
 }
 export const peopleArt = () => people;
 
-interface BodyCache { back: Frame; front: Frame | null; ax: number; ay: number; hx: number; hy: number; look: Look; hand: [number, number] | null; headBehind: boolean; hrot: number; hflip: boolean; hair: number; pts: Record<string, [number, number]> | null }
+interface BodyCache { back: Frame; front: Frame | null; ax: number; ay: number; hx: number; hy: number; look: Look; hand: [number, number] | null; headBehind: boolean; hrot: number; hflip: boolean; hair: number; pts: Record<string, [number, number]> | null; /** buffer px per world px */ k?: number; /** live frames: the pool's own frames (to check they're still there) */ raw?: [Frame, Frame | null] }
 const bodyCache = new Map<string, BodyCache>();
 const headCache = new Map<string, Frame>();
 const emoteCache = new Map<string, Frame[]>();
@@ -102,6 +109,41 @@ function bodyFrame(id: string, anim: string, frame: number): BodyCache | null {
   }
   return b;
 }
+
+// ---- live bodies (the player): frames drawn on the fly, kept in a bounded texture pool
+
+let pool: FramePool | null = null;
+const liveMap = new Map<string, BodyCache>();
+const toCache = (key: string, art: BodyFrameArt, back: Frame, front: Frame | null): BodyCache => {
+  const k = art.k ?? 1, w = (v: number) => v / k;
+  return {
+    back: dense(back, k), front: front ? dense(front, k) : null,
+    ax: w(art.ax), ay: w(art.ay), hx: w(art.hx), hy: w(art.hy), look: art.look ?? 'fwd', hand: art.hand ? [w(art.hand[0]), w(art.hand[1])] : null, headBehind: !!art.headBehind, hrot: art.hrot ?? 0, hflip: !!art.hflip, hair: art.hair ?? 0,
+    pts: art.pts && Object.keys(art.pts).length ? Object.fromEntries(Object.entries(art.pts).map(([n, p]) => [n, [w(p[0]), w(p[1])] as [number, number]])) : null,
+    k,
+  };
+};
+const liveStore = {
+  get(key: string): BodyCache | undefined {
+    const c = liveMap.get(key);
+    if (!c || !pool) return undefined;
+    // (its page may have been recycled since)
+    if (pool.get(key + '|b') !== c.raw?.[0] || (c.raw?.[1] && pool.get(key + '|f') !== c.raw[1])) { liveMap.delete(key); return undefined; }
+    return c;
+  },
+  put(key: string, art: BodyFrameArt): BodyCache {
+    pool ??= new FramePool(atlas.r);
+    const back = pool.add(key + '|b', art.back, art.ax, art.ay) ?? atlas.add('pb:' + key, art.back, art.ax, art.ay);
+    const front = art.front ? pool.add(key + '|f', art.front, art.ax, art.ay) ?? atlas.add('pf:' + key, art.front, art.ax, art.ay) : null;
+    const c = toCache(key, art, back, front);
+    c.raw = [back, front];
+    if (liveMap.size > 3000) for (const k of [...liveMap.keys()]) if (!liveStore.get(k)) liveMap.delete(k);
+    liveMap.set(key, c);
+    return c;
+  },
+};
+/** the live frame pool's state (debug readout) */
+export const livePoolStats = () => ({ stored: pool?.stored ?? 0, added: pool?.added ?? 0, recycled: pool?.recycled ?? 0 });
 
 function headFrame(id: string, expr: string, mouth: 0 | 1 | 2, blink: boolean, look: Look, hair = 0, hairY = 0): Frame | null {
   if (!people) return null;
@@ -269,6 +311,14 @@ export class Actor implements Drawable {
   private hopPend = 0;
   /** who is talking right now (listeners nearby glance at them) */
   static speaking = new Set<Actor>();
+  /** live drawing (the player): continuous clips with physical motion on top (livebody.ts) */
+  private lvb: LiveBody<BodyFrameArt, BodyCache> | null | undefined = undefined;
+  /** airborne: the vertical speed (px/s, the Player sets it); null on the ground */
+  airVy: number | null = null;
+  /** the ground's rise per px toward the facing (the Player sets it: the feet go on the slope) */
+  slope = 0;
+  /** the head's follow-through on the neck (live), world px */
+  private headLagY = 0;
   /** updated at least once (a facing set while placing them doesn't turn them round) */
   private onStage = false;
 
@@ -309,8 +359,26 @@ export class Actor implements Drawable {
   /** insert posture transitions (sit down / stand up / lie down / get up) automatically */
   transitions = true;
 
-  /** the clip actually played for a requested one (see ActorExt.mapAnim) */
-  mapped(anim: string) { return actorExt.mapAnim ? actorExt.mapAnim(this, anim) : anim; }
+  /** the clip actually played for a requested one (see ActorExt.mapAnim); live, the walk at his pace */
+  mapped(anim: string) {
+    const a = actorExt.mapAnim ? actorExt.mapAnim(this, anim) : anim;
+    return a === 'walk' && this.live ? this.live.walkClip() : a;
+  }
+
+  /** this actor's live body (the player: livebody.ts), or null when it draws cached clip frames */
+  get live(): LiveBody<BodyFrameArt, BodyCache> | null {
+    if (this.lvb !== undefined) return this.lvb;
+    const P = people;
+    if (!P) return null;
+    this.lvb = P.isLive?.(this.id) && P.renderLive && P.quantMotion7 && P.motionKey7
+      ? new LiveBody<BodyFrameArt, BodyCache>({ renderLive: P.renderLive, quantMotion7: P.quantMotion7, motionKey7: P.motionKey7 }, liveStore)
+      : null;
+    return this.lvb;
+  }
+  /** a landing (vertical speed px/s): live, the knees absorb it */
+  landed(vy: number) { this.live?.landed(vy); }
+  /** the wind-up before a jump: live, the knees load for `secs` */
+  windUp(k: number, secs: number) { this.live?.windUp(k, secs); }
 
   /** Loop an animation (no-op if already playing). */
   setAnim(anim: string) {
@@ -324,8 +392,17 @@ export class Actor implements Drawable {
     const from = this.trans ? this.trans.to : this.anim;
     this.trans = null;
     let clip = this.transitions ? people?.transitionFor?.(this.id, from, anim) ?? null : null;
+    const lv = this.live;
+    if (lv) {
+      // live, a landing is absorbed in the knees (landed()), not a canned crouch; setting off goes
+      // into the walk at the pace it's heading for
+      if (clip === 'land') clip = null;
+      if (clip === 'walkStart' && anim.startsWith('walk~')) clip = 'walkStart~' + anim.slice(5);
+      if (clip) lv.seamless = true;
+    }
     // a stop picks up from the very stride the feet were in ('walkStop~walk.7')
-    if (clip && animInfo(clip, this.id).phased) clip = `${clip}~${this.anim}.${this.frameIndex()}`;
+    // (live: from the very sub-frame on screen, after an @: 'walkStop~walk~1@7.25')
+    if (clip && animInfo(clip, this.id).phased) clip = lv?.shownAt(this.anim) !== undefined ? `${clip}~${this.anim}@${lv.shownAt(this.anim)}` : `${clip}~${this.anim}.${this.frameIndex()}`;
     const prev = this.anim;
     this.anim = clip ?? anim;
     if (clip) this.trans = { to: anim, from };
@@ -480,6 +557,9 @@ export class Actor implements Drawable {
       if (this.onStage && this.visible && !this.once && TURN_BASE.has(clipBase(this.anim)) && this.holdFrame === null && this.hasClip('turn')) {
         this.turnFace = this.lastFacing;
         this.layIt('turn', [{ anim: 'turn', loop: false }]);
+        // (live: a turn round is on the spot, from the stance and back into it: whatever stride or stop
+        // was under way gives way to standing, so no stride is mirrored under it)
+        if (this.live && this.anim !== this.idleAnim && !STANCE.has(this.anim)) { this.anim = this.idleAnim; this.trans = null; this.animT = 0; }
         this.blinking = Math.max(this.blinking, 0.1);
       }
       this.lastFacing = this.facing;
@@ -564,18 +644,36 @@ export class Actor implements Drawable {
   update(dt: number, st?: Stage) {
     // locomotion clips advance by distance travelled, so planted feet (and hands on a ladder) never skate
     const inf = animInfo(this.anim, this.id) as { frames: number; fps: number; dist?: number };
-    const moved = Number.isFinite(this.lastPX) ? Math.min(12, Math.hypot(this.x - this.lastPX, this.y - this.lastPY)) : 0;
+    const lv = this.live;
+    // (live: along the ground only, the feet are set on the slope separately)
+    const moved = Number.isFinite(this.lastPX) ? Math.min(12, lv ? Math.abs(this.x - this.lastPX) : Math.hypot(this.x - this.lastPX, this.y - this.lastPY)) : 0;
     this.lastPX = this.x; this.lastPY = this.y;
+    const ph0 = (this.animT * inf.fps) / inf.frames;
     // (setting off is distance-driven too: the planted foot stays put as the body moves over it)
-    if (inf.dist && !this.once) this.animT += moved > 0.02 ? (moved / inf.dist) * (inf.frames / inf.fps) : dt * 0.25;
+    // (live, the feet don't tread on the spot while he stands still in the walk)
+    if (inf.dist && !this.once) this.animT += moved > 0.02 ? (moved / inf.dist) * (inf.frames / inf.fps) : lv ? 0 : dt * 0.25;
     else this.animT += dt;
+    // live: the walk's pace follows his speed, changed only at mid-stance (see LiveBody.latch)
+    if (lv) {
+      const walking = clipBase(this.anim) === 'walk' && !this.once && !this.trans;
+      const ph1 = (this.animT * inf.fps) / inf.frames;
+      // (not while setting off: that heads for the walk at the pace it started for)
+      if (lv.latch(walking, clipBase(this.anim) === 'walkStart', ph0 - Math.floor(ph0), ph1 - Math.floor(ph1)) && walking) this.anim = lv.walkClip();
+    }
     // posture transition finished: continue into the target anim
     if (this.trans) {
       const info = animInfo(this.anim, this.id);
-      if (this.animT >= info.frames / info.fps) {
+      // (a distance-driven one, setting off, ends on its last frame: that pose is where the walk begins)
+      const end = (info.dist ? info.frames - 1 : info.frames) / info.fps;
+      if (this.animT >= end) {
+        // (the distance it covered past its end carries on into the walk's stride, so no step is lost)
+        const over = info.dist ? ((this.animT - end) / (info.frames / info.fps)) * info.dist : 0;
         this.anim = this.trans.to;
         this.trans = null;
-        this.animT = 0;
+        const ni = animInfo(this.anim, this.id);
+        this.animT = over > 0 && ni.dist ? (over / ni.dist) * (ni.frames / ni.fps) : 0;
+        // (a transition ends where the clip it leads to begins)
+        if (lv) lv.seamless = true;
       }
     }
     // one-shot completion
@@ -601,8 +699,20 @@ export class Actor implements Drawable {
         this.stopWalk();
         if (this.anim === this.mapped(this.walkAnim)) this.setAnim(this.idleAnim);
       } else {
-        this.facing = Math.sign(d);
-        this.vx = Math.sign(d) * this.walkSpeed;
+        // live: he speeds up into the walk and brakes into the spot (no instant start or stop); to go
+        // back the other way he stops first, turns round on the spot, then sets off
+        if (lv) {
+          const back = Math.sign(d) !== this.facing;
+          if (back && Math.abs(this.vx) > 5) this.vx = approach(this.vx, 0, 260 * dt);
+          else {
+            this.facing = Math.sign(d);
+            const go = this.layKind === 'turn' && !back ? 0 : Math.min(this.walkSpeed, Math.sqrt(2 * 240 * Math.abs(d)) + 6);
+            this.vx = approach(this.vx, Math.sign(d) * go, 200 * dt);
+          }
+        } else {
+          this.facing = Math.sign(d);
+          this.vx = Math.sign(d) * this.walkSpeed;
+        }
         this.x += this.vx * dt;
         if (Math.sign(this.walkX - this.x) !== Math.sign(d)) this.x = this.walkX;
         const wa = this.mapped(this.walkAnim);
@@ -659,6 +769,16 @@ export class Actor implements Drawable {
     }
     actorExt.update?.(this, dt);
     this.updateLay(dt);
+    if (lv) {
+      // live: never stretched as a sprite (his pixels stay square: the knees and the body take it),
+      // then the springs and the frame for this tick
+      this.sqx = 1; this.sqy = 1;
+      lv.budget = 2;
+      const standing = STANCE.has(this.anim) && this.walkX === null && !this.once && !this.trans && this.airVy === null && this.holdFrame === null;
+      lv.step(dt, { x: this.x, facing: this.facing, air: this.airVy, slope: this.slope, standing });
+      const fr = lv.pick(this.artId, this.liveClip());
+      if (fr) this.headLagY = lv.headLag(this.y + this.oy + this.hop + (fr.hy - fr.ay), fr.k ?? 1, dt);
+    }
     // idle life: now and then a fidget of their own (a weight shift, a glance back, a tug at a strap,
     // hair tucked behind an ear), or just a glance up or down
     if (this.glance) { this.glance.t -= dt; if (this.glance.t <= 0) this.glance = null; }
@@ -679,8 +799,7 @@ export class Actor implements Drawable {
     this.autoLook = lk;
     // hair: follows the body on a quick spring (trails back on the move, flicks past and settles on a stop)
     if (this.canLay) {
-      const [sa, sf] = this.shown();
-      const bc = bodyCache.get(`${this.artId}.${sa}.${sf}`);
+      const bc = this.bodyNow(false);
       const tgt = Math.max(bc?.hair ?? 0, Math.min(1.5, (moved / Math.max(dt, 1e-3)) / 80));
       const h = Math.min(dt, 0.05), w = 16, z = 0.42;
       this.hairV += (w * w * (tgt - this.hairX) - 2 * z * w * this.hairV) * h;
@@ -692,14 +811,35 @@ export class Actor implements Drawable {
     if (!spec) this.hairP = null;
     else {
       if (this.hairP?.spec !== spec) this.hairP = new HairPhys(spec);
-      const [sa, sf, f] = this.shown();
-      const bc = bodyCache.get(`${this.artId}.${sa}.${sf}`);
+      const f = this.shown()[2];
+      const bc = this.bodyNow(false);
       if (bc) {
         const hx = this.x + this.ox + f * (bc.hx - bc.ax) * this.sqx, hy = this.y + this.oy + this.hop + (bc.hy - bc.ay) * this.sqy;
         this.hairP.update(dt, hx, hy, f, { wind: st?.wind, bias: bc.hair });
       }
     }
     this.onStage = true;
+  }
+
+  /** live: where the sprite is drawn relative to x (the walk's frame phase), world px */
+  private get liveDX() { const lv = this.live; return lv ? lv.dx * this.shown()[2] : 0; }
+  /** the body frame on screen (live: the one drawn this tick); `render` false: only if already cached */
+  private bodyNow(render = true): BodyCache | null | undefined {
+    if (this.live) return this.live.frame;
+    const [sa, sf] = this.shown();
+    return render ? bodyFrame(this.artId, sa, sf) : bodyCache.get(`${this.artId}.${sa}.${sf}`);
+  }
+  /** live: the clip on screen at its continuous frame (laid-over clips included) */
+  private liveClip() {
+    if (this.lay.length && this.lay[0].anim && this.layOK()) {
+      const st = this.lay[0], info = animInfo(st.anim, this.id), f = this.layT * info.fps;
+      return { anim: st.anim, frame: st.loop ? f % info.frames : Math.min(info.frames - 1, f), frames: info.frames, fps: info.fps, loop: st.loop };
+    }
+    const info = animInfo(this.anim, this.id);
+    if (this.holdFrame !== null) return { anim: this.anim, frame: Math.min(info.frames - 1, this.holdFrame), frames: info.frames, fps: info.fps, loop: info.loop, hold: true };
+    // (in the air the pose follows the vertical speed, not a clock: motion7.airPose7)
+    const f = this.anim === 'jump' || this.anim === 'fall' ? 0 : this.animT * info.fps;
+    return { anim: this.anim, frame: info.loop ? f % info.frames : Math.min(info.frames - 1, f), frames: info.frames, fps: info.fps, loop: info.loop, dist: info.dist && !this.once ? info.dist : undefined };
   }
 
   private frameIndex() {
@@ -711,10 +851,9 @@ export class Actor implements Drawable {
 
   /** world position of the top of the head (for emotes and bubbles) */
   headTop(): [number, number] {
-    const [sa, sf] = this.shown();
-    const b = bodyFrame(this.artId, sa, sf);
+    const b = this.bodyNow();
     if (!b) return [this.x, this.y - 84 + this.hop];
-    const hx = this.x + this.ox + this.facing * (b.hx - b.ax) * this.sqx;
+    const hx = this.x + this.ox + this.liveDX + this.shown()[2] * (b.hx - b.ax) * this.sqx;
     const hy = this.y + this.oy + this.hop + (b.hy - b.ay) * this.sqy;
     const h = headFrame(this.artId, this.expr, 0, false, 'fwd');
     const top = h ? (b.hflip ? h.h - h.ay : h.ay) : 17;
@@ -784,10 +923,12 @@ export class Actor implements Drawable {
     void st;
     const [sa, fi, f] = this.shown();
     const art = this.artId;
-    const b = bodyFrame(art, sa, fi);
+    const lv = this.live;
+    const b = lv ? lv.frame : bodyFrame(art, sa, fi);
     const sh = this.shakeT > 0 ? Math.sin(this.shakeT * 70) * this.shakeAmp : 0;
     const tr = this.tremble > 0 ? (Math.floor(this.tremble * 30) % 2 ? 0.5 : -0.5) : 0;
-    const x = this.x + this.ox + sh + tr, y = this.y + this.oy + this.hop;
+    // (live: the walk's frame phase, so the planted foot holds its spot between steps)
+    const x = this.x + this.ox + sh + tr + (lv ? lv.dx * f : 0), y = this.y + this.oy + this.hop;
     const col = this.alpha < 1 ? packColor(((this.tint & 255) / 255), ((this.tint >>> 8) & 255) / 255, ((this.tint >>> 16) & 255) / 255, this.alpha) : this.tint;
     if (this.shadow && this.hop > -40) {
       r.beginShadows();
@@ -807,7 +948,7 @@ export class Actor implements Drawable {
     const hp = this.hairP;
     const hair = hp ? hp.swing : this.canLay ? clamp(Math.round(this.hairX * 2) / 2, -1, 2) : b.hair;
     const head = headFrame(art, expr, this.mouth, blink, lk, hair, hp ? hp.lift : 0);
-    const nod = this.nodT > 0 ? Math.sin((this.nodT / 0.35) * Math.PI) * 1.5 : 0;
+    const nod = (this.nodT > 0 ? Math.sin((this.nodT / 0.35) * Math.PI) * 1.5 : 0) + (lv ? this.headLagY : 0);
     const hx = x + f * (b.hx - b.ax) * this.sqx, hy = y + (b.hy - b.ay) * this.sqy + nod;
     const sx = f * this.sqx, sy = this.sqy;
     const hr = b.hrot * f;
@@ -848,19 +989,17 @@ export class Actor implements Drawable {
 
   /** A named point on the current frame ('handN', 'handF', a held object's 'cup', 'drip0'...) in world space. */
   point(name: string): [number, number] | null {
-    const [sa, sf] = this.shown();
-    const b = bodyFrame(this.artId, sa, sf);
+    const b = this.bodyNow();
     const p = b?.pts?.[name];
     if (!b || !p) return null;
-    return [this.x + this.ox + this.facing * (p[0] - b.ax) * this.sqx, this.y + this.oy + this.hop + (p[1] - b.ay) * this.sqy];
+    return [this.x + this.ox + this.liveDX + this.shown()[2] * (p[0] - b.ax) * this.sqx, this.y + this.oy + this.hop + (p[1] - b.ay) * this.sqy];
   }
 
   /** Hand position in world space (for held props & particles). */
   handPos(): [number, number] | null {
-    const [sa, sf] = this.shown();
-    const b = bodyFrame(this.artId, sa, sf);
+    const b = this.bodyNow();
     if (!b || !b.hand) return null;
-    return [this.x + this.ox + this.facing * (b.hand[0] - b.ax), this.y + this.oy + this.hop + (b.hand[1] - b.ay)];
+    return [this.x + this.ox + this.liveDX + this.shown()[2] * (b.hand[0] - b.ax), this.y + this.oy + this.hop + (b.hand[1] - b.ay)];
   }
 
   /** approach helper for smooth scripted movement */

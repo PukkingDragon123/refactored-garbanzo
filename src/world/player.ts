@@ -14,6 +14,14 @@ import { perks } from '../game/skills';
 import { climbFrame } from '../art/ladder';
 import { carrySpeedK } from '../game/v11/carry';
 
+/** ground acceleration and braking (px/s^2): about a step to get up to his walk, a short stop */
+const ACCEL = 190;
+const DECEL = 260;
+/** the jump's wind-up (s) */
+const JUMP_PREP = 0.075;
+/** the turn round on the spot (s): the turn clip's length */
+const TURN_HOLD = 0.2;
+
 export type PState = 'normal' | 'climb' | 'hide' | 'swim' | 'script' | 'stunned' | 'work';
 
 export interface HideSpot {
@@ -32,6 +40,10 @@ export class Player implements Drawable {
   facing = 1;
   onGround = true;
   private airT = 0;
+  /** the jump's wind-up (s left): the knees load, then he leaves the ground */
+  private jumpPrep = 0;
+  /** turning round (s left): he stays on the spot while the turn plays */
+  private turnHold = 0;
   private pendAnim = '';
   private pendT = 0;
   crouch = false;
@@ -152,8 +164,11 @@ export class Player implements Drawable {
     const inp = game.input;
     const canControl = this.control && !this.frozen && !game.ui.blocking && this.state !== 'script' && this.state !== 'work';
     let ax = canControl ? inp.axisX() : 0;
+    let brake = Infinity;
     if (this.state === 'script' && this.scriptTarget !== null) {
       const d = this.scriptTarget - this.x;
+      // (he slows into the spot: no faster than he can stop in the distance left)
+      brake = Math.sqrt(2 * DECEL * Math.abs(d)) + 4;
       // arrive when this frame's step would carry us past it (low frame rates would otherwise oscillate forever)
       if (Math.abs(d) < Math.max(2, Math.abs(this.vx) * dt * 1.1)) {
         this.vx = 0;
@@ -269,16 +284,24 @@ export class Player implements Drawable {
     // V12: no sprint, no rush. Mori walks everywhere (scripted moves can still hurry him along)
     this.running = false;
     const speed = (this.state === 'script' ? this.scriptSpeed : this.camera ? 28 : this.crouch ? 26 : 60) * this.speedK * this.wadeK * (this.state === 'script' ? 1 : this.loadK * carrySpeedK(this.body));
-    let target = ax * speed;
+    this.turnHold = Math.max(0, this.turnHold - dt);
+    let target = this.turnHold > 0 ? 0 : ax * Math.min(speed, brake);
     // dizzy: he veers, stalls and staggers a step on his own (facing still follows the keys)
     if (this.dizzy > 0 && canControl) {
       const w = Math.sin(this.t * 1.3) * 0.6 + Math.sin(this.t * 3.7 + 1) * 0.4;
       target = ax ? target + w * 0.9 * this.dizzy * speed : Math.abs(w) > 0.72 ? Math.sign(w) * 0.45 * this.dizzy * speed : 0;
     }
-    this.vx = approach(this.vx, target, (this.onGround ? 640 : 280) * dt);
+    // momentum (V12, user: "realistic, physics based"): he takes a step or so to get up to pace and
+    // brakes over a short distance; turning round, he stops first, then sets off the other way
+    const speeding = Math.sign(target) === Math.sign(this.vx) && Math.abs(target) > Math.abs(this.vx);
+    this.vx = approach(this.vx, target, (this.onGround ? (speeding || this.vx === 0 ? ACCEL : DECEL) : 280) * dt);
     // sliding on a tilted deck
     if (this.onGround && Math.abs(this.tilt) > 0.03) this.vx += Math.sin(this.tilt) * 520 * dt * (this.crouch ? 0.35 : 1);
-    if (ax !== 0 && !this.camera) this.facing = ax;
+    if (ax !== 0 && !this.camera && (Math.sign(this.vx) === ax || Math.abs(this.vx) < 5 || !this.onGround) && this.facing !== ax) {
+      this.facing = ax;
+      // (live: he turns round on the spot, the weight going over onto the new way, before he sets off)
+      if (this.onGround && this.body.live) this.turnHold = TURN_HOLD;
+    }
 
     // climbing grab (down from the top of a ladder / hatch)
     if (canControl && inp.hit('down') && this.onGround && !this.camera) {
@@ -303,17 +326,20 @@ export class Player implements Drawable {
       }
     }
     // jump / drop through
-    if (canControl && inp.hit('jump') && this.onGround && !this.camera) {
+    if (canControl && inp.hit('jump') && this.onGround && !this.camera && this.jumpPrep <= 0) {
       if (this.crouch && this.surface?.oneWay) {
         this.dropT = 0.35;
         this.onGround = false;
         this.y += 2;
-      } else {
-        this.vy = -138;
-        this.onGround = false;
-        this.body.react('stretch');
-        audio.play('jump', { vol: 0.5 });
-      }
+      } else if (this.body.live) {
+        // a live body winds up first: the knees load for a beat, then he springs off them
+        this.jumpPrep = JUMP_PREP;
+        this.body.windUp(0.5, JUMP_PREP);
+      } else this.takeOff();
+    }
+    if (this.jumpPrep > 0) {
+      this.jumpPrep -= dt;
+      if (this.jumpPrep <= 0) { if (this.onGround) this.takeOff(); this.jumpPrep = 0; }
     }
 
     // integrate
@@ -344,6 +370,8 @@ export class Player implements Drawable {
         if (s && ny >= s.y) {
           this.y = s.y;
           if (this.vy > 150) { audio.play('land', { vol: 0.6 }); st.shake(1, 0.15); this.body.react('land'); }
+          // the knees take it, deeper the further he fell
+          if (this.vy > 40) this.body.landed(this.vy);
           this.vy = 0;
           this.onGround = true;
           this.surface = s.s;
@@ -389,6 +417,13 @@ export class Player implements Drawable {
     this.syncBody(dt);
   }
 
+  private takeOff() {
+    this.vy = -138;
+    this.onGround = false;
+    this.body.react('stretch');
+    audio.play('jump', { vol: 0.5 });
+  }
+
   private updateSwim(dt: number, canControl: boolean) {
     const inp = game.input;
     const ax = canControl ? inp.axisX() : 0;
@@ -424,6 +459,13 @@ export class Player implements Drawable {
     if (this.poseOverride && this.poseFrame !== null) b.holdFrame = this.poseFrame;
     b.alpha = (this.state === 'hide' ? 0.6 : 1) * this.alpha * (this.hurtT > 0 && Math.floor(this.hurtT * 12) % 2 === 0 ? 0.35 : 1);
     b.shadow = !this.underwater && this.onGround;
+    // the live body's physics: the vertical speed in the air, the slope of the ground under his feet
+    b.airVy = this.onGround || this.state === 'climb' || this.underwater ? null : this.vy;
+    b.slope = 0;
+    if (this.onGround && this.surface && this.state !== 'climb') {
+      const ya = Terrain.yAt(this.surface, this.x + 4 * this.facing), yb = Terrain.yAt(this.surface, this.x - 4 * this.facing);
+      if (ya !== null && yb !== null) b.slope = clamp((yb - ya) / 8, -0.6, 0.6);
+    }
     b.update(dt);
   }
 

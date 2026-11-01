@@ -12,6 +12,8 @@ import { renderHead7, HeadOpts7, hairDyn7 } from './head';
 import type { HairSpec } from '../../world/hairphys';
 import { CAST7, INFO7 } from './cast';
 import { ANIMS7, pose7, animInfo7, clip7, framesOf7 } from './anims7';
+import { applyMotion7, airPose7, Motion7 } from './motion7';
+import type { Pose } from '../people-rig';
 import { IDLE_VARIETY } from './anims-acts';
 // clips registered beside the core set: secondary motion for the everyday clips, hands and carrying
 import './anims-life';
@@ -29,6 +31,8 @@ import { CHUNK_ANIMS, renderChunkBody, renderChunkHead } from '../anime/chunk';
 import { renderAnimePortrait, PORTRAIT_EXPRS } from '../anime/portraits';
 
 export { PORTRAIT_EXPRS, OUTFIT_NAMES, outfitOf, setOutfit, wardrobeVersion };
+export { quantMotion7, motionKey7 } from './motion7';
+export type { Motion7 };
 export type { AnimInfo };
 export const OUTFITS: string[] = [...OUTFIT_NAMES];
 
@@ -88,7 +92,9 @@ tr(['slingReady', 'slingAim', 'slingRelease', 'slingshot'], ['idle', 'walk', 'ru
 tr(['idle', 'walk', 'run', 'slingReady', 'crouch'], ['slingAim'], 'slingDraw');
 export function transitionFor(id: string, from: string, to: string): string | null {
   if (parse(id)[0] === 'chunk') return CHUNK_TRANS[from]?.[to] ?? null;
-  return TRANS7[from]?.[to] ?? TRANSITIONS[from]?.[to] ?? null;
+  // (a walk at a pace, 'walk~0.5', is still the walk: setting off into it, stopping out of it)
+  const vb = (a: string) => (a.startsWith('walk~') ? 'walk' : a);
+  return TRANS7[vb(from)]?.[vb(to)] ?? TRANSITIONS[from]?.[to] ?? null;
 }
 
 const cache = new Map<string, Frame7>();
@@ -114,6 +120,37 @@ export function renderBody(id: string, anim: string, frame: number): Frame7 {
   cache.set(key, out);
   return out;
 }
+
+/**
+ * Live rendering (the player, src/world/livebody.ts): a body drawn at any fractional frame of a clip,
+ * with a physical motion laid over it (motion7.ts) and optionally crossfading in from another clip's
+ * frame. Not cached here: the caller keeps its own bounded store of the frames it draws.
+ */
+export function renderLive(id: string, anim: string, frame: number, mo: Motion7 = {}, from?: { anim: string; frame: number; u: number; mo?: Motion7 }): Frame7 {
+  const [cid, outfit] = parse(id);
+  const ch = restyle7(dress(cid, outfit).ch);
+  const b = ch.build;
+  const at = (a: string, f: number, m: Motion7): Pose => {
+    const c = clip7(a) ? a : 'idle';
+    if (c === 'jump' || c === 'fall') return airPose7(b, m.air ?? (c === 'jump' ? -0.5 : 0.75));
+    const n = framesOf7(cid, c), info = clip7(c)!;
+    // ladder clips take their frame as a place on the ladder (whole frames only)
+    const ff = c === 'climb' || c === 'climbIdle' || c === 'carryPupClimb' ? Math.round(f) : f;
+    return pose7(cid, c, b, info.loop ? ((ff % n) + n) % n : Math.max(0, Math.min(n - 1, ff)));
+  };
+  const to = applyMotion7(b, at(anim, frame, mo), mo);
+  // (the pose it blends from is drawn as it was on screen, with the motion it had then)
+  const fm = from?.mo ?? mo;
+  const pose = from && from.u < 1 ? { ...to, mix: { a: applyMotion7(b, at(from.anim, from.frame, fm), fm), p: to, u: from.u } } : to;
+  const out = renderBody7(ch, pose);
+  const a = clipBase(anim);
+  out.hair = pose.flags?.hair !== undefined ? pose.flags.hair : a === 'run' || a === 'carryPupRun' ? ((pose.sway ?? 0) > 0.4 ? 2 : 1) : (pose.sway ?? 0) > 0.75 ? 1 : 0;
+  return out;
+}
+const clipBase = (a: string) => { const i = a.indexOf('~'); return i < 0 ? a : a.slice(0, i); };
+/** the characters drawn live (continuous, physical motion): the player */
+export const LIVE_IDS = new Set(['mori']);
+export const isLive = (id: string) => LIVE_IDS.has(parse(id)[0]);
 
 /**
  * The hair spring's tuning for a character whose head (as dressed) has physics locks (twin tails), or
