@@ -8,6 +8,7 @@
 // jump to a section (riffling through the pages between), the ribbon marks the tracked quest, and a
 // pen, a pencil and an eraser stand in the spine: take one to draw on any page.
 
+import { FIRST_PERSON_HANDS } from '../closeup/hands';
 import { game } from '../../../game/game';
 import { guardInput } from '../../../core/input';
 import { pushKeys } from '../../laptop-kit';
@@ -566,8 +567,8 @@ class Notebook {
       const px = this.spread && s % 2 === 0 ? spine - PW : spine;
       this.drawHeld(this.penAt.tool === 'pencil' ? 'pencil' : 'pen', px + this.penAt.x, top + this.penAt.y, 0);
     }
-    // Mori's hands
-    this.drawHands(leftOpen ? bx0 : spine - 1, bx1, by1, shut);
+    // (Mori's hands holding the book are never drawn: no first-person hands, user rule)
+    if (FIRST_PERSON_HANDS) this.drawHands(leftOpen ? bx0 : spine - 1, bx1, by1, shut);
     // the tool in hand follows the pointer
     if (this.tool && this.ptr && this.phase === 'open') this.drawHeld(this.tool, this.ptr[0], this.ptr[1], this.stroke ? 0 : 2);
     if (this.hint) {
