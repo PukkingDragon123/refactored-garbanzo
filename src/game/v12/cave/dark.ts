@@ -113,7 +113,7 @@ export class Darkness {
 
 // ------------------------------------------------------------------ Mori's storm lantern
 export type LampMode = 'bright' | 'dim' | 'pole';
-export const LAMP = { mode: 'bright' as LampMode, R: 104, dimR: 40, k: 1, auto: false };
+export const LAMP = { mode: 'bright' as LampMode, R: 104, dimR: 56, k: 1, auto: false };
 export const lampR = () => (LAMP.mode === 'bright' ? LAMP.R : LAMP.mode === 'dim' ? LAMP.dimR : 0);
 export const lampBright = () => LAMP.mode === 'bright';
 
@@ -149,7 +149,7 @@ const clamp3 = (v: number) => Math.max(0, Math.min(3, v));
 export function drawLanternGlow(r: Renderer, x: number, y: number, mode: LampMode | 'pole', t: number) {
   const f = 0.92 + Math.sin(t * 13) * 0.05 + Math.sin(t * 29) * 0.03;
   const big = mode !== 'dim';
-  r.light(x, y + 6, big ? 230 : 90, 1, 0.78, 0.5, (big ? 1.05 : 0.55) * f, 0.05);
+  r.light(x, y + 6, big ? 230 : 90, 1, 0.8, 0.56, (big ? 0.68 : 0.42) * f, 0);
   r.fxRect(x - 1, y + 5, 3, 3, packColor(1, 0.86, 0.5, 1), big ? 1.6 * f : 0.8, true);
   r.fxRect(x, y + 6, 1, 1, packColor(1, 1, 0.9, 1), 2.2 * f, true);
   void game;

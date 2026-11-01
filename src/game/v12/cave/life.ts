@@ -133,7 +133,7 @@ export function attachLife(f: FieldScene, run: CaveRuntime) {
 
   // ---- dev points: the Gulper already drawn to the shore, the lantern already on the pole
   if (game.save.flags['dev:gulperNow']) { delete game.save.flags['dev:gulperNow']; setTimeout(() => { const g = gulper(); if (g) { caveKeep(g).interest = 1.2; g.x = 1100; } }, 400); }
-  if (game.save.flags['dev:gulperPole']) { delete game.save.flags['dev:gulperPole']; LAMP.mode = 'pole'; setTimeout(() => { const g = gulper(); if (g) { caveKeep(g).interest = 1.2; g.x = 1000; } p.crouch = true; }, 400); }
+  if (game.save.flags['dev:gulperPole']) { delete game.save.flags['dev:gulperPole']; LAMP.mode = 'pole'; setTimeout(() => { const g = gulper(); if (g) { caveKeep(g).interest = 1.2; g.x = 1000; } const h = run.hides[0]; if (h) { p.x = h.x; p.state = 'hide'; (p as unknown as { hideSpot: unknown }).hideSpot = h; } }, 400); }
   if (game.save.flags['dev:caveDim']) { delete game.save.flags['dev:caveDim']; LAMP.mode = 'dim'; LAMP.auto = false; }
 
   // ---- the caver's pole: hang the lantern on it, or take it down
@@ -241,7 +241,8 @@ export function attachLife(f: FieldScene, run: CaveRuntime) {
   let waded = false, splashT = 0;
   f.main.add(new Custom(0, () => {}, dt => {
     if (game.scene !== f || !(dt > 0)) return;
-    const calm = LAMP.mode !== 'bright' && Math.abs(p.vx) < 5 && (p.crouch || p.state === 'hide' || LAMP.mode === 'pole' || !p.onGround === false);
+    // (still, with the lantern shuttered or hung on the pole: the cave forgets him)
+    const calm = LAMP.mode !== 'bright' && Math.abs(p.vx) < 5 && (p.onGround || p.state === 'hide');
     CAVE_CTX.calmT = calm ? CAVE_CTX.calmT + dt : Math.max(0, CAVE_CTX.calmT - dt * 3);
     if (bait) { bait.life -= dt; if (bait.life <= 0) bait = null; }
     // the lake
@@ -275,6 +276,7 @@ export function attachLife(f: FieldScene, run: CaveRuntime) {
   run.extra.push(() => {
     const g = gulper();
     if (!g || g.y > LAKE.top + 80) return null;
-    return { x: g.x - g.facing * 100, y: LAKE.top - 16, r: 76, k: 0.56 };
+    const open = g.act === 'gape' || g.act === 'gapeHold' || g.act === 'gulp';
+    return { x: g.x + g.facing * (open ? 86 : 70), y: LAKE.top - (open ? 30 : 12), r: open ? 92 : 70, k: open ? 0.62 : 0.52 };
   });
 }

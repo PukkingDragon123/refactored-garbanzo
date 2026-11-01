@@ -154,14 +154,14 @@ export class Glowworms {
   update(dt: number) { this.t += dt; }
   draw(r: Renderer) {
     const vx0 = r.wx(0) - 30, vx1 = r.wx(r.VW) + 30, vy0 = r.wy(0) - 30, vy1 = r.wy(r.VH) + 30;
-    const silk = P(0.62, 0.7, 0.74, 0.55);
+    const silk = P(0.62, 0.7, 0.74, 0.32);
     for (const c of this.clusters) {
       if (c.x < vx0 || c.x > vx1 || c.y < vy0 || c.y > vy1) continue;
       for (const w of c.worms) {
         const x = Math.round(c.x + w.dx), sway = Math.round(Math.sin(this.t * 0.6 + w.ph) * 0.6);
         r.rect(x + sway, c.y + 2, 1, w.len, silk);
         // the beads of glue down the thread catch the light
-        for (let y = 4; y < w.len; y += 3) r.fxRect(x + sway, c.y + 2 + y, 1, 1, P(0.5, 0.85, 1, 1), 0.35 + 0.15 * Math.sin(this.t * 2 + w.ph + y), true);
+        for (let y = 3 + (Math.round(w.ph * 3) % 3); y < w.len; y += 4) r.fxRect(x + sway, c.y + 2 + y, 1, 1, P(0.5, 0.85, 1, 1), 0.22 + 0.12 * Math.sin(this.t * 2 + w.ph + y), true);
         // the larva at the top: the light
         const k = 0.75 + 0.25 * Math.sin(this.t * 0.9 + w.ph);
         r.fxRect(x, c.y + 1, 1, 1, P(0.45, 1, 0.9, 1), 2.4 * k, true);

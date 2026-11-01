@@ -184,53 +184,70 @@ const FLOW = ['#2a1a10', '#4a3020', '#6e4a30', '#946a44', '#b88e5e', '#d4ae7c', 
 /** a stalactite hanging from (ax, 0): a lumpy tapering cone, wet, ringed, a drip at the tip */
 export function paintStalactite(seed: number, len: number, wid: number): Sprite {
   const r = new Rng(seed);
-  const w = Math.ceil(wid) + 6, h = len + 4;
+  const w = Math.ceil(wid * 1.6) + 8, h = len + 4;
   const b = new PixelBuffer(w, h);
   const cx = w / 2 + r.range(-1, 1);
-  const lean = r.range(-0.08, 0.08);
+  const lean = r.range(-0.1, 0.1);
   const ramp = r.chance(0.4) ? FLOW : STONE;
+  // a soda straw tip on some: a thin tube hanging out of the cone
+  const straw = r.chance(0.4) ? Math.round(len * r.range(0.12, 0.25)) : 0;
+  const body = len - straw;
   for (let y = 0; y < len; y++) {
-    const t = y / len;
-    const half = (wid / 2) * Math.pow(1 - t, 0.85) * (1 + (noise1(y / 3.5, seed) - 0.5) * 0.5) + (t > 0.9 ? 0.3 : 0.6);
-    const mx = cx + lean * y + (noise1(y / 9, seed + 1) - 0.5) * 1.5;
-    for (let x = Math.floor(mx - half); x <= Math.ceil(mx + half); x++) {
-      const u = (x + 0.5 - mx) / Math.max(0.6, half);
+    const t = Math.min(1, y / Math.max(1, body));
+    // the root flares into the roof; the cone narrows in lumps (drapery rings), each edge its own
+    let half = (wid / 2) * Math.pow(1 - t, 0.8) * (1 + Math.sin(y * 0.55 + seed) * 0.12) + (t < 0.15 ? (0.15 - t) * wid * 1.6 : 0);
+    if (y >= body) half = 0.6;
+    const hl = half * (1 + (noise1(y / 4.5, seed + 2) - 0.5) * 0.7), hr = half * (1 + (noise1(y / 5.2, seed + 3) - 0.5) * 0.7);
+    const mx = cx + lean * y + (noise1(y / 9, seed + 1) - 0.5) * 2;
+    for (let x = Math.floor(mx - hl - 0.5); x <= Math.ceil(mx + hr + 0.5); x++) {
+      const fx = x + 0.5 - mx;
+      const u = fx < 0 ? fx / Math.max(0.6, hl) : fx / Math.max(0.6, hr);
       if (Math.abs(u) > 1) continue;
-      let l = 0.62 - u * 0.42 - t * 0.12 + (Math.sin(y * 0.9 + seed) > 0.8 ? 0.12 : 0) + (bayer(x, y) - 0.5) * 0.18;
-      if (Math.abs(u) > 0.82) l -= 0.18;
+      let l = 0.6 - u * 0.42 - t * 0.1 + (Math.sin(y * 0.55 + seed) > 0.7 ? 0.12 : 0) + (bayer(x, y) - 0.5) * 0.2;
+      if (Math.abs(u) > 0.8) l -= 0.18;
+      if (y >= body) l = 0.75;
       b.set(x, y, ramp[clamp(Math.round(l * (ramp.length - 1)), 0, ramp.length - 1)]);
     }
   }
-  // the wet shine down the lit side and the drip
-  for (let y = 2; y < len - 3; y += 1) if (noise1(y / 4, seed + 3) > 0.45) b.set(Math.round(cx + lean * y - wid * 0.18 * (1 - y / len)), y, mix(ramp[ramp.length - 1], WET, 0.3));
+  // the wet shine down the lit side, and a drip at the tip
+  for (let y = 2; y < body - 2; y += 1) if (noise1(y / 4, seed + 3) > 0.45) b.set(Math.round(cx + lean * y - wid * 0.2 * (1 - y / body)), y, mix(ramp[ramp.length - 1], WET, 0.3));
   b.set(Math.round(cx + lean * len), len, H('#a8c4d0'));
   b.set(Math.round(cx + lean * len), len + 1, H('#6a8a9a'));
   b.outline(H('#07060a'));
   return S(b, Math.round(cx), 0);
 }
 
-/** a stalagmite growing up to (ax, ay): a fat lumpy cone with a splash-cup top and growth rings */
+/** a stalagmite growing up to (ax, ay): a lumpy column, broad at its foot where it spreads over the
+ *  floor, a rounded wet top with a splash cup, growth rings like a stack of melted candles */
 export function paintStalagmite(seed: number, hgt: number, wid: number): Sprite {
   const r = new Rng(seed);
-  const w = Math.ceil(wid) + 8, h = hgt + 2;
+  const w = Math.ceil(wid * 1.8) + 8, h = hgt + 2;
   const b = new PixelBuffer(w, h);
   const cx = w / 2 + r.range(-1, 1), ramp = r.chance(0.5) ? FLOW : STONE;
+  const lean = r.range(-0.08, 0.08);
   for (let y = 0; y < hgt; y++) {
-    const t = 1 - y / hgt; // 1 at the base
-    const half = (wid / 2) * (0.22 + 0.78 * Math.pow(t, 0.7)) * (1 + (noise1(y / 4, seed) - 0.5) * 0.4) + (t > 0.92 ? (t - 0.92) * 30 : 0);
-    const mx = cx + (noise1(y / 11, seed + 1) - 0.5) * 2;
-    for (let x = Math.floor(mx - half); x <= Math.ceil(mx + half); x++) {
-      const u = (x + 0.5 - mx) / Math.max(0.6, half);
+    const t = y / Math.max(1, hgt - 1); // 0 at the top, 1 at the foot
+    let half = (wid / 2) * (0.3 + 0.7 * Math.pow(t, 0.7)) * (1 + Math.sin(y * 0.42 + seed) * 0.14) + (t > 0.82 ? (t - 0.82) * wid * 2.2 : 0);
+    // the rounded top
+    if (y < 3) half *= [0.45, 0.75, 0.9][y];
+    const hl = half * (1 + (noise1(y / 5, seed + 2) - 0.5) * 0.6), hr = half * (1 + (noise1(y / 4.4, seed + 3) - 0.5) * 0.6);
+    const mx = cx + lean * (hgt - y) + (noise1(y / 10, seed + 1) - 0.5) * 2;
+    for (let x = Math.floor(mx - hl - 0.5); x <= Math.ceil(mx + hr + 0.5); x++) {
+      const fx = x + 0.5 - mx;
+      const u = fx < 0 ? fx / Math.max(0.6, hl) : fx / Math.max(0.6, hr);
       if (Math.abs(u) > 1) continue;
-      let l = 0.6 - u * 0.4 + (1 - t) * 0.12 + (Math.sin(y * 0.7 + seed) > 0.75 ? 0.14 : 0) + (bayer(x, y) - 0.5) * 0.2;
-      if (Math.abs(u) > 0.84) l -= 0.2;
+      // growth rings: bands that sag at the edges like melted wax
+      const ring = Math.sin((y + u * u * 3) * 0.55 + seed);
+      let l = 0.58 - u * 0.4 + (1 - t) * 0.12 + (ring > 0.75 ? 0.13 : ring < -0.85 ? -0.1 : 0) + (bayer(x, y) - 0.5) * 0.2;
+      if (Math.abs(u) > 0.82) l -= 0.18;
       b.set(x, y, ramp[clamp(Math.round(l * (ramp.length - 1)), 0, ramp.length - 1)]);
     }
   }
-  // the splash cup on top
-  b.set(Math.round(cx), 0, ramp[ramp.length - 1]);
-  b.set(Math.round(cx) - 1, 1, ramp[ramp.length - 2]);
-  b.set(Math.round(cx) + 1, 1, ramp[2]);
+  // the splash cup and its wet shine
+  const tx = Math.round(cx + lean * hgt);
+  b.set(tx, 0, ramp[ramp.length - 1]);
+  b.set(tx, 1, H('#2a2a30'));
+  b.set(tx - 1, 1, ramp[ramp.length - 2]);
   b.outline(H('#07060a'));
   return S(b, Math.round(cx), hgt - 1);
 }
@@ -347,23 +364,35 @@ export function paintShelf(seed: number, w: number, th: number): Sprite & { top:
   return Object.assign(S(b, 3, 2), { top: (x: number) => tops[clamp(Math.round(x + 3), 0, tops.length - 1)] - 2 });
 }
 
-/** a boulder fallen from the roof: an irregular hand-shaped block, cracked, a lit top and a dark heel */
+/** a boulder fallen from the roof: a chipped block of limestone, every broken face its own tone (lit
+ *  from the top left), dark cracks where the faces meet, a bedding line across it, a flat heel */
 export function paintBoulder(seed: number, w: number, hgt: number): Sprite {
   const b = new PixelBuffer(w + 4, hgt + 4);
   const r = new Rng(seed);
-  // the silhouette: a few flat facets round a lopsided body
-  const facets = Array.from({ length: 7 }, (_, i) => ({ a: (i / 7) * Math.PI * 2 + r.range(-0.3, 0.3), k: r.range(0.82, 1) }));
-  const cx = (w + 4) / 2, cy = hgt * 0.62 + 2;
+  // the faces: planes cut round a lopsided body (big flat ones and a few small chips)
+  const n = 6 + r.int(0, 3);
+  const faces = Array.from({ length: n }, (_, i) => ({ a: (i / n) * Math.PI * 2 + r.range(-0.35, 0.35), k: r.range(0.66, 1), t: r.range(-0.12, 0.12) }));
+  faces.push({ a: Math.PI / 2, k: 0.62, t: 0 }); // the flat heel it sits on
+  const cx = (w + 4) / 2 + r.range(-2, 2), cy = hgt * 0.6 + 2;
   for (let y = 0; y < hgt + 4; y++) for (let x = 0; x < w + 4; x++) {
     const dx = (x + 0.5 - cx) / (w / 2), dy = (y + 0.5 - cy) / (hgt * 0.62);
-    const a = Math.atan2(dy, dx);
-    let rr = 1;
-    for (const f of facets) rr = Math.min(rr, f.k / Math.max(0.2, Math.cos(a - f.a)));
-    const d = Math.hypot(dx, dy);
-    if (d > rr || y > hgt + 1) continue;
-    let l = 0.5 - dx * 0.3 - dy * 0.42 + (noise2(x / 5, y / 5, seed) - 0.5) * 0.4 + (bayer(x, y) - 0.5) * 0.2;
-    if (d > rr - 0.12) l -= 0.15;
-    if (Math.abs(noise2(x / 9, y / 9, seed + 3) - 0.5) < 0.02) l -= 0.35;
+    // the binding plane (and how close the next one is: a crack where two faces meet)
+    let best = 1e9, second = 1e9, bf = faces[0];
+    for (const f of faces) {
+      const d = (dx * Math.cos(f.a) + dy * Math.sin(f.a)) / f.k;
+      const m = 1 - d;
+      if (m < best) { second = best; best = m; bf = f; } else if (m < second) second = m;
+    }
+    if (best < 0) continue;
+    // each face lit by where it points, its own grain, a bedding line across the whole block
+    // (the chipped faces round the rim; inside, the block's broad shoulder catching the light)
+    const rim = best < 0.3;
+    let l = (rim ? 0.52 - Math.cos(bf.a + 0.9) * 0.28 + bf.t : 0.6 - dx * 0.22 - dy * 0.3) + (noise2(x / 4, y / 4, seed) - 0.5) * 0.22 + (bayer(x, y) - 0.5) * 0.18;
+    if (rim && second - best < 0.035) l -= 0.3;
+    else if (best < 0.05) l -= 0.12;
+    if (Math.abs(noise2(x / 9, y / 7, seed + 3) - 0.5) < 0.018) l -= 0.3;
+    if (Math.abs(y - cy + 2 + Math.sin(x * 0.3 + seed) * 1.5) < 0.6 && best > 0.1) l -= 0.18;
+    if (hash2(x, y, seed) > 0.96) l += 0.15;
     b.set(x, y, STONE[clamp(Math.round(l * 9), 0, 9)]);
   }
   b.outline(H('#07060a'));

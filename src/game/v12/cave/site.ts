@@ -327,6 +327,8 @@ export function buildCave(f: FieldScene): CaveRuntime {
   for (const x of [700, 1040, 1320, 1600, 1840]) gw(x, roofAt('t1', x), 10, 22);
   for (const x of [200, 380, 1500, 1700, 2000]) gw(x, roofAt('t2', x), 8);
   for (let x = 820; x < 2260; x += rng.range(90, 160)) gw(x, roofAt('t3', x), 12, 22);
+  // (a colony over every pool: the water and what lives in it sit in their faint blue light)
+  for (const q of POOLS) { const mx = (q.x0 + q.x1) / 2; const c = gw(mx, roofAt(q.tier, mx), 16, (q.x1 - q.x0) * 0.35); c.light.y = poolTop(q) - 6; c.light.r = (q.x1 - q.x0) * 0.62; c.light.k = 0.5; }
   // the glowworm sky over the lake
   const lakeRoof = HOLES[HOLES.length - 1].top;
   for (let x = 440; x < 2360; x += rng.range(34, 70)) gw(x, Math.round(lakeRoof(x)) + 6, 10 + rng.int(0, 10), 26);

@@ -11,9 +11,9 @@ import { runCloseup } from './stage';
 import type { Closeup, SetScene, CloseupResult } from './stage';
 import { PixelBuffer, hex, mix, rd, ramp, dith, hash, vnoise, clamp, clamp01, lerp, blit, shadowOval, pmap, up, area, ellipse, line, dot, Z } from './kit';
 import { drawHand } from './hands';
-import { BEETLE, BEETLE_PAL, FROG, FROG_PAL, CRAB, CRAB_PAL, TOAD_PAL } from './sprites';
+import { BEETLE, BEETLE_PAL, FROG, FROG_PAL, CRAB, CRAB_PAL, TOAD_PAL, SAL, SAL_PAL } from './sprites';
 
-export type Critter = 'beetle' | 'frog' | 'crab' | 'toad';
+export type Critter = 'beetle' | 'frog' | 'crab' | 'toad' | 'sal';
 export interface CatchOpts { critter: Critter; item?: string; difficulty?: number; world?: [number, number] }
 
 const LITTER = [ramp('#3a1a0a', '#6a3414', '#9a5422', '#c47a34'), ramp('#2a2a0a', '#5a5414', '#8a7a24', '#b8a040'), ramp('#1a2a10', '#2e4a1a', '#4a6a24', '#6a8a34')];
@@ -22,6 +22,7 @@ export function critterFor(item?: string, itemKind?: string): Critter {
   const id = (item ?? '').toLowerCase();
   if (/crab|shell|pipi|mussel|whelk/.test(id) || itemKind === 'shell') return 'crab';
   if (/toad|embertox/.test(id)) return 'toad';
+  if (/salswab|blindsal|salamander/.test(id)) return 'sal';
   if (/frog|newt|lizard|skink|gecko/.test(id) || itemKind === 'animal') return 'frog';
   return 'beetle';
 }
@@ -36,12 +37,17 @@ export class CatchSet implements SetScene {
   // the hand: its shadow (target) and how high it is
   sx = 160; sy = 110; psx = 160; psy = 110; drop = 0; cupping = false; tries = 0; maxAlert = 0;
   t = 0; limit = 16; done = -1;
+  /** the set is the bed of a cave pool (the blind salamander) */
+  cave = false;
   constructor(readonly o: CatchOpts) {
-    const sets = { beetle: [BEETLE, BEETLE_PAL], frog: [FROG, FROG_PAL], crab: [CRAB, CRAB_PAL], toad: [FROG, TOAD_PAL] } as const;
+    const sets = { beetle: [BEETLE, BEETLE_PAL], frog: [FROG, FROG_PAL], crab: [CRAB, CRAB_PAL], toad: [FROG, TOAD_PAL], sal: [SAL, SAL_PAL] } as const;
     const [fr, pal] = sets[o.critter];
     this.frames = fr.map(rows => { const b = pmap(rows as unknown as string[], pal as unknown as Record<string, string>); return b; });
     // (V12 the ember toad: a frog in warning colours, and it behaves like one)
     if (o.critter === 'toad') this.o = { ...o, critter: 'frog' };
+    // (V12 the blind salamander: on the bed of a cave pool, creeping and darting like a beetle)
+    this.cave = o.critter === 'sal';
+    if (o.critter === 'sal') this.o = { ...o, critter: 'beetle' };
     this.limit = 18 - (o.difficulty ?? 0.5) * 5;
   }
 
@@ -57,6 +63,12 @@ export class CatchSet implements SetScene {
     area(bg, 0, 0, W, H, (u, v, x, y) => {
       // dappled light through the canopy, pooled in soft dithered patches
       const dapple = vnoise(u * 0.035, v * 0.05, 1);
+      if (this.cave) {
+        // the bed of a cave pool under the lantern: wet limestone pebbles, silt, the water's ripple light
+        const peb = vnoise(u * 0.32, v * 0.32, 8), rip = Math.sin(u * 0.21 + Math.sin(v * 0.17) * 2.6 + vnoise(u * 0.05, v * 0.05, 2) * 4);
+        const lamp = Math.max(0, 1 - Math.hypot(u - W * 0.45, v - H * 0.4) / (W * 0.62));
+        return rd(PAL.stone, 0.08 + lamp * 0.5 + (peb > 0.62 ? 0.16 : peb < 0.3 ? -0.08 : 0) + (rip > 0.86 ? 0.12 : 0), x, y);
+      }
       if (k === 'crab') {
         // the pool along the top, a foam line, then wet sand rippled by the tide
         const shore = 34 + Math.sin(u * 0.05) * 8 + Math.sin(u * 0.13) * 3 + vnoise(u * 0.2, 0, 2) * 2;
@@ -73,7 +85,7 @@ export class CatchSet implements SetScene {
       }
       return rd(PAL.soil, 0.32 + dapple * 0.4 + (vnoise(u * 1.1, v * 1.1, 7) - 0.5) * 0.25, x, y);
     });
-    if (k === 'beetle' || k === 'frog') {
+    if ((k === 'beetle' || k === 'frog') && !this.cave) {
       // fallen leaves: a pointed outline, a midrib and veins, a bite or two, curled edges
       const n = k === 'beetle' ? 70 : 22;
       for (let i = 0; i < n; i++) {
@@ -96,7 +108,7 @@ export class CatchSet implements SetScene {
     // stones and ferns round the edge
     for (let i = 0; i < 10; i++) {
       const a = i / 10 * Math.PI * 2, x = W / 2 + Math.cos(a) * (W / 2 - 10), y = H / 2 + Math.sin(a) * (H / 2 - 8);
-      if (k === 'frog' && i % 2) { const f = paintGroundFern(70 + i, 14 * Z, PAL.fern).buf; blit(bg, f, x - f.w / Z / 2, y - f.h / Z / 2); }
+      if (k === 'frog' && i % 2 && !this.cave) { const f = paintGroundFern(70 + i, 14 * Z, PAL.fern).buf; blit(bg, f, x - f.w / Z / 2, y - f.h / Z / 2); }
       else { const w = 12 + (i % 3) * 5, h = 8 + (i % 2) * 3; shadowOval(bg, x + w / 2 + 2, y + h, w / 2, 2); blit(bg, paintRock(140 + i, w * Z, h * Z, k === 'crab' ? PAL.stone : PAL.stoneWarm, k === 'crab' ? 0 : 0.5).buf, x, y); }
     }
     if (k === 'crab') for (let i = 0; i < 8; i++) {

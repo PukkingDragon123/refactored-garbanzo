@@ -172,6 +172,68 @@ export const TOAD_PAL: Record<string, string> = {
   o: '#1a0806', d: '#5a1a10', m: '#c84a14', l: '#e8701e', h: '#f8b040', y: '#f4d040', e: '#080404', w: '#f8e8a0', b: '#2a1210',
 };
 
+/** V12 the blind salamander of Te Rua Pōuri from above: a long pale pink eel of a body, a spade of a
+ *  snout, no eyes, three scarlet feathery gills each side, four tiny legs, the tail swinging */
+export const SAL_PAL: Record<string, string> = {
+  o: '#3a2026', d: '#b07478', m: '#dca09c', l: '#f2c8c0', h: '#fff2ee', r: '#d83848', R: '#ff98a2',
+};
+export const SAL = [
+  [
+    '.....ooo.....',
+    '....olhlo....',
+    '....lhhhl....',
+    '.R..lhhhl..R.',
+    'rRr.olhlo.rRr',
+    '.rRrolmlorRr.',
+    'rRr.olmlo.rRr',
+    '.r..olmlo..r.',
+    '..oolmmmloo..',
+    '.oo.lmmml.oo.',
+    'o...olmlo...o',
+    '....olmlo....',
+    '....olmlo....',
+    '....olmmo....',
+    '....olmmo....',
+    '...oolmmoo...',
+    '..oo.lmmo.oo.',
+    '.o...olmo...o',
+    '.....olmo....',
+    '.....olmo....',
+    '......lmo....',
+    '......lmo....',
+    '.......mo....',
+    '.......mo....',
+    '........o....',
+  ],
+  [
+    '.....ooo.....',
+    '....olhlo....',
+    '....lhhhl....',
+    '.R..lhhhl..R.',
+    'rRr.olhlo.rRr',
+    '.rRrolmlorRr.',
+    'rRr.olmlo.rRr',
+    '.r..olmlo..r.',
+    '..oolmmmloo..',
+    '.oo.lmmml.oo.',
+    'o...olmlo...o',
+    '....olmlo....',
+    '....olmlo....',
+    '....olmmo....',
+    '...olmmo.....',
+    '..oolmmoo....',
+    '.oo.lmmo.oo..',
+    'o..olmo....o.',
+    '...olmo......',
+    '...olmo......',
+    '...lmo.......',
+    '...lmo.......',
+    '...mo........',
+    '...mo........',
+    '...o.........',
+  ],
+];
+
 /** a shore crab from above */
 export const CRAB_PAL: Record<string, string> = {
   o: '#1a0806', d: '#5a1a10', m: '#9a3418', l: '#d0582a', h: '#f09050', e: '#0a0a0a', w: '#f8f0e0',
