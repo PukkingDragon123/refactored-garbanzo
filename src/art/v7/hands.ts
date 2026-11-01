@@ -13,7 +13,7 @@
 
 import type { ArmP } from '../people-rig';
 import type { J3 } from './body';
-import { Scene3D, V3, Mat, vadd, vsub, vsc, vdot, vnorm, vcross, vlen } from './raster';
+import { Scene3D, V3, Mat, vadd, vsub, vsc, vdot, vnorm, vcross, vlen, TOON7 } from './raster';
 
 export type PalmDir = 'in' | 'out' | 'up' | 'down' | 'fwd' | 'back' | 'cam' | 'upcam';
 
@@ -73,7 +73,7 @@ const SPL = [1.25, 0.42, -0.42, -1.25];
 const seg = (m: Mat, t0: number, t1: number): Mat => h => { h.t = t0 + (t1 - t0) * h.t; return m(h); };
 
 /** the drawn hand scale for a build's `hand` (anime proportions: small hands drawn a little large) */
-export const handScale = (hand: number) => 1.48 + (hand - 1) * 0.6;
+export const handScale = (hand: number) => (1.48 + (hand - 1) * 0.6) * (TOON7 ? 1.18 : 1);
 
 export interface HandFrame {
   /** wrist */
@@ -179,6 +179,8 @@ export function drawHand7(s: Scene3D, wr: V3, el: V3, J: J3, near: boolean, arm:
   const [tb, tm, tt] = bones.thumb;
   s.limb(tb, tm, fr * 1.14, fr * 1.02, g, seg(fmat, 0, 0.56));
   s.limb(tm, tt, fr * 1.02, fr * 0.84, g, seg(fmat, 0.56, 1));
+  // (the cartoon hand at the world's pixel size is a clean silhouette: no creases, no knuckle line)
+  if (TOON7 && s.k < 1.3) return H;
   // creases between the fingers, on the side the camera sees (lying on the nearer finger's surface)
   const cam: V3 = [0, 0, 1];
   const onTop = (p: V3, q: V3, r: number) => vadd(vsc(vadd(p, q), 0.5), vsc(cam, r));

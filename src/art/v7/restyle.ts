@@ -11,6 +11,7 @@ import type { Char7 } from './body';
 import { CAST7 } from './cast';
 import { HEADS7, HEAD_SCALE_MAN7, HEAD_SCALE_WOMAN7 } from './head';
 import { isFem7 } from './face7';
+import { TOON7 } from './raster';
 
 const memo = new WeakMap<Char7, Char7>();
 const isChild = (b: Build) => b.hipH < 21;
@@ -93,12 +94,14 @@ function realBuild(ch: Char7): Char7 {
 }
 /** Mori's head: a touch smaller than the other men's (realistic proportions), the face still reading
  *  at his density */
-export const HEAD_SCALE_REAL7 = 0.74;
+export const HEAD_SCALE_REAL7 = TOON7 ? 0.94 : 0.74;
+/** children's heads: rounder and larger still */
+const HEAD_SCALE_KID7 = TOON7 ? 1.08 : 0.9;
 
 /** how large a character's head is drawn (fraction of its volumes) */
 export function headScale7(id: string): number {
   const ch = CAST7[id];
-  if (ch && isChild(ch.build)) return 0.9;
+  if (ch && isChild(ch.build)) return HEAD_SCALE_KID7;
   if (REAL7.has(id)) return HEAD_SCALE_REAL7;
   return isFem7(id, HEADS7[id]) ? HEAD_SCALE_WOMAN7 : HEAD_SCALE_MAN7;
 }

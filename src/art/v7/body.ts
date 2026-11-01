@@ -11,7 +11,7 @@ import { drawProp5 } from '../v5/props';
 import { finish5 } from '../v5/body';
 import type { Ctx, CharDef } from '../people-parts';
 import { C, mix, shade } from '../color';
-import { Scene3D, V3, Hit, Mat, vadd, vsub, vsc, vnorm, vdot, vlerp, vlen, vcross, cel, Ramp6 } from './raster';
+import { Scene3D, V3, Hit, Mat, vadd, vsub, vsc, vnorm, vdot, vlerp, vlen, vcross, cel, Ramp6, TOON7, popBuf } from './raster';
 import { drawHand7, HandFrame, handScale } from './hands';
 import { drawHeld7 } from './held';
 
@@ -232,16 +232,16 @@ function mixJ(A: J3, B: J3, u: number): J3 {
  */
 export const PX7 = 2;
 /**
- * A character's own density, where it isn't PX7. Mori, the player, is drawn a little coarser (user:
- * "a little lower resolution"): 1.5 buffer px per world px, between the cast's fine 2x and the
- * world's 1x. He is rasterised at that density (never resampled when drawn), so each of his pixels is
- * one clean texel the renderer scales like any other sprite: at zoom 1 on 1080p and at the close-up
- * zoom of 1.5 on 720p that is exactly 2 x 2 device px. Any coarser (1.25) and the mid face's clusters
- * no longer fit his head.
+ * A character's own density, where it isn't the cast's. (Mori used to be drawn at 1.5.)
  */
-export const DENS7: Record<string, number> = { mori: 1.5 };
-/** every character at the same pixel size as Mori (one pixel grid across the cast) */
-export const CAST_DENS7 = 1.5;
+export const DENS7: Record<string, number> = {};
+/**
+ * The whole cast at the world's own pixel size (user: "make charter lower resolution more cartoony
+ * art style"): one buffer pixel per world pixel, so every figure shares the world's pixel grid. The
+ * cartoon finish (raster.ts TOON7) and the cartoon face (facetoon.ts) are built for this size; the
+ * finer 1.5 / 2 densities belong with the painted anime finish.
+ */
+export const CAST_DENS7 = 1;
 export const dens7 = (id: string) => DENS7[id] ?? CAST_DENS7;
 /** the side-view prop painter's canvas (world px), and the body's buffer at a density */
 const CW0 = 128, CH0 = 118, OX0 = 64, OY0 = 100;
@@ -278,7 +278,7 @@ export function renderBody7(ch: Char7, pose0: Pose): Frame7 {
   const pm = (m: PartMat, near: boolean): Mat => h => m(part(h, near, h.t));
   // fabric: folds and seams laid over whatever the outfit paints on the limbs and torso (skin is left bare)
   const skin = skinSet(ch.skin);
-  const fm = (m: PartMat, near: boolean, kind: Fold): Mat => h => {
+  const fm = (m: PartMat, near: boolean, kind: Fold): Mat => TOON7 ? pm(m, near) : h => {
     const p = part(h, near, h.t), c = m(p);
     return c === -1 || skin.has(c) ? c : fold(kind, p, c);
   };
@@ -296,7 +296,7 @@ export function renderBody7(ch: Char7, pose0: Pose): Frame7 {
     if (bt) { const top = vlerp(kn, an, bt.t), bm = pm(bt.mat, near); s.limb(top, an, r1 + (r2 - r1) * bt.t + bt.r, r2 + bt.r * 0.8, g, h => { h.t = bt.t + h.t * (1 - bt.t); return bm(h); }); }
     const fa = (near ? pose.fl.fa : pose.bl.fa) ?? 0;
     // shoe: an ellipsoid pointing along the foot (bigger boots keep their sole on the ground)
-    const [k0, k1, k2] = ch.shoeK ?? [1, 1, 1];
+    const [k0, k1, k2] = (ch.shoeK ?? [1, 1, 1]).map((v, i) => v * FOOT7[i]);
     const fd = vnorm(vadd(vsc(flat(J.legFwd), Math.cos(fa)), [0, Math.sin(fa), 0]));
     const upv = vnorm(vsub([0, 1, 0], vsc(fd, fd[1])));
     const lt = vnorm(vcross(fd, upv));
@@ -372,6 +372,7 @@ export function renderBody7(ch: Char7, pose0: Pose): Frame7 {
   const r = s.finish({ ink: ch.ink, inkK: HAND_INK, rim: 0.5 });
   if (pose.props?.length) drawProps(ch, pose, J, r.back, r.front ?? (r.front = new PixelBuffer(CW, CH)), D);
   if (posts.length) { const fr = r.front ?? (r.front = new PixelBuffer(CW, CH)); for (const f of posts) f(r.back, fr); }
+  popBuf(r.back); popBuf(r.front);
   const tr = trimPair(r.back, r.front, 1);
   const nt = J.neckTop;
   return {
@@ -443,6 +444,8 @@ function fold(kind: Fold, p: Part, c: C): C {
 }
 
 const flat = (v: V3): V3 => vnorm([v[0], 0, v[2]]);
+/** cartoon feet: shoes a little bigger than life [length, height, width] (the sole stays on the ground) */
+const FOOT7: [number, number, number] = TOON7 ? [1.16, 1.12, 1.12] : [1, 1, 1];
 /** hands are small: their edges go darker (less of the skin's own red) so they read clean */
 const HAND_INK: Record<number, number> = { [G.handN]: 0.62, [G.handF]: 0.62 };
 

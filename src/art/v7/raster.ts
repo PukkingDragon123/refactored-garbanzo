@@ -9,7 +9,7 @@
 // ground anchor between the feet) sits at (ox, oy).
 
 import { PixelBuffer } from '../pixel';
-import { C, mix, shade } from '../color';
+import { C, mix, shade, rgbToHsl, hslToRgb } from '../color';
 
 export type V3 = [number, number, number];
 export const v3 = (x: number, y: number, z: number): V3 => [x, y, z];
@@ -51,12 +51,45 @@ export type Ramp6 = C[];
  */
 export function cel(r: Ramp6, l: number, bias = 0, shine = false): C {
   const v = l + bias;
+  // the cartoon cast: three flat tones, a clear shadow side and a narrow light
+  if (TOON7) return v < -0.04 ? r[2] : v < 0.66 ? r[3] : r[4];
   if (v < -0.42) return r[1];
   if (v < 0.04) return r[2];
   if (v < 0.15) return r[6] ?? (r[6] = terminator(r[2], r[3]));
   if (v < 0.78) return r[3];
   return shine && v > 0.93 ? r[5] : r[4];
 }
+/**
+ * The cast's cartoon look (user: "lower resolution more cartoony art style"): drawn at the world's
+ * own pixel size, three-tone cel shading (shadow, base, light; no deep step, terminator or shine), a
+ * bold even outline round every form and between overlapping parts, no rim light or contact shading,
+ * and brighter, more saturated colour (popBuf). Off brings back the painted anime finish.
+ */
+export const TOON7 = true;
+
+/** a colour pushed brighter and more saturated (cached): the cartoon palette, kept in its own hue */
+const popped = new Map<C, C>();
+export function pop7(c: C): C {
+  let o = popped.get(c);
+  if (o !== undefined) return o;
+  const a = c >>> 24;
+  const [h, s, l] = rgbToHsl(c & 255, (c >>> 8) & 255, (c >>> 16) & 255);
+  // inks and near-blacks stay put; mid tones get the most lift, the lights keep their headroom
+  const w = Math.max(0, Math.min(1, (l - 0.1) / 0.2));
+  const ns = Math.min(1, s * (1 + 0.32 * w) + 0.03 * w * (s > 0.06 ? 1 : 0));
+  const nl = Math.min(0.97, l + w * 0.07 * (1 - l) * 1.6 * (l < 0.75 ? 1 : 0.4));
+  o = hslToRgb(h, ns, nl, a);
+  if (popped.size > 20000) popped.clear();
+  popped.set(c, o);
+  return o;
+}
+/** pop every pixel of a finished buffer (the cartoon palette) */
+export function popBuf(b: { data: Uint32Array } | null) {
+  if (!TOON7 || !b) return;
+  const d = b.data;
+  for (let i = 0; i < d.length; i++) { const c = d[i]; if (c >>> 24) d[i] = pop7(c); }
+}
+
 /** the step between shadow and base: half way, pushed a touch warmer and more saturated */
 export function terminator(sh: C, base: C): C {
   const m = mix(sh, base, 0.5);
@@ -328,6 +361,25 @@ export class Scene3D {
     if (this.bx1 < 0) return { back, front: null, ox: this.ox, oy: this.oy };
     // only the drawn area (and the ring of outline round it) needs looking at
     const X0 = Math.max(0, this.bx0 - 1), X1 = Math.min(W - 1, this.bx1 + 1), Y0 = Math.max(0, this.by0 - 1), Y1 = Math.min(Hh - 1, this.by1 + 1);
+    // the cartoon finish: lone pixels of texture (knit, stitches, speckle) folded into the flat colour
+    // round them, so every part reads as clean shapes of two or three tones
+    if (TOON7) for (let y = Y0; y <= Y1; y++) for (let x = X0; x <= X1; x++) {
+      const i = y * W + x, gi = g[i];
+      if (!gi) continue;
+      let n = 0, a = 0, na = 0, b = 0, nb = 0, same = false;
+      for (let q = 0; q < 4; q++) {
+        const X = x + N4X[q], Y = y + N4Y[q];
+        if (X < 0 || Y < 0 || X >= W || Y >= Hh) continue;
+        const j = Y * W + X;
+        if (g[j] !== gi) continue;
+        n++;
+        const c = src[j];
+        if (c === src[i]) { same = true; break; }
+        if (!na || c === a) { a = c; na++; } else if (!nb || c === b) { b = c; nb++; }
+      }
+      if (!same && n >= 3) out[i] = na >= nb ? a : b;
+    }
+    if (TOON7) src.set(out);
     for (let y = Y0; y <= Y1; y++) for (let x = X0; x <= X1; x++) {
       const i = y * W + x;
       if (!g[i]) continue;
@@ -341,6 +393,8 @@ export class Scene3D {
         if ((g[j] !== g[i] && nearer > 0.4) || nearer > dl) line = j;
         else if (dy === -1 && g[j] !== g[i] && nearer > -0.4) contact = true;
       }
+      // the cartoon outline: one bold dark line, the ink tinted by the part in front
+      if (TOON7) { if (line >= 0) out[i] = toonInk(src[line], o.ink); continue; }
       // the line takes the dark tone of the part in front (a hand-inked edge of that part)
       if (line >= 0) out[i] = mix(mix(shade(src[line], -lineK - 0.1), shade(src[i], -lineK), 0.3), o.ink, ik?.[g[line]] ?? 0.3);
       else if (contact) out[i] = mix(src[i], shade(src[i], -0.3), 0.6);
@@ -363,6 +417,7 @@ export class Scene3D {
       }
       if (nb >= 0) {
         // 0 = the form faces the light here (a soft tinted line), 1 = turned away into shadow (deep ink)
+        if (TOON7) { const c = toonInk(src[nb], o.ink); if (this.lay[nb]) { front.data[i] = c; anyFront = true; } else back.data[i] = c; continue; }
         const away = Math.max(0, Math.min(1, 0.55 - lit[nb] * 0.9));
         const base = ik ? Math.max(0.55, ik[g[nb]] ?? 0) : 0.55;
         const c = mix(shade(src[nb], -0.5 - 0.3 * away), o.ink, Math.min(1, base * (0.55 + 0.75 * away)));
@@ -374,3 +429,11 @@ export class Scene3D {
 }
 
 const N4X = [1, -1, 0, 0], N4Y = [0, 0, 1, -1];
+/** the cartoon outline's colour: the part's own darkest tone, mostly ink (cached per pair) */
+const inks = new Map<string, C>();
+function toonInk(c: C, ink: C): C {
+  const key = c + ':' + ink;
+  let o = inks.get(key);
+  if (o === undefined) { o = mix(shade(c, -0.8), ink, 0.72); if (inks.size > 20000) inks.clear(); inks.set(key, o); }
+  return o;
+}

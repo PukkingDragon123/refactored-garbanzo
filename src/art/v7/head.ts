@@ -6,12 +6,13 @@
 
 import { PixelBuffer } from '../pixel';
 import { C, hex, mix } from '../color';
-import { Scene3D, V3, Hit, cel, Ramp6, vadd, vsub, vsc, vlen, vnorm, vlerp } from './raster';
+import { Scene3D, V3, Hit, cel, Ramp6, vadd, vsub, vsc, vlen, vnorm, vlerp, TOON7, popBuf } from './raster';
 import { YAW, BACK_YAW, dens7 } from './body';
 import { isFem7 } from './face7';
 import { trimPair } from '../people-rig';
 import { AROHA_HEAD } from './aroha7';
 import { paintFaceMid7 } from './facemid';
+import { paintFaceToon7 } from './facetoon';
 
 const R6 = (...h: string[]): Ramp6 => h.map(v => hex(v));
 export type Look = 'fwd' | 'up' | 'down' | 'back' | 'cam' | 'away';
@@ -126,7 +127,8 @@ const JOSHU_SKIN = R6('#3a1810', '#a04a3a', '#d08064', '#f2aa86', '#f8c49c', '#f
 
 const MORI: HeadDef7 = {
   skin: BOY_SKIN,
-  hair: R6('#0a0608', '#1a1216', '#2a2024', '#3c3034', '#5a5262', '#8a86a0'),
+  // near-black, a cool navy shine in the light
+  hair: R6('#060408', '#100c12', '#1a161e', '#28242c', '#3c3a48', '#5e5e74'),
   face: { iris: ['#3e2a22', '#8e6a4c'], lash: 'm' },
   ink: hex('#1a0e10'),
   skull: [[0.1, 8.0, 0], [4.8, 5.4, 4.2]],
@@ -235,7 +237,8 @@ const JOSHU: HeadDef7 = {
     s.ellipsoid(W([2.4, 3.2, 0]), W([4.2, 0, 0]), [0, 4.2, 0], W([0, 0, 5.0]), 10, bm);
     s.ellipsoid(W([2.6, -0.8, 0]), W([4.4, 0, 0]), [0, 4.0, 0], W([0, 0, 4.4]), 10, bm);
     s.ellipsoid(W([3.4, -4.2, 0]), W([3.2, 0, 0]), [0, 2.8, 0], W([0, 0, 3.2]), 10, bm);
-    s.ellipsoid(W([5.6, 4.8, 0]), W([1.6, 0, 0]), [0, 1.0, 0], W([0, 0, 3.0]), 11, h => cel(beard, h.l, 0.25, true));
+    // (the cartoon cast: one beard group, so no ink line cuts the moustache off the beard)
+    s.ellipsoid(W([5.6, 4.8, 0]), W([1.6, 0, 0]), [0, 1.0, 0], W([0, 0, 3.0]), TOON7 ? 10 : 11, h => cel(beard, h.l, 0.25, true));
     const cap = R6('#2a0808', '#5a1410', '#8a2218', '#b0342a', '#cc4a3a', '#e8705a');
     s.ellipsoid(W([-0.2, 13.2, 0]), W([6.0, 0, 0]), [0, 3.0, 0], W([0, 0, 5.8]), 12, h => (h.q[1] < -0.1 ? -1 : cel(cap, h.l, 0)));
     s.ellipsoid(W([0.1, 13.2, 0]), W([6.1, 0, 0]), [0, 0.8, 0], W([0, 0, 5.9]), 12, h => cel(cap, h.l, -0.5));
@@ -290,10 +293,16 @@ function slitEye(mark: FaceMark, x: number, y: number, inner: 1 | -1, eye: HeadE
   if (eye === 'angry') mark(x + o * 2, y - 1, crease);
 }
 
-export const HEAD_SCALE7 = 0.8;
+/**
+ * Head sizes (fractions of the head volumes). The cartoon cast wears larger heads (about five heads
+ * tall, never chibi) so the face reads at the world's pixel size; the painted anime cast was about six
+ * and a half (0.8 / 0.75 / 0.78).
+ */
+export const HEAD_SCALE7 = TOON7 ? 1.0 : 0.8;
 /** grown men's heads (a touch smaller on the broader build) and women's */
-export const HEAD_SCALE_MAN7 = 0.75, HEAD_SCALE_WOMAN7 = 0.78;
-/** which sprite face: 'mid' (facemid.ts, the V12 face) or 'simple' (the old dot face, kept) */
+export const HEAD_SCALE_MAN7 = TOON7 ? 0.95 : 0.75, HEAD_SCALE_WOMAN7 = TOON7 ? 0.98 : 0.78;
+/** which sprite face: 'mid' (facemid.ts, the V12 face at 1.5x), 'simple' (the old dot face, kept);
+ *  the cartoon cast at the world's pixel size wears the cartoon face (facetoon.ts) */
 const FACE_STYLE7: 'mid' | 'simple' = 'mid';
 
 /**
@@ -403,12 +412,16 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
   // hair in strand clusters: dark grooves between the clumps, a broken two-tone angel ring across the
   // crown and a fainter second band, lit tips on the locks (the rim light comes in the finish pass)
   const HR = d.hair;
+  // (cartoon hair keeps its light to the crown's shine band and the top edges, so it reads as its own colour)
+  const HAIR_B = TOON7 ? -0.22 : 0.05;
   // the angel ring: one band at a fixed height round the head, across the shell and every lock alike,
   // its lower edge cut into teeth along the strands; a thinner second band lower on the bangs
   const ringY = d.skull[0][1] + d.skull[1][1] * 0.52;
   const ring = (h: Hit, groove: boolean, strand: number): C | 0 => {
     if (groove || h.l < 0.18) return 0;
     const y = h.p[1], saw = frac(strand);
+    // the cartoon shine: one flat light band with a toothed lower edge
+    if (TOON7) return y < ringY + 0.8 && y > ringY - 0.5 - saw * 0.9 ? HR[4] : 0;
     if (y < ringY + 0.75 && y > ringY - 0.35 - saw * 0.9) return h.l > 0.55 && y > ringY - 0.1 && y < ringY + 0.45 ? HR[5] : HR[4];
     return 0;
   };
@@ -417,18 +430,19 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
     const q = h.q, lat = q[1];
     // strands fan out from the whorl at the back of the crown
     const ang = Math.atan2(q[2], q[0] + 0.45);
-    const groove = lat < 0.92 && Math.sin(ang * 8 + lat * 2.4) > 0.8;
+    const groove = !TOON7 && lat < 0.92 && Math.sin(ang * 8 + lat * 2.4) > 0.8;
     const rg = ring(h, groove, ang * 2.6);
     if (rg) return rg;
-    const c = cel(HR, h.l, 0.05);
+    const c = cel(HR, h.l, HAIR_B);
     return groove ? mix(c, HR[1], 0.55) : c;
   };
   const lockM = (i: number) => (h: Hit): C => {
     const t = h.t;
-    const groove = Math.sin(h.q[1] * 2.6 + i * 1.9) > 0.8;
+    const groove = !TOON7 && Math.sin(h.q[1] * 2.6 + i * 1.9) > 0.8;
     const rg = ring(h, groove, h.q[1] * 0.8 + i * 0.37);
     if (rg) return rg;
-    const c = cel(HR, h.l, 0.05);
+    const c = cel(HR, h.l, HAIR_B);
+    if (TOON7) return c;
     if (groove) return mix(c, HR[1], 0.6);
     if (t > 0.84 && h.l > -0.1) return mix(c, HR[4], 0.35); // fine tips catch the light
     return c;
@@ -448,11 +462,11 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
     const base = lockM(i), gk = 2.6 * Math.max(1, (l.rm ?? l.r0) / 1.4);
     return (h: Hit): C => {
       h.t = ta + h.t * (tb - ta);
-      const groove = Math.sin(h.q[1] * gk + i * 1.9) > 0.78;
+      const groove = !TOON7 && Math.sin(h.q[1] * gk + i * 1.9) > 0.78;
       if (groove) return mix(cel(HR, h.l, 0.05), HR[1], 0.6);
       if (l.band !== undefined && h.l > 0.12) {
         const dt = h.t - l.band, saw = frac(h.q[1] * 0.9 + i * 0.37) * 0.06;
-        if (dt > -0.05 - saw && dt < 0.045) return h.l > 0.5 && dt > -0.02 && dt < 0.025 ? HR[5] : HR[4];
+        if (dt > -0.05 - saw && dt < 0.045) return !TOON7 && h.l > 0.5 && dt > -0.02 && dt < 0.025 ? HR[5] : HR[4];
       }
       return base(h);
     };
@@ -524,7 +538,7 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
     // the V12 face (facemid.ts): clean clusters on the buffer grid
     const dirX = W([1, 0, 0])[0];
     const nt: V3 = [d.nose[0][0] + d.nose[1][0] * 0.85, d.nose[0][1] - d.nose[1][1] * 0.1, d.nose[0][2]];
-    paintFaceMid7(put, {
+    (TOON7 ? paintFaceToon7 : paintFaceMid7)(put, {
       near: visible(nearE) ? at2(nearE) : null,
       far: visible(farE) ? at2(farE) : null,
       nose: at2(nt),
@@ -588,6 +602,7 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
   // the hair's edge over the face is inked in the hair's own dark, not the skin's red-brown (no streak down the cheek)
   const r = s.finish({ ink: mix(d.ink, d.hair[0], 0.6), depthLine: 1.6, rim: 0.55, inkK: { 1: 0.8, 3: 0.6, 6: 0.75 } });
   for (const [x, y, c] of marks) r.back.data[y * BW + x] = c;
+  popBuf(r.back);
   const tr = trimPair(r.back, null, 1);
   const out = { buf: tr.a, ax: BOX - tr.ox, ay: BOY - tr.oy, k: D };
   if (cache.size > 600) cache.clear();
