@@ -29,12 +29,12 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
   New foliage opts into the shared plant physics (`src/world/foliage.ts`: `Prop` option
   `foliage: 'grass' | 'fern' | 'bush' | 'reed' | 'flower' | 'vine' | 'plant' | 'tree'`, `GroundCover`,
   `st.windField`). Organic painters live in `src/art/organic.ts`.
-- Characters (user): faces are the mid face (`src/art/v7/facemid.ts`), realistic plus anime and
-  between the two the user rejected. The fine anime face (`face7.ts`) was too high-res and uncanny,
-  and the old dot face ugly; both are kept unused. Men have a narrow almond eye with a strong lid,
-  straight thick brows, a jaw built from the head's volumes (cheekbones, jaw angle, firm chin; no
-  painted stripe), a smaller head (0.75) and a broader build (`restyle.ts`). Women and girls are
-  listed in `FEM7`.
+- Characters (user, latest): lower resolution and more cartoony. The cast is drawn at 1 pixel per
+  world pixel (`CAST_DENS7 = 1` in `src/art/v7/body.ts`), with bigger heads (about 4.5–5 heads),
+  bold outlines, 2–3 tone flat cel shading and brighter colours (`TOON7` in `raster.ts`). Faces are
+  the cartoon face in `facetoon.ts`, with clear 2×2/2×3 eyes plus a highlight and distinct mouths
+  per expression. The older mid, anime and dot faces are kept unused. Mori is a normal, realistic
+  build, not skinny. Women and girls are listed in `FEM7`.
 - **Never show the player's first-person hands** (user: "never ever show player first person
   hand"). Close-ups show the tools and what they touch, not Mori's hands or sleeves
   (`FIRST_PERSON_HANDS = false` in `src/ui/v12/closeup/hands.ts`, `HANDS3D.enabled = false`).
