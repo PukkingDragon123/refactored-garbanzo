@@ -33,10 +33,14 @@ import { DARK_HOUR, hourWords } from '../clock';
 import { floatText, floatNotice } from '../../../ui/v12/float';
 import { showWatch } from '../../../ui/v12/watch';
 import { paintCaveRock, paintStalactite, paintStalagmite, paintCurtain, paintCrystals, paintFungi, paintShelf, paintBoulder, paintGuano, paintCamp, paintJournal, paintPole, paintLadder, paintPlanks, paintAnchor } from '../../../art/v12/cave/rock';
-import { DC, TIERS, TIER, HOLES, LADDERS, ROPES, PLANKS, CHUTE, chuteY, LAKE, FALLS, SPOT, floorOf, climbOf, zoneAt, depthK } from './layout';
+import { DC, TIERS, TIER, HOLES, LADDERS, ROPES, PLANKS, CHUTE, POOLS, chuteY, LAKE, FALLS, SPOT, floorOf, poolTop, climbOf, zoneAt, depthK } from './layout';
 import { Darkness, LAMP, lampR, lanternFrames, drawLanternGlow } from './dark';
 import type { CaveLight } from './dark';
 import { Waterfall, CaveWater, Glowworms, breathPuff } from './fx';
+import { CaveBugs } from './bugs';
+import { attachLife } from './life';
+import { CAVE_POINTS } from './quests';
+import { CAVE_CTX } from './species';
 
 const todOf = (t: number) => (t < 0.35 ? 'dawn' : t < 2.6 ? 'day' : t < 3.4 ? 'dusk' : 'night') as 'dawn' | 'day' | 'dusk' | 'night';
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
@@ -51,6 +55,8 @@ export interface CaveRuntime {
   hides: { x: number; w: number; y: number; cover: number }[];
   /** lights that move (the lantern, the pole, the Gulper): added to each frame */
   extra: (() => CaveLight | null)[];
+  /** where Mori's lantern is (null: hung on the pole) */
+  lantern: () => [number, number] | null;
   update(f: FieldScene, dt: number): void;
   enter(f: FieldScene): void;
 }
@@ -58,8 +64,27 @@ let rt: CaveRuntime | null = null;
 /** the cave's runtime while it is the scene */
 export const caveRuntime = () => rt;
 
-/** who lives here (filled in by ./species.ts once the cave's animals are registered) */
-export const CAVE_SPAWNS: SpawnV2[] = [];
+/** who lives here (the animals' minds: ./species.ts; the small life in swarms: ./bugs.ts) */
+const fy = (tier: string, x: number) => floorOf(tier, x);
+const ALLT = ['dawn', 'day', 'dusk', 'night'] as SpawnV2['times'];
+export const CAVE_SPAWNS: SpawnV2[] = [
+  // blind salamanders in every pool of the dark stream, the plunge pool and the gallery's pool
+  ...POOLS.map((p): SpawnV2 => ({ species: 'blindsal', n: p.tier === 'g' ? [1, 1] : p.tier === 't4' ? [2, 2] : [2, 3], x: [p.x0 + 14, p.x1 - 14], y: poolTop(p) + 5, medium: 'water', times: ALLT, chance: 1 })),
+  // the Ghost Gulper, deep in the lake
+  { species: 'gulper', n: [1, 1], x: [1500, 1800], y: LAKE.top + 104, medium: 'water', times: ALLT, chance: 1 },
+  // cave wētā on the walls (the swarms are drawn by ./bugs.ts; these ones can be photographed), and the
+  // big one in the wētā hall that jumps at a bright lantern
+  { species: 'caveweta', n: [2, 3], x: [300, 700], y: fy('t0', 500) - 38, medium: 'trunk', times: ALLT, chance: 1 },
+  { species: 'caveweta', n: [1, 2], x: [1100, 1500], y: fy('t0', 1300) - 34, medium: 'trunk', times: ALLT, chance: 1 },
+  { species: 'caveweta', n: [2, 3], x: [700, 1050], y: fy('t1', 900) - 56, medium: 'trunk', times: ALLT, chance: 1 },
+  { species: 'caveweta', n: [2, 3], x: [1400, 1850], y: fy('t1', 1600) - 48, medium: 'trunk', times: ALLT, chance: 1 },
+  { species: 'caveweta', n: [1, 1], x: [SPOT.bigWeta - 4, SPOT.bigWeta + 4], y: fy('t1', SPOT.bigWeta) - 40, medium: 'trunk', times: ALLT, chance: 1 },
+  { species: 'caveweta', n: [1, 2], x: [1700, 2100], y: fy('t3', 1900) - 40, medium: 'trunk', times: ALLT, chance: 1 },
+  // harvestmen on the floors of the halls
+  { species: 'harvestman', n: [2, 3], x: [820, 1000], y: fy('t1', 900), medium: 'trunk', times: ALLT, chance: 1 },
+  { species: 'harvestman', n: [1, 2], x: [1500, 1700], y: fy('t2', 1600), medium: 'trunk', times: ALLT, chance: 1 },
+  { species: 'harvestman', n: [1, 2], x: [1380, 1520], y: fy('g', 1450), medium: 'trunk', times: ALLT, chance: 1 },
+];
 
 export const DEEPCAVE: Site10 = {
   id: 'deepcave', loc: 'deepcave', name: 'Te Rua Pōuri', width: DC.W, camY: 120, followY: true, minY: DC.minY, maxY: DC.maxY,
@@ -69,7 +94,7 @@ export const DEEPCAVE: Site10 = {
   spawns: CAVE_SPAWNS,
   insects: [],
   onEnter: f => { rt?.enter(f); },
-  v10: { points: [] },
+  v10: { points: CAVE_POINTS },
 };
 
 // ---------------------------------------------------------------- the crossroads
@@ -389,6 +414,7 @@ export function buildCave(f: FieldScene): CaveRuntime {
     rr.draw(LAMP.mode === 'dim' ? fr.shut : fr.open, Math.round(x), Math.round(y), 1, 1, 0, WHITE);
     drawLanternGlow(rr, x, y, LAMP.mode, s2.time);
   }));
+  main.add(new CaveBugs(f, (x, y) => CAVE_CTX.lit(x, y), () => (LAMP.mode === 'pole' ? null : lanternAt())));
   main.add(dark);
   main.add(new Custom(0, () => {}, dt => dark.update(dt)));
 
@@ -415,6 +441,7 @@ export function buildCave(f: FieldScene): CaveRuntime {
   registerPosts(f, posts());
   const run: CaveRuntime = {
     clock, dark, water, glow, limits, hides, extra,
+    lantern: () => (LAMP.mode === 'pole' ? null : lanternAt()),
     enter: fs => enterCave(fs, run),
     update: (fs, dt) => tick(fs, dt, run),
   };
@@ -458,6 +485,7 @@ function enterCave(f: FieldScene, run: CaveRuntime) {
   }, 900);
   audio.setAmbience('none', false);
   ambFalls = false;
+  attachLife(f, run);
 }
 
 // ---------------------------------------------------------------- every frame

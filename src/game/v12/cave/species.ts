@@ -353,7 +353,8 @@ HOOKS[SAL_ID] = {
   ...(HOOKS[SAL_ID] ?? {}),
   onThreat(a) { a.fear = 0; return true; },
   decide(a) {
-    if (a.act === 'flee' || a.act === 'hide') return false;
+    // (its own scripted acts end themselves: the generic mind must not pick a new one under them)
+    if (a.act === 'flee' || a.act === 'hide' || a.act === 'emerge') return true;
     if (scared(a) && CAVE_CTX.calmT < 1) { a.setAct('flee', 4); a.host.sfx('splash', a.x, 0.12, 2.4); return true; }
     return false;
   },
@@ -457,7 +458,7 @@ HOOKS[GULPER_ID] = {
   onThreat(a) { a.fear = 0; return true; },
   decide(a) {
     const k = caveKeep(a);
-    if (a.act === 'approach' || a.act === 'tell' || a.act === 'rise' || a.act === 'gape' || a.act === 'gapeHold' || a.act === 'gulp' || a.act === 'sink') return false;
+    if (a.act === 'approach' || a.act === 'tell' || a.act === 'rise' || a.act === 'gape' || a.act === 'gapeHold' || a.act === 'gulp' || a.act === 'sink') return true;
     if (k.cool <= 0 && k.interest >= 1) {
       const L = CAVE_CTX.lure();
       if (L) { k.strikeX = L.x; k.kind = L.kind; a.setAct('approach', 30); return true; }
@@ -525,7 +526,7 @@ SPECIALS[WETA_ID] = {
   leap(a) {
     a.anim = 'jump';
     const p = a.host.player;
-    if (a.mem.x0 === undefined) { a.mem.x0 = a.x; a.mem.y0 = a.y; a.mem.tx = p.x + p.facing * 6; a.mem.ty = p.y - 26; a.face(a.mem.tx); }
+    if (a.mem.x0 === undefined) { a.mem.x0 = a.x; a.mem.y0 = a.y; a.mem.tx = p.x; a.mem.ty = p.y - 26; a.face(a.mem.tx); }
     const t = Math.min(1, a.actT / 0.5);
     a.x = a.mem.x0 + (a.mem.tx - a.mem.x0) * t;
     a.y = a.mem.y0 + (a.mem.ty - a.mem.y0) * t - Math.sin(t * Math.PI) * 14;
@@ -543,6 +544,7 @@ SPECIALS[WETA_ID] = {
 };
 HOOKS[WETA_ID] = {
   ...(HOOKS[WETA_ID] ?? {}),
+  decide(a) { return a.act === 'windup' || a.act === 'leap' || a.act === 'hop'; },
   onThreat(a) { a.fear = 0; return true; },
   tick(a, dt) { const k = caveKeep(a); a.fear = 0; if (k.cool > 0) k.cool -= dt; },
 };
@@ -613,7 +615,8 @@ HOOKS[CENT_ID] = {
   onThreat(a) { a.fear = 0; return true; },
   decide(a) {
     const k = caveKeep(a), p = a.host.player;
-    if (a.act === 'rear' || a.act === 'strike' || k.cool > 0) return false;
+    if (a.act === 'rear' || a.act === 'strike') return true;
+    if (k.cool > 0) return false;
     if (Math.abs(p.x - a.x) < 40 && Math.abs(p.y - a.y) < 24 && CAVE_CTX.lit(a.x, a.y) > 0.3) { a.setAct('rear', 1.4); return true; }
     return false;
   },

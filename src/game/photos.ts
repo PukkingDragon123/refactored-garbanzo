@@ -225,7 +225,7 @@ export function reviewPhoto(id: number, tags: [number, number][], keep: boolean)
 /** the bit of an animal that pokes into the frame when the rest of it is cropped off */
 const CROP_PART: Record<string, string> = {
   Bird: 'a wingtip', Fish: 'a tail', Mammal: 'a tail', Reptile: 'a tail', Amphibian: 'a tail', Serpent: 'a tail',
-  Crustacean: 'a leg', Insect: 'a leg', Arachnid: 'a leg', Mollusc: 'a tentacle', Cnidarian: 'a tentacle', Worm: 'a wriggly end', Parasite: 'a speck',
+  Crustacean: 'a leg', Insect: 'a leg', Arachnid: 'a leg', Myriapod: 'a leg', Mollusc: 'a tentacle', Cnidarian: 'a tentacle', Worm: 'a wriggly end', Parasite: 'a speck',
 };
 
 /** V9 laptop upload: a failed identification in plain words ('Too blurry to identify', 'Only a tail in frame') */

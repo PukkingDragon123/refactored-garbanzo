@@ -29,6 +29,8 @@ export interface RareSpot {
   needs?: 'hide_cloak' | 'slingshot';
   /** V12 big regions: only on this tier (world y band Mori must stand in: up on a limb, down in a gully) */
   y?: [number, number];
+  /** V12 vertical maps (the deep cave): it comes in on the tier Mori is waiting on */
+  tierY?: boolean;
 }
 
 export const RARE: RareSpot[] = [
@@ -44,6 +46,8 @@ export const RARE: RareSpot[] = [
   { loc: 'falls', species: 'galehawk', x: 3000, y: [-40, 70], times: ['dawn', 'day', 'dusk'], still: 12, goal: 'on the top auk ledge, keep still and watch the sky', hint: 'The gale hawk hunts off this cliff. Sit tight up here and let it come past.' },
   // ---- V12 Te Repo Raupō: the high way, the old maimai over the raupō beds
   { loc: 'swamp', species: 'snakestork', x: 3420, y: [96, 150], times: ['dawn', 'day', 'dusk'], still: 12, goal: 'up on the old maimai over the raupō, sit still and watch the water', hint: 'Serpent storks fish the raupō beds. Up here they can\'t see you. Sit, and wait.' },
+  // ---- V12 Te Rua Pōuri: the crystal gallery, lantern shuttered, crouched in the dark
+  { loc: 'deepcave', species: 'cavecentipede', x: 1555, y: [880, 950], tierY: true, times: ['dawn', 'day', 'dusk', 'night'], still: 14, goal: 'in the crystal gallery of Te Rua Pōuri, lantern shuttered, crouch in the dark and wait', hint: 'Something hunts the wētā in this gallery. It hates the light. Shutter the lantern, get low, and let the dark come back.' },
   { loc: 'mangrove', species: 'titan', x: 1800, times: ['dawn', 'day', 'dusk', 'night'], still: 18, goal: 'deep in the channels, hidden in cover, for a long time', hint: 'Something enormous moves under this water. If you want to see it, you hide. For a long time.', needs: 'hide_cloak' },
 ];
 
@@ -84,7 +88,7 @@ export function installRare(f: FieldScene) {
         s.came = true;
         const side = p.facing >= 0 ? 1 : -1;
         const sx = Math.max(60, Math.min(f.site.width - 60, s.r.x + side * 210));
-        f.spawnRule({ species: s.r.species, n: [1, 1], x: [sx - 10, sx + 10], chance: 1 }, false);
+        f.spawnRule({ species: s.r.species, n: [1, 1], x: [sx - 10, sx + 10], chance: 1, ...(s.r.tierY ? { y: p.y } : {}) }, false);
         // without the right kit it was never going to be a quiet sighting: it has smelled him, and it's angry
         if (s.r.needs && !game.save.tools.includes(s.r.needs)) {
           const a = f.animals[f.animals.length - 1];
