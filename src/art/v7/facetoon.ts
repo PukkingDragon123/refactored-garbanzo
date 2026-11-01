@@ -60,18 +60,18 @@ const WOMAN_FAR: Record<string, T> = {
   happy: t(0, 2, '..', '.K.', 'K.K'),
   closed: t(0, 2, '..', '..', 'KK'),
 };
-/** Joshu: always narrowed, a short dark slit under a heavy brow */
+/** Joshu: small beady eyes, always narrowed, under a heavy pale brow */
 const SLIT_NEAR: Record<string, T> = {
-  dot: t(2, 0, 'kKK'),
-  wide: t(2, 1, '.KK', '.HK'),
+  dot: t(1, 0, 'kK'),
+  wide: t(1, 1, 'HK', 'KK'),
   happy: t(2, 1, '.K.', 'K.K'),
-  closed: t(2, 0, 'kKK'),
+  closed: t(1, 0, 'kk'),
 };
 const SLIT_FAR: Record<string, T> = {
-  dot: t(0, 0, 'KK'),
-  wide: t(0, 1, 'KK', 'HK'),
+  dot: t(0, 0, 'K'),
+  wide: t(0, 1, 'HK', 'KK'),
   happy: t(0, 1, '.K.', 'K.K'),
-  closed: t(0, 0, 'KK'),
+  closed: t(0, 0, 'k'),
 };
 
 // ------------------------------------------------------------------ brows

@@ -52,7 +52,7 @@ export type Ramp6 = C[];
 export function cel(r: Ramp6, l: number, bias = 0, shine = false): C {
   const v = l + bias;
   // the cartoon cast: three flat tones, a clear shadow side and a narrow light
-  if (TOON7) return v < -0.04 ? r[2] : v < 0.66 ? r[3] : r[4];
+  if (TOON7) return v < -0.04 ? r[2] : v < 0.76 ? r[3] : r[4];
   if (v < -0.42) return r[1];
   if (v < 0.04) return r[2];
   if (v < 0.15) return r[6] ?? (r[6] = terminator(r[2], r[3]));

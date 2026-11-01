@@ -378,7 +378,8 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
   };
   const Wv = (v: V3): V3 => W(v); // (linear)
   const E = (c: V3, r: V3, g: number, m: (h: Hit) => C | -1) => s.ellipsoid(W(c), Wv([r[0], 0, 0]), Wv([0, r[1], 0]), Wv([0, 0, r[2]]), g, m);
-  const skinM = (bias = 0) => (h: Hit) => cel(d.skin, h.l, bias + 0.18);
+  // (a cartoon face is mostly one flat skin tone: the light only on the brow, the shadow under the jaw)
+  const skinM = (bias = 0) => (h: Hit) => cel(d.skin, h.l, bias + (TOON7 ? 0.04 : 0.18));
   // face volumes: a man's jaw and chin a little broader and squarer (user: "men more manly")
   const fem = isFem7(id, d);
   E(d.skull[0], d.skull[1], 1, skinM());
