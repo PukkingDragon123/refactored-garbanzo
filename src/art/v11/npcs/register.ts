@@ -18,6 +18,7 @@ import { RUA7, SUNNY7, HUNTER_HEADS } from './hunters';
 import { TIPENE7, NGAIO7, CRAFT_HEADS } from './crafts';
 import { MARGE7, MARGE_HEAD } from './naturalist';
 import { NPC_PORTRAITS } from './portraits';
+import { HANK7, HANK_HEAD } from './dealer';
 
 export interface NpcArt {
   id: string;
@@ -44,6 +45,8 @@ export const NPC_ART: NpcArt[] = [
   { id: 'tipene', name: 'Tīpene', body: TIPENE7, head: CRAFT_HEADS.tipene, height: 54, voice: 0.72, color: '#7e5530', tint: ['#f2e8d8', '#b89068', '#5e3c20'], panel: ['#c49a6c', '#7e5530', '#1c1008', '#fff0d8'] },
   { id: 'ngaio', name: 'Ngaio', body: NGAIO7, head: CRAFT_HEADS.ngaio, height: 66, voice: 1.2, color: '#226282', tint: ['#e4f0f2', '#6aa2b0', '#226282'], panel: ['#7ac0c8', '#226282', '#06141c', '#e0fbff'] },
   { id: 'marge', name: 'Marge', body: MARGE7, head: MARGE_HEAD, height: 52, voice: 1.3, color: '#7a6a2a', tint: ['#f4f0dc', '#c8b878', '#6a5a24'], panel: ['#d8c880', '#7a6a2a', '#1c1808', '#fffbe4'] },
+  // V12 the dealer at the end of Te Huarahi (src/game/v11/npcs/hank.ts)
+  { id: 'hank', name: 'Hank', body: HANK7, head: HANK_HEAD, height: 66, voice: 0.7, color: '#c02a20', tint: ['#e8f6f4', '#5ac0c0', '#b8241c'], panel: ['#3cc6c4', '#c02a20', '#06161a', '#fff0d8'] },
 ];
 export const NPC_ART_BY_ID: Record<string, NpcArt> = Object.fromEntries(NPC_ART.map(n => [n.id, n]));
 export const NPC_IDS = NPC_ART.map(n => n.id);

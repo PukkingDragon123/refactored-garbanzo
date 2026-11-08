@@ -19,4 +19,6 @@ export const AROUND = {
   marge: () => loopOn() && day() >= 2,
   helix: () => loopOn(),
   hunters: () => loopOn(),
+  /** V12 Big Hank's stall at the end of Te Huarahi (src/game/v11/npcs/hank.ts) */
+  hank: () => loopOn() && day() >= 3,
 };

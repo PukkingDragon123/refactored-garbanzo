@@ -41,7 +41,10 @@ export function anim7(...names: string[]): string {
 }
 
 // ------------------------------------------------------------------ registry
-export type DeterKind = 'pebble' | 'grenade' | 'smoke' | 'pepper' | 'flash' | 'noise' | 'shout';
+export type DeterKind = 'pebble' | 'grenade' | 'smoke' | 'pepper' | 'flash' | 'noise' | 'shout'
+  // V12 the weapon belt (src/game/v12/arsenal.ts): bolas, flare (the flash) and fire (a burning flare),
+  // banger, net, dart (drowse), spray
+  | 'bolas' | 'flare' | 'fire' | 'banger' | 'net' | 'dart' | 'spray';
 
 export interface PredatorDef {
   species: string;
@@ -61,6 +64,10 @@ export interface PredatorDef {
   onBreak?(a: Animal, s: FieldScene): void;
   /** what Aroha shouts while it's on the attack (one at random) */
   advice?: string[];
+  /** V12: darts it takes to fall asleep (default by tier; src/game/v12/arsenal-fx.ts) */
+  drowseAt?: number;
+  /** V12: a net holds a medium predator and only slows a big one (default: by its size on screen) */
+  size?: 'medium' | 'big';
 }
 
 export const PREDATORS: Record<string, PredatorDef> = {};
@@ -86,12 +93,20 @@ export interface PredState {
   script: boolean;
   /** knock-downs this encounter */
   downs: number;
+  /** V12 the weapon belt (src/game/v12/arsenal-fx.ts runs these down): tranquilliser darts in it (it
+   *  falls asleep at its threshold), seconds asleep, seconds the bolas holds its legs, seconds a net
+   *  holds it, seconds a net slows it */
+  drowse: number;
+  asleep: number;
+  tangle: number;
+  netted: number;
+  slow: number;
 }
 const STATE = new WeakMap<Animal, PredState>();
 export function predState(a: Animal): PredState {
   let s = STATE.get(a);
   if (!s) {
-    s = { nerve: PREDATORS[a.species]?.nerve ?? 4, stun: 0, blind: 0, rest: 0, target: null, hits: 0, sinceHit: 99, phase: 'idle', script: false, downs: 0 };
+    s = { nerve: PREDATORS[a.species]?.nerve ?? 4, stun: 0, blind: 0, rest: 0, target: null, hits: 0, sinceHit: 99, phase: 'idle', script: false, downs: 0, drowse: 0, asleep: 0, tangle: 0, netted: 0, slow: 0 };
     STATE.set(a, s);
   }
   return s;
@@ -104,7 +119,9 @@ export function targetPos(s: FieldScene, t: Target11): [number, number] {
 export const targetName = (t: Target11) => (t.kind === 'player' ? 'mori' : t.a.id);
 
 // ------------------------------------------------------------------ events
-export type PredEvent = 'notice' | 'stalk' | 'charge' | 'attack' | 'knockdown' | 'hit' | 'stun' | 'break' | 'retreat' | 'submerge' | 'plinked' | 'shout' | 'ambush' | 'ambushEnd';
+export type PredEvent = 'notice' | 'stalk' | 'charge' | 'attack' | 'knockdown' | 'hit' | 'stun' | 'break' | 'retreat' | 'submerge' | 'plinked' | 'shout' | 'ambush' | 'ambushEnd'
+  // V12 the weapon belt (src/game/v12/arsenal.ts has what each carries)
+  | 'tangle' | 'netted' | 'drowse' | 'asleep' | 'wake' | 'fired';
 export interface PredInfo { a?: Animal | null; who?: string; kind?: DeterKind; power?: number; x?: number; head?: boolean }
 type PredFn = (ev: PredEvent, info: PredInfo) => void;
 const listeners: PredFn[] = [];
@@ -118,7 +135,10 @@ export function emitPred(ev: PredEvent, info: PredInfo = {}) {
 }
 
 // ------------------------------------------------------------------ deterrence
-const COST: Record<DeterKind, number> = { pebble: 1, grenade: 2.5, smoke: 1.2, pepper: 2, flash: 1.6, noise: 0.5, shout: 0.45 };
+const COST: Record<DeterKind, number> = { pebble: 1, grenade: 2.5, smoke: 1.2, pepper: 2, flash: 1.6, noise: 0.5, shout: 0.45,
+  bolas: 0.8, flare: 2.2, fire: 0.35, banger: 0.8, net: 1, dart: 0.35, spray: 2.6 };
+/** V12: a weapon's own effect on top of the nerve it costs (the arsenal fills these in: src/game/v12/arsenal-fx.ts) */
+export const DETER_FX: Partial<Record<DeterKind, (a: Animal, st: PredState, d: PredatorDef, power: number, s: FieldScene) => void>> = {};
 
 /**
  * A deterrent lands on a predator. power ~1 (a headshot 1.6, a point-blank grenade 1.5). Costs it
@@ -135,6 +155,7 @@ export function deter(s: FieldScene, a: Animal, kind: DeterKind, power = 1, o: {
   else if (kind === 'grenade' || kind === 'flash') st.stun = Math.max(st.stun, d.stunTime * power);
   else if (kind === 'pepper') st.stun = Math.max(st.stun, d.stunTime * 0.6 * power);
   if (kind === 'smoke' || kind === 'pepper') st.blind = Math.max(st.blind, 3.5 * power);
+  DETER_FX[kind]?.(a, st, d, power, s);
   // it now knows exactly who is shooting at it
   a.aw = Math.max(a.aw, 1);
   emitPred('hit', { a, kind, power, x: o.x, head: o.head });
