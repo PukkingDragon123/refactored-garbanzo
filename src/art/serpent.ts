@@ -164,7 +164,35 @@ export interface SerpentLook {
   wet?: number;
   /** nostrils on top of the snout */
   nostrilTop?: boolean;
+  /** V12 plumage (the feathered boa): a fringe down the spine, a ruff behind the head raised by
+   *  SerpentState.crest, a crest on the crown. Absent: the serpent is painted exactly as before. */
+  feathers?: FeatherSpec;
   seed?: number;
+}
+
+/** V12 plumage: feathers hand-shaped pixel by pixel (vane, shaft, barbs, splits, an iridescent sheen) */
+export interface FeatherSpec {
+  /** feathers along the spine from..to (0 head .. 1 tail): length x radius, spacing x radius */
+  fringe?: { from: number; to: number; len: number; every?: number };
+  /** the ruff behind the head: feathers in the fan and their length x radius */
+  ruff?: { n: number; len: number };
+  /** the crest on the crown: feathers and their length x radius */
+  crest?: { n: number; len: number };
+  /** vane colours dark -> light (the ruff and the crest) */
+  vane: C[];
+  /** the spine fringe's own vane colours (default: vane) */
+  fringeVane?: C[];
+  /** shaft */
+  rachis: C;
+  /** the dark tips */
+  tip?: C;
+  /** the ruff's display colours, inner and middle bands (shown when it is raised) */
+  flash?: C;
+  flash2?: C;
+  /** iridescent sheen colours, shadow -> highlight */
+  sheen?: C[];
+  /** dark bars across the fringe feathers */
+  barred?: boolean;
 }
 
 export interface SerpentState {
@@ -425,6 +453,12 @@ export class SerpentPainter {
   private stillT = 0;
   private gaitK = 1;
 
+  // V12 plumage ramps (null for serpents without feathers)
+  private readonly FV: C[] | null = null;
+  private readonly FV0: C[] | null = null;
+  private readonly FS: C[][] = [];
+  private readonly FX: { rach: C; rachD: C; tip: C; tipL: C; fl: C[]; fl2: C[] } | null = null;
+
   // outline scratch
   private olI = new Int32Array(1024);
   private olC = new Uint32Array(1024);
@@ -479,6 +513,19 @@ export class SerpentPainter {
     this.R = new Uint32Array(ramps.length * NR);
     for (let m = 0; m < ramps.length; m++) for (let i = 0; i < NR; i++) this.R[m * NR + i] = ramps[m][i];
 
+    // ---- V12 plumage
+    if (L.feathers) {
+      const F = L.feathers;
+      this.FV = resampleRamp(F.vane);
+      this.FV0 = F.fringeVane ? resampleRamp(F.fringeVane) : this.FV;
+      if (F.sheen) for (const c of F.sheen) this.FS.push(around(c, -0.5, 0.45));
+      const tip = F.tip ?? shade(F.vane[0], -0.3);
+      this.FX = {
+        rach: F.rachis, rachD: shade(F.rachis, -0.35), tip, tipL: shade(tip, 0.35),
+        fl: around(F.flash ?? hex('#e0a830'), -0.5, 0.35), fl2: around(F.flash2 ?? F.flash ?? hex('#c03030'), -0.5, 0.35),
+      };
+    }
+
     // ---- scars: [u, phi, len(px), slope, count]
     if (L.scars) {
       const rng = new Rng(this.seed ^ 0x5ca7);
@@ -526,6 +573,7 @@ export class SerpentPainter {
     if (L.gills) m = Math.max(m, L.radius * (L.gillLen ?? 1.7) * 1.3 + 6);
     if (L.crest) m = Math.max(m, L.crest.h + L.radius + 4);
     if (L.dewlap) m = Math.max(m, L.dewlap.size + L.radius + 4);
+    if (L.feathers) m = Math.max(m, Math.max(L.feathers.ruff?.len ?? 0, L.feathers.crest?.len ?? 0, L.feathers.fringe?.len ?? 0) * L.radius * 1.15 + L.radius + 6);
     return Math.ceil(m + L.radius);
   }
 
@@ -579,6 +627,7 @@ export class SerpentPainter {
       if (L.pectoral) this.drawPectoral(buf, time, true);
       if (L.gills) this.drawGills(buf, time, true);
       if (L.crest && (st.crest ?? 0) > 0.02) this.drawCrest(buf, clamp(st.crest ?? 0));
+      if (L.feathers) this.drawPlumage(buf, st, time, 0);
     }
 
     // ---- 4. G-buffer: fins then body (body wins)
@@ -595,6 +644,7 @@ export class SerpentPainter {
     if (!this.topView) {
       if (L.osteoderms?.crest) this.drawCrestScutes(buf, st);
       if (L.patagia && !glideTop) this.drawFoldedPatagia(buf, flat);
+      if (L.feathers) this.drawPlumage(buf, st, time, 1);
     }
 
     // ---- 7. front layer
@@ -605,6 +655,7 @@ export class SerpentPainter {
     }
     if (L.dewlap && (st.dewlap ?? 0) > 0.02) this.drawDewlap(buf, st, clamp(st.dewlap ?? 0));
     this.drawHead(buf, st, time, detail);
+    if (L.feathers && !this.topView) this.drawPlumage(buf, st, time, 2);
 
     // ---- 8. outline, then details that stay un-outlined
     this.outline(buf);
@@ -1843,6 +1894,160 @@ export class SerpentPainter {
         buf.data[y * buf.w + x] = c;
       }
     }
+  }
+
+  // ================================================================ V12 plumage
+  /**
+   * The feathered boa's plumage. layer 0: the far side, painted before the body (the far half of the
+   * ruff fans out behind the neck, the far fringe shows over the spine, both in shadow); layer 1: over
+   * the body (the near fringe down the spine, the near half of the ruff lying over the neck); layer 2:
+   * the crest on the crown, after the head. st.crest (0..1) raises the ruff into a full frill and
+   * the crest up off the crown; at 0 they lie back sleek along the neck.
+   */
+  private drawPlumage(buf: PixelBuffer, st: SerpentState, time: number, layer: number) {
+    const F = this.look.feathers!;
+    const Rd = this.look.radius;
+    const lift = clamp(st.crest ?? 0);
+    const n = this.n, ds = this.ds, total = this.total, seed = this.seed;
+    const PX = this.PX, PY = this.PY, NX = this.NX, NY = this.NY, TX = this.TX, TY = this.TY, WW = this.WW;
+    const curlTo = (dx: number, dy: number, cx: number, cy: number): [number, number] => {
+      const d = cx * dx + cy * dy;
+      let x = cx - dx * d, y = cy - dy * d;
+      const l = Math.hypot(x, y);
+      if (l < 1e-3) { x = -dy; y = dx; } else { x /= l; y /= l; }
+      return [x, y];
+    };
+    // ---- the fringe down the spine (tail first, so each feather lies over the one behind it)
+    if (F.fringe && layer < 2) {
+      const fr = F.fringe;
+      const every = Math.max(2.5, (fr.every ?? 0.45) * Rd) * (layer === 0 ? 2 : 1);
+      const s0 = Math.max(fr.from * total, this.hh * 2.6), s1 = fr.to * total;
+      const cnt = Math.floor((s1 - s0) / every);
+      for (let i = cnt; i >= 0; i--) {
+        const sF = s0 + i * every + (layer === 0 ? every * 0.25 : 0);
+        const k = Math.min(n - 1, Math.round(sF / ds));
+        const u = (sF - s0) / Math.max(1, s1 - s0);
+        const env = Math.min(1, 0.45 + u * 3) * (1 - smoothstep(0.7, 1, u) * 0.75);
+        const h = hash2(i, layer, seed + 41);
+        const len = fr.len * Rd * env * (0.8 + h * 0.4) * (layer === 0 ? 0.9 : 1) * (1 + lift * 0.15);
+        if (len < 2) continue;
+        const w = WW[k];
+        const bx = PX[k] + NX[k] * w * 0.7, by = PY[k] + NY[k] * w * 0.7;
+        const sway = Math.sin(time * 2.3 + sF * 0.045 + h * 3) * 0.08;
+        const th = (layer === 0 ? 0.75 : 0.95) - lift * 0.42 + sway + (h - 0.5) * 0.2;
+        const dx = NX[k] * Math.cos(th) + TX[k] * Math.sin(th), dy = NY[k] * Math.cos(th) + TY[k] * Math.sin(th);
+        const [cx, cy] = curlTo(dx, dy, TX[k], TY[k]);
+        this.feather(buf, bx, by, dx, dy, len, Math.max(1, len * 0.24), 0.16, cx, cy, layer === 0 ? 0.15 : 0.75, 0, seed + i * 7 + layer, time, 0);
+      }
+    }
+    // ---- the ruff behind the head: a frill when raised, a sleek cowl when not
+    if (F.ruff && layer < 2) {
+      const rf = F.ruff;
+      const nR = layer === 0 ? rf.n : Math.max(3, Math.round(rf.n * 0.55));
+      const sA = this.hh * 0.8 + Rd * 0.15, sB = sA + Rd * 1.7;
+      for (let j = 0; j < nR; j++) {
+        const q = nR > 1 ? j / (nR - 1) : 0.5;
+        const h = hash2(j, 11 + layer, seed);
+        const sR = layer === 0 ? sA + (sB - sA) * (0.15 + h * 0.7) : sB - (sB - sA) * q;
+        const k = Math.min(n - 1, Math.round(sR / ds));
+        const w = WW[k];
+        let th: number, across: number;
+        if (layer === 0) { th = 1.3 + (q - 0.5) * 0.35 + (-0.8 + q * 3.2 - 1.3 - (q - 0.5) * 0.35) * lift; across = 0.8 - q * 1.6; }
+        else { th = 1.25 + q * 0.15 + (0.05 + q * 1.25 - 1.25 - q * 0.15) * lift; across = 0.72 - q * 0.75; }
+        th += Math.sin(time * 2.1 + j * 1.7) * 0.04 * (0.4 + lift);
+        const bx = PX[k] + NX[k] * w * across, by = PY[k] + NY[k] * w * across;
+        const dx = NX[k] * Math.cos(th) + TX[k] * Math.sin(th), dy = NY[k] * Math.cos(th) + TY[k] * Math.sin(th);
+        const len = rf.len * Rd * (0.5 + 0.5 * lift) * (0.82 + h * 0.3) * (layer === 0 ? 1.06 : 0.9);
+        const [cx, cy] = curlTo(dx, dy, TX[k], TY[k]);
+        this.feather(buf, bx, by, dx, dy, len, len * (0.12 + 0.04 * lift), 0.1, cx, cy, layer === 0 ? 0.45 + lift * 0.15 : 0.9, 1, seed + 300 + j * 13 + layer, time, lift);
+      }
+    }
+    // ---- the crest on the crown
+    if (F.crest && layer === 2) {
+      const cr = F.crest;
+      const { ox0, oy0, fx, fy, ux, uy } = this.headFrame(st);
+      for (let j = cr.n - 1; j >= 0; j--) {
+        const q = cr.n > 1 ? j / (cr.n - 1) : 0;
+        const bx = ox0 + fx * this.hl * (0.36 - q * 0.42) + ux * this.hh * 0.78;
+        const by = oy0 + fy * this.hl * (0.36 - q * 0.42) + uy * this.hh * 0.78;
+        const th = 1.38 + q * 0.1 + (0.2 + q * 0.5 - 1.38 - q * 0.1) * lift + Math.sin(time * 2.6 + j) * 0.05;
+        const dx = ux * Math.cos(th) - fx * Math.sin(th), dy = uy * Math.cos(th) - fy * Math.sin(th);
+        const len = cr.len * Rd * (1 - q * 0.3) * (0.55 + 0.45 * lift) * (0.9 + hash2(j, 5, seed) * 0.2);
+        const [cx, cy] = curlTo(dx, dy, -fx, -fy);
+        this.feather(buf, bx, by, dx, dy, len, Math.max(1, len * 0.15), 0.22, cx, cy, 0.9, 2, seed + 600 + j * 5, time, 0);
+      }
+    }
+  }
+
+  /**
+   * One feather, placed pixel by pixel along a curving shaft: from (bx, by) heading (dx, dy), bowing
+   * toward (cx, cy) by `curl` of its length. kind 0 fringe, 1 ruff, 2 crest; lit 0 (shadow) .. 1;
+   * flash 0..1 shows the ruff's display bands.
+   */
+  private feather(buf: PixelBuffer, bx: number, by: number, dx: number, dy: number, len: number, wid: number, curl: number,
+    cx: number, cy: number, lit: number, kind: number, seed: number, time: number, flash: number) {
+    const W = buf.w, H = buf.h, d = buf.data;
+    const steps = Math.ceil(len * 2.2);
+    for (let i = 0; i <= steps; i++) {
+      const s = i / steps;
+      const ax = bx + dx * len * s + cx * curl * len * s * s, ay = by + dy * len * s + cy * curl * len * s * s;
+      let tx = dx + cx * curl * 2 * s, ty = dy + cy * curl * 2 * s;
+      const tl = Math.hypot(tx, ty) || 1;
+      tx /= tl; ty /= tl;
+      const nx = -ty, ny = tx;
+      // narrow at the quill, fullest past the middle, a rounded tip; the leading vane a little narrower
+      const prof = s < 0.1 ? 0.22 + s * 3.2 : Math.pow(Math.sin(Math.PI * Math.min(1, 0.06 + s * 0.95)), 0.55);
+      const wA = wid * prof * (kind === 1 ? 0.95 : 0.78), wB = wid * prof;
+      const nA = Math.ceil(wA * 2), nB = Math.ceil(wB * 2);
+      for (let j = -nA; j <= nB; j++) {
+        const off = j * 0.5;
+        const side = off < 0 ? -1 : 1;
+        const v = off < 0 ? off / Math.max(0.5, wA) : off / Math.max(0.5, wB);
+        if (v < -1 || v > 1) continue;
+        const x = Math.floor(ax + nx * off), y = Math.floor(ay + ny * off);
+        if (x < 0 || y < 0 || x >= W || y >= H) continue;
+        const c = this.featherCol(s, v, side, len, wid, lit, kind, seed, time, flash);
+        if (c !== -1) d[y * W + x] = c;
+      }
+    }
+  }
+
+  private featherCol(s: number, v: number, side: number, len: number, wid: number, lit: number, kind: number, seed: number, time: number, flash: number): number {
+    const FV = kind === 0 ? this.FV0! : this.FV!, FX = this.FX!, FS = this.FS, F = this.look.feathers!;
+    const av = v < 0 ? -v : v;
+    const sp = s * len;
+    // barbs: grooves raking toward the tip; here and there they have parted (a split in the vane)
+    const ph = (sp * 0.8 - av * wid * 0.9) / 2.1;
+    const bi = Math.floor(ph), band = ph - bi;
+    if (av > 0.45 && band < 0.24 && hash2(bi, side + 3, seed) < 0.24) return -1;
+    // a ragged edge
+    if (av > 0.9 && s > 0.15 && hash2(Math.floor(sp), side + 7, seed) < 0.4) return -1;
+    // the shaft
+    if (av * wid < 0.55 && wid > 1.3 && s < 0.88) return s < 0.14 ? FX.rachD : FX.rach;
+    let lvl = 1.6 + lit * 2.6 + (1 - av) * 1.3 + (side < 0 ? 0.55 : -0.35) - s * 0.5;
+    if (band < 0.32) lvl -= 0.9;
+    if (av > 0.78) lvl -= 0.9;
+    const li = lvl < 0 ? 0 : lvl > 7 ? 7 : lvl | 0;
+    // the ruff's display: a gold heart and a crimson band, shown as it rises
+    if (kind === 1 && flash > 0.05) {
+      if (s < 0.08 + 0.14 * flash) return FX.fl[Math.min(7, li + 1)];
+      if (s < 0.13 + 0.17 * flash) return FX.fl2[li];
+    }
+    // dark tips; the ruff's carry a pale eye-spot
+    const tipAt = kind === 1 ? 0.8 : kind === 2 ? 0.86 : 0.88;
+    if (s > tipAt) {
+      if (kind === 1 && av < 0.42 && s > tipAt + 0.04 && s < tipAt + 0.12) return FX.tipL;
+      return FX.tip;
+    }
+    // bars across the fringe feathers
+    if (kind === 0 && F.barred && sp % 4.4 < 1.4 && s > 0.2) return FV[Math.max(0, li - 2)];
+    // iridescence: a sheen band that slides along the feather as it moves
+    if (FS.length && kind > 0 && av > 0.12 && av < 0.86) {
+      const ir = 0.5 + 0.5 * Math.sin(s * 4.2 + time * 1.6 + seed * 0.37 + v * 1.2);
+      const i0 = 0.45;
+      if (ir > i0) return FS[Math.min(FS.length - 1, Math.floor(((ir - i0) / (1 - i0)) * FS.length))][Math.min(7, li + 1)];
+    }
+    return FV[li];
   }
 
   // ================================================================ head
