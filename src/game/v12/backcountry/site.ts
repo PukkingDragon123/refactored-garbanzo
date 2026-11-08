@@ -67,6 +67,8 @@ import type { Biome } from './gen';
 import { tuaHooks } from './hooks';
 import './statues';
 import './feud';
+// the wild's encounters: rotten logs, the ruru's tree, the eel pool, the glow-worms, the hot pools, kea
+import '../wild/encounters';
 import { TuaGusts, TuaAir, SteamPlumes, Cascade, Strip, TuaMist } from './fx';
 
 export { TUA_SPOT, TUA_MORE, tuaGround, tuaHooks };

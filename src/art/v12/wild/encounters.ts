@@ -229,7 +229,7 @@ export function huhuGrub(i: number): Sprite {
 
 // ------------------------------------------------------------------ the old hollow tree
 
-export const HOLLOW = { up: 54, w: 12, h: 11 };
+export const HOLLOW = { up: 54, w: 12, h: 11, perchUp: 34, perchLen: 18 };
 
 /**
  * An old rimu running up out of frame: scaly red-brown bark, a flared buttressed foot, moss, an
@@ -274,6 +274,12 @@ export function hollowTree(seed: number): Sprite {
     const ang = -Math.PI * (0.15 + rng.next() * 0.7), len = 8 + rng.next() * 9;
     for (let t = 0; t < len; t++) { const X = Math.round(bx + 2 + Math.cos(ang) * t), Y = Math.round(by - 4 + Math.sin(ang) * t + t * t * 0.025); b.set(X, Y, t > len - 2 ? hex('#b8c8a8') : i % 2 ? hex('#6a8a5a') : hex('#8aa47a')); }
   }
+  // a low dead branch on the right: the ruru's perch at night (HOLLOW.perch)
+  const py = base - HOLLOW.perchUp, px = cx + lean(py) + tw - 2;
+  for (let k = 0; k < HOLLOW.perchLen; k++) {
+    const r = 2.2 - k * 0.11, yc = py - k * 0.28;
+    for (let j = -Math.ceil(r); j <= Math.ceil(r); j++) { if (Math.abs(j) > r) continue; const X = px + k, Y = Math.round(yc + j); b.set(X, Y, dp(k > HOLLOW.perchLen - 4 ? WP.barkGrey : WP.bark, 3.4 - j * 0.6, X, Y)); }
+  }
   // the hollow: a knot hole with a thick rolled lip of bark round it, dark and deep inside
   const hy = base - HOLLOW.up, hx = cx + lean(hy) - 2;
   for (let y = -HOLLOW.h; y <= 4; y++) for (let x = -HOLLOW.w; x <= HOLLOW.w; x++) {
@@ -286,19 +292,23 @@ export function hollowTree(seed: number): Sprite {
   return { buf: b, ax: cx, ay: base };
 }
 
-/** the hollow's lower lip alone (drawn in front of the owl): its anchor is the hollow's lip line */
+/**
+ * The hollow's lower rim on its own, to draw in front of whoever lives in it: the tree's own pixels
+ * just under the opening (so it is invisible except where it tucks the owl in). Same size and anchor
+ * as the tree: place it where the tree is.
+ */
 export function hollowLip(seed: number): Sprite {
-  const W = HOLLOW.w * 2 + 3, H = 10, b = new PixelBuffer(W, H);
-  const cx = HOLLOW.w + 1, top = 1;
-  for (let y = 0; y < H; y++) for (let x = -HOLLOW.w; x <= HOLLOW.w; x++) {
-    const X = cx + x;
-    const rimY = top + Math.round((x / HOLLOW.w) ** 2 * -3 + 3) - 3 + (Math.abs(x) > HOLLOW.w * 0.7 ? -1 : 0);
-    if (y < rimY + 3) continue;
-    const lip = y < rimY + 6;
-    b.set(X, y, dp(lip ? WP.bark : WP.bark, lip ? 4 - (y - rimY - 3) * 0.6 - x * 0.05 : 2.6 - x * 0.06, X, y + seed));
+  const tree = hollowTree(seed), t = tree.buf;
+  const b = new PixelBuffer(t.w, t.h);
+  const base = tree.ay, cx = tree.ax;
+  const hy = base - HOLLOW.up, hx = cx + Math.round(HOLLOW.up * 0.025) - 2;
+  for (let y = hy - 2; y <= hy + 6; y++) for (let x = hx - HOLLOW.w - 1; x <= hx + HOLLOW.w + 1; x++) {
+    const d = Math.hypot((x - hx) / (HOLLOW.w * 0.62), (y - hy + HOLLOW.h * 0.42) / (HOLLOW.h * 0.62));
+    if (d < 0.8) continue;
+    const c = t.get(x, y);
+    if (c) b.set(x, y, c);
   }
-  b.outline(INK);
-  return { buf: b, ax: cx, ay: top + 3 };
+  return { buf: b, ax: cx, ay: base };
 }
 
 // ------------------------------------------------------------------ the glow-worm overhang
@@ -382,7 +392,7 @@ export function overhang(seed: number): Sprite {
 
 // ------------------------------------------------------------------ the eel pool
 
-export const POOL = { w: 150, h: 46, lair: 0.18 };
+export const POOL = { w: 156, h: 54, lair: 0.2 };
 
 /**
  * A deep hole in the creek bed, seen from the bank above (anchor: the middle of its top edge, at the
@@ -419,7 +429,7 @@ export function eelPool(seed: number): { bed: Sprite; surface: Sprite; bank: Spr
     if (depth < 0.45 && h01(x >> 1, y >> 1, seed + 2) > 0.6) bed.set(x, y, dp(WP.stone, 3 - depth * 3, x, y));
     else bed.set(x, y, dp(WP.water, 3.4 - depth * 3.2 + (vn(x * 0.1, y * 0.2, seed + 5) - 0.5) * 0.8, x, y));
     // the surface: a see-through tint, deeper blue where it's deep, a light streak or two
-    const a = Math.round(70 + depth * 110);
+    const a = Math.round(28 + depth * 60);
     const sc = dp(WP.water, 4.2 - depth * 1.4, x, y);
     surf.set(x, y, ((a << 24) | (sc & 0xffffff)) >>> 0);
     // glints of the sky on the water: short level dashes, scattered, more toward the far side
@@ -452,7 +462,10 @@ export function geoField(seed: number): Sprite {
   const [pcx, pcy, prx, pry] = GEO.pool;
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const nx = (x - cx) / (W0 / 2), ny = (y - top - H0 / 2) / (H0 / 2);
-    if (nx * nx * 0.9 + ny * ny + (vn(x * 0.08, y * 0.15, seed) - 0.5) * 0.4 > 1) continue;
+    // a ragged edge that crumbles into the ground: crust breaking up into flakes, nothing pasted on
+    const e = nx * nx * 0.9 + ny * ny + (vn(x * 0.08, y * 0.15, seed) - 0.5) * 0.5;
+    if (e > 1.12) continue;
+    if (e > 0.9) { if (h01(x, y, seed + 11) < (e - 0.9) * 5) continue; b.set(x, y, dp(WP.sinter, 2.2 + (h01(x, y, seed) - 0.5) * 2, x, y)); continue; }
     // the hot pool: clear turquoise, deeper toward its middle, a pale sinter rim
     const px = (x / W - pcx) / prx, py = ((y - top) / H0 - pcy) / pry;
     const pd = Math.hypot(px, py) + (vn(x * 0.2, y * 0.3, seed + 3) - 0.5) * 0.12;
@@ -485,6 +498,19 @@ export function geoField(seed: number): Sprite {
     let x = Math.round(rng.next() * W), y = top + Math.round(rng.next() * H0);
     for (let k = 0; k < 7; k++) { if (b.get(x, y)) b.set(x, y, WP.sinter[1]); x += rng.next() < 0.5 ? 1 : -1; y += rng.next() < 0.5 ? 1 : 0; }
   }
-  b.outline(hex('#3a3428'));
   return { buf: b, ax: Math.round(cx), ay: top };
+}
+
+/** a drift of leaf litter with a fern frond over it: cover for something small (anchor: bottom middle) */
+export function litter(seed: number): Sprite {
+  const W = 24, H = 9, b = new PixelBuffer(W, H), rng = new Rng(seed * 19 + 3);
+  const LEAF = [WP.rot, WP.bark, WP.grass];
+  for (let i = 0; i < 26; i++) {
+    const x = 2 + Math.round(rng.next() * (W - 5)), y = H - 2 - Math.round(rng.next() * (3 - Math.abs(x - W / 2) / W * 4));
+    const R = LEAF[i % 3];
+    b.set(x, y, R[3]); b.set(x + 1, y, R[2]); if (rng.next() < 0.5) b.set(x, y - 1, R[4]);
+  }
+  for (let t = 0; t < 12; t++) { const X = 4 + t, Y = H - 3 - Math.round(Math.sin(t / 11 * Math.PI) * 5); b.set(X, Y, WP.fern[4]); if (t % 2) { b.set(X, Y - 1, WP.fern[5]); b.set(X, Y + 1, WP.fern[3]); } }
+  b.outline(INK);
+  return { buf: b, ax: W / 2, ay: H - 1 };
 }

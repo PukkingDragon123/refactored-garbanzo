@@ -137,6 +137,19 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
 - **The weapon belt:** `src/game/v12/arsenal*.ts`. T cycles weapons, G fires; there are no hit
   points, weapons spend nerve and darts put a predator to sleep.
 - **Statues:** always one of the island's animals, organic and ruined (`src/art/v12/statues.ts`).
+- **The wild's encounters** (user: "more props and wildlife that's actually cool and unique you can
+  interact with"): `src/game/v12/wild/encounters.ts` places them in Te Tuawhenua (`WILD`), clear of the
+  feud's arena and signs. Roll rotten logs over (a heave) for huhu grubs and, in the feathered gully,
+  a velvet worm (ngaokeoke) that squirts glue; knock on the old rimu for the ruru; drop a grub into the
+  creek's deep pool for the longfin eel (tuna); sit in the dark under the overhang for the glow-worms
+  (titiwai, a photo subject that only counts in the dark); soak your feet in the hot pools at the gorge's
+  end (stamina) and steam huhu over the vent; kea on the burnt ridge raid an open pack. The animals:
+  `./birds.ts` (kea, ruru), `./crawlers.ts` (tuna, ngaokeoke), each with a `*_CTX` the scene fills in;
+  the props: `src/art/v12/wild/encounters.ts`. New encounters should be things to do, feed each other,
+  and get a first-visit hint line.
+- **Rooms behind doors and windows:** never a black hole. `src/art/v11/village/interior.ts` paints the
+  room (home, meeting house, store) lit by the opening; use `paintDoorway` / `paintWindowRoom` for any
+  new building.
 
 ## Working notes
 
