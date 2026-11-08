@@ -6,6 +6,7 @@ import type { LocationDef } from './regions';
 
 import { GRID_W, GRID_H } from './atlasgeo';
 import { toWorld } from '../v12/region';
+import { TUA_STRETCHES } from '../v12/backcountry/gen';
 
 /** V12 big regions (src/game/v12/region.ts): a place played as a stretch of a region scene opens that
  *  scene with Mori at the stretch's offset (`at` is the place's own x) */
@@ -263,5 +264,14 @@ export const ATLAS: AtlasLoc[] = [
     path: PATH([316, 118], [324, 124], [332, 132], [340, 140]),
     routes: [{ from: 'isle-cave', at: 5250, enter: 30, label: 'Climb the dry chimney behind the glowworms', hours: 0.25, energy: 10, kind: 'climb', say: 'Cold air breathing out of the rock. From somewhere deep.' }],
     desc: 'Behind the glowworm cave a dry chimney climbs into the headland and then drops, tier under tier, into the dark: wētā on every wall, a squeeze, a hall of glowing fungi, a gallery of crystals, a stream with pale blind salamanders, a waterfall, and at the bottom a black lake under a sky of glowworms. Something big lives in the lake.', terrain: 'Limestone, ladders, rope pitches', arriveX: 30,
+  },
+  {
+    // (src/game/v12/backcountry: one 14,000 px map laid out by a seeded generator, gen.ts; reached on foot
+    // from the crossroads behind Te Kāinga's market lane, and from the Hot Valley's west end: v12/trails.ts)
+    id: 'backcountry', name: 'Te Tuawhenua', sub: 'The Backcountry', region: 'south', kind: 'ecosystem', pos: P(428, 418),
+    scene: { type: 'site', site: 'backcountry' }, difficulty: 4, xr: [0, 14000],
+    path: PATH([258, 382], [312, 398], [376, 410], [430, 420], [486, 432], [530, 436], [594, 442]), knots: [0, ...TUA_STRETCHES.slice(1).map(s => s.x0), 14000],
+    routes: [{ from: 'village', at: 3712, enter: 92, label: 'Take the track up behind the market lane, into the backcountry', hours: 1, energy: 14, kind: 'walk', say: 'Up the bank behind the market... and the land just opens out. Nobody lives out there.' }],
+    desc: 'The empty south interior between Te Kāinga and the Hot Valley: kānuka scrub, a braided river, a ridge burned black, a wet fern gully, tussock clearings and a gorge. Two big animals own it: a feathered serpent in the gully, and the thing with one great claw that hunts it.', terrain: 'Kānuka scrub, braided river, burnt ridge, fern gully, tussock, gorge', arriveX: 92,
   },
 ];

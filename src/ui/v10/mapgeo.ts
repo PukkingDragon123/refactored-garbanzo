@@ -59,6 +59,10 @@ export const SHAPES: Shape[] = [
   L(B.gorge, 12, [540, 262], [580, 254], [612, 246], [646, 238]),
   E(B.glow, 676, 300, 42, 60, 6), E(B.thermal, 648, 408, 66, 38, -6), E(B.sink, 522, 470, 62, 32),
   E(B.wetland, 452, 346, 34, 17),
+  // ---- V12 Te Tuawhenua, the backcountry (src/game/v12/backcountry): kānuka scrub, the braided river's
+  // flats, the burnt ridge (tussock coming back), the feathered fern gully, the tussock, the claw gorge
+  E(B.scrub, 288, 392, 30, 11, 14), E(B.plain, 354, 408, 30, 11, 8), E(B.hills, 404, 416, 24, 10, 6), E(B.fern, 458, 427, 28, 12, 6),
+  E(B.hills, 508, 434, 22, 9), L(B.gorge, 7, [540, 437], [568, 440], [594, 442]),
 ];
 
 /** the kind of shore along the coast: anchor points (grid) blended between neighbours, so beaches
@@ -191,6 +195,7 @@ export const REGION_NAMES: { text: string; at: P2; size: number }[] = [
   { text: 'NGĀ MAUNGA HUKARERE', at: G(780, 200), size: 2 },
   { text: 'THE SOUTHERN BUSH', at: G(330, 440), size: 1 },
   { text: 'THE TABLELAND', at: G(400, 262), size: 1 },
+  { text: 'TE TUAWHENUA', at: G(430, 402), size: 1 },
 ];
 /** the seas' names (on the paper, always) */
 export const SEA_NAMES: { text: string; at: P2 }[] = [
@@ -219,7 +224,7 @@ export const CRITTERS = {
 
 /** how far either side of the trail Mori sees (map px) as he walks a place */
 export const REVEAL_R: Record<string, number> = Object.fromEntries(Object.entries({
-  hills: 44, canopy: 36, ruins: 34, falls: 34, fossils: 34, coast: 36, unknown: 36, geovalley: 34, forest: 34, fernwood: 32, mangrove: 30, village: 32, glowforest: 28, deep: 30, grotto: 24,
+  hills: 44, backcountry: 36, canopy: 36, ruins: 34, falls: 34, fossils: 34, coast: 36, unknown: 36, geovalley: 34, forest: 34, fernwood: 32, mangrove: 30, village: 32, glowforest: 28, deep: 30, grotto: 24,
 }).map(([k, v]) => [k, v * S]));
 /** what a place shows once it has been well walked (half explored): the land seen from it (ground) */
 export const VISTAS: Record<string, [number, number, number, number][]> = Object.fromEntries(Object.entries({
@@ -241,6 +246,7 @@ export const VISTAS: Record<string, [number, number, number, number][]> = Object
   hills: [[576, 192, 72, 44], [700, 150, 56, 36], [640, 240, 40, 24]],
   glowforest: [[676, 302, 28, 48]],
   geovalley: [[648, 408, 64, 36]],
+  backcountry: [[300, 394, 44, 16], [400, 414, 50, 16], [500, 432, 50, 14], [570, 440, 30, 10]],
   unknown: [[522, 470, 60, 30]],
   coast: [[680, 90, 68, 18]],
   deep: [[534, 64, 92, 20]],

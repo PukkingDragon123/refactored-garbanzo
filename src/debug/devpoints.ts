@@ -29,6 +29,7 @@ import { SPOT, WRECK } from '../art/island4/layout';
 import { TRAILHEAD_X, LOG } from '../game/v11/forest/layout';
 import type { TimeOfDay } from '../world/timeofday';
 import type { SiteId } from '../game/species';
+import { TUA, TUA_SPOT, TUA_STRETCHES, tuaGround } from '../game/v12/backcountry/gen';
 
 // ---------------------------------------------------------------- small helpers
 export const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
@@ -355,6 +356,35 @@ export async function goCave(x: number, tier: string, o: { hour?: number; rope?:
   cam.x = cam.tx = x; cam.y = cam.ty = p.y - 38;
 }
 
+/** V12 Te Tuawhenua, the backcountry (src/game/v12/backcountry): out on a trip from camp, at world x;
+ *  `high` stands Mori on the highest thing there (the ledge over the den). The grip soles and the trail
+ *  boots are made, so both ways out (the village, the Hot Valley) are open. */
+export async function goBackcountry(x: number, o: { high?: boolean; hour?: number } = {}) {
+  ensureLoop();
+  findLocation('backcountry');
+  const d = dayState();
+  d.phase = 'out'; d.went = 'backcountry'; d.woke = dayNumber(); d.meals.breakfast = dayNumber();
+  if (o.hour !== undefined) game.save.vars['v10:hour'] = o.hour;
+  const bp = await import('../game/v11/blueprints');
+  for (const id of ['grip_soles', 'trail_boots']) {
+    bp.grantBlueprint(id, 'dev');
+    if (!bp.isBuilt(id)) bp.markMade(id);
+  }
+  game.persist();
+  await idle();
+  const ex = await import('../game/v10/expedition');
+  await ex.goExpedition('backcountry', { at: x });
+  refill();
+  const { FieldScene } = await import('../game/scenes/field');
+  await sceneWhere(s => s instanceof FieldScene && !!(s as InstanceType<typeof FieldScene>).player && ((s as InstanceType<typeof FieldScene>).site.id as string) === 'backcountry');
+  const f = game.scene as InstanceType<typeof FieldScene>;
+  const s = f.st.terrain.surfaceBelow(x, o.high ? -400 : tuaGround(x) - 12);
+  const p = f.player;
+  p.x = x; p.y = s?.y ?? tuaGround(x); p.vy = 0; p.onGround = true;
+  if (s) (p as unknown as { surface: unknown }).surface = s.s;
+  f.snapCamera();
+}
+
 export async function goTrip(id: string, stop = false) {
   ensureLoop();
   boatTo(6);
@@ -596,6 +626,28 @@ export async function chapters(): Promise<DevChapter[]> {
     { id: 'dc:lunge', name: 'The Ghost Gulper\'s lunge', sub: 'At the water\'s edge, lantern bright: watch the tell', icon: 'heart', run: () => goCave(760, 't4', { hour: 14, lunge: true }), variants: [
       { label: 'Lunge', run: () => goCave(760, 't4', { hour: 14, lunge: true }) }, { label: 'Lure: lantern on the pole, hidden', run: () => goCave(680, 't4', { hour: 14, pole: true }) },
     ] },
+  ] });
+  // V12 Te Tuawhenua, the backcountry (one big procedural map): a point per stretch, the story spots
+  const tuT = (x: number, high = false) => [
+    { label: 'Morning', run: () => goBackcountry(x, { high, hour: 7.5 }) }, { label: 'Midday', run: () => goBackcountry(x, { high, hour: 12 }) },
+    { label: 'Dusk', run: () => goBackcountry(x, { high, hour: 18.6 }) }, { label: 'Night', run: () => goBackcountry(x, { high, hour: 21.5 }) },
+  ];
+  const tuAt = (b: number, u: number) => Math.round(TUA_STRETCHES[b].x0 + (TUA_STRETCHES[b].x1 - TUA_STRETCHES[b].x0) * u);
+  const tuCrest = Math.round((TUA.crest[0] + TUA.crest[1]) / 2), tuArena = Math.round((TUA_SPOT.arena[0] + TUA_SPOT.arena[1]) / 2);
+  const tuWide = TUA.streams[Math.floor(TUA.streams.filter(q => q.kind === 'braid').length / 2)].x;
+  out.push({ id: 'backcountry', name: 'Te Tuawhenua, the backcountry (one big procedural map)', points: [
+    { id: 'tu:edge', name: 'The way in', sub: 'West end, up from the crossroads behind Te Kāinga\'s market lane', icon: 'map', run: () => goBackcountry(92, { hour: 9 }), variants: tuT(92) },
+    { id: 'tu:scrub', name: 'Ngā Mānuka, the kānuka scrub', sub: 'Kānuka and mānuka stands, cairns, the first claw-scored trunk', icon: 'map', run: () => goBackcountry(tuAt(0, 0.45), { hour: 10 }), variants: tuT(tuAt(0, 0.45)) },
+    { id: 'tu:flats', name: 'Te Awa Whiri, the braided river', sub: 'The boa\'s drag trail across the gravel, the braids', icon: 'map', run: () => goBackcountry(TUA.tracks[0].x - 60, { hour: 11 }), variants: tuT(TUA.tracks[0].x - 60) },
+    { id: 'tu:wade', name: 'The widest braid', sub: 'Thigh deep in the milky water', icon: 'map', run: () => goBackcountry(tuWide, { hour: 12 }), variants: tuT(tuWide) },
+    { id: 'tu:prints', name: 'The Bearer\'s prints', sub: 'Four toes and one great hooked claw, pressed into the river gravel', icon: 'map', run: () => goBackcountry(TUA.tracks[1].x - 40, { hour: 12 }), variants: tuT(TUA.tracks[1].x - 40) },
+    { id: 'tu:burnt', name: 'Te Hiwi Pango, the burnt ridge', sub: 'The crest: charred trunks, ash, regrowth, the long view', icon: 'map', run: () => goBackcountry(tuCrest, { hour: 13 }), variants: tuT(tuCrest) },
+    { id: 'tu:boa', name: 'Te Kōawa Huruhuru, the feathered gully', sub: 'The boa ground: tree ferns, the shed skin on the log', icon: 'map', run: () => goBackcountry(TUA.skins[0] + 60, { hour: 10 }), variants: tuT(TUA.skins[0] + 60) },
+    { id: 'tu:arena', name: 'The fern clearing (the arena)', sub: 'Te Ātea: TUA_SPOT.arena, the wallow beside it', icon: 'heart', run: () => goBackcountry(tuArena, { hour: 15 }), variants: tuT(tuArena) },
+    { id: 'tu:tussock', name: 'Ngā Pātītī, the tussock clearings', sub: 'A kill site: a serpent\'s picked-clean bones', icon: 'map', run: () => goBackcountry(TUA_SPOT.kills[1] - 50, { hour: 14 }), variants: tuT(TUA_SPOT.kills[1] - 50) },
+    { id: 'tu:gorge', name: 'Te Kapiti Matikuku, the claw gorge', sub: 'Between the walls: the den under the overhang, the cache', icon: 'heart', run: () => goBackcountry(TUA_SPOT.den - 140, { hour: 16 }), variants: tuT(TUA_SPOT.den - 140) },
+    { id: 'tu:ledge', name: 'The ledge over the den (the high way)', sub: 'Looking down on the den mouth', icon: 'map', run: () => goBackcountry(TUA.ledge.x1 - 30, { high: true, hour: 16 }), variants: tuT(TUA.ledge.x1 - 30, true) },
+    { id: 'tu:end', name: 'The gorge\'s end', sub: 'East end: the steam of the Hot Valley', icon: 'map', run: () => goBackcountry(13800, { hour: 17 }), variants: tuT(13800) },
   ] });
   out.push({ id: 'map', name: 'Region Map · Expeditions', points: locs.map(l => ({
     id: 'loc:' + l.id, name: l.name, sub: `${l.sub ? l.sub + ' · ' : ''}${l.region}${l.secret ? ' · secret' : ''}`, icon: l.kind === 'camp' ? 'flag' : l.kind === 'cave' ? 'moon' : 'map',
