@@ -42,7 +42,9 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
   hand"). Close-ups show the tools and what they touch, not Mori's hands or sleeves
   (`FIRST_PERSON_HANDS = false` in `src/ui/v12/closeup/hands.ts`, `HANDS3D.enabled = false`).
 - Never use emoji. Use painted pixel icons (`src/ui/pxicons.ts`).
-- Never show the HD close-up face as a small profile portrait in the HUD.
+- Never show the HD close-up face as a small profile portrait in the HUD, and no dialogue close-up
+  cut-ins either (user: "remove the zoom-in dialogue close-up face"; `CLOSEUP_CUTINS = false` in
+  `src/ui/bubbles.ts`). Every line floats by its speaker in the world.
 - The quality bar is the best scenes in the game, such as the palm beach and the great forest.
   - Nothing should look like a rectangle pasted into the world. No cropped sprites.
   - Sprites stand on the ground they belong to; trunks and canopy run out of frame.

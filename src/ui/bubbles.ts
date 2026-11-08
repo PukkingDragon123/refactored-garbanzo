@@ -3,10 +3,14 @@
 // BubbleLine options: style, expr, emote, react, others, auto, choices, close, speed, onShow), so the
 // story calls work unchanged. The line's style and the speaker's expression pick the letters' motion:
 // shouts shake and grow, whispers waver, scared lines tremble, happy ones bounce, sad ones droop,
-// thoughts drift, the phone crackles. Answers float near Mori. The big dramatic moments of the main
-// cast still bring in the close-up cut-in, with the line floating beside the bust.
+// thoughts drift, the phone crackles. Answers float near Mori. The close-up cut-in (the big face in a
+// band across the screen) is switched off (user: "remove the zoom-in dialogue close-up face"): every
+// line floats by its speaker in the world. CLOSEUP_CUTINS brings it back.
 
 import { el } from './ui';
+
+/** the dialogue close-up cut-in (a big bust in a band across the screen): off (the user removed it) */
+export const CLOSEUP_CUTINS = false;
 import { game } from '../game/game';
 import { audio } from '../core/audio';
 import { guardInput } from '../core/input';
@@ -150,8 +154,10 @@ export class Bubbles {
     return s.replace(/(<[^>]*>)|([^<]+)/g, (_m, tag: string | undefined, txt: string | undefined) => tag ?? (txt ?? '').replace(keywords(), '\u0003$1\u0004'));
   }
 
-  /** the big dramatic moments of the main cast bring the close-up in (a line's `close` overrides) */
+  /** the big dramatic moments of the main cast bring the close-up in (a line's `close` overrides);
+   *  V12: off altogether while CLOSEUP_CUTINS is false */
   private wantClose(line: BubbleLine) {
+    if (!CLOSEUP_CUTINS) return false;
     if (!isCastId(line.who)) return false;
     if (line.close !== undefined) return line.close;
     if (CHUNK_IDS.includes(line.who)) return false;
