@@ -5,6 +5,7 @@
 // and the eel-fisher's whare raupō on the hidden island. Lit from the upper left; a dark ink edge on
 // the lower right. All anchors are the bottom centre unless a painter says otherwise.
 
+import { paintDoorway } from '../../v11/village/interior';
 import { PixelBuffer } from '../../pixel';
 import type { C } from '../../color';
 import { mix, shade } from '../../color';
@@ -594,7 +595,9 @@ export function paintWhare(seed: number): Sprite {
     set(b, x, y, c);
   }
   // the doorway: low and dark, a worn sill, a carved lintel board
-  for (let x = cx - 6; x <= cx + 6; x++) for (let y = gy - 13; y <= gy; y++) set(b, x, y, pk(SWP.wood, y < gy - 11 ? 1 : 0));
+  // (user: "why is the window and doors inside empty"): the eel-catcher's store in the gloom, a shelf of
+  // gourds and kete, a string of dried eels, a sack
+  paintDoorway(b, cx - 6, gy - 13, 13, 14, 'store', seed);
   for (let x = cx - 8; x <= cx + 8; x++) { set(b, x, gy - 15, pk(SWP.wood, 5 + (x % 3 === 0 ? 1 : 0))); set(b, x, gy - 14, pk(SWP.wood, 3)); if ((x - cx) % 4 === 0) set(b, x, gy - 15, pk(SWP.lilyRed, 3)); }
   // the thatch: layered rows of raupō, ragged at the eaves, combed downward, moss on the ridge
   for (let x = x0 - 8; x <= x1 + 8; x++) {

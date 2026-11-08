@@ -21,6 +21,7 @@ import type { Sprite } from '../../jungle-core';
 import { Rng, bayer, clamp } from '../../../core/math';
 import { hineruaStatue } from '../../v12/statues';
 import { whare12 } from './house';
+import { paintDoorway, paintWindowRoom } from './interior';
 
 const R = (...h: string[]): C[] => h.map(v => hex(v));
 export const VP = {
@@ -132,12 +133,14 @@ export function wharenui(): Sprite {
     }
   });
   // the door (tatau) with its carved lintel (pare), and the window (matapihi)
-  b.rect(door0, base - 7 - dh, dw, dh, hex('#0c0606'));
+  // inside: the poupou and tukutuku round the walls, the ancestors' portraits, mattresses on the floor
+  paintDoorway(b, door0, base - 7 - dh, dw, dh, 'meeting', 11);
   for (let x = door0 - 5; x < door0 + dw + 5; x++) for (let y = base - 7 - dh - 10; y < base - 7 - dh; y++) b.set(x, y, ((x + y) % 5 === 0) ? VP.ochre[1] : dpick(VP.ochre, 3, x, y));
   b.set(door0 + 7, base - 7 - dh - 6, VP.paua); b.set(door0 + dw - 8, base - 7 - dh - 6, VP.paua);
   for (const s of [-1, 1]) for (let y = base - 7 - dh; y < base - 7; y++) b.set(s < 0 ? door0 - 1 : door0 + dw, y, VP.ochre[2]);
   const wx = cx + 18, wy = base - 44;
-  b.rect(wx, wy, 18, 14, hex('#0c0606'));
+  paintWindowRoom(b, wx, wy, 18, 14, 'meeting', 5);
+  for (let y = wy; y < wy + 14; y++) b.set(wx + 9, y, VP.ochre[2]);
   for (let x = wx - 2; x < wx + 20; x++) { b.set(x, wy - 1, VP.ochre[3]); b.set(x, wy + 14, VP.ochre[2]); }
   // a pair of shoes left at the door: you go in barefoot
   b.rect(door0 - 12, base - 9, 4, 2, hex('#2a2018')); b.rect(door0 - 7, base - 9, 4, 2, hex('#2a2018'));
@@ -214,7 +217,8 @@ export function pataka(): Sprite {
   for (let y = 0; y < 27; y++) { const hw = (y / 27) * 30; for (const s of [-1, 1]) for (let k = 0; k < 4; k++) b.set(Math.round(cx + s * (hw - k)), top + y, k === 1 || k === 2 ? VP.ochre[4] : VP.ochre[2]); }
   b.disc(cx, top + 4, 4, VP.ochre[3]); b.set(cx - 2, top + 3, VP.paua); b.set(cx + 2, top + 3, VP.paua);
   for (let y = 0; y < 10; y++) for (let x = -2; x <= 2; x++) b.set(cx + x, top - 10 + y, dpick(VP.ochre, 3 - x * 0.3, cx + x, top - 10 + y));
-  b.rect(cx - 6, bodyTop + 6, 12, 16, hex('#0c0606'));
+  // the store through its little door: kete and gourds on shelves, dried fish on a string
+  paintDoorway(b, cx - 6, bodyTop + 6, 12, 16, 'store', 3);
   for (let x = cx - 25; x <= cx + 25; x++) { b.set(x, bodyTop + 24, VP.wood[4]); b.set(x, bodyTop + 25, VP.wood[2]); }
   // the notched-log ladder leaning on it
   for (let y = 0; y < 74; y++) { const X = cx + 30 - Math.round(y * 0.3), Y = base - y; b.set(X, Y, VP.wood[3]); b.set(X + 1, Y, VP.wood[2]); if (y % 8 === 0) { b.set(X - 1, Y, VP.wood[1]); b.set(X + 2, Y, VP.wood[4]); } }

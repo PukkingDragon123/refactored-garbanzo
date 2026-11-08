@@ -20,6 +20,7 @@ import type { C } from '../../color';
 import type { Sprite } from '../../jungle-core';
 import { Rng, bayer, clamp } from '../../../core/math';
 import { VP } from './props';
+import { paintDoorway, paintWindowRoom, sillPlant } from './interior';
 
 const pick = (r: C[], v: number) => r[clamp(Math.round(v), 0, r.length - 1)];
 const dp = (r: C[], v: number, x: number, y: number) => pick(r, v + (bayer(x, y) - 0.5) * 0.9);
@@ -28,7 +29,6 @@ const h01 = (x: number, y: number, s: number) => {
   n = Math.imul(n ^ (n >>> 13), 1274126177);
   return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
 };
-const DARK = hex('#0c0705');
 const MOSS = [hex('#1e3014'), hex('#2e481a'), hex('#466a22'), hex('#62902e'), hex('#86b240')];
 const FRESH = [hex('#5a4416'), hex('#8a6a22'), hex('#b8922e'), hex('#d8b448'), hex('#f0d474')];
 
@@ -228,7 +228,8 @@ export function whare12(variant: number, seed: number): Sprite {
   // ---------------------------------------------------------------- the door, ajar, under a carved lintel
   const dw = 20, dh = 44;
   const dx = cx - 10 + (variant === 2 ? -18 : -8);
-  for (let y = base - dh; y <= base - 3; y++) for (let x = dx; x < dx + dw; x++) b.set(x, y, x < dx + 7 ? hex('#160e0a') : DARK);
+  // the room inside (interior.ts: never a black hole), the door leaf over its left edge
+  paintDoorway(b, dx, base - dh, dw, dh - 2, 'home', seed * 3 + variant, { leaf: 6 });
   // the door leaf swung in, seen edge-on at the left: planks with a cross brace
   for (let y = base - dh + 1; y <= base - 4; y++) for (let x = dx; x < dx + 6; x++) b.set(x, y, dp(VP.wood, 2.4 + (x - dx === 0 ? 1 : 0) - (x - dx) * 0.15 + ((y - (base - dh)) % 14 === 0 ? -1 : 0), x, y));
   for (let k = 0; k < 6; k++) b.set(dx + k, base - dh + 8 + k * 4, VP.wood[1]);
@@ -245,13 +246,18 @@ export function whare12(variant: number, seed: number): Sprite {
 
   // ---------------------------------------------------------------- the window and its shutter (fixed place: the night lights it)
   const wx = dx + dw + 12, wy = base - 38;
-  for (let y = wy; y < wy + 12; y++) for (let x = wx; x < wx + 14; x++) b.set(x, y, (x === wx + 7 || y === wy + 6) ? VP.wood[2] : DARK);
+  // the room through it (a shelf of jars, a hanging lamp, or the end of a bed), a curtain to one side,
+  // then the cross bars over it
+  const CURTAINS = [hex('#a83a2a'), hex('#d8c070'), hex('#3a6a8a'), hex('#7a3a6a')];
+  paintWindowRoom(b, wx, wy, 14, 12, 'home', seed * 5 + variant, { curtain: CURTAINS[(seed + variant) % CURTAINS.length] });
+  for (let y = wy; y < wy + 12; y++) for (let x = wx; x < wx + 14; x++) if (x === wx + 7 || y === wy + 6) b.set(x, y, VP.wood[2]);
   for (let x = wx - 2; x < wx + 16; x++) { b.set(x, wy - 1, VP.wood[4]); b.set(x, wy - 2, VP.wood[2]); b.set(x, wy + 12, VP.wood[4]); b.set(x, wy + 13, VP.wood[1]); }
   for (let y = wy; y < wy + 12; y++) { b.set(wx - 1, y, VP.wood[3]); b.set(wx + 14, y, VP.wood[2]); }
   // the shutter swung up and propped on a stick
   for (let y = 0; y < 5; y++) for (let x = -1; x < 16; x++) b.set(wx + x + Math.round(y * 0.6), wy - 7 + y, dp(VP.wood, 3 - y * 0.3 + (x % 5 === 0 ? -1 : 0), wx + x, wy - 7 + y));
   for (let y = 0; y < 8; y++) b.set(wx + 13 - Math.round(y * 0.3), wy - 2 + y - 6 + 6, VP.wood[1]);
-  if (variant === 2) for (let x = wx + 2; x < wx + 12; x++) for (let y = wy + 2; y < wy + 5; y++) if (x !== wx + 7) b.set(x, y, hex('#e8c060'));
+  // a tin of flowers on the sill
+  if ((seed + variant) % 3 !== 1) sillPlant(b, wx + 2 + ((seed + variant) % 2) * 7, wy + 12, seed + variant);
 
   // ---------------------------------------------------------------- on the porch
   const porch = rng.next();
