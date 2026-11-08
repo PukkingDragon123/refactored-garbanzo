@@ -1934,7 +1934,7 @@ export class SerpentPainter {
         const w = WW[k];
         const bx = PX[k] + NX[k] * w * 0.7, by = PY[k] + NY[k] * w * 0.7;
         const sway = Math.sin(time * 2.3 + sF * 0.045 + h * 3) * 0.08;
-        const th = (layer === 0 ? 0.75 : 0.95) - lift * 0.42 + sway + (h - 0.5) * 0.2;
+        const th = (layer === 0 ? 0.7 : 0.88) - lift * 0.42 + sway + (h - 0.5) * 0.2;
         const dx = NX[k] * Math.cos(th) + TX[k] * Math.sin(th), dy = NY[k] * Math.cos(th) + TY[k] * Math.sin(th);
         const [cx, cy] = curlTo(dx, dy, TX[k], TY[k]);
         this.feather(buf, bx, by, dx, dy, len, Math.max(1, len * 0.24), 0.16, cx, cy, layer === 0 ? 0.15 : 0.75, 0, seed + i * 7 + layer, time, 0);

@@ -303,7 +303,7 @@ const busyAct = new Set(['strike', 'constrict', 'swallow', 'ruff', 'brawl', 'fli
 
 function tick(a: Animal, dt: number) {
   const s = host(a), st = predState(a), m = boaMind(a);
-  a.fear = 0; a.anger = 0; a.curio = 0;
+  a.fear = 0; a.anger = st.target ? 0.4 : 0; a.curio = 0;
   st.stun = Math.max(0, st.stun - dt);
   st.blind = Math.max(0, st.blind - dt);
   st.sinceHit += dt;

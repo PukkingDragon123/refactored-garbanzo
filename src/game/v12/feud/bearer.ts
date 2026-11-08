@@ -164,9 +164,10 @@ export class BearerBody implements Body {
     const x0 = a.facing > 0 ? a.x + l : a.x - rr, x1 = a.facing > 0 ? a.x + rr : a.x - l;
     return { x0, y0: a.y - f.ay, x1, y1: a.y + (f.buf.h - f.ay) };
   }
-  head(a: Animal): [number, number] { const f = this.last ?? this.frame(a); return [a.x + f.head[0] * a.facing, a.y + f.head[1]]; }
-  mouth(a: Animal): [number, number] { const f = this.last ?? this.frame(a); return [a.x + f.mouth[0] * a.facing, a.y + f.mouth[1]]; }
-  clawTip(a: Animal): [number, number] { const f = this.last ?? this.frame(a); return [a.x + f.clawTip[0] * a.facing, a.y + f.clawTip[1]]; }
+  // (the current frame, not the last one drawn: the blows are timed in update, before the draw)
+  head(a: Animal): [number, number] { const f = this.frame(a); return [a.x + f.head[0] * a.facing, a.y + f.head[1]]; }
+  mouth(a: Animal): [number, number] { const f = this.frame(a); return [a.x + f.mouth[0] * a.facing, a.y + f.mouth[1]]; }
+  clawTip(a: Animal): [number, number] { const f = this.frame(a); return [a.x + f.clawTip[0] * a.facing, a.y + f.clawTip[1]]; }
   points(a: Animal): [number, number][] {
     const f = this.last ?? this.frame(a);
     return f.pts.map(([x, y]) => [a.x + x * a.facing, a.y + y] as [number, number]);
@@ -185,7 +186,9 @@ export const SWIPE_REACH = 112;
 
 function tick(a: Animal, dt: number) {
   const s = host(a), st = predState(a), mind = bearerMind(a);
-  a.fear = 0; a.anger = 0; a.curio = 0;
+  // nerve replaces fear; a little anger while it's after Mori keeps the danger music up (below the
+  // generic brain's own attack threshold)
+  a.fear = 0; a.anger = st.target ? 0.4 : 0; a.curio = 0;
   st.stun = Math.max(0, st.stun - dt);
   st.blind = Math.max(0, st.blind - dt);
   st.rest = Math.max(0, st.rest - dt);

@@ -77,8 +77,9 @@ export interface FeudHandle {
   readonly boa: Animal | null;
   readonly cache: Cache;
   readonly phase: FeudPhase;
-  /** stage an encounter now (dev points; the boss fight sets the stage with these) */
-  start(kind: FeudKind): void;
+  /** stage an encounter now: snap (default) puts both animals in place at once (dev points; the boss
+   *  fight setting the stage); snap false walks them there when they're in view */
+  start(kind: FeudKind, o?: { snap?: boolean }): void;
   /** a grazer for the boa (default: a torhopper, walking into the arena) */
   spawnPrey(x?: number, species?: string): Animal;
   /** stop staging encounters (the animals keep their own minds) */
@@ -331,29 +332,53 @@ class Director implements FeudHandle, Drawable {
   }
 
   /** stage an encounter now */
-  start(kind: FeudKind) {
-    const b = this.bearer, boa = this.boa, s = this.spots;
+  start(kind: FeudKind, o: { snap?: boolean } = { snap: true }) {
+    const b = this.bearer, boa = this.boa, s = this.spots, f = this.f;
+    const snap = o.snap !== false;
     this.round = 0; this.outcome = null; this.cool = 0; this.chaseAt = 0;
     if (b) { const m = bearerMind(b); m.task = null; m.foe = null; m.will = 3 + rand.next() * 1.6; restore(b); predState(b).target = null; }
     if (boa) { const m = boaMind(boa); m.task = null; m.foe = null; m.will = 2.5 + rand.next() * 2; restore(boa); predState(boa).target = null; }
+    // move an animal into place: at once when snapping (dev points) or when nobody can see it happen
+    const camX = f.st.cam.x;
+    const unseen = (x: number) => Math.abs(x - camX) > 440;
+    const put = (a: Animal, x: number): boolean => {
+      if (!snap && !(unseen(a.x) && unseen(x))) return false;
+      a.x = x; a.y = f.st.terrain.groundY(x);
+      return true;
+    };
+    /** the Bearer to its den, to sleep (walking there if it's in view) */
+    const toBed = (dur: number) => {
+      if (!b) return;
+      const m = bearerMind(b);
+      m.task = 'sleep';
+      if (b.act === 'sleep' || put(b, s.den)) { b.setAct('sleep', dur); return; }
+      m.tx = s.den; b.setAct('goto', 40);
+    };
+    /** the boa out of the way, lying up beyond the arena on the far side from Mori */
+    const boaAway = () => {
+      if (!boa) return;
+      const side = Math.sign((s.arena[0] + s.arena[1]) / 2 - f.player.x) || 1;
+      const x = side > 0 ? s.arena[1] + 520 : s.arena[0] - 520;
+      if (put(boa, x)) { boa.facing = (-side || 1) as 1 | -1; boa.setAct('ambush', 60); (boa.body as PlumeBody).settle(boa, 2); }
+    };
     if (kind === 'quiet') { this.go('quiet'); this.cool = 20; return; }
-    if (kind === 'sleep') {
-      if (b) { b.x = s.den; b.y = this.f.st.terrain.groundY(s.den); b.setAct('sleep', 60); bearerMind(b).task = 'sleep'; }
-      this.go('sleep');
-      return;
-    }
+    if (kind === 'sleep') { this.cache.kill = this.cache.kill ?? 'torhopper'; toBed(60); boaAway(); this.go('sleep'); this.cool = 40; return; }
     if (kind === 'ambush') {
       // the boa lies with its head toward where the grazers come from (away from Mori), its coils behind
       const kx = s.kills[Math.floor(rand.next() * s.kills.length)] ?? (s.arena[0] + s.arena[1]) / 2;
-      const side = (Math.sign(kx - this.f.player.x) || 1) as 1 | -1;
-      if (boa) { boa.x = kx; boa.y = this.f.st.terrain.groundY(kx); boa.facing = side; boa.setAct('ambush', 60); boaMind(boa).task = null; (boa.body as PlumeBody).settle(boa, 2); }
+      const side = (Math.sign(kx - f.player.x) || 1) as 1 | -1;
+      if (boa) {
+        const bm = boaMind(boa);
+        if (put(boa, kx)) { boa.facing = side; boa.setAct('ambush', 60); (boa.body as PlumeBody).settle(boa, 2); }
+        else { bm.task = 'lie'; bm.tx = kx; boa.setAct('goto', 30); }
+      }
       if (!this.prey || this.prey.dead || this.prey.gone || this.prey.held) {
-        const pr = this.spawnPrey(kx + side * 280);
+        const pr = this.spawnPrey(kx + side * (snap ? 280 : 520));
         pr.home = side > 0 ? [kx, kx + 300] : [kx - 300, kx];
         pr.facing = (-side) as 1 | -1;
       }
       // the Bearer sleeps it off at its den meanwhile (until the smell of a kill reaches it)
-      if (b) { if (b.act !== 'sleep') { b.x = s.den; b.y = this.f.st.terrain.groundY(s.den); } b.setAct('sleep', 60); bearerMind(b).task = 'sleep'; }
+      if (snap) toBed(60);
       this.go('ambush');
       return;
     }
@@ -363,12 +388,12 @@ class Director implements FeudHandle, Drawable {
       const c = this.spawnPrey(kx, 'torhopper');
       const side = Math.sign(s.den - kx) || -1;
       if (boa) {
-        boa.x = kx - side * 30; boa.y = this.f.st.terrain.groundY(boa.x); boa.facing = (side || 1) as 1 | -1;
+        boa.x = kx - side * 30; boa.y = f.st.terrain.groundY(boa.x); boa.facing = (side || 1) as 1 | -1;
         boaMind(boa).task = 'guard';
         grab(boa, c);
         (boa.body as PlumeBody).settle(boa, 2.5);
       }
-      if (b) { b.x = kx + side * 330; b.y = this.f.st.terrain.groundY(b.x); b.facing = (-side || 1) as 1 | -1; b.setAct('idle', 1); }
+      if (b) { b.x = kx + side * 330; b.y = f.st.terrain.groundY(b.x); b.facing = (-side || 1) as 1 | -1; b.setAct('idle', 1); }
       this.carcass = c;
       this.forceBearer = true;
       this.go('kill');
@@ -377,16 +402,27 @@ class Director implements FeudHandle, Drawable {
     }
     if (kind === 'raid') {
       this.cache.kill = this.cache.kill ?? 'torhopper';
-      if (b) { b.x = s.den; b.y = this.f.st.terrain.groundY(s.den); b.setAct('sleep', 80); bearerMind(b).task = 'sleep'; }
+      toBed(80);
       // the boa comes in from the far side of the cache from Mori, and makes off that way again
-      this.raidSide = Math.sign(s.cache - this.f.player.x) || 1;
+      this.raidSide = Math.sign(s.cache - f.player.x) || 1;
       if (boa) {
         const bx = s.cache + this.raidSide * 520;
-        boa.x = bx; boa.y = this.f.st.terrain.groundY(bx); boa.facing = (-this.raidSide || 1) as 1 | -1;
-        boa.setAct('ambush', 2);
-        (boa.body as PlumeBody).settle(boa, 2);
+        if (put(boa, bx)) { boa.facing = (-this.raidSide || 1) as 1 | -1; boa.setAct('ambush', 2); (boa.body as PlumeBody).settle(boa, 2); }
       }
       this.go('raid');
+    }
+  }
+
+  /** tasks that just need finishing off: the boa arrived at its ambush spot, the Bearer at its bed */
+  private errands() {
+    const b = this.bearer, boa = this.boa;
+    if (b) {
+      const m = bearerMind(b);
+      if (m.task === 'sleep' && b.act === 'idle') b.setAct('sleep', 60);
+    }
+    if (boa) {
+      const m = boaMind(boa);
+      if (m.task === 'lie' && boa.act === 'idle') { m.task = null; boa.setAct('ambush', 60); }
     }
   }
 
@@ -397,6 +433,7 @@ class Director implements FeudHandle, Drawable {
     const b = this.bearer, boa = this.boa;
     const mid = (s.arena[0] + s.arena[1]) / 2;
     const near = Math.abs(p.x - mid) < 1300;
+    this.errands();
     // Mori is watching: a fight in view counts as witnessed
     if ((this.phase === 'fight' || this.phase === 'pin' || this.phase === 'standoff') && b && boa) {
       const r = game.r;
@@ -411,8 +448,8 @@ class Director implements FeudHandle, Drawable {
         if (this.cool > 0) return;
         // the next encounter: a raid on a full cache, else a fresh hunt
         this.cool = 25 + rand.next() * 20;
-        if (this.cache.kill && b && boa && rand.chance(0.5)) this.start('raid');
-        else if (boa) this.start('ambush');
+        if (this.cache.kill && b && boa && b.act === 'sleep' && rand.chance(0.6)) this.start('raid', { snap: false });
+        else if (boa && boa.act !== 'digest' && boa.act !== 'swallow') this.start('ambush', { snap: false });
         return;
       }
       case 'ambush': {

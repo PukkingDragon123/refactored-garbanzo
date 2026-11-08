@@ -123,7 +123,8 @@ function placeKoroReport(f: FieldScene) {
   const ready = () => feudStep() === 5 && !F('feud:report');
   let busy = false;
   const it: Interactable = {
-    get x() { return koro()?.x ?? -9999; }, get y() { return koro()?.y ?? 0; }, w: 16, h: 22,
+    // (a hair nearer Mori than Koro's own "Talk to" prompt, so this wins while it's the quest's step)
+    get x() { const k = koro(); return k ? k.x + Math.sign(f.player.x - k.x) * 2 : -9999; }, get y() { return koro()?.y ?? 0; }, w: 16, h: 22,
     label: 'Tell Koro Wiremu about Matikuku Nui',
     get standX() { const a = koro(); return a ? a.x - 22 * (a.facing ?? 1) : 0; },
     enabled: () => ready() && !!koro()?.visible && !busy,

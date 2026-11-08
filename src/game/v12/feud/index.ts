@@ -5,6 +5,8 @@
 //   zlFeud.gallery({ anim, frame, scale, big, boa })   the art sheet
 //   zlFeud.here(o?)                                     run the feud in the current field scene round Mori
 //   zlFeud.state()                                      what the feud and both animals are doing
+//   zlFeud.script()                                     bearerScript() on the scene's Bearer
+//   zlFeud.markSign('trunk' | 'plume' | 'bones')         as if Mori had found that sign
 
 let booted = false;
 export async function bootFeud() {
@@ -20,5 +22,12 @@ export async function bootFeud() {
     here: async (o?: { prey?: string }) => (await import('./director')).feudHere(o),
     state: async () => (await import('./director')).feudState(),
     markSign: (id: string) => Q.markSign(id as never),
+    /** take over the scene's Bearer (bearerScript) */
+    script: async () => {
+      const D = await import('./director');
+      const s = (await import('../../game')).game.scene as unknown as { animals?: { species: string }[] };
+      const a = s.animals?.find(x => x.species === 'bearer');
+      return a ? D.bearerScript(a as never) : null;
+    },
   };
 }

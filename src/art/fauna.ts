@@ -75,11 +75,11 @@ export const SERPENT_LOOKS: Record<string, SerpentLook> = {
     head: 'blunt', eye: hex('#f0a828'), pupil: 'slit', eyeSize: 0.6, brow: 2, headMark: 'postocular', smile: -0.25,
     scale: { kind: 'smooth', len: 4.2, rows: 12 }, bellyScute: 5, scars: 3, seed: 9187,
     feathers: {
-      fringe: { from: 0.04, to: 0.9, len: 1.3, every: 0.4 },
+      fringe: { from: 0.04, to: 0.9, len: 1.55, every: 0.4 },
       ruff: { n: 17, len: 2.8 },
       crest: { n: 5, len: 1.35 },
       vane: r('#0e1a18', '#14302a', '#1a4838', '#226248', '#2e7e56', '#4a9a60', '#76b86a', '#a8d47c'),
-      fringeVane: r('#1c120a', '#2c1c0e', '#402a14', '#58401c', '#745826', '#927232', '#b08e44', '#ccac60'),
+      fringeVane: r('#1e140a', '#30200e', '#463016', '#60461e', '#7e6028', '#9e7c34', '#bc9a48', '#d8b866'),
       rachis: hex('#c8b47e'), tip: hex('#140a12'), flash: hex('#f0b638'), flash2: hex('#c8302c'),
       sheen: [hex('#1e7a62'), hex('#2a8aa0'), hex('#3a6ac0'), hex('#6a5ab8')],
       barred: true,
