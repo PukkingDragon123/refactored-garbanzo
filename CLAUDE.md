@@ -34,10 +34,18 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
   `st.windField`). Organic painters live in `src/art/organic.ts`.
 - Characters (user, latest: "make the people a lot better, realistic anime, not ugly and chopped"):
   the painted anime cast at its fine density, two buffer pixels per world pixel (`CAST_DENS7 = 2` in
-  `src/art/v7/body.ts`, `TOON7 = false` in `raster.ts`). That means realistic anime proportions (about
-  six and a half heads), smooth form shading with a terminator and shine, fabric folds, strand hair with
-  its angel ring, rim light, and the V12 face (`facemid.ts`). The cartoon finish and face (`facetoon.ts`)
-  are kept, unused. Mori is a normal, realistic build, not skinny. Women and girls are listed in `FEM7`.
+  `src/art/v7/body.ts`, `TOON7 = false` in `raster.ts`). That means smooth form shading with a
+  terminator and shine, fabric folds, strand hair with its angel ring, rim light, and the V12 face
+  (`facemid.ts`). The cartoon finish and face (`facetoon.ts`) are kept, unused. Mori is a normal,
+  realistic build, not skinny. Women and girls are listed in `FEM7`.
+  - **Anatomically accurate proportions** (user: "still looks chopped ... make it anatomically
+    accurate"). Every adult goes through the anatomy pass `anat()` in `src/art/v7/restyle.ts`, which
+    rebuilds the skeleton from measured human segment ratios (Drillis & Contini) of the figure's
+    height H: men 7.4 heads tall, women 7.15; ankle 0.039 H, shin 0.246 H, thigh 0.245 H (hip joint
+    at about 0.53 H), torso 0.29 H, upper arm 0.186 H, forearm 0.146 H, shoulders about 0.2 H across
+    (women 0.185 H). `headScale7` follows it. Children are left as they are. The shoulders are a
+    sloping trapezius with a deltoid cap (`body.ts`), never a tube straight across. Don't hand-tune a
+    build's segment lengths around the pass; change the ratios there.
 - **Never show the player's first-person hands** (user: "never ever show player first person
   hand"). Close-ups show the tools and what they touch, not Mori's hands or sleeves
   (`FIRST_PERSON_HANDS = false` in `src/ui/v12/closeup/hands.ts`, `HANDS3D.enabled = false`).

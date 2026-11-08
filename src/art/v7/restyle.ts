@@ -24,7 +24,7 @@ export function restyle7(ch: Char7): Char7 {
   // Mori, the player (user: "more skinny and human ... not that skinny, just realistic"): an ordinary
   // fit young man rather than the other men's broad, heavy frame: real shoulders, a natural chest and
   // arms, legs with muscle on them, on longer limbs and a natural neck, about six and a half heads tall
-  if (REAL7.has(ch.id)) return realBuild(ch);
+  if (REAL7.has(ch.id)) return anat(realBuild(ch), ch);
   // grown men (user: "men more manly"): broader shoulders and chest, a thicker neck, full-weight arms
   // and legs, a sturdier stretch; women and children keep the slender build
   const man = !kid && !isFem7(ch.id);
@@ -52,9 +52,48 @@ export function restyle7(ch: Char7): Char7 {
     legR: ch.legR.map(v => v * (man ? 1.02 : 0.96)) as Char7['legR'],
     skirt: ch.skirt ? { ...ch.skirt, len: ch.skirt.len * (1 + (L - 1) * 0.6) } : undefined,
   };
-  memo.set(ch, r);
-  memo.set(r, r);
-  return r;
+  return anat(r, ch);
+}
+
+// ---------------------------------------------------------------- anatomy (user: "make it anatomically accurate")
+// Every grown-up's segments are set from their stature by the measured human ratios (Drillis & Contini's
+// segment lengths as fractions of height H): thigh 0.245, shin 0.246, ankle 0.039 (the hip joint at
+// ~0.53 H), hip joint to the base of the neck 0.29, upper arm 0.186, forearm 0.146 (the elbow at the
+// waist, the wrist at the crotch). The head is 1/7.4 of the height for men and 1/7.15 for women (a
+// realistic anime figure), the shoulder joints at least ~0.2 H apart (men) / ~0.185 H (women), the hip
+// joints ~0.1 H apart. Each keeps their own stature, their own breadth where it is bigger (a broad man
+// stays broad), and their own girths. Children keep their own rounder proportions.
+const HEADS_TALL = { man: 7.4, woman: 7.15 };
+const anatK = new Map<string, number>();
+function anat(r: Char7, from: Char7): Char7 {
+  const b = r.build;
+  if (isChild(from.build)) { memo.set(from, r); memo.set(r, r); return r; }
+  const hd = HEADS7[r.id] ?? HEADS7.mori;
+  const top = hd.skull[0][1] + hd.skull[1][1];
+  const chin = Math.min(hd.chin[0][1] - hd.chin[1][1], hd.jaw[0][1] - hd.jaw[1][1]);
+  const raw = Math.max(1, top - chin);
+  const fem = isFem7(r.id, HEADS7[r.id]);
+  const kNow = REAL7.has(r.id) ? HEAD_SCALE_REAL7 : fem ? HEAD_SCALE_WOMAN7 : HEAD_SCALE_MAN7;
+  const H = b.hipH + b.torso + b.neck + raw * kNow;
+  const headH = H / (fem ? HEADS_TALL.woman : HEADS_TALL.man);
+  anatK.set(r.id, headH / raw);
+  const ankleH = 0.039 * H, shin = 0.246 * H, thigh = 0.245 * H;
+  // (the rig stands with a soft knee: the hip a touch under the straight-leg sum)
+  const hipH = (ankleH + shin + thigh) * 0.99;
+  const torso = 0.29 * H;
+  const neck = Math.max(0.6, H - hipH - torso - headH);
+  const build: Build = { ...b, ankleH, shin, thigh, hipH, torso, neck, upArm: 0.186 * H, foreArm: 0.146 * H };
+  const out: Char7 = {
+    ...r,
+    build,
+    shW: Math.max(r.shW, (fem ? 0.0925 : 0.1) * H),
+    hipW: Math.max(r.hipW, (fem ? 0.052 : 0.048) * H),
+    skirt: r.skirt ? { ...r.skirt, len: r.skirt.len * (build.hipH / Math.max(1, b.hipH)) } : undefined,
+  };
+  memo.set(from, out);
+  memo.set(r, out);
+  memo.set(out, out);
+  return out;
 }
 
 /** the realistic, slim-to-average build (Mori) */
@@ -88,8 +127,6 @@ function realBuild(ch: Char7): Char7 {
     legR: [ch.legR[0] * 1.0, ch.legR[1] * 0.98, ch.legR[2] * 0.94],
     skirt: ch.skirt ? { ...ch.skirt, len: ch.skirt.len * 1.06 } : undefined,
   };
-  memo.set(ch, r);
-  memo.set(r, r);
   return r;
 }
 /** Mori's head: a touch smaller than the other men's (realistic proportions), the face still reading
@@ -102,6 +139,8 @@ const HEAD_SCALE_KID7 = TOON7 ? 1.08 : 0.9;
 export function headScale7(id: string): number {
   const ch = CAST7[id];
   if (ch && isChild(ch.build)) return HEAD_SCALE_KID7;
+  // grown-ups: the anatomy pass's head (1/7.4 of the height for men, 1/7.15 for women)
+  if (ch) { restyle7(ch); const k = anatK.get(id); if (k) return k; }
   if (REAL7.has(id)) return HEAD_SCALE_REAL7;
   return isFem7(id, HEADS7[id]) ? HEAD_SCALE_WOMAN7 : HEAD_SCALE_MAN7;
 }

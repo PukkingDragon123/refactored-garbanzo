@@ -313,7 +313,14 @@ export function renderBody7(ch: Char7, pose0: Pose): Frame7 {
   E(T * 0.42, 0, ch.waist[0], T * 0.3, ch.waist[1]);
   E(T * 0.7, 0.2, ch.chest[0], T * 0.3, ch.chest[1]);
   if (ch.belly) E(T * 0.36, ch.belly * 0.45, ch.waist[0] + ch.belly * 0.6, T * 0.3, ch.waist[1] + ch.belly * 0.25);
-  s.limb(J.shN, J.shF, ch.armR[0] + 0.5, ch.armR[0] + 0.5, G.torso, tmat);
+  // the shoulders (user: anatomically accurate): the trapezius slopes from the base of the neck out to
+  // each shoulder, and a rounded deltoid caps the top of each arm; no tube straight across (it made
+  // square shoulder pads above the collarbones)
+  for (const sh of [J.shN, J.shF]) {
+    const mid = vlerp(J.neckBase, sh, 0.55);
+    s.limb(vadd(J.neckBase, [0, -0.2, 0]), vadd(mid, [0, -0.35, 0]), ch.neckR * 1.05, ch.armR[0] * 0.95, G.torso, tmat);
+    s.limb(vadd(mid, [0, -0.35, 0]), vadd(sh, [0, -0.25, 0]), ch.armR[0] * 0.95, ch.armR[0] * 1.08, G.torso, tmat);
+  }
   // the neck, in the jaw's shadow at the top and lit down the side that faces the light
   s.limb(J.neckBase, vadd(J.neckTop, [0, -0.5, 0]), ch.neckR, ch.neckR * 0.92, G.torso, h => (h.t > 0.6 ? ch.skin[2] : cel(ch.skin, h.l, -0.1)));
   if (ch.skirt) {
