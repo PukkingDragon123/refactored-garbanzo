@@ -32,6 +32,7 @@ import { Livestock } from './livestock';
 import type { VCtx } from './ctx';
 import { say, bark, sleep } from './ctx';
 import { W, G, RIVER, X } from './layout';
+import { villageFloor } from './floorbands';
 import { spawnVillagers, defineVillagePeople, welcome } from './people';
 import { placeChores } from './chores';
 import { installLife, bindLifeCtx } from './life';
@@ -50,36 +51,9 @@ let current: VCtx | null = null;
 export const villageCtx = () => (current && game.scene === current.f ? current : null);
 
 // ------------------------------------------------------------------ the ground
-const PATHS: [number, number][] = [[RIVER, 300], [380, 420], [690, 720], [790, 860], [1060, 1460], [1580, 2060], [2380, 4000]];
-const TILLED: [number, number][] = [[X.garden[0], X.garden[1]]];
 function groundStrip(f: FieldScene) {
-  const h = 120, yTop = G - 10;
-  const buf = new PixelBuffer(W, h);
-  const grass = PAL.moss, dirt = [hex('#2c1e14'), hex('#3e2c1e'), hex('#56402a'), hex('#6e5436'), hex('#8a6c46'), hex('#a08458')], till = PAL.soil;
-  const rng = new Rng(77);
-  const zone = (x: number, list: [number, number][]) => { let k = 0; for (const [a, b] of list) { const e = Math.min(x - a, b - x); if (e > 0) k = Math.max(k, clamp(e / 18)); } return k; };
-  for (let x = 0; x < W; x++) {
-    const gy = Math.round(villageGround(x) - yTop);
-    const pk = zone(x, PATHS), tk = zone(x, TILLED);
-    for (let y = Math.max(0, gy); y < h; y++) {
-      const d = y - gy, dth = bayer(x, y);
-      const usePath = pk > dth * 0.9 + 0.05, useTill = tk > dth * 0.9 + 0.05;
-      let c: C;
-      if (d < 4) {
-        const top = useTill ? [till[2], till[3], till[4], till[5]] : usePath ? [dirt[2], dirt[3], dirt[4], dirt[5]] : [grass[3], grass[4], grass[5], grass[6]];
-        c = top[clamp(3 - d, 0, 3)];
-      } else c = mix(usePath || useTill ? dirt[1] : grass[1], hex('#140e0a'), clamp(d / 70));
-      if (d > 3 && bayer(x, y) < 0.07) c = shade(c, 0.1);
-      if (d > 5 && ((x * 13 + y * 7) % 41 === 0)) c = shade(c, -0.14);
-      // pebbles and flecks in the trodden earth
-      if (usePath && d > 0 && d < 10 && rng.next() < 0.012) c = hex('#9a8a72');
-      buf.data[y * W + x] = c;
-    }
-    if (!usePathAt(x) && rng.chance(0.45)) buf.set(x, gy - 1, grass[rng.int(3, 6)]);
-    if (usePathAt(x) && rng.chance(0.05)) buf.set(x, gy - 1, dirt[4]);
-  }
-  function usePathAt(x: number) { return zone(x, PATHS) > 0.5; }
-  f.main.add(new Prop({ ...bigFrame(game.r, buf), ax: 0, ay: 0 }, 0, yTop, -10));
+  // V12: the ground in depth, painted on three parallax bands (./floorbands.ts)
+  villageFloor(f, villageGround);
   const pts: [number, number][] = [];
   for (let x = 0; x <= W; x += 8) pts.push([x, villageGround(x)]);
   f.st.terrain.addGround(pts, 'ground');
