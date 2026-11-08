@@ -90,6 +90,24 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
   and tricky moments use short QTE minigames. The model is how Dave the Diver polishes its loop.
 - Features that clutter the loop are hidden rather than deleted, so they can return.
 
+## Where the newer systems live
+
+- **Photos:** a picture already on file pays nothing, a better one pays the difference
+  (`src/game/v12/shotvalue.ts`; shown on the print, the aiming ring and the upload).
+- **Te Kāinga** is 4000 px wide:
+  - Te Huarahi, the multicultural market lane: `src/art/v11/village/quarter.ts`, `clutter.ts`,
+    `src/game/v11/village/quarter.ts`.
+  - The ground is three parallax bands painted as a ground plane: `floor.ts`, `floorbands.ts`.
+- **Te Tuawhenua, the backcountry:** a 14,000 px map generated from one seed
+  (`src/game/v12/backcountry/gen.ts`). Modules attach through `tuaHooks` (`hooks.ts`).
+- **Matikuku Nui (the Bearer) and Huruhuru (the feathered boa):** `src/game/v12/feud/` (director API at
+  the top of `director.ts`), art in `src/art/v12/feud/` and the serpent painter's `feathers` option.
+- **The night of the claw, the village boss fight:** `src/game/v12/raid/`.
+- **Big Hank the dealer:** `src/game/v11/npcs/hank.ts`; his barter wares are in `src/ui/v12/wares.ts`.
+- **The weapon belt:** `src/game/v12/arsenal*.ts`. T cycles weapons, G fires; there are no hit
+  points, weapons spend nerve and darts put a predator to sleep.
+- **Statues:** always one of the island's animals, organic and ruined (`src/art/v12/statues.ts`).
+
 ## Working notes
 
 - The user reviews gameplay themselves. Verify with `npx tsc --noEmit` and
