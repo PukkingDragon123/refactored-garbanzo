@@ -3,9 +3,11 @@
 // kūmara gardens, the pig pen, the weaving shelter, the wharenui and the marae in front of it (the
 // dance ground, the night fire), the hāngī and the cooking fire, the woodpile, the carving shed with
 // the waka on its trestles, the family houses with the laundry and the kids' things, Hana's bench,
-// the pātaka, the hens' house, the goats, and the palisade with the carved gateway to the old track.
+// the pātaka, the hens' house, the goats, then Te Huarahi (the market lane: the families who came from
+// across the sea and stayed, their houses, stalls and gardens, the dealer's lean-to at the far end and
+// the crossroads to the backcountry), and the palisade with the carved gateway to the old track.
 
-export const W = 2600;
+export const W = 4000;
 export const G = 284;
 export const RIVER = 230;
 
@@ -42,7 +44,13 @@ export const X = {
   pataka: 2176,
   coop: 2246,
   goats: [2286, 2340] as [number, number],
-  palisade: [2366, 2600] as [number, number],
-  gate: 2462,
-  trackExit: 2520,
+  /** Te Huarahi, the market lane (src/art/v11/village/quarter.ts paints it, scene.ts lays it out) */
+  lane: [2380, 3740] as [number, number],
+  /** the dealer's tarp lean-to at the end of the lane (kept clear by the lane's clutter) */
+  dealer: [3540, 3680] as [number, number],
+  /** the signposted crossroads up to the backcountry, Te Tuawhenua */
+  backcountry: 3712,
+  palisade: [3766, 4000] as [number, number],
+  gate: 3862,
+  trackExit: 3920,
 };

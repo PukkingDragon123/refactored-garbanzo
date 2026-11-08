@@ -49,7 +49,7 @@ let current: VCtx | null = null;
 export const villageCtx = () => (current && game.scene === current.f ? current : null);
 
 // ------------------------------------------------------------------ the ground
-const PATHS: [number, number][] = [[RIVER, 300], [380, 420], [690, 720], [790, 860], [1060, 1460], [1580, 2060], [2380, 2600]];
+const PATHS: [number, number][] = [[RIVER, 300], [380, 420], [690, 720], [790, 860], [1060, 1460], [1580, 2060], [2380, 4000]];
 const TILLED: [number, number][] = [[X.garden[0], X.garden[1]]];
 function groundStrip(f: FieldScene) {
   const h = 120, yTop = G - 10;
