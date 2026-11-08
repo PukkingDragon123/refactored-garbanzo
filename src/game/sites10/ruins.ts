@@ -17,6 +17,7 @@ import { plant } from '../../art/jungle-plants';
 import { findArt } from '../v10/finds';
 import { rumour, addNote } from '../v10/regions';
 import { paintTerraceWall, paintRuaPit, paintHearth, paintCollapsedStair } from '../../art/pa';
+import { bearerStatue, striderStatue, fallenSerpent, ruinStump, brokenRelief } from '../../art/v12/statues';
 import { A } from '../assets';
 import { rand } from '../../core/math';
 
@@ -40,63 +41,6 @@ const hash = (a: number, b: number) => ((Math.sin(a * 127.1 + b * 311.7) * 43758
 function stoneWall(w: number, h: number, seed: number) {
   return paintTerraceWall(w, h, seed);
 }
-/** a carved pou: a post of red-brown wood with spirals and a manaia face, standing (tilted) or fallen */
-function pou(seed: number, h: number, fallen: boolean) {
-  const w = 16, b = new PixelBuffer(fallen ? h + 4 : w + 4, fallen ? w + 4 : h + 4);
-  const rng = new Rng(seed);
-  for (let t = 0; t < h; t++) for (let s = 0; s < w; s++) {
-    const band = Math.floor(t / 14), inBand = t % 14;
-    let c = WOOD[clamp(Math.round(2 + (s < 4 ? 1 : s > 11 ? -1 : 0) + (bayer(s, t) - 0.5)), 0, 4)];
-    // spirals (koru) and notches in each band, an eye of pāua shell in the face band
-    const cx = 8, cy = 7, dx = s - cx, dy = inBand - cy, r = Math.hypot(dx, dy), a = Math.atan2(dy, dx);
-    const koru = (rr: number, aa: number) => band % 2 === 0 && rr < 6 && Math.abs(((rr - aa * 0.9) % 2.2 + 2.2) % 2.2) < 0.7;
-    if (koru(r, a)) c = WOOD[0];
-    // the lower lip of each groove catches the light
-    else if (koru(Math.hypot(dx, dy - 1), Math.atan2(dy - 1, dx))) c = WOOD[4];
-    if (band % 2 === 1 && (s + inBand) % 4 === 0) c = WOOD[0];
-    else if (band % 2 === 1 && (s + inBand) % 4 === 1) c = WOOD[3];
-    // weather checks running up the grain, moss creeping up from the foot
-    if (Math.abs(s - 5 - (seed % 5)) < 0.5 && hash(t >> 3, seed) < 0.5) c = WOOD[0];
-    if (t < 6 + (seed % 4) && bayer(s, t) < 0.5 - t * 0.06) c = PAL.moss[2 + (s % 2)];
-    if (band === 1 && Math.hypot(dx + 2, dy) < 1.6) c = hex('#6ab8a8');
-    if (rng.next() < 0.03) c = mix(c, PAL.moss[3], 0.6);
-    if (fallen) b.set(t + 2, s + 2, c); else b.set(s + 2, h - 1 - t + 2, c);
-  }
-  b.outline(hex('#140806'));
-  return fallen ? { buf: b, ax: Math.floor(h / 2), ay: w + 3 } : { buf: b, ax: 10, ay: h + 3 };
-}
-
-/** the great carving: a stone panel with a legged taniwha coiled around a spiral hole */
-function carving() {
-  const w = 110, h = 86, b = new PixelBuffer(w, h);
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const edge = Math.min(x, y, w - 1 - x, h - 1 - y);
-    if (edge < 2 && bayer(x, y) < 0.4) continue;
-    const n = fbm2(x * 0.08, y * 0.08, 3, 5);
-    b.set(x, y, STONE[clamp(Math.round(2 + n * 2.4 + (bayer(x, y) - 0.5) * 0.6), 0, 5)]);
-  }
-  const groove = STONE[0], lip = STONE[5];
-  const cx = 55, cy = 46;
-  // the spiral hole in the middle
-  for (let a = 0; a < Math.PI * 7; a += 0.03) { const r = 2 + a * 1.2; const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r * 0.8; b.set(x, y, groove); b.set(x + 1, y + 1, lip); }
-  b.disc(cx, cy, 3, hex('#0c0a08'));
-  // the taniwha: a body coiled around it, four legs, a head with a long jaw
-  for (let a = 0; a < Math.PI * 1.75; a += 0.02) {
-    const r = 33, x = cx + Math.cos(a + 0.6) * r, y = cy + Math.sin(a + 0.6) * r * 0.78;
-    for (let k = -2; k <= 2; k++) b.set(x, y + k, k === -2 || k === 2 ? groove : (Math.floor(a * 30) % 3 === 0 ? STONE[1] : STONE[3]));
-  }
-  for (const a of [1.2, 2.2, 3.5, 4.6]) {
-    const x = cx + Math.cos(a + 0.6) * 33, y = cy + Math.sin(a + 0.6) * 33 * 0.78;
-    for (let k = 0; k < 7; k++) b.set(x + Math.cos(a + 0.6) * k, y + Math.sin(a + 0.6) * k * 0.78, groove);
-  }
-  const hx = cx + Math.cos(0.6) * 33, hy = cy + Math.sin(0.6) * 33 * 0.78;
-  b.ellipse(hx + 6, hy - 2, 7, 4, STONE[3]);
-  for (let k = 0; k < 12; k++) b.set(hx + 2 + k, hy - 2 + (k > 6 ? 1 : 0), groove);
-  b.disc(hx + 5, hy - 4, 1.4, hex('#6ab8a8'));
-  b.outline(hex('#141410'));
-  return { buf: b, ax: Math.floor(w / 2), ay: h - 1 };
-}
-
 export const RUINS: Site10 = {
   id: 'ruins', loc: 'ruins', name: 'The Old Pā', width: W, camY: 170, spawnX: 80, exitX: 30, waterY: null,
   ambience: 'canopy', music: 'wonder', ground: 'grass',
@@ -127,15 +71,16 @@ export const RUINS: Site10 = {
       for (let k = 0; k < 4; k++) { const sx = a + k * 10; const c2 = sprite(`pa:step:${k}`, () => boulder(k + 31, 14, 6, STONE, { moss: 0.3 })); if (c2) main.add(new Prop(c2.f, sx + 6, ruinsGround(sx + 8) + 3, -3)); }
     }
     // palisade stumps along the upper terrace, the hearth, the storage pits
-    for (let x = 1540; x < 2200; x += rng.range(22, 40)) { const hh = rng.int(10, 24); const c = sprite(`pa:stake:${hh}`, () => pou(hh, hh, false)); if (c) main.add(new Prop(c.f, x, ruinsGround(x) + 2, -2, { tint: packColor(0.7, 0.62, 0.55, 1) })); }
+    for (let x = 1540; x < 2200; x += rng.range(22, 40)) { const hh = rng.int(10, 24); const c = sprite(`pa:stake:${hh}:${Math.round(x) % 3}`, () => ruinStump(hh * 3 + (Math.round(x) % 3), hh)); if (c) main.add(new Prop(c.f, x, ruinsGround(x) + 2, -2, { tint: packColor(0.8, 0.74, 0.68, 1) })); }
     for (const x of [900, 960, 1020]) propAt(f, `pa:rua:${x}`, () => paintRuaPit(30, x), x, ruinsGround(x) + 1, -1.5);
     propAt(f, 'pa:hearth', () => paintHearth(5), 1120, ruinsGround(1120) + 2, -1.5);
-    // pou: two still standing (leaning), one fallen across the court
-    propAt(f, 'pa:pou1', () => pou(11, 90, false), 820, ruinsGround(820) + 3, -2.5, { tint: packColor(0.9, 0.85, 0.82, 1) });
-    propAt(f, 'pa:pou2', () => pou(12, 64, false), 1660, ruinsGround(1660) + 3, -2.5, { tint: packColor(0.9, 0.85, 0.82, 1) });
-    propAt(f, 'pa:pou3', () => pou(13, 96, true), 1040, ruinsGround(1040) + 3, -1.5);
-    // the great carving
-    propAt(f, 'pa:carving', carving, 1320, ruinsGround(1320) + 3, -3);
+    // the old carvings, going back to the forest (src/art/v12/statues.ts): Matikuku Nui rearing with its
+    // claw snapped off at its feet, a forest serpent coiled on a stump, a serpent toppled and broken in two
+    propAt(f, 'pa:pou1', () => bearerStatue(31), 820, ruinsGround(820) + 3, -2.5, { tint: packColor(0.92, 0.9, 0.86, 1) });
+    propAt(f, 'pa:pou2', () => striderStatue(41), 1660, ruinsGround(1660) + 3, -2.5, { tint: packColor(0.92, 0.88, 0.84, 1) });
+    propAt(f, 'pa:pou3', () => fallenSerpent(51), 1040, ruinsGround(1040) + 3, -1.5);
+    // the great carving: a cracked slab, a corner fallen
+    propAt(f, 'pa:carving', () => brokenRelief(61), 1320, ruinsGround(1320) + 3, -3);
     // the collapsed stair at the top end: broken steps going down into the dark
     {
       const x0 = 2200, y0 = ruinsGround(x0);
@@ -177,14 +122,14 @@ export const RUINS: Site10 = {
     hazards: [{ x0: 880, x1: 1040, kind: 'slip', dmg: 3, warn: 'The old storage pits. Their edges crumble: walk around, not over.' }],
     points: [
       { id: 'ruin:pa:terraces', kind: 'ruin', name: 'The stone terraces', x: 480, photo: { w: 300, h: 80, dy: -10 }, note: 'Stone-faced terraces climb the ridge: a pā, centuries old.' },
-      { id: 'ruin:pa:pou', kind: 'ruin', name: 'Carved pou', x: 820, photo: { w: 30, h: 96 }, note: 'Carved posts, red with old kōkōwai, spirals and a manaia face. Still standing, just.',
-        look: { verb: 'Look at the carved post', lines: () => [
-          { who: 'mori', text: 'Spirals... a face with a shell eye. Whoever carved this had all the time in the world.', expr: 'surprised' },
-          { who: 'aroha', text: 'Pou. They hold up the stories. This one is somebody’s ancestor, standing guard. Don’t lean on him.', expr: 'serious' },
+      { id: 'ruin:pa:pou', kind: 'ruin', name: 'The stone beast', x: 820, photo: { w: 80, h: 112 }, note: 'A great beast carved in stone, up on its hind legs, one arm raised. Its claw lies broken in the moss.',
+        look: { verb: 'Look at the stone beast', lines: () => [
+          { who: 'mori', text: 'It’s rearing up... and that arm used to end in something huge. There, in the moss: a claw as long as my leg.', expr: 'surprised' },
+          { who: 'aroha', text: 'Matikuku Nui. The old people carved what they feared, so nobody forgot to respect it. Don’t lean on it.', expr: 'serious' },
         ] } },
       { id: 'ruin:pa:rua', kind: 'ruin', name: 'Storage pits', x: 960, note: 'Rua: pits where kūmara were stored through the winter.',
         look: { verb: 'Look into the pits', lines: () => [{ who: 'mori', text: 'Neat rectangular pits. Storage? A whole village’s winter food could go in these.', expr: 'thinking' }, { who: 'aroha', text: 'Rua kūmara. My aunty still stores kūmara like this.', expr: 'happy' }] } },
-      { id: 'ruin:pa:carving', kind: 'ruin', name: 'The great carving', x: 1320, photo: { w: 110, h: 86 }, note: 'A taniwha coiled round a hole in the earth: the carvers knew a place nobody goes.',
+      { id: 'ruin:pa:carving', kind: 'ruin', name: 'The great carving', x: 1320, photo: { w: 124, h: 96 }, note: 'A taniwha coiled round a hole in the earth: the carvers knew a place nobody goes.',
         take: { item: 'art_glyphrub', verb: 'Make a charcoal rubbing in your notebook', time: 3, line: 'A legged serpent... coiled around a spiral going down. Down into what?', aroha: 'A rubbing takes nothing from the stone. My koro will want to see it. He doesn’t like what it shows.' },
         after: () => { rumour('unknown'); addNote({ id: 'note:carving', loc: 'ruins', x: 1320, text: 'The carving points south-east: a hole in the earth. "Te Korokoro"?' }); } },
       { id: 'pt:pa:vine', kind: 'plant', name: 'Pā vine flower', x: 640, art: () => findArt.plant('#c8302a', 14), take: { item: 'plt_pavine', verb: 'Pick a vine flower', time: 1.2 } },

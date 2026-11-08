@@ -19,6 +19,7 @@ import { hex, mix, shade } from '../../color';
 import type { C } from '../../color';
 import type { Sprite } from '../../jungle-core';
 import { Rng, bayer, clamp } from '../../../core/math';
+import { hineruaStatue } from '../../v12/statues';
 
 const R = (...h: string[]): C[] => h.map(v => hex(v));
 export const VP = {
@@ -564,43 +565,10 @@ export function lanternString(w: number, seed: number): Sprite {
 }
 
 // ------------------------------------------------------------------ Hinerua
-/** Hinerua's pou at the river landing: a tall carved post, the serpent coiling up it, shell eyes */
+/** Hinerua's pou at the river landing: Hinerua herself rearing out of her own coils, carved long ago,
+ *  weathered silver and cracked, ochre left in the grooves, offerings at her foot (src/art/v12/statues.ts) */
 export function hineruaPou(): Sprite {
-  const W = 40, H = 120, b = new PixelBuffer(W, H), base = H - 1, cx = 20;
-  // the post: red ochre, a carved ancestor face near the top
-  for (let y = 10; y <= base - 6; y++) for (let k = -5; k <= 5; k++) {
-    let c = dpick(VP.ochre, 3.4 - (k + 5) / 10 * 1.6, cx + k, y);
-    if ((y + Math.abs(k) * 2) % 9 === 0) c = VP.ochre[1];
-    b.set(cx + k, y, c);
-  }
-  b.ellipse(cx, 18, 6, 7, VP.ochre[3]);
-  b.set(cx - 3, 16, VP.paua); b.set(cx + 3, 16, VP.paua); b.set(cx - 3, 15, VP.black); b.set(cx + 3, 15, VP.black);
-  b.rect(cx - 3, 22, 7, 1, VP.black); b.set(cx - 4, 21, VP.black); b.set(cx + 4, 21, VP.black);
-  // Hinerua: a scaled serpent body winding up round the post, her head over the top looking out
-  const pts: [number, number][] = [];
-  for (let i = 0; i <= 60; i++) { const t = i / 60; pts.push([cx + Math.sin(t * Math.PI * 5) * 9, base - 10 - t * 92]); }
-  for (let i = 0; i < pts.length - 1; i++) {
-    const [x0, y0] = pts[i], [x1, y1] = pts[i + 1];
-    const front = Math.cos((i / 60) * Math.PI * 5) > -0.2;
-    const r = 3.4 - i / 60 * 1.2;
-    for (let s = 0; s <= 4; s++) {
-      const x = x0 + (x1 - x0) * s / 4, y = y0 + (y1 - y0) * s / 4;
-      b.discFn(x, y, r, (X, Y, nx, ny) => {
-        if (!front && Math.abs(X - cx) < 5) return -1;
-        const scale = ((X + Y * 2) % 4 === 0) ? -1 : 0;
-        return dpick([hex('#0e1a14'), hex('#1a3428'), hex('#28503a'), hex('#3a6e4a'), hex('#58905c'), hex('#84b47a')], 3.2 - nx * 0.8 - ny * 0.6 + scale, X, Y);
-      });
-    }
-  }
-  // her head at the top: a wide, gentle serpent's head with fins like a crown, pāua eyes
-  const hx0 = cx + 2, hy0 = 8;
-  b.ellipseFn(hx0, hy0, 9, 5, (X, Y, nx, ny) => dpick([hex('#0e1a14'), hex('#1a3428'), hex('#28503a'), hex('#3a6e4a'), hex('#58905c'), hex('#84b47a')], 3.6 - nx * 0.6 - ny, X, Y));
-  for (let i = 0; i < 4; i++) b.line(hx0 - 6 + i * 3, hy0 - 4, hx0 - 8 + i * 3, hy0 - 8, hex('#a8342a'));
-  b.set(hx0 + 4, hy0 - 1, VP.paua); b.set(hx0 + 5, hy0 - 1, VP.white);
-  b.line(hx0 + 4, hy0 + 2, hx0 + 9, hy0 + 2, VP.black);
-  // the flat offering stone at the foot
-  b.ellipseFn(cx, base - 2, 14, 3, (X, Y, nx, ny) => dpick(VP.stone, 4 - ny * 1.4 - nx * 0.5, X, Y));
-  return S(b, cx, base);
+  return hineruaStatue();
 }
 /** the waharoa: the carved gateway, Hinerua along the lintel, her head over the opening */
 export function gateway(): Sprite {
