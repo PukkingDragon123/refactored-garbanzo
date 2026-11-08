@@ -90,6 +90,10 @@ export const TRAILS: TrailDef[] = [
   T('mangrove-swamp', { loc: 'mangrove', at: 2000, arm: 'up' }, { loc: 'swamp', at: 'E' }, 0.75, 'wade', { gate: 'staff', say: 'Upstream the water goes still, and black, and the bulrushes are taller than me.' }),
   T('village-ruins', { loc: 'village', at: 'E' }, { loc: 'ruins', at: 'E' }, 0.75, 'path', { gate: 'blessing', say: 'With Koro’s blessing, then. Up the old track.' }),
   T('ruins-unknown', { loc: 'ruins', at: 'E', arm: 'down' }, { loc: 'unknown', at: 'E' }, 1, 'tunnel', { gate: 'rope', say: 'Tie it off. Twice. Okay. Three times.' }),
+  // ---- V12 Te Tuawhenua, the backcountry (src/game/v12/backcountry): up from the crossroads behind Te
+  // Kāinga's market lane at its west end; out of the claw gorge's east end to the Hot Valley
+  T('village-backcountry', { loc: 'village', at: 3712, arm: 'up' }, { loc: 'backcountry', at: 'W' }, 0.75, 'path', { gate: 'grip', say: 'Up the bank behind the market lane... and the land just opens out. Nobody lives out there. Nobody.' }),
+  T('backcountry-geo', { loc: 'backcountry', at: 'E' }, { loc: 'geovalley', at: 'E', arm: 'up' }, 1, 'path', { gate: 'boots', say: 'Steam at the end of the gorge. The Hot Valley. My boots are going to hate this.' }),
   // ---- the deep interior
   T('fossils-glow', { loc: 'fossils', at: 'E' }, { loc: 'glowforest', at: 'W' }, 1, 'climb', { gate: 'lantern', say: 'It’s midday and it’s dark down there. And something down there is... glowing.' }),
   T('glow-geo', { loc: 'glowforest', at: 'E' }, { loc: 'geovalley', at: 'W' }, 1, 'path', { gate: 'boots', say: 'Smells like rotten eggs. Steam over the ridge. Oh no. Oh, yes.' }),
@@ -105,6 +109,7 @@ const SIGN: Record<string, string> = {
   forest: 'TE WAO NUI', fernwood: 'FERNWOOD', canopy: 'THE CANOPY', falls: 'THE FALLS', hills: 'ROCKY HILLS',
   mangrove: 'MANGROVES', village: 'TE KĀINGA', ruins: 'THE OLD PĀ', fossils: 'BONE CLIFFS', glowforest: 'GLOW FOREST',
   geovalley: 'HOT VALLEY', unknown: 'KOROKORO', grotto: 'SEA GROTTO', deep: 'THE DEEP', coast: 'SERPENT COAST', swamp: 'TE REPO RAUPŌ', deepcave: 'TE RUA PŌURI',
+  backcountry: 'TE TUAWHENUA',
 };
 const VERB: Record<TrailKind, string> = { path: 'Walk to', climb: 'Climb to', swim: 'Swim to', wade: 'Wade to', dive: 'Dive to', tunnel: 'Rope down to' };
 const ACT: Record<TrailKind, HungerActivity> = { path: 'walk', climb: 'climb', swim: 'swim', wade: 'wade', dive: 'swim', tunnel: 'climb' };
