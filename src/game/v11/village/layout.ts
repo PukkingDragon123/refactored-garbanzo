@@ -46,6 +46,13 @@ export const X = {
   goats: [2286, 2340] as [number, number],
   /** Te Huarahi, the market lane (src/art/v11/village/quarter.ts paints it, scene.ts lays it out) */
   lane: [2380, 3740] as [number, number],
+  /** the lane's households, west to east (quarter.ts): the Tongan family's fale, the Lees' store, the
+   *  first of the three stalls, the trading store, the old gum-digger's hut */
+  fale: 2470,
+  leeStore: 2846,
+  stalls: 2976,
+  tradeStore: 3256,
+  gumHut: 3450,
   /** the dealer's tarp lean-to at the end of the lane (kept clear by the lane's clutter) */
   dealer: [3540, 3680] as [number, number],
   /** the signposted crossroads up to the backcountry, Te Tuawhenua */
