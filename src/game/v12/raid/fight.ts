@@ -284,8 +284,9 @@ async function lost(r: Raid) {
   delete game.save.flags['raid:started'];
   bark('ani', 'NO! Not Pōtiki!', { expr: 'cry' });
   await r.bear.act('pin', 1.0);
-  const live = villageCtx()?.live as unknown as { remove?: (kind: string) => void } | null;
-  live?.remove?.('goat');
+  // it takes the nearest goat with it
+  const live = villageCtx()?.live;
+  if (live) { const i = live.list.findIndex(g => g.kind === 'goat'); if (i >= 0) live.list.splice(i, 1); }
   await r.bear.moveTo(X.gate + 360, 120);
   r.bear.remove();
   r.phase = 'done';
