@@ -18,6 +18,7 @@
 import { game } from '../../game';
 import { QUESTS, QUEST_BY_ID, questStatus, startQuest, currentStepIndex } from '../../quests';
 import type { QuestDef } from '../../quests';
+import { ownedWeapons } from '../arsenal';
 
 export const RAID_ID = 'feud_raid';
 export const F = (k: string) => !!game.save.flags[k];
@@ -28,7 +29,7 @@ export const setV = (k: string, n: number) => { game.save.vars[k] = n; game.pers
 export const BARRICADES = 3;
 export const builtN = () => Math.min(BARRICADES, V('raid:built'));
 /** any of Big Hank's weapons on the belt (the arsenal is optional: the sling alone can do it, barely) */
-export const armed = () => game.save.tools.some(t => ['bolas', 'flaregun', 'bangers', 'netgun', 'tranq', 'bearspray'].includes(t));
+export const armed = () => ownedWeapons().some(w => w.id !== 'sling');
 export const raidActive = () => questStatus(RAID_ID) === 'active';
 export const raidWon = () => F('raid:won');
 export function raidStep(): number { return raidActive() ? currentStepIndex(RAID_QUEST) : -1; }

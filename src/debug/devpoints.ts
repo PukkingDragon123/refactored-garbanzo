@@ -735,6 +735,7 @@ export async function chapters(): Promise<DevChapter[]> {
     { id: 'raid:wait', name: 'Barricades up: wait for dark', sub: 'At the fire on the marae', icon: 'sun', run: () => raidGo('ready', 'day', 1240) },
     { id: 'raid:fight', name: 'The Bearer comes through the gate', sub: 'Night, barricades up', icon: 'bolt', variants: [
       { label: 'Sling only', run: () => raidGo('ready', 'night', 3300) },
+      { label: 'Fully armed (every weapon from Hank)', run: async () => { const A = await import('../game/v12/arsenal'); for (const id of A.WEAPON_IDS) A.giveWeapon(id); await raidGo('ready', 'night', 3300); } },
     ] },
     { id: 'raid:after', name: 'The morning after', sub: 'Claw marks on the gateway; Koro by the fire', icon: 'moon', run: () => raidGo('won', 'dawn', 1240) },
   ] });
