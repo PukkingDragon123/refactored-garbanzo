@@ -65,6 +65,7 @@ import { paintPlume, paintSkinLog, paintBonePile, paintWallow, paintDenMouth, pa
 import { TUA, TUA_W, TUA_MIN_Y, TUA_MAX_Y, TUA_B0, TUA_SPOT, TUA_MORE, BIOMES, bioW, bioPick, tuaGround, tuaBase, tuaDepth, tuaCanopy, tuaZone } from './gen';
 import type { Biome } from './gen';
 import { tuaHooks } from './hooks';
+import './statues';
 import { TuaGusts, TuaAir, SteamPlumes, Cascade, Strip, TuaMist } from './fx';
 
 export { TUA_SPOT, TUA_MORE, tuaGround, tuaHooks };
