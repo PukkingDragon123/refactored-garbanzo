@@ -52,6 +52,8 @@ async function boot() {
   game.r.post.fade = 1;
   game.fadeTo(1);
   game.start();
+  // V12: the night of the claw (the Bearer comes to Te Kāinga)
+  try { (await import('./game/v12/raid')).bootRaid(); } catch (e) { console.warn('[raid] boot', e); }
   // V11: the people of Zealandia (relationships, NPCs, their quests); K opens the people book
   try { await (await import('./game/v11/npcs')).bootNpcs(); } catch (e) { console.warn('[npcs] boot', e); }
   // V12: the Thunderbird quest and the harder, more hostile wilds

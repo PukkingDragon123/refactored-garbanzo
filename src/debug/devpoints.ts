@@ -626,6 +626,17 @@ export async function chapters(): Promise<DevChapter[]> {
       await game.go(() => new FieldScene(COAST_DEEP, t));
     } })) },
   ] });
+  const raid = () => import('../game/v12/raid');
+  const vilR = () => import('../game/v11/village/debug');
+  const raidGo = async (to: 'prep' | 'ready' | 'won', tod: 'dawn' | 'day' | 'dusk' | 'night', x: number) => { ensureLoop(); (await vilR()).stage('done'); (await raid()).stageRaid(to); await (await vilR()).go(tod, x); };
+  out.push({ id: 'raid', name: 'Te Pō o te Matikuku · the night of the claw', points: [
+    { id: 'raid:prep', name: 'Get the village ready', sub: 'Three stake piles to lash across the market lane', icon: 'wrench', run: () => raidGo('prep', 'day', 3240) },
+    { id: 'raid:wait', name: 'Barricades up: wait for dark', sub: 'At the fire on the marae', icon: 'sun', run: () => raidGo('ready', 'day', 1240) },
+    { id: 'raid:fight', name: 'The Bearer comes through the gate', sub: 'Night, barricades up', icon: 'bolt', variants: [
+      { label: 'Sling only', run: () => raidGo('ready', 'night', 3300) },
+    ] },
+    { id: 'raid:after', name: 'The morning after', sub: 'Claw marks on the gateway; Koro by the fire', icon: 'moon', run: () => raidGo('won', 'dawn', 1240) },
+  ] });
   out.push({ id: 'mini', name: 'Minigames and screens', points: [
     { id: 'm:engine', name: 'Engine repair minigame', icon: 'wrench', run: async () => { await zl().engine?.(); } },
     { id: 'm:noodles', name: 'Instant noodles', icon: 'heart', run: async () => { await zl().noodles?.(); } },
