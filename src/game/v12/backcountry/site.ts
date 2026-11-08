@@ -66,6 +66,7 @@ import { TUA, TUA_W, TUA_MIN_Y, TUA_MAX_Y, TUA_B0, TUA_SPOT, TUA_MORE, BIOMES, b
 import type { Biome } from './gen';
 import { tuaHooks } from './hooks';
 import './statues';
+import './feud';
 import { TuaGusts, TuaAir, SteamPlumes, Cascade, Strip, TuaMist } from './fx';
 
 export { TUA_SPOT, TUA_MORE, tuaGround, tuaHooks };

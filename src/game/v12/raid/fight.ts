@@ -248,7 +248,9 @@ async function asleep(r: Raid) {
   const f = r.f;
   setF('raid:won'); setF('raid:asleep');
   cineSlowmo(0.35, 1.2);
-  await r.bear.act('sleep');
+  // it slumps and stays down (the sleep pose held for as long as the scene lasts)
+  void r.bear.act('sleep', 1e6);
+  await sleep(1400);
   r.tag.set(0);
   await sleep(900);
   r.phase = 'done';
@@ -325,4 +327,5 @@ export async function fireTalk(f: FieldScene) {
 }
 
 /** dev / console: the raid controller */
-export const RAID_ZL = { now: () => cur, phase: () => cur?.phase ?? null, nerve: () => cur?.bear.nerve() ?? null, clamp };
+export const RAID_ZL = { now: () => cur, phase: () => cur?.phase ?? null, nerve: () => cur?.bear.nerve() ?? null, bear: () => cur?.bear.a ?? null, clamp };
+(window as unknown as { zlRaid?: typeof RAID_ZL }).zlRaid = RAID_ZL;
