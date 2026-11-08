@@ -15,8 +15,11 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
   - Paper, ink, stamps, tape and pins are painted as pixel art.
 - The UI should be present and look great. Make it cool, stylish and physical, in the spirit of
   Dave the Diver: a proper stamina gauge, gauges and tags. Don't strip things away until it's bare.
-- Every UI piece is a super-detailed physical object. Timers are a real vintage pocket watch
-  (`src/ui/v12/watch.ts`), never a bar or a bare number.
+- Every UI piece is a super-detailed physical object. Timers and the clock are Mori's modern field watch
+  (user, latest: "real modern watch, cool, interactive, show stamina"; `src/ui/v12/watch.ts`), never a bar
+  or a bare number: a rugged composite case, a steel compass bezel, four pushers and a colour display
+  with the time, stamina (its ring) and how long until dark. Click it (or press C) and it comes up big as
+  a working menu (`src/ui/v12/fieldwatch.ts`: clock, body, sun, compass, quest, shortcuts).
 - Every asset is hand-drawn pixel art, placed pixel by pixel with hand-picked clusters. Don't
   build things by sticking primitive shapes together: no circle or ellipse rocks, no blob fossils,
   no stacked-rectangle props. That covers world art, item icons and UI. Rocks, fossils, plants and
@@ -47,7 +50,7 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
 ## V12 design: zero traditional UI and a clear loop (always)
 
 - **HUD (user, latest): the classic HUD is back**, every piece a detailed physical pixel-art object.
-  It includes the pinned objective note, the research stamp, the pocket-watch clock, the place
+  It includes the pinned objective note, the research stamp, the field-watch clock, the place
   banner and the kit (`src/ui/v11/hud2classic.ts`, mounted by `src/ui/hud2.ts` via `CLASSIC_HUD`).
   There's no top-left status plate (medallion, flask or weight scale) and no research-point counter;
   the user removed both. The HUD is only what's useful: the objective note, the pocket-watch clock,
@@ -73,7 +76,9 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
   - **Main menu:** a cinematic scene of the boat sailing with Mori on deck. The title is a cloud
     formation in the sky and the options are floating text. The pause and settings menus also use
     floating text over the scene.
-- **No stamina, no sprint, no fast travel.**
+- **Stamina is back (user, latest), no fast travel.** Shift sprints (fast and loud); sprinting,
+  climbing and swimming use stamina, easing off refills it, hunger caps it, and running it out leaves
+  Mori winded for a moment (`src/game/v12/stamina.ts`). It is read on the field watch's ring.
   - **Hunger:** Mori's stomach growls (a sound and an animation). When he's too hungry he refuses to
     take photos until he eats.
   - **Travel:** you walk everywhere. Trails link the areas, with signposted crossroads where paths

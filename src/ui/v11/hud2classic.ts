@@ -1,6 +1,9 @@
 // The HUD (src/ui/hud2.ts mounts this when CLASSIC_HUD is on): only what the player uses, painted at
 // the screen's own resolution (about one device pixel per art pixel, never chunky blocks):
-//   top right   the brass pocket watch with the time of day (src/ui/v12/watch.ts), and under it the
+//   top right   Mori's field watch (src/ui/v12/watch.ts): a rugged modern watch whose display shows the
+//               time, his stamina (the ring) and heart, or how long until dark; click it to change face
+//               (the MODE pusher goes in, it beeps, the backlight comes on); sprinting or winded it
+//               switches to the body face by itself and buzzes when he runs out. Under it the
 //               objective note: a small pinned scrap of journal paper with the current step in Mori's
 //               marker hand. When a step is done it's ticked and struck through in ink, then the next
 //               one is written in. After a while it rolls up to its title; hover it (or tap) to unroll
@@ -31,6 +34,10 @@ import type { PxFontId } from '../pxfont';
 import { PixelBuffer } from '../../art/pixel';
 import { hudHour } from './hudclock';
 import { drawWatch, watchSize } from '../v12/watch';
+import type { WatchFace } from '../v12/watch';
+import { openFieldWatch, installWatchKeys, fieldWatchOpen } from '../v12/fieldwatch';
+import { stamina, staminaMax, isWinded, heartRate, onStamina } from '../../game/v12/stamina';
+import { hunger } from '../../game/v12/hunger';
 import { DUSK_HOUR, DARK_HOUR, FETCH_HOUR } from '../../game/v12/clock';
 import { slingOwnsG } from '../../game/v11/predators';
 import { floatSky, floatNotice, floatPickup } from '../v12/float';
@@ -45,11 +52,9 @@ const CSS = `
 .h2 .hr .dial.off { display: none; }
 .h2 .hr .wb { position: relative; pointer-events: auto; cursor: pointer; }
 .h2 .hr .wb.off { display: none; }
-.h2 .hr .wb canvas.dial { display: block; transform-origin: 50% 4%; }
-.h2 .hr .wb.hov canvas.dial { animation: wSwing 1.8s steps(8) infinite; }
-@keyframes wSwing { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
-.h2 .hr .wb canvas.dial.spin { animation: wSpin 0.8s steps(12); }
-@keyframes wSpin { from { transform: perspective(240px) rotateY(0deg) scale(1.08); } to { transform: perspective(240px) rotateY(360deg) scale(1); } }
+.h2 .hr .wb canvas.dial { display: block; transition: transform 0.12s steps(2); }
+.h2 .hr .wb.hov canvas.dial { transform: translateY(calc(var(--kp, 2px) * -1)); }
+.h2 .hr .wb canvas.dial.spin { transform: translateY(var(--kp, 2px)); transition: none; }
 .h2 .hr .wb canvas.wl { position: absolute; right: 100%; top: 38%; margin-right: 4px; pointer-events: none; opacity: 0; transform: translateX(8px); image-rendering: pixelated; }
 .h2 .hr .wb.show canvas.wl { opacity: 1; transform: none; animation: wlIn 0.26s steps(4), wlBob 2s steps(6) 0.26s infinite; }
 @keyframes wlIn { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
@@ -119,6 +124,8 @@ const hudK = () => dprOf() * hudUi();
 /** device px per art pixel for the kit icons (user: "not that high resolution"): every screen gets the
  *  same ~34 px icon art, shown at a whole number of device pixels */
 const kitPx = () => Math.max(2, Math.round(hudK() * 2));
+let dayFn: (() => number) | null = null;
+void import('../../game/v10/day').then(m => { dayFn = m.dayNumber; }).catch(() => {});
 const KIT_NAMES: Record<KitKind, string> = { pack: 'Backpack', guide: 'Field guide', lap: 'Laptop', cam: 'Camera' };
 
 /** a canvas painted at device resolution: w x h design units */
@@ -187,62 +194,6 @@ function watchWords(h: number): [string, string] {
   return [fmtHour(h), todo];
 }
 
-/**
- * The island has had its way with the watch: a cushion of moss on the lower rim with a few lit tips,
- * a vine climbing the left side with its leaves, and three tiny flowers (two in the moss, one by the
- * crown). Hand-placed clusters on the case's rim, sized to the watch (case S, centre as drawWatch).
- */
-function paintWatchNature(g: CanvasRenderingContext2D, S: number) {
-  const R = S / 2, top = Math.round(S * 0.28) + 3, cx = Math.round(3 + R), cy = Math.round(top + R);
-  const P = (x: number, y: number, c: string) => { g.fillStyle = c; g.fillRect(Math.round(x), Math.round(y), 1, 1); };
-  const MOSS = ['#22381a', '#2f4a1e', '#4a6e26', '#6e9632', '#9cc04a', '#c8e070'];
-  const hsh = (i: number) => { const n = Math.sin(i * 127.1 + 31.7) * 43758.5453; return n - Math.floor(n); };
-  // moss: along the rim from the bottom (90°) round to the lower left (205°), thickest at the bottom
-  for (let a = 70, i = 0; a <= 205; a += 360 / (Math.PI * S * 1.1), i++) {
-    const r = (a * Math.PI) / 180, mid = 1 - Math.abs(a - 140) / 70;
-    const th = Math.max(1, Math.round(1.5 + mid * 3.4 + hsh(i) * 2));
-    for (let d = -2; d < th; d++) {
-      const rr = R - 0.5 + d, x = cx + Math.cos(r) * rr, y = cy + Math.sin(r) * rr;
-      const c = d === th - 1 ? (hsh(i + 7) > 0.55 ? MOSS[4] : MOSS[3]) : d < 0 ? MOSS[0] : d === 0 ? MOSS[1] : hsh(i * 3 + d) > 0.7 ? MOSS[3] : MOSS[2];
-      P(x, y, c);
-    }
-    if (hsh(i + 3) > 0.7) P(cx + Math.cos(r) * (R + th - 0.5), cy + Math.sin(r) * (R + th - 0.5), MOSS[5]); // a lit tip
-  }
-  // the vine: up the left side from the moss, a leaf every few pixels
-  for (let a = 200, i = 0; a <= 262; a += 360 / (Math.PI * S * 1.2), i++) {
-    const r = (a * Math.PI) / 180, wob = Math.sin(i * 0.9) * 0.8;
-    const x = cx + Math.cos(r) * (R + 1 + wob), y = cy + Math.sin(r) * (R + 1 + wob);
-    P(x, y, MOSS[1]);
-    if (i % 4 === 2) { const lx = x - 1, ly = y - 1; P(lx, ly, MOSS[3]); P(lx - 1, ly, MOSS[2]); P(lx, ly - 1, MOSS[4]); }
-  }
-  // flowers: petals round a gold heart (a white one and a pink one in the moss, a white one by the crown)
-  // a little daisy: petals two long on the lit side, shaded on the far side, a gold heart, two leaves
-  const flower = (x: number, y: number, pet: string, petD: string) => {
-    x = Math.round(x); y = Math.round(y);
-    for (const [dx, dy] of [[0, -2], [0, -1], [-2, 0], [-1, 0], [-1, -1]]) P(x + dx, y + dy, pet);
-    for (const [dx, dy] of [[1, 0], [2, 0], [0, 1], [0, 2], [1, 1], [1, -1], [-1, 1]]) P(x + dx, y + dy, petD);
-    P(x, y, '#f0c040');
-    P(x + 2, y + 2, MOSS[3]); P(x + 3, y + 2, MOSS[2]); P(x - 2, y + 2, MOSS[3]);
-  };
-  const at = (deg: number, rr: number): [number, number] => { const r = (deg * Math.PI) / 180; return [cx + Math.cos(r) * rr, cy + Math.sin(r) * rr]; };
-  flower(...at(118, R + 2), '#fbf4f0', '#d8c8d0');
-  flower(...at(168, R + 2), '#f4a8c8', '#d0789c');
-  flower(cx - Math.round(S * 0.16), top - 2, '#fbf4f0', '#d8c8d0');
-}
-
-/** today's marks on the dial: an amber sun at dusk (head back), a blue moon at dark */
-function paintWatchMarks(g: CanvasRenderingContext2D, S: number, _h: number) {
-  const R = S / 2, top = Math.round(S * 0.28) + 3, cx = 3 + R, cy = top + R;
-  const P = (x: number, y: number, c: string) => { g.fillStyle = c; g.fillRect(Math.round(x), Math.round(y), 1, 1); };
-  const pip = (hour: number, c: string, cd: string) => {
-    const a = (((hour % 12) + 12) % 12) / 12 * Math.PI * 2 - Math.PI / 2, rr = R * 0.56;
-    const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr;
-    P(x, y, c); P(x + 1, y, c); P(x, y + 1, cd); P(x + 1, y + 1, cd);
-  };
-  pip(DUSK_HOUR, '#ffb030', '#c86a10');
-  pip(DARK_HOUR, '#7ab0ff', '#3a5aa8');
-}
-
 /** the watch's floating words: the time in the menus' bold face, what to do under it */
 function paintWatchLabel(cv: HTMLCanvasElement, time: string, todo: string) {
   const px = kitPx(), dpr = dprOf();
@@ -292,6 +243,14 @@ export class Hud2Classic {
   private watchHover = false;
   /** 1 → 0 while the watch spins after a click (the hands whirl a full turn back to the time) */
   private watchSpin = 0;
+  /** V12 field watch: the face picked, seconds of the MODE pusher held in, of backlight, of buzz,
+   *  and of the body face shown by itself (sprinting, winded) */
+  private watchFace: WatchFace = 'time';
+  private watchPress = 0;
+  private watchLight = 0;
+  private watchBuzz = 0;
+  private watchAuto = 0;
+  private offStamina: (() => void) | null = null;
   /** seconds the 'what to do' words stay up without a hover */
   private watchSayT = 0;
   private watchAdvice = '';
@@ -345,15 +304,23 @@ export class Hud2Classic {
     this.watchCv.className = 'hd dial';
     this.watchBox.addEventListener('pointerenter', () => { this.watchHover = true; this.watchBox.classList.add('hov', 'show'); audio.play('ui', { vol: 0.05, pitch: 2.1 }); });
     this.watchBox.addEventListener('pointerleave', () => { this.watchHover = false; this.watchBox.classList.remove('hov'); if (this.watchSayT <= 0) this.watchBox.classList.remove('show'); });
+    // a click presses START: the watch comes up off the corner, big, and works like a menu (C does too)
+    const watchOpts = () => ({ from: this.watchCv.getBoundingClientRect(), pack: () => this.useKit('pack'), camera: () => this.useKit('cam') });
     this.watchBox.addEventListener('pointerdown', e => {
       e.stopPropagation();
-      this.watchSpin = 1;
-      this.watchSayT = 4;
-      this.watchBox.classList.add('show');
-      this.watchCv.classList.remove('spin'); void this.watchCv.offsetWidth; this.watchCv.classList.add('spin');
-      audio.play('ui', { vol: 0.12, pitch: 2.6 });
-      setTimeout(() => audio.play('ui', { vol: 0.1, pitch: 3.1 }), 220);
-      setTimeout(() => audio.play('ui', { vol: 0.12, pitch: 2.4 }), 520);
+      if (game.ui.blocking || fieldWatchOpen()) return;
+      this.watchPress = 0.16;
+      this.watchLight = 2.4;
+      this.watchCv.classList.add('spin');
+      setTimeout(() => this.watchCv.classList.remove('spin'), 120);
+      audio.play('ui', { vol: 0.1, pitch: 3.4 });
+      void openFieldWatch(watchOpts());
+    });
+    installWatchKeys(watchOpts);
+    // out of breath: the watch buzzes on his wrist and shows the body face
+    this.offStamina = onStamina(ev => {
+      if (ev === 'winded') { this.watchBuzz = 0.7; this.watchLight = 1.6; this.watchAuto = 3.5; audio.play('ui', { vol: 0.12, pitch: 1.2 }); setTimeout(() => audio.play('ui', { vol: 0.12, pitch: 1.2 }), 140); }
+      else if (ev === 'low') { this.watchBuzz = 0.35; this.watchAuto = Math.max(this.watchAuto, 2.5); }
     });
     // a fresh scene: the watch says the time and what to do for a few seconds
     this.watchSayT = 5;
@@ -505,6 +472,12 @@ export class Hud2Classic {
     }
     this.bump = Math.max(0, this.bump - dt);
     if (this.watchSpin > 0) this.watchSpin = Math.max(0, this.watchSpin - dt / 0.8);
+    this.watchPress = Math.max(0, this.watchPress - dt);
+    this.watchLight = Math.max(0, this.watchLight - dt);
+    this.watchBuzz = Math.max(0, this.watchBuzz - dt);
+    // sprinting (or winded): the watch goes to the body face by itself, and back a little after
+    { const pl = (game.scene as unknown as { player?: { running?: boolean } } | null)?.player; if (pl?.running || isWinded()) this.watchAuto = Math.max(this.watchAuto, 2.5); }
+    this.watchAuto = Math.max(0, this.watchAuto - dt);
     if (this.watchSayT > 0) { this.watchSayT -= dt; if (this.watchSayT <= 0 && !this.watchHover) this.watchBox.classList.remove('show'); }
     this.body?.update(dt);
     this.acc += dt;
@@ -534,6 +507,7 @@ export class Hud2Classic {
   }
 
   destroy() {
+    this.offStamina?.();
     setQuestNotice(null);
     setTransitionFocus(null);
     for (const t of this.swapT) clearTimeout(t);
@@ -547,7 +521,7 @@ export class Hud2Classic {
     this.paintT += dt;
     if (!force && this.paintT < 1 / 30) return;
     this.paintT = 0;
-    // the pocket watch: brass case, cream dial, blued hands on the time of day
+    // Mori's field watch: the face picked (or the body face while he sprints), stamina on its ring
     const hour = hudHour();
     this.watchBox.classList.toggle('off', hour === null);
     if (hour !== null) {
@@ -555,15 +529,23 @@ export class Hud2Classic {
       if (this.watchCv.width !== ws.w || this.watchCv.height !== ws.h) { this.watchCv.width = ws.w; this.watchCv.height = ws.h; }
       this.watchCv.style.width = (ws.w * px) / dprOf() + 'px';
       this.watchCv.style.height = (ws.h * px) / dprOf() + 'px';
+      this.watchBox.style.setProperty('--kp', px / dprOf() + 'px');
       const g = this.watchCv.getContext('2d')!;
       g.clearRect(0, 0, ws.w, ws.h);
-      // after a click the hands whirl a full turn and settle on the time
-      const sp = this.watchSpin, shown = hour - 12 * sp * sp;
-      drawWatch(g, 0, 0, S, 1, { mode: 'clock', hour: shown, deadline: FETCH_HOUR });
-      paintWatchNature(g, S);
-      paintWatchMarks(g, S, hour);
-      // the words: the time, and what to do now
-      const [t, todo] = watchWords(hour);
+      this.watchFace = (['time', 'body', 'sun'] as WatchFace[])[game.save?.vars?.['hud:watchFace'] ?? 0] ?? 'time';
+      const face: WatchFace = this.watchAuto > 0 ? 'body' : this.watchFace;
+      const st = stamina(), cap = staminaMax(), winded = isWinded(), bpm = heartRate(), hu = hunger();
+      drawWatch(g, 0, 0, S, 1, {
+        mode: 'clock', hour, deadline: DARK_HOUR, face, stamina: st, staminaMax: cap, winded, bpm, hunger: hu,
+        day: dayFn?.() ?? undefined, light: this.watchLight > 0 || !!game.save?.vars?.['watch:light'], press: this.watchPress > 0 ? 'start' : null, buzz: this.watchBuzz > 0 ? 0.8 : 0,
+      });
+      // the words: what the face says, and what to do now
+      const [t0, todo0] = watchWords(hour);
+      const late = DARK_HOUR - hour;
+      const fmt = (h: number) => `${Math.floor(h)}:${String(Math.floor((h - Math.floor(h)) * 60)).padStart(2, '0')}`;
+      const [t, todo] = face === 'body'
+        ? [`Stamina ${Math.round(st * 100)}%`, winded ? 'Winded! Catch your breath' : hu >= 0.65 && cap < 0.9 ? 'Hungry: eat to fill up' : `Heart ${bpm} · Shift to sprint`]
+        : face === 'sun' ? [late > 0 ? `Dark in ${fmt(late)}` : 'It’s dark!', todo0] : [t0, todo0];
       if (todo !== this.watchAdvice) {
         if (this.watchAdvice) { this.watchSayT = 5; this.watchBox.classList.add('show'); }
         this.watchAdvice = todo;

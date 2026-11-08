@@ -198,6 +198,30 @@ export function sceneAt(e: TrailEnd): 'W' | 'E' | number {
   return part.x0 + e.at;
 }
 
+/**
+ * V12 the field watch's compass: which way is home from `loc` with Mori at x (-1 west, +1 east, 0 here),
+ * the place's name, and how many trails out he is. Home is the way along a trail end that leads nearer
+ * the beach; on the beach itself, the camp.
+ */
+export function wayHome(loc: string | null, x: number): { dir: -1 | 0 | 1; name: string; depth: number } {
+  const L = loc ? location(loc) : null;
+  const name = L?.name ?? 'The island';
+  if (!loc || isIsland(L)) {
+    const camp = 1980;
+    return { dir: Math.abs(x - camp) < 60 ? 0 : x > camp ? -1 : 1, name, depth: 0 };
+  }
+  const here = depthOf(loc);
+  let best: { at: 'W' | 'E' | number; d: number } | null = null;
+  for (const t of TRAILS) for (const [mine, far] of [[t.a, t.b], [t.b, t.a]] as const) {
+    if (sceneLocOf(mine.loc) !== loc && mine.loc !== loc) continue;
+    const d = depthOf(far.loc);
+    if (d < here && (!best || d < best.d)) best = { at: sceneAt(mine), d };
+  }
+  if (!best) return { dir: 0, name, depth: here };
+  const dir = best.at === 'W' ? -1 : best.at === 'E' ? 1 : Math.abs(best.at - x) < 40 ? 0 : best.at < x ? -1 : 1;
+  return { dir, name, depth: here };
+}
+
 /** a region scene's own crossroads (set by the region's builder before the trails go in) */
 const posts = new WeakMap<FieldScene, RegionPost[]>();
 export function registerPosts(f: FieldScene, list: RegionPost[]) { posts.set(f, [...(posts.get(f) ?? []), ...list]); }

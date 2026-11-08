@@ -1,4 +1,4 @@
-// Rowan Ellis: side-scrolling controller with walk/crouch/jump/climb/hide/swim (V12: no sprint), scripted moves,
+// Rowan Ellis: side-scrolling controller with walk/sprint (V12 stamina)/crouch/jump/climb/hide/swim, scripted moves,
 // timed work actions (collecting, building) and deck sliding. Rendered through an Actor so any
 // expression, emote or cartoon reaction works on the player too.
 
@@ -98,6 +98,10 @@ export class Player implements Drawable {
   loadK = 1;
   /** V10: too loaded or worn out to sprint */
   noSprint = false;
+  /** V12 stamina (src/game/v12/stamina.ts): how hard he can still climb and swim (1 fresh .. ~0.55 spent) */
+  staminaK = 1;
+  /** V12 stamina run out: a few seconds at a slower, heavy walk while he gets his breath back */
+  winded = false;
   /** V10: dizzy from bad forage, 0..1: the controls wobble and he staggers */
   dizzy = 0;
   /** remap automatic anims (e.g. carrying Chunk: idle -> carryPupIdle, walk -> carryPup) */
@@ -224,7 +228,7 @@ export class Player implements Drawable {
       if (this.body.inTransition && this.body.anim === 'climbOn') ay = 0;
       // the climb clip's frame is the place on the ladder, so this speed is how fast the limbs work:
       // two rungs per hand per 12 px
-      this.y = clamp(this.y + ay * (this.autoClimb ? 50 : 40 * Math.max(0.5, this.loadK)) * dt, c.y0, c.y1);
+      this.y = clamp(this.y + ay * (this.autoClimb ? 50 : 40 * Math.max(0.5, this.loadK) * Math.max(0.55, this.staminaK)) * dt, c.y0, c.y1);
       this.x = approach(this.x, c.x, 120 * dt);
       this.anim = 'climb';
       if (ay) {
@@ -281,9 +285,11 @@ export class Player implements Drawable {
         return;
       }
     }
-    // V12: no sprint, no rush. Mori walks everywhere (scripted moves can still hurry him along)
-    this.running = false;
-    const speed = (this.state === 'script' ? this.scriptSpeed : this.camera ? 28 : this.crouch ? 26 : 60) * this.speedK * this.wadeK * (this.state === 'script' ? 1 : this.loadK * carrySpeedK(this.body));
+    // V12 stamina (user, latest): hold Shift to sprint while there is breath for it (src/game/v12/stamina.ts);
+    // it is fast and loud. Spent, he is winded for a moment and walks heavy.
+    this.running = canControl && !this.noSprint && !this.winded && !this.camera && !this.crouch && ax !== 0 && this.state === 'normal' && inp.down('run');
+    const walk = this.running ? 104 : this.winded ? 48 : 60;
+    const speed = (this.state === 'script' ? this.scriptSpeed : this.camera ? 28 : this.crouch ? 26 : walk) * this.speedK * this.wadeK * (this.state === 'script' ? 1 : this.loadK * carrySpeedK(this.body));
     this.turnHold = Math.max(0, this.turnHold - dt);
     let target = this.turnHold > 0 ? 0 : ax * Math.min(speed, brake);
     // dizzy: he veers, stalls and staggers a step on his own (facing still follows the keys)
@@ -428,7 +434,7 @@ export class Player implements Drawable {
     const inp = game.input;
     const ax = canControl ? inp.axisX() : 0;
     const ay = canControl ? (inp.down('down') ? 1 : 0) - (inp.down('up') || inp.down('jump') ? 1 : 0) : 0;
-    const sp = 50 * this.loadK;
+    const sp = 50 * this.loadK * Math.max(0.6, this.staminaK);
     this.vx = approach(this.vx, ax * sp, 90 * dt);
     this.vy = approach(this.vy, ay * sp + 4, 90 * dt);
     this.x = clamp(this.x + this.vx * dt, this.minX, this.maxX);
