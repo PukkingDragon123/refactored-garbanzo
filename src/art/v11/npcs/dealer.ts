@@ -4,7 +4,7 @@
 //  green leaves, untucked, sweat patches under the arms and down the chest; the collar open on a
 //  hairy chest and a gold chain; cargo shorts with fat pockets; white tube socks with two stripes in
 //  brown sandals; hairy sunburnt forearms and a gold watch. A red-and-white trucker cap (a foam front
-//  with a little fish patch, a mesh back), aviator sunglasses (even at night), stubble, a goatee, and
+//  with a little fish patch, a mesh back), aviator sunglasses pushed up on his cap, stubble, a goatee, and
 //  an unlit cigar he chews in the corner of his mouth.
 //
 //  Waits mopping his neck with a hanky, glancing up and down the lane, chewing the cigar; walks with a
@@ -147,8 +147,10 @@ export const HANK7: Char7 = {
 // ================================================================== the head
 const CAP_RED = R6('#2a0606', '#5a0e0c', '#8e1c16', '#c02a20', '#e04a3a', '#f8806a');
 const FOAM = R6('#6a6a64', '#a4a49c', '#d0d0c8', '#eeeee6', '#fafaf4', '#ffffff');
-const LENS = R6('#060404', '#140c0a', '#2a1a12', '#4a2a1a', '#7a4a2a', '#d8a070');
-const STUB2 = hex('#b06a54');
+// dark mirrored aviator lenses: smoke going blue toward the top, a white glint (never a pale middle that reads as an eye)
+const LENS = R6('#040608', '#0a1014', '#121c24', '#1c2c38', '#2c4454', '#6a9ab0');
+// a five o'clock shadow: a cool, slightly darker skin, not dark spots
+const STUB2 = hex('#b88a76');
 export const HANK_HEAD: HeadDef7 = {
   ...HEADS7.joshu,
   skin: HS, hair: HAIR.greyBlack, ink: hex('#1a0c0e'), eyeCol: '#1a0c0e', brow: '#5a4a44', blush: '#e86a5a',
@@ -169,7 +171,7 @@ export const HANK_HEAD: HeadDef7 = {
     s.ellipsoid(W([1.2, 3.4, 0]), W([4.7, 0, 0]), [0, 2.4, 0], W([0, 0, 4.9]), 1, (h: Hit) => {
       if (h.q[0] > 0.3 || h.q[1] > 0.2) return -1;
       const n = hsh(h.x, h.y, 9);
-      return n > 0.82 ? STUB2 : -1;
+      return n > 0.6 ? STUB2 : -1;
     });
     const goat = R6('#2a1a12', '#4a3022', '#6a4a36', '#8a644a', '#a88060', '#c8a07c');
     s.ellipsoid(W([3.9, 1.7, 0]), W([1.1, 0, 0]), [0, 1.3, 0], W([0, 0, 1.0]), 10, h => cel(goat, h.l, 0.1));
@@ -186,15 +188,18 @@ export const HANK_HEAD: HeadDef7 = {
     s.ellipsoid(W([0.1, 13.1, 0]), W([6.1, 0, 0]), [0, 0.7, 0], W([0, 0, 5.95]), 12, h => cel(CAP_RED, h.l, -0.4));
     s.ellipsoid(W([0.4, 16.2, 0]), W([0.8, 0, 0]), [0, 0.5, 0], W([0, 0, 0.8]), 12, h => cel(CAP_RED, h.l, 0.1));
     s.ellipsoid(W([5.2, 13.0, 0]), W([2.8, -0.5, 0]), [0, 0.38, 0], W([0, 0, 4.4]), 13, h => cel(CAP_RED, h.l, h.q[1] < 0 ? -0.5 : 0.1));
-    // aviators: teardrop lenses, a gold bridge and arms back to the ears
-    for (const z of [2.7, -2.7]) {
-      s.ellipsoid(W([5.3, 7.4, z]), W([0.35, 0, 0]), W([0, 1.15, 0]), W([0, 0, 1.3]), 14, h => {
-        if (h.q[1] > 0.4 && h.q[2] * Math.sign(z) < -0.1) return hex('#f6e6c8');
-        return h.q[1] < -0.6 ? hex('#c89a34') : cel(LENS, h.l, h.q[1] > 0 ? 0.0 : -0.3);
+    // aviators pushed up, resting on the cap's brim (his face shows; they come down when he's being shady)
+    for (const z of [2.5, -2.5]) {
+      s.ellipsoid(W([5.9, 11.2, z]), W([0.4, 0, 0]), W([0, 1.05, 0]), W([0, 0, 1.25]), 14, h => {
+        // a thin gold rim, a white glint up high, the lens dark and going blue toward its top
+        const rr = Math.hypot(h.q[1], h.q[2]);
+        if (rr > 0.9) return hex('#d8aa40');
+        if (h.q[1] > 0.3 && h.q[1] < 0.6 && h.q[2] * Math.sign(z) < 0.05 && h.q[2] * Math.sign(z) > -0.45) return hex('#f2f6f8');
+        return cel(LENS, h.q[1] * 0.6 + 0.2, -0.2);
       });
-      s.limb(W([5.0, 8.6, z * 1.35]), W([0.4, 8.2, z * 1.9]), 0.18, 0.18, 14, h => cel(GOLD, h.l, 0.2, true));
+      s.limb(W([5.5, 11.9, z * 1.4]), W([1.0, 12.4, z * 2.1]), 0.16, 0.16, 14, h => cel(GOLD, h.l, 0.2, true));
     }
-    s.limb(W([5.6, 8.3, 1.1]), W([5.6, 8.3, -1.1]), 0.2, 0.2, 14, h => cel(GOLD, h.l, 0.3, true));
+    s.limb(W([6.1, 11.9, 1.0]), W([6.1, 11.9, -1.0]), 0.18, 0.18, 14, h => cel(GOLD, h.l, 0.3, true));
     // the cigar: unlit, chewed, a gold band, out of the corner of his mouth
     s.limb(W([5.6, 3.3, 1.2]), W([8.4, 2.4, 3.2]), 0.5, 0.48, 15, h => (h.t > 0.62 && h.t < 0.72 ? cel(GOLD, h.l, 0.1) : h.t > 0.94 ? hex('#3a2416') : cel(CL.leather, h.l, 0.1)));
     // a bead of sweat at the temple, under the cap
