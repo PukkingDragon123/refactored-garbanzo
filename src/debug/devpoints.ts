@@ -564,6 +564,55 @@ export async function chapters(): Promise<DevChapter[]> {
     { id: 'n:hills', name: 'The trappers’ camp', sub: 'Rua and Sunny in the Rocky Hills', icon: 'target', run: () => people({ loc: 'hills' }) },
     { id: 'n:visit', name: 'Camp: the craftspeople visit', sub: 'Tīpene and Ngaio at camp (met)', icon: 'wrench', run: () => people({ px: 2300, day: 5, flags: ['n:tipeneMet', 'n:ngaioMet'], meet: ['tipene', 'ngaio'] }) },
   ] });
+  // V12 Big Hank, the dealer at the end of Te Huarahi (src/game/v11/npcs/hank.ts), and the weapon belt
+  // he barters (src/game/v12/arsenal.ts)
+  const dealerAt = async (tod: TimeOfDay, o: { met?: boolean; goods?: boolean; then?: 'talk' | 'wares' | 'lily'; lily?: boolean } = {}) => {
+    ensureLoop();
+    if ((game.save.day ?? 1) < 4) game.save.day = 4;
+    const S = await import('../game/v11/social');
+    if (o.met) { S.meet('hank'); S.setMemo('hank', 'intro', 1); if (S.affinity('hank') < 25) S.addAffinity('hank', 25 - S.affinity('hank'), 'debug'); }
+    if (o.goods) {
+      // (an empty pack first, so everything fits)
+      game.save.inv = game.save.inv.filter(st => st.id.startsWith('q_'));
+      for (const [id, n] of [['rope', 10], ['driftglass', 6], ['wire', 3], ['shell_fan', 4], ['kawakawa', 6], ['resin', 5], ['feather', 4], ['scrap', 3], ['flax', 4], ['glowcap', 5], ['shedskin', 3]] as [string, number][]) giveTo(id, n);
+      game.save.rp = Math.max(game.save.rp ?? 0, 200);
+    }
+    if (o.lily) {
+      S.setMemo('hank', 's:photo', 1); S.setMemo('hank', 's:snakes', 1);
+      if (questStatus('q_lily') === 'hidden') startQuest('q_lily', true);
+      game.save.flags['v4:photo:plumeboa'] = true;
+      delete game.save.flags['q_lily:given'];
+    }
+    game.persist();
+    const { X } = await import('../game/v11/village/layout');
+    const m = await import('../game/v11/village/debug');
+    m.stage('start');
+    await m.go(tod as 'day', Math.round((X.dealer[0] + X.dealer[1]) / 2) - 120);
+    // (not awaited: the jump is done once the scene is up; the talk plays on in it)
+    const then = o.then;
+    if (then) void sleep(1600).then(async () => (await import('../game/v11/npcs/hank')).hankDebug(then));
+  };
+  const weaponTest = async (id: import('../game/v12/arsenal').WeaponId) => {
+    ensureLoop(); tool('slingshot');
+    const A = await import('../game/v12/arsenal');
+    for (const w of A.WEAPONS) A.giveWeapon(w.id);
+    A.selectWeapon(id);
+    const d = dayState(); d.phase = 'out'; d.woke = dayNumber(); d.meals.breakfast = dayNumber();
+    game.persist(); await idle();
+    await (await import('../game/v10/expedition')).goExpedition('hills', { at: 1640 });
+    refill();
+    await sleep(1500);
+    const sc = game.scene as unknown as { player?: { x: number; facing: number }; animals?: unknown[] } | null;
+    if (!sc?.player || !sc.animals) return;
+    await (await import('../game/v11/predators')).spawnCerebralTiger(sc, sc.player.x + sc.player.facing * 300, { lurk: false, facing: sc.player.facing >= 0 ? -1 : 1 });
+  };
+  out.push({ id: 'dealer', name: 'Big Hank, the dealer at the crossroads', points: [
+    { id: 'd:meet', name: 'Meet Big Hank', sub: 'Te Huarahi by day (Day 4): the tarp stall at the end of the lane', icon: 'heart', run: () => dealerAt('day') },
+    { id: 'd:night', name: 'Hank at night', sub: 'Asleep in his chair under the lit bulbs (met)', icon: 'moon', run: () => dealerAt('night', { met: true }) },
+    { id: 'd:wares', name: 'Hank’s wares', sub: 'Goods in the pack and vouchers to spend: the trade opens', icon: 'gift', run: () => dealerAt('day', { met: true, goods: true, then: 'wares' }) },
+    { id: 'd:weapons', name: 'The weapon belt vs the Cerebral Tiger', sub: 'Every weapon, full ammo, a tiger prowling up (T cycles, G uses)', icon: 'target', variants: (['sling', 'bolas', 'flare', 'bangers', 'net', 'tranq', 'spray'] as const).map(w => ({ label: w[0].toUpperCase() + w.slice(1), run: () => weaponTest(w) })) },
+    { id: 'd:lily', name: 'A picture for Lily: the photo handed over', sub: 'The feathered boa photographed; Hank gets choked up', icon: 'star', run: () => dealerAt('day', { met: true, lily: true, then: 'lily' }) },
+  ] });
   // the Region Map
   const order = ['home', 'interior', 'south', 'east', 'ocean', 'isle2'];
   const locs = [...LOCATIONS].filter(l => !l.trip).sort((a, b) => order.indexOf(a.region) - order.indexOf(b.region));

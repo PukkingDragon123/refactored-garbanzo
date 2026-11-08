@@ -43,6 +43,7 @@ import { slingOwnsG } from '../../game/v11/predators';
 import { floatSky, floatNotice, floatPickup } from '../v12/float';
 import { paintKitIcon, paintKitButton, KIT_SIZE } from './kitart';
 import type { KitKind } from './kitart';
+import { ArmKitButton } from '../v12/armkit';
 
 const CSS = `
 .h2 { position: absolute; inset: 0; pointer-events: none; transition: opacity 0.3s steps(4); }
@@ -259,6 +260,8 @@ export class Hud2Classic {
   private kit: Record<KitKind, HdCanvas>;
   private kitSt: Record<KitKind, { hover: boolean; press: boolean; lift: number; glint: number; key: string }>;
   private kitBox: HTMLElement;
+  /** V12 the weapon belt's button (only once Mori carries more than the slingshot: src/ui/v12/armkit.ts) */
+  private arm: ArmKitButton;
   private lap: HudLaptop | null = null;
   private body: BodyHud | null = null;
   private onBackpack?: () => void;
@@ -364,6 +367,7 @@ export class Hud2Classic {
     const [cm, cs] = mk('cam', '', 'Camera: film left');
     this.kit = { pack: pk, guide: gd, lap: lp, cam: cm };
     this.kitSt = { pack: ps, guide: gs, lap: ls, cam: cs };
+    this.arm = new ArmKitButton(this.kitBox, { px: kitPx, k: hudK, label: paintKitLabel });
     this.setPlace(o.place, o.sub);
     setQuestNotice(q => this.noticeQuest(q));
     // transitions centre their iris / first ink blot on Mori
@@ -471,6 +475,7 @@ export class Hud2Classic {
       if (s.glint >= 0) { s.glint += dt / 0.45; if (s.glint > 1) s.glint = -1; }
     }
     this.bump = Math.max(0, this.bump - dt);
+    this.arm.update(dt);
     if (this.watchSpin > 0) this.watchSpin = Math.max(0, this.watchSpin - dt / 0.8);
     this.watchPress = Math.max(0, this.watchPress - dt);
     this.watchLight = Math.max(0, this.watchLight - dt);
@@ -666,6 +671,7 @@ export class Hud2Classic {
     const n = game.save.inv.length, cap = Math.max(1, capacity());
     this.packFill += (n / cap - this.packFill) * 0.2;
     const touch = document.body.classList.contains('touchmode');
+    this.arm.paint(touch);
     const dev = cam && cam.v10 !== false ? Math.max(0, Math.min(1, cam.develop ?? 1)) : 1;
     const shots = Math.max(0, Math.round(cam?.shots ?? 0));
     const k = hudK();

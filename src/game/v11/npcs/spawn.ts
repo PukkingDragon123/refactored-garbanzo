@@ -37,6 +37,9 @@ import { hasSlingshot } from '../predators';
 import { toWorld } from '../../v12/region';
 import { registerNpcArt } from '../../../art/v11/npcs/register';
 import * as PL from '../../../art/v11/npcs/places';
+import { stall, BULBS, STALL_W, CHAIR_X } from '../../../art/v11/npcs/stall';
+import { X as VX } from '../village/layout';
+import { armFrames } from '../../v12/arsenal-fx';
 import { hasMet, PEOPLE } from '../social';
 import { converse } from './talk';
 import { questMenu } from './quests';
@@ -85,6 +88,9 @@ interface PersonOpts {
   hello?: { lines: [string, string, string?][]; r?: number };
   /** shown only while this holds */
   when?: () => boolean;
+  /** V12: what they do at the night spot (default sitting on the ground), and when it's night (default the clock) */
+  nightAnim?: string;
+  isNight?: () => boolean;
 }
 export const SPAWNED = new Map<string, Actor>();
 
@@ -131,8 +137,8 @@ function person(f: FieldScene, id: string, g: Ground, o: PersonOpts): Actor {
     if (near && !a.walking) { a.faceTo(p.x); return; }
     t -= dt;
     if (t > 0 || a.walking) return;
-    if (nightNow(f) && o.night !== undefined) {
-      if (Math.abs(a.x - o.night) > 4) { void a.walkTo(o.night, o.speed ?? 34, 'walk').then(() => { a.idleAnim = 'sitGround'; a.setAnim('sitGround'); }); }
+    if ((o.isNight ? o.isNight() : nightNow(f)) && o.night !== undefined) {
+      if (Math.abs(a.x - o.night) > 4) { void a.walkTo(o.night, o.speed ?? 34, 'walk').then(() => { a.idleAnim = o.nightAnim ?? 'sitGround'; a.setAnim(a.idleAnim); }); }
       t = 8;
       return;
     }
@@ -458,6 +464,45 @@ function traps(f: FieldScene, g: Ground, xs: number[]) {
   });
 }
 
+// ================================================================== Te Kāinga: Big Hank's stall at the end of Te Huarahi
+/** Hank (src/game/v11/npcs/hank.ts) at his tarp lean-to in the market lane, from Day 3: by day he
+ *  hangs about the stall and sits in his chair; after dark the bulbs are lit and he dozes in it */
+function dealer(f: FieldScene, r: TripRun | null) {
+  if (!AROUND.hank()) return;
+  const g = groundFn(f, r);
+  const sx = Math.round((VX.dealer[0] + VX.dealer[1]) / 2);
+  const lit = f.tod === 'night' || f.tod === 'dusk';
+  const isNight = () => f.tod === 'night';
+  prop(f, lit ? 'n:hankStallLit' : 'n:hankStall', () => stall(lit), sx, g(sx) + 2, -4.5);
+  const left = sx - Math.round(STALL_W / 2), chair = left + CHAIR_X + 1;
+  // the string of bulbs: real lights after dark
+  if (lit) f.main.add(new Custom(-4.4, rr => {
+    const gy = g(sx) + 2 - 105;
+    for (const [bx, by] of BULBS) rr.light(left + bx, gy + by, 26, 1, 0.82, 0.5, 0.22 + Math.sin(f.st.time * 3 + bx) * 0.02, 0.6);
+    rr.light(sx, gy + 76, 96, 1, 0.74, 0.46, 0.2);
+  }));
+  const a = person(f, 'hank', g, {
+    spots: [{ x: sx - 22, anim: 'idle', dur: [8, 14] }, { x: chair, anim: 'hankSit', dur: [10, 18] }, { x: sx + 34, anim: 'idle', dur: [5, 9] }],
+    night: chair, nightAnim: 'hankDoze', isNight, speed: 22, face: -1,
+    hello: { lines: [['hank', 'Psst! Hey! Camera guy! Come here a sec. I don’t bite. Much.', 'smug']], r: 190 },
+  });
+  if (isNight()) { a.x = chair; a.y = g(chair); a.idleAnim = 'hankDoze'; a.setAnim('hankDoze'); }
+  // Zzz over him while he dozes
+  f.main.add(new Custom(46, rr => {
+    if (!isNight() || !a.visible || a.anim !== 'hankDoze') return;
+    const fr = armFrames(), t = f.st.time;
+    for (let i = 0; i < 3; i++) {
+      const u = (t * 0.4 + i / 3) % 1;
+      rr.draw(fr.z[Math.min(2, Math.floor(u * 3))], Math.round(a.x + 6 + u * 9 + Math.sin(u * 6 + i) * 2), Math.round(a.y - 52 - u * 20), 1, 1, 0, packColor(1, 1, 1, Math.max(0, Math.min(1, Math.min(u * 5, (1 - u) * 3)))));
+    }
+  }));
+  if (!F('n:seen:hank')) f.main.add(new Custom(0, () => {}, () => {
+    if (F('n:seen:hank') || Math.abs(f.player.x - sx) > 220) return;
+    setF('n:seen:hank');
+    discover({ id: 'n:hankstall', kind: 'landmark', name: 'Hank’s stall', loc: 'village', x: sx, note: 'A tarp lean-to at the end of the market lane. Everything in it fell off a boat.' }, false);
+  }));
+}
+
 // ================================================================== dispatch
 export async function spawnFor(f: FieldScene, loc: string | null, r: TripRun | null) {
   if (!loopOn() && loc !== 'island') return;
@@ -470,6 +515,8 @@ export async function spawnFor(f: FieldScene, loc: string | null, r: TripRun | n
     else if (r && (loc === 'canopy' || loc === 'forest')) maybeTeo(f, r, groundFn(f, r), 900);
     // (the forest scene runs on into Fernwood: the Te Wao Nui region, src/game/v12/region.ts)
     if (loc === 'forest') fernwood(f, r, toWorld('fernwood', 0));
+    // V12 Big Hank's stall at the end of Te Huarahi
+    if (loc === 'village') dealer(f, r);
   } catch (e) { console.warn('[npcs] spawn', loc, e); }
   void sleep;
 }

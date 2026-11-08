@@ -13,6 +13,7 @@
 // More predators: ./predators-core (registerPredator, onPredator, deter, knockDown).
 // The heavy modules load on first use.
 import { game } from '../game';
+import { ownsAnyWeapon } from '../v12/arsenal';
 
 export interface AmbushOpts {
   /** the scene the group is in (an island / field scene) */
@@ -34,7 +35,8 @@ export function hasSlingshot(): boolean { return game.save.tools.includes('sling
  *  field guide then opens from the notebook's tabs or the HUD's little guide book instead */
 export function slingOwnsG(): boolean {
   const s = game.scene as unknown as { animals?: unknown; player?: unknown; site?: { id?: string } } | null;
-  return hasSlingshot() && !!s && Array.isArray(s.animals) && !!s.player && s.site?.id !== 'boat';
+  // (V12: any weapon on the belt, src/game/v12/arsenal.ts, takes G the same way)
+  return (hasSlingshot() || ownsAnyWeapon()) && !!s && Array.isArray(s.animals) && !!s.player && s.site?.id !== 'boat';
 }
 
 /** predators, Mori's slingshot and Aroha's combat AI in a field scene (idempotent) */
