@@ -41,7 +41,8 @@ import { hunger } from '../../game/v12/hunger';
 import { DUSK_HOUR, DARK_HOUR, FETCH_HOUR } from '../../game/v12/clock';
 import { slingOwnsG } from '../../game/v11/predators';
 import { floatSky, floatNotice, floatPickup } from '../v12/float';
-import { paintKitIcon, paintKitButton, KIT_SIZE } from './kitart';
+import { KIT_SIZE } from './kitart';
+import { paintKitPix, KIT_W, KIT_H, KIT_FRAMES } from '../v12/kitpix';
 import type { KitKind } from './kitart';
 import { ArmKitButton } from '../v12/armkit';
 
@@ -258,7 +259,9 @@ export class Hud2Classic {
   private noteBox: HTMLElement;
   private note: HdCanvas;
   private kit: Record<KitKind, HdCanvas>;
-  private kitSt: Record<KitKind, { hover: boolean; press: boolean; lift: number; glint: number; key: string }>;
+  private kitSt: Record<KitKind, { hover: boolean; press: boolean; lift: number; glint: number; key: string; open: number; pop: number; fire: number }>;
+  /** the kit's idle loop clock (s): the live parts (a swinging mug, the ribbon, the glints) step with it */
+  private kitT = 0;
   private kitBox: HTMLElement;
   /** V12 the weapon belt's button (only once Mori carries more than the slingshot: src/ui/v12/armkit.ts) */
   private arm: ArmKitButton;
@@ -342,7 +345,7 @@ export class Hud2Classic {
       lab.className = 'kl';
       const c = new HdCanvas(wrap, 'kit ' + id);
       c.el.title = title;
-      const st = { hover: false, press: false, lift: 0, glint: -1, key };
+      const st = { hover: false, press: false, lift: 0, glint: -1, key, open: 0, pop: 0, fire: 0 };
       const react = (cls: string) => { c.el.classList.remove(cls); void c.el.offsetWidth; c.el.classList.add(cls); };
       c.el.addEventListener('pointerenter', () => {
         st.hover = true; st.glint = 0;
@@ -356,7 +359,8 @@ export class Hud2Classic {
       c.el.addEventListener('pointerup', e => {
         e.stopPropagation();
         c.el.classList.remove('press');
-        if (st.press) { react('use'); this.useKit(id); }
+        // the click's payoff: the flap flips open, the cover opens, the flash fires
+        if (st.press) { react('use'); st.pop = 0.45; if (id === 'cam') st.fire = 1; this.useKit(id); }
         st.press = false;
       });
       return [c, st] as const;
@@ -473,7 +477,14 @@ export class Hud2Classic {
       s.lift += (want - s.lift) * Math.min(1, dt * 18);
       if (Math.abs(want - s.lift) < 0.05) s.lift = want;
       if (s.glint >= 0) { s.glint += dt / 0.45; if (s.glint > 1) s.glint = -1; }
+      // hover opens the object (the flap lifts, the cover cracks open, the lens racks out)
+      s.pop = Math.max(0, s.pop - dt);
+      const op = s.hover || s.pop > 0 ? 1 : 0;
+      s.open += (op - s.open) * Math.min(1, dt * 9);
+      if (Math.abs(op - s.open) < 0.02) s.open = op;
+      s.fire = Math.max(0, s.fire - dt / 0.35);
     }
+    this.kitT += dt;
     this.bump = Math.max(0, this.bump - dt);
     this.arm.update(dt);
     if (this.watchSpin > 0) this.watchSpin = Math.max(0, this.watchSpin - dt / 0.8);
@@ -675,20 +686,22 @@ export class Hud2Classic {
     const dev = cam && cam.v10 !== false ? Math.max(0, Math.min(1, cam.develop ?? 1)) : 1;
     const shots = Math.max(0, Math.round(cam?.shots ?? 0));
     const k = hudK();
-    const states = Object.values(this.kitSt).map(s => `${s.lift.toFixed(2)},${s.glint.toFixed(2)},${s.hover}`).join('|');
-    const key = `${k}|${kitPx()}|${lapOn}|${badge}|${!!cam}|${shots}|${Math.round(dev * 12)}|${Math.round(this.packFill * 8)}|${this.bump > 0}|${touch}|${slingOwnsG()}|${states}`;
+    const states = Object.values(this.kitSt).map(s => `${s.lift.toFixed(2)},${s.glint.toFixed(2)},${s.hover},${Math.round(s.open * 4)},${Math.round(s.fire * 4)}`).join('|');
+    const frame = Math.floor(this.kitT * 8) % KIT_FRAMES;
+    const key = `${k}|${kitPx()}|${lapOn}|${badge}|${!!cam}|${shots}|${Math.round(dev * 12)}|${Math.round(this.packFill * 8)}|${this.bump > 0}|${touch}|${slingOwnsG()}|${states}|${frame}`;
     if (key === this.kitKey) return;
     this.kitKey = key;
     this.kit.lap.el.parentElement!.classList.toggle('off', !lapOn);
     this.kit.cam.el.parentElement!.classList.toggle('off', !cam);
-    const draw = (id: KitKind, info: Parameters<typeof paintKitIcon>[2], extra: { badge?: number } = {}) => {
+    // (user, latest: "the kit lower resolution, felt like real pixel art, handmade"): hand-made pixel
+    // sprites (src/ui/v12/kitpix.ts) at a whole number of device px per sprite pixel
+    const S = Math.max(2, Math.round(hudK() * 3));
+    const draw = (id: KitKind, info: { fill?: number; shots?: number; develop?: number; badge?: number }, extra: { badge?: number } = {}) => {
       const st = this.kitSt[id];
       const hint = touch || !st.hover ? '' : id === 'guide' && slingOwnsG() ? '' : st.key;
-      this.kit[id].draw(KIT_SIZE * KIT_K, (KIT_SIZE + 10) * KIT_K, (a, kk) => {
-        const ik = kk * KIT_K;
-        const icon = paintKitIcon(id, ik, info);
-        paintKitButton(a, icon, ik, { lift: st.lift + (id === 'pack' && this.bump > 0 ? 1.5 : 0), glint: st.glint, key: hint || undefined, keyGp: Math.max(1, Math.round(kk)), badge: extra.badge });
-      }, kitPx());
+      this.kit[id].draw(((KIT_W - 0.01) * S) / hudK(), ((KIT_H - 0.01) * S) / hudK(), a => {
+        paintKitPix(a, id, { t: frame, open: st.open, fire: st.fire, lift: st.lift * 0.67 + (id === 'pack' && this.bump > 0 ? 1 : 0), glint: st.glint, key: hint || undefined, shots: info.shots, develop: info.develop, badge: extra.badge });
+      }, S);
     };
     draw('pack', { fill: this.packFill });
     draw('guide', {});
