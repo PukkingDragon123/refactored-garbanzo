@@ -433,6 +433,38 @@ async function tbHunt(feeding: boolean) {
   h.startEncounter(sc, { feeding });
 }
 
+/** V12 the feud (src/game/v12/feud): the Rocky Hills' tussock basin stands in for the backcountry; the
+ *  director runs there with the den, the cache and the arena below, Mori at x, and the encounter staged */
+const FEUD_HILLS = { den: 580, cache: 720, arena: [820, 1080] as [number, number], kills: [960] };
+async function feudAt(kind: 'ambush' | 'fight' | 'raid' | 'sleep' | 'quiet', at: number, o: { awake?: boolean; hour?: number } = {}) {
+  ensureLoop();
+  if ((game.save.day ?? 1) < 4) game.save.day = 4;
+  F('aroha:met', 'v4:arohaJoined', 'feud:heard');
+  tool('slingshot');
+  V('v11:pebbles', 20);
+  const Qm = await import('../game/v12/feud/quest');
+  Qm.registerFeud();
+  if (questStatus('feud') === 'hidden') game.save.quests['feud'] = 'active';
+  const d = dayState();
+  d.phase = 'out'; d.went = 'hills'; d.woke = dayNumber(); d.meals.breakfast = dayNumber(); d.arrive = null;
+  game.save.vars['v10:hour'] = o.hour ?? 11;
+  game.persist();
+  await idle();
+  await (await import('../game/v10/expedition')).goExpedition('hills', { at });
+  refill();
+  if (!(await sceneWhere(s => (s as { site?: { id?: string } }).site?.id === 'hills'))) return;
+  await sleep(300);
+  const D = await import('../game/v12/feud/director');
+  const f = game.scene as unknown as Parameters<typeof D.attachFeud>[0];
+  const h = D.attachFeud(f, { ...FEUD_HILLS, ground: (x: number) => f.st.terrain.groundY(x) });
+  h.start(kind);
+  if (o.awake && h.bearer) {
+    h.bearer.x = 860; h.bearer.y = f.st.terrain.groundY(860); h.bearer.setAct('wander', 30); h.pause(true);
+    // the boa well out of the way, lying up at the bush line
+    if (h.boa) { h.boa.x = 260; h.boa.y = f.st.terrain.groundY(260); h.boa.setAct('ambush', 120); }
+  }
+}
+
 // ---------------------------------------------------------------- the list
 export interface DevPoint {
   id: string;
@@ -543,6 +575,27 @@ export async function chapters(): Promise<DevChapter[]> {
       await (await import('../game/v10/expedition')).goExpedition('hills', { at: 1640 });
       refill();
     } },
+  ] });
+  // V12: the feud (src/game/v12/feud): Matikuku Nui the Bearer and Huruhuru the feathered boa
+  out.push({ id: 'feud', name: 'Matikuku Nui and Huruhuru, the claw and the plume', points: [
+    { id: 'feud:bearer', name: 'The Bearer up close', sub: 'Rocky Hills basin: Matikuku Nui awake and roaming. Walk up: it rears, then charges and swipes', icon: 'target', run: () => feudAt('quiet', 1130, { awake: true }) },
+    { id: 'feud:constrict', name: 'The boa constricting', sub: 'The boa in ambush in the basin, a torhopper grazing into reach', icon: 'eye', run: () => feudAt('ambush', 1150) },
+    { id: 'feud:fight', name: 'The fight', sub: 'A fresh kill in the boa’s coils; the Bearer smells it and comes. Watch from the scree', icon: 'bolt', variants: [
+      { label: 'Day', run: () => feudAt('fight', 1230) },
+      { label: 'Dusk', run: () => feudAt('fight', 1230, { hour: 18.5 }) },
+    ] },
+    { id: 'feud:raid', name: 'The boa raids the cache', sub: 'The Bearer asleep by its cache; the boa slides in from the bush line', icon: 'scroll', run: () => feudAt('raid', 960) },
+    { id: 'feud:sleep', name: 'The Bearer asleep', sub: 'On its den by the cache. Don’t wake it', icon: 'moon', run: () => feudAt('sleep', 900) },
+    { id: 'feud:koro', name: 'Tell Koro Wiremu', sub: 'The quest at its last step; Mori by Koro’s seat in Te Kāinga', icon: 'flag', run: async () => {
+      (await import('../game/v12/feud/quest')).registerFeud();
+      F('feud:heard', 'feud:sign:trunk', 'feud:sign:plume', 'feud:sign:bones', 'feud:photo:constrict', 'feud:photo:bearer', 'feud:witness', 'feud:photo:fight');
+      delete game.save.flags['feud:report']; delete game.save.flags['feud:raidSoon'];
+      game.save.quests['feud'] = 'active';
+      const m = await import('../game/v11/village/debug');
+      m.stage('start');
+      await m.go('day', 1110);
+    } },
+    { id: 'feud:art', name: 'Art sheet', sub: 'Every Bearer frame and the boa’s poses (a debug page: reload after)', icon: 'star', run: async () => { (await import('../game/v12/feud/gallery')).feudGallery({ boa: true }); } },
   ] });
   // V11: the new people (src/game/v11/npcs)
   const people = async (o: { px?: number; loc?: string; day?: number; flags?: string[]; meet?: string[] }) => {
