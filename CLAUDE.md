@@ -34,10 +34,10 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
   `st.windField`). Organic painters live in `src/art/organic.ts`.
 - Characters (user, latest: "make the people a lot better, realistic anime, not ugly and chopped"):
   the painted anime cast at its fine density, two buffer pixels per world pixel (`CAST_DENS7 = 2` in
-  `src/art/v7/body.ts`, `TOON7 = false` in `raster.ts`). That means smooth form shading with a
-  terminator and shine, fabric folds, strand hair with its angel ring, rim light, and the V12 face
-  (`facemid.ts`). The cartoon finish and face (`facetoon.ts`) are kept, unused. Mori is a normal,
-  realistic build, not skinny. Women and girls are listed in `FEM7`.
+  `src/art/v7/body.ts`, `TOON7 = false` in `raster.ts`). That means smooth form shading, fabric
+  folds, strand hair with its angel ring, rim light, and the realistic sprite face (`facereal.ts`, below).
+  The cartoon finish and face (`facetoon.ts`) are kept, unused. Mori is a normal, fit build, never
+  skinny. Women and girls are listed in `FEM7`.
   - **Proportions: stylised like Dave the Diver, anatomy in the joints** (user, latest: "the body and
     face and neck looks uncanny, study how Dave the Diver makes it look good and normal"; before that,
     "make it anatomically accurate"). Purely measured anatomy (7.4 heads, a long thin neck) was
@@ -48,11 +48,24 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
     stay anatomical: the knee halfway down the leg (thigh/shin/ankle 0.463/0.463/0.074 of it), the
     elbow at the waist, the wrist at the crotch. `headScale7` follows it. Children are left as they
     are. Change proportions in that table, never by hand-tuning a build's segment lengths.
+  - **Heads and faces (user, latest: "make it realistic like a real human face ... low resolution but
+    polished", after "the head shape looks ugly" and "not like circles mashed together").** The head
+    is one sculpted form, not ellipsoids pushed together: `headForm()` in `src/art/v7/headsdf.ts`
+    lofts the head from cross-sections through each character's own landmarks (an egg-shaped skull, a
+    flat face front for the eyes, the jaw running from its angle under the ear to a chin about a third
+    of the face's width), with a subtle brow ridge, eye sockets, nose, nostril wings and lips, rendered
+    by `Scene3D.sdf` (`HEAD_SDF7 = true` in `head.ts`). Its skin is smoothed and shaded in four clean
+    tones, no speckled terminator. The sprite face is `facereal.ts`: an upper lid line over the iris
+    with its catch-light inside, only a sliver of shaded white, tapered brows, a lip line with a
+    shadow under the lower lip. The detailed (`facemid.ts`) and bead-eyed (`facesimple.ts`) faces are
+    kept, unused. Judge faces only at the game's sprite size, never from enlarged debug renders.
   - The head meets the neck with no inked line: the edge under the jaw is the jaw's shadow in a deep
-    skin tone (`renderHead7` in `head.ts`); a black line there reads as a choker. The shoulders are a
-    sloping trapezius with a deltoid cap (`body.ts`), never a tube straight across.
-  - Sprite eyes (`facemid.ts`) are mostly the dark iris with the catch-light inside it and only a
-    sliver of shaded white; a bright pixel beside the iris reads as a staring side-eye.
+    skin tone (`renderHead7`); a black line there reads as a choker.
+  - **Bodies (user: "the mc is too skinny ... less like a bunch of sticks").** Limbs are shaped, not
+    tubes: `limb()` takes a radius profile, and `body.ts` swells the thigh, calf, upper arm and forearm
+    (`PROF_*`). `STYLE` in `restyle.ts` gives every adult fuller arms and legs and hands that read;
+    Mori is a fit young man with a full chest and real arms and legs (`realBuild`). The shoulders are
+    a sloping trapezius with a deltoid cap, never a tube straight across.
 - **Never show the player's first-person hands** (user: "never ever show player first person
   hand"). Close-ups show the tools and what they touch, not Mori's hands or sleeves
   (`FIRST_PERSON_HANDS = false` in `src/ui/v12/closeup/hands.ts`, `HANDS3D.enabled = false`).

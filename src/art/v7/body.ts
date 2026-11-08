@@ -288,11 +288,11 @@ export function renderBody7(ch: Char7, pose0: Pose): Frame7 {
     const g = near ? G.legN : G.legF;
     const hp = near ? J.hpN : J.hpF, kn = near ? J.knN : J.knF, an = near ? J.anN : J.anF;
     const [r0, r1, r2] = ch.legR;
-    s.limb(hp, kn, r0, r1, g, fm(ch.thigh, near, 'thigh'));
-    s.limb(kn, an, r1, r2, g, fm(ch.shin, near, 'shin'));
+    s.limb(hp, kn, r0, r1, g, fm(ch.thigh, near, 'thigh'), PROF_THIGH);
+    s.limb(kn, an, r1, r2, g, fm(ch.shin, near, 'shin'), PROF_SHIN);
     // a boot shaft / gaiter: a slightly thicker sleeve over the lower shin
     const bt = ch.bootTop;
-    if (bt) { const top = vlerp(kn, an, bt.t), bm = pm(bt.mat, near); s.limb(top, an, r1 + (r2 - r1) * bt.t + bt.r, r2 + bt.r * 0.8, g, h => { h.t = bt.t + h.t * (1 - bt.t); return bm(h); }); }
+    if (bt) { const top = vlerp(kn, an, bt.t), bm = pm(bt.mat, near); s.limb(top, an, r1 + (r2 - r1) * bt.t + bt.r, r2 + bt.r * 0.8, g, h => { h.t = bt.t + h.t * (1 - bt.t); return bm(h); }, u => PROF_SHIN(bt.t + u * (1 - bt.t))); }
     const fa = (near ? pose.fl.fa : pose.bl.fa) ?? 0;
     // shoe: an ellipsoid pointing along the foot (bigger boots keep their sole on the ground)
     const [k0, k1, k2] = (ch.shoeK ?? [1, 1, 1]).map((v, i) => v * FOOT7[i]);
@@ -350,8 +350,8 @@ export function renderBody7(ch: Char7, pose0: Pose): Frame7 {
     if (front.has(near ? 'armF' : 'armB') || raised) s.layer = 1;
     const sh = near ? J.shN : J.shF, el = near ? J.elN : J.elF, wr = near ? J.wrN : J.wrF;
     const [r0, r1, r2] = ch.armR;
-    s.limb(sh, el, r0, r1, g, fm(ch.upperArm, near, 'upper'));
-    s.limb(el, wr, r1, r2, g, fm(ch.foreArm, near, 'fore'));
+    s.limb(sh, el, r0, r1, g, fm(ch.upperArm, near, 'upper'), PROF_UPARM);
+    s.limb(el, wr, r1, r2, g, fm(ch.foreArm, near, 'fore'), PROF_FORE);
     const hp = (near ? pose.fa.hand : pose.ba.hand) ?? 'relax';
     if (hp !== 'none') {
       const am = near ? pose.fa : pose.ba;
@@ -391,6 +391,19 @@ export function renderBody7(ch: Char7, pose0: Pose): Frame7 {
     k: D,
   };
 }
+
+// ------------------------------------------------------------------ muscle
+// (user: "make character less like bunch of sticks"): every limb is a shaped form, its radius swelling
+// along it as a muscle does, never a straight tube. Each is ~1 at both joints so the limbs still meet.
+const bump = (t: number, c: number, w: number) => Math.exp(-(((t - c) / w) ** 2));
+/** the thigh: full through its upper two thirds (the quadriceps), easing in to the knee */
+export const PROF_THIGH = (t: number) => 1 + 0.1 * Math.sin(Math.PI * Math.min(1, t * 1.15));
+/** the shin: the calf high on the leg, a slim ankle */
+export const PROF_SHIN = (t: number) => 1 + 0.2 * bump(t, 0.28, 0.17) - 0.06 * Math.max(0, Math.min(1, (t - 0.7) / 0.3));
+/** the upper arm: the deltoid and biceps */
+export const PROF_UPARM = (t: number) => 1 + 0.1 * bump(t, 0.38, 0.22);
+/** the forearm: its muscle near the elbow, tapering to the wrist */
+export const PROF_FORE = (t: number) => 1 + 0.15 * bump(t, 0.22, 0.2);
 
 // ------------------------------------------------------------------ fabric
 

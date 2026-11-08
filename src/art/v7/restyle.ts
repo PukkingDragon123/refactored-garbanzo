@@ -65,9 +65,11 @@ export function restyle7(ch: Char7): Char7 {
 // ankle as measured (0.463/0.463/0.074 of the leg; the knee halfway), the elbow at the waist, the wrist
 // at the crotch. Each keeps their own stature, their own breadth where it is bigger (a broad man stays
 // broad), and their own girths. Children keep their own rounder proportions.
+// Girth (user: "make character less like bunch of sticks"): limbs with real mass, a touch fuller than
+// life the way stylised sprites are (Dave the Diver's people are chunky), and hands that read.
 const STYLE = {
-  man: { heads: 5.7, neck: 0.024, torso: 0.3, upArm: 0.172, foreArm: 0.138, neckR: 0.26, shW: 0.1, hipW: 0.048 },
-  woman: { heads: 5.55, neck: 0.03, torso: 0.288, upArm: 0.168, foreArm: 0.134, neckR: 0.21, shW: 0.0925, hipW: 0.052 },
+  man: { heads: 5.7, neck: 0.024, torso: 0.3, upArm: 0.172, foreArm: 0.138, neckR: 0.26, shW: 0.1, hipW: 0.048, arm: 1.12, leg: 1.2, hand: 1.08 },
+  woman: { heads: 5.55, neck: 0.03, torso: 0.288, upArm: 0.168, foreArm: 0.134, neckR: 0.21, shW: 0.0925, hipW: 0.052, arm: 1.08, leg: 1.16, hand: 1.04 },
 };
 const anatK = new Map<string, number>();
 function anat(r: Char7, from: Char7): Char7 {
@@ -94,6 +96,9 @@ function anat(r: Char7, from: Char7): Char7 {
     shW: Math.max(r.shW, S.shW * H),
     hipW: Math.max(r.hipW, S.hipW * H),
     neckR: Math.max(r.neckR, S.neckR * headH),
+    armR: r.armR.map(v => v * S.arm) as Char7['armR'],
+    legR: r.legR.map(v => v * S.leg) as Char7['legR'],
+    hand: r.hand * S.hand,
     skirt: r.skirt ? { ...r.skirt, len: r.skirt.len * (build.hipH / Math.max(1, b.hipH)) } : undefined,
   };
   memo.set(from, out);
@@ -121,16 +126,15 @@ function realBuild(ch: Char7): Char7 {
   const r: Char7 = {
     ...ch,
     build,
-    // shoulders about two heads across, a chest with some depth, a waist that tapers a little
-    shW: ch.shW * 1.04,
-    chest: [ch.chest[0] * 1.0, ch.chest[1] * 1.0],
-    waist: [ch.waist[0] * 0.96, ch.waist[1] * 0.95],
-    pelvis: [ch.pelvis[0] * 0.98, ch.pelvis[1] * 0.98],
+    // (user, latest: "the mc is too skinny"): a fit young man who hauls his own kit, not a slim one:
+    // broad shoulders, a full chest with depth, a solid waist, arms and legs with muscle on them
+    shW: ch.shW * 1.08,
+    chest: [ch.chest[0] * 1.12, ch.chest[1] * 1.1],
+    waist: [ch.waist[0] * 1.08, ch.waist[1] * 1.06],
+    pelvis: [ch.pelvis[0] * 1.05, ch.pelvis[1] * 1.04],
     neckR: ch.neckR * 1.02,
-    // arms of a man who carries his own kit: upper arm with some bulk, tapering to the wrist
-    armR: [ch.armR[0] * 0.98, ch.armR[1] * 0.95, ch.armR[2] * 0.94],
-    // the thigh full, the calf shaped, a slimmer ankle
-    legR: [ch.legR[0] * 1.0, ch.legR[1] * 0.98, ch.legR[2] * 0.94],
+    armR: [ch.armR[0] * 1.1, ch.armR[1] * 1.06, ch.armR[2] * 1.0],
+    legR: [ch.legR[0] * 1.08, ch.legR[1] * 1.05, ch.legR[2] * 0.98],
     skirt: ch.skirt ? { ...ch.skirt, len: ch.skirt.len * 1.06 } : undefined,
   };
   return r;

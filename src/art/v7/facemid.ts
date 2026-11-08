@@ -1,4 +1,4 @@
-// V12 sprite faces (user: "realistic + anime male ... no weird"): the features hand-placed as small
+// V12 sprite faces, the detailed set (kept, unused: the cast wears facereal.ts) (user: "realistic + anime male ... no weird"): the features hand-placed as small
 // clean clusters on the head's own buffer grid, between the fine anime decal (paintFace7, "too high
 // resolution") and the dot-and-dash face ("ugly").
 //  - men: a narrow almond eye about two world pixels tall under a strong upper lid line (no flick),
