@@ -20,6 +20,7 @@ import type { C } from '../../color';
 import type { Sprite } from '../../jungle-core';
 import { Rng, bayer, clamp } from '../../../core/math';
 import { hineruaStatue } from '../../v12/statues';
+import { whare12 } from './house';
 
 const R = (...h: string[]): C[] => h.map(v => hex(v));
 export const VP = {
@@ -194,59 +195,8 @@ export function wharenui(): Sprite {
 
 // ------------------------------------------------------------------ family houses
 export function whare(variant: number, seed: number): Sprite {
-  const sizes: [number, number][] = [[112, 104], [98, 96], [128, 108], [92, 92]];
-  const [w, h] = sizes[variant % sizes.length];
-  const W = w + 30, H = h + 34;
-  const b = new PixelBuffer(W, H);
-  const cx = Math.floor(W / 2), base = H - 1;
-  const wallH = Math.round(h * 0.52), roofH = Math.round(h * 0.6);
-  const wallTop = base - wallH;
-  const rng = new Rng(seed);
-  // walls, a low stone footing
-  if (variant % 2 === 0) slabWall(b, cx - w / 2, wallTop, w, wallH, VP.wood, seed, 6);
-  else reedWall(b, cx - w / 2, wallTop, w, wallH, seed);
-  for (let x = cx - w / 2; x < cx + w / 2; x++) for (let y = base - 3; y <= base; y++) b.set(x, y, dpick(VP.stone, 2.6 + Math.sin(x * 0.7) * 0.6, x, y));
-  // door and a shuttered window
-  const dw = 20, dh = 44;
-  const dx = cx - dw / 2 + (variant === 2 ? -18 : -8);
-  b.rect(dx, base - dh, dw, dh, hex('#0e0806'));
-  for (let x = dx - 2; x < dx + dw + 2; x++) b.set(x, base - dh - 1, VP.wood[4]);
-  for (let y = base - dh; y <= base; y++) { b.set(dx - 1, y, VP.wood[3]); b.set(dx + dw, y, VP.wood[2]); }
-  const wx = dx + dw + 12, wy = base - 38;
-  b.rect(wx, wy, 14, 12, hex('#0e0806'));
-  for (let y = wy; y < wy + 12; y++) for (let k = 0; k < 4; k++) b.set(wx - 5 + k, y, (y + k) % 4 === 0 ? VP.wood[1] : VP.wood[3]);
-  for (let x = wx - 1; x < wx + 15; x++) { b.set(x, wy - 1, VP.wood[4]); b.set(x, wy + 12, VP.wood[4]); }
-  if (variant === 2) b.rect(wx + 2, wy + 2, 10, 3, hex('#e8c060'));
-  // the roof: thatch, or salvaged iron with a rusty patch
-  const top = base - wallH - roofH;
-  const half = w / 2 + 14;
-  if (variant === 3) {
-    for (let y = 0; y < roofH; y++) {
-      const hw = (y / roofH) * half;
-      for (let x = -hw; x <= hw; x++) {
-        const X = Math.round(cx + x), Y = top + y;
-        const rib = (X - cx + 200) % 6 === 0;
-        const rusty = (x > 6 && x < hw * 0.6 && y > roofH * 0.4) || Math.sin(X * 0.3 + Y * 0.2) > 0.92;
-        b.set(X, Y, rusty ? dpick(VP.rust, 3 - (rib ? 1 : 0), X, Y) : dpick(VP.iron, 3.2 - (rib ? 1.2 : 0) - x / hw * 0.5, X, Y));
-      }
-    }
-  } else thatchGable(b, cx, top, half, roofH, variant === 1 ? VP.raupo : VP.thatch, seed);
-  // bargeboards: plain timber, red ochre on the bigger houses
-  for (let y = 0; y < roofH; y++) {
-    const hw = (y / roofH) * half;
-    for (const s of [-1, 1]) for (let k = 0; k < 4; k++) b.set(Math.round(cx + s * (hw - k)), top + y, variant === 0 || variant === 2 ? (k === 1 || k === 2 ? VP.ochre[3] : VP.ochre[2]) : (k === 1 ? VP.wood[4] : VP.wood[2]));
-  }
-  // porch clutter: gumboots, a bench, a kete, a broom, a bucket
-  if (rng.next() < 0.6) { b.rect(dx - 13, base - 9, 4, 9, hex('#141414')); b.rect(dx - 8, base - 8, 4, 8, hex('#141414')); b.set(dx - 13, base - 9, hex('#3a3a3a')); b.set(dx - 8, base - 8, hex('#3a3a3a')); }
-  if (variant !== 3) {
-    const bx0 = cx + 14, bx1 = cx + 40;
-    for (let x = bx0; x < bx1; x++) { b.set(x, base - 14, VP.wood[4]); b.set(x, base - 13, VP.wood[3]); }
-    for (const px of [bx0 + 2, bx1 - 3]) for (let y = base - 12; y <= base; y++) b.set(px, y, VP.wood[2]);
-    b.ellipse(bx0 + 10, base - 18, 4, 3, VP.flax[3]); b.set(bx0 + 10, base - 22, VP.flax[2]);
-  } else { b.ellipseFn(cx + 26, base - 6, 6, 6, (x, y, nx) => dpick(VP.iron, 3 - nx, x, y)); }
-  for (let y = 0; y < 34; y++) b.set(dx + dw + 4 + Math.round(y * 0.12), base - 34 + y, VP.wood[3]);
-  for (let x = -3; x <= 3; x++) for (let y = 0; y < 7; y++) b.set(dx + dw + 8 + x + Math.round(y * 0.2), base - 6 + y, VP.thatch[3 - (x & 1)]);
-  return S(b, cx, base);
+  // V12: rebuilt with a body (the gable end, the side wall and the roof going back): ./house.ts
+  return whare12(variant, seed);
 }
 
 // ------------------------------------------------------------------ the pātaka

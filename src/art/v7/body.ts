@@ -236,12 +236,11 @@ export const PX7 = 2;
  */
 export const DENS7: Record<string, number> = {};
 /**
- * The whole cast at the world's own pixel size (user: "make charter lower resolution more cartoony
- * art style"): one buffer pixel per world pixel, so every figure shares the world's pixel grid. The
- * cartoon finish (raster.ts TOON7) and the cartoon face (facetoon.ts) are built for this size; the
- * finer 1.5 / 2 densities belong with the painted anime finish.
+ * The cast's density (user, latest: "realistic anime, not ugly and chopped"): two buffer pixels per
+ * world pixel, the painted anime cast's fine grid, so faces, hands, hair and folds have room. (The
+ * cartoon cast was 1, at the world's own pixel size.)
  */
-export const CAST_DENS7 = 1;
+export const CAST_DENS7 = 2;
 export const dens7 = (id: string) => DENS7[id] ?? CAST_DENS7;
 /** the side-view prop painter's canvas (world px), and the body's buffer at a density */
 const CW0 = 128, CH0 = 118, OX0 = 64, OY0 = 100;

@@ -60,12 +60,13 @@ export function cel(r: Ramp6, l: number, bias = 0, shine = false): C {
   return shine && v > 0.93 ? r[5] : r[4];
 }
 /**
- * The cast's cartoon look (user: "lower resolution more cartoony art style"): drawn at the world's
- * own pixel size, three-tone cel shading (shadow, base, light; no deep step, terminator or shine), a
- * bold even outline round every form and between overlapping parts, no rim light or contact shading,
- * and brighter, more saturated colour (popBuf). Off brings back the painted anime finish.
+ * The cast's cartoon look: drawn at the world's own pixel size, three-tone cel shading, a bold even
+ * outline, no rim light, brighter colour (popBuf). Off (user, latest: "make the people a lot better,
+ * realistic anime, not ugly and chopped"): the painted anime finish, a deep step, a terminator and a
+ * shine in the shading, fabric folds, strand hair with its angel ring, rim light and contact shading,
+ * at the cast's fine density (body.ts CAST_DENS7) and its realistic proportions (head.ts).
  */
-export const TOON7 = true;
+export const TOON7 = false;
 
 /** a colour pushed brighter and more saturated (cached): the cartoon palette, kept in its own hue */
 const popped = new Map<C, C>();
