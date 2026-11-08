@@ -35,6 +35,7 @@ import { W, G, RIVER, X } from './layout';
 import { spawnVillagers, defineVillagePeople, welcome } from './people';
 import { placeChores } from './chores';
 import { installLife, bindLifeCtx } from './life';
+import { placeQuarter } from './quarter';
 import { registerVillageQuests, startVillageQuest, vf, setVf } from './lore';
 import { questStatus } from '../../quests';
 import './items';
@@ -236,6 +237,7 @@ export async function buildVillage(f: FieldScene) {
   // ---------------------------------------------------------------- the palisade and the gateway
   for (let x = X.palisade[0]; x < W; x += 96) if (Math.abs(x + 48 - X.gate) > 70) put(f, `pal:${x}`, () => P.stakes(100, x), x, -7, { dy: 3 });
   put(f, 'gate', P.gateway, X.gate, -4, { dy: 3 });
+  placeQuarter(c);
 
   // ---------------------------------------------------------------- night: torches along the paths
   if (night || f.tod === 'dusk') {

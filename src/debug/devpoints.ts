@@ -705,6 +705,7 @@ export async function chapters(): Promise<DevChapter[]> {
     ] },
     { id: 'v:guitar', name: 'Guitar by the fire with Aunty Hana', sub: 'The guitar close-up (a rhythm game)', icon: 'star', variants: ([['Te Ahi (easy)', 'ahi'], ['Hoki Mai', 'hoki'], ['Te Rere o te Manu (hard)', 'manu']] as const).map(([label, s]) => ({ label, run: async () => { const m = await vil(); m.stage('start'); await m.life('evening', 'dusk', 19.5, 1300); const { runGuitar } = await import('../ui/v12/closeup/guitar'); await runGuitar({ song: s, who: 'hana' }); } })) },
     { id: 'v:life', name: 'Village life through the day', sub: 'Chores, work and play, the fire and Hana’s guitar, bedtime', icon: 'sun', variants: ([['Morning chores', 'morning', 'dawn', 8.5, 640], ['Midday work and play', 'midday', 'day', 13, 1500], ['Evening at the fire', 'evening', 'dusk', 19.5, 1150], ['Night (asleep)', 'night', 'night', 23.5, 1760]] as const).map(([label, ph, tod, h, x]) => ({ label, run: async () => { const m = await vil(); m.stage('start'); await m.life(ph, tod, h, x); } })) },
+    { id: 'v:lane', name: 'Te Huarahi, the market lane', sub: 'The families from across the sea: the fale, the Lees’ store, the stalls, the gum-digger', icon: 'map', variants: TODS.map(t => ({ label: TOD_LABEL[t], run: async () => { const m = await vil(); m.stage('start'); await m.go(t, 2600); } })) },
   ] });
   return out;
 }
