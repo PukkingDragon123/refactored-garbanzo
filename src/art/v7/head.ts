@@ -602,6 +602,17 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
   }
   // the hair's edge over the face is inked in the hair's own dark, not the skin's red-brown (no streak down the cheek)
   const r = s.finish({ ink: mix(d.ink, d.hair[0], 0.6), depthLine: 1.6, rim: 0.55, inkK: { 1: 0.8, 3: 0.6, 6: 0.75 } });
+  // under the jaw (user: "the face and neck looks uncanny"): no inked line between the head and the
+  // neck (it read as a black choker, the head a mask on a stick); the edge under the jaw and chin is
+  // the jaw's shadow falling on the throat, a deep skin tone running into the neck's shade
+  if (!back) {
+    const jawSh = mix(d.skin[1], d.skin[2], 0.4), bd = r.back.data;
+    for (let y = 1; y < BH; y++) for (let x = 0; x < BW; x++) {
+      const i = y * BW + x;
+      if (s.grp[i] || !bd[i] || s.grp[i - BW] !== 1) continue;
+      bd[i] = jawSh;
+    }
+  }
   for (const [x, y, c] of marks) r.back.data[y * BW + x] = c;
   popBuf(r.back);
   const tr = trimPair(r.back, null, 1);

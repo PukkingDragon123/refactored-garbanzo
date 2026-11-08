@@ -38,14 +38,21 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
   terminator and shine, fabric folds, strand hair with its angel ring, rim light, and the V12 face
   (`facemid.ts`). The cartoon finish and face (`facetoon.ts`) are kept, unused. Mori is a normal,
   realistic build, not skinny. Women and girls are listed in `FEM7`.
-  - **Anatomically accurate proportions** (user: "still looks chopped ... make it anatomically
-    accurate"). Every adult goes through the anatomy pass `anat()` in `src/art/v7/restyle.ts`, which
-    rebuilds the skeleton from measured human segment ratios (Drillis & Contini) of the figure's
-    height H: men 7.4 heads tall, women 7.15; ankle 0.039 H, shin 0.246 H, thigh 0.245 H (hip joint
-    at about 0.53 H), torso 0.29 H, upper arm 0.186 H, forearm 0.146 H, shoulders about 0.2 H across
-    (women 0.185 H). `headScale7` follows it. Children are left as they are. The shoulders are a
-    sloping trapezius with a deltoid cap (`body.ts`), never a tube straight across. Don't hand-tune a
-    build's segment lengths around the pass; change the ratios there.
+  - **Proportions: stylised like Dave the Diver, anatomy in the joints** (user, latest: "the body and
+    face and neck looks uncanny, study how Dave the Diver makes it look good and normal"; before that,
+    "make it anatomically accurate"). Purely measured anatomy (7.4 heads, a long thin neck) was
+    uncanny at sprite size. Every adult goes through `anat()` in `src/art/v7/restyle.ts` (the `STYLE`
+    table): men 5.7 heads tall, women 5.55, so the face reads; a short, thick neck (0.024 H, women
+    0.03 H; radius about 0.26 of the head's height for men, 0.21 for women) so the head sits on the
+    shoulders; torso 0.3 H; arms a touch short (upper arm 0.172 H, forearm 0.138 H). The landmarks
+    stay anatomical: the knee halfway down the leg (thigh/shin/ankle 0.463/0.463/0.074 of it), the
+    elbow at the waist, the wrist at the crotch. `headScale7` follows it. Children are left as they
+    are. Change proportions in that table, never by hand-tuning a build's segment lengths.
+  - The head meets the neck with no inked line: the edge under the jaw is the jaw's shadow in a deep
+    skin tone (`renderHead7` in `head.ts`); a black line there reads as a choker. The shoulders are a
+    sloping trapezius with a deltoid cap (`body.ts`), never a tube straight across.
+  - Sprite eyes (`facemid.ts`) are mostly the dark iris with the catch-light inside it and only a
+    sliver of shaded white; a bright pixel beside the iris reads as a staring side-eye.
 - **Never show the player's first-person hands** (user: "never ever show player first person
   hand"). Close-ups show the tools and what they touch, not Mori's hands or sleeves
   (`FIRST_PERSON_HANDS = false` in `src/ui/v12/closeup/hands.ts`, `HANDS3D.enabled = false`).

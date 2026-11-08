@@ -2,7 +2,8 @@
 // clean clusters on the head's own buffer grid, between the fine anime decal (paintFace7, "too high
 // resolution") and the dot-and-dash face ("ugly").
 //  - men: a narrow almond eye about two world pixels tall under a strong upper lid line (no flick),
-//    a small dark iris with one catch-light, the white at the back; a straight, fairly thick brow
+//    a small dark iris with its catch-light inside it (user: "uncanny ... like Dave the Diver": a
+//    bright pixel beside the iris read as a staring white), a sliver of shaded white; a straight, fairly thick brow
 //    close over it that tilts with the mood; a short mouth line with a shadow under the lower lip
 //  - women: the same eye fuller, with a lash at the outer corner and a lower lid; a lighter, higher brow;
 //    a coloured lip
@@ -39,37 +40,37 @@ const t = (ax: number, ay: number, ...r: string[]): T => ({ r, ax, ay });
 // on the row above it.
 
 const MAN_NEAR: Record<string, T> = {
-  dot: t(2, 1, '.KKKK.', 'KwHIk.', '.WIi..'),
-  half: t(2, 1, '.LLLL.', 'KKKKk.', '.WIi..'),
-  angry: t(2, 1, '.KK...', 'KwHKK.', '.WIi..'),
-  sad: t(2, 1, '..KKK.', 'KKHIk.', '.WIi..', '..l...'),
+  dot: t(2, 1, '.KKKK.', 'KwIHk.', '.wIi..'),
+  half: t(2, 1, '.LLLL.', 'KKKKk.', '.wIi..'),
+  angry: t(2, 1, '.KK...', 'KwIKK.', '.wIi..'),
+  sad: t(2, 1, '..KKK.', 'KKIHk.', '.wIi..', '..l...'),
   wide: t(2, 2, '.KKKK.', 'KwWWk.', '.WHIW.', '..Ii..'),
   happy: t(2, 1, '.KKK..', 'K...K.', '.l.l..'),
   closed: t(2, 1, '......', 'kKKKk.', '.l....'),
 };
 const MAN_FAR: Record<string, T> = {
-  dot: t(1, 1, 'KKKk', 'wHIK', '.Ii.'),
+  dot: t(1, 1, 'KKKk', 'wIHK', '.Ii.'),
   half: t(1, 1, 'LLLL', 'kKKK', '.Ii.'),
-  angry: t(1, 1, '..KK', 'KHKK', '.Ii.'),
-  sad: t(1, 1, 'KKk.', 'kHIK', '.Ii.'),
+  angry: t(1, 1, '..KK', 'KIKK', '.Ii.'),
+  sad: t(1, 1, 'KKk.', 'kIHK', '.Ii.'),
   wide: t(1, 2, 'KKKk', 'wWWK', 'WHIW', '.Ii.'),
   happy: t(1, 1, '.KK.', 'K..K'),
   closed: t(1, 1, '....', 'kKKk'),
 };
 const WOMAN_NEAR: Record<string, T> = {
-  dot: t(2, 2, 'K.....', '.KKKKk', 'KwHII.', '.WIIi.', '..LL..'),
-  half: t(2, 2, 'K.....', '.LLLL.', 'KKKKKk', '.WIIi.', '..LL..'),
-  angry: t(2, 2, 'K.....', '.KK...', 'KwHKKk', '.WIIi.', '..LL..'),
-  sad: t(2, 2, '......', '..KKKk', 'KKHII.', '.WIIi.', '..LL..'),
+  dot: t(2, 2, 'K.....', '.KKKKk', 'KwIHI.', '.wIIi.', '..LL..'),
+  half: t(2, 2, 'K.....', '.LLLL.', 'KKKKKk', '.wIIi.', '..LL..'),
+  angry: t(2, 2, 'K.....', '.KK...', 'KwIKKk', '.wIIi.', '..LL..'),
+  sad: t(2, 2, '......', '..KKKk', 'KKIHI.', '.wIIi.', '..LL..'),
   wide: t(2, 2, 'K.....', '.KKKKk', 'KwWWW.', '.WHIW.', '..Ii..', '..LL..'),
   happy: t(2, 2, '......', 'K.....', '.KKKK.', 'K....K', '.l..l.'),
   closed: t(2, 2, '......', '......', 'KkKKKk', '.l....'),
 };
 const WOMAN_FAR: Record<string, T> = {
-  dot: t(1, 2, '....', 'KKKK', 'wHIK', 'WIi.', '.L..'),
-  half: t(1, 2, '....', 'LLLL', 'kKKK', 'WIi.', '.L..'),
-  angry: t(1, 2, '....', '..KK', 'KHKK', 'WIi.', '.L..'),
-  sad: t(1, 2, '....', 'KKk.', 'kHIK', 'WIi.', '.L..'),
+  dot: t(1, 2, '....', 'KKKK', 'wIHK', 'wIi.', '.L..'),
+  half: t(1, 2, '....', 'LLLL', 'kKKK', 'wIi.', '.L..'),
+  angry: t(1, 2, '....', '..KK', 'KIKK', 'wIi.', '.L..'),
+  sad: t(1, 2, '....', 'KKk.', 'kIHK', 'wIi.', '.L..'),
   wide: t(1, 2, 'KKKK', 'wWWK', 'WHIW', '.Ii.', '.L..'),
   happy: t(1, 2, '....', '.KK.', 'K..K', '.l..'),
   closed: t(1, 2, '....', '....', 'kKKK', '....'),
@@ -156,11 +157,13 @@ function palette(d: HeadDef7, fem: boolean): Pal {
       const [i0, i1] = d.face?.iris ?? ['#4a2e22', '#a06a3e'];
       const iris = hex(i0), irisL = hex(i1);
       const brow = hex(d.brow);
-      const W = mix(hex('#f8f0ea'), s[4], 0.12);
+      // (the white warmed and dimmed toward the skin: at sprite size a bright white beside the iris
+      // stares; Dave the Diver's eyes are mostly the dark iris and its catch-light)
+      const W = mix(hex('#f4ebe2'), s[4], 0.28);
       return {
         K, k: mix(K, s[2], 0.45),
-        W, w: mix(W, s[2], 0.5),
-        I: mix(iris, K, 0.45), i: mix(iris, irisL, 0.45), H: 0xffffffff,
+        W, w: mix(W, s[3], 0.55),
+        I: mix(iris, K, 0.45), i: mix(iris, irisL, 0.45), H: mix(0xffffffff, irisL, 0.18),
         L: mix(s[2], s[1], 0.25), l: mix(s[2], s[3], 0.35),
         B: f ? mix(brow, s[2], 0.25) : brow, b: mix(brow, s[2], f ? 0.6 : 0.45),
         D: mix(hex('#3a0e14'), s[0], 0.3), T: hex('#b8505a'), Y: hex('#f2ebe4'),

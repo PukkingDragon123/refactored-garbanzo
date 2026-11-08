@@ -1,10 +1,8 @@
-// V7 anime-realistic proportions, applied to every cast member (the core four, the NPCs and the
-// villagers) from their own builds, so the clips (all parameterised by the build) follow:
-//  - longer legs and a slightly longer torso and neck: a slender young-adult figure instead of a chibi
-//  - arms long enough to reach mid-thigh, limbs a touch slimmer
-//  - heads drawn at HEAD_SCALE_MAN7 / HEAD_SCALE_WOMAN7 of their volumes (head.ts): about six and a
-//    half heads tall, the men's a touch smaller on their broader build
-// Children keep rounder proportions (a smaller stretch, larger heads).
+// V7 proportions, applied to every cast member (the core four, the NPCs and the villagers) from their
+// own builds, so the clips (all parameterised by the build) follow. Each build is first restyled for
+// its type (Mori's ordinary fit build, the grown men's broader frame, the women's slender one), then
+// set to the cast's proportions (`anat`, below: stylised like Dave the Diver's people, a readable head
+// on a short thick neck, the joints where anatomy puts them). Children keep their rounder proportions.
 
 import type { Build } from '../people-rig';
 import type { Char7 } from './body';
@@ -55,15 +53,22 @@ export function restyle7(ch: Char7): Char7 {
   return anat(r, ch);
 }
 
-// ---------------------------------------------------------------- anatomy (user: "make it anatomically accurate")
-// Every grown-up's segments are set from their stature by the measured human ratios (Drillis & Contini's
-// segment lengths as fractions of height H): thigh 0.245, shin 0.246, ankle 0.039 (the hip joint at
-// ~0.53 H), hip joint to the base of the neck 0.29, upper arm 0.186, forearm 0.146 (the elbow at the
-// waist, the wrist at the crotch). The head is 1/7.4 of the height for men and 1/7.15 for women (a
-// realistic anime figure), the shoulder joints at least ~0.2 H apart (men) / ~0.185 H (women), the hip
-// joints ~0.1 H apart. Each keeps their own stature, their own breadth where it is bigger (a broad man
-// stays broad), and their own girths. Children keep their own rounder proportions.
-const HEADS_TALL = { man: 7.4, woman: 7.15 };
+// ---------------------------------------------------------------- proportions
+// The figure (user: "the body and face and neck looks uncanny, study how Dave the Diver makes it look
+// good and normal"). Measured anatomy alone (7.4 heads, a long thin neck, a small face) reads as uncanny
+// at sprite size: the eye finds a tiny face on a big realistic body. Dave the Diver's people are
+// stylised the way good game sprites are: a larger head so the face reads, a short thick neck so the
+// head sits on the shoulders, arms a touch short, every joint still where it belongs. So the head is
+// 1/5.7 of the height for men and 1/5.55 for women, the visible neck short (0.024 H, women 0.03 H)
+// and thick (its radius about a quarter of the head's height for men, a fifth for women), and the rest
+// keeps the anatomical landmarks (user, before: "anatomically accurate"): the legs split thigh/shin/
+// ankle as measured (0.463/0.463/0.074 of the leg; the knee halfway), the elbow at the waist, the wrist
+// at the crotch. Each keeps their own stature, their own breadth where it is bigger (a broad man stays
+// broad), and their own girths. Children keep their own rounder proportions.
+const STYLE = {
+  man: { heads: 5.7, neck: 0.024, torso: 0.3, upArm: 0.172, foreArm: 0.138, neckR: 0.26, shW: 0.1, hipW: 0.048 },
+  woman: { heads: 5.55, neck: 0.03, torso: 0.288, upArm: 0.168, foreArm: 0.134, neckR: 0.21, shW: 0.0925, hipW: 0.052 },
+};
 const anatK = new Map<string, number>();
 function anat(r: Char7, from: Char7): Char7 {
   const b = r.build;
@@ -73,21 +78,22 @@ function anat(r: Char7, from: Char7): Char7 {
   const chin = Math.min(hd.chin[0][1] - hd.chin[1][1], hd.jaw[0][1] - hd.jaw[1][1]);
   const raw = Math.max(1, top - chin);
   const fem = isFem7(r.id, HEADS7[r.id]);
+  const S = fem ? STYLE.woman : STYLE.man;
   const kNow = REAL7.has(r.id) ? HEAD_SCALE_REAL7 : fem ? HEAD_SCALE_WOMAN7 : HEAD_SCALE_MAN7;
   const H = b.hipH + b.torso + b.neck + raw * kNow;
-  const headH = H / (fem ? HEADS_TALL.woman : HEADS_TALL.man);
+  const headH = H / S.heads;
   anatK.set(r.id, headH / raw);
-  const ankleH = 0.039 * H, shin = 0.246 * H, thigh = 0.245 * H;
+  const torso = S.torso * H, neck = S.neck * H;
+  const hipH = H - headH - neck - torso;
   // (the rig stands with a soft knee: the hip a touch under the straight-leg sum)
-  const hipH = (ankleH + shin + thigh) * 0.99;
-  const torso = 0.29 * H;
-  const neck = Math.max(0.6, H - hipH - torso - headH);
-  const build: Build = { ...b, ankleH, shin, thigh, hipH, torso, neck, upArm: 0.186 * H, foreArm: 0.146 * H };
+  const leg = hipH / 0.99;
+  const build: Build = { ...b, ankleH: 0.074 * leg, shin: 0.463 * leg, thigh: 0.463 * leg, hipH, torso, neck, upArm: S.upArm * H, foreArm: S.foreArm * H };
   const out: Char7 = {
     ...r,
     build,
-    shW: Math.max(r.shW, (fem ? 0.0925 : 0.1) * H),
-    hipW: Math.max(r.hipW, (fem ? 0.052 : 0.048) * H),
+    shW: Math.max(r.shW, S.shW * H),
+    hipW: Math.max(r.hipW, S.hipW * H),
+    neckR: Math.max(r.neckR, S.neckR * headH),
     skirt: r.skirt ? { ...r.skirt, len: r.skirt.len * (build.hipH / Math.max(1, b.hipH)) } : undefined,
   };
   memo.set(from, out);
@@ -139,7 +145,7 @@ const HEAD_SCALE_KID7 = TOON7 ? 1.08 : 0.9;
 export function headScale7(id: string): number {
   const ch = CAST7[id];
   if (ch && isChild(ch.build)) return HEAD_SCALE_KID7;
-  // grown-ups: the anatomy pass's head (1/7.4 of the height for men, 1/7.15 for women)
+  // grown-ups: the proportion pass's head (1/5.7 of the height for men, 1/5.55 for women)
   if (ch) { restyle7(ch); const k = anatK.get(id); if (k) return k; }
   if (REAL7.has(id)) return HEAD_SCALE_REAL7;
   return isFem7(id, HEADS7[id]) ? HEAD_SCALE_WOMAN7 : HEAD_SCALE_MAN7;
