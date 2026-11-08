@@ -172,6 +172,8 @@ async function boot() {
       setCarry(a as never, kind, o);
       return kind;
     },
+    /** V12 the shot ledger (what each picture is worth; the same shot again pays nothing): (await zl.shots()).judgeShot(photo) */
+    shots: () => import('./game/v12/shotvalue'),
     /** the pause menu (floating words over the softened scene), wherever the game is */
     pause: async () => (await import('./ui/pause')).openPause(),
     /** the cinematic camera and post FX (cineTo, cinePunch, cineLook...): (await zl.cine()).cinePunch() */

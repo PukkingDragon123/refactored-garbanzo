@@ -33,7 +33,42 @@ import { tooHungryForPhotos } from './v12/hunger';
 import { CamRing } from './v12/qte';
 /** world px / s: faster subjects need a timed shutter (the QTE ring) instead of the automatic one */
 const FAST_SUBJECT = 70;
-import { pxIcon, setHtml } from '../ui/pxicons';
+import { pxIcon, pxRating, setHtml } from '../ui/pxicons';
+import { judgeShot, photoVerdict, onFile, verdictWords } from './v12/shotvalue';
+import type { ShotKind } from './v12/shotvalue';
+import { bufCanvas, over, skewSteps } from '../ui/pxkit';
+import { pxTextBuf } from '../ui/pxfont';
+import { PixelBuffer as PxBuf } from '../art/pixel';
+import { hex } from '../art/color';
+
+/** V12: the verdict tag taped on a dry print: a cream paper label, an inked worn border, the word in
+ *  tiny caps, a strip of masking tape over the top edge and a hard paper-thickness edge underneath */
+function paintPrintTag(word: string, ink: string, seed: number, ang: number): PxBuf {
+  const hs = (x: number, y: number) => { let n = (x * 374761393 + y * 668265263 + seed * 1442695041) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
+  const t = pxTextBuf(word, { font: 'tiny', color: ink, spacing: 1 });
+  const w = t.w + 9, h = t.h + 7, top = 2;
+  const b = new PxBuf(w, h + top + 1);
+  const paper = [hex('#f3ead2'), hex('#e9dcbc'), hex('#d6c59d')], inkC = hex(ink), edge = hex('#a8946c');
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const corner = (x === 0 || x === w - 1) && (y === 0 || y === h - 1);
+    if (corner || ((x === 0 || x === w - 1 || y === h - 1) && hs(x, y) > 0.8)) continue;
+    // a little grain, darker toward the bottom
+    const g = y > h - 3 ? 1 : hs(x * 3, y * 7) > 0.9 ? 1 : 0;
+    b.set(x, y + top, paper[g]);
+  }
+  for (let x = 1; x < w - 1; x++) if (hs(x, 99) > 0.25) b.set(x, h + top, edge);
+  // the inked frame, worn
+  for (let x = 2; x < w - 2; x++) { if (hs(x, 1) < 0.86) b.set(x, top + 2, inkC); if (hs(x, 2) < 0.86) b.set(x, top + h - 3, inkC); }
+  for (let y = 2; y < h - 2; y++) { if (hs(1, y) < 0.86) b.set(2, top + y, inkC); if (hs(2, y) < 0.86) b.set(w - 3, top + y, inkC); }
+  over(b, t, 5, top + 3);
+  // masking tape across the top edge
+  const tx = Math.round(w / 2 - 5);
+  for (let y = 0; y < 4; y++) for (let x = 0; x < 10; x++) {
+    if ((x === 0 || x === 9) && hs(x, y + 50) > 0.5) continue;
+    b.set(tx + x, y, hs(x, y + 7) > 0.8 ? hex('#cdbb86') : hex('#e6d8a4'));
+  }
+  return ang ? skewSteps(b, ang) : b;
+}
 
 /** A foreground prop that can block the shot. The mask is the sprite's own pixels. */
 export interface Occluder {
@@ -115,6 +150,11 @@ export class FieldCamera {
   private holdNag = 0;
   private holdQ = 0;
   private uiT = 0;
+  /** V12: the best stars already on file for the picture in the focus box (0: a new picture) */
+  private onFileStars = 0;
+  private onFileT = 0;
+  /** V12: what the print on the camera is worth (stamped on it when it is dry) */
+  private printVerdict: { kind: ShotKind; pts: number } | null = null;
 
   constructor(readonly host: WildHost, readonly site: RawPhoto['site']) {
     this.v10 = site !== 'sea';
@@ -313,6 +353,12 @@ export class FieldCamera {
     const still = pan <= tol ? 1 : pan >= tol * 3 ? 0 : 1 - (pan - tol) / (tol * 2);
     const stab = clamp(1 - (Math.hypot(this.swayVX, this.swayVY) * this.shutterTime()) / 5);
     if (still < 0.35) { this.hold = Math.max(0, this.hold - dt * 0.7); this.holdQ = Math.floor(this.hold * 4); this.holdState = 'shaky'; return; }
+    // V12: is this a picture already on file? (checked a few times a second)
+    this.onFileT -= dt;
+    if (this.onFileT <= 0) {
+      this.onFileT = 0.35;
+      this.onFileStars = tgt ? this.onFileOf(tgt, animals) : 0;
+    }
     const af = !tgt || this.afState === 'locked' ? 1 : 0.5;
     const rate = (still * (0.6 + 0.4 * stab) * (this.holding ? 1.2 : 1) * (brace ? 1.1 : 1) * af) / Math.max(0.2, holdSecs10());
     this.hold = Math.min(1, this.hold + rate * dt);
@@ -481,6 +527,18 @@ export class FieldCamera {
     } as PhotoSubject;
   }
 
+  /** the best stars already paid (or on the roll) for the picture of `tgt` the viewfinder holds now */
+  private onFileOf(tgt: Animal, animals: Animal[]): number {
+    const subjects: PhotoSubject[] = [];
+    for (const a of animals) {
+      if (a.dead || a.gone || Math.abs(a.x - tgt.x) > 600) continue;
+      const m = this.measure(a);
+      if (m) subjects.push(m);
+    }
+    for (const s of subjects) s.group = subjects.filter(o => o.species === s.species).length;
+    return onFile(subjects, tgt.species, this.site, this.host.tod, rawPhotos());
+  }
+
   shoot(animals: Animal[]) {
     if (this.v10 && tooHungryForPhotos()) { this.raise(false); this.refuseHungry(); return; }
     if (this.shots <= 0) { audio.play('wrong'); game.ui.toast('Memory card full. Head back to camp and review your shots.', 'CAMERA', 'coral'); this.cooldown = 0.6; return; }
@@ -511,6 +569,7 @@ export class FieldCamera {
       if (this.holding) notes.push('Held breath');
       const photo = addRawPhoto({ img, site: this.site, time: this.host.tod, day: game.save.day, video: false, light, subjects: clean, af, notes });
       game.r.post.flash = 0.35;
+      this.printVerdict = photoVerdict(photo, judgeShot(photo, rawPhotos()));
       this.lcd(img);
       this.onShot?.(photo);
     };
@@ -582,6 +641,13 @@ export class FieldCamera {
   private lcd(img: string) {
     const l = this.els.lcd;
     l.innerHTML = `<div class="pic"><img src="${img}" alt=""></div><span class="cap">DEVELOPING…${this.v10 ? ' <em class="cd"></em>' : ''} shake it! <b>R</b></span><span class="n">${rawPhotos().length} to upload</span>`;
+    // V12: what it is worth, stamped on the print once it is dry
+    const v = this.printVerdict;
+    if (v && this.v10) {
+      const w = verdictWords(v.kind, v.pts);
+      const st = bufCanvas(paintPrintTag(w.word, w.ink, rawPhotos().length + 3, 0), 'stamp ' + v.kind, 2);
+      l.appendChild(st);
+    }
     l.classList.remove('on', 'dry');
     void l.offsetWidth;
     l.classList.add('on');
@@ -625,9 +691,26 @@ export class FieldCamera {
     if (this.develop >= 1) {
       l.classList.add('dry');
       audio.play('collectPop' as never, { vol: 0.35 });
+      this.stampLanded();
       (l as unknown as { _t: number })._t = window.setTimeout(() => { l.classList.remove('on'); if (!this.active) this.vf.classList.remove('pocket'); }, 1600);
       if (this.v10 && !this.active) game.ui.toast('The print is dry. Camera ready for the next research photo.', 'CAMERA', 'teal', 2200);
     }
+  }
+
+  /** V12: the verdict stamp lands on the dry print; the rule is spelled out the first few times */
+  private stampLanded() {
+    const v = this.printVerdict;
+    if (!v || !this.v10) return;
+    const vars = game.save.vars;
+    const seen = (k: string) => { const n = vars['v12:shotTip:' + k] ?? 0; vars['v12:shotTip:' + k] = n + 1; return n; };
+    setTimeout(() => {
+      audio.play('press' as never, { vol: 0.4, pitch: v.kind === 'same' ? 0.7 : 1 });
+      void import('../ui/v12/float').then(m => {
+        if (v.kind === 'same') m.floatNotice(seen('same') < 3 ? 'Same shot as one you already have: no points. A new angle, a closer frame, another behaviour or another animal with it will pay.' : 'Same shot: no points.', seen('same') < 3 ? 4200 : 1800, { tag: 'CAMERA', accent: '#ff9a7a' });
+        else if (v.kind === 'new' && seen('new') < 2) m.floatNotice(`A new picture: +${v.pts} RP when you upload it at camp.`, 2600, { tag: 'CAMERA', accent: '#bff59a' });
+        else if (v.kind === 'better' && seen('better') < 2) m.floatNotice(`A better take on a picture you had: +${v.pts} RP (only the difference).`, 2600, { tag: 'CAMERA', accent: '#a8d8ff' });
+      });
+    }, 120);
   }
 
   /** tap/click on the print to shake it */
@@ -727,6 +810,12 @@ export class FieldCamera {
     this.uiT = 6;
     const left = Math.max(0.1, (1 - this.hold) * holdSecs10());
     const auto = !!this.holdOn;
+    const had = this.holdOn && (st === 'filling' || st === 'ready') ? this.onFileStars : 0;
+    e.holdlab.classList.toggle('have', had > 0);
+    if (had > 0 && !nag) {
+      e.holdlab.innerHTML = `ON FILE ${pxRating(had, 5, 'star', 'star0', 1)} · same shot pays nothing: beat it or change the angle`;
+      return;
+    }
     e.holdlab.innerHTML = nag ? 'HOLD STILL… the shutter goes when the ring is full'
       : st === 'filling' ? `HOLD STEADY <b>${left.toFixed(1)}s</b>${auto ? '' : ' · nothing in focus'}`
       : st === 'ready' ? (auto ? 'STEADY!' : 'READY · <b>click</b> to shoot')
@@ -773,6 +862,13 @@ function injectCss() {
 .vf .lcd.nag { box-shadow: 0 0 0 3px #d0301e, 0 8px 0 rgba(0,0,0,0.4); }
 .vf::after { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0.06; background: repeating-linear-gradient(0deg, #000 0 1px, transparent 1px 3px); }
 .vf .lcd .cap .cd { font-style: normal; color: #b0301e; }
+/* V12: the verdict stamp on the dry print */
+.vf .lcd .stamp { position: absolute; right: 0.9em; bottom: 2.5em; opacity: 0; transform: rotate(3deg) scale(2); transform-origin: 80% 60%; transition: opacity 0.08s steps(1), transform 0.16s steps(3); pointer-events: none; }
+/* the print hangs at -3deg: the tag turns back so its pixels sit square on the screen */
+.vf .lcd.dry .stamp { opacity: 1; transform: rotate(3deg); }
+.vf.pocket .lcd.dry .stamp { transform: rotate(-3deg); }
+.vf .holdlab.have { color: #ffd59a; }
+.vf .holdlab.have b { color: #ffe27a; letter-spacing: 0.1em; }
 /* V10: the steadiness ring round the focus box, and the line under it */
 .vf .hold { position: absolute; left: 50%; top: 50%; width: 134px; height: 134px; margin: -67px 0 0 -67px; border-radius: 50%; opacity: 0; transition: opacity 0.2s; --p: 0; --c: var(--amber2);
   background: conic-gradient(var(--c) calc(var(--p) * 360deg), rgba(255, 255, 255, 0.16) 0);

@@ -283,6 +283,16 @@ export function researchApps(os: OSCtx) {
         sfx.star();
         os.floatText(c.x, c.y - 20, '+ behaviour', '#c8ff9a');
         await wait(450 * k);
+      } else if (out.shots.length && out.shots.every(v => v.kind === 'same')) {
+        // V12: the same picture again pays nothing, and says so
+        sfx.press();
+        stamp.className = 'stamp same'; stamp.innerHTML = `Same shot<small>You already have this picture: no points</small>`;
+        await wait(700 * k);
+      } else if (out.shots.some(v => v.pts > 0)) {
+        sfx.star();
+        const better = out.shots.every(v => v.kind !== 'new');
+        stamp.className = 'stamp shot'; stamp.innerHTML = better ? `Better shot<small>Paid the difference</small>` : `New shot<small>A picture you did not have</small>`;
+        await wait(600 * k);
       } else await wait(250 * k);
       if (out.rp) { const cc = os.center(qs[i]); os.floatText(cc.x, cc.y, `+${out.rp} RP`, '#ffe27a'); }
       qs[i].classList.remove('on'); qs[i].classList.add('done', out.found.some(f => f.ok) ? 'hit' : 'miss');
@@ -305,7 +315,9 @@ export function researchApps(os: OSCtx) {
       if (f.ok) {
         const isNew = out.newSpecies.includes(f.species);
         const bh = f.beh.map(x => `${out.newBeh.some(([s, b]) => s === f.species && b === x) ? '<em>+</em>' : ''}${esc(behLabel(f.sp, x))}`).join(', ');
-        ls.appendChild(el('div', 'ln ok', `<b>${OK()} ${esc(f.sp?.name ?? f.species)}</b>${f.n > 1 ? ` ×${f.n}` : ''}${isNew ? ' <span class="tag">NEW SPECIES</span>' : ''}<small>${f.auto ? 'Auto-tagged from a poor photo · ' : ''}${bh ? bh + ' · ' : ''}<span class="st">${stars(f.stars)}</span></small>`));
+        const sv = out.shots.find(v => v.species === f.species);
+        const shotTag = !sv ? '' : sv.kind === 'same' ? ' <span class="tag same">SAME SHOT · NO POINTS</span>' : sv.kind === 'better' ? ' <span class="tag shot">BETTER SHOT</span>' : ' <span class="tag shot">NEW SHOT</span>';
+        ls.appendChild(el('div', 'ln ok', `<b>${OK()} ${esc(f.sp?.name ?? f.species)}</b>${f.n > 1 ? ` ×${f.n}` : ''}${isNew ? ' <span class="tag">NEW SPECIES</span>' : ''}${shotTag}<small>${f.auto ? 'Auto-tagged from a poor photo · ' : ''}${bh ? bh + ' · ' : ''}<span class="st">${stars(f.stars)}</span></small>`));
       } else {
         const nm = entry(f.species) ? f.sp?.name ?? f.species : 'Unidentified animal';
         ls.appendChild(el('div', 'ln no', `<b>${NO()} ${esc(nm)}</b><small>${esc(f.why ?? 'Not identifiable')}</small>`));
