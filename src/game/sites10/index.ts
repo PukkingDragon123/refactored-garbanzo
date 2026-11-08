@@ -13,7 +13,9 @@ import { VILLAGE } from './village';
 import { HILLS_SITE } from './hills';
 import { SWAMP } from '../v12/swamp/site';
 import { DEEPCAVE } from '../v12/cave/site';
+import { BACKCOUNTRY } from '../v12/backcountry/site';
 
 export const SITES10: Record<string, Site10> = {
   grotto: GROTTO, fossils: FOSSILS, glowforest: GLOWFOREST, geovalley: GEOVALLEY, ruins: RUINS, unknown: UNKNOWN, village: VILLAGE, hills: HILLS_SITE, swamp: SWAMP, deepcave: DEEPCAVE,
+  backcountry: BACKCOUNTRY,
 };

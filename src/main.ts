@@ -52,10 +52,13 @@ async function boot() {
   game.r.post.fade = 1;
   game.fadeTo(1);
   game.start();
+  // V12: the night of the claw (the Bearer comes to Te Kāinga)
+  try { (await import('./game/v12/raid')).bootRaid(); } catch (e) { console.warn('[raid] boot', e); }
   // V11: the people of Zealandia (relationships, NPCs, their quests); K opens the people book
   try { await (await import('./game/v11/npcs')).bootNpcs(); } catch (e) { console.warn('[npcs] boot', e); }
   // V12: the Thunderbird quest and the harder, more hostile wilds
   try { await (await import('./game/v12/thunderbird')).bootThunderbird(); } catch (e) { console.warn('[thunderbird] boot', e); }
+  try { await (await import('./game/v12/feud')).bootFeud(); } catch (e) { console.warn('[feud] boot', e); }
   const scene = params.get('scene');
   const flow = await import('./game/scenes/flow');
   if (params.has('flags')) for (const f of params.get('flags')!.split(',')) game.save.flags[f] = true;
@@ -172,6 +175,8 @@ async function boot() {
       setCarry(a as never, kind, o);
       return kind;
     },
+    /** V12 the shot ledger (what each picture is worth; the same shot again pays nothing): (await zl.shots()).judgeShot(photo) */
+    shots: () => import('./game/v12/shotvalue'),
     /** the pause menu (floating words over the softened scene), wherever the game is */
     pause: async () => (await import('./ui/pause')).openPause(),
     /** the cinematic camera and post FX (cineTo, cinePunch, cineLook...): (await zl.cine()).cinePunch() */

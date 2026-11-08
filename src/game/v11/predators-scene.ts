@@ -25,6 +25,7 @@ import { ArohaCombat, PartyReact } from './predators-aroha';
 import { TigerBody, warmTigerStep, wallowsOf, spawnTiger } from './predators-tiger';
 import { sfx11 } from './predators-sfx';
 import { TIGER_ID } from './species-tiger';
+import { WeaponBelt } from '../v12/arsenal-belt';
 
 const ctls = new WeakMap<FieldScene, PredatorScene>();
 
@@ -74,6 +75,8 @@ export class PredatorScene implements Drawable {
   readonly sling: PlayerSling;
   readonly aroha: ArohaCombat;
   readonly party: PartyReact;
+  /** V12 the rest of the weapon belt (src/game/v12/arsenal.ts): T cycles, G uses the selected one */
+  readonly belt: WeaponBelt;
   private shout: Interactable;
   private shoutOn = false;
   private shoutCool = 0;
@@ -85,6 +88,7 @@ export class PredatorScene implements Drawable {
     this.sling = new PlayerSling(s, this.fx);
     this.aroha = new ArohaCombat(s, this.fx);
     this.party = new PartyReact(s);
+    this.belt = new WeaponBelt(s, { hitstop: secs => this.hitstop(secs) });
     this.fx.onPebbleHit = (a, head, owner) => {
       this.hitstop(head ? 0.085 : 0.055);
       s.st.shake(head ? 1.6 : 1, 0.12);
@@ -118,18 +122,20 @@ export class PredatorScene implements Drawable {
     }
     if ((tiger || wallowsOf(s).length) && !this.warmDone) this.warmDone = warmTigerStep();
     this.sling.update(dt);
+    this.belt.update(dt);
     this.aroha.update(dt);
     this.party.update(dt);
     // the shout prompt follows Mori while something is after him
     const p = s.player;
     this.shoutCool = Math.max(0, this.shoutCool - dt);
     this.shout.x = p.x; this.shout.y = p.y;
-    this.shoutOn = this.shoutCool <= 0 && !s.cutscene && !this.sling.ready && s.animals.some(a => isPredator(a) && !predState(a).script && (predState(a).phase === 'stalk' || predState(a).phase === 'charge') && Math.abs(a.x - p.x) < 230);
+    this.shoutOn = this.shoutCool <= 0 && !s.cutscene && !this.sling.ready && !this.belt.ready && s.animals.some(a => isPredator(a) && !predState(a).script && (predState(a).phase === 'stalk' || predState(a).phase === 'charge') && Math.abs(a.x - p.x) < 230);
   }
 
   draw(r: Renderer) {
     if (this.disposed) return;
     this.sling.render(r);
+    this.belt.render(r);
   }
 
   /** freeze the world for a moment on a good hit (not over a slow-motion shot) */
@@ -181,6 +187,7 @@ export class PredatorScene implements Drawable {
     if (this.disposed) return;
     this.disposed = true;
     this.sling.dispose();
+    this.belt.dispose();
     this.aroha.dispose();
     this.party.dispose();
     const i = this.s.interact.indexOf(this.shout);

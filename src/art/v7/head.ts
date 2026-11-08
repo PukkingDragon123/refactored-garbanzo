@@ -12,6 +12,9 @@ import { isFem7 } from './face7';
 import { trimPair } from '../people-rig';
 import { AROHA_HEAD } from './aroha7';
 import { paintFaceMid7 } from './facemid';
+import { paintFaceSimple7 } from './facesimple';
+import { paintFaceReal7 } from './facereal';
+import { headForm } from './headsdf';
 import { paintFaceToon7 } from './facetoon';
 
 const R6 = (...h: string[]): Ramp6 => h.map(v => hex(v));
@@ -249,6 +252,65 @@ const JOSHU: HeadDef7 = {
 
 export const HEADS7: Record<string, HeadDef7> = { mori: MORI, jenna: JENNA, aroha: AROHA_HEAD, joshu: JOSHU };
 
+// ------------------------------------------------------------------ one face
+
+/**
+ * The face as one drawn shape (user: "make it not like circle mash together the face"). The volumes
+ * a head is built from (skull, jaw, chin) leave notches where they meet and seams in their shading,
+ * so the face reads as circles pushed together. This fills the group out to its convex outline (one
+ * clean egg or shield, the jaw a straight run from its angle to the chin) and reshades it as one
+ * surface: the light term is averaged over a small radius across the whole group, then painted in
+ * the face's three tones. Run it after the face volumes and before the nose, ears and hair.
+ */
+function unifyFace(s: Scene3D, g: number, R: number, paint: (l: number) => C, fill = true) {
+  const W = s.w, H = s.h, grp = s.grp;
+  const pts: [number, number][] = [];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (grp[y * W + x] === g) pts.push([x, y]);
+  if (pts.length < 3) return;
+  // the convex hull (monotone chain), counter-clockwise in buffer coordinates
+  pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o: number[], a: number[], b: number[]) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo: [number, number][] = [], hi: [number, number][] = [];
+  for (const p of pts) { while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+  for (let i = pts.length - 1; i >= 0; i--) { const p = pts[i]; while (hi.length >= 2 && cross(hi[hi.length - 2], hi[hi.length - 1], p) <= 0) hi.pop(); hi.push(p); }
+  const hull = lo.slice(0, -1).concat(hi.slice(0, -1));
+  const inside = (x: number, y: number) => {
+    for (let i = 0; i < hull.length; i++) if (cross(hull[i], hull[(i + 1) % hull.length], [x, y]) < -1e-6) return false;
+    return true;
+  };
+  let x0 = W, x1 = 0, y0 = H, y1 = 0;
+  for (const [x, y] of hull) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  // fill the notches: each empty pixel inside the outline takes the nearest face pixel on its row
+  if (fill) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const i = y * W + x;
+    if (grp[i] || !inside(x, y)) continue;
+    let j = -1;
+    for (let d = 1; d <= x1 - x0 && j < 0; d++) {
+      if (x - d >= x0 && grp[i - d] === g) j = i - d;
+      else if (x + d <= x1 && grp[i + d] === g) j = i + d;
+    }
+    if (j < 0) continue;
+    s.z[i] = s.z[j]; s.col[i] = s.col[j]; grp[i] = g; s.lay[i] = s.lay[j];
+    s.nx[i] = s.nx[j]; s.ny[i] = s.ny[j]; s.lit[i] = s.lit[j];
+  }
+  // one surface: the light term and the normal averaged over the group, then the face's tones
+  const lit = s.lit.slice(), nx = s.nx.slice(), ny = s.ny.slice();
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const i = y * W + x;
+    if (grp[i] !== g) continue;
+    let sl = 0, sx = 0, sy = 0, n = 0;
+    for (let v = -R; v <= R; v++) for (let u = -R; u <= R; u++) {
+      const X = x + u, Y = y + v;
+      if (X < 0 || Y < 0 || X >= W || Y >= H) continue;
+      const j = Y * W + X;
+      if (grp[j] !== g) continue;
+      sl += lit[j]; sx += nx[j]; sy += ny[j]; n++;
+    }
+    s.lit[i] = sl / n; s.nx[i] = sx / n; s.ny[i] = sy / n;
+    s.col[i] = paint(s.lit[i]);
+  }
+}
+
 // ------------------------------------------------------------------ render
 
 const cache = new Map<string, { buf: PixelBuffer; ax: number; ay: number; k: number }>();
@@ -301,9 +363,18 @@ function slitEye(mark: FaceMark, x: number, y: number, inner: 1 | -1, eye: HeadE
 export const HEAD_SCALE7 = TOON7 ? 1.0 : 0.8;
 /** grown men's heads (a touch smaller on the broader build) and women's */
 export const HEAD_SCALE_MAN7 = TOON7 ? 0.95 : 0.75, HEAD_SCALE_WOMAN7 = TOON7 ? 0.98 : 0.78;
-/** which sprite face: 'mid' (facemid.ts, the V12 face at 1.5x), 'simple' (the old dot face, kept);
- *  the cartoon cast at the world's pixel size wears the cartoon face (facetoon.ts) */
+/** which sprite face: 'mid' (the 3D head's face points; the painter below), 'simple' (the old dot
+ *  face, kept); the cartoon cast at the world's pixel size wears the cartoon face (facetoon.ts) */
 const FACE_STYLE7: 'mid' | 'simple' = 'mid';
+/**
+ * The painted cast's face (user, latest: "the face looks ugly uncanny, simplify it ... make the face
+ * simple"): the simple face (facesimple.ts: matching dark oval eyes, a line brow, a short mouth). The
+ * detailed V12 face (facemid.ts) is kept, unused.
+ */
+export const SIMPLE_FACE7 = true;
+/** the sculpted head (headsdf.ts, user: "remake the head ... realistic, the head shape looks ugly"):
+ *  one blended form instead of ellipsoids pushed together */
+export const HEAD_SDF7 = true;
 
 /**
  * Whether a head (as worn: hoods hide locks) has locks that swing with the hair physics. The Actor
@@ -379,9 +450,39 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
   const Wv = (v: V3): V3 => W(v); // (linear)
   const E = (c: V3, r: V3, g: number, m: (h: Hit) => C | -1) => s.ellipsoid(W(c), Wv([r[0], 0, 0]), Wv([0, r[1], 0]), Wv([0, 0, r[2]]), g, m);
   // (a cartoon face is mostly one flat skin tone: the light only on the brow, the shadow under the jaw)
-  const skinM = (bias = 0) => (h: Hit) => cel(d.skin, h.l, bias + (TOON7 ? 0.04 : 0.18));
+  // the simple face (SIMPLE_FACE7): the face is three clean tones, a lit plane, the base and the shadow
+  // side, with no terminator band or deep tone, and every face volume shaded as one surface (small lit
+  // patches on the cheekbones, jaw and chin read as lumps at sprite size)
+  const faceCel = (l: number, bias: number): C => {
+    const v = l + bias + 0.18;
+    return v < -0.06 ? d.skin[2] : v < 0.8 ? d.skin[3] : d.skin[4];
+  };
+  const skinM = (bias = 0) => (h: Hit) => (SIMPLE_FACE7 && !TOON7 ? faceCel(h.l, bias > 0.15 ? 0.08 : 0) : cel(d.skin, h.l, bias + (TOON7 ? 0.04 : 0.18)));
   // face volumes: a man's jaw and chin a little broader and squarer (user: "men more manly")
   const fem = isFem7(id, d);
+  if (HEAD_SDF7 && !TOON7) {
+    // the sculpted head (headsdf.ts): one form, cranium, cheekbones, jaw, chin, brow, sockets, nose and
+    // lips blended with no seams, shaded in the painted skin ramp (no shine)
+    const hf = headForm(d, fem, hs > 0.85);
+    // world → head space (undo the yaw, then the pitch: W is a pure rotation)
+    const toHead = (v: V3): V3 => {
+      const x = v[0] * ca + v[2] * sa, z = -v[0] * sa + v[2] * ca, y = v[1];
+      return [x * cp + y * sp, -x * sp + y * cp, z];
+    };
+    let lo: V3 = [1e9, 1e9, 1e9], hi: V3 = [-1e9, -1e9, -1e9];
+    for (let c = 0; c < 8; c++) {
+      const w = W([c & 1 ? hf.hi[0] : hf.lo[0], c & 2 ? hf.hi[1] : hf.lo[1], c & 4 ? hf.hi[2] : hf.lo[2]]);
+      lo = [Math.min(lo[0], w[0]), Math.min(lo[1], w[1]), Math.min(lo[2], w[2])];
+      hi = [Math.max(hi[0], w[0]), Math.max(hi[1], w[1]), Math.max(hi[2], w[2])];
+    }
+    s.sdf(p => hf.f(toHead(p)), lo, hi, 1, h => cel(d.skin, h.l, 0.15));
+    // clean skin at sprite size: the light smoothed over the face, then four tones (the deep shade
+    // under the jaw, the shadow side, the base, the light), no speckled terminator band
+    unifyFace(s, 1, 1, l => {
+      const v = l + 0.15;
+      return v < -0.42 ? mix(d.skin[1], d.skin[2], 0.55) : v < -0.02 ? d.skin[2] : v < 0.8 ? d.skin[3] : d.skin[4];
+    }, false);
+  } else {
   E(d.skull[0], d.skull[1], 1, skinM());
   // (children, drawn at a larger head scale, keep the soft round face)
   if (fem || hs > 0.85) {
@@ -400,9 +501,14 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
     }
     E([cc[0] + 0.15, cc[1] - 0.1, 0], [cr[0] * 1.0, cr[1] * 1.05, cr[2] * 0.85], 1, skinM(0.1));
     const ey = d.eye;
-    for (const z of [-1, 1]) E([ey[0] - 1.1, ey[1] - 1.15, z * (ey[2] + 0.75)], [1.3, 0.8, 1.0], 1, skinM(0.28));
+    if (!SIMPLE_FACE7) for (const z of [-1, 1]) E([ey[0] - 1.1, ey[1] - 1.15, z * (ey[2] + 0.75)], [1.3, 0.8, 1.0], 1, skinM(0.28));
   }
+  // one face, not circles pushed together (user: "make it not like circle mash together the face"):
+  // the skull, jaw and chin are filled out to one smooth convex outline and shaded as one surface,
+  // before the nose, the ear and the hair go on
+  if (SIMPLE_FACE7 && !TOON7) unifyFace(s, 1, Math.max(1, Math.round(k * 1.1)), l => faceCel(l, 0));
   E(d.nose[0], d.nose[1], 1, skinM(0.2));
+  }
   // the ear: rim lit, the bowl inside it in shadow
   // (in the face group: no ink seam between the ear and the cheek, only its outline against the hair)
   E(d.ear[0], d.ear[1], 1, h => {
@@ -539,7 +645,7 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
     // the V12 face (facemid.ts): clean clusters on the buffer grid
     const dirX = W([1, 0, 0])[0];
     const nt: V3 = [d.nose[0][0] + d.nose[1][0] * 0.85, d.nose[0][1] - d.nose[1][1] * 0.1, d.nose[0][2]];
-    (TOON7 ? paintFaceToon7 : paintFaceMid7)(put, {
+    (TOON7 ? paintFaceToon7 : HEAD_SDF7 ? paintFaceReal7 : SIMPLE_FACE7 ? paintFaceSimple7 : paintFaceMid7)(put, {
       near: visible(nearE) ? at2(nearE) : null,
       far: visible(farE) ? at2(farE) : null,
       nose: at2(nt),
@@ -601,7 +707,19 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
     }
   }
   // the hair's edge over the face is inked in the hair's own dark, not the skin's red-brown (no streak down the cheek)
-  const r = s.finish({ ink: mix(d.ink, d.hair[0], 0.6), depthLine: 1.6, rim: 0.55, inkK: { 1: 0.8, 3: 0.6, 6: 0.75 } });
+  // (the simple face: only real overlaps get an inner line, not every fold of the face volumes)
+  const r = s.finish({ ink: mix(d.ink, d.hair[0], 0.6), depthLine: SIMPLE_FACE7 ? 2.6 : 1.6, rim: 0.55, inkK: { 1: 0.8, 3: 0.6, 6: 0.75 } });
+  // under the jaw (user: "the face and neck looks uncanny"): no inked line between the head and the
+  // neck (it read as a black choker, the head a mask on a stick); the edge under the jaw and chin is
+  // the jaw's shadow falling on the throat, a deep skin tone running into the neck's shade
+  if (!back) {
+    const jawSh = mix(d.skin[1], d.skin[2], 0.4), bd = r.back.data;
+    for (let y = 1; y < BH; y++) for (let x = 0; x < BW; x++) {
+      const i = y * BW + x;
+      if (s.grp[i] || !bd[i] || s.grp[i - BW] !== 1) continue;
+      bd[i] = jawSh;
+    }
+  }
   for (const [x, y, c] of marks) r.back.data[y * BW + x] = c;
   popBuf(r.back);
   const tr = trimPair(r.back, null, 1);

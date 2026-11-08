@@ -25,6 +25,7 @@ import { anim7, isPredator, shootTargets } from './predators-core';
 import { PredFx, G_PEBBLE } from './predators-fx';
 import { sfx11 } from './predators-sfx';
 import { isActive } from './blueprints';
+import { selectedWeapon } from '../v12/arsenal';
 
 /** the kahu band (the Thunderbird hunt's upgrade): harder hits, a quicker draw */
 const kahu = () => isActive('sling_kahu');
@@ -99,7 +100,7 @@ export class PlayerSling {
   /** can he use it here and now? */
   get available(): boolean {
     const s = this.s, p = s.player;
-    return game.save.tools.includes('slingshot') && !!p && !p.underwater && s.site?.id !== 'boat' && !s.cutscene && !game.ui.blocking && !s.cam?.active && p.state !== 'climb' && p.state !== 'hide' && p.state !== 'swim' && p.state !== 'stunned';
+    return game.save.tools.includes('slingshot') && selectedWeapon() === 'sling' && !!p && !p.underwater && s.site?.id !== 'boat' && !s.cutscene && !game.ui.blocking && !s.cam?.active && p.state !== 'climb' && p.state !== 'hide' && p.state !== 'swim' && p.state !== 'stunned';
   }
 
   /** world point the pouch is held at (the shot starts here) */
@@ -357,7 +358,7 @@ export class PlayerSling {
       : 'Slingshot up. <span class="key">G</span> hold and release, or hold the <b>left mouse button</b> and release at the target. <span class="key">G</span> again lowers it.', 'SLING', 'teal', 5200);
   }
   private updateUi() {
-    const avail = game.save.tools.includes('slingshot') && !this.s.cam?.active && !this.s.cutscene;
+    const avail = game.save.tools.includes('slingshot') && selectedWeapon() === 'sling' && !this.s.cam?.active && !this.s.cutscene;
     if (this.btn) this.btn.hidden = !avail;
     if (!this.ready) { if (this.chip) this.chip.style.display = 'none'; return; }
     if (!this.chip) {

@@ -90,6 +90,10 @@ export const TRAILS: TrailDef[] = [
   T('mangrove-swamp', { loc: 'mangrove', at: 2000, arm: 'up' }, { loc: 'swamp', at: 'E' }, 0.75, 'wade', { gate: 'staff', say: 'Upstream the water goes still, and black, and the bulrushes are taller than me.' }),
   T('village-ruins', { loc: 'village', at: 'E' }, { loc: 'ruins', at: 'E' }, 0.75, 'path', { gate: 'blessing', say: 'With Koro’s blessing, then. Up the old track.' }),
   T('ruins-unknown', { loc: 'ruins', at: 'E', arm: 'down' }, { loc: 'unknown', at: 'E' }, 1, 'tunnel', { gate: 'rope', say: 'Tie it off. Twice. Okay. Three times.' }),
+  // ---- V12 Te Tuawhenua, the backcountry (src/game/v12/backcountry): up from the crossroads behind Te
+  // Kāinga's market lane at its west end; out of the claw gorge's east end to the Hot Valley
+  T('village-backcountry', { loc: 'village', at: 3712, arm: 'up' }, { loc: 'backcountry', at: 'W' }, 0.75, 'path', { gate: 'grip', say: 'Up the bank behind the market lane... and the land just opens out. Nobody lives out there. Nobody.' }),
+  T('backcountry-geo', { loc: 'backcountry', at: 'E' }, { loc: 'geovalley', at: 'E', arm: 'up' }, 1, 'path', { gate: 'boots', say: 'Steam at the end of the gorge. The Hot Valley. My boots are going to hate this.' }),
   // ---- the deep interior
   T('fossils-glow', { loc: 'fossils', at: 'E' }, { loc: 'glowforest', at: 'W' }, 1, 'climb', { gate: 'lantern', say: 'It’s midday and it’s dark down there. And something down there is... glowing.' }),
   T('glow-geo', { loc: 'glowforest', at: 'E' }, { loc: 'geovalley', at: 'W' }, 1, 'path', { gate: 'boots', say: 'Smells like rotten eggs. Steam over the ridge. Oh no. Oh, yes.' }),
@@ -105,6 +109,7 @@ const SIGN: Record<string, string> = {
   forest: 'TE WAO NUI', fernwood: 'FERNWOOD', canopy: 'THE CANOPY', falls: 'THE FALLS', hills: 'ROCKY HILLS',
   mangrove: 'MANGROVES', village: 'TE KĀINGA', ruins: 'THE OLD PĀ', fossils: 'BONE CLIFFS', glowforest: 'GLOW FOREST',
   geovalley: 'HOT VALLEY', unknown: 'KOROKORO', grotto: 'SEA GROTTO', deep: 'THE DEEP', coast: 'SERPENT COAST', swamp: 'TE REPO RAUPŌ', deepcave: 'TE RUA PŌURI',
+  backcountry: 'TE TUAWHENUA',
 };
 const VERB: Record<TrailKind, string> = { path: 'Walk to', climb: 'Climb to', swim: 'Swim to', wade: 'Wade to', dive: 'Dive to', tunnel: 'Rope down to' };
 const ACT: Record<TrailKind, HungerActivity> = { path: 'walk', climb: 'climb', swim: 'swim', wade: 'wade', dive: 'swim', tunnel: 'climb' };
@@ -196,6 +201,30 @@ export function sceneAt(e: TrailEnd): 'W' | 'E' | number {
   if (e.at === 'W') return part.x0 <= 0 ? 'W' : part.x0 + 60;
   if (e.at === 'E') return part.x0 + part.w >= r.W ? 'E' : part.x0 + part.w - 60;
   return part.x0 + e.at;
+}
+
+/**
+ * V12 the field watch's compass: which way is home from `loc` with Mori at x (-1 west, +1 east, 0 here),
+ * the place's name, and how many trails out he is. Home is the way along a trail end that leads nearer
+ * the beach; on the beach itself, the camp.
+ */
+export function wayHome(loc: string | null, x: number): { dir: -1 | 0 | 1; name: string; depth: number } {
+  const L = loc ? location(loc) : null;
+  const name = L?.name ?? 'The island';
+  if (!loc || isIsland(L)) {
+    const camp = 1980;
+    return { dir: Math.abs(x - camp) < 60 ? 0 : x > camp ? -1 : 1, name, depth: 0 };
+  }
+  const here = depthOf(loc);
+  let best: { at: 'W' | 'E' | number; d: number } | null = null;
+  for (const t of TRAILS) for (const [mine, far] of [[t.a, t.b], [t.b, t.a]] as const) {
+    if (sceneLocOf(mine.loc) !== loc && mine.loc !== loc) continue;
+    const d = depthOf(far.loc);
+    if (d < here && (!best || d < best.d)) best = { at: sceneAt(mine), d };
+  }
+  if (!best) return { dir: 0, name, depth: here };
+  const dir = best.at === 'W' ? -1 : best.at === 'E' ? 1 : Math.abs(best.at - x) < 40 ? 0 : best.at < x ? -1 : 1;
+  return { dir, name, depth: here };
 }
 
 /** a region scene's own crossroads (set by the region's builder before the trails go in) */

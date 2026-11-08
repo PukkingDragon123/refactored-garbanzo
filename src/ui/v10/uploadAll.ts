@@ -330,6 +330,8 @@ export function uploadAllApp(os: OSCtx, ra: ResearchApps): UploadApp {
     const names = (l: string[], max = 4) => l.slice(0, max).map(esc).join(', ') + (l.length > max ? ` +${l.length - max}` : '');
     const rows: [string, number, string][] = [
       ['Photos uploaded', ses.photos, ses.ok ? `${ses.ok} with something identified` : ses.photos ? 'nothing identifiable, sadly' : ''],
+      ['New pictures', ses.shotsNew, ses.shotsSame ? `${ses.shotsSame} repeat${ses.shotsSame > 1 ? 's' : ''} of pictures you had: no points` : 'every one a picture you did not have'],
+      ['Repeat pictures', ses.photos && !ses.shotsNew ? ses.shotsSame : 0, 'the same shots again: no points. Try new angles and behaviours'],
       ['New species', ses.species.length, names(ses.species.map(s => SPECIES_BY_ID[s]?.name ?? s))],
       ['Behaviours recorded', ses.beh.length, names([...new Set(ses.beh.map(([s, k]) => SPECIES_BY_ID[s]?.behaviors[k] ?? k))])],
       ['Findings', ses.facts.length, names(ses.facts.map(([, f]) => f.cat))],

@@ -10,6 +10,7 @@ import { conversation, meet, hasMet, addAffinity, talkedToday, markTalked, gifta
 import type { GiftReaction } from '../social';
 import { questMenu, tagMenu } from './quests';
 import { romanceMenu } from './romance';
+import { hankMenu } from './hank';
 import type { MenuOpt, TalkHost } from './types';
 
 const EXPR: Record<GiftReaction, string> = { love: 'happy', like: 'happy', neutral: 'neutral', dislike: 'worried', hate: 'angry' };
@@ -38,6 +39,7 @@ export function giftOpt(id: string): MenuOpt | null {
 export function menuFor(id: string): MenuOpt[] {
   const out: MenuOpt[] = [];
   out.push(...questMenu(id), ...tagMenu(id));
+  out.push(...hankMenu(id));
   const g = giftOpt(id);
   if (g) out.push(g);
   out.push(...romanceMenu(id));
@@ -50,7 +52,7 @@ export async function converse(h: TalkHost): Promise<void> {
   meet(id);
   const said = conversation(id) ?? [{ who: id, text: '...', expr: 'neutral' }];
   if (!talkedToday(id)) { markTalked(id); addAffinity(id, 2, 'chat'); }
-  const lines: BubbleLine[] = said.map(l => ({ who: l.who, text: l.text, expr: l.expr ?? 'neutral' }));
+  const lines: BubbleLine[] = said.map(l => ({ who: l.who, text: l.text, expr: l.expr ?? 'neutral', ...(l.style ? { style: l.style as BubbleLine['style'] } : {}) }));
   const menu = menuFor(id).slice(0, 4);
   if (menu.length) lines[lines.length - 1] = { ...lines[lines.length - 1], choices: [...menu.map(m => m.label), 'See you later.'] };
   const c = await h.say(lines);

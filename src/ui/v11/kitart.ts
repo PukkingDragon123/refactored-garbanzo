@@ -27,7 +27,15 @@ export interface KitInfo {
   /** camera: film left, and the print developing (0..1, 1 = none) */
   shots?: number;
   develop?: number;
+  /** V12 (user: "remake the 3 ui icons better, cooler, animated, polished"): the idle loop's frame
+   *  (0..KIT_FRAMES-1), how far the object opens on hover (0..1: the flap lifts, the cover cracks open,
+   *  the lens racks out and the flash charges), and the click's burst (0..1) */
+  t?: number;
+  open?: number;
+  fire?: number;
 }
+/** frames in the kit's idle loop (painted at about 8 a second) */
+export const KIT_FRAMES = 16;
 
 // ---------------------------------------------------------------- shapes (design units)
 type SDF = (x: number, y: number) => number;
@@ -56,6 +64,13 @@ const poly = (pts: [number, number][], r = 0): SDF => (x, y) => {
   }
   return d - r;
 };
+/** an SDF turned by `a` radians about (cx, cy) (a swinging mug, a fluttering tag) */
+const rot = (f: SDF, cx: number, cy: number, a: number): SDF => {
+  const c = Math.cos(-a), s = Math.sin(-a);
+  return (x, y) => { const dx = x - cx, dy = y - cy; return f(cx + dx * c - dy * s, cy + dx * s + dy * c); };
+};
+/** an SDF squeezed toward x = x0 by s (0..1): a book cover swinging open about its spine */
+const squeeze = (f: SDF, x0: number, s: number): SDF => (x, y) => f(x0 + (x - x0) / s, y) * s;
 const uni = (...f: SDF[]): SDF => (x, y) => Math.min(...f.map(g => g(x, y)));
 const cut = (a: SDF, b: SDF): SDF => (x, y) => Math.max(a(x, y), -b(x, y));
 const inter = (a: SDF, b: SDF): SDF => (x, y) => Math.max(a(x, y), b(x, y));
@@ -184,39 +199,91 @@ const DARKLEATHER = ramp('#3a3430', 9, { deep: '#08060a', hi: '#c8bcb0' });
 const CHROME = ramp('#a8b0b8', 10, { deep: '#101418', hi: '#ffffff', spread: 1.2 });
 const RED = ramp('#d8402a', 8, { deep: '#3a0806', hi: '#ffe0d0' });
 const INK = col('#140c06');
+const ENAMEL = ramp('#e8eef2', 8, { deep: '#3a4a5a', hi: '#ffffff' });
+const ENAMEL_B = ramp('#2a5aa8', 6, { deep: '#081428', hi: '#a8d0ff' });
+const MANILA = ramp('#d8b878', 7, { deep: '#4a3418', hi: '#fff6dc' });
+const TWILL = ramp('#26262c', 6, { deep: '#050508', hi: '#7a7a86' });
+const PENCIL = ramp('#f2c230', 7, { deep: '#4a3006', hi: '#fff8d0' });
+const BLUE = ramp('#3a8ae8', 7, { deep: '#081a3a', hi: '#e0f0ff' });
+const MARBLE = ramp('#7a2a3a', 7, { deep: '#1a0610', hi: '#f0c8b0' });
+
+/** a little four-pointed sparkle (a glint on metal or glass), r design units, at full strength s 0..1 */
+function sparkle(p: Painter, x: number, y: number, r: number, s: number) {
+  if (s <= 0) return;
+  const R = r * s;
+  p.flat(uni(seg(x - R, y, x + R, y, 0.32), seg(x, y - R, x, y + R, 0.32)), col('#ffffff'));
+  p.flat(circ(x, y, 0.55 + s * 0.3), col('#ffffff'));
+  if (s > 0.5) p.flat(uni(seg(x - R * 0.45, y - R * 0.45, x + R * 0.45, y + R * 0.45, 0.22), seg(x - R * 0.45, y + R * 0.45, x + R * 0.45, y - R * 0.45, 0.22)), col('#fff6c8'), 0.7);
+}
+/** a silver fern (the patch's emblem): a slim curving rib and three pairs of leaflets, point at the top */
+const fernSDF = (cx: number, cy: number, h: number): SDF => {
+  const rib: [number, number][] = [];
+  for (let t = 0; t <= 1; t += 0.1) rib.push([cx + Math.sin(t * 1.6) * h * 0.14, cy + h / 2 - t * h]);
+  const leaf: [number, number, number, number][] = [];
+  for (const [t, L] of [[0.3, 0.36], [0.52, 0.3], [0.72, 0.22]] as [number, number][]) {
+    const fx = cx + Math.sin(t * 1.6) * h * 0.14, fy = cy + h / 2 - t * h;
+    for (const sd of [-1, 1]) leaf.push([fx, fy, fx + sd * L * h, fy - L * h * 0.5]);
+  }
+  return (x, y) => {
+    let d = Infinity;
+    for (let i = 0; i + 1 < rib.length; i++) d = Math.min(d, seg(rib[i][0], rib[i][1], rib[i + 1][0], rib[i + 1][1], 0.3)(x, y));
+    for (const [ax, ay, bx, by] of leaf) d = Math.min(d, seg(ax, ay, bx, by, 0.24)(x, y));
+    return d;
+  };
+};
 
 // ---------------------------------------------------------------- the icons
 function paintPack(p: Painter, info: KitInfo) {
   const full = Math.max(0, Math.min(1, info.fill ?? 0));
-  const bulge = full * 1.6;
-  // side pockets behind the body
+  const bulge = full * 1.6, o = info.open ?? 0, lift = o * 5.5;
+  // side pockets behind the body, a bottle in the left one
   p.fill(box(9.5, 33, 4.5, 9, 3.5), { ramp: CANVAS, bevel: 3, tex: weave, bias: -0.12 });
   p.fill(box(42.5, 33, 4.5, 9, 3.5), { ramp: CANVAS, bevel: 3, tex: weave, bias: -0.18 });
+  p.fill(box(8.6, 24.5, 2.4, 3.6, 1), { ramp: BLUE, bevel: 1.4, spec: 0.86 });
+  p.fill(box(8.6, 20.6, 1.5, 0.9, 0.4), { ramp: SHELL, bevel: 0.5 });
   // the carry handle loop
   p.fill(cut(ell(26, 9, 6, 4.5), ell(26, 9.6, 3.6, 2.6)), { ramp: LEATHER, bevel: 1.4, tex: leather });
   // the body: a canvas sack, a little pear-shaped, fuller when it's packed
   const body = uni(box(26, 30, 15.5 + bulge * 0.5, 15.5, 7), ell(26, 37, 17 + bulge, 10.5));
   p.fill(body, { ramp: CANVAS, bevel: 6, tex: weave });
-  // a seam down each side
   p.stitch(body, 2.2, CANVAS[7], 1.4);
-  // the bedroll strapped on top
+  // the bedroll strapped on top: wool, a stripe woven round it
   const roll = seg(12.5, 12.5, 39.5, 12.5, 4.6);
   p.fill(roll, { ramp: WOOL, bevel: 4, tex: (u, v) => (Math.sin(u * 2.2) > 0.6 ? 0.08 : 0) + (vnoise(u, v, 4) - 0.5) * 0.1 });
+  p.flat(inter(roll, (x) => Math.abs(x - 26) - 0.8), col('#f0e2c0'), 0.9);
   for (const sx of [17, 35]) p.fill(box(sx, 12.5, 1.6, 5.2, 0.8), { ramp: LEATHER, bevel: 1, tex: leather });
   p.fill(ell(10.6, 12.5, 2.2, 4.4), { ramp: WOOL, bevel: 1.5, bias: -0.1 });
   p.flat(cut(circ(10.6, 12.5, 2.4), circ(10.6, 12.5, 1.6)), WOOL[2]);
-  // the top flap with its curved hem and stitching
-  const flap = inter(box(26, 22, 15.8, 8.6, 6), (x, y) => y - (27.5 + Math.cos((x - 26) / 9) * 2.4));
-  p.fill(flap, { ramp: CANVAS_L, bevel: 3.2, tex: weave, bias: 0.04 });
+  // opened (on hover): under the lifted flap, the dark mouth of the pack and what's packed in it
+  if (o > 0.05) {
+    const mouth = ell(26, 25.6, 13.6, 2.4 + o * 2.2);
+    p.fill(mouth, { ramp: ramp('#2a2014', 6, { deep: '#060402', hi: '#5a4a30' }), bevel: 3, bias: -0.25, ink: shadeC(CANVAS[0], -0.3) });
+    const up = o * 3.2;
+    p.fill(inter(seg(17, 26 - up * 0.4, 23.5, 23 - up, 1.7), (x, y) => y - 27), { ramp: PAGES, bevel: 1.2 });
+    p.flat(box(20.2, 24.6 - up * 0.7, 0.45, 1.9), RED[3]);
+    p.fill(inter(box(30.5, 24.6 - up, 2.1, 3, 1), (x, y) => y - 27), { ramp: BLUE, bevel: 1.2, spec: 0.85 });
+    p.fill(inter(seg(35.6, 26.5, 37, 22 - up, 0.45), (x, y) => y - 27), { ramp: CLOTH, bevel: 0.5, ink: null });
+    for (let i = 0; i < 4; i++) p.flat(seg(36.2 + i * 0.3, 25 - i * 1.1 - up * (i / 4), 38.2, 24 - i * 1.2 - up * (i / 4), 0.35), CLOTH[6 + (i % 2)]);
+  }
+  // the top flap with its curved hem and stitching (lifts on hover)
+  const flap = inter(box(26, 22 - lift, 15.8, 8.6, 6), (x, y) => y - (27.5 - lift * 1.15 + Math.cos((x - 26) / 9) * 2.4));
+  p.fill(flap, { ramp: CANVAS_L, bevel: 3.2, tex: weave, bias: 0.04 + o * 0.06 });
   p.stitch(flap, 1.5, CANVAS_L[8], 1.3);
-  // two leather straps over the flap down to their brass buckles
+  // the patch sewn on the flap: black twill, a silver fern, a cream stitched border
+  const pcx = 26, pcy = 20.6 - lift;
+  p.fill(circ(pcx, pcy, 4.1), { ramp: TWILL, bevel: 1.2, tex: (u, v, px, py) => ((px + py) % 2 ? -0.05 : 0.03) });
+  p.stitch(circ(pcx, pcy, 4.1), 0.5, col('#c8bea0'), 0.8);
+  p.flat(fernSDF(pcx, pcy + 0.3, 5.4), col('#e8eef4'));
+  // two leather straps from the flap down to their brass buckles (unbuckled when the flap is up)
   for (const sx of [19, 33]) {
-    const strap = box(sx, 27, 2, 9.5, 1);
+    const strapEnd = 36 - lift * 1.25;
+    const strap = box(sx, (14 - lift + strapEnd) / 2, 2, (strapEnd - (14 - lift)) / 2, 1);
     p.fill(strap, { ramp: LEATHER, bevel: 1.4, tex: leather });
     p.stitch(strap, 0.65, LEATHER[7], 1.1);
+    if (lift > 1.5) p.flat(circ(sx, strapEnd - 1.6, 0.5), LEATHER[0]);
     const buckle = cut(box(sx, 34.5, 3.1, 2.3, 0.8), box(sx, 34.5, 1.8, 1.1, 0.3));
     p.fill(buckle, { ramp: BRASS, bevel: 0.9, spec: 0.86 });
-    p.fill(box(sx, 34.5, 0.45, 1.6, 0.2), { ramp: BRASS, bevel: 0.4, bias: 0.1, ink: null });
+    if (lift <= 1.5) p.fill(box(sx, 34.5, 0.45, 1.6, 0.2), { ramp: BRASS, bevel: 0.4, bias: 0.1, ink: null });
     p.fill(box(sx, 38.5, 1.7, 2.4, 1.6), { ramp: LEATHER, bevel: 1, tex: leather, bias: -0.06 });
   }
   // the front pocket, its flap and a brass snap
@@ -227,19 +294,64 @@ function paintPack(p: Painter, info: KitInfo) {
   p.stitch(pocket, 1.1, CANVAS[7], 1.2, (x, y) => -(y - 41.5));
   p.fill(circ(26, 40.4, 1.5), { ramp: BRASS, bevel: 1, spec: 0.84 });
   // hand-placed highlights where the canvas catches the light
-  p.flat(seg(14.5, 19, 16.5, 16.5, 0.45), CANVAS_L[9], 0.75);
+  p.flat(seg(14.5, 19 - lift, 16.5, 16.5 - lift, 0.45), CANVAS_L[9], 0.75);
   p.flat(seg(12.2, 31, 12.2, 37, 0.4), CANVAS[8], 0.5);
   p.flat(circ(14.2, 10.6, 0.6), WOOL[8]);
 }
 
-function paintGuide(p: Painter) {
+/** the pack's live parts: an enamel mug on a carabiner and a luggage tag, swinging; a glint on a buckle */
+function packLive(p: Painter, info: KitInfo) {
+  const f = info.t ?? 0, ph = (f / KIT_FRAMES) * Math.PI * 2, o = info.open ?? 0;
+  // the carabiner on the right pocket's loop, and the mug swinging from it
+  p.fill(cut(ell(45.6, 25.4, 1.5, 2.2), ell(45.6, 25.4, 0.75, 1.35)), { ramp: CHROME, bevel: 0.6, spec: 0.84 });
+  const th = Math.sin(ph) * 0.16 + o * 0.12;
+  const R = (g: SDF) => rot(g, 45.6, 27.3, th);
+  p.fill(R(cut(ell(48.9, 31.2, 1.7, 1.9), ell(48.9, 31.2, 0.85, 1.05))), { ramp: ENAMEL, bevel: 0.6 });
+  p.fill(R(box(45.6, 31.4, 3.1, 3.5, 0.9)), { ramp: ENAMEL, bevel: 1.7, spec: 0.88 });
+  p.fill(R(box(45.6, 28.3, 3.3, 0.55, 0.3)), { ramp: ENAMEL_B, bevel: 0.4, ink: null });
+  p.flat(R(circ(44.2, 33, 0.5)), ENAMEL_B[1]);
+  p.flat(R(circ(46.8, 30.4, 0.32)), ENAMEL_B[2]);
+  // the luggage tag on its red string from the left buckle, fluttering in the breeze
+  const th2 = Math.sin(ph * 2 + 1.3) * 0.2 + Math.sin(ph * 3) * 0.06 + 0.2;
+  const T = (g: SDF) => rot(g, 17.2, 36.3, th2);
+  p.flat(T(seg(17.2, 36.3, 15.6, 40.2, 0.28)), RED[4]);
+  p.fill(T(poly([[12.6, 40.4], [17.4, 39.8], [18.1, 46.4], [13.3, 47]], 0.4)), { ramp: MANILA, bevel: 0.9 });
+  p.flat(T(circ(15.3, 41.4, 0.55)), INK);
+  p.flat(T(cut(circ(15.3, 41.4, 0.9), circ(15.3, 41.4, 0.55))), MANILA[1]);
+  for (let i = 0; i < 2; i++) p.flat(T(seg(14 + i * 0.1, 43.4 + i * 1.4, 16.8, 43.1 + i * 1.4, 0.17)), col('#5a4030'));
+  // now and then the light catches a buckle
+  const g = f % KIT_FRAMES;
+  sparkle(p, 33.9, 33.5, 2.4, g < 3 ? [0.5, 1, 0.45][g] : 0);
+}
+
+function paintGuide(p: Painter, info: KitInfo) {
+  const o = info.open ?? 0;
   // the page block behind the cover, showing on the fore-edge and the bottom
   const pages = box(28, 27.5, 15.5, 20.2, 1.5);
   p.fill(pages, { ramp: PAGES, bevel: 1.2, tex: (u, v) => (Math.floor(v * 1.6) % 2 ? -0.06 : 0.02) });
-  // the cloth cover, worn at the corners
-  const cover = box(25.5, 26, 15.5, 20.5, 2.6);
+  // coloured index tabs sticking out of the fore-edge
+  ([[11.5, '#e8432a'], [18.5, '#f4c83a'], [25.5, '#3a8ae8'], [32.5, '#5ab84a']] as [number, string][]).forEach(([ty, h], i) => {
+    p.fill(box(43.8 + (i % 2) * 0.4, ty, 2.3, 2.4, 0.7), { ramp: ramp(h, 6, { deep: '#1a1014' }), bevel: 0.8 });
+  });
+  // opened (on hover): the cover swings toward us about the spine and the first page shows, lit
+  const sc = 1 - o * 0.55;
+  if (o > 0.05) {
+    const page = box(28.5, 26.5, 14.4, 19.5, 1.2);
+    p.fill(page, { ramp: PAGES, bevel: 2, bias: 0.06, tex: (u, v) => 0.12 - Math.hypot((u - 30) / 16, (v - 26) / 22) * 0.2 });
+    // a pencil sketch of a kiwi, a fern, the handwriting
+    const sepia = col('#5a4030');
+    p.flat(cut(ell(31, 24, 5, 3.6), ell(31.2, 24.4, 4.2, 2.8)), sepia);
+    p.flat(circ(35.6, 21.6, 1.6), sepia, 0.85);
+    p.flat(seg(36.8, 21.8, 41, 24.6, 0.28), sepia);
+    p.flat(uni(seg(29.4, 27.4, 28.8, 30, 0.25), seg(32.2, 27.4, 32.8, 30, 0.25)), sepia);
+    for (let i = 0; i < 4; i++) p.flat(seg(22, 33.5 + i * 2.2, 39 - (i % 2) * 5, 33.5 + i * 2.2, 0.2), col('#7a6a58'), 0.8);
+    p.flat(seg(23, 13.5, 37, 13.5, 0.3), col('#3a2a20'));
+  }
+  // the cloth cover, worn at the corners (squeezed toward the spine as it opens)
+  const S = (g: SDF) => (o > 0.05 ? squeeze(g, 10, sc) : g);
+  const cover = S(box(25.5, 26, 15.5, 20.5, 2.6));
   p.fill(cover, {
-    ramp: CLOTH, bevel: 2.6, tex: (u, v, px, py) => {
+    ramp: CLOTH, bevel: 2.6, bias: -o * 0.12, tex: (u, v, px, py) => {
       const worn = Math.max(0, 1 - Math.min(Math.hypot(u - 10, v - 5.5), Math.hypot(u - 41, v - 5.5), Math.hypot(u - 10, v - 46.5), Math.hypot(u - 41, v - 46.5)) / 3.4);
       return clothTex(u, v, px, py) + worn * 0.32;
     },
@@ -249,26 +361,50 @@ function paintGuide(p: Painter) {
   p.fill(spine, { ramp: CLOTH, bevel: 2.2, tex: clothTex, bias: -0.16 });
   for (const by of [12, 40]) p.fill(box(12, by, 3.2, 1.1, 0.8), { ramp: CLOTH, bevel: 0.9, bias: 0.06 });
   p.flat(box(14.6, 26, 0.35, 19.5), CLOTH[1]);
-  // a gilt frame and the gilt koru emblem
-  const frame = cut(box(28.5, 26, 9.6, 15.5, 1.2), box(28.5, 26, 8.7, 14.6, 0.8));
+  // brass corner protectors
+  for (const cy of [6.4, 45.6]) p.fill(S(poly(cy < 20 ? [[37.6, 5.5], [41, 5.5], [41, 8.9]] : [[37.6, 46.5], [41, 46.5], [41, 43.1]], 0.3)), { ramp: BRASS, bevel: 0.6, spec: 0.86 });
+  // the gilt frame, a title plate and the gilt koru emblem
+  const frame = S(cut(box(28.5, 26, 9.6, 15.5, 1.2), box(28.5, 26, 8.7, 14.6, 0.8)));
   p.fill(frame, { ramp: GOLD, bevel: 0.5, ink: null, bias: -0.05 });
-  p.fill(cut(circ(28.5, 23.5, 6.6), circ(28.5, 23.5, 5.6)), { ramp: GOLD, bevel: 0.5, ink: shadeC(CLOTH[1], -0.2), spec: 0.9 });
-  // the frond: a spiral unrolling into a stem
+  p.fill(S(box(28.5, 36.4, 5.6, 2.2, 0.5)), { ramp: GOLD, bevel: 0.6, ink: shadeC(CLOTH[1], -0.2), spec: 0.9 });
+  p.flat(S(uni(seg(25, 36, 32, 36, 0.22), seg(26, 37, 31, 37, 0.22))), CLOTH[2]);
+  p.fill(S(cut(circ(28.5, 23, 6.6), circ(28.5, 23, 5.6))), { ramp: GOLD, bevel: 0.5, ink: shadeC(CLOTH[1], -0.2), spec: 0.9 });
   const sp: SDF = (x, y) => {
     let d = Infinity;
     for (let t = 0; t < 4.4; t += 0.12) {
       const r = 0.6 + t * 0.95, an = t * 2.2 + 3.6;
-      d = Math.min(d, Math.hypot(x - (28.5 + Math.cos(an) * r * 0.8), y - (22.8 + Math.sin(an) * r * 0.8)));
+      d = Math.min(d, Math.hypot(x - (28.5 + Math.cos(an) * r * 0.8), y - (22.3 + Math.sin(an) * r * 0.8)));
     }
     return d - 0.55;
   };
-  p.fill(sp, { ramp: GOLD, bevel: 0.5, ink: null, spec: 0.88 });
-  p.fill(seg(28.5, 27, 27.4, 34.5, 0.55), { ramp: GOLD, bevel: 0.5, ink: null });
-  // the elastic strap and the red ribbon marker
-  p.fill(box(37.5, 26, 1.3, 20.6, 0.4), { ramp: LEATHER, bevel: 0.8, tex: leather, bias: -0.05 });
-  p.fill(poly([[31.6, 45.5], [34, 45.5], [34, 51], [32.8, 49.8], [31.6, 51]]), { ramp: RED, bevel: 0.7 });
+  p.fill(S(sp), { ramp: GOLD, bevel: 0.5, ink: null, spec: 0.88 });
+  p.fill(S(seg(28.5, 26.5, 27.4, 31.5, 0.55)), { ramp: GOLD, bevel: 0.5, ink: null });
+  // the elastic strap, and a pencil tucked in beside it (only while it's shut)
+  if (o < 0.3) {
+    p.fill(box(37.5, 26, 1.3, 20.6, 0.4), { ramp: LEATHER, bevel: 0.8, tex: leather, bias: -0.05 });
+    p.fill(seg(40.4, 8.5, 40.4, 41, 1.05), { ramp: PENCIL, bevel: 0.9, tex: (u) => (Math.abs(u - 40.4) < 0.3 ? 0.08 : 0) });
+    p.fill(poly([[39.4, 41], [41.4, 41], [40.4, 44.6]], 0.15), { ramp: ramp('#e8c898', 6), bevel: 0.5 });
+    p.flat(circ(40.4, 44.2, 0.4), col('#2a2a2e'));
+    p.fill(box(40.4, 8.4, 1.05, 0.9, 0.3), { ramp: CHROME, bevel: 0.5, spec: 0.85 });
+    p.fill(box(40.4, 6.6, 1.05, 1.1, 0.6), { ramp: ramp('#e88aa0', 6), bevel: 0.6 });
+  }
   // rubbed light on the top edge
-  p.flat(seg(16.5, 6.6, 36, 6.6, 0.32), CLOTH[8], 0.7);
+  p.flat(S(seg(16.5, 6.6, 36, 6.6, 0.32)), CLOTH[8], 0.7);
+}
+
+/** the guide's live parts: the silk ribbon swaying under it, a glint across the gilt, motes of light off
+ *  the open page */
+function guideLive(p: Painter, info: KitInfo) {
+  const f = info.t ?? 0, ph = (f / KIT_FRAMES) * Math.PI * 2, o = info.open ?? 0;
+  const th = Math.sin(ph) * 0.2 + (o > 0.3 ? 0.25 : 0);
+  p.fill(rot(poly([[31.6, 45.5], [34, 45.5], [34.2, 51.2], [32.9, 49.9], [31.5, 51.2]], 0.15), 32.8, 45.6, th), { ramp: RED, bevel: 0.7 });
+  const g = (f + 8) % KIT_FRAMES;
+  if (o < 0.3) sparkle(p, 25 + g * 0.5, 18.5 + g * 0.3, 2.2, g < 3 ? [0.55, 1, 0.5][g] : 0);
+  if (o > 0.4) for (let i = 0; i < 4; i++) {
+    const k = ((f + i * 4) % KIT_FRAMES) / KIT_FRAMES;
+    const x = 26 + i * 4 + Math.sin(ph + i) * 1.2, y = 30 - k * 22;
+    p.flat(circ(x, y, 0.55 + (1 - k) * 0.25), col('#fff4c8'), (1 - k) * 0.95);
+  }
 }
 
 function paintLaptop(p: Painter, info: KitInfo) {
@@ -378,36 +514,97 @@ function paintCamera(p: Painter, info: KitInfo, k: number) {
     const rows = small ? DIG5[ch] : DIG7[ch];
     for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) if (rows[j * gw + i] === '#') for (let b = 0; b < g; b++) for (let c = 0; c < g; c++) p.a.put(left + (n * (gw + 1) + i) * g + c, top + j * g + b, dc);
   });
-  // the lens: a stepped chrome barrel, a black ring, deep glass with reflections
+  // the lens: a stepped chrome barrel with a knurled focus ring, a black ring, deep glass; on hover it
+  // racks out toward us (bigger, a second barrel step showing)
+  const o = info.open ?? 0, lr = 1 + o * 0.14, lx = 20 - o * 0.6, ly = 29 + o * 0.4;
   p.fill(circ(20, 29, 11.2), { ramp: CHROME, bevel: 2.4, spec: 0.9 });
-  p.fill(circ(20, 29, 8.6), { ramp: ramp('#2a2a30', 7, { deep: '#000000', hi: '#8a8a96' }), bevel: 1.6 });
-  p.flat(cut(circ(20, 29, 8), circ(20, 29, 7.4)), col('#5a5a64'));
-  const glass = circ(20, 29, 6.8);
+  if (o > 0.05) p.fill(circ(lx, ly, 10.4 * lr), { ramp: CHROME, bevel: 1.6, spec: 0.88, bias: 0.04 });
+  p.fill(cut(circ(lx, ly, 9.6 * lr), circ(lx, ly, 8.6 * lr)), { ramp: ramp('#3a3a42', 6, { deep: '#000000', hi: '#a0a0ac' }), bevel: 0.5, ink: null, tex: (u, v) => (Math.floor(Math.atan2(v - ly, u - lx) * 9) % 2 ? -0.12 : 0.1) });
+  p.fill(circ(lx, ly, 8.6 * lr), { ramp: ramp('#2a2a30', 7, { deep: '#000000', hi: '#8a8a96' }), bevel: 1.6 });
+  p.flat(cut(circ(lx, ly, 8 * lr), circ(lx, ly, 7.4 * lr)), col('#5a5a64'));
+  const glass = circ(lx, ly, 6.8 * lr);
   p.fill(glass, { ramp: ramp('#1c3450', 9, { deep: '#02060c', hi: '#c8e8ff' }), bevel: 7, ink: col('#000000'), bias: -0.2 });
-  p.flat(cut(circ(20, 29, 3.4), circ(20, 29, 2.7)), col('#3a5a7a'), 0.8);
-  p.flat(inter(cut(circ(20, 29, 5.6), circ(20.6, 29.6, 4.6)), (x, y) => x - 20 + (y - 29)), col('#bfe0ff'), 0.85);
-  p.flat(circ(17, 26, 1.3), col('#ffffff'));
-  p.flat(circ(23.4, 32.2, 0.7), col('#8ac8ff'), 0.9);
+  p.flat(cut(circ(lx, ly, 3.4 * lr), circ(lx, ly, 2.7 * lr)), col('#3a5a7a'), 0.8);
+  p.flat(inter(cut(circ(lx, ly, 5.6 * lr), circ(lx + 0.6, ly + 0.6, 4.6 * lr)), (x, y) => x - lx + (y - ly)), col('#bfe0ff'), 0.85);
+  // the ready light by the viewfinder
+  p.fill(box(32.2, 12.6, 1.6, 1.6, 0.6), { ramp: CHROME, bevel: 0.6, spec: 0.88 });
   // the print slot along the bottom
   p.flat(box(26, 39.6, 13, 0.6, 0.3), INK);
 }
 
-const cache = new Map<string, Art>();
-/** a kit icon (52 x 52 units) at k device px per unit; cached by what it shows */
+/** the camera's live parts: the reflections turning slowly in the glass, the ready light blinking, the
+ *  flash charging on hover (a rising whine of light) and firing on a click */
+function camLive(p: Painter, info: KitInfo) {
+  const f = info.t ?? 0, ph = (f / KIT_FRAMES) * Math.PI * 2, o = info.open ?? 0, fire = info.fire ?? 0;
+  const lr = 1 + o * 0.14, lx = 20 - o * 0.6, ly = 29 + o * 0.4;
+  // the glints in the glass drift round as the light moves
+  const a1 = -2.3 + Math.sin(ph) * 0.35;
+  p.flat(circ(lx + Math.cos(a1) * 3.8 * lr, ly + Math.sin(a1) * 3.8 * lr, 1.3 * lr), col('#ffffff'));
+  p.flat(circ(lx + Math.cos(a1 + 3.1) * 4.2 * lr, ly + Math.sin(a1 + 3.1) * 4.2 * lr, 0.7), col('#8ac8ff'), 0.9);
+  // a streak of light across the glass every loop
+  const g = f % KIT_FRAMES;
+  if (g >= 4 && g < 8) {
+    const k = (g - 4) / 3;
+    p.flat(inter(circ(lx, ly, 6.4 * lr), (x, y) => Math.abs((x - lx) + (y - ly) - (k * 14 - 7)) - 0.8), col('#d8f0ff'), 0.7);
+  }
+  // the ready light: green and steady when charged, blinking red while it charges
+  const ready = o > 0.95 || o < 0.05;
+  const on = ready ? true : (f % 4) < 2;
+  p.flat(circ(32.2, 12.6, 0.95), on ? (ready ? col('#6aff7a') : col('#ff4a3a')) : col('#3a1a14'));
+  if (on) p.flat(circ(31.9, 12.3, 0.35), col('#ffffff'), 0.8);
+  // the flash charging: its window lit from within, brighter as the hover holds
+  if (o > 0.05) p.flat(box(13.5, 19, 4.8, 2.5, 0.4), col('#fff6c8'), Math.min(0.85, o * (0.55 + Math.sin(ph * 4) * 0.12)));
+  // the click: the flash fires, a hard starburst off the window
+  if (fire > 0) {
+    p.flat(box(13.5, 19, 5.4, 3, 0.6), col('#ffffff'));
+    const R = 4 + fire * 9;
+    p.flat(uni(seg(13.5 - R, 19, 13.5 + R, 19, 0.5 + fire * 0.4), seg(13.5, 19 - R * 0.8, 13.5, 19 + R * 0.8, 0.5 + fire * 0.4)), col('#ffffff'), Math.min(1, fire * 1.2));
+    p.flat(uni(seg(13.5 - R * 0.6, 19 - R * 0.6, 13.5 + R * 0.6, 19 + R * 0.6, 0.35), seg(13.5 - R * 0.6, 19 + R * 0.6, 13.5 + R * 0.6, 19 - R * 0.6, 0.35)), col('#fff2b0'), fire * 0.8);
+  }
+  // the strap off the left lug, swinging a little
+  const T = (s: SDF) => rot(s, 3.4, 24, Math.sin(ph + 0.6) * 0.12);
+  p.fill(T(seg(3.4, 24, 2.2, 36, 1.1)), { ramp: RED, bevel: 0.8, tex: (u, v) => (Math.floor(v * 1.4) % 2 ? -0.14 : 0.06) });
+}
+
+const bases = new Map<string, Art>();
+const frames = new Map<string, Art>();
+/**
+ * A kit icon (52 x 52 units) at k device px per unit. The object itself (and its hover state: how far
+ * it is open) is painted once and cached; its live parts (the swinging mug and tag, the ribbon, the
+ * glints, the ready light, the flash) are painted over a copy for each frame of the idle loop.
+ */
 export function paintKitIcon(kind: KitKind, k: number, info: KitInfo = {}): Art {
-  const key = `${kind}|${k.toFixed(3)}|${Math.round((info.fill ?? 0) * 8)}|${info.badge ?? 0}|${info.shots ?? 0}|${Math.round((info.develop ?? 1) * 12)}`;
-  const hit = cache.get(key);
-  if (hit) return hit;
-  const S = Math.ceil(KIT_SIZE * k);
-  const a = new Art(S, S);
-  const p = new Painter(a, k);
-  if (kind === 'pack') paintPack(p, info);
-  else if (kind === 'guide') paintGuide(p);
-  else if (kind === 'lap') paintLaptop(p, info);
-  else paintCamera(p, info, k);
-  if (cache.size > 80) cache.clear();
-  cache.set(key, a);
-  return a;
+  const open = Math.round((info.open ?? 0) * 4) / 4;
+  const bkey = `${kind}|${k.toFixed(3)}|${Math.round((info.fill ?? 0) * 8)}|${info.badge ?? 0}|${info.shots ?? 0}|${Math.round((info.develop ?? 1) * 12)}|${open}`;
+  let base = bases.get(bkey);
+  if (!base) {
+    const S = Math.ceil(KIT_SIZE * k);
+    base = new Art(S, S);
+    const p = new Painter(base, k);
+    const bi = { ...info, open };
+    if (kind === 'pack') paintPack(p, bi);
+    else if (kind === 'guide') paintGuide(p, bi);
+    else if (kind === 'lap') paintLaptop(p, bi);
+    else paintCamera(p, bi, k);
+    if (bases.size > 120) bases.clear();
+    bases.set(bkey, base);
+  }
+  if (kind === 'lap') return base;
+  const t = (((info.t ?? 0) % KIT_FRAMES) + KIT_FRAMES) % KIT_FRAMES, fire = Math.round((info.fire ?? 0) * 4) / 4;
+  const fkey = `${bkey}|${t}|${fire}`;
+  let fr = frames.get(fkey);
+  if (!fr) {
+    fr = new Art(base.w, base.h);
+    fr.d.set(base.d);
+    const p = new Painter(fr, k);
+    const li = { ...info, open, t, fire };
+    if (kind === 'pack') packLive(p, li);
+    else if (kind === 'guide') guideLive(p, li);
+    else camLive(p, li);
+    if (frames.size > 420) frames.clear();
+    frames.set(fkey, fr);
+  }
+  return fr;
 }
 
 // ---------------------------------------------------------------- the button around an icon

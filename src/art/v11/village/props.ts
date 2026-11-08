@@ -19,6 +19,9 @@ import { hex, mix, shade } from '../../color';
 import type { C } from '../../color';
 import type { Sprite } from '../../jungle-core';
 import { Rng, bayer, clamp } from '../../../core/math';
+import { hineruaStatue } from '../../v12/statues';
+import { whare12 } from './house';
+import { paintDoorway, paintWindowRoom } from './interior';
 
 const R = (...h: string[]): C[] => h.map(v => hex(v));
 export const VP = {
@@ -130,12 +133,14 @@ export function wharenui(): Sprite {
     }
   });
   // the door (tatau) with its carved lintel (pare), and the window (matapihi)
-  b.rect(door0, base - 7 - dh, dw, dh, hex('#0c0606'));
+  // inside: the poupou and tukutuku round the walls, the ancestors' portraits, mattresses on the floor
+  paintDoorway(b, door0, base - 7 - dh, dw, dh, 'meeting', 11);
   for (let x = door0 - 5; x < door0 + dw + 5; x++) for (let y = base - 7 - dh - 10; y < base - 7 - dh; y++) b.set(x, y, ((x + y) % 5 === 0) ? VP.ochre[1] : dpick(VP.ochre, 3, x, y));
   b.set(door0 + 7, base - 7 - dh - 6, VP.paua); b.set(door0 + dw - 8, base - 7 - dh - 6, VP.paua);
   for (const s of [-1, 1]) for (let y = base - 7 - dh; y < base - 7; y++) b.set(s < 0 ? door0 - 1 : door0 + dw, y, VP.ochre[2]);
   const wx = cx + 18, wy = base - 44;
-  b.rect(wx, wy, 18, 14, hex('#0c0606'));
+  paintWindowRoom(b, wx, wy, 18, 14, 'meeting', 5);
+  for (let y = wy; y < wy + 14; y++) b.set(wx + 9, y, VP.ochre[2]);
   for (let x = wx - 2; x < wx + 20; x++) { b.set(x, wy - 1, VP.ochre[3]); b.set(x, wy + 14, VP.ochre[2]); }
   // a pair of shoes left at the door: you go in barefoot
   b.rect(door0 - 12, base - 9, 4, 2, hex('#2a2018')); b.rect(door0 - 7, base - 9, 4, 2, hex('#2a2018'));
@@ -193,59 +198,8 @@ export function wharenui(): Sprite {
 
 // ------------------------------------------------------------------ family houses
 export function whare(variant: number, seed: number): Sprite {
-  const sizes: [number, number][] = [[112, 104], [98, 96], [128, 108], [92, 92]];
-  const [w, h] = sizes[variant % sizes.length];
-  const W = w + 30, H = h + 34;
-  const b = new PixelBuffer(W, H);
-  const cx = Math.floor(W / 2), base = H - 1;
-  const wallH = Math.round(h * 0.52), roofH = Math.round(h * 0.6);
-  const wallTop = base - wallH;
-  const rng = new Rng(seed);
-  // walls, a low stone footing
-  if (variant % 2 === 0) slabWall(b, cx - w / 2, wallTop, w, wallH, VP.wood, seed, 6);
-  else reedWall(b, cx - w / 2, wallTop, w, wallH, seed);
-  for (let x = cx - w / 2; x < cx + w / 2; x++) for (let y = base - 3; y <= base; y++) b.set(x, y, dpick(VP.stone, 2.6 + Math.sin(x * 0.7) * 0.6, x, y));
-  // door and a shuttered window
-  const dw = 20, dh = 44;
-  const dx = cx - dw / 2 + (variant === 2 ? -18 : -8);
-  b.rect(dx, base - dh, dw, dh, hex('#0e0806'));
-  for (let x = dx - 2; x < dx + dw + 2; x++) b.set(x, base - dh - 1, VP.wood[4]);
-  for (let y = base - dh; y <= base; y++) { b.set(dx - 1, y, VP.wood[3]); b.set(dx + dw, y, VP.wood[2]); }
-  const wx = dx + dw + 12, wy = base - 38;
-  b.rect(wx, wy, 14, 12, hex('#0e0806'));
-  for (let y = wy; y < wy + 12; y++) for (let k = 0; k < 4; k++) b.set(wx - 5 + k, y, (y + k) % 4 === 0 ? VP.wood[1] : VP.wood[3]);
-  for (let x = wx - 1; x < wx + 15; x++) { b.set(x, wy - 1, VP.wood[4]); b.set(x, wy + 12, VP.wood[4]); }
-  if (variant === 2) b.rect(wx + 2, wy + 2, 10, 3, hex('#e8c060'));
-  // the roof: thatch, or salvaged iron with a rusty patch
-  const top = base - wallH - roofH;
-  const half = w / 2 + 14;
-  if (variant === 3) {
-    for (let y = 0; y < roofH; y++) {
-      const hw = (y / roofH) * half;
-      for (let x = -hw; x <= hw; x++) {
-        const X = Math.round(cx + x), Y = top + y;
-        const rib = (X - cx + 200) % 6 === 0;
-        const rusty = (x > 6 && x < hw * 0.6 && y > roofH * 0.4) || Math.sin(X * 0.3 + Y * 0.2) > 0.92;
-        b.set(X, Y, rusty ? dpick(VP.rust, 3 - (rib ? 1 : 0), X, Y) : dpick(VP.iron, 3.2 - (rib ? 1.2 : 0) - x / hw * 0.5, X, Y));
-      }
-    }
-  } else thatchGable(b, cx, top, half, roofH, variant === 1 ? VP.raupo : VP.thatch, seed);
-  // bargeboards: plain timber, red ochre on the bigger houses
-  for (let y = 0; y < roofH; y++) {
-    const hw = (y / roofH) * half;
-    for (const s of [-1, 1]) for (let k = 0; k < 4; k++) b.set(Math.round(cx + s * (hw - k)), top + y, variant === 0 || variant === 2 ? (k === 1 || k === 2 ? VP.ochre[3] : VP.ochre[2]) : (k === 1 ? VP.wood[4] : VP.wood[2]));
-  }
-  // porch clutter: gumboots, a bench, a kete, a broom, a bucket
-  if (rng.next() < 0.6) { b.rect(dx - 13, base - 9, 4, 9, hex('#141414')); b.rect(dx - 8, base - 8, 4, 8, hex('#141414')); b.set(dx - 13, base - 9, hex('#3a3a3a')); b.set(dx - 8, base - 8, hex('#3a3a3a')); }
-  if (variant !== 3) {
-    const bx0 = cx + 14, bx1 = cx + 40;
-    for (let x = bx0; x < bx1; x++) { b.set(x, base - 14, VP.wood[4]); b.set(x, base - 13, VP.wood[3]); }
-    for (const px of [bx0 + 2, bx1 - 3]) for (let y = base - 12; y <= base; y++) b.set(px, y, VP.wood[2]);
-    b.ellipse(bx0 + 10, base - 18, 4, 3, VP.flax[3]); b.set(bx0 + 10, base - 22, VP.flax[2]);
-  } else { b.ellipseFn(cx + 26, base - 6, 6, 6, (x, y, nx) => dpick(VP.iron, 3 - nx, x, y)); }
-  for (let y = 0; y < 34; y++) b.set(dx + dw + 4 + Math.round(y * 0.12), base - 34 + y, VP.wood[3]);
-  for (let x = -3; x <= 3; x++) for (let y = 0; y < 7; y++) b.set(dx + dw + 8 + x + Math.round(y * 0.2), base - 6 + y, VP.thatch[3 - (x & 1)]);
-  return S(b, cx, base);
+  // V12: rebuilt with a body (the gable end, the side wall and the roof going back): ./house.ts
+  return whare12(variant, seed);
 }
 
 // ------------------------------------------------------------------ the pātaka
@@ -263,7 +217,8 @@ export function pataka(): Sprite {
   for (let y = 0; y < 27; y++) { const hw = (y / 27) * 30; for (const s of [-1, 1]) for (let k = 0; k < 4; k++) b.set(Math.round(cx + s * (hw - k)), top + y, k === 1 || k === 2 ? VP.ochre[4] : VP.ochre[2]); }
   b.disc(cx, top + 4, 4, VP.ochre[3]); b.set(cx - 2, top + 3, VP.paua); b.set(cx + 2, top + 3, VP.paua);
   for (let y = 0; y < 10; y++) for (let x = -2; x <= 2; x++) b.set(cx + x, top - 10 + y, dpick(VP.ochre, 3 - x * 0.3, cx + x, top - 10 + y));
-  b.rect(cx - 6, bodyTop + 6, 12, 16, hex('#0c0606'));
+  // the store through its little door: kete and gourds on shelves, dried fish on a string
+  paintDoorway(b, cx - 6, bodyTop + 6, 12, 16, 'store', 3);
   for (let x = cx - 25; x <= cx + 25; x++) { b.set(x, bodyTop + 24, VP.wood[4]); b.set(x, bodyTop + 25, VP.wood[2]); }
   // the notched-log ladder leaning on it
   for (let y = 0; y < 74; y++) { const X = cx + 30 - Math.round(y * 0.3), Y = base - y; b.set(X, Y, VP.wood[3]); b.set(X + 1, Y, VP.wood[2]); if (y % 8 === 0) { b.set(X - 1, Y, VP.wood[1]); b.set(X + 2, Y, VP.wood[4]); } }
@@ -564,43 +519,10 @@ export function lanternString(w: number, seed: number): Sprite {
 }
 
 // ------------------------------------------------------------------ Hinerua
-/** Hinerua's pou at the river landing: a tall carved post, the serpent coiling up it, shell eyes */
+/** Hinerua's pou at the river landing: Hinerua herself rearing out of her own coils, carved long ago,
+ *  weathered silver and cracked, ochre left in the grooves, offerings at her foot (src/art/v12/statues.ts) */
 export function hineruaPou(): Sprite {
-  const W = 40, H = 120, b = new PixelBuffer(W, H), base = H - 1, cx = 20;
-  // the post: red ochre, a carved ancestor face near the top
-  for (let y = 10; y <= base - 6; y++) for (let k = -5; k <= 5; k++) {
-    let c = dpick(VP.ochre, 3.4 - (k + 5) / 10 * 1.6, cx + k, y);
-    if ((y + Math.abs(k) * 2) % 9 === 0) c = VP.ochre[1];
-    b.set(cx + k, y, c);
-  }
-  b.ellipse(cx, 18, 6, 7, VP.ochre[3]);
-  b.set(cx - 3, 16, VP.paua); b.set(cx + 3, 16, VP.paua); b.set(cx - 3, 15, VP.black); b.set(cx + 3, 15, VP.black);
-  b.rect(cx - 3, 22, 7, 1, VP.black); b.set(cx - 4, 21, VP.black); b.set(cx + 4, 21, VP.black);
-  // Hinerua: a scaled serpent body winding up round the post, her head over the top looking out
-  const pts: [number, number][] = [];
-  for (let i = 0; i <= 60; i++) { const t = i / 60; pts.push([cx + Math.sin(t * Math.PI * 5) * 9, base - 10 - t * 92]); }
-  for (let i = 0; i < pts.length - 1; i++) {
-    const [x0, y0] = pts[i], [x1, y1] = pts[i + 1];
-    const front = Math.cos((i / 60) * Math.PI * 5) > -0.2;
-    const r = 3.4 - i / 60 * 1.2;
-    for (let s = 0; s <= 4; s++) {
-      const x = x0 + (x1 - x0) * s / 4, y = y0 + (y1 - y0) * s / 4;
-      b.discFn(x, y, r, (X, Y, nx, ny) => {
-        if (!front && Math.abs(X - cx) < 5) return -1;
-        const scale = ((X + Y * 2) % 4 === 0) ? -1 : 0;
-        return dpick([hex('#0e1a14'), hex('#1a3428'), hex('#28503a'), hex('#3a6e4a'), hex('#58905c'), hex('#84b47a')], 3.2 - nx * 0.8 - ny * 0.6 + scale, X, Y);
-      });
-    }
-  }
-  // her head at the top: a wide, gentle serpent's head with fins like a crown, pāua eyes
-  const hx0 = cx + 2, hy0 = 8;
-  b.ellipseFn(hx0, hy0, 9, 5, (X, Y, nx, ny) => dpick([hex('#0e1a14'), hex('#1a3428'), hex('#28503a'), hex('#3a6e4a'), hex('#58905c'), hex('#84b47a')], 3.6 - nx * 0.6 - ny, X, Y));
-  for (let i = 0; i < 4; i++) b.line(hx0 - 6 + i * 3, hy0 - 4, hx0 - 8 + i * 3, hy0 - 8, hex('#a8342a'));
-  b.set(hx0 + 4, hy0 - 1, VP.paua); b.set(hx0 + 5, hy0 - 1, VP.white);
-  b.line(hx0 + 4, hy0 + 2, hx0 + 9, hy0 + 2, VP.black);
-  // the flat offering stone at the foot
-  b.ellipseFn(cx, base - 2, 14, 3, (X, Y, nx, ny) => dpick(VP.stone, 4 - ny * 1.4 - nx * 0.5, X, Y));
-  return S(b, cx, base);
+  return hineruaStatue();
 }
 /** the waharoa: the carved gateway, Hinerua along the lintel, her head over the opening */
 export function gateway(): Sprite {

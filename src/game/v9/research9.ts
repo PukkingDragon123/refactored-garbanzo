@@ -35,6 +35,8 @@ import { SHORE9 } from './species-shore';
 import { FISH9 } from './species-fish';
 import { WILD9 } from './species-wild';
 import type { FieldScene } from '../scenes/field';
+import { recordShot } from '../v12/shotvalue';
+import type { ShotVerdict } from '../v12/shotvalue';
 
 /** width of the stored copy of an uploaded photo */
 export const UPLOAD_W = 320;
@@ -105,6 +107,8 @@ export interface UploadOutcome {
   newBeh: [string, string][];
   /** [species, fact] */
   newFacts: [string, Fact][];
+  /** V12 what each picture in it was worth (a new shot, a better one, or the same shot again: 0) */
+  shots: ShotVerdict[];
   rp: number;
 }
 
@@ -142,10 +146,13 @@ export async function uploadPhoto(p: RawPhoto, where: 'ship' | 'field'): Promise
   s.uploads = s.uploads.filter(u => u.id !== p.id);
   s.uploads.push(rec);
   s.raw = s.raw.filter(r => r.id !== p.id);
-  const out: UploadOutcome = { rec, found, newSpecies: [], newBeh: [], newFacts: [], rp: 0 };
+  const out: UploadOutcome = { rec, found, newSpecies: [], newBeh: [], newFacts: [], shots: [], rp: 0 };
   const day = daySum();
   day.photos++;
   logEv('photo', String(rec.id), 0);
+  // V12: every picture pays by its stars once; the same picture again pays nothing (src/game/v12/shotvalue.ts)
+  out.shots = recordShot(p);
+  for (const v of out.shots) if (v.pts > 0) out.rp += awardRp(v.pts, 'shot', v.key);
   // research sheet sections per upload (Data Analysis depth; at 5, the Ecosystem Model, the whole sheet)
   const d0 = Math.max(1, Math.round(fx10.infoDepth()));
   const depth = d0 >= 5 ? 99 : d0;
@@ -290,7 +297,7 @@ export function enableFieldLaptop(s: FieldScene) {
 /** what a backpack item is to the research crate (null: it stays in the pack) */
 export type ItemCat = 'flora' | 'sample' | 'artifact' | 'fossil';
 /** ledger entries (one per thing documented, with the RP it paid) */
-export type EvKind = 'photo' | 'species' | 'beh' | 'fact' | 'flora' | 'sample' | 'artifact' | 'fossil' | 'place' | 'note' | 'bonus';
+export type EvKind = 'photo' | 'shot' | 'species' | 'beh' | 'fact' | 'flora' | 'sample' | 'artifact' | 'fossil' | 'place' | 'note' | 'bonus';
 
 export interface CrateItem { id: string; n: number; day: number; cat: ItemCat; returned?: number }
 export interface LabRecord {
@@ -677,8 +684,11 @@ export interface Session {
   rp: number;
   /** the weekly target bonus this session completed (0 if none) */
   bonus: number;
+  /** V12 pictures paid for (new or better) and repeats of pictures already on file */
+  shotsNew: number;
+  shotsSame: number;
 }
-export const newSession = (): Session => ({ day: today(), photos: 0, ok: 0, species: [], beh: [], facts: [], items: [], notes: [], rp: 0, bonus: 0 });
+export const newSession = (): Session => ({ day: today(), photos: 0, ok: 0, species: [], beh: [], facts: [], items: [], notes: [], rp: 0, bonus: 0, shotsNew: 0, shotsSame: 0 });
 /** fold one photo upload into a session */
 export function addUpload(ses: Session, o: UploadOutcome) {
   ses.photos++;
@@ -687,6 +697,8 @@ export function addUpload(ses: Session, o: UploadOutcome) {
   ses.beh.push(...o.newBeh);
   ses.facts.push(...o.newFacts);
   ses.rp += o.rp;
+  ses.shotsNew += o.shots.filter(v => v.pts > 0).length;
+  ses.shotsSame += o.shots.filter(v => v.kind === 'same').length;
 }
 /** a session is over: count it for the day, and pay the weekly bonus if it completed the targets */
 export function endSession(ses: Session) {

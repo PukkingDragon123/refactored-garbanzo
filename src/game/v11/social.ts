@@ -180,7 +180,7 @@ export function knownTastes(id: string): Record<string, GiftReaction> { return {
 export function revealTaste(id: string, item: string) { const r = giftReaction(id, item); (S().tastes[id] ??= {})[item] = r; game.persist(); }
 
 // ---------------------------------------------------------------- talk providers
-export interface TalkLine { who: string; text: string; expr?: string }
+export interface TalkLine { who: string; text: string; expr?: string; /** V12: the floating text's style ('whisper', 'shout'...) */ style?: string }
 export type TalkProvider = () => TalkLine[] | null;
 const TALK: Record<string, TalkProvider[]> = {};
 /** register a conversation source for someone (the first that returns lines wins, newest first) */
@@ -265,8 +265,8 @@ export interface PersonView {
   tastes: { item: string; name: string; reaction: GiftReaction }[];
   color: string;
 }
-export const GROUP_ORDER = ['crew', 'village', 'ranger', 'researcher', 'hunter', 'craft', 'naturalist'];
-export const GROUP_NAMES: Record<string, string> = { crew: 'The crew', village: 'Te Kāinga', ranger: 'The ranger station', researcher: 'Helix camp', hunter: 'The hills', craft: 'Craftspeople', naturalist: 'The palm grove' };
+export const GROUP_ORDER = ['crew', 'village', 'ranger', 'researcher', 'hunter', 'craft', 'naturalist', 'trader'];
+export const GROUP_NAMES: Record<string, string> = { crew: 'The crew', village: 'Te Kāinga', ranger: 'The ranger station', researcher: 'Helix camp', hunter: 'The hills', craft: 'Craftspeople', naturalist: 'The palm grove', trader: 'Traders' };
 /** everything a people page needs, people Mori has met first (crew, then by group) */
 export function relationships(o: { includeUnmet?: boolean } = {}): PersonView[] {
   const out: PersonView[] = [];

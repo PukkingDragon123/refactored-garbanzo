@@ -60,12 +60,13 @@ export function cel(r: Ramp6, l: number, bias = 0, shine = false): C {
   return shine && v > 0.93 ? r[5] : r[4];
 }
 /**
- * The cast's cartoon look (user: "lower resolution more cartoony art style"): drawn at the world's
- * own pixel size, three-tone cel shading (shadow, base, light; no deep step, terminator or shine), a
- * bold even outline round every form and between overlapping parts, no rim light or contact shading,
- * and brighter, more saturated colour (popBuf). Off brings back the painted anime finish.
+ * The cast's cartoon look: drawn at the world's own pixel size, three-tone cel shading, a bold even
+ * outline, no rim light, brighter colour (popBuf). Off (user, latest: "make the people a lot better,
+ * realistic anime, not ugly and chopped"): the painted anime finish, a deep step, a terminator and a
+ * shine in the shading, fabric folds, strand hair with its angel ring, rim light and contact shading,
+ * at the cast's fine density (body.ts CAST_DENS7) and its realistic proportions (head.ts).
  */
-export const TOON7 = true;
+export const TOON7 = false;
 
 /** a colour pushed brighter and more saturated (cached): the cartoon palette, kept in its own hue */
 const popped = new Map<C, C>();
@@ -261,7 +262,11 @@ export class Scene3D {
   }
 
   /** tapered limb from a (radius ra) to b (radius rb): a sweep of spheres */
-  limb(a: V3, b: V3, ra: number, rb: number, g: number, mat: Mat) {
+  /**
+   * A tapered limb from a (radius ra) to b (rb). `prof` (optional) multiplies the radius along it
+   * (t 0..1): the swell of a muscle, so a thigh, calf or forearm is a shaped form, not a straight tube.
+   */
+  limb(a: V3, b: V3, ra: number, rb: number, g: number, mat: Mat, prof?: (t: number) => number) {
     const d = vsub(b, a), L = vlen(d), k = this.k;
     // spheres spaced to a fraction of the radius (the silhouette stays smooth, big limbs stay cheap)
     const n = Math.max(2, Math.ceil((L * k) / Math.max(0.4, Math.min(ra, rb) * k * 0.3)));
@@ -270,7 +275,7 @@ export class Scene3D {
     const ref: V3 = Math.abs(ax[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
     const e1 = vnorm(vcross(ax, ref)), e2 = vcross(ax, e1);
     const H: Hit = { n: [0, 0, 1], p: [0, 0, 0], q: [0, 0, 0], t: 0, l: 0, x: 0, y: 0 };
-    const rmax = Math.max(ra, rb);
+    const rmax = Math.max(ra, rb) * (prof ? 1.4 : 1);
     const x0 = Math.max(0, Math.floor(this.ox + (Math.min(a[0], b[0]) - rmax) * k - 1)), x1 = Math.min(this.w - 1, Math.ceil(this.ox + (Math.max(a[0], b[0]) + rmax) * k + 1));
     const y0 = Math.max(0, Math.floor(this.oy - (Math.max(a[1], b[1]) + rmax) * k - 1)), y1 = Math.min(this.h - 1, Math.ceil(this.oy - (Math.min(a[1], b[1]) - rmax) * k + 1));
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
@@ -278,7 +283,7 @@ export class Scene3D {
       let best = -1e9, bt = 0, bc: V3 | null = null, br = 1;
       for (let k = 0; k <= n; k++) {
         const t = k / n;
-        const cx = a[0] + d[0] * t, cy = a[1] + d[1] * t, cz = a[2] + d[2] * t, r = ra + (rb - ra) * t;
+        const cx = a[0] + d[0] * t, cy = a[1] + d[1] * t, cz = a[2] + d[2] * t, r = (ra + (rb - ra) * t) * (prof ? prof(t) : 1);
         const dx = px - cx, dy = py - cy, q = r * r - dx * dx - dy * dy;
         if (q < 0) continue;
         const z = cz + Math.sqrt(q);
@@ -296,6 +301,46 @@ export class Scene3D {
       const col = mat(H);
       if (col === -1) continue;
       this.write(i, best, col, g, x, y, H);
+    }
+  }
+
+  /**
+   * A sculpted surface given as a signed distance f (world units, negative inside): a form blended
+   * from many shapes with no seams (a head). Each pixel's ray is marched from the front of the world
+   * box [lo, hi] to its back; the hit is refined, its normal taken from f's gradient. The material
+   * sees q = the world point (callers map it to their own frame).
+   */
+  sdf(f: (p: V3) => number, lo: V3, hi: V3, g: number, mat: Mat) {
+    const k = this.k;
+    const x0 = Math.max(0, Math.floor(this.ox + lo[0] * k - 1)), x1 = Math.min(this.w - 1, Math.ceil(this.ox + hi[0] * k + 1));
+    const y0 = Math.max(0, Math.floor(this.oy - hi[1] * k - 1)), y1 = Math.min(this.h - 1, Math.ceil(this.oy - lo[1] * k + 1));
+    const H: Hit = { n: [0, 0, 1], p: [0, 0, 0], q: [0, 0, 0], t: 0, l: 0, x: 0, y: 0 };
+    const e = 0.04, zEnd = lo[2] - 0.5;
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const px = this.wx(x), py = this.wy(y);
+      let z = hi[2] + 0.5, prev = z, hit = false;
+      for (let it = 0; it < 120 && z > zEnd; it++) {
+        const dd = f([px, py, z]);
+        if (dd < 0.01) { hit = true; break; }
+        prev = z;
+        z -= Math.max(0.02, dd * 0.85);
+      }
+      if (!hit) continue;
+      // refine between the last point outside and the first inside
+      let a = prev, b = z;
+      for (let it = 0; it < 8; it++) { const m = (a + b) / 2; if (f([px, py, m]) > 0) a = m; else b = m; }
+      z = (a + b) / 2;
+      const i = y * this.w + x;
+      if (z <= this.z[i]) continue;
+      const nrm = vnorm([
+        f([px + e, py, z]) - f([px - e, py, z]),
+        f([px, py + e, z]) - f([px, py - e, z]),
+        f([px, py, z + e]) - f([px, py, z - e]),
+      ]);
+      H.n = nrm; H.p = [px, py, z]; H.q = [px, py, z]; H.t = 0; H.l = vdot(nrm, LIGHT7); H.x = x; H.y = y;
+      const col = mat(H);
+      if (col === -1) continue;
+      this.write(i, z, col, g, x, y, H);
     }
   }
 

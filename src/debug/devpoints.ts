@@ -29,6 +29,7 @@ import { SPOT, WRECK } from '../art/island4/layout';
 import { TRAILHEAD_X, LOG } from '../game/v11/forest/layout';
 import type { TimeOfDay } from '../world/timeofday';
 import type { SiteId } from '../game/species';
+import { TUA, TUA_SPOT, TUA_STRETCHES, tuaGround } from '../game/v12/backcountry/gen';
 
 // ---------------------------------------------------------------- small helpers
 export const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
@@ -355,6 +356,35 @@ export async function goCave(x: number, tier: string, o: { hour?: number; rope?:
   cam.x = cam.tx = x; cam.y = cam.ty = p.y - 38;
 }
 
+/** V12 Te Tuawhenua, the backcountry (src/game/v12/backcountry): out on a trip from camp, at world x;
+ *  `high` stands Mori on the highest thing there (the ledge over the den). The grip soles and the trail
+ *  boots are made, so both ways out (the village, the Hot Valley) are open. */
+export async function goBackcountry(x: number, o: { high?: boolean; hour?: number } = {}) {
+  ensureLoop();
+  findLocation('backcountry');
+  const d = dayState();
+  d.phase = 'out'; d.went = 'backcountry'; d.woke = dayNumber(); d.meals.breakfast = dayNumber();
+  if (o.hour !== undefined) game.save.vars['v10:hour'] = o.hour;
+  const bp = await import('../game/v11/blueprints');
+  for (const id of ['grip_soles', 'trail_boots']) {
+    bp.grantBlueprint(id, 'dev');
+    if (!bp.isBuilt(id)) bp.markMade(id);
+  }
+  game.persist();
+  await idle();
+  const ex = await import('../game/v10/expedition');
+  await ex.goExpedition('backcountry', { at: x });
+  refill();
+  const { FieldScene } = await import('../game/scenes/field');
+  await sceneWhere(s => s instanceof FieldScene && !!(s as InstanceType<typeof FieldScene>).player && ((s as InstanceType<typeof FieldScene>).site.id as string) === 'backcountry');
+  const f = game.scene as InstanceType<typeof FieldScene>;
+  const s = f.st.terrain.surfaceBelow(x, o.high ? -400 : tuaGround(x) - 12);
+  const p = f.player;
+  p.x = x; p.y = s?.y ?? tuaGround(x); p.vy = 0; p.onGround = true;
+  if (s) (p as unknown as { surface: unknown }).surface = s.s;
+  f.snapCamera();
+}
+
 export async function goTrip(id: string, stop = false) {
   ensureLoop();
   boatTo(6);
@@ -401,6 +431,38 @@ async function tbHunt(feeding: boolean) {
   await until(() => !!h.huntOf(sc)?.bird, 8000);
   await sleep(500);
   h.startEncounter(sc, { feeding });
+}
+
+/** V12 the feud (src/game/v12/feud): the Rocky Hills' tussock basin stands in for the backcountry; the
+ *  director runs there with the den, the cache and the arena below, Mori at x, and the encounter staged */
+const FEUD_HILLS = { den: 580, cache: 720, arena: [820, 1080] as [number, number], kills: [960] };
+async function feudAt(kind: 'ambush' | 'fight' | 'raid' | 'sleep' | 'quiet', at: number, o: { awake?: boolean; hour?: number } = {}) {
+  ensureLoop();
+  if ((game.save.day ?? 1) < 4) game.save.day = 4;
+  F('aroha:met', 'v4:arohaJoined', 'feud:heard');
+  tool('slingshot');
+  V('v11:pebbles', 20);
+  const Qm = await import('../game/v12/feud/quest');
+  Qm.registerFeud();
+  if (questStatus('feud') === 'hidden') game.save.quests['feud'] = 'active';
+  const d = dayState();
+  d.phase = 'out'; d.went = 'hills'; d.woke = dayNumber(); d.meals.breakfast = dayNumber(); d.arrive = null;
+  game.save.vars['v10:hour'] = o.hour ?? 11;
+  game.persist();
+  await idle();
+  await (await import('../game/v10/expedition')).goExpedition('hills', { at });
+  refill();
+  if (!(await sceneWhere(s => (s as { site?: { id?: string } }).site?.id === 'hills'))) return;
+  await sleep(300);
+  const D = await import('../game/v12/feud/director');
+  const f = game.scene as unknown as Parameters<typeof D.attachFeud>[0];
+  const h = D.attachFeud(f, { ...FEUD_HILLS, ground: (x: number) => f.st.terrain.groundY(x) });
+  h.start(kind);
+  if (o.awake && h.bearer) {
+    h.bearer.x = 860; h.bearer.y = f.st.terrain.groundY(860); h.bearer.setAct('wander', 30); h.pause(true);
+    // the boa well out of the way, lying up at the bush line
+    if (h.boa) { h.boa.x = 260; h.boa.y = f.st.terrain.groundY(260); h.boa.setAct('ambush', 120); }
+  }
 }
 
 // ---------------------------------------------------------------- the list
@@ -514,6 +576,27 @@ export async function chapters(): Promise<DevChapter[]> {
       refill();
     } },
   ] });
+  // V12: the feud (src/game/v12/feud): Matikuku Nui the Bearer and Huruhuru the feathered boa
+  out.push({ id: 'feud', name: 'Matikuku Nui and Huruhuru, the claw and the plume', points: [
+    { id: 'feud:bearer', name: 'The Bearer up close', sub: 'Rocky Hills basin: Matikuku Nui awake and roaming. Walk up: it rears, then charges and swipes', icon: 'target', run: () => feudAt('quiet', 1130, { awake: true }) },
+    { id: 'feud:constrict', name: 'The boa constricting', sub: 'The boa in ambush in the basin, a torhopper grazing into reach', icon: 'eye', run: () => feudAt('ambush', 1150) },
+    { id: 'feud:fight', name: 'The fight', sub: 'A fresh kill in the boa’s coils; the Bearer smells it and comes. Watch from the scree', icon: 'bolt', variants: [
+      { label: 'Day', run: () => feudAt('fight', 1230) },
+      { label: 'Dusk', run: () => feudAt('fight', 1230, { hour: 18.5 }) },
+    ] },
+    { id: 'feud:raid', name: 'The boa raids the cache', sub: 'The Bearer asleep by its cache; the boa slides in from the bush line', icon: 'scroll', run: () => feudAt('raid', 960) },
+    { id: 'feud:sleep', name: 'The Bearer asleep', sub: 'On its den by the cache. Don’t wake it', icon: 'moon', run: () => feudAt('sleep', 900) },
+    { id: 'feud:koro', name: 'Tell Koro Wiremu', sub: 'The quest at its last step; Mori by Koro’s seat in Te Kāinga', icon: 'flag', run: async () => {
+      (await import('../game/v12/feud/quest')).registerFeud();
+      F('feud:heard', 'feud:sign:trunk', 'feud:sign:plume', 'feud:sign:bones', 'feud:photo:constrict', 'feud:photo:bearer', 'feud:witness', 'feud:photo:fight');
+      delete game.save.flags['feud:report']; delete game.save.flags['feud:raidSoon'];
+      game.save.quests['feud'] = 'active';
+      const m = await import('../game/v11/village/debug');
+      m.stage('start');
+      await m.go('day', 1110);
+    } },
+    { id: 'feud:art', name: 'Art sheet', sub: 'Every Bearer frame and the boa’s poses (a debug page: reload after)', icon: 'star', run: async () => { (await import('../game/v12/feud/gallery')).feudGallery({ boa: true }); } },
+  ] });
   // V11: the new people (src/game/v11/npcs)
   const people = async (o: { px?: number; loc?: string; day?: number; flags?: string[]; meet?: string[] }) => {
     ensureLoop();
@@ -533,6 +616,55 @@ export async function chapters(): Promise<DevChapter[]> {
     { id: 'n:helix', name: 'The Helix camp', sub: 'Dr Varga and Teo on the Serpent Coast', icon: 'map', run: () => people({ loc: 'coast' }) },
     { id: 'n:hills', name: 'The trappers’ camp', sub: 'Rua and Sunny in the Rocky Hills', icon: 'target', run: () => people({ loc: 'hills' }) },
     { id: 'n:visit', name: 'Camp: the craftspeople visit', sub: 'Tīpene and Ngaio at camp (met)', icon: 'wrench', run: () => people({ px: 2300, day: 5, flags: ['n:tipeneMet', 'n:ngaioMet'], meet: ['tipene', 'ngaio'] }) },
+  ] });
+  // V12 Big Hank, the dealer at the end of Te Huarahi (src/game/v11/npcs/hank.ts), and the weapon belt
+  // he barters (src/game/v12/arsenal.ts)
+  const dealerAt = async (tod: TimeOfDay, o: { met?: boolean; goods?: boolean; then?: 'talk' | 'wares' | 'lily'; lily?: boolean } = {}) => {
+    ensureLoop();
+    if ((game.save.day ?? 1) < 4) game.save.day = 4;
+    const S = await import('../game/v11/social');
+    if (o.met) { S.meet('hank'); S.setMemo('hank', 'intro', 1); if (S.affinity('hank') < 25) S.addAffinity('hank', 25 - S.affinity('hank'), 'debug'); }
+    if (o.goods) {
+      // (an empty pack first, so everything fits)
+      game.save.inv = game.save.inv.filter(st => st.id.startsWith('q_'));
+      for (const [id, n] of [['rope', 10], ['driftglass', 6], ['wire', 3], ['shell_fan', 4], ['kawakawa', 6], ['resin', 5], ['feather', 4], ['scrap', 3], ['flax', 4], ['glowcap', 5], ['shedskin', 3]] as [string, number][]) giveTo(id, n);
+      game.save.rp = Math.max(game.save.rp ?? 0, 200);
+    }
+    if (o.lily) {
+      S.setMemo('hank', 's:photo', 1); S.setMemo('hank', 's:snakes', 1);
+      if (questStatus('q_lily') === 'hidden') startQuest('q_lily', true);
+      game.save.flags['v4:photo:plumeboa'] = true;
+      delete game.save.flags['q_lily:given'];
+    }
+    game.persist();
+    const { X } = await import('../game/v11/village/layout');
+    const m = await import('../game/v11/village/debug');
+    m.stage('start');
+    await m.go(tod as 'day', Math.round((X.dealer[0] + X.dealer[1]) / 2) - 120);
+    // (not awaited: the jump is done once the scene is up; the talk plays on in it)
+    const then = o.then;
+    if (then) void sleep(1600).then(async () => (await import('../game/v11/npcs/hank')).hankDebug(then));
+  };
+  const weaponTest = async (id: import('../game/v12/arsenal').WeaponId) => {
+    ensureLoop(); tool('slingshot');
+    const A = await import('../game/v12/arsenal');
+    for (const w of A.WEAPONS) A.giveWeapon(w.id);
+    A.selectWeapon(id);
+    const d = dayState(); d.phase = 'out'; d.woke = dayNumber(); d.meals.breakfast = dayNumber();
+    game.persist(); await idle();
+    await (await import('../game/v10/expedition')).goExpedition('hills', { at: 1640 });
+    refill();
+    await sleep(1500);
+    const sc = game.scene as unknown as { player?: { x: number; facing: number }; animals?: unknown[] } | null;
+    if (!sc?.player || !sc.animals) return;
+    await (await import('../game/v11/predators')).spawnCerebralTiger(sc, sc.player.x + sc.player.facing * 300, { lurk: false, facing: sc.player.facing >= 0 ? -1 : 1 });
+  };
+  out.push({ id: 'dealer', name: 'Big Hank, the dealer at the crossroads', points: [
+    { id: 'd:meet', name: 'Meet Big Hank', sub: 'Te Huarahi by day (Day 4): the tarp stall at the end of the lane', icon: 'heart', run: () => dealerAt('day') },
+    { id: 'd:night', name: 'Hank at night', sub: 'Asleep in his chair under the lit bulbs (met)', icon: 'moon', run: () => dealerAt('night', { met: true }) },
+    { id: 'd:wares', name: 'Hank’s wares', sub: 'Goods in the pack and vouchers to spend: the trade opens', icon: 'gift', run: () => dealerAt('day', { met: true, goods: true, then: 'wares' }) },
+    { id: 'd:weapons', name: 'The weapon belt vs the Cerebral Tiger', sub: 'Every weapon, full ammo, a tiger prowling up (T cycles, G uses)', icon: 'target', variants: (['sling', 'bolas', 'flare', 'bangers', 'net', 'tranq', 'spray'] as const).map(w => ({ label: w[0].toUpperCase() + w.slice(1), run: () => weaponTest(w) })) },
+    { id: 'd:lily', name: 'A picture for Lily: the photo handed over', sub: 'The feathered boa photographed; Hank gets choked up', icon: 'star', run: () => dealerAt('day', { met: true, lily: true, then: 'lily' }) },
   ] });
   // the Region Map
   const order = ['home', 'interior', 'south', 'east', 'ocean', 'isle2'];
@@ -597,6 +729,28 @@ export async function chapters(): Promise<DevChapter[]> {
       { label: 'Lunge', run: () => goCave(760, 't4', { hour: 14, lunge: true }) }, { label: 'Lure: lantern on the pole, hidden', run: () => goCave(680, 't4', { hour: 14, pole: true }) },
     ] },
   ] });
+  // V12 Te Tuawhenua, the backcountry (one big procedural map): a point per stretch, the story spots
+  const tuT = (x: number, high = false) => [
+    { label: 'Morning', run: () => goBackcountry(x, { high, hour: 7.5 }) }, { label: 'Midday', run: () => goBackcountry(x, { high, hour: 12 }) },
+    { label: 'Dusk', run: () => goBackcountry(x, { high, hour: 18.6 }) }, { label: 'Night', run: () => goBackcountry(x, { high, hour: 21.5 }) },
+  ];
+  const tuAt = (b: number, u: number) => Math.round(TUA_STRETCHES[b].x0 + (TUA_STRETCHES[b].x1 - TUA_STRETCHES[b].x0) * u);
+  const tuCrest = Math.round((TUA.crest[0] + TUA.crest[1]) / 2), tuArena = Math.round((TUA_SPOT.arena[0] + TUA_SPOT.arena[1]) / 2);
+  const tuWide = TUA.streams[Math.floor(TUA.streams.filter(q => q.kind === 'braid').length / 2)].x;
+  out.push({ id: 'backcountry', name: 'Te Tuawhenua, the backcountry (one big procedural map)', points: [
+    { id: 'tu:edge', name: 'The way in', sub: 'West end, up from the crossroads behind Te Kāinga\'s market lane', icon: 'map', run: () => goBackcountry(92, { hour: 9 }), variants: tuT(92) },
+    { id: 'tu:scrub', name: 'Ngā Mānuka, the kānuka scrub', sub: 'Kānuka and mānuka stands, cairns, the first claw-scored trunk', icon: 'map', run: () => goBackcountry(tuAt(0, 0.45), { hour: 10 }), variants: tuT(tuAt(0, 0.45)) },
+    { id: 'tu:flats', name: 'Te Awa Whiri, the braided river', sub: 'The boa\'s drag trail across the gravel, the braids', icon: 'map', run: () => goBackcountry(TUA.tracks[0].x - 60, { hour: 11 }), variants: tuT(TUA.tracks[0].x - 60) },
+    { id: 'tu:wade', name: 'The widest braid', sub: 'Thigh deep in the milky water', icon: 'map', run: () => goBackcountry(tuWide, { hour: 12 }), variants: tuT(tuWide) },
+    { id: 'tu:prints', name: 'The Bearer\'s prints', sub: 'Four toes and one great hooked claw, pressed into the river gravel', icon: 'map', run: () => goBackcountry(TUA.tracks[1].x - 40, { hour: 12 }), variants: tuT(TUA.tracks[1].x - 40) },
+    { id: 'tu:burnt', name: 'Te Hiwi Pango, the burnt ridge', sub: 'The crest: charred trunks, ash, regrowth, the long view', icon: 'map', run: () => goBackcountry(tuCrest, { hour: 13 }), variants: tuT(tuCrest) },
+    { id: 'tu:boa', name: 'Te Kōawa Huruhuru, the feathered gully', sub: 'The boa ground: tree ferns, the shed skin on the log', icon: 'map', run: () => goBackcountry(TUA.skins[0] + 60, { hour: 10 }), variants: tuT(TUA.skins[0] + 60) },
+    { id: 'tu:arena', name: 'The fern clearing (the arena)', sub: 'Te Ātea: TUA_SPOT.arena, the wallow beside it', icon: 'heart', run: () => goBackcountry(tuArena, { hour: 15 }), variants: tuT(tuArena) },
+    { id: 'tu:tussock', name: 'Ngā Pātītī, the tussock clearings', sub: 'A kill site: a serpent\'s picked-clean bones', icon: 'map', run: () => goBackcountry(TUA_SPOT.kills[1] - 50, { hour: 14 }), variants: tuT(TUA_SPOT.kills[1] - 50) },
+    { id: 'tu:gorge', name: 'Te Kapiti Matikuku, the claw gorge', sub: 'Between the walls: the den under the overhang, the cache', icon: 'heart', run: () => goBackcountry(TUA_SPOT.den - 140, { hour: 16 }), variants: tuT(TUA_SPOT.den - 140) },
+    { id: 'tu:ledge', name: 'The ledge over the den (the high way)', sub: 'Looking down on the den mouth', icon: 'map', run: () => goBackcountry(TUA.ledge.x1 - 30, { high: true, hour: 16 }), variants: tuT(TUA.ledge.x1 - 30, true) },
+    { id: 'tu:end', name: 'The gorge\'s end', sub: 'East end: the steam of the Hot Valley', icon: 'map', run: () => goBackcountry(13800, { hour: 17 }), variants: tuT(13800) },
+  ] });
   out.push({ id: 'map', name: 'Region Map · Expeditions', points: locs.map(l => ({
     id: 'loc:' + l.id, name: l.name, sub: `${l.sub ? l.sub + ' · ' : ''}${l.region}${l.secret ? ' · secret' : ''}`, icon: l.kind === 'camp' ? 'flag' : l.kind === 'cave' ? 'moon' : 'map',
     run: () => goLocation(l.id),
@@ -625,6 +779,18 @@ export async function chapters(): Promise<DevChapter[]> {
       const { FieldScene } = await import('../game/scenes/field');
       await game.go(() => new FieldScene(COAST_DEEP, t));
     } })) },
+  ] });
+  const raid = () => import('../game/v12/raid');
+  const vilR = () => import('../game/v11/village/debug');
+  const raidGo = async (to: 'prep' | 'ready' | 'won', tod: 'dawn' | 'day' | 'dusk' | 'night', x: number) => { ensureLoop(); (await vilR()).stage('done'); (await raid()).stageRaid(to); await (await vilR()).go(tod, x); };
+  out.push({ id: 'raid', name: 'Te Pō o te Matikuku · the night of the claw', points: [
+    { id: 'raid:prep', name: 'Get the village ready', sub: 'Three stake piles to lash across the market lane', icon: 'wrench', run: () => raidGo('prep', 'day', 3240) },
+    { id: 'raid:wait', name: 'Barricades up: wait for dark', sub: 'At the fire on the marae', icon: 'sun', run: () => raidGo('ready', 'day', 1240) },
+    { id: 'raid:fight', name: 'The Bearer comes through the gate', sub: 'Night, barricades up', icon: 'bolt', variants: [
+      { label: 'Sling only', run: () => raidGo('ready', 'night', 3300) },
+      { label: 'Fully armed (every weapon from Hank)', run: async () => { const A = await import('../game/v12/arsenal'); for (const id of A.WEAPON_IDS) A.giveWeapon(id); await raidGo('ready', 'night', 3300); } },
+    ] },
+    { id: 'raid:after', name: 'The morning after', sub: 'Claw marks on the gateway; Koro by the fire', icon: 'moon', run: () => raidGo('won', 'dawn', 1240) },
   ] });
   out.push({ id: 'mini', name: 'Minigames and screens', points: [
     { id: 'm:engine', name: 'Engine repair minigame', icon: 'wrench', run: async () => { await zl().engine?.(); } },
@@ -705,6 +871,7 @@ export async function chapters(): Promise<DevChapter[]> {
     ] },
     { id: 'v:guitar', name: 'Guitar by the fire with Aunty Hana', sub: 'The guitar close-up (a rhythm game)', icon: 'star', variants: ([['Te Ahi (easy)', 'ahi'], ['Hoki Mai', 'hoki'], ['Te Rere o te Manu (hard)', 'manu']] as const).map(([label, s]) => ({ label, run: async () => { const m = await vil(); m.stage('start'); await m.life('evening', 'dusk', 19.5, 1300); const { runGuitar } = await import('../ui/v12/closeup/guitar'); await runGuitar({ song: s, who: 'hana' }); } })) },
     { id: 'v:life', name: 'Village life through the day', sub: 'Chores, work and play, the fire and Hana’s guitar, bedtime', icon: 'sun', variants: ([['Morning chores', 'morning', 'dawn', 8.5, 640], ['Midday work and play', 'midday', 'day', 13, 1500], ['Evening at the fire', 'evening', 'dusk', 19.5, 1150], ['Night (asleep)', 'night', 'night', 23.5, 1760]] as const).map(([label, ph, tod, h, x]) => ({ label, run: async () => { const m = await vil(); m.stage('start'); await m.life(ph, tod, h, x); } })) },
+    { id: 'v:lane', name: 'Te Huarahi, the market lane', sub: 'The families from across the sea: the fale, the Lees’ store, the stalls, the gum-digger', icon: 'map', variants: TODS.map(t => ({ label: TOD_LABEL[t], run: async () => { const m = await vil(); m.stage('start'); await m.go(t, 2600); } })) },
   ] });
   return out;
 }

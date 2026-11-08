@@ -1,4 +1,5 @@
-// V10 expedition body, V12 edition: no stamina, no sprint, no exhaustion. What is left: the backpack's
+// V10 expedition body, V12 edition. Stamina is back (user, latest) as breath for sprinting, climbing and
+// swimming (src/game/v12/stamina.ts, shown on the field watch's ring). Also: the backpack's
 // weight (a pack over capacity slows Mori a little), ailments from bad forage, and the old energy API
 // mapped onto V12 hunger (src/game/v12/hunger.ts): energy() is how full he is, restore() is eating,
 // spend() makes him a little hungrier. The blackout listeners stay (the loop module fires them when
@@ -13,6 +14,7 @@ import { bucket } from './store';
 import { fx10 } from './skills10';
 import { audio } from '../../core/audio';
 import { hunger, feed, addHunger, tickHunger, tooHungryForPhotos } from '../v12/hunger';
+import { tickStamina, onStamina, refillStamina } from '../v12/stamina';
 import type { HungerActivity } from '../v12/hunger';
 import type * as ExpMod from './expedition';
 import type * as DayMod from './day';
@@ -112,10 +114,12 @@ export function effort(n: number, why = ''): void { spend(n, why); }
 export function restore(n: number): void {
   if (!(n > 0)) return;
   feed(n / 100);
+  refillStamina(Math.min(0.5, n / 100));
 }
 
 /** a new day (sleep): ailments slept off (the loop module sets the morning's hunger) */
 export function refill(): void {
+  refillStamina(1);
   const b = S();
   b.out = false;
   b.ail = [];
@@ -296,6 +300,9 @@ let persistT = 30;
 let caOn = false;
 let pending: { text: string; expr?: string; emote?: string; t: number } | null = null;
 let activity = 'idle';
+let winBound = false;
+let lastS: FieldLike | null = null;
+const WINDED_LINES = ['Hhh... hhh... give me... a second.', 'Okay. No more running. For a bit.', 'Lungs. On. Fire.'];
 /** the activity tickBody saw last frame ('idle' | 'walk' | 'climb' | 'swim' | 'work' | 'walk+wade') */
 export const currentActivity = () => activity;
 
@@ -325,10 +332,11 @@ export function tickBody(dt: number, s: FieldLike) {
   if (p !== lastP) { lastP = p; lastX = p.x; lastY = p.y; overWarned = false; }
   const exp = onExpedition();
   const enc = encumbrance();
-  // ---- the load on his legs (a heavy pack: a little slower; never a sprint, never exhaustion)
+  // ---- the load on his legs (a heavy pack: a little slower, and too heavy to sprint)
   p.loadK = exp ? loadSpeedK(enc) : 1;
-  p.noSprint = true;
-  p.running = false;
+  p.noSprint = exp && tooHeavyToRun(enc);
+  if (!winBound) { winBound = true; onStamina(e => { if (e === 'winded' && lastS) bark(lastS, WINDED_LINES[Math.floor(Math.random() * WINDED_LINES.length)], 'tired', 'sweat'); }); }
+  lastS = s;
   // ---- quick-eat
   if (!s.cutscene && !game.ui.blocking && game.input.keyHit(EAT_KEY)) void import('./forage10').then(m => m.quickEat());
   // ---- hunger: what he's doing
@@ -353,7 +361,8 @@ export function tickBody(dt: number, s: FieldLike) {
   else if (act === 'climb') k *= fx10.climbMult() * (gf?.climbEnergyMult() ?? 1);
   else if (act === 'swim') k *= fx10.swimMult() * (gf?.swimEnergyMult() ?? 1);
   if ((s as { lampOn?: boolean }).lampOn) k *= gf?.nightEnergyMult() ?? 1;
-  tickHunger(dt, { act, live, out: exp, k: Math.max(0.3, Math.min(1.5, k)) });
+  tickHunger(dt, { act, live, out: exp, k: Math.max(0.3, Math.min(1.5, k)) * (p.running ? 1.7 : 1) });
+  tickStamina(dt, p, act, live);
   lastX = p.x; lastY = p.y;
   // ---- ailments (they run at camp too: a stomach ache doesn't care where you are)
   if (dt > 0 && !s.cutscene) updateAilments(dt, s);
