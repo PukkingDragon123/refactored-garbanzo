@@ -15,6 +15,8 @@ import { hex, mix, shade } from '../../color';
 import type { C } from '../../color';
 import { Rng, bayer, clamp, hash2, noise1, noise2 } from '../../../core/math';
 import type { Sprite } from '../../jungle-core';
+import type { FloorMat } from '../../../game/v12/cave/layout';
+import { floorTex, bandDepth, bandCoords, bandEdge, crumbAt, stubPx } from './floor';
 
 const H = (s: string) => hex(s);
 /** the limestone, dark to pale (cool shadows, warm lights) */
@@ -28,11 +30,15 @@ export interface CaveHole { x0: number; x1: number; top: (x: number) => number; 
 
 const pick = (ramp: C[], t: number, x: number, y: number) => ramp[clamp(Math.floor(t * (ramp.length - 1) + bayer(x, y) - 0.25), 0, ramp.length - 1)];
 
+const MATS: FloorMat[] = ['dry', 'rubble', 'guano', 'wet', 'flow', 'mud', 'crystal', 'shingle', 'rim', 'moon'];
+
 /**
  * One chunk of the cave (world x0, y0, w x h). `null` when it is all deep rock (nothing to see).
- * The walk lines are exact: the rock under a floor starts on the line itself.
+ * The walk lines are exact: the rock under a floor starts on the line itself. Under every floor a band
+ * of floor is painted in perspective (./floor.ts: slabs, scree, puddles, flowstone, rimstone, mud...,
+ * `mat` says which), its front edge ragged into the dark; crumbs and pebbles sit on the walk line.
  */
-export function paintCaveRock(x0: number, y0: number, w: number, h: number, holes: CaveHole[], seed: number): PixelBuffer | null {
+export function paintCaveRock(x0: number, y0: number, w: number, h: number, holes: CaveHole[], seed: number, mat?: (x: number, y: number) => FloorMat, solids: CaveHole[] = []): PixelBuffer | null {
   const M = 44; // margin read around the chunk (distances reach across chunk edges)
   const W = w + M * 2, Hh = h + M * 2;
   const open = new Uint8Array(W * Hh);
@@ -62,6 +68,14 @@ export function paintCaveRock(x0: number, y0: number, w: number, h: number, hole
     }
   }
   if (!any) return null;
+  // rock standing in the open (ledges): filled back in
+  for (const sl of solids) {
+    const ax = Math.max(0, Math.floor(sl.x0 - (x0 - M))), bx = Math.min(W - 1, Math.ceil(sl.x1 - (x0 - M)));
+    for (let i = ax; i <= bx; i++) {
+      const wx = x0 - M + i, t = sl.top(wx), bt = sl.bot(wx);
+      for (let j = Math.max(0, Math.round(t - (y0 - M))); j <= Math.min(Hh - 1, Math.round(bt - (y0 - M))); j++) open[j * W + i] = 0;
+    }
+  }
   // distance (chamfer, capped) from every rock pixel to the open, and from every open pixel to the rock
   const CAP = 60;
   const dist = new Uint8Array(W * Hh).fill(CAP);
@@ -90,6 +104,34 @@ export function paintCaveRock(x0: number, y0: number, w: number, h: number, hole
   let near = false;
   for (let j = M; j < M + h && !near; j += 2) for (let i = M; i < M + w; i += 2) if (dist[j * W + i] < CAP) { near = true; break; }
   if (!near) return null;
+  // ---- the floors: for every rock pixel under a passage, how far under the walk line it is (fd), its
+  // material (fm) and that column's band depth (fD); for every open pixel, how far above the rock (rb)
+  const NONE = 255;
+  const fd = new Uint8Array(W * Hh).fill(NONE), fm = new Uint8Array(W * Hh), fD = new Uint8Array(W * Hh), rb = new Uint8Array(W * Hh).fill(NONE);
+  if (mat) for (let i = 0; i < W; i++) {
+    const wx = x0 - M + i;
+    let run = 0, top = -1, mi = 0, D = 0, edgeCol = false;
+    for (let j = 0; j < Hh; j++) {
+      const k = j * W + i;
+      if (open[k]) { run++; top = -1; continue; }
+      if (run >= 6 && top < 0) {
+        top = j;
+        const wy = y0 - M + j, m = mat(wx, wy);
+        mi = MATS.indexOf(m); D = bandDepth(wx, m, seed);
+        // near where one floor gives way to another the two dissolve into each other, never a seam
+        edgeCol = mat(wx - 18, wy) !== m || mat(wx + 18, wy) !== m;
+      }
+      run = 0;
+      if (top >= 0) {
+        const d = j - top;
+        if (d < D + 3) {
+          fd[k] = d; fD[k] = D;
+          fm[k] = edgeCol && d > 0 ? MATS.indexOf(mat(wx + (noise2(wx / 7, d / 2.6, seed + 170) - 0.5) * 40 + (hash2(wx, j, seed + 171) - 0.5) * 6, y0 - M + top)) : mi;
+        } else top = -2;
+      }
+    }
+    for (let j = Hh - 2; j >= 0; j--) { const k = j * W + i; if (open[k]) rb[k] = open[k + W] ? Math.min(NONE, rb[k + W] + 1) : 1; }
+  }
 
   const b = new PixelBuffer(w, h);
   const D = b.data;
@@ -99,6 +141,16 @@ export function paintCaveRock(x0: number, y0: number, w: number, h: number, hole
       const I = i + M, k = J * W + I, wx = x0 + i;
       const d = dist[k] / 2; // in pixels
       if (open[k]) {
+        // ---- just over a floor: crumbs on the walk line, the dark crease where the far wall meets it
+        const r0 = rb[k];
+        if (r0 <= 5 && fd[k + r0 * W] === 0) {
+          const m = MATS[fm[k + r0 * W]];
+          const cr = r0 <= 4 ? crumbAt(wx, r0 - 0.5, m, seed) : -1;
+          if (cr !== -1) { D[j * w + i] = cr; continue; }
+          const t0 = 0.46 + stone(wx, wy, seed, 0.55) - (6 - r0) * 0.07 - Math.min(0.32, dOpen[k] / 2 * 0.012);
+          D[j * w + i] = pick(BACK, clamp(t0), wx, wy);
+          continue;
+        }
         // ---- the far wall of the passage
         const dd = dOpen[k] / 2;
         let t = 0.46 + stone(wx, wy, seed, 0.55);
@@ -110,6 +162,21 @@ export function paintCaveRock(x0: number, y0: number, w: number, h: number, hole
         if (dd < 2.5) t += 0.08;
         const c = pick(BACK, clamp(t), wx, wy);
         D[j * w + i] = streak > 0.9 && t > 0.5 ? mix(c, WET, 0.18) : c;
+        continue;
+      }
+      // ---- a floor: the band in perspective, then its broken front edge
+      if (fd[k] !== NONE) {
+        const fdk = fd[k], Dk = fD[k], m = MATS[fm[k]];
+        if (fdk < Dk) {
+          const [z, P, v] = bandCoords(fdk, Dk);
+          let c = floorTex(wx, z, P, v, wy, m, seed);
+          if (fdk === 0) c = shade(c, -0.1);
+          // the corner where a floor ends at a step or a shaft: its end catches the light
+          if (open[k - 1] || open[k + 1]) c = shade(c, 0.14);
+          D[j * w + i] = c;
+          continue;
+        }
+        D[j * w + i] = bandEdge(wx, wy, fdk - Dk, m, seed);
         continue;
       }
       if (d >= 29) { D[j * w + i] = (hash2(wx, wy, seed) > 0.985) ? LIME[1] : LIME[0]; continue; }
@@ -140,6 +207,33 @@ export function paintCaveRock(x0: number, y0: number, w: number, h: number, hole
         c = pick(LIME, clamp(t), wx, wy);
       }
       D[j * w + i] = c;
+    }
+  }
+  // ---- stalagmite stubs and loose stones standing in the floor bands (never over the walk line)
+  if (mat) for (let cx = Math.floor((x0 - 12) / 19) * 19; cx < x0 + w + 12; cx += 19) {
+    const hh = hash2(cx, 7, seed + 160);
+    const sx = Math.round(cx + hash2(cx, 8, seed + 160) * 15);
+    const i = sx - (x0 - M);
+    if (i < 1 || i >= W - 1) continue;
+    for (let j = 1; j < Hh; j++) {
+      const k = j * W + i;
+      if (fd[k] !== 0) continue;
+      const m = MATS[fm[k]], Dk = fD[k];
+      const p = m === 'mud' || m === 'guano' || m === 'shingle' ? 0.03 : m === 'flow' || m === 'rim' || m === 'moon' ? 0.22 : m === 'crystal' ? 0.12 : 0.1;
+      if (hash2(cx, j, seed + 161) > p || hh > 0.9) continue;
+      const foot = j + 8 + Math.round(hash2(cx, j, seed + 162) * Math.max(0, Dk - 12));
+      const sh = Math.min(foot - j - 3, 4 + Math.round(hash2(cx, j, seed + 163) * 5 * (0.5 + (foot - j) / Dk)));
+      const sw = 3 + Math.round(hash2(cx, j, seed + 164) * 2.5 * (0.6 + (foot - j) / Dk));
+      if (sh < 3) continue;
+      const wet = m === 'flow' || m === 'rim' || m === 'moon' || m === 'wet';
+      for (let ly = -1; ly <= sh; ly++) for (let lx = -sw - 1; lx <= sw + 1; lx++) {
+        const I = i + lx, J = foot - ly, bi = I - M, bj = J - M;
+        if (bi < 0 || bi >= w || bj < 0 || bj >= h || fd[J * W + I] === NONE || fd[J * W + I] >= fD[J * W + I]) continue;
+        const c = ly < 0 ? -1 : stubPx(lx, ly, sh, sw, cx + j, wet);
+        if (c !== -1) D[bj * w + bi] = c;
+        // its outline and the shadow it casts toward the camera
+        else if (ly <= 0 || stubPx(lx - 1, ly, sh, sw, cx + j, wet) !== -1 || stubPx(lx + 1, ly, sh, sw, cx + j, wet) !== -1) D[bj * w + bi] = shade(D[bj * w + bi], ly < 0 ? -0.35 : -0.5);
+      }
     }
   }
   return b;
@@ -252,18 +346,28 @@ export function paintStalagmite(seed: number, hgt: number, wid: number): Sprite 
   return S(b, Math.round(cx), hgt - 1);
 }
 
-/** a flowstone curtain down a wall: folds like a drape, banded cream and rust, translucent lit edges */
+/** a flowstone curtain down a wall: a drape hung in deep folds, each fold lit on one side and in shadow
+ *  on the other, a dark crease between, thin growth lines across, the hem ending in a point under every
+ *  fold where the water drips off, translucent and pale at the tips */
 export function paintCurtain(seed: number, w: number, hgt: number): Sprite {
-  const b = new PixelBuffer(w + 2, hgt + 2);
+  const b = new PixelBuffer(w + 2, hgt + 3);
+  const nf = Math.max(2, Math.round(w / 7));
   for (let x = 0; x < w; x++) {
-    const fold = Math.sin(x * 0.55 + noise1(x / 5, seed) * 3);
-    const len = hgt * (0.55 + 0.45 * noise1(x / 6, seed + 1)) * (1 - Math.pow(Math.abs(x / w - 0.5) * 2, 3) * 0.6);
+    const u = x / w;
+    // where across its fold this column is (0 at a crease .. 1 at the next crease)
+    const fp = (u * nf + noise1(x / 5, seed) * 0.35) % 1;
+    const ridge = Math.sin(fp * Math.PI); // 0 at the creases, 1 on the ridge
+    const side = fp < 0.5 ? 1 : -1; // the ridge's lit side faces the left
+    const len = hgt * (0.55 + 0.4 * ridge * (0.7 + noise1(Math.floor(u * nf) * 3.1, seed + 1) * 0.6)) * (1 - Math.pow(Math.abs(u - 0.5) * 2, 3) * 0.45);
     for (let y = 0; y < len; y++) {
-      const band = Math.floor((y + noise1(x / 8, seed + 2) * 6) / 5) % 3;
-      let l = 0.5 + fold * 0.28 + (band === 0 ? 0.14 : band === 2 ? -0.08 : 0) + (y > len - 3 ? 0.2 : 0) + (bayer(x, y) - 0.5) * 0.2;
-      if (fold < -0.8) l -= 0.15;
-      b.set(x + 1, y, FLOW[clamp(Math.round(l * (FLOW.length - 1)), 0, FLOW.length - 1)]);
+      const t = y / Math.max(1, len);
+      let l = 3.4 + ridge * 1.6 * side + (ridge > 0.85 ? 0.9 : 0) - (1 - t) * 0.9 * (y < 4 ? 1 : 0.3);
+      if (ridge < 0.18) l -= 1.6; // the crease
+      if ((y + Math.round(noise1(x / 4, seed + 2) * 3)) % 9 === 0) l -= 0.5; // growth lines
+      if (y > len - 3) l += 2.2; // the translucent hem
+      b.set(x + 1, y, FLOW[clamp(Math.round(l + (bayer(x, y) - 0.5) * 0.7), 0, FLOW.length - 1)]);
     }
+    if (ridge > 0.7 && len > 6) b.set(x + 1, Math.round(len) + 1, H('#a8c4d0'));
   }
   b.outline(H('#0a0806'));
   return S(b, Math.round(w / 2) + 1, 0);
@@ -271,7 +375,7 @@ export function paintCurtain(seed: number, w: number, hgt: number): Sprite {
 
 /** a cluster of cave crystals (calcite and something that glows), standing out of a broken rock heel;
  *  returns the glowing pixels (sprite-local) for the light pass too */
-export function paintCrystals(seed: number, size: number, tint = '#7ae8ff'): Sprite & { glow: [number, number][] } {
+export function paintCrystals(seed: number, size: number, tint = '#7ae8ff', o: { down?: boolean } = {}): Sprite & { glow: [number, number][] } {
   const r = new Rng(seed);
   const w = Math.round(size * 1.6) + 8, h = Math.round(size * 1.2) + 6;
   const b = new PixelBuffer(w, h);
@@ -279,10 +383,12 @@ export function paintCrystals(seed: number, size: number, tint = '#7ae8ff'): Spr
   const base = h - 3;
   const g = hex(tint);
   const ramp = [shade(g, -0.7), shade(g, -0.5), shade(g, -0.28), g, mix(g, H('#ffffff'), 0.45), mix(g, H('#ffffff'), 0.8)];
-  // the rock heel
+  // the rock heel: a broken knuckle of stone, higher in the middle, chipped at its ends
   for (let x = 2; x < w - 2; x++) {
-    const hh = 3 + Math.round(noise1(x / 3, seed) * 3);
-    for (let y = base - hh + 3; y < h; y++) b.set(x, y, STONE[clamp(2 + Math.round((noise1(x / 2, seed + 1) - 0.4) * 3) + (y === base - hh + 3 ? 2 : 0), 0, 9)]);
+    const u = (x - w / 2) / (w / 2 - 2);
+    const hh = Math.round((1 - u * u) * 4 + (noise1(x / 3, seed) - 0.5) * 3);
+    if (hh < 0) continue;
+    for (let y = base - hh + 3; y < h; y++) b.set(x, y, STONE[clamp(2 + Math.round((noise1(x / 2, seed + 1) - 0.4) * 3) + (y === base - hh + 3 ? 1 : 0), 0, 9)]);
   }
   // the blades: hexagonal prisms, each a lit face, a dark face, a bright ridge and a pointed tip
   const n = 4 + r.int(0, 3);
@@ -302,6 +408,12 @@ export function paintCrystals(seed: number, size: number, tint = '#7ae8ff'): Spr
     }
   }
   b.outline(H('#06070a'));
+  if (o.down) {
+    // hanging from the roof: the same cluster turned over (the heel up in the rock), its glow too
+    const f = new PixelBuffer(w, h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) f.data[(h - 1 - y) * w + x] = b.data[y * w + x];
+    return Object.assign(S(f, Math.round(w / 2), 0), { glow: glow.map(([x, y]) => [x, h - 1 - y] as [number, number]) });
+  }
   return Object.assign(S(b, Math.round(w / 2), h - 1), { glow });
 }
 

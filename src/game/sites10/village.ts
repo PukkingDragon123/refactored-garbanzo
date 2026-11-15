@@ -44,7 +44,7 @@ export const VILLAGE: Site10 = {
     points: [
       { id: 'vil:wharenui', kind: 'village', name: 'The wharenui', x: X.wharenui, photo: { w: 200, h: 160 }, note: 'The carved meeting house: the ancestors are its ridgepole, its rafters, its posts.' },
       { id: 'vil:waka', kind: 'artifact', name: 'The waka', x: X.waka, photo: { w: 130, h: 22 }, note: 'A river canoe with a carved prow, dug from a single trunk.' },
-      { id: 'vil:pou', kind: 'village', name: 'Hinerua’s pou', x: X.pou, photo: { w: 40, h: 120 }, note: 'A carved post at the landing: Hinerua, the serpent guardian of the river, coiling up it.' },
+      { id: 'vil:pou', kind: 'village', name: 'Hinerua’s pou', x: X.pou, photo: { w: 60, h: 130 }, note: 'A very old carving at the landing: Hinerua, the serpent guardian of the river, rearing out of her coils. Silver with age, cracked, one pāua eye left; there are always fresh flowers at her foot.' },
       { id: 'vil:pataka', kind: 'village', name: 'The pātaka', x: X.pataka, photo: { w: 52, h: 86 }, note: 'A storehouse on a post, safe from rats and floods.' },
       { id: 'vil:gardens', kind: 'plant', name: 'Kūmara gardens', x: 560, photo: { w: 280, h: 20 }, note: 'Rows of kūmara mounds facing the sun.' },
       { id: 'vil:wakabuild', kind: 'artifact', name: 'A waka in the making', x: X.wakaBuild, photo: { w: 150, h: 40 }, note: 'Uncle Hēmi’s new waka: a tōtara trunk on trestles, half adzed, chips everywhere.' },

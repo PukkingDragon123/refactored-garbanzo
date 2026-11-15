@@ -26,6 +26,8 @@
 // claws under the head. Anims: idle, walk, rear (the threat), strike.
 
 import { Sk, V2, rmp, TAU, hh, ik2 } from '../../beasts-core';
+import { seg, blob, hair, curve, cumOf, pointOn } from '../../small-kit';
+import type { LP, FP } from '../../small-kit';
 import type { Px, SpeciesDef } from '../../beasts-core';
 import { hex } from '../../color';
 import { noise2 } from '../../../core/math';
@@ -35,371 +37,19 @@ const rotAbout = (p: V2, c: V2, a: number): V2 => {
   return [c[0] + dx * co - dy * s, c[1] + dx * s + dy * co];
 };
 
-// ================================================================== the Blind Salamander
-const SANIMS = {
-  idle: { frames: 4, fps: 3, loop: true },
-  swim: { frames: 6, fps: 8, loop: true },
-  walk: { frames: 4, fps: 5, loop: true },
-  rest: { frames: 2, fps: 1, loop: true },
-  flee: { frames: 4, fps: 14, loop: true },
-  snap: { frames: 3, fps: 10, loop: false },
-};
-function sdraw(sk: Sk, anim: string, frame: number, _eye: unknown, juv: boolean) {
-  const n = SANIMS[anim as keyof typeof SANIMS]?.frames ?? 1;
-  const t = frame / n;
-  const k = juv ? 0.75 : 1;
-  const amp = anim === 'swim' ? 1.6 : anim === 'flee' ? 2.4 : anim === 'walk' ? 0.8 : anim === 'rest' ? 0.3 : 0.5;
-  const ph = t * TAU;
-  const gill = anim === 'idle' || anim === 'rest' ? Math.sin(ph) : Math.sin(ph * 2) * 0.5;
-  const snap = anim === 'snap' ? [0.3, 1, 0.2][frame] : 0;
-  const M = {
-    skin: sk.m(rmp('#efc6c0', { n: 7, dark: 0.42, light: 0.55, warm: 0.3, cool: 0.2 }), { spec: 0.45, edge: 1 }),
-    vein: sk.m(rmp('#d8888a', { n: 5, dark: 0.4, light: 0.4 }), { spec: 0.3, edge: 0 }),
-    gut: sk.m(rmp('#c89a96', { n: 5, dark: 0.4, light: 0.3 }), { spec: 0.3, edge: 0 }),
-    fin: sk.m(rmp('#f4dcd6', { n: 4, dark: 0.3, light: 0.5 }), { edge: 1 }),
-    gill: sk.m(rmp('#e04454', { n: 5, dark: 0.4, light: 0.55 }), { spec: 0.5, edge: 0 }),
-  };
-  // the spine, snout to tail tip, rippling
-  const N = 14;
-  const spine: V2[] = [];
-  for (let i = 0; i <= N; i++) {
-    const u = i / N;
-    spine.push([(12 - u * 30) * k, (-2.6 + Math.sin(ph - u * 4.2) * amp * Math.pow(u, 1.2) - snap * (1 - u) * 1.2) * k]);
-  }
-  const rad = (u: number) => (u < 0.12 ? 1.1 + u * 9 : u < 0.5 ? 2.2 + Math.sin((u - 0.12) / 0.38 * Math.PI) * 0.3 : 2.2 * Math.pow(1 - (u - 0.5) / 0.5, 0.9) + 0.25) * k;
-  const fill = (p: Px) => {
-    // see-through: the gut a shadow, veins showing
-    if (p.t > 0.25 && p.t < 0.55 && Math.abs(p.v) < 0.35) { p.l -= 0.06; return M.gut; }
-    const vn = noise2(p.x * 0.9 + 40, p.y * 0.9 + 40, 3);
-    if (vn > 0.5 && vn < 0.53) return M.vein;
-    return M.skin;
-  };
-  // the far limbs
-  const limb = (x: number, near: boolean, fingers: number) => {
-    sk.np();
-    const z = near ? 6 : -6, s = near ? 1 : -1;
-    const step = anim === 'walk' ? Math.sin(ph + (near ? 0 : Math.PI) + x) * 1.2 : 0;
-    const a: V2 = [x * k, -1.6 * k], b: V2 = [(x + 1.2 + step) * k, (0.2) * k];
-    sk.tube([a, b], 0.45 * k, M.skin, { z, bias: near ? 0 : -0.15 });
-    for (let i = 0; i < fingers; i++) sk.dot(b[0] + (i - 0.5) * 0.8 + 0.6, b[1] + 0.2, M.skin, 0.7, z + 0.2);
-    void s;
-  };
-  limb(5, false, 3); limb(-7, false, 2);
-  // the tail fin, a thin keel above and below the back half, tapering to the tip
-  sk.np();
-  const keel = (top: boolean) => {
-    const pts: number[] = [];
-    for (let i = 7; i <= N; i++) { const [x, y] = spine[i]; pts.push(x, y + (top ? -1 : 1) * (rad(i / N) - 0.4)); }
-    for (let i = N; i >= 7; i--) {
-      const [x, y] = spine[i], u = (i - 7) / (N - 7);
-      pts.push(x, y + (top ? -1 : 1) * (rad(i / N) + Math.sin(u * Math.PI * 0.92) * (top ? 2 : 1.4) * k));
-    }
-    sk.poly(pts, M.fin, { z: 1 });
-  };
-  keel(true); keel(false);
-  // the body
-  sk.np();
-  sk.tube(spine, i => rad(i), fill, { z: 2 });
-  // the snout: flat, spade-shaped, a slight lip line
-  sk.np();
-  const [sx, sy] = spine[0];
-  sk.ell(sx - 1.2 * k, sy + 0.3 * k, 2.6 * k, 1.3 * k, M.skin, { z: 4, rot: snap * -0.3 });
-  sk.over(sx + 0.6 * k, sy + 1.1 * k, hex('#b0787a'));
-  sk.over(sx - 0.6 * k, sy + 1.2 * k, hex('#b0787a'));
-  if (snap > 0.5) { sk.over(sx + 1.4 * k, sy + 1.4 * k, hex('#8a3a40')); sk.over(sx + 0.6 * k, sy + 1.8 * k, hex('#8a3a40')); }
-  // where the eyes were: a faint smudge under the skin
-  sk.over(sx - 2.4 * k, sy - 0.8 * k, hex('#d6a6a2'));
-  // the gills: three feathery scarlet tufts, breathing
-  const gx = spine[2][0], gy = spine[2][1];
-  for (let i = 0; i < 3; i++) {
-    sk.np();
-    const ang = -2.1 + i * 0.42 + gill * 0.12;
-    const L = (2.6 + (i === 1 ? 0.8 : 0)) * k;
-    const tip: V2 = [gx - 0.6 + Math.cos(ang) * L, gy - 0.8 + Math.sin(ang) * L];
-    sk.tube([[gx - 0.4, gy - 0.8], tip], 0.4 * k, M.gill, { z: 5 });
-    for (let q = 1; q <= 3; q++) {
-      const fx = gx - 0.4 + (tip[0] - gx) * q / 3.2, fy = gy - 0.8 + (tip[1] - gy) * q / 3.2;
-      sk.over(fx - 1, fy, hex(q % 2 ? '#ff7c88' : '#f04c5c'));
-      sk.over(fx + 1, fy - 0.5, hex('#ffb0b8'));
-    }
-  }
-  limb(4, true, 3); limb(-8, true, 2);
-  return { head: [sx, sy - 3 * k] as V2, eye: [sx - 2.4 * k, sy - 0.8 * k] as V2 };
-}
-export const BLINDSAL: SpeciesDef = {
-  name: 'Blind Salamander', kind: 'amphibian', len: 30, height: 6,
-  anims: SANIMS,
-  canvas: () => ({ w: 48, h: 22, ox: 26, oy: 14 }),
-  draw: sdraw as SpeciesDef['draw'],
-  eyeFor: () => 'closed',
-};
-
-// ================================================================== the Ghost Gulper
-const GANIMS = {
-  idle: { frames: 4, fps: 1.2, loop: true },
-  lurk: { frames: 4, fps: 1.2, loop: true },
-  swim: { frames: 6, fps: 3.2, loop: true },
-  rise: { frames: 4, fps: 3, loop: false },
-  gape: { frames: 4, fps: 4, loop: false },
-  gapeHold: { frames: 4, fps: 3, loop: true },
-  gulp: { frames: 4, fps: 9, loop: false },
-  sink: { frames: 4, fps: 3, loop: false },
-};
-interface GP { ph: number; tail: number; ba: number; ha: number; jaw: number; lunge: number; gill: number; throat: number; drip: number; cheek: number }
-function gpose(anim: string, f: number, n: number): GP {
-  const t = f / n;
-  const p: GP = { ph: t * TAU, tail: 4, ba: 0, ha: 0, jaw: 0, lunge: 0, gill: Math.sin(t * TAU), throat: 0, drip: 0, cheek: 0 };
-  switch (anim) {
-    case 'swim': p.tail = 13; break;
-    case 'rise': p.ba = [-0.04, -0.12, -0.2, -0.24][f]; p.ha = [-0.02, -0.08, -0.14, -0.16][f]; p.drip = 1; p.tail = 6; break;
-    case 'gape': p.ba = -0.24; p.ha = -0.16; p.jaw = [0.25, 0.55, 0.85, 1][f]; p.drip = 1; break;
-    case 'gapeHold': p.ba = -0.24; p.ha = -0.16; p.jaw = 1; p.throat = Math.sin(t * TAU); p.drip = 1; break;
-    case 'gulp': p.ba = [-0.2, -0.1, -0.06, -0.08][f]; p.ha = [-0.1, 0.04, 0.06, 0.02][f]; p.jaw = [0.7, 0.05, 0, 0][f]; p.lunge = [8, 22, 18, 10][f]; p.cheek = [0, 1, 0.8, 0.4][f]; p.drip = 1; p.tail = 10; break;
-    case 'sink': p.ba = [-0.12, -0.02, 0.06, 0.1][f]; p.ha = [-0.06, 0, 0.04, 0.06][f]; p.tail = 6; break;
-  }
-  return p;
-}
-function gdraw(sk: Sk, anim: string, frame: number) {
-  const n = GANIMS[anim as keyof typeof GANIMS]?.frames ?? 1;
-  const P = gpose(anim, frame, n);
-  const M = {
-    skin: sk.m(rmp('#c6d2d8', { n: 9, dark: 0.6, light: 0.6, cool: 0.6, warm: 0.15 }), { spec: 0.4, edge: 1 }),
-    belly: sk.m(rmp('#dcd0d0', { n: 7, dark: 0.5, light: 0.55, warm: 0.4 }), { spec: 0.3, edge: 1 }),
-    fold: sk.m(rmp('#8e98aa', { n: 6, dark: 0.55, light: 0.4, cool: 0.5 }), { edge: 0 }),
-    inner: sk.m(rmp('#a6a8bc', { n: 6, dark: 0.5, light: 0.35, cool: 0.4 }), { spec: 0.3, edge: 0 }),
-    vein: sk.m(rmp('#c89aa8', { n: 5, dark: 0.45, light: 0.35 }), { spec: 0.3, edge: 0 }),
-    fin: sk.m(rmp('#b4c4cc', { n: 6, dark: 0.45, light: 0.55, cool: 0.4 }), { spec: 0.25, edge: 1 }),
-    ray: sk.m(rmp('#8a9cac', { n: 4, dark: 0.4 }), { edge: 0 }),
-    gill: sk.m(rmp('#d46a7c', { n: 6, dark: 0.5, light: 0.55 }), { spec: 0.45, edge: 0 }),
-    gillTip: sk.m(rmp('#f4a4b0', { n: 4, dark: 0.3, light: 0.5 }), { spec: 0.4, edge: 0 }),
-    throat: sk.m(rmp('#6e2232', { n: 6, dark: 0.6, light: 0.45 }), { spec: 0.5, edge: 0 }),
-    mouth: sk.m(rmp('#c45a6e', { n: 6, dark: 0.5, light: 0.45 }), { spec: 0.55, edge: 0 }),
-    tongue: sk.m(rmp('#e894a2', { n: 5, dark: 0.4, light: 0.45 }), { spec: 0.6, edge: 1 }),
-    stretch: sk.m(rmp('#e2b8bc', { n: 6, dark: 0.45, light: 0.5 }), { spec: 0.35, edge: 0 }),
-    toe: sk.m(rmp('#d6dce0', { n: 5, dark: 0.45, light: 0.5 }), { edge: 1 }),
-  };
-  const BY = -30;
-  const hip: V2 = [-34, BY];
-  const tilt = (q: V2) => rotAbout(q, hip, P.ba);
-  // skin: wrinkled, mottled faintly lavender, the spine and the gut shadows showing through
-  const wrinkle = (p: Px, axisV: number) => {
-    const cre = Math.sin(p.x * 0.85 + noise2(p.x / 9, p.y / 9, 3) * 5);
-    if (cre > 0.88) p.l -= 0.08;
-    else if (cre < -0.9) p.l += 0.04;
-    const mot = noise2((p.x + 300) / 14, (p.y + 300) / 10, 5);
-    if (mot > 0.66) p.l -= 0.05;
-    void axisV;
-  };
-  const bodyFill = (p: Px) => {
-    // the lateral skin fold: a wavering ridge down the flank, lit above, creased under
-    const fv = 0.36 + Math.sin(p.x * 0.3) * 0.06 + Math.sin(p.x * 0.11) * 0.05;
-    if (Math.abs(p.v - fv) < 0.05) return M.fold;
-    if (p.v > fv && p.v < fv + 0.12) p.l += 0.08;
-    if (p.v > fv + 0.15) { wrinkle(p, 1); return M.belly; }
-    wrinkle(p, 0);
-    // see-through: the spine a row of faint knuckles, the gut a darker cloud
-    if (Math.abs(p.v + 0.12) < 0.05 && Math.floor(p.x / 4) % 2 === 0) { p.l -= 0.05; return M.inner; }
-    if (p.v > -0.05 && p.v < 0.3 && noise2((p.x + 90) / 16, (p.y + 90) / 8, 7) > 0.6) { p.l -= 0.04; return M.inner; }
-    const vn = noise2((p.x + 50) / 6, (p.y + 50) / 6, 9);
-    if (vn > 0.495 && vn < 0.515) return M.vein;
-    return M.skin;
-  };
-  // the tail: a long paddle, waving
-  const tailPts: V2[] = [];
-  for (let i = 0; i <= 18; i++) {
-    const u = i / 18;
-    tailPts.push(tilt([-34 - u * 128, BY + 2 + Math.sin(P.ph - u * 3.4) * P.tail * Math.pow(u, 1.4) - u * 3]));
-  }
-  const trad = (u: number) => 15 * Math.pow(1 - u, 0.85) + 1.5;
-  // legs
-  const leg = (x: number, near: boolean, front: boolean) => {
-    sk.np();
-    const z = near ? 26 : -16, bias = near ? 0 : -0.18;
-    const sh = tilt([x, BY + 8]);
-    const swing = anim === 'swim' ? Math.sin(P.ph + (front ? 0 : Math.PI) + (near ? 0 : 1)) * 6 : 0;
-    const tuck = anim === 'swim' || anim === 'lurk' || anim === 'idle' ? 0.5 : 0;
-    const foot: V2 = tilt([x + (front ? 8 : -6) + swing - tuck * (front ? 10 : -10), BY + 30 - tuck * 10]);
-    const [knee] = ik2(sh, foot, 14, 14, front ? -1 : 1);
-    const legFill = (p: Px) => { if (Math.sin(p.t * 16 + p.v) > 0.75) p.l -= 0.09; return M.skin; };
-    sk.tube([sh, knee], t => 7 - t * 1.5, bodyFill, { z, bias });
-    sk.tube([knee, foot], t => 5.5 - t * 1.5, legFill, { z: z + 1, bias });
-    for (let i = 0; i < (front ? 4 : 5); i++) {
-      const a = (front ? -0.5 : -0.9) + i * 0.38;
-      const tip: V2 = [foot[0] + Math.cos(a) * 8 * (front ? 1 : -1) * -1 + (front ? 6 : -2), foot[1] + Math.abs(Math.sin(a)) * 2 + 1];
-      sk.tube([foot, tip], t => 1.8 - t * 0.6, M.toe, { z: z + 2, bias });
-      sk.ell(tip[0], tip[1], 1.5, 1.1, M.toe, { z: z + 3, bias });
-    }
-  };
-  leg(28, false, true);
-  leg(-30, false, false);
-  // the fins along the tail, rayed
-  sk.np();
-  // the paddle: a fin above and below the tail, rising from the hips, tallest two thirds along,
-  // rounding off at the tip, its edge frilled, faint rays through it
-  const finH = (u: number, top: boolean) => (top ? 20 : 13) * Math.pow(Math.sin(Math.PI * Math.min(1, u * 1.02)), 0.75) * Math.min(1, u * 4) + (Math.sin(u * 40) * 0.8);
-  const finPts = (top: boolean): number[] => {
-    const out: number[] = [];
-    for (let i = 1; i <= 18; i++) { const u = i / 18, [x, y] = tailPts[i]; out.push(x, y + (top ? -1 : 1) * (trad(u) * 0.6)); }
-    for (let i = 18; i >= 1; i--) { const u = i / 18, [x, y] = tailPts[i]; out.push(x - (top ? 1 : 0), y + (top ? -1 : 1) * (trad(u) * 0.6 + finH(u, top))); }
-    return out;
-  };
-  sk.poly(finPts(true), (p: Px) => (noise2((p.x + 200) / 5, (p.y + 200) / 5, 13) > 0.7 ? M.ray : M.fin), { z: -3 });
-  sk.poly(finPts(false), (p: Px) => (noise2((p.x + 200) / 5, (p.y + 200) / 5, 14) > 0.72 ? M.ray : M.fin), { z: -3 });
-  for (let i = 2; i <= 17; i++) {
-    const u = i / 18, [x, y] = tailPts[i];
-    const a = trad(u) * 0.6, ht = finH(u, true), hb = finH(u, false);
-    sk.overLine(x, y - a - 1, x - 3, y - a - ht * 0.85, hex('#9eb0bc'));
-    sk.overLine(x, y + a + 1, x - 3, y + a + hb * 0.8, hex('#94a6b2'));
-  }
-  sk.np();
-  sk.tube(tailPts, i => trad(i), bodyFill, { z: 0 });
-  // the body: long, flat, heavy, hung with folds
-  sk.np();
-  const bc = tilt([4, BY - 1]);
-  sk.ell(bc[0], bc[1], 50, 17, bodyFill, { rot: P.ba, rz: 16, z: 6 });
-  sk.ell(...tilt([-26, BY]), 22, 15, bodyFill, { rot: P.ba, rz: 13, z: 5 });
-  // a low wrinkled crest along the back, running on into the tail fin
-  {
-    sk.np();
-    const cp: number[] = [];
-    for (let x = -64; x <= 40; x += 2) { const q = tilt([x, BY - 14]); cp.push(q[0], q[1]); }
-    for (let x = 40; x >= -64; x -= 2) { const q = tilt([x, BY - 17.5 - Math.abs(Math.sin(x * 0.45)) * 2 - (x < -20 ? (-20 - x) * 0.05 : 0)]); cp.push(q[0], q[1]); }
-    sk.poly(cp, (p: Px) => { if (Math.sin(p.x * 1.4) > 0.6) p.l -= 0.1; return M.fin; }, { z: 5.5 });
-  }
-  // the head: flat and broad, pivoting at the neck; the lower jaw drops from the hinge
-  const neck = tilt([44 + P.lunge, BY - 2]);
-  const ha = P.ba + P.ha;
-  const H = (q: V2): V2 => { const r = rotAbout([neck[0] + q[0], neck[1] + q[1]], neck, ha); return r; };
-  const hinge = H([6, 5]);
-  const jawA = P.jaw * 1.12, skullA = -P.jaw * 0.17;
-  const U = (q: V2): V2 => rotAbout(H(q), hinge, skullA);
-  const L = (q: V2): V2 => rotAbout(H(q), hinge, jawA);
-  const headFill = (p: Px) => { wrinkle(p, 0); if (p.v > 0.55) { p.l += 0.03; return M.belly; } return M.skin; };
-  // far gill frills
-  const frill = (near: boolean) => {
-    for (let i = 0; i < 3; i++) {
-      sk.np();
-      const z = near ? 30 : -8;
-      const base = U([4 - i * 5, -6 + i * 3]);
-      const ang = ha + skullA - 2.4 + i * 0.25 + P.gill * 0.1 * (i + 1);
-      const len = 22 - i * 3;
-      const pts: V2[] = [];
-      for (let s = 0; s <= 6; s++) { const u = s / 6; pts.push([base[0] + Math.cos(ang + u * 0.6) * len * u, base[1] + Math.sin(ang + u * 0.6) * len * u + Math.sin(u * 5 + P.ph) * 1.2]); }
-      sk.tube(pts, t => 2.6 - t * 1.6, M.gill, { z, bias: near ? 0 : -0.2 });
-      // the feathery filaments both sides of each stalk
-      for (let s = 1; s < pts.length; s++) {
-        const [x, y] = pts[s], [x0, y0] = pts[s - 1];
-        const dx = x - x0, dy = y - y0, l = Math.hypot(dx, dy) || 1, qx = -dy / l, qy = dx / l;
-        for (let w = 2; w <= 4; w++) {
-          sk.dot(x + qx * w, y + qy * w, w > 3 ? M.gillTip : M.gill, 0.65, z + 1, true);
-          sk.dot(x - qx * w, y - qy * w, w > 3 ? M.gillTip : M.gill, 0.5, z + 1, true);
-        }
-      }
-    }
-  };
-  frill(false);
-  // the throat pouch: when it gapes the floor of the mouth balloons into a pleated bag (the megamouth)
-  if (P.jaw > 0.2) {
-    sk.np();
-    const k2 = (P.jaw - 0.2) / 0.8;
-    const pc = L([30, 10 + 9 * k2 + P.throat * 1.2]);
-    sk.ell(pc[0], pc[1], 30 + 4 * k2, 6 + 12 * k2 + P.throat * 1.5, (p: Px) => {
-      // the pleats run lengthwise down the pouch, pale skin stretched pink between them
-      const pl = Math.sin((p.v * 7 + p.u * 0.6) * Math.PI);
-      if (pl > 0.82) { p.l -= 0.14; return M.fold; }
-      if (pl < -0.7) p.l += 0.06;
-      return p.v > 0.2 ? M.stretch : M.belly;
-    }, { rot: ha + jawA * 0.85, rz: 10, z: 7.8 });
-  }
-  // the lower jaw
-  sk.np();
-  const lj = L([38, 9]);
-  sk.ell(lj[0], lj[1], 38, 7.5 - P.jaw * 2, headFill, { rot: ha + jawA, rz: 9, z: 8 });
-  if (P.jaw > 0.04) {
-    // the mouth: from the hinge out to both lips: a pink cavern going dark down the throat
-    sk.np();
-    const pts: number[] = [];
-    const up: V2[] = [], lo: V2[] = [];
-    // the roof of the mouth arches up, the floor sags into the pouch
-    for (let i = 0; i <= 12; i++) { const u = i / 12, x = 8 + u * 66; up.push(U([x, 4.5 - Math.sin(u * Math.PI) * 4 * P.jaw])); lo.push(L([x, 3.5 + Math.sin(Math.min(1, u * 1.15) * Math.PI) * 9 * P.jaw])); }
-    for (const q of up) pts.push(q[0], q[1]);
-    // the front of the gape bows back toward the hinge: the far lips meeting round the snout
-    {
-      const a = up[up.length - 1], b = lo[lo.length - 1];
-      const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
-      const dx = hinge[0] - mx, dy = hinge[1] - my, dl = Math.hypot(dx, dy) || 1;
-      const c: V2 = [mx + (dx / dl) * 14 * P.jaw, my + (dy / dl) * 14 * P.jaw];
-      for (let i = 1; i < 6; i++) { const u = i / 6, w = 1 - u; pts.push(w * w * a[0] + 2 * w * u * c[0] + u * u * b[0], w * w * a[1] + 2 * w * u * c[1] + u * u * b[1]); }
-    }
-    for (let i = lo.length - 1; i >= 0; i--) pts.push(lo[i][0], lo[i][1]);
-    const hx = hinge[0], hy = hinge[1];
-    sk.poly(pts, (p: Px) => {
-      const d = Math.hypot(p.x - hx, p.y - hy);
-      // the gullet, going dark; then the wet pink of the mouth, blotched and glistening
-      if (d < 14 + P.throat * 1.5) { p.l -= 0.3; return M.throat; }
-      if (d < 24 && noise2(p.x / 4, p.y / 4, 11) > 0.55) { p.l -= 0.12; return M.throat; }
-      const wet = noise2((p.x + 77) / 6, (p.y + 77) / 4, 12);
-      if (wet > 0.7) p.l += 0.14;
-      else if (wet < 0.3) p.l -= 0.08;
-      // the palate's folds, short and running back toward the gullet
-      const a = Math.atan2(p.y - hy, p.x - hx);
-      if (d > 30 && d < 58 && Math.sin(a * 46) > 0.88 && p.y < hy + (p.x - hx) * Math.tan(ha + skullA + 0.25)) p.l -= 0.1;
-      return M.mouth;
-    }, { z: 7 });
-    // the stretched skin at the back of the gape, creased like a bellows
-    const sp: number[] = [];
-    const sU = U([10, 5]), sL = L([10, 4]);
-    sp.push(hinge[0], hinge[1], sU[0], sU[1], sL[0], sL[1]);
-    sk.poly(sp, (p: Px) => { if (Math.sin((p.x + p.y) * 1.3) > 0.7) p.l -= 0.1; return M.stretch; }, { z: 7.5 });
-    // the tongue: a fat pale lump on the floor of the mouth
-    sk.np();
-    const tg = L([34, 0.5]);
-    sk.ell(tg[0], tg[1], 13, 4 + P.throat * 0.6, M.tongue, { rot: ha + jawA, rz: 5, z: 9 });
-    // tiny teeth, a fringe along both jaws
-    for (let i = 0; i < 22; i++) {
-      const x = 14 + i * 3;
-      const a = U([x, 4.6]), b = L([x, 3.4]);
-      sk.over(a[0], a[1] + 1, hex(i % 3 ? '#f4efe6' : '#d8d0c4'));
-      sk.over(b[0], b[1] - 1, hex(i % 3 ? '#efe8de' : '#cfc6b8'));
-    }
-  }
-  // the skull: flat as a spade, the snout rounded, the lip a dark line round the front
-  sk.np();
-  const sc = U([36, -3]);
-  sk.ell(sc[0], sc[1], 41, 11.5 + P.cheek * 2, headFill, { rot: ha + skullA - 0.03, rz: 12, z: 12 });
-  const sn = U([66, -1]);
-  sk.ell(sn[0], sn[1], 14, 8.5, headFill, { rot: ha + skullA + 0.12, rz: 9, z: 13 });
-  if (P.cheek > 0.1) { sk.np(); const ck = L([30, 8]); sk.ell(ck[0], ck[1], 22, 6 + P.cheek * 6, headFill, { rot: ha, rz: 8, z: 14 }); }
-  // the lip line and the ridges on top of the head
-  for (let i = 0; i <= 40; i++) {
-    const x = 6 + i * 1.85, q = U([x, 5 - Math.sin(i / 40 * Math.PI) * 1.4]);
-    sk.over(q[0], q[1], hex('#4a4c5e'));
-  }
-  for (let i = 0; i < 9; i++) { const q = U([16 + i * 6, -11 - Math.sin(i * 1.3) * 0.8]); sk.over(q[0], q[1], hex('#9aa4b4')); }
-  // two pinprick milky eyes on top, two nostrils at the front
-  const ey = U([50, -10.5]);
-  sk.over(ey[0], ey[1], hex('#e6ecf2')); sk.over(ey[0] + 1, ey[1], hex('#7c8698')); sk.over(ey[0], ey[1] + 1, hex('#5a6274'));
-  const ns = U([75, -4]);
-  sk.over(ns[0], ns[1], hex('#3a3c4a')); sk.over(ns[0] - 3, ns[1] - 1, hex('#3a3c4a'));
-  frill(true);
-  leg(30, true, true);
-  leg(-28, true, false);
-  // water streaming off the head and back as it comes up
-  if (P.drip) for (let i = 0; i < 14; i++) {
-    const x = -20 + hh(i, frame, 3) * 90, top = tilt([x, BY - 16]);
-    for (let s = 0; s < 2 + hh(i, 2, 4) * 4; s++) sk.over(top[0] + (i % 2), top[1] + 2 + s * 2 + frame, hex(s === 0 ? '#e8f4fa' : '#9cc0d0'));
-  }
-  return { head: U([40, -16]), eye: ey };
-}
-export const GULPER: SpeciesDef = {
-  name: 'Ghost Gulper', kind: 'amphibian', len: 290, height: 64,
-  anims: GANIMS,
-  canvas: () => ({ w: 360, h: 220, ox: 196, oy: 150 }),
-  draw: gdraw as SpeciesDef['draw'],
-  eyeFor: () => 'open',
-};
+// ================================================================== the Blind Salamander and the Ghost Gulper
+// (sculpted from one continuous outline each, with their wrinkled, see-through skin: ./salamanders.ts)
+export { BLINDSAL, GULPER } from './salamanders';
 
 // ================================================================== the Cave Wētā
+// A rhaphidophorid from one contour: the head hung face-down under the front of the pronotum, the
+// pronotum's glossy saddle, then the meso- and metanotum and seven abdominal tergites arching over
+// the hump and down to the cerci, every plate's rear margin overlapping the next (a step in the
+// outline) and banded dark, a glint on each; the pale pleural membrane below the plates' lower edges.
+// Long banded legs: the front and middle legs with their knees up, the great hind femur a swollen
+// drumstick with the herringbone of its muscles, its knee cocked above the back, the long hind tibia
+// down to the ground with two rows of spines; long hanging palps; a small dark eye; and the antennae,
+// three times the body, ringed and fading to hair at the tips, always feeling the air.
 const WANIMS = {
   idle: { frames: 4, fps: 3, loop: true },
   walk: { frames: 4, fps: 8, loop: true },
@@ -407,67 +57,207 @@ const WANIMS = {
   windup: { frames: 2, fps: 6, loop: true },
   feed: { frames: 2, fps: 4, loop: true },
 };
+const WAMB = ['#2e1a0c', '#4c2c12', '#74461c', '#9c6a2c', '#be8c44', '#d8ae66', '#eed096', '#fbeccc'];
+const WBAND = ['#1c0e06', '#2e180a', '#46260e', '#603818', '#7a4c22'];
+const WPALE = ['#5a4026', '#86683e', '#b09062', '#d0b486', '#e8d4aa'];
+/** dorsal plate boundaries (body-space x, head to tail): pronotum | meso | meta | T1..T7 */
+const WB = [2.75, 1.45, 0.25, -0.85, -1.85, -2.75, -3.55, -4.3, -4.95, -5.6];
+/** the dorsal arch (x -> y) through the hump */
+const WARCH: [number, number][] = [[-6.0, -3.9], [-5.4, -4.7], [-4.6, -5.6], [-3.6, -6.5], [-2.4, -7.25], [-1.0, -7.8], [0.4, -8.05], [1.8, -7.95], [3.2, -7.45], [4.6, -6.7], [5.6, -5.9]];
+const archY = (x: number) => {
+  if (x <= WARCH[0][0]) return WARCH[0][1];
+  for (let i = 1; i < WARCH.length; i++) if (x <= WARCH[i][0]) { const [a, va] = WARCH[i - 1], [b, vb] = WARCH[i]; const t = (x - a) / (b - a); return va + (vb - va) * (t * t * (3 - 2 * t)); }
+  return WARCH[WARCH.length - 1][1];
+};
+/** the body's outline: the stepped plates over the arch, the tail and cerci, the underside */
+function wetaBody(): LP[] {
+  const out: LP[] = [[5.65, -5.85]];
+  // head to tail along the back: each plate rises toward its overlapping rear margin, then steps down
+  const edges = [5.6, ...WB];
+  for (let i = 0; i < edges.length - 1; i++) {
+    const x0 = edges[i], x1 = edges[i + 1];
+    const lift = i === 0 ? 0.28 : 0.22;
+    for (let j = 1; j <= 3; j++) { const t = j / 3, x = x0 + (x1 - x0) * t; out.push([x, archY(x) - lift * t * t, j === 3 ? 1 : 0] as LP); }
+    // the step down to the next plate, tucked under this one
+    out.push([x1 - 0.06, archY(x1) + 0.12, 1]);
+  }
+  out.push([-6.05, -3.95], [-6.0, -3.35], [-5.3, -3.0], [-3.8, -2.85], [-1.8, -3.05], [0.6, -3.3], [2.6, -3.45], [4.2, -3.6], [5.15, -4.3]);
+  return out;
+}
+/** the head capsule, face down (hypognathous) */
+const WHEAD: LP[] = [[4.9, -5.75], [5.85, -6.05], [6.7, -5.45], [7.05, -4.4], [6.95, -3.3], [6.45, -2.55], [5.75, -2.6], [5.05, -3.4]];
+
+interface WPose { dx: number; dy: number; rot: number; hind: number; hindLift: number; feet: number; air: number; ant: number; antBack: number; head: number; palp: number; step: number }
+function wpose(anim: string, f: number): WPose {
+  const t = f / (WANIMS[anim as keyof typeof WANIMS]?.frames ?? 1), ph = t * TAU;
+  const p: WPose = { dx: 0, dy: 0, rot: 0, hind: 0, hindLift: 0, feet: 0, air: 0, ant: Math.sin(ph) * 0.12, antBack: 0, head: 0, palp: Math.sin(ph * 2) * 0.3, step: 0 };
+  switch (anim) {
+    case 'idle': p.dy = f === 2 ? 0.3 : 0; break;
+    case 'walk': p.step = ph; p.dy = Math.abs(Math.sin(ph)) * -0.35; p.ant = Math.sin(ph) * 0.18; break;
+    case 'jump':
+      // gathered, the kick, flying, landing
+      p.dy = [1.5, -3.5, -7, 0.4][f]; p.dx = [0, 2, 5, 5.5][f]; p.rot = [0.08, -0.32, -0.12, 0.12][f];
+      p.hind = [1, 2, 3, 0.4][f]; p.air = [0, 0.4, 1, 0][f]; p.antBack = [0.6, 1, 0.9, 0][f];
+      break;
+    case 'windup': p.dy = 1.7 + f * 0.15; p.rot = 0.1; p.hind = 1.15; p.antBack = 0.75 + f * 0.1; p.ant = f * 0.05; break;
+    case 'feed': p.head = 0.35; p.rot = 0.12; p.dy = 0.6; p.palp = f ? 0.6 : -0.3; p.ant = 0.1 + f * 0.08; break;
+  }
+  return p;
+}
 function wdraw(sk: Sk, anim: string, frame: number, _e: unknown, juv: boolean) {
-  const k = juv ? 0.7 : 1;
-  const t = frame / (WANIMS[anim as keyof typeof WANIMS]?.frames ?? 1), ph = t * TAU;
-  const crouch = anim === 'windup' ? 1 : anim === 'jump' ? [1, 0, 0, 0.6][frame] : 0;
-  const air = anim === 'jump' ? [0, 1, 1, 0][frame] : 0;
+  const k = juv ? 0.8 : 1.22;
+  const P = wpose(anim, frame);
   const M = {
-    amber: sk.m(rmp('#a8743a', { n: 6, dark: 0.6, light: 0.5, warm: 0.4 }), { spec: 0.45, edge: 1 }),
-    band: sk.m(rmp('#4e2e16', { n: 5, dark: 0.55, light: 0.35 }), { spec: 0.4, edge: 1 }),
-    pale: sk.m(rmp('#d8b07a', { n: 5, dark: 0.45, light: 0.5 }), { spec: 0.3, edge: 1 }),
-    leg: sk.m(rmp('#8a5a2c', { n: 5, dark: 0.55, light: 0.45 }), { spec: 0.3, edge: 1 }),
+    amb: sk.m(WAMB.map(c => hex(c)), { edge: 2, k: 0.85 }),
+    band: sk.m(WBAND.map(c => hex(c)), { edge: 1 }),
+    pale: sk.m(WPALE.map(c => hex(c)), { edge: 2 }),
+    fem: sk.m(['#5a3a1a', '#8a6232', '#b88e54', '#d8b47a', '#eed4a2', '#fbefd2'].map(c => hex(c)), { edge: 1 }),
+    leg: sk.m(['#3a220e', '#5e3a18', '#8a5c2a', '#b2824a', '#d2a86e', '#ead0a0'].map(c => hex(c)), { edge: 1 }),
   };
-  const lift = air * 6 - crouch * 1.2;
-  const by = (-4.2 + crouch * 1.5 - lift) * k;
-  // the hind legs: the great drumstick femur up over the back, the long shin down behind
-  const hind = (near: boolean) => {
-    sk.np();
-    const z = near ? 6 : -6, bias = near ? 0 : -0.2;
-    const hip: V2 = [-3 * k, by + 0.5 * k];
-    const knee: V2 = air ? [-9 * k, by - 1 * k] : [(-6 - crouch * 1.5) * k, by - (6 + crouch * 2) * k];
-    const foot: V2 = air ? [-17 * k, by + 1 * k] : [(-12 + crouch * 2) * k, 0];
-    sk.tube([hip, [(hip[0] + knee[0]) / 2, (hip[1] + knee[1]) / 2 - 0.6 * k], knee], u => (2.3 - u * 1.5) * k, (p: Px) => (p.t > 0.55 && p.t < 0.7 ? M.band : p.v < -0.3 ? M.pale : M.amber), { z, bias });
-    sk.tube([knee, foot], u => (0.75 - u * 0.2) * k, M.leg, { z: z + 0.5, bias });
-    // the spines down the shin
-    for (let i = 1; i < 6; i++) { const q = [knee[0] + (foot[0] - knee[0]) * i / 6, knee[1] + (foot[1] - knee[1]) * i / 6]; sk.over(q[0] - 1, q[1] - 0.4, hex('#2a160a')); }
-    sk.over(foot[0] - 1, foot[1], hex('#6a4220')); sk.over(foot[0] + 1, foot[1], hex('#6a4220'));
+  // body space -> canvas: tip about the hips, lift / drop, slide forward
+  const piv: V2 = [0, -4];
+  const c = Math.cos(P.rot), s = Math.sin(P.rot);
+  const T = (x: number, y: number): V2 => { const dx = x - piv[0], dy = y - piv[1]; return [(piv[0] + dx * c - dy * s + P.dx) * k, (piv[1] + dx * s + dy * c + P.dy) * k]; };
+  const inv = (X: number, Y: number): V2 => { const x = X / k - P.dx - piv[0], y = Y / k - P.dy - piv[1]; return [piv[0] + x * c + y * s, piv[1] - x * s + y * c]; };
+  const K = (q: V2): V2 => [q[0] * k, q[1] * k];
+  const U = (x: number, y: number): V2 => { const q = T(x, y); return [q[0] / k, q[1] / k]; };
+  const gy = 0;
+  /** one thin leg: femur, tibia, tarsus as hair-fine lines, banded dark at the joints; the knee by IK */
+  const NEAR = { a: '#d4a468', b: '#a87440', d: '#4a2a12', t: '#ecd0a0' }, FAR = { a: '#8a6440', b: '#6a4626', d: '#2e1a0a', t: '#9a7a54' };
+  const thin: (() => void)[] = [];
+  const leg = (hipB: V2, foot: V2, lf: number, lt: number, bend: number, far: boolean, tars: number) => {
+    const hip = U(hipB[0], hipB[1]);
+    const [knee, ft] = ik2(hip, foot, lf, lt, bend);
+    const C = far ? FAR : NEAR;
+    const tip: V2 = [ft[0] + tars, Math.min(gy - 0.5, ft[1] + (P.air > 0.5 ? 0.6 : 0))];
+    thin.push(() => {
+      hair(sk, [K(hip), K(knee)], (t) => hex(t > 0.8 ? C.d : C.a), 0.3, far);
+      hair(sk, [K(knee), K(ft)], (t) => hex(t < 0.12 || Math.abs(t - 0.55) < 0.07 ? C.d : C.b), 0.3, far);
+      hair(sk, [K(ft), K(tip)], () => hex(C.t), 0.3, far);
+    });
   };
-  const small = (x: number, near: boolean, ph2: number) => {
-    sk.np();
-    const z = near ? 5 : -5;
-    const step = anim === 'walk' ? Math.sin(ph + ph2) * 1.6 : 0;
-    const a: V2 = [x * k, by + 1 * k], kn: V2 = [(x + 1.6 + step * 0.5) * k, by - 1.4 * k], f: V2 = air ? [(x + 3) * k, by + 3 * k] : [(x + 2.6 + step) * k, 0];
-    sk.tube([a, kn], 0.55 * k, M.leg, { z });
-    sk.tube([kn, f], 0.45 * k, M.leg, { z });
+  /** the hind leg: the drumstick femur, knee up; the long spined tibia */
+  const hindLeg = (far: boolean) => {
+    const hipB: V2 = far ? [-0.2, -4.2] : [-0.55, -3.75];
+    const hip = U(hipB[0], hipB[1]);
+    const LF = 9.8, LT = 11;
+    let foot: V2;
+    const h = P.hind;
+    if (h >= 2.5) foot = [hip[0] - 17.5, hip[1] + 2.6];                  // trailing in the air
+    else if (h >= 1.5) foot = [hip[0] - 15.6, gy - 0.3];                  // the kick: near straight
+    else if (h >= 0.9) foot = [hip[0] - 7.4 - (h - 1) * 2, gy - 0.3];     // gathered: folded tight
+    else foot = [hip[0] - 11.5 + h * 2, gy - 0.3];
+    if (far) foot = [foot[0] + 1.2, foot[1] - (P.air > 0.5 ? 0.5 : 0)];
+    const [knee, ft] = ik2(hip, foot, LF, LT, 1);
+    const z0 = far ? -5 : 7, bias = far ? -0.2 : 0;
+    const dx = knee[0] - hip[0], dy = knee[1] - hip[1], L = Math.hypot(dx, dy);
+    // the drumstick: swollen at the base, tapering to the knee
+    seg(sk, [K(hip), K([hip[0] + dx * 0.45, hip[1] + dy * 0.45 - 0.25]), K(knee)],
+      t => (1.75 * Math.pow(1 - t, 0.75) + 0.38) * k, t => (1.45 * Math.pow(1 - t, 0.9) + 0.32) * k,
+      (p, t, cr) => {
+        if (t > 0.88) { p.l -= 0.3; return M.leg; }
+        // the herringbone: chevrons of muscle pointing down the femur, a dark band before the knee
+        const ch = (t * L * 0.9 + Math.abs(cr) / k * 0.8) % 1.5;
+        if (!far && ch < 0.45 && t > 0.1 && t < 0.8) p.l -= 0.24;
+        if (t > 0.72) p.l -= 0.12;
+        return M.fem;
+      }, { z: z0, bias, capA: 1, capB: 1, spec: 0.5, specPow: 12 });
+    const C = far ? FAR : NEAR;
+    const tip: V2 = [ft[0] - 2.2, Math.min(gy - 0.5, ft[1] + (P.air > 0.5 ? 0.4 : 0))];
+    thin.push(() => {
+      hair(sk, [K(knee), K(ft)], (t) => hex(t < 0.08 || Math.abs(t - 0.5) < 0.05 ? C.d : C.b), 0.3, far);
+      hair(sk, [K(ft), K(tip)], () => hex(C.t), 0.3, far);
+      // the two rows of spines down the back of the tibia
+      if (far) return;
+      const tx = ft[0] - knee[0], ty = ft[1] - knee[1], tl = Math.hypot(tx, ty) || 1;
+      const nx = ty / tl, ny = -tx / tl;
+      const sgn = nx < 0 ? 1 : -1;
+      for (let i = 1; i <= (juv ? 3 : 6); i++) {
+        const t = 0.15 + i * (juv ? 0.22 : 0.12);
+        sk.over((knee[0] + tx * t + nx * sgn * 1.1) * k, (knee[1] + ty * t + ny * sgn * 1.1) * k, hex(i % 2 ? '#3a2008' : '#6a4420'));
+      }
+    });
   };
-  hind(false); small(1.5, false, 1); small(3.6, false, 2.5);
-  // the body: a humped arch of banded segments, pale beneath
-  for (let i = 0; i < 5; i++) {
-    sk.np();
-    const x = (-5 + i * 2.1) * k, y = by - (Math.sin((i + 0.5) / 5 * Math.PI) * 1.8) * k;
-    sk.ell(x, y, 1.9 * k, (2.6 - i * 0.12) * k, (p: Px) => (p.v > 0.45 ? M.pale : p.u < -0.55 ? M.band : M.amber), { z: i * 0.3, rz: 2 * k });
-  }
-  // the head, tucked down, small dark eyes, the palps
-  sk.np();
-  const hx = 6.2 * k, hy = by + 0.2 * k;
-  sk.ell(hx, hy, 1.9 * k, 2.1 * k, M.amber, { z: 2, rot: 0.4 });
-  sk.over(hx + 0.4 * k, hy - 0.8 * k, hex('#140a04'));
-  sk.over(hx + 1.2 * k, hy + 1.8 * k, hex('#6a4220'));
-  // the antennae: three times the body, always feeling the air
-  for (const [s, l] of [[0, 1], [1, 0.85]] as const) {
-    const sway = anim === 'windup' ? 0.2 : Math.sin(ph + s * 1.7) * 0.25;
-    const a0 = (anim === 'windup' ? -0.5 : -1.1) + s * 0.25 + sway;
-    let x = hx + 1.4 * k, y = hy - 1.2 * k, a = a0;
-    for (let i = 0; i < 30 * l * k; i++) {
-      a += 0.035 + Math.sin(i * 0.2 + ph) * 0.01;
-      x += Math.cos(a); y += Math.sin(a) * 0.9;
-      sk.over(x, y, hex(i % 5 === 0 ? '#5a3a1e' : '#8a6038'));
+  /** the walking gait: alternate tripods */
+  const st = (i: number) => (P.step ? Math.sin(P.step + i * Math.PI) * 1.3 : 0);
+  const sl = (i: number) => (P.step ? Math.max(0, Math.cos(P.step + i * Math.PI)) * 0.9 : 0);
+  const air = P.air > 0.5;
+  const frontFoot = (far: boolean): V2 => { const h = U(far ? 4.0 : 4.4, -3.3); return air ? [h[0] + 4, h[1] + 3.5] : [h[0] + 3.6 + st(far ? 1 : 0) + (far ? -0.8 : 0), gy - 0.3 - sl(far ? 1 : 0)]; };
+  const midFoot = (far: boolean): V2 => { const h = U(far ? 1.7 : 2.1, -3.3); return air ? [h[0] - 1, h[1] + 4] : [h[0] - 1.6 + st(far ? 0 : 1) + (far ? 0.9 : 0), gy - 0.3 - sl(far ? 0 : 1)]; };
+
+  // ---- the far side: antenna, legs
+  const headPt = (x: number, y: number): V2 => {
+    // the head pitches down to feed about its neck under the pronotum
+    if (!P.head) return [x, y];
+    const cx = 5.2, cy = -4.6, a = P.head, dx = x - cx, dy = y - cy;
+    return [cx + dx * Math.cos(a) - dy * Math.sin(a), cy + dx * Math.sin(a) + dy * Math.cos(a)];
+  };
+  const antenna = (far: boolean) => {
+    const b0 = headPt(far ? 6.3 : 6.6, far ? -5.0 : -4.8);
+    const base = U(b0[0], b0[1]);
+    // forward and up, feeling the air; swept back over the body before (and through) a leap
+    const back = Math.min(1, P.antBack);
+    let a = (-1.05 + P.ant * (far ? -1 : 1)) * (1 - back) + (-2.55 + P.ant * 0.3) * back + (far ? -0.18 : 0) + P.rot;
+    const L = (juv ? 25 : 29) * (far ? 0.9 : 1) * (1 - back * 0.2);
+    const pts: V2[] = [base];
+    let q = base;
+    for (let d = 0; d < L; d += 1) {
+      // rising, then arcing over and down
+      a += (0.045 + Math.sin(d * 0.13 + frame * 0.9 + (far ? 1.3 : 0)) * 0.012) * (1 - back * 2.1);
+      q = [q[0] + Math.cos(a), q[1] + Math.sin(a)];
+      if (q[1] > gy - 0.5) q[1] = gy - 0.5;
+      pts.push(q);
     }
+    const near = ['#d8b07a', '#8a5a2c'], fa = ['#8e6a44', '#5a3a1e'];
+    hair(sk, pts.map(K), (t, i) => {
+      if (t > 0.92 && i % 2) return 0;
+      const C = far ? fa : near;
+      return hex(C[(i >> 1) % 2], Math.round(255 * (t < 0.65 ? 1 : 1 - (t - 0.65) * 1.6)));
+    }, 0.4, far);
+  };
+  hindLeg(true);
+  leg([1.7, -3.4], midFoot(true), 4.6, 5.3, 1, true, 1.2);
+  leg([4.0, -3.4], frontFoot(true), 4.0, 4.8, -1, true, 1.3);
+
+  // ---- the body: one stepped outline, the plates banded and glossy, the pale membrane under them
+  const cont = wetaBody().map(q => { const u = T(q[0], q[1]); return (q[2] ? [u[0], u[1], 1] : [u[0], u[1]]) as LP; });
+  blob(sk, cont, (p) => {
+    const [bx, by] = inv(p.x, p.y);
+    // which plate: the boundaries run radially out from under the arch
+    const ang = Math.atan2(by + 1.2, bx);
+    let i = 0;
+    while (i < WB.length && ang < Math.atan2(archY(WB[i]) + 1.2, WB[i])) i++;
+    const front = i === 0 ? 5.6 : WB[i - 1], rear = i < WB.length ? WB[i] : -6.1;
+    const dxr = bx - rear, u = 1 - Math.max(0, Math.min(1, dxr / Math.max(0.3, front - rear)));
+    // the plates' lower edges: below them the pale pleural membrane
+    const top = archY(bx), depth = Math.max(1, (top * -1) - 3.0);
+    const low = top + depth * (i === 0 ? 0.78 : 0.66) + Math.sin(u * Math.PI) * 0.25;
+    if (by > low) return M.pale;
+    if (u > (i === 0 ? 0.8 : 0.6)) return M.band;
+    if (p.nx > 0) p.l += p.nx * 0.15;
+    return M.amb;
+  }, { z: 0, round: 1.5 * k, dome: 1.0 * k, spec: 0.5, specPow: 22, per: 3 });
+  // the head, hung face-down under the pronotum's lip; the small dark eye; the palps
+  const hp = WHEAD.map(q => { const h = headPt(q[0], q[1]); const u = T(h[0], h[1]); return [u[0], u[1]] as LP; });
+  blob(sk, hp, (p) => { if (p.nx > 0) p.l += p.nx * 0.18; return M.amb; }, { z: -0.5, round: 1.0 * k, dome: 0.6 * k, spec: 0.6, per: 3 });
+  const eb = headPt(6.05, -4.5), ey = T(eb[0], eb[1]);
+  sk.over(ey[0], ey[1], hex('#140a04'));
+  if (!juv) sk.over(ey[0], ey[1] - 1, hex('#5a3a1e'));
+  for (const sd of [0, 1]) {
+    const m0 = headPt(6.5 - sd * 0.5, -2.7), m1 = headPt(7.1 - sd * 0.6 + P.palp * 0.4, -1.6), m2 = headPt(7.5 - sd * 0.5 + P.palp * 0.6, -0.9 + sd * 0.2);
+    hair(sk, [K(U(m0[0], m0[1])), K(U(m1[0], m1[1])), K(U(m2[0], m2[1]))], (t) => hex(t > 0.6 ? '#e2c08a' : sd ? '#8a5c2c' : '#b88a52'), 0.3);
   }
-  small(2.8, true, 0); small(0.6, true, 3);
-  hind(true);
-  return { head: [hx, hy - 3 * k] as V2, eye: [hx + 0.4 * k, hy - 0.8 * k] as V2 };
+  antenna(true);
+  // ---- the cerci at the tail tip
+  for (const sd of [0, 1]) { const a = U(-5.95, -3.7 + sd * 0.3), b = U(-7.4 + sd * 0.3, -4.3 + sd * 0.7); hair(sk, [K(a), K(b)], (t) => hex(t > 0.5 ? '#c49a62' : '#6a4420'), 0.3); }
+  // ---- the near legs over the body, the near antenna
+  leg([2.1, -3.3], midFoot(false), 4.6, 5.3, 1, false, 1.3);
+  leg([4.4, -3.3], frontFoot(false), 4.0, 4.8, -1, false, 1.4);
+  hindLeg(false);
+  for (const f of thin) f();
+  antenna(false);
+  const h0 = headPt(6.2, -5.6), hd = T(h0[0], h0[1]);
+  return { head: [hd[0], hd[1] - 2 * k] as V2, eye: ey };
 }
 export const CAVEWETA: SpeciesDef = {
   name: 'Cave Wētā', kind: 'insect', len: 14, height: 7,
@@ -478,42 +268,98 @@ export const CAVEWETA: SpeciesDef = {
 };
 
 // ================================================================== the Cave Harvestman
+// One fused body (the prosoma and the segmented opisthosoma with no waist), the eye turret
+// (ocularium) standing on its front with an eye each side, the chelicerae and short pedipalps in
+// front, and eight hair-thin legs: from the coxae under the body each femur climbs steeply to a
+// high knee (the pale patella), the tibia drops away down and out, kinks at the metatarsus, and the
+// long whip of the tarsus curls along the ground. The second pair is longest and probes ahead.
+// Dark chestnut with a black saddle and pale flecks; the legs dark with pale knees and pale tips.
 const HANIMS = {
   idle: { frames: 2, fps: 1.5, loop: true },
   walk: { frames: 4, fps: 6, loop: true },
   bob: { frames: 4, fps: 16, loop: true },
 };
+function harvBody(): LP[] {
+  return [
+    // the prosoma's front, the turret, the back sloping into the segmented abdomen, the rounded rear
+    [4.0, -9.6], [3.6, -10.9], [2.7, -11.4], [2.2, -12.6, 1], [1.3, -13.1], [0.6, -12.5, 1], [0.1, -11.75],
+    [-1.2, -11.9], [-2.7, -11.7], [-3.9, -11.0], [-4.5, -9.9], [-4.1, -8.6], [-2.6, -7.8], [0.0, -7.7], [2.3, -7.95], [3.6, -8.6],
+  ];
+}
 function hdraw(sk: Sk, anim: string, frame: number) {
   const ph = (frame / (HANIMS[anim as keyof typeof HANIMS]?.frames ?? 1)) * TAU;
-  const bob = anim === 'bob' ? Math.sin(ph) * 3 : anim === 'idle' ? frame * 0.5 : 0;
+  const bob = anim === 'bob' ? Math.sin(ph) * 2.6 : anim === 'idle' ? frame * 0.4 : 0;
   const M = {
-    body: sk.m(rmp('#8a6434', { n: 5, dark: 0.55, light: 0.5, warm: 0.4 }), { spec: 0.5, edge: 1 }),
-    saddle: sk.m(rmp('#3e2410', { n: 4, dark: 0.5, light: 0.3 }), { spec: 0.5, edge: 1 }),
-    leg: sk.m(rmp('#4a3018', { n: 4, dark: 0.5, light: 0.4 }), { edge: 0 }),
+    body: sk.m(['#3a1e0c', '#5e3414', '#86501e', '#ae7230', '#cc944a', '#e4b46c', '#f4d49a'].map(c => hex(c)), { edge: 1 }),
+    saddle: sk.m(['#2a1206', '#3e1e0c', '#582c12', '#723c1a', '#8e5024'].map(c => hex(c)), { edge: 1 }),
+    turret: sk.m(['#3a2412', '#5e3e1e', '#8a6232', '#b48a52', '#d4b07a'].map(c => hex(c)), { edge: 1 }),
   };
-  const by = -9 + bob;
-  // eight legs: four each side, knees high, feet splayed far out
-  const legs = (near: boolean) => {
-    for (let i = 0; i < 4; i++) {
-      sk.np();
-      const z = near ? 4 : -4, l = near ? 0.55 : 0.32;
-      const spread = [-18, -9, 8, 19][i] + (near ? 0 : (i < 2 ? 2 : -2));
-      const step = anim === 'walk' ? Math.sin(ph + i * 1.6 + (near ? 0 : Math.PI)) * 2.5 : 0;
-      const foot: V2 = [spread + step, 0], knee: V2 = [spread * 0.42 + step * 0.4, by - 9 - Math.abs(spread) * 0.12];
-      const c = hex(near ? '#5a3c20' : '#3a2412');
-      sk.overLine(0, by, knee[0], knee[1], c);
-      sk.overLine(knee[0], knee[1], foot[0], foot[1], c);
-      sk.over(knee[0], knee[1], hex(near ? '#c09a68' : '#8a6a42'));
-      void z; void l;
-    }
+  const dy = bob;
+  // eight legs: [coxa x, knee x offset, foot x, knee height, near]
+  const LEGS: [number, number, number, number][] = [
+    [1.6, 9.0, 18.5, 19.0], [0.8, 6.2, 21.0, 21.0], [-0.6, -4.8, -13.5, 18.0], [-1.4, -8.0, -20.0, 20.0],
+  ];
+  const leg = (i: number, far: boolean) => {
+    const [cx, kx, fx, kh] = LEGS[i];
+    const sgn = fx > 0 ? 1 : -1;
+    const step = anim === 'walk' ? Math.sin(ph + i * 1.7 + (far ? Math.PI : 0)) * 1.5 : 0;
+    const lift = anim === 'walk' ? Math.max(0, Math.cos(ph + i * 1.7 + (far ? Math.PI : 0))) * 1.6 : 0;
+    const fo = far ? 0.82 : 1, ko = far ? -1.2 : 0;
+    const hip: V2 = [cx * (far ? 0.7 : 1), -8.2 + dy];
+    // the second pair (i 1) probes forward, its tip lifted
+    const probe = i === 1 ? (anim === 'idle' ? 1.2 + frame * 0.8 : anim === 'bob' ? 0.6 : 1) : 0;
+    const knee: V2 = [cx + kx * fo + step * 0.35, -kh * (far ? 0.92 : 1) + ko + dy * 0.45];
+    const kink: V2 = [cx + (kx + (fx - kx) * 0.62) * fo + step * 0.8, -kh * 0.42 + ko * 0.5 - probe * 1.5];
+    const foot: V2 = [cx + fx * fo + step, -0.5 - lift - (far ? 1.2 : 0) - probe * 2.2];
+    const tarsus: V2 = [foot[0] + sgn * (2.6 + probe), foot[1] + (probe ? -probe * 1.4 : 0.15)];
+    const C = far ? { fem: '#1e1208', pat: '#7a6448', tib: '#2e1e10', tar: '#5a4630' } : { fem: '#2e1a0c', pat: '#d8c49a', tib: '#4a3018', tar: '#a08462' };
+    // (the coxae sit under the body: every femur climbs out from behind it)
+    hair(sk, curve([hip, [hip[0] + (knee[0] - hip[0]) * 0.5, hip[1] + (knee[1] - hip[1]) * 0.55 - 0.6], knee], 4), (t) => hex(t > 0.88 ? C.pat : C.fem), 0.3, true);
+    hair(sk, [knee, kink], (t) => hex(t < 0.12 ? C.pat : C.tib), 0.3, far);
+    hair(sk, curve([kink, [kink[0] + (foot[0] - kink[0]) * 0.55 + sgn * 0.3, kink[1] + (foot[1] - kink[1]) * 0.5], foot], 4), (t) => hex(t < 0.1 ? C.pat : C.tib), 0.3, far);
+    hair(sk, curve([foot, [foot[0] + sgn * 1.4, foot[1] + 0.3], tarsus], 4), () => hex(C.tar), 0.3, far);
   };
-  legs(false);
-  sk.np();
-  sk.ell(0, by, 2.8, 2.1, (p: Px) => (p.v < -0.1 && Math.abs(p.u) < 0.6 ? M.saddle : M.body), { z: 2, rz: 2 });
-  sk.over(0.6, by - 2.4, hex('#1a0e06'));
-  sk.over(1.6, by - 2.2, hex('#c8a070'));
-  legs(true);
-  return { head: [1, by - 4] as V2, eye: [0.6, by - 2.4] as V2 };
+  // the body: a ghost of it at the other end of the bob, a blur of speed
+  let ghost: (() => void) | null = null;
+  if (anim === 'bob') {
+    const gdy = -Math.sin(ph) * 2.6 - dy;
+    const g = harvBody().map(q => [q[0], q[1] + dy + gdy * 0.8] as LP);
+    ghost = () => {
+      // a translucent smear where the body just was
+      const gc = hex('#a8743a', 46), ge = hex('#d8a868', 80);
+      const ys = g.map(q => q[1]), y0 = Math.floor(Math.min(...ys)), y1 = Math.ceil(Math.max(...ys));
+      for (let y = y0; y <= y1; y++) for (let x = -5; x <= 5; x++) if (inPoly(g, x + 0.5, y + 0.5) && !sk.has(x + 0.5, y + 0.5)) sk.over(x, y, y === y0 || y === y1 ? ge : gc);
+    };
+  }
+  const cont = harvBody().map(q => [q[0], q[1] + dy, q[2] ?? 0] as LP);
+  blob(sk, cont, (p) => {
+    const y = p.y - dy;
+    // the turret, the saddle over the back, pale flecks in rows across the abdomen's segments
+    if (y < -11.7 && p.x > 0.2 && p.x < 2.6) return M.turret;
+    // the saddle: a dark hourglass over the back, ragged at its edges
+    if (p.x < 0.0 && p.x > -3.2 && y < -11.2 + Math.sin(p.x * 2.6) * 0.3 + Math.abs(p.x + 1.6) * 0.35) return M.saddle;
+    // the abdomen's segment grooves, rows of pale flecks along them
+    if (p.x < -0.3 && Math.abs(((p.x + 8) % 1.3) - 0.65) < 0.22 && y > -10.4) { p.l -= 0.2; return M.body; }
+    if (p.x < -0.3 && Math.abs(((p.x + 8) % 1.3)) < 0.3 && y > -10.4 && y < -9.0) p.l += 0.25;
+    if (p.nx > 0) p.l += p.nx * 0.2;
+    return M.body;
+  }, { z: 1, round: 1.4, dome: 0.9, spec: 0.7, specPow: 14, per: 3 });
+  ghost?.();
+  // the far legs pass behind the body
+  for (let i = 0; i < 4; i++) leg(i, true);
+  // the eyes either side of the turret, glinting; the chelicerae and the palps in front
+  sk.over(1.9, -12.0 + dy, hex('#050302'));
+  sk.over(1.9, -12.6 + dy, hex('#f0e4c8'));
+  sk.over(0.9, -12.2 + dy, hex('#1a0e06'));
+  hair(sk, [[3.8, -9.0 + dy], [4.7, -8.3 + dy], [4.8, -7.4 + dy]], (t) => hex(t > 0.7 ? '#1a0e06' : '#7a5430'), 0.3);
+  hair(sk, [[3.4, -8.4 + dy], [4.9, -7.6 + dy], [5.6, -6.0 + dy], [5.3, -4.9 + dy]], (t) => hex(t < 0.4 ? '#5a3a1c' : t < 0.75 ? '#a88454' : '#d8c49a'), 0.3);
+  for (let i = 0; i < 4; i++) leg(i, false);
+  return { head: [1.3, -14 + dy] as V2, eye: [1.9, -12.0 + dy] as V2 };
+}
+function inPoly(P: LP[], x: number, y: number) {
+  let c = false;
+  for (let i = 0, j = P.length - 1; i < P.length; j = i++) if ((P[i][1] > y) !== (P[j][1] > y) && x < ((P[j][0] - P[i][0]) * (y - P[i][1])) / (P[j][1] - P[i][1]) + P[i][0]) c = !c;
+  return c;
 }
 export const HARVESTMAN: SpeciesDef = {
   name: 'Cave Harvestman', kind: 'other', len: 6, height: 12,
@@ -524,62 +370,110 @@ export const HARVESTMAN: SpeciesDef = {
 };
 
 // ================================================================== the Cave Centipede
+// A scolopendrid seen side-on and a little from above: the rounded head plate with its long
+// segmented feelers, the forcipules (the first legs turned to venom fangs) curving under it with
+// black tips, then twenty tergites, each a glossy amber plate banded dark at its rear margin and
+// slightly wider at its rear corners (the outline steps at every joint), the pale side membrane under
+// them, one pair of legs per segment rippling in a wave, and the spined ultimate legs trailing far
+// behind like a second pair of feelers.
 const CANIMS = {
   idle: { frames: 2, fps: 2, loop: true },
   walk: { frames: 4, fps: 10, loop: true },
   rear: { frames: 3, fps: 6, loop: true },
   strike: { frames: 3, fps: 12, loop: false },
 };
+const CSEG = 20;
 function cdraw(sk: Sk, anim: string, frame: number) {
   const ph = (frame / (CANIMS[anim as keyof typeof CANIMS]?.frames ?? 1)) * TAU;
   const rear = anim === 'rear' ? 1 : anim === 'strike' ? [1, 0.5, 0.2][frame] : 0;
   const lunge = anim === 'strike' ? [0, 5, 2][frame] : 0;
+  const open = anim === 'rear' ? 0.6 + frame * 0.2 : anim === 'strike' ? [1, 0.3, 0][frame] : 0;
   const M = {
-    body: sk.m(rmp('#c08a40', { n: 6, dark: 0.6, light: 0.5, warm: 0.5 }), { spec: 0.55, edge: 1 }),
-    band: sk.m(rmp('#5a2e12', { n: 5, dark: 0.5, light: 0.35 }), { spec: 0.5, edge: 1 }),
-    leg: sk.m(rmp('#e0b070', { n: 4, dark: 0.45, light: 0.45 }), { edge: 0 }),
-    claw: sk.m(rmp('#2e140a', { n: 4, dark: 0.4, light: 0.5 }), { spec: 0.7, edge: 0 }),
+    body: sk.m(['#3a1c08', '#5e300e', '#8a4c18', '#b26e26', '#d0903a', '#e8b25c', '#f8d690'].map(c => hex(c)), { edge: 1 }),
+    band: sk.m(['#180a04', '#2a1206', '#3e1c0a', '#562a10'].map(c => hex(c)), { edge: 1 }),
+    side: sk.m(['#5a3a1c', '#86603a', '#b08a5a', '#d0b080'].map(c => hex(c)), { edge: 1 }),
+    head: sk.m(['#2a0e06', '#4a1a0a', '#702a10', '#963e18', '#b85a26', '#d8844a'].map(c => hex(c)), { edge: 1 }),
+    fang: sk.m(['#0a0404', '#1e0c08', '#3a1a10', '#7a4a2a'].map(c => hex(c)), { edge: 1 }),
+    leg: sk.m(['#6a4a1c', '#9a7432', '#c8a04e', '#e6c674', '#f6e2a6'].map(c => hex(c)), { edge: 1 }),
   };
-  const N = 18;
-  const seg: V2[] = [];
-  for (let i = 0; i < N; i++) {
-    const u = i / (N - 1);
-    // head first (+x), the front third raised in the threat
-    const raise = rear * Math.max(0, 1 - u * 3) * 12;
-    seg.push([20 + lunge - u * 44, -2.4 - raise + Math.sin(ph * (anim === 'walk' ? 1 : 0.5) + u * 6) * 0.5]);
+  // the spine: head first (+x); the front third raised in the threat, a slow sway along it
+  const N = 44;
+  const sp: V2[] = [];
+  for (let i = 0; i <= N; i++) {
+    const u = i / N;
+    const raise = rear * Math.pow(Math.max(0, 1 - u * 3.2), 1.5) * 10;
+    const sway = Math.sin(ph * (anim === 'walk' ? 1 : 0.5) + u * 7) * (anim === 'walk' ? 0.35 : 0.2);
+    sp.push([21 + lunge * (1 - u) - u * 44 - raise * 0.25, -4.7 - raise + sway]);
   }
-  // legs: a pair per segment, in a wave down the body
-  const legs = (near: boolean) => {
-    sk.np();
-    for (let i = 1; i < N - 1; i++) {
-      const [x, y] = seg[i];
-      const w = anim === 'walk' ? Math.sin(ph - i * 0.9) * 2 : 0;
-      const up = y < -6;
-      const fx = x + w + (near ? 0.5 : -0.5), fy = up ? y + 4 : 0;
-      sk.overLine(x, y + 1.6, fx + (near ? 1.4 : -0.6), fy, hex(near ? '#e8b878' : '#8a6030'));
+  const cum = cumOf(sp), L = cum[cum.length - 1];
+  const H0 = 2.6 / L, segL = (1 - H0 - 0.02) / CSEG;
+  /** u along the body -> segment index (-1 = head) and position within it */
+  const segOf = (u: number): [number, number] => { if (u < H0) return [-1, u / H0]; const s = (u - H0) / segL; return [Math.min(CSEG - 1, Math.floor(s)), s - Math.floor(s)]; };
+  // legs, far side first: a pair per segment in a metachronal wave
+  const legs = (far: boolean) => {
+    for (let i = 0; i < CSEG - 1; i++) {
+      const u = H0 + (i + 0.6) * segL;
+      const b0 = pointOn(sp, u, cum), b: V2 = [b0[0], b0[1] + (far ? 0.6 : 1.5)];
+      const w = anim === 'walk' ? Math.sin(ph - i * 0.85) : 0;
+      const raised = b[1] < -5;
+      // each leg kinks out at the knee then down to the ground, the wave running forward along them
+      const knee: V2 = [b[0] + (far ? -0.1 : 0.6) + w * 0.5, b[1] + (far ? 0.8 : 1.1)];
+      const foot: V2 = raised ? [b[0] + 1.2 + w * 0.5, b[1] + 3.6] : [b[0] + (far ? 0.2 : 0.9) + w * 1.2, -0.4 - (far ? 0.9 : 0) - Math.max(0, -w) * 0.9];
+      const z0 = far ? -3 : 4;
+      const C = far ? ['#5a3c18', '#7a5426'] : ['#d8b066', '#f0d896'];
+      hair(sk, [b, knee], () => hex(C[0]), 0.3, far);
+      hair(sk, [knee, foot], (t) => hex(t > 0.7 ? C[1] : C[0]), 0.3, far);
+      void z0;
     }
   };
-  legs(false);
-  for (let i = N - 1; i >= 0; i--) {
-    sk.np();
-    const [x, y] = seg[i];
-    const r = i === 0 ? 1.9 : 1.7 - (i > N - 4 ? (i - (N - 4)) * 0.3 : 0);
-    sk.ell(x, y, 1.8, r, (p: Px) => (p.u < -0.5 ? M.band : M.body), { z: N - i, rz: 1.8 });
-  }
-  // the last legs trail long behind; the feelers out in front; the venom claws under the head
-  const [tx, ty] = seg[N - 1];
-  sk.overLine(tx - 1, ty, tx - 9, ty - 2, hex('#d8a868')); sk.overLine(tx - 1, ty + 1, tx - 8, ty + 2, hex('#a07038'));
-  const [hx, hy] = seg[0];
-  for (const s of [0, 1]) {
-    let x = hx + 1, y = hy - 1, a = -0.5 - s * 0.3 + Math.sin(ph + s) * 0.15 - rear * 0.5;
-    for (let i = 0; i < 16; i++) { a += 0.05; x += Math.cos(a); y += Math.sin(a) * 0.8; sk.over(x, y, hex(i % 4 === 0 ? '#7a4a20' : '#d8a060')); }
-  }
-  const open = rear * 1.2;
-  sk.over(hx + 2, hy + 1, hex('#2e140a')); sk.over(hx + 3, hy + 1 + open, hex('#2e140a')); sk.over(hx + 3.5, hy + open * 0.5, hex('#c03a20'));
-  sk.over(hx + 1.5, hy + 2, hex('#2e140a')); sk.over(hx + 2.5, hy + 2.5 + open, hex('#2e140a'));
+  // the ultimate legs: long, spined, trailing back and up
+  const ult = (far: boolean) => {
+    const b = pointOn(sp, 0.985, cum);
+    const tip: V2 = [b[0] - 8.5 - (far ? 0 : 0.8), b[1] - (far ? 2.2 : 1.0) + Math.sin(ph) * 0.4];
+    const mid: V2 = [b[0] - 4.2, b[1] - (far ? 0.6 : 0.1)];
+    seg(sk, curve([b, mid, tip], 4), t => (0.62 - t * 0.25), t => (0.55 - t * 0.2), (p, t) => { if (Math.abs(t - 0.45) < 0.06) p.l -= 0.3; return M.leg; },
+      { z: far ? -3 : 5, bias: far ? -0.25 : -0.05, spines: far ? undefined : { side: -1, at: [0.2, 0.32, 0.6], len: 0.6, lean: -0.6 } });
+  };
+  ult(true);
+  // the body: one outline swept along the spine, the rear corners of each tergite standing out a hair
+  const prof = (u: number, top: boolean) => {
+    if (u < H0) return (top ? 1.55 : 1.35) * (0.75 + 0.25 * Math.sin(Math.min(1, u / H0) * Math.PI * 0.5));
+    const [i, f] = segOf(u);
+    const taper = i > CSEG - 4 ? 1 - (i - (CSEG - 4)) * 0.12 : i < 1 ? 0.9 : 1;
+    return (top ? 1.6 : 1.35) * taper * (1 + (f > 0.7 ? 0.13 : f < 0.12 ? -0.07 : 0));
+  };
+  // (the spine runs head to tail, right to left: the strip's 'up' side is the underside)
+  seg(sk, sp, t => prof(t, false), t => prof(t, true), (p, t, cr) => {
+    const [i, f] = segOf(t);
+    if (i < 0) { if (p.nx > 0) p.l += p.nx * 0.2; return M.head; }
+    if (f > 0.62) return M.band;
+    if (cr > 0.55) return M.side;
+    // a glint down each plate
+    if (cr < -0.5 && f > 0.12 && f < 0.5) p.l += 0.1;
+    return M.body;
+  }, { z: 0, round: 1.1, dome: 0.5, spec: 0.9, specPow: 14, capA: 1, capB: 0.6 });
   legs(true);
-  void M.claw;
-  return { head: [hx, hy - 3] as V2, eye: [hx + 0.5, hy - 0.8] as V2 };
+  legs(false);
+  ult(false);
+  // the head: the feelers, the forcipules under it
+  const hd = sp[0], hn = sp[2];
+  const ha = Math.atan2(hd[1] - hn[1], hd[0] - hn[0]);
+  for (const sd of [0, 1]) {
+    const pts: V2[] = [];
+    let a = (ha - 0.55) * (1 - rear) + -0.55 * rear - sd * 0.35 + Math.sin(ph + sd) * 0.15, q: V2 = [hd[0] + 0.6, hd[1] - 0.8];
+    pts.push(q);
+    for (let j = 0; j < 14; j++) { a += 0.06 + sd * 0.02; q = [q[0] + Math.cos(a), q[1] + Math.sin(a) * 0.9]; pts.push(q); }
+    hair(sk, pts, (t, j) => hex(sd ? (j % 3 === 0 ? '#5a3418' : '#8a5a2c') : (j % 3 === 0 ? '#7a4a20' : t > 0.7 ? '#f0c88a' : '#d8a060'), t > 0.85 ? 160 : 255), 0.4);
+  }
+  // the forcipules: hooked fangs from under the head, closed or spread, black-tipped
+  for (const sd of [1, 0]) {
+    const base: V2 = [hd[0] - 0.6, hd[1] + 1.3];
+    const spread = open * (sd ? 1.2 : 0.6);
+    const m: V2 = [base[0] + 1.8 + spread * 0.4, base[1] + 0.9 + spread];
+    const tip: V2 = [base[0] + 3.0 + spread * 0.2, base[1] - 0.1 + spread * 0.6];
+    seg(sk, curve([base, m, tip], 4), t => 0.55 - t * 0.3, t => 0.5 - t * 0.28, (p, t) => (t > 0.6 ? M.fang : M.head), { z: sd ? -1 : 3, spec: 0.9, capB: 0.4 });
+  }
+  return { head: [hd[0], hd[1] - 3] as V2, eye: [hd[0] + 0.5, hd[1] - 0.8] as V2 };
 }
 export const CENTIPEDE: SpeciesDef = {
   name: 'Cave Centipede', kind: 'other', len: 46, height: 5,

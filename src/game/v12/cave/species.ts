@@ -4,7 +4,9 @@
 //
 //   Blind Salamander  pale, eyeless, gilled, in the stream pools. It feels light on its skin and hates
 //                     it: a bright lantern near the pool and it is gone under the ledge. Shutter the
-//                     lantern, keep still, and after a while they come out again.
+//                     lantern, keep still, and after a while they come out again. In the glowing
+//                     rimstone pool of the deepest chamber (the nursery) the females guard their eggs:
+//                     the rarest photo in the cave, past every gate (src/game/v12/cave/site.ts).
 //   Ghost Gulper      the giant of the lake (legendary). It lurks deep, sensed by its ripples and its
 //                     bubbles. Light and footsteps at the shore draw it in. Its TELL: rings closing in
 //                     on one spot, then bubbles; then it rises, gapes, and lunges at the shore. Lure it
@@ -26,7 +28,7 @@ import { BLINDSAL, GULPER, CAVEWETA, HARVESTMAN, CENTIPEDE } from '../../../art/
 import { FUN } from '../../../ui/v10/funfacts';
 import { WEB } from '../../../ui/v10/foodweb';
 import { rand, clamp } from '../../../core/math';
-import { POOLS, TIERS, LAKE, floorOf, poolTop, SPOT } from './layout';
+import { POOLS, TIERS, LAKE, NURSERY, floorOf, poolTop, SPOT } from './layout';
 import './items';
 
 export const SAL_ID = 'blindsal', GULPER_ID = 'gulper', WETA_ID = 'caveweta', HARV_ID = 'harvestman', CENT_ID = 'cavecentipede';
@@ -73,7 +75,7 @@ export const BLINDSAL_SPECIES: Species = {
   id: SAL_ID, name: 'Blind Salamander', sci: 'Proteus zealandicus', group: 'Amphibian', sites: [], times: ['dawn', 'day', 'dusk', 'night'],
   rarity: 4, danger: 0, size: '30 cm long, lighter than an egg',
   blurb: 'A salamander that never comes out of the dark: long as an eel, pale pink and nearly see-through, with no eyes at all and three feathery scarlet gills each side of its head. It lives in the still pools of Te Rua Pōuri\'s dark stream and feels light on its skin. Bring a bright lantern and it is gone.',
-  behaviors: { gills: 'Breathing through its gills', swimming: 'Swimming', resting: 'Resting on the pool bed', hunting: 'Snapping up a springtail', fleeing: 'Fleeing the light' },
+  behaviors: { gills: 'Breathing through its gills', swimming: 'Swimming', resting: 'Resting on the pool bed', hunting: 'Snapping up a springtail', fleeing: 'Fleeing the light', brooding: 'Guarding its eggs (the nursery)' },
   facts: [
     {
       id: 'bs-eyes', cat: 'Adaptation', q: 'Why has the Blind Salamander no eyes?', options: ['In total darkness eyes are useless, so over many generations they shrank away under the skin', 'It lost them in fights', 'Its eyes are on the underside of its head'], answer: 0,
@@ -94,6 +96,11 @@ export const BLINDSAL_SPECIES: Species = {
       id: 'bs-starve', cat: 'Diet', q: 'How long can a Blind Salamander go without eating?', options: ['Years: it lives so slowly that one springtail can last it weeks', 'One day', 'It never eats'], answer: 0,
       text: 'Food is rare in a cave. It has the slowest life it can manage: it hardly moves, it grows for decades, and it can live a hundred years. It eats springtails, shrimp and anything that falls in the pool.',
       evidence: [ph(SAL_ID, 'hunting')], hint: 'Watch one by the surface where the springtails hop. Patience.',
+    },
+    {
+      id: 'bs-nursery', cat: 'Behaviour', q: 'Where do Blind Salamanders lay their eggs?', options: ['Deep below the lake, in the still crystal pool of the deepest chamber, where a mother guards them for months', 'In the dark stream, wherever they are', 'They give birth to live young in the lake'], answer: 0,
+      text: 'The deepest pool never floods, never freezes and never sees light: the steadiest water in the hill. The mothers come down to it to lay a few big pale eggs under the rimstone, and each one stays with hers, fanning them with her tail, until they hatch. It can take a hundred days.',
+      evidence: [ph(SAL_ID, 'brooding')], hint: 'Below the lake, past the crystal squeeze, the mud and the sump: the glowing pool. Lantern shuttered, very still.',
     },
   ],
   research: {
@@ -271,8 +278,12 @@ ECO[SAL_ID] = {
   loco: 'swimmer', medium: 'water', walk: 10, run: 60, bold: 0.2, aggro: 0, curious: 0, social: 0, alert: 0.9,
   sight: 0, hear: 0.6, flightDist: 0, food: [], defense: ['flee'], group: [1, 1], calls: {}, size: 1,
   idle: [{ act: 'drift', w: 3, dur: [4, 9] }, { act: 'swim', w: 2, dur: [3, 6] }, { act: 'rest', w: 2, dur: [5, 10] }, { act: 'hunt', w: 1.4, dur: [3, 5] }],
-  photo: { drift: 'gills', swim: 'swimming', rest: 'resting', hunt: 'hunting', flee: 'fleeing', emerge: 'swimming' },
+  photo: { drift: 'gills', swim: 'swimming', rest: 'resting', hunt: 'hunting', flee: 'fleeing', emerge: 'swimming', brood: 'brooding' },
 };
+/** in the deepest chamber's nursery pool (the mothers guard their eggs there) */
+export const inNursery = (a: Animal) => { const mid = (a.home[0] + a.home[1]) / 2; return mid > NURSERY.x0 - 20 && mid < NURSERY.x1 + 20; };
+/** where the eggs lie on the nursery's bed (the scene draws them; each mother keeps to her clutch) */
+export const NURSERY_EGGS = [NURSERY.x0 + 30, NURSERY.x0 + 72, NURSERY.x1 - 34];
 const poolOf = (a: Animal) => {
   const mid = (a.home[0] + a.home[1]) / 2;
   return POOLS.find(p => mid >= p.x0 - 20 && mid <= p.x1 + 20) ?? POOLS[0];
@@ -347,6 +358,16 @@ SPECIALS[SAL_ID] = {
     swimTo(a, x, y, 5, dt);
     if (a.actT > a.actDur) { a.hidden = 0; return false; }
   },
+  /** a mother over her clutch: low on the bed, fanning the eggs with her tail, gills fluttering */
+  brood(a, dt) {
+    a.hidden = 0;
+    if (a.mem.ex === undefined) a.mem.ex = NURSERY_EGGS.reduce((b, x) => (Math.abs(x - a.x) < Math.abs(b - a.x) ? x : b), NURSERY_EGGS[0]) + rand.range(-4, 4);
+    const [x, y] = inPool(a, a.mem.ex, 0.9);
+    const there = swimTo(a, x, y, 4, dt);
+    a.anim = there ? (Math.floor(a.actT * 1.4) % 3 === 0 ? 'swim' : 'rest') : 'swim';
+    if (there && Math.abs(Math.sin(a.actT * 2.1)) > 0.97) a.facing = -a.facing as 1 | -1;
+    if (a.actT > a.actDur) return false;
+  },
   sleep(a) { a.setAct('rest', 6); },
 };
 HOOKS[SAL_ID] = {
@@ -356,6 +377,8 @@ HOOKS[SAL_ID] = {
     // (its own scripted acts end themselves: the generic mind must not pick a new one under them)
     if (a.act === 'flee' || a.act === 'hide' || a.act === 'emerge') return true;
     if (scared(a) && CAVE_CTX.calmT < 1) { a.setAct('flee', 4); a.host.sfx('splash', a.x, 0.12, 2.4); return true; }
+    // the mothers in the nursery go back to their eggs whenever it is dark and quiet
+    if (inNursery(a) && a.act !== 'brood' && rand.chance(0.6)) { a.setAct('brood', rand.range(9, 16)); return true; }
     return false;
   },
   tick(a) { a.fear = 0; caveKeep(a); },

@@ -196,6 +196,14 @@ B({ id: 'fins', name: 'Fins', kind: 'equipment', by: 'jenna', source: 'research'
   desc: 'Two fanshell-stiffened fins cut from the tender’s rubber floor.',
   effect: 'Swim faster; swimming −40% energy', needs: [['shell_fan', 3], ['kelp', 4], ['rubber_band', 2]],
   notes: ['kick from the hip'], line: 'Fins! You look like a very confused duck. A FAST confused duck.' });
+B({ id: 'air_tank', name: 'Salvaged air tank', kind: 'equipment', by: 'jenna', source: 'research', rp: 120, hours: 24, chain: ['wetsuit', 4], req: ['fins'],
+  desc: 'The Kittiwake’s old dive cylinder, its valve rebuilt and its straps resewn, with a mouthpiece cut from inner tube. Filled from the boat’s compressor.',
+  effect: 'Dive from the boat: about four minutes of air, less the deeper you go', needs: [['scrap', 3], ['rubber_band', 2], ['rope', 1]],
+  notes: ['breathe slow', 'refill at the ladder'], line: 'A real tank. It hisses. I love it. Breathe slow, Mori. Slow. SLOW.' });
+B({ id: 'speargun', name: 'Rubber speargun', kind: 'equipment', by: 'jenna', source: 'research', rp: 90, hours: 16, chain: ['wetsuit', 5], req: ['air_tank'],
+  desc: 'A band-powered speargun: a flint-tipped shaft on a line, and a blunt bang-head for anything with too many teeth.',
+  effect: 'Spear fish underwater for dinner; the bang-head turns a charging shark', needs: [['scrap', 2], ['rubber_band', 2], ['flint', 1], ['rope', 1]],
+  notes: ['the line comes back', 'blunt end for sharks'], line: 'Dinner on a string. And the blunt end is for the big grey thing. Do NOT mix those up.' });
 // the headlamp chain
 B({ id: 'lamp_lens', name: 'Sea-glass lamp lens', kind: 'equipment', by: 'jenna', source: 'research', rp: 15, hours: 8, chain: ['headlamp', 1],
   desc: 'A polished sea-glass lens that throws the headlamp’s beam twice as far.',

@@ -65,7 +65,8 @@ export interface Banner { el: HTMLElement; /** the text has finished landing */ 
 export function showBanner(icon: PixelBuffer, head: string, name: string, pun: string, meta: string): Banner {
   style();
   const vmin = Math.min(window.innerWidth, window.innerHeight);
-  const sc = vmin < 500 ? 3 : 4;
+  // the icon shows at 96 / 128 px whatever size it was painted at (a bigger painted icon carries more detail)
+  const sc = Math.max(1, Math.round((vmin < 500 ? 96 : 128) / icon.w));
   const b = el('div', 'fcs');
   b.style.setProperty('--icw', Math.round(icon.w * sc * 1.24) + 'px');
   const ic = el('div', 'ic', '<div class="sun"></div>');

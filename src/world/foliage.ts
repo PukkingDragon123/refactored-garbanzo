@@ -17,13 +17,20 @@
 // colours of what flies off; `hang` for vines and moss hanging from their anchor). A custom drawable
 // can own a Plant and call plant.push(r, st, x, y) + windBend(...) itself. Each frame the scene lists
 // its movers with st.foliage.begin() / .add(...) (FieldScene does this for Mori, animals and actors).
+//
+// Underwater (st.windField.water > 0) the wind is a water current instead: a slow to-and-fro surge as
+// each swell passes overhead (travelling along x), plus a steady drift. The 'kelp' kind is buoyant,
+// slow and big: a Strand (below) bends along its whole length with the surge, the top lagging behind
+// the foot so a wave runs up it, and parts where a swimmer pushes through (the stalk bends around the
+// point of contact, not just at the tip), then drifts back past upright and settles. Nothing rustles
+// or throws leaves underwater.
 
 import type { Frame, Renderer } from '../gfx/renderer';
 import type { Stage, Layer } from './stage';
 import { clamp, noise1, rand } from '../core/math';
 import { audio } from '../core/audio';
 
-export type FoliageKind = 'grass' | 'fern' | 'bush' | 'reed' | 'flower' | 'vine' | 'plant' | 'tree';
+export type FoliageKind = 'grass' | 'fern' | 'bush' | 'reed' | 'flower' | 'vine' | 'plant' | 'tree' | 'kelp';
 type RGB = [number, number, number];
 
 /** the scene's wind: base strength plus gust fronts rolling across in world x */
@@ -38,14 +45,22 @@ export class Wind {
   base = 0.6;
   /** gust 0..1 at the camera this frame */
   gust = 0;
+  /** underwater: > 0 makes this a water current (the surge's strength) instead of a wind */
+  water = 0;
   private t = 0;
   update(st: Stage) {
     this.t = st.time;
     this.base = st.wind;
     this.gust = this.gustAt(st.cam.x);
   }
+  /** underwater: the surge at world x, -1..1 (the to-and-fro of the passing swells), `lag` s ago */
+  surgeAt(x: number, lag = 0): number {
+    const t = this.t - lag, k = this.speed / 85;
+    return Math.sin(t * 0.62 - x * 0.0045 * k) * 0.62 + Math.sin(t * 0.27 - x * 0.0019 * k + 1.7) * 0.38;
+  }
   /** gust 0..1 at world x on the gameplay plane */
   gustAt(x: number): number {
+    if (this.water > 0) return Math.abs(this.surgeAt(x));
     const u = x * this.dir - this.speed * this.t;
     const front = clamp((noise1(u / 320, 71) - 0.45) * 2.2 + (noise1(u / 95, 72) - 0.5) * 0.45);
     const ripple = Math.max(0, Math.sin(u * 0.021)) ** 4 * 0.3;
@@ -53,6 +68,7 @@ export class Wind {
   }
   /** signed lean at world x: the base plus the gust passing there */
   at(x: number): number {
+    if (this.water > 0) return this.water * this.surgeAt(x) + this.dir * this.base * 0.4;
     return this.dir * this.base * (0.4 + 1.1 * this.gustAt(x));
   }
 }
@@ -64,6 +80,11 @@ export class Wind {
 export function windBend(r: Renderer, st: Stage, x: number, amp: number, speed: number, phase: number): number {
   if (!amp) return 0;
   const W = st.windField, lp = r.layerP, t = st.time;
+  if (W.water > 0) {
+    // underwater: the plant goes to and fro with the surge, leaning into the drift, barely fluttering
+    const wx = lp > 0.05 ? x / lp : st.cam.x;
+    return amp * (W.water * W.surgeAt(wx, 0.4) * 1.3 + W.dir * W.base * 0.5 + Math.sin(t * speed * 0.6 + phase) * 0.15);
+  }
   const g = W.gustAt(lp > 0.05 ? x / lp : st.cam.x);
   const lean = W.dir * W.base * (0.4 + 1.1 * g);
   const fl = (Math.sin(t * speed + phase) * 0.6 + Math.sin(t * speed * 2.7 + phase * 1.7) * 0.4) * (0.3 + 0.35 * W.base + 0.8 * g);
@@ -87,6 +108,8 @@ const KIND: Record<FoliageKind, KindSpec> = {
   vine: { k: 42, c: 2.3, push: 0.45, curve: 1.2, snd: 0.6, bits: GREEN },
   plant: { k: 90, c: 4.8, push: 0.35, curve: 1.5, snd: 0.7, bits: GREEN },
   tree: { k: 200, c: 9, push: 0.03, curve: 1.8, snd: 0, bits: GREEN },
+  // buoyant and slow: a long, lazy spring that overshoots and drifts back
+  kelp: { k: 5.5, c: 1.5, push: 0.3, curve: 1.15, snd: 0, bits: [[0.62, 0.52, 0.2], [0.78, 0.66, 0.28], [0.5, 0.42, 0.16]] },
 };
 
 /** one plant's spring: the push from movers, the shake, and its contact state */
@@ -106,6 +129,8 @@ export class Plant {
   shk = 0;
   touch = false;
   rest = true;
+  /** where along its height (0 the anchor .. 1 the free end) it was last pushed (kelp parts there) */
+  at = 0.5;
   private t = -1;
   constructor(readonly kind: FoliageKind, frame: Frame, sx: number, sy: number, readonly hang: boolean, readonly phase: number, bits?: RGB[]) {
     const S = KIND[kind];
@@ -119,6 +144,8 @@ export class Plant {
     // (tall reeds part, they don't lie flat: the travel is capped for big plants)
     const h = hang ? this.down : this.up;
     this.max = Math.min(S.push * h, 6 + h * 0.22);
+    // kelp: pushed by its stalk (not its whole spread of fronds), and it gives way about a body's width
+    if (kind === 'kelp') { this.hw = Math.max(3, Math.min(this.hw, 8)); this.max = Math.min(this.max, 14 + h * 0.05); }
     this.bits = bits ?? S.bits;
   }
   /** the push bend (world px at the free end) for a plant anchored at x, y this frame */
@@ -143,6 +170,7 @@ export class Plant {
         if (Math.abs(q) >= Math.abs(push)) { push = q; hit = m; }
       }
     }
+    if (hit && this.kind === 'kelp') this.at = clamp((y - (hit.y - hit.h * 0.5)) / Math.max(1, this.up), 0.05, 0.95);
     if (!hit && this.rest) return 0;
     if (hit && (!this.touch || hit.landed)) F.enter(this, x, y, hit, st);
     this.touch = !!hit;
@@ -216,6 +244,8 @@ export class Foliage {
   enter(p: Plant, x: number, y: number, m: Mover, st: Stage) {
     const sp = Math.abs(m.vx), S = KIND[p.kind];
     const dir = m.vx > 0 ? 1 : m.vx < 0 ? -1 : x >= m.x ? 1 : -1;
+    // underwater: a soft nudge, no rustle, nothing thrown
+    if (p.kind === 'kelp' || st.windField.water > 0) { p.pv += dir * Math.min(Math.hypot(m.vx, m.vy), 120) * 0.06; return; }
     if ((m.air && m.vy > 40) || m.landed) {
       p.shk = Math.min(6, p.max * 0.5 + 1.5);
       p.pv += dir * 30;
@@ -264,4 +294,65 @@ export function plantFor(
     kind = 'plant';
   }
   return new Plant(kind, frame, sx, sy, hang, phase, bits);
+}
+
+/**
+ * A kelp strand (or any tall water plant): a sprite anchored at its foot (x, y) that bends along its
+ * height in the water current, the top lagging behind the foot so the surge runs up it like a wave,
+ * and parts where a swimmer pushes through: the stalk bends around the point of contact (a bow from
+ * the foot to there, easing back toward the top, which the floats hold up). Rows move in whole art
+ * pixels; runs of rows with the same offset go out as one quad. On any layer it sways; on the
+ * gameplay plane it is also pushed (st.foliage movers).
+ */
+export class Strand {
+  plant: Plant | null | undefined;
+  hidden = false;
+  readonly phase = rand.next() * 10;
+  constructor(
+    public frame: Frame, public x: number, public y: number, public z = 0,
+    /** current amplitude at the top, world px */
+    public amp = 16,
+    public sx = 1, public tint = 0xffffffff,
+    /** seconds the top lags behind the foot */
+    public lag = 1.6,
+    public kind: FoliageKind | false = 'kelp',
+  ) {}
+  draw(r: Renderer, st: Stage) {
+    if (this.hidden) return;
+    const fr = this.frame;
+    // cull before any work (the bend never moves it more than amp + the push)
+    const z = r.layerZoom, reach = (this.amp * 2 + 40) * z;
+    const cx = r.sx(this.x);
+    if (cx + (fr.w * Math.abs(this.sx)) * z + reach < 0 || cx - fr.w * Math.abs(this.sx) * z - reach > r.VW) return;
+    if (this.plant === undefined) this.plant = this.kind ? new Plant(this.kind, fr, this.sx, 1, false, this.phase) : null;
+    const pl = this.plant;
+    const push = pl ? pl.push(r, st, this.x, this.y) : 0;
+    const W = st.windField, lp = r.layerP, t = st.time;
+    const wx = lp > 0.05 ? this.x / lp : st.cam.x;
+    const water = W.water > 0;
+    const H = fr.h, ay = fr.ay, ak = Math.abs(this.sx) || 1;
+    const top = r.sy(this.y - ay), bot = r.sy(this.y + (H - ay));
+    if (bot < -2 || top > r.VH + 2) return;
+    const uc = pl ? pl.at : 0.5;
+    const off = (row: number) => {
+      const u = clamp((ay - row) / Math.max(1, ay));
+      if (u <= 0) return 0;
+      let o: number;
+      if (water) {
+        const s = W.water * W.surgeAt(wx, u * this.lag) + W.dir * W.base * 0.45;
+        o = this.amp * Math.pow(u, 1.25) * s + Math.sin(t * 0.9 + this.phase + u * 5) * this.amp * 0.06 * u;
+      } else o = windBend(r, st, this.x, this.amp, 1.3, this.phase) * Math.pow(u, 1.6);
+      if (push) o += push * (u < uc ? Math.pow(u / uc, 0.9) : 1 - Math.pow((u - uc) / (1 - uc), 1.3) * 0.7);
+      return Math.round(o / ak) * ak;
+    };
+    const left = this.x - fr.ax * this.sx;
+    let i = 0;
+    while (i < H) {
+      const o = off(i);
+      let j = i + 1;
+      while (j < H && off(j) === o) j++;
+      r.drawSub(fr, 0, i, fr.w, j - i, left + o, this.y - ay + i, this.sx, 1, this.tint);
+      i = j;
+    }
+  }
 }

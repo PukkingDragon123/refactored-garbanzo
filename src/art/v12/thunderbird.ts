@@ -1,18 +1,17 @@
 // V12 the Thunderbird (Te Pouākai): the legendary storm eagle of the Rocky Hills, painted pixel by pixel.
 //
 // Two views, like a bird book's plates:
-//   from below   soar / flap / flee: the wings spread right across the sky (about 300 px tip to tip, five
-//                Moris), the body seen from underneath, the head turned to look down at you
-//   in profile   dive (the folded stoop, then the strike with the talons thrown forward), land (mantling
-//                over the bait, tearing at it), shriek (wings flared, head thrown up), hurt (a wing
-//                dropped, feathers torn loose)
+//   from below   soar / flap / flee: the wings spread right across the sky (about 330 px tip to tip), the
+//                body seen from underneath, the head turned to look down at you
+//   in profile   dive (the folded stoop, then the strike: wings swept up and back, talons thrown
+//                forward), land (wings raised over the bait), shriek (wings flared, head thrown up, beak
+//                open), hurt (a wing dropped, feathers torn loose)
 //
-// Nothing here is stuck together from circles: every flight feather is its own tapered vane (a shaft,
-// a lighter leading vane, barring, a split ragged tip, a dark seam against the next one), the coverts
-// are rows of small scalloped feathers with rusty fringes, the bodies are hand-picked outlines filled
-// with scale-feather texture and form shading, and the head and talons are hand-placed pixel maps.
-// The storm-white "lightning" streak through the primaries is its mark. Colours step through fixed
-// ramps with ordered (Bayer) dithering: no smooth blends anywhere.
+// The bird itself (every wing, the bodies, head, legs and feet) is painted by ./tb-bird.ts: one
+// continuous contour per mass through anatomical landmarks, the wing a single structure from the
+// shoulder to the slotted fingertips with its feather tracts stepping down in value, a keeled breast,
+// barred trousers and feathered boots, huge talons, a flat brow shelf over a gold eye and a deep hooked
+// beak with its cere. The storm-white lightning zigzag across the primaries is its mark.
 //
 // Also here: the signs it leaves (a giant shed primary, talon gouges raked into a boulder, a kill
 // site), the storm's pixels (rain streaks, splashes, a dithered flash veil, a forked lightning bolt),
@@ -22,22 +21,18 @@ import { PixelBuffer } from '../pixel';
 import type { C } from '../color';
 import { hex, mix, shade } from '../color';
 import { Rng, bayer, hash2 } from '../../core/math';
+import { tbUnder, tbProfile, tbWing } from './tb-bird';
 
 // ---------------------------------------------------------------- palette
 const H = (s: string) => hex(s);
 const OUT = H('#07060a');
 /** storm-dark plumage, deepest to lightest */
 const PLUME: C[] = ['#0d0b12', '#19151f', '#26202c', '#362d3a', '#4a3f4e', '#62566a'].map(H);
-/** the far wing and the shadowed side */
-const PLUME_D: C[] = ['#08070b', '#100e15', '#19151e', '#241e29', '#30283a', '#3e344a'].map(H);
 /** blue storm sheen on the leading edges */
 const SHEEN: C[] = ['#2c3a56', '#40567a', '#6684ac'].map(H);
-/** the rust-gold nape mane and covert fringes */
-const RUST: C[] = ['#3e1a0c', '#6a2e14', '#9a4a1e', '#c87430', '#eaa456'].map(H);
 /** pale barring on the flight and tail feathers */
 const BAR: C[] = ['#5a5058', '#7e7276', '#a89c98'].map(H);
 const FLASH: C[] = ['#9ec4ec', '#d8ecff', '#ffffff'].map(H);
-const BELLY: C[] = ['#2a2228', '#4a3c40', '#6e5c58', '#9a8676'].map(H);
 
 const dz = (x: number, y: number) => bayer(x, y);
 /** a ramp tone for light l (0..1), dithered between steps */
@@ -60,103 +55,6 @@ function stamp(b: PixelBuffer, m: PMap, x0: number, y0: number, flip = false) {
     }
   });
 }
-
-const HEAD_PAL: Record<string, C> = {
-  o: OUT, a: PLUME[0], b: PLUME[1], c: PLUME[2], d: PLUME[3], e: PLUME[4], f: SHEEN[1],
-  r: RUST[1], s: RUST[2], t: RUST[3], u: RUST[4],
-  g: H('#0a0810'), y: H('#c89a2a'), Y: H('#e8c050'), n: H('#4a3410'),
-  h: H('#6a5a3e'), K: H('#9a8858'), j: H('#c8b884'), J: H('#efe4bc'), k: H('#2a2014'),
-  E: H('#f0a818'), W: H('#ffe070'), p: H('#000000'), w: H('#ffffff'),
-  m: H('#3a0c10'), q: H('#b84048'), Q: H('#e07070'),
-};
-/** the head in profile, facing right: flat brow over a fierce yellow eye, a massive horn beak with
- *  its hook, a yellow cere, the rust mane of hackles down the nape (28 x 20) */
-const HEAD: PMap = { pal: HEAD_PAL, rows: [
-  '.........ooooo..............',
-  '......ooodeeddoo............',
-  '....ootsddddcccdo...........',
-  '...otsrcdcccccccdo..........',
-  '..otsrcccbbbccccddo.........',
-  '.otsrccbbbbgggggggdo........',
-  'otsrcbbbbbgggggggggooo......',
-  'osrcbbbbbbgoEEEogYyKjjoo....',
-  'otrcbbbbbbgoEwppoYyKjJJJoo..',
-  'osrbbbbbbbbgoEWEonyKKjjJJJo.',
-  'otrbbbbbbbbbgoooYyhKKKjjjJJo',
-  '.osrbbbbbbbbbbbYyhhKKKKKjjJo',
-  '.otrbbbbbbbbbbbbookhhhKKKKjo',
-  '..osrbbbbbbbbbbbbhhoookhKKko',
-  '..otsrbbbbbbbbbbhhhhhooKhkko',
-  '...osrbbbbbbbbaahhhhhhoohkko',
-  '...otsrbbbbbbaaaoohhhoo.okko',
-  '....osrrbbbbaaao..ooo...oko.',
-  '....otsrbbbaaaoo........oo..',
-  '.....oooooooooo.............',
-] };
-/** head thrown up, beak wide: the shriek (28 x 22) */
-const HEAD_OPEN: PMap = { pal: HEAD_PAL, rows: [
-  '.........ooooo....ooo.......',
-  '......ooodeeddoooojJJoo.....',
-  '....ootsddddcccdoKjjJJJoo...',
-  '...otsrcdcccccccoKKjjjJJJo..',
-  '..otsrcccbbbcccYyhKKKjjjJJo.',
-  '.otsrccbbbbggggYyhhKKKKjjko.',
-  'otsrcbbbbbgggggoyhhooKKKkko.',
-  'osrcbbbbbbgoEEEonhomQQoookko',
-  'otrcbbbbbbgoEwppomqqQQo.okko',
-  'osrbbbbbbbbgoEWEomqqqqQo.oo.',
-  'otrbbbbbbbbbgoooomqqqqqo....',
-  '.osrbbbbbbbbbbbYyhmmqqqo....',
-  '.otrbbbbbbbbbbbbYhhhmmqqo...',
-  '..osrbbbbbbbbbbbbhhKKhmmo...',
-  '..otsrbbbbbbbbbbbhhhKKKhoo..',
-  '...osrbbbbbbbbbaahhhhKKKko..',
-  '...otsrbbbbbbbaaaoohhhhkkko.',
-  '....osrrbbbbbaaao..oohhkko..',
-  '....otsrbbbbaaaoo....oooo...',
-  '.....osrbbbaaoo.............',
-  '.....otsrbaao...............',
-  '......ooooo.................',
-] };
-
-const FOOT_PAL: Record<string, C> = {
-  o: OUT, a: H('#6a4a08'), y: H('#a87c10'), Y: H('#d8a828'), Z: H('#f6d868'),
-  k: H('#100c0a'), K: H('#3a322c'), L: H('#8a8078'), f: PLUME[2], F: PLUME[3],
-};
-/** a talon thrown forward, open (the strike, the landing): 20 x 16 */
-const FOOT_OPEN: PMap = { pal: FOOT_PAL, rows: [
-  '..offFFo............',
-  '..ofFFfo............',
-  '..oayZYo............',
-  '..oaYYyo............',
-  '..oyZYao............',
-  '.oayYZYyoo..........',
-  'oayYyoayYZYoo.......',
-  'oYyoo.oayYZZYyoo....',
-  'oyao...ooayyYZZYo...',
-  'oKko.....oooayYYyo..',
-  'oLKko.......ooayYo..',
-  '.oLKko........oKko..',
-  '..oLko.......oLKko..',
-  '...oko......oLKko...',
-  '....oo.....oLko.....',
-  '...........ooo......',
-] };
-/** a talon gripping (standing, tucked): 16 x 12 */
-const FOOT_GRIP: PMap = { pal: FOOT_PAL, rows: [
-  '...offFo........',
-  '...oayZo........',
-  '...oaYYo........',
-  '..oayZYoo.......',
-  '.oayYyZYYoo.....',
-  'oayYoayYZZYoo...',
-  'oKyo.oayyYZYYo..',
-  'oLKo..ooaayyYYo.',
-  'oLKko....oooaKo.',
-  '.oLko.......oKko',
-  '..oko.......oLko',
-  '...o.........oo.',
-] };
 
 // ---------------------------------------------------------------- one flight feather
 interface FeatherO {
@@ -229,110 +127,24 @@ export interface WingPose {
   tip: number; spread: number; plen: number;
   /** the direction the secondaries trail (radians) and their length */
   sec: number; slen: number;
-  /** the far wing (darker, no lightning) */
+  /** the far wing (darker) */
   far?: boolean;
   /** primaries knocked loose (hurt) / missing (fleeing, a gap) */
   ruffle?: number;
   gap?: number;
   seed: number;
+  /** we see its underside (optional; the upper side by default) */
+  under?: boolean;
 }
 
-/** a wing: secondaries trailing along the arm, the fan of primaries from the wrist, rows of
- *  coverts with rusty fringes over their bases, and the thick leading edge with its storm sheen */
+/** a wing, shoulder to fingertips, as one structure: the leading edge bowing to the carpal bend and the
+ *  alula, covert rows stepping down in value, the scalloped secondaries, the slotted primaries with the
+ *  lightning across them (painted by ./tb-bird.ts) */
 export function paintWing(b: PixelBuffer, w: WingPose) {
-  const ramp = w.far ? PLUME_D : PLUME;
-  const rng = new Rng(w.seed);
-  const nSec = 11, nPrim = 9;
-  const ax = w.wx - w.sx, ay = w.wy - w.sy, alen = Math.hypot(ax, ay) || 1;
-  // the secondaries always trail square off the arm: the perpendicular nearest the asked direction
-  {
-    const arm = Math.atan2(ay, ax);
-    const d = (a: number) => Math.abs(Math.atan2(Math.sin(a - w.sec), Math.cos(a - w.sec)));
-    const perp = d(arm + Math.PI / 2) < d(arm - Math.PI / 2) ? arm + Math.PI / 2 : arm - Math.PI / 2;
-    const diff = Math.atan2(Math.sin(w.sec - perp), Math.cos(w.sec - perp));
-    w = { ...w, sec: perp + Math.max(-0.35, Math.min(0.35, diff)) };
-  }
-  const ru = (k: number) => (w.ruffle ? rng.range(-k, k) * w.ruffle : 0);
-  // secondaries: inner first
-  for (let i = 0; i < nSec; i++) {
-    const t = (i + 0.5) / nSec;
-    const bx = w.sx + ax * t, by = w.sy + ay * t;
-    const a = w.sec + (t - 0.5) * 0.22 + ru(0.4);
-    const L = w.slen * (0.92 + 0.1 * Math.sin(i * 1.7)) * (0.9 + 0.12 * t);
-    feather(b, bx, by, bx + Math.cos(a) * L, by + Math.sin(a) * L, 9, 7.5, { ramp, light: 0.42 + (i % 2) * 0.06, bars: 4, seed: w.seed + i, rag: 0.5 });
-  }
-  // primaries: inner (next to the secondaries) to outer (the leading edge, on top)
-  for (let k = 0; k < nPrim; k++) {
-    if (w.gap !== undefined && k === w.gap) continue;
-    const t = k / (nPrim - 1);
-    const a = w.tip + (0.5 - t) * w.spread * (Math.sign(Math.cos(w.tip)) || 1) * -1 + ru(0.5);
-    // the outer six are the long splayed fingers; the leading one a little shorter
-    const L = w.plen * (0.62 + 0.38 * Math.sin(Math.min(1, t * 1.25) * Math.PI * 0.62)) * (k === nPrim - 1 ? 0.86 : 1);
-    const bx = w.wx - Math.cos(w.sec) * (1 - t) * 6, by = w.wy - Math.sin(w.sec) * (1 - t) * 6;
-    feather(b, bx, by, bx + Math.cos(a) * L, by + Math.sin(a) * L, 10, 5, {
-      ramp, light: 0.36 + t * 0.12 + (k % 2) * 0.05, bars: 5, seed: w.seed + 40 + k, rag: 0.35, notch: t > 0.3,
-      flash: w.far || k < 2 ? undefined : 0.55 - t * 0.12, sheen: k === nPrim - 1 && !w.far,
-    });
-  }
-  // primary coverts at the wrist
-  for (let k = 0; k < 6; k++) {
-    const t = k / 5;
-    const a = w.tip + (0.5 - t) * w.spread * 0.6 * (Math.sign(Math.cos(w.tip)) || 1) * -1;
-    const L = w.plen * 0.34;
-    feather(b, w.wx, w.wy, w.wx + Math.cos(a) * L, w.wy + Math.sin(a) * L, 8, 6, { ramp, light: 0.5 + (k % 2) * 0.06, seed: w.seed + 80 + k, rag: 0.2 });
-  }
-  // covert rows over the arm: greater, median, lesser (each feather with a rusty fringe)
-  const rows: [number, number, number][] = [[0.48, 10, 0.5], [0.3, 8, 0.56], [0.16, 6, 0.62]];
-  for (const [f, wid, light] of rows) {
-    const n = Math.max(6, Math.round(alen / (wid * 0.6)));
-    for (let i = 0; i < n; i++) {
-      const t = (i + 0.5) / n;
-      const bx = w.sx + ax * t, by = w.sy + ay * t;
-      const L = w.slen * f + 3;
-      const a = w.sec + (t - 0.5) * 0.18;
-      const ex = bx + Math.cos(a) * L, ey = by + Math.sin(a) * L;
-      feather(b, bx, by, ex, ey, wid, wid * 0.8, { ramp, light: light + (i % 2) * 0.05, seed: w.seed + 120 + i + wid * 7, rag: 0.15 });
-      // the fringe: a crescent of rust at the tip
-      if (!w.far || f > 0.4) for (let s = -2; s <= 2; s++) {
-        const px = Math.round(ex - Math.cos(a) * 1.5 + Math.cos(a + Math.PI / 2) * s * wid * 0.16);
-        const py = Math.round(ey - Math.sin(a) * 1.5 + Math.sin(a + Math.PI / 2) * s * wid * 0.16);
-        if (b.get(px, py) >>> 24) b.set(px, py, tone(w.far ? RUST.slice(0, 3) : RUST, 0.45 - Math.abs(s) * 0.12, px, py));
-      }
-    }
-  }
-  // the leading edge: a thick dark band shoulder -> wrist with a sheen line along its top
-  const nx = -ay / alen, ny = ax / alen;
-  const up = (Math.cos(w.sec) * nx + Math.sin(w.sec) * ny) > 0 ? -1 : 1;
-  const steps = Math.ceil(alen * 1.5);
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    const thick = 3.6 - t * 1.2;
-    for (let s = -thick; s <= thick; s += 0.5) {
-      const px = Math.round(w.sx + ax * t + nx * s * up), py = Math.round(w.sy + ay * t + ny * s * up);
-      const k = (s + thick) / (2 * thick);
-      const c = k < 0.2 ? (w.far ? PLUME_D[0] : OUT) : k < 0.42 && !w.far ? tone(SHEEN, 0.4 + 0.4 * (1 - t), px, py) : tone(ramp, 0.28 + k * 0.25, px, py);
-      b.set(px, py, c);
-    }
-  }
+  tbWing(b, w);
 }
 
 // ---------------------------------------------------------------- texture fills
-/** scale feathers: rows of small scallops, each lit from the top-left, for a body outline */
-function scaleFill(b: PixelBuffer, pts: number[], o: { ramp: C[]; light: (x: number, y: number) => number; size?: number; seed: number; fleck?: (x: number, y: number) => number }) {
-  const sz = o.size ?? 4;
-  b.polyFn(pts, (x, y) => {
-    const row = Math.floor(y / sz);
-    const off = (row & 1) * (sz >> 1) + (hash2(row, 7, o.seed) & 1);
-    const cx = ((x + off) % sz + sz) % sz, cy = y - row * sz;
-    let l = o.light(x, y);
-    // the lower rim of each scallop is a shade darker, its top a touch lighter
-    const rim = cy === sz - 1 || (cy === sz - 2 && (cx === 0 || cx === sz - 1));
-    if (rim) l -= 0.16; else if (cy === 0 && cx > 0 && cx < sz - 1) l += 0.07;
-    l += (hsh(x, y, o.seed) - 0.5) * 0.06;
-    if (o.fleck) { const f = o.fleck(x, y); if (f > 0 && !rim && cy === 1 && cx === (sz >> 1) && hsh(row, x >> 2, o.seed + 5) < f) return tone(BELLY, 0.75 + f * 0.25, x, y); }
-    return tone(o.ramp, l, x, y);
-  });
-}
 /** shaggy pointed feathers (hackles, trousers) as short strokes from (x, y) at angle a */
 function shag(b: PixelBuffer, x: number, y: number, a: number, len: number, ramp: C[], light: number, seed: number) {
   const n = Math.ceil(len * 1.5);
@@ -352,146 +164,18 @@ export type TBPose = 'soar' | 'flap' | 'flee' | 'dive' | 'land' | 'shriek' | 'hu
 export const TB_FRAMES: Record<TBPose, number> = { soar: 2, flap: 4, flee: 4, dive: 2, land: 2, shriek: 2, hurt: 2 };
 export interface TBArt { buf: PixelBuffer; ax: number; ay: number }
 
-const UW = 344, UH = 220;
+/** from below: 344 x 220, anchored on the body (TB_FRAMES soar / flap / flee) */
 
 /** seen from below: wings across the sky, the tail fanned, talons tucked, the head turned to look down */
 function paintUnder(phase: number, o: { flee?: boolean; soar?: boolean }): TBArt {
-  const b = new PixelBuffer(UW, UH);
-  const cx = UW / 2, cy = 104;
-  // the beat: wrist height and the primaries' tilt (0 = top of the upstroke)
-  const lift = o.soar ? 0.16 + Math.sin(phase * Math.PI * 2) * 0.05 : Math.cos(phase * Math.PI * 2);   // +1 wings up, -1 down
-  const wy = cy - 14 - lift * 40;
-  const tilt = lift * 0.55;
-  // the tail fan behind everything
-  for (let i = 0; i < 9; i++) {
-    const t = i / 8;
-    const a = Math.PI / 2 + (t - 0.5) * (o.flee ? 0.7 : 1.05);
-    const L = 44 - Math.abs(t - 0.5) * 10;
-    feather(b, cx + (t - 0.5) * 8, cy + 22, cx + (t - 0.5) * 8 + Math.cos(a) * L, cy + 22 + Math.sin(a) * L, 9, 8, { ramp: PLUME, light: 0.4 + (i % 2) * 0.07, bars: 5, seed: 300 + i, rag: 0.4 });
-  }
-  // the wings
-  for (const side of [-1, 1] as const) {
-    const sx = cx + side * 13, sy = cy - 12;
-    const wx = cx + side * 80, wyy = wy + (side === 1 ? 2 : 0);
-    const tip = side === 1 ? -tilt * 0.9 : Math.PI + tilt * 0.9;
-    paintWing(b, {
-      sx, sy, wx, wy: wyy, tip, spread: o.soar ? 0.9 : 0.78 + 0.2 * (1 - Math.abs(lift)), plen: 80,
-      sec: Math.PI / 2 + side * (0.1 - lift * 0.14), slen: 44 - Math.max(0, lift) * 8,
-      seed: side === 1 ? 11 : 37, gap: o.flee && side === 1 ? 4 : undefined, ruffle: o.flee ? 0.25 : 0,
-    });
-  }
-  // the body from underneath: hand-picked outline, chest to vent
-  const body = [cx - 9, cy - 30, cx - 3, cy - 33, cx + 4, cy - 33, cx + 10, cy - 29, cx + 16, cy - 18, cx + 18, cy - 6, cx + 17, cy + 5, cx + 14, cy + 15,
-    cx + 9, cy + 24, cx + 3, cy + 27, cx - 4, cy + 27, cx - 10, cy + 23, cx - 15, cy + 14, cx - 18, cy + 4, cx - 18, cy - 7, cx - 15, cy - 19];
-  scaleFill(b, body, {
-    ramp: PLUME, seed: 5, size: 4,
-    light: (x, y) => 0.42 - Math.abs(x - cx) / 40 + (y - cy) * 0.004,
-    fleck: (x, y) => (y > cy - 8 && Math.abs(x - cx) < 12 ? 0.55 : 0),
-  });
-  // trousers: shaggy feathered legs either side of the vent, the talons balled under them
-  for (const side of [-1, 1]) {
-    for (let k = 0; k < 9; k++) shag(b, cx + side * (7 + (k % 3)), cy + 10 + k * 1.4, Math.PI / 2 + side * 0.18 + (k % 2 ? 0.12 : -0.1), 9 + (k % 3), PLUME, 0.36, 60 + k + side);
-    stamp(b, FOOT_GRIP, cx + side * 8 - 8, cy + 22, side < 0);
-  }
-  // the nape mane, then the head turned to look down at you
-  for (let k = 0; k < 10; k++) shag(b, cx - 8 + k * 1.6, cy - 30 + (k % 2), Math.PI / 2 + (k - 5) * 0.08, 7 + (k % 3) * 2, RUST, 0.55, 90 + k);
-  stamp(b, HEAD, cx - 13, cy - 50);
-  b.outline(OUT);
-  return { buf: b, ax: cx, ay: cy };
+  return tbUnder(phase, o);
 }
 
-const PW = 300, PH = 230;
+/** in profile: 300 x 230, anchored on the body (dive) or the ground under the feet */
 
 /** in profile, facing right. kind: dive (0 the stoop, 1 the strike), land (mantling), shriek, hurt */
 function paintProfile(kind: 'dive' | 'land' | 'shriek' | 'hurt', f: number): TBArt {
-  const b = new PixelBuffer(PW, PH);
-  const cx = 150, cy = kind === 'dive' ? 110 : 150;
-  // the body's axis: the stoop points down-right, standing it leans back
-  const ang = kind === 'dive' ? (f === 0 ? 0.62 : 0.22) : kind === 'shriek' ? -0.55 : kind === 'hurt' ? -0.12 : -0.38 + f * 0.1;
-  const ca = Math.cos(ang), sa = Math.sin(ang);
-  const P = (u: number, v: number): [number, number] => [cx + u * ca - v * sa, cy + u * sa + v * ca];
-  const shoulder = P(8, -12);
-  // the far wing first (darker, offset back)
-  const wings: WingPose[] = [];
-  if (kind === 'dive' && f === 0) {
-    // folded tight along the back: the classic teardrop stoop
-    const [sx, sy] = P(10, -11), [wx, wy] = P(-18, -15);
-    wings.push({ sx, sy, wx, wy, tip: ang + Math.PI + 0.06, spread: 0.22, plen: 70, sec: ang + Math.PI - 0.5, slen: 16, seed: 21 });
-  } else if (kind === 'dive') {
-    // the strike: wings thrown up and forward to brake
-    wings.push({ sx: shoulder[0] - 6, sy: shoulder[1] + 2, wx: shoulder[0] - 30, wy: shoulder[1] - 50, tip: -1.9, spread: 1.1, plen: 72, sec: 0.2 + Math.PI * 0.08, slen: 30, far: true, seed: 22 });
-    wings.push({ sx: shoulder[0], sy: shoulder[1], wx: shoulder[0] + 12, wy: shoulder[1] - 58, tip: -1.35, spread: 1.25, plen: 80, sec: Math.PI * 0.62, slen: 34, seed: 23 });
-  } else if (kind === 'land') {
-    // mantling: both wings spread up and out over the bait like a cloak
-    const k = f ? 4 : 0;
-    wings.push({ sx: shoulder[0] - 8, sy: shoulder[1] + 2, wx: shoulder[0] - 64, wy: shoulder[1] - 36 + k, tip: Math.PI + 0.75, spread: 1.0, plen: 76, sec: Math.PI * 0.42, slen: 34, far: true, seed: 24 });
-    wings.push({ sx: shoulder[0], sy: shoulder[1], wx: shoulder[0] + 54, wy: shoulder[1] - 46 + k, tip: -0.85, spread: 1.15, plen: 82, sec: Math.PI * 0.6, slen: 36, seed: 25 });
-  } else if (kind === 'shriek') {
-    const k = f ? -5 : 0;
-    wings.push({ sx: shoulder[0] - 8, sy: shoulder[1] + 2, wx: shoulder[0] - 44, wy: shoulder[1] - 62 + k, tip: -2.1, spread: 1.1, plen: 80, sec: Math.PI * 0.3, slen: 36, far: true, seed: 26 });
-    wings.push({ sx: shoulder[0], sy: shoulder[1], wx: shoulder[0] + 26, wy: shoulder[1] - 70 + k, tip: -1.2, spread: 1.2, plen: 86, sec: Math.PI * 0.55, slen: 38, seed: 27 });
-  } else {
-    // hurt: the near wing hangs, primaries knocked about
-    wings.push({ sx: shoulder[0] - 8, sy: shoulder[1] + 2, wx: shoulder[0] - 50, wy: shoulder[1] - 30, tip: Math.PI + 0.9, spread: 0.9, plen: 70, sec: Math.PI * 0.4, slen: 30, far: true, seed: 28 });
-    wings.push({ sx: shoulder[0], sy: shoulder[1], wx: shoulder[0] + 20 + f * 4, wy: shoulder[1] + 34, tip: 0.9, spread: 0.8, plen: 64, sec: Math.PI * 0.95, slen: 30, ruffle: 1, gap: 3, seed: 29 });
-  }
-  if (wings.length > 1) paintWing(b, wings[0]);
-  // the tail, fanned a little behind
-  const tailN = 7;
-  for (let i = 0; i < tailN; i++) {
-    const t = i / (tailN - 1);
-    const [tx, ty] = P(-24, -2 + t * 5);
-    const a = ang + Math.PI + (t - 0.5) * (kind === 'dive' && f === 0 ? 0.18 : 0.55) + (kind === 'land' ? -0.1 : 0);
-    feather(b, tx, ty, tx + Math.cos(a) * 40, ty + Math.sin(a) * 40, 9, 8, { ramp: PLUME, light: 0.38 + (i % 2) * 0.06, bars: 5, seed: 200 + i, rag: 0.4 });
-  }
-  // legs (behind the body's front edge): thick feathered trousers, a bare yellow tarsus, the talon
-  const standing = kind !== 'dive';
-  const strike = kind === 'dive' && f === 1;
-  const [hx, hy] = P(-4, 10);
-  for (let k = 0; k < 12; k++) {
-    const a = standing ? Math.PI / 2 + 0.15 - (k % 3) * 0.12 : strike ? 0.6 + (k % 3) * 0.1 : ang + Math.PI * 0.85;
-    shag(b, hx - 4 + (k % 4) * 3, hy + (k >> 2) * 2, a, 12 + (k % 3) * 2, PLUME, 0.34, 400 + k);
-  }
-  if (standing) {
-    // tarsi down to the ground, talons gripping
-    const gy = cy + 54;
-    for (const dxl of [-8, 5]) {
-      for (let y = hy + 16; y < gy - 8; y++) for (let x = -2; x <= 2; x++) b.set(hx + dxl + x, y, tone([FOOT_PAL.a, FOOT_PAL.y, FOOT_PAL.Y, FOOT_PAL.Z], 0.5 - x * 0.15 + ((y >> 1) & 1) * 0.12, hx + dxl + x, y));
-      stamp(b, FOOT_GRIP, hx + dxl - 4, gy - 11);
-    }
-  } else if (strike) {
-    const [fx, fy] = P(20, 22);
-    stamp(b, FOOT_OPEN, fx - 4, fy - 6);
-    stamp(b, FOOT_OPEN, fx + 6, fy - 2);
-  } else {
-    const [fx, fy] = P(-8, 12);
-    stamp(b, FOOT_GRIP, fx - 8, fy - 2);
-  }
-  // the body: a hand-picked profile outline (deep chest, the back's hump, the rump)
-  const outline: [number, number][] = [[24, -9], [16, -14], [6, -16], [-6, -15], [-16, -11], [-24, -7], [-28, -3], [-27, 3], [-20, 9], [-10, 14], [2, 16], [12, 14], [20, 9], [25, 2]];
-  const pts: number[] = [];
-  for (const [u, v] of outline) { const [x, y] = P(u, v); pts.push(x, y); }
-  scaleFill(b, pts, {
-    ramp: PLUME, seed: 7, size: 4,
-    light: (x, y) => { const v = -(x - cx) * sa + (y - cy) * ca; return 0.5 - v * 0.018; },
-    fleck: (x, y) => { const v = -(x - cx) * sa + (y - cy) * ca; return v > 5 ? 0.45 : 0; },
-  });
-  // ragged feather edges hanging off the belly and the hackles down the nape
-  for (let k = 0; k < 8; k++) { const [x, y] = P(-14 + k * 4, 13 + (k % 2)); shag(b, x, y, ang + Math.PI / 2 + 0.25, 5 + (k % 3), PLUME, 0.3, 500 + k); }
-  for (let k = 0; k < 9; k++) { const [x, y] = P(12 + k * 1.4, -14 + k * 1.8); shag(b, x, y, ang + Math.PI * 0.82 + k * 0.05, 9 + (k % 3) * 2, RUST, 0.6 - k * 0.03, 600 + k); }
-  // the near wing over the body
-  paintWing(b, wings[wings.length - 1]);
-  // the head
-  const [nx, ny] = P(27, -6);
-  const head = kind === 'shriek' || kind === 'hurt' ? HEAD_OPEN : HEAD;
-  stamp(b, head, nx - 10, ny - (head === HEAD_OPEN ? 15 : 12));
-  // torn loose feathers drifting off a hurt bird
-  if (kind === 'hurt') for (let k = 0; k < 3; k++) {
-    const x = cx - 40 + k * 34 + f * 6, y = cy - 70 + k * 18 - f * 8;
-    feather(b, x, y, x + 16 - k * 6, y + 6 + k * 3, 4, 3, { ramp: PLUME, light: 0.5, bars: 3, seed: 700 + k + f * 3, rag: 0.6 });
-  }
-  b.outline(OUT);
-  return { buf: b, ax: cx, ay: kind === 'dive' ? cy : cy + 54 };
+  return tbProfile(kind, f);
 }
 
 const cache = new Map<string, TBArt>();

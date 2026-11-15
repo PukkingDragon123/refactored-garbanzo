@@ -307,6 +307,7 @@ export function updateQuests(dt: number) {
   checkT -= dt;
   if (checkT > 0) return;
   checkT = 0.25;
+  void import('./v12/feats').then(m => m.tickFeats()).catch(() => {}); // V12 feats (lazy: they import this module)
   for (const q of activeQuests()) {
     const i = currentStepIndex(q);
     const was = stepSeen.get(q.id);

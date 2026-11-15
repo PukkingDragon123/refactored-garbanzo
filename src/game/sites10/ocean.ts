@@ -5,6 +5,7 @@
 //   glassreef    Glass Reef         a shallow reef: snorkel over coral and reef fish (oceanreef.ts)
 //   motuahi      Motu Ahi           a smoking volcanic islet with a seabird colony (oceanisle.ts)
 //   farcoast     The Far Coast      sea cliffs, a kelp forest and a river mouth, only reachable by sea (oceancoast.ts)
+//   kelpforest   Te Moana Rimurimu  V12: anchored over the kelp forest, dive with the air tank (v12/dive/scene.ts)
 // Plus 'maiden', the short maiden voyage on Launch Day (not on the map).
 //
 // API
@@ -24,7 +25,7 @@ import { el } from '../../ui/ui';
 import { audio } from '../../core/audio';
 import { pxRating } from '../../ui/pxicons';
 
-export type TripStop = 'fish' | 'reef' | 'land' | 'maiden';
+export type TripStop = 'fish' | 'reef' | 'land' | 'maiden' | 'kelp';
 export type Horizon = 'islet' | 'coast' | 'reef' | 'open' | 'home';
 export interface TripPlan {
   id: string;
@@ -70,6 +71,12 @@ export const TRIPS: Record<string, TripPlan> = {
     depart: [['joshu', 'The far side of our own island. Cliffs a hundred metres high. Nobody walks there.', 'thinking'], ['aroha', 'There is a river that comes down to the sea through a gorge. The kelp at its mouth is as tall as trees.', 'serious']],
     arrive: [['mori', 'A waterfall straight into the sea! And the kelp... it’s a forest. An underwater forest.', 'excited']],
   },
+  kelpforest: {
+    id: 'kelpforest', name: 'Te Moana Rimurimu', sub: 'The kelp forest off the southern headland (scuba)', dur: 58, stop: 'kelp', ahead: 'coast',
+    events: [{ at: 0.12, kind: 'gulls' }, { at: 0.3, kind: 'pod' }, { at: 0.52, kind: 'kites' }, { at: 0.74, kind: 'flock' }],
+    depart: [['joshu', 'Te Moana Rimurimu. The kelp grows up out of the deep there like a forest of gold ropes.', 'thinking'], ['aroha', 'Kina, pāua, crayfish in every hole. And the big fish that hunt the edge. Stay out of the blue alone.', 'serious']],
+    arrive: [['joshu', 'See the gold on the water? That’s the canopy. Anchor’s down on the sand. Tank on, lad.', 'happy'], ['mori', 'Mask, regulator, camera in its housing. Going down the line.', 'excited']],
+  },
   maiden: {
     id: 'maiden', name: 'Maiden Voyage', sub: 'Once round the bay', dur: 34, stop: 'maiden', ahead: 'home',
     events: [{ at: 0.18, kind: 'gulls' }, { at: 0.3, kind: 'pod' }, { at: 0.62, kind: 'kites' }],
@@ -90,6 +97,8 @@ const LOCS: LocationDef[] = [
     desc: 'A smoking volcanic islet with black sand beaches, steaming vents and a vast seabird colony on its cliffs.', scene: { type: 'custom', go: () => goBoatTrip('motuahi') } },
   { id: 'farcoast', name: 'The Far Coast', region: 'south', kind: 'site', pos: MP(470, 562), difficulty: 3, needs: [BOAT_FLAG], trip: { hours: 3, energy: 7 }, terrain: 'Shingle, sea cliffs, a river mouth',
     desc: 'The island’s far side: sea cliffs too steep to walk, a waterfall into the sea and a kelp forest at the river mouth.', scene: { type: 'custom', go: () => goBoatTrip('farcoast') } },
+  { id: 'kelpforest', name: 'Te Moana Rimurimu', region: 'ocean', kind: 'ecosystem', pos: MP(392, 604), difficulty: 4, needs: [BOAT_FLAG], trip: { hours: 2.5, energy: 6 }, terrain: 'Kelp forest, a boulder reef, the drop-off (scuba)',
+    desc: 'A giant-kelp forest off the southern headland: the boulder reef beyond it drops off a cliff into the blue. Dive it from the boat with an air tank.', scene: { type: 'custom', go: () => goBoatTrip('kelpforest') } },
 ];
 export const BOAT_LOCATIONS = LOCS.map(l => l.id);
 
@@ -121,7 +130,7 @@ export async function goBoatTrip(id: string, o: { phase?: TripState['phase'] } =
   const clockT = trip?.clockT ?? sc?.clock?.t ?? 0.6;
   trip = { id, clockT, phase: o.phase ?? 'out' };
   setBoatAway(true);
-  if (plan.stop === 'land' || plan.stop === 'reef' || plan.stop === 'fish') findLocation(id);
+  if (plan.stop === 'land' || plan.stop === 'reef' || plan.stop === 'fish' || plan.stop === 'kelp') findLocation(id);
   const { BoatTripScene } = await import('../v10/boattrip');
   game.go(() => new BoatTripScene(plan, trip!), [0.02, 0.04, 0.06], 1.2);
 }
@@ -134,6 +143,7 @@ export async function goStop(id: string) {
   if (plan.site === 'motuahi') { const m = await import('./oceanisle'); return m.goMotuAhi(trip.clockT); }
   if (plan.site === 'farcoast') { const m = await import('./oceancoast'); return m.goFarCoast(trip.clockT); }
   if (plan.stop === 'reef') { const m = await import('./oceanreef'); return m.goReefDive(trip.clockT); }
+  if (plan.stop === 'kelp') { const m = await import('../v12/dive/scene'); return m.goKelpDive(trip.clockT); }
 }
 
 /** the trip is over: back to camp by boat (the camp module plays the landing) */
@@ -172,7 +182,7 @@ const CSS = `
 .bt-pick .row { display: flex; justify-content: flex-end; margin-top: 0.6em; }
 `;
 let styled = false;
-const TAG: Record<string, string> = { fishgrounds: 'FISH', glassreef: 'DIVE', motuahi: 'LAND', farcoast: 'LAND' };
+const TAG: Record<string, string> = { fishgrounds: 'FISH', glassreef: 'DIVE', motuahi: 'LAND', farcoast: 'LAND', kelpforest: 'DIVE' };
 
 /** the destination picker at the Kitten (a stand-in for the Region Map's boat routes) */
 export async function openBoatTrips(yard?: { launchOut(): Promise<void> } | null) {

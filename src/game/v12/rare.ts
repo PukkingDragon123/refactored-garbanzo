@@ -12,6 +12,7 @@ import { SPECIES_BY_ID } from '../species';
 import { sceneTag } from '../v10/expedition';
 import { partsOf } from './region';
 import { floatText } from '../../ui/v12/float';
+import { TUA } from './backcountry/gen';
 
 export interface RareSpot {
   loc: string;
@@ -48,6 +49,10 @@ export const RARE: RareSpot[] = [
   { loc: 'swamp', species: 'snakestork', x: 3420, y: [96, 150], times: ['dawn', 'day', 'dusk'], still: 12, goal: 'up on the old maimai over the raupō, sit still and watch the water', hint: 'Serpent storks fish the raupō beds. Up here they can\'t see you. Sit, and wait.' },
   // ---- V12 Te Rua Pōuri: the crystal gallery, lantern shuttered, crouched in the dark
   { loc: 'deepcave', species: 'cavecentipede', x: 1555, y: [880, 950], tierY: true, times: ['dawn', 'day', 'dusk', 'night'], still: 14, goal: 'in the crystal gallery of Te Rua Pōuri, lantern shuttered, crouch in the dark and wait', hint: 'Something hunts the wētā in this gallery. It hates the light. Shutter the lantern, get low, and let the dark come back.' },
+  // ---- V12 Te Tuawhenua: the crest of the burnt ridge (everything shows on the ash), the edge of the
+  // feathered gully's fern clearing (a snake hunter works the boa ground)
+  { loc: 'backcountry', species: 'galehawk', x: Math.round((TUA.crest[0] + TUA.crest[1]) / 2), times: ['dawn', 'day', 'dusk'], still: 12, goal: 'on the crest of the burnt ridge, crouch by the dead spars and watch the sky', hint: 'A gale hawk hunts the burnt ridge: on the ash, everything that moves shows. Get low by the spars and be still.' },
+  { loc: 'backcountry', species: 'flicker', x: TUA.arena[0] - 90, times: ['dawn', 'day', 'dusk'], still: 14, goal: 'at the edge of the fern clearing in the feathered gully, hide in the crown ferns and wait', hint: 'Something quick hunts snakes along this clearing. Hide in the ferns, and let the gully forget you.', needs: 'hide_cloak' },
   { loc: 'mangrove', species: 'titan', x: 1800, times: ['dawn', 'day', 'dusk', 'night'], still: 18, goal: 'deep in the channels, hidden in cover, for a long time', hint: 'Something enormous moves under this water. If you want to see it, you hide. For a long time.', needs: 'hide_cloak' },
 ];
 

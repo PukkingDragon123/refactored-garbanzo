@@ -23,6 +23,7 @@ import { FERNWOOD_V11 } from '../v11/woods/fernwood';
 import { FALLS_V11 } from '../v11/woods/falls';
 import { CANOPY_V11 } from '../v11/woods/canopy';
 import { plant, deadwood } from '../../art/jungle-plants';
+import { caveFloorStrip } from '../v12/cave/floors';
 import {
   sprite, mainLayer, skyAndRidge, jungleWalls, ceiling, trees, undergrowth, frontFoliage, hideBush, shafts, groundStrip, node, Ground,
 } from './common';
@@ -653,7 +654,8 @@ const COAST_DEEP: FieldSite = {
       if (c) kelpL.add(new Prop(c.f, x, DP_FLOOR + 10, rng.next(), { sway: 1.2, tint: packColor(0.5, 0.65, 0.75, 1) }));
     }
     const main = mainLayer(f);
-    groundStrip(f, DP_W, G, [PAL.sand[5], PAL.sand[4], PAL.sand[3], PAL.sand[2]], PAL.sand[0], 17, 80);
+    // the seabed (V12): drowned rock slabs half buried in rippled sand (src/art/v12/cave/floor.ts); the walk line is unchanged
+    caveFloorStrip(f, DP_W, dpGround, { seed: 17, h: 80, mat: () => 'seabed' });
     st.terrain.water.push([0, DP_W, -60, 420]);
     for (let x = 60; x < DP_W; x += rng.range(40, 90)) {
       const c = sprite(`kelpn:${rng.int(0, 4)}`, () => SA.paintKelp(rng.int(1, 999), rng.range(80, 180)) as never);

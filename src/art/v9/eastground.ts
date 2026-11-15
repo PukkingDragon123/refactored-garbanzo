@@ -5,7 +5,8 @@
 //     pebbles under teal water, wet sand banks with gravel and wrack, boulders, a braided delta;
 //   the seal rocks: basalt shelves in front of the walk line with tide pools, weed and barnacles;
 //   under the cliffs: fallen rubble and damp shingle;
-//   the sea cave: wet flowstone floor, puddles and the still pool with a rimstone lip;
+//   the sea cave: a real cave floor (V12, src/art/v12/cave/floor.ts): wet limestone slabs and puddles,
+//     flowstone and rimstone terraces toward the still pool with its rimstone lip, scree by the mouths;
 //   the hidden cove: soft sheltered sand, shell drifts, a trickle of seep water from the cliff;
 //   the bush track and the plateau: a worn track, leaf litter drifts, moss carpets, roots and stones
 //     receding in perspective, and the creek running off toward the camera over stones.
@@ -16,6 +17,8 @@ import type { C } from '../color';
 import { hex, mix, shade } from '../color';
 import { bayer, clamp, fbm2, hash2, noise1, noise2, smoothstep } from '../../core/math';
 import { SPOT } from '../island4/layout';
+import { floorTex, FP } from '../v12/cave/floor';
+import type { CaveFloorMat } from '../v12/cave/floor';
 import {
   MAX_DD, MOUTH, CREEK, DELTA_THREADS, CAVE_POOL, shelfAt, tidePoolAt,
   baseTop, persp, realZ, mouthCx, mouthHw, mouthBend, threadE, creekCx, creekHw, cavePoolHw,
@@ -228,28 +231,24 @@ function cavePool(x: number, y: number, dd: number): boolean {
   return false;
 }
 
+/** the cave floor's water tones (those pixels go into the reflective twin buffer) */
+const CAVE_WET = new Set<C>([...FP.pool, FP.wet[9]]);
 function caveFloor(x: number, y: number, d: number, c0: C, wet0: boolean): boolean {
   if (cavePool(x, y, y - baseTop(x))) return true;
-  // flowstone ridges running toward the camera and shallow puddles that mirror the shafts (only on
-  // the rock the shared painter laid down: same test as its cave floor)
+  // (only on the rock the shared painter laid down: same test as its cave floor)
   const k = Math.min(smoothstep(5030, 5100, x), 1 - smoothstep(5400, 5470, x));
   if (k <= 0 || fbm2(x / 20, y / 11, 2, 72) * 0.9 + 0.05 >= k) return false;
-  const P = persp(d);
-  const u = (x - CAVE_POOL.x) / P;
-  const puddle = fbm2(u / 16, d / 7, 3, 123);
-  if (puddle > 0.7 && d > 6) {
-    EG.c = mix(POOL[1], POOL[3], clamp((puddle - 0.7) * 6));
-    EG.wet = true;
-    return true;
-  }
-  const ridge = Math.abs(Math.sin(u * 0.16 + fbm2(u / 30, d / 20, 2, 124) * 5));
-  let c = c0;
-  if (ridge < 0.1) c = shade(c0, 0.12);
-  if (puddle > 0.65) { c = mix(c, H('#3a4a4e'), 0.5); EG.c = c; EG.wet = true; return true; }
-  // damp sheen: glossy patches shimmer with the water material
-  EG.c = c;
-  EG.wet = wet0 || noise2(u / 6, d / 3, 125) > 0.66;
-  return c !== c0 || EG.wet !== wet0;
+  // the floor in perspective: real distance in from the walk line, things bigger toward the camera
+  const P = persp(d), z = realZ(d) * 170;
+  // scree by the two mouths, flowstone and rimstone terraces toward the pool, wet slabs between
+  const pd = Math.abs(x - CAVE_POOL.x) + (noise1(d / 9, 160) - 0.5) * 40;
+  const mat: CaveFloorMat = x < 5100 + noise1(d / 7, 161) * 30 || x > 5410 + noise1(d / 7, 162) * 30 ? 'rubble' : pd < 70 ? 'rim' : pd < 120 ? 'flow' : 'wet';
+  const raw = floorTex(x, z, P, clamp(d / 160, 0, 1) * 0.5, y, mat, 5250);
+  // the light from the mouths and the skylights still falls on it: no darker than the rock it replaces
+  EG.c = mix(raw, c0, 0.18);
+  EG.wet = CAVE_WET.has(raw);
+  void wet0;
+  return true;
 }
 
 // ------------------------------------------------------------------ under the cliffs: shingle and rubble

@@ -427,6 +427,16 @@ export class FieldScene extends WorldScene implements WildHost {
       fo.add(p, 7, p.height * 0.85, dt);
       for (const a of this.animals) if (a.p === 1 && a.medium === 'ground' && a.hidden < 0.5) fo.add(a, 6 * a.scale, 16 * a.scale, dt);
       for (const a of this.actors.values()) if (a.visible) fo.add(a, 6, 64, dt, true);
+    } else {
+      // underwater the kelp and seagrass part around Mori swimming through (his body lies along x, a
+      // little above his feet point) and around anything that swims through them (fish, seals, sharks)
+      fo.add(p, 16, 30, dt);
+      for (const a of this.animals) {
+        const o = a as unknown as { p?: number; hidden?: number; scale?: number; dead?: boolean; gone?: boolean };
+        if ((o.p ?? 1) !== 1 || (o.hidden ?? 0) > 0.5 || o.dead || o.gone) continue;
+        const k = o.scale ?? 1;
+        fo.add(a, 10 * k, 22 * k, dt, true);
+      }
     }
     fo.end();
   }

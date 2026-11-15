@@ -12,6 +12,7 @@ import { questPages } from './quests';
 import { guidePages } from './guide';
 import { peoplePages } from './people';
 import { mapPages } from './map';
+import { featPages } from './feats';
 import { hashStr } from '../../v11/paper/rng';
 
 export interface Section { id: TabIcon; color: string; pages: Page[]; anchors: Record<string, string> }
@@ -60,12 +61,13 @@ function padPage(section: string, seed: number): Page {
 }
 
 export function buildAll(spread: boolean): Built {
-  const q = questPages(), g = guidePages(), p = peoplePages(), m = mapPages(), s = sketchPages();
+  const q = questPages(), g = guidePages(), p = peoplePages(), m = mapPages(), ft = featPages(), s = sketchPages();
   const sections: Section[] = [
     { id: 'quests', color: '#c8503c', pages: q.pages, anchors: q.anchors },
     { id: 'guide', color: '#6a9a4a', pages: g.pages, anchors: g.anchors },
     { id: 'people', color: '#4a7ab8', pages: p.pages, anchors: p.anchors },
     { id: 'map', color: '#d8a838', pages: m.pages, anchors: m.anchors },
+    { id: 'feats', color: '#8a5aa8', pages: ft.pages, anchors: ft.anchors },
     s,
   ];
   const inside: Page = { id: 'inside', section: 'cover', paper: 'kraft', seed: 5, ops: [], hits: [], anims: [], art: insideCoverArt };

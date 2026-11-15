@@ -10,7 +10,7 @@ import { BLUEPRINTS, defineBlueprint, hasBlueprint, isActive } from '../v11/blue
 import type { BlueprintDef } from '../v11/blueprints';
 import type { GearIcon } from './signpost';
 
-export type GateId = 'staff' | 'snorkel' | 'grip' | 'gloves' | 'rope' | 'lantern' | 'boots' | 'wetsuit' | 'blessing';
+export type GateId = 'staff' | 'snorkel' | 'grip' | 'gloves' | 'rope' | 'lantern' | 'boots' | 'wetsuit' | 'scuba' | 'blessing';
 export interface Gate {
   /** the blueprint that opens it (none: a story flag) */
   bp?: string;
@@ -31,6 +31,7 @@ export const GATES: Record<GateId, Gate> = {
   lantern: { bp: 'storm_lantern', gear: 'a storm lantern', icon: 'lantern', why: 'It’s pitch black down there. I’m not going in without a lantern.' },
   boots: { bp: 'trail_boots', gear: 'trail boots', icon: 'boot', why: 'The ground is HOT. These soles would melt. I need proper trail boots.' },
   wetsuit: { bp: 'wetsuit', gear: 'a wetsuit', icon: 'fin', why: 'That water is freezing, and the sump is long. Not without a wetsuit.' },
+  scuba: { bp: 'air_tank', gear: 'an air tank', icon: 'fin', why: 'All the way down there? On one breath? Not without an air tank.' },
   blessing: { flag: 'v10:koroBlessing', gear: 'Koro’s blessing', icon: 'koru', why: 'Aroha shakes her head. Not without Koro’s blessing. Not that way.' },
 };
 
@@ -58,6 +59,8 @@ const OPENS: Record<string, string> = {
   storm_lantern: 'Opens the dark ways: down into the Glowing Forest and the stair into Te Korokoro',
   trail_boots: 'Opens the hot ground of the Hot Valley',
   wetsuit: 'Opens the long cold dive through the grotto sump to the Deep',
+  air_tank: 'Opens the kelp-forest dive from the boat, Te Moana Rimurimu',
+  speargun: 'Spearfishing on the kelp dive, and a bang-head for sharks',
 };
 
 /** an old "energy" effect line, read in V12 terms (energy costs are how quickly Mori gets hungry now) */

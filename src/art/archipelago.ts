@@ -122,26 +122,32 @@ export function paintNearIsles(w = 960, h = 170, seed = 11): IsleArt {
     const on = hash2(i, Math.floor(y / 3), seed) > 0.25;
     b.set(wx + i + Math.round(Math.sin(y * 0.07)), y, on ? hex('#dfeef0') : hex('#9ab8c4'));
   }
-  // the pou: a tall carved guardian post on the cliff edge, big head, paua-shell eyes
+  // the pou: an old carving of a serpent rearing out of its coils on the cliff edge, leaning, its crest
+  // broken, one pāua eye still catching the light
   const px = cx0 + 16, py = Math.round(h - top[px]) + 1;
   const wood = [hex('#140f1a'), hex('#231a2a'), hex('#3a2c3a')];
-  const H = 34;
-  for (let j = 0; j < H; j++) {
-    const yy = py - j;
-    const headZone = j > H - 13;
-    const hw = headZone ? 5 : j < 4 ? 4 : 3 + ((j >> 2) & 1);
-    for (let i = -hw; i <= hw; i++) {
-      const edge = i === -hw ? rim : i === hw ? wood[0] : wood[(i + j) & 1 ? 1 : 2];
-      b.set(px + i, yy, edge);
-    }
-    // carved notches
-    if (!headZone && j % 5 === 2) for (let i = -2; i <= 2; i++) b.set(px + i, yy, wood[0]);
+  const lean = (j: number) => Math.round(j * 0.09);
+  // the coils: a lumpy mound on the cliff top
+  for (let i = -6; i <= 6; i++) {
+    const hh = Math.round(4 - (i * i) / 12 + (hash2(i, 3, seed) > 0.6 ? 1 : 0));
+    for (let k = 0; k < hh; k++) b.set(px + i, py - k, k === hh - 1 ? (i < 0 ? rim : wood[2]) : (i + k) % 3 === 0 ? wood[0] : wood[1]);
   }
-  // crest and tongue
-  for (let i = -3; i <= 3; i++) b.set(px + i, py - H, wood[1]);
-  b.set(px, py - H - 1, wood[1]);
-  b.set(px + 1, py - H + 7, hex('#6a3a3a')); b.set(px + 1, py - H + 8, hex('#6a3a3a'));
-  const eyes: [number, number][] = [[px - 2, py - H + 4], [px + 2, py - H + 4]];
+  // the body rising in an S, thinning to the neck
+  const cx = (j: number) => px + Math.round(Math.sin(j * 0.2) * 2.4) - lean(j);
+  for (let j = 3; j < 27; j++) {
+    const hw = j < 14 ? 2 : 1;
+    for (let i = -hw; i <= hw; i++) b.set(cx(j) + i, py - j, i === -hw ? rim : i === hw ? wood[0] : wood[(j >> 1) % 3 === 0 ? 0 : 2]);
+  }
+  // the head looking out to sea (west), a jaw line
+  const hx = cx(27), hy = py - 28;
+  for (let i = -5; i <= 1; i++) for (let k = -1; k <= 1; k++) b.set(hx + i, hy + k, k === -1 ? rim : i === -5 ? wood[1] : wood[2]);
+  b.set(hx - 6, hy, wood[1]);
+  for (let i = -5; i <= -1; i++) b.set(hx + i, hy + 1, wood[0]);
+  // the crest: two spines left of three, the middle one snapped
+  b.set(hx + 1, hy - 2, wood[1]); b.set(hx + 2, hy - 3, wood[1]); b.set(hx + 2, hy - 4, rim);
+  b.set(hx + 2, hy - 1, wood[1]); b.set(hx + 3, hy - 2, wood[2]);
+  b.set(hx + 3, hy + 1, wood[1]); b.set(hx + 4, hy, wood[1]); b.set(hx + 5, hy - 1, rim);
+  const eyes: [number, number][] = [[hx - 3, hy - 1]];
   for (const [ex, ey] of eyes) { g.set(ex, ey, hex('#8ff0dc')); b.set(ex, ey, hex('#3a8a88')); }
   return { buf: b, glow: g, eyes };
 }

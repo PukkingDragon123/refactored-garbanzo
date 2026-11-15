@@ -1,21 +1,32 @@
-// V9 shore birds on one compact bird rig (egg body, neck, head frame, IK legs, fanned tail, layered
-// folded wing, 3D spread wings from beasts-bird), each with its own anatomy hooks:
+// V9 shore birds on one contour bird rig (the seabird contour kit, src/art/v9/sea/seabird-kit.ts):
+// the body, neck and head are ONE lofted contour through the rump, back, breast, the curve of the
+// neck, the occiput, crown and forehead; the bill, the folded wing, the tail feathers and the
+// spread wings are each their own contour, lit on the Relief layer; the legs and feet are placed
+// pixel by pixel. Each species has its own anatomy:
 //
-//  Swashrunner      a tiny sand-pale plover on stilts with a black necklace and mask and huge lobed
-//                   "snowshoe" toes that keep it from sinking into the wet sand as it chases waves.
-//  Pied Shellwrench a stocky black-and-white wrack-line wader whose orange bill is crossed at the tip
-//                   like a pair of pliers: it jams the tips into a mussel's gape and twists. Orange
-//                   carpal spurs on the wrists for hammering limpets and fighting rivals.
-//  Twinfan          a bush flycatcher whose tail is split into two separate fans, upper and lower,
-//                   that it flares alternately to flush insects out of the undergrowth.
+//  Swashrunner      a tiny sand-pale plover on long orange legs with a black necklace and mask, a
+//                   short black bill with a swollen touch-tip, and huge lobed "snowshoe" toes (a long
+//                   sole with a scalloped flap at every joint) that keep it from sinking in wet sand.
+//  Pied Shellwrench a stocky black-and-white wrack-line wader whose long orange bill is crossed at the
+//                   tip like a pair of pliers (the upper tip hooks down over the lower, the lower bends
+//                   up past it): it jams the tips into a mussel's gape and twists. Orange carpal spurs
+//                   on the wrists for hammering limpets and fighting rivals; a red eye in an orange ring.
+//  Twinfan          a bush flycatcher whose tail is split into two separate fans, upper and lower, dark
+//                   with white tips and edges, that it flares alternately to flush insects out of the
+//                   undergrowth. Rufous breast, white brow and throat, rictal bristles round its bill.
 //
 // Ground anims are anchored under the feet, air anims on the body centre.
 
-import { Sk, V2, V3, Px, rmp, drawEye, EyeSpec, BeastEye, SpeciesDef, AnimDef, TAU, gait, qbez, fr, hh, lerp2 } from '../../beasts-core';
+import { Sk, V2, V3, rmp, drawEye, EyeSpec, BeastEye, SpeciesDef, AnimDef, TAU, gait, fr, hh, lerp2 } from '../../beasts-core';
 import { Frame2 } from '../../beasts-rig';
-import { spreadWing, foldedWing, birdLeg, tailFan, scallop, WingLook, WingPose, BirdLegLook } from '../../beasts-bird';
+import type { WingPose } from '../../beasts-bird';
 import { hex } from '../../color';
 import type { PixelBuffer } from '../../pixel';
+import { View3, WingShape } from '../sea/seabird';
+import {
+  Relief, LM, Sp, Tx, spline, fringe, loft, loftOutline, loftAt, Station, HeadF, wingFrame, wing, WingLook as KWingLook, WingPx,
+  fan, fanAt, FanOut, feathers, FT, foldOutline, foldTex, foldMap, FoldLook, pxLeg, PxLegLook, B3, clamp,
+} from '../sea/seabird-kit';
 
 // ------------------------------------------------------------------ look
 interface Cols {
@@ -28,9 +39,9 @@ interface Look {
   rx: number; ry: number; stance: number;
   neckL: number; neckR0: number; neckR1: number;
   hrx: number; hry: number;
-  leg: BirdLegLook; hipX: number;
-  tail: { L: number; hw: number; n: number; spread: number };
-  wing: Omit<WingLook, 'fill'> & { foldExt: number };
+  leg: PxLegLook; hipX: number;
+  tail: { L: number; n: number; spread: number };
+  wing: { shape: WingShape; look: KWingLook; foldExt: number };
   eye: EyeSpec;
   cols: Cols;
   flap: number;
@@ -38,8 +49,6 @@ interface Look {
   light?: number;
   /** lifts the belly tones so white underparts read white even in the body shadow */
   bellyBias?: number;
-  /** sleek plumage: faint scallops, no ragged tufts */
-  sleek?: boolean;
   /** a percher: ground anims are anchored on the twig it grips, nothing is clipped below the feet */
   perch?: boolean;
 }
@@ -79,7 +88,6 @@ function flapPose(t: number, amp: number, spread = 1): WingPose {
   return { th: (0.25 + 0.85 * c) * amp, hand: (-0.35 * Math.sin(t * TAU) + (up ? 0.25 : -0.05)) * amp, fold: up ? 0.5 * Math.sin((t - 0.5) * 2 * Math.PI) : 0, sweep: 0.12 + (up ? -0.15 : 0.05), spread };
 }
 const both = (w: WingPose): [WingPose, WingPose] => [w, { ...w }];
-const add = (a: V2, b: V2): V2 => [a[0] + b[0], a[1] + b[1]];
 
 type PoseFn = (L: Look, f: number, n: number) => BP;
 const G: Record<string, PoseFn> = {
@@ -176,7 +184,7 @@ const G: Record<string, PoseFn> = {
   },
   takeoff(L, f) {
     const p = stand(L);
-    const K = [[1.5, 0.8], [-2, 1.1], [-5, 0.9]][f];
+    const K = [[1.5, 0.8], [-2, 1.1], [-5, 0.45]][f];
     p.b[1] += K[0]; p.ba = L.stance + 0.25;
     p.wing = both({ th: K[1], hand: 0.3, fold: 0.1, sweep: -0.2, spread: 1.2 });
     p.feet = [[1.2, f === 2 ? -2 : 0], [-1, f === 2 ? -1.5 : 0]];
@@ -247,7 +255,8 @@ function mats(sk: Sk, L: Look) {
   const lt = L.light ?? 0.5;
   return {
     back: sk.m(rmp(c.back, { n: 6, dark: 0.6, light: lt }), { edge: 1 }),
-    belly: sk.m(rmp(c.belly, { n: 5, dark: 0.42, at: 3, cool: 0.12 }), { edge: 1, bias: L.bellyBias ?? 0 }),
+    backF: sk.m(rmp(c.cov ?? c.back, { n: 6, dark: 0.6, light: lt }), { edge: 1 }),
+    belly: sk.m(rmp(c.belly, { n: 6, dark: 0.42, at: 4, cool: L.id === 'twinfan' ? 0.02 : 0.4, warm: L.id === 'twinfan' ? 0.35 : 0.25 }), { edge: 1, bias: L.bellyBias ?? 0 }),
     head: sk.m(rmp(c.head, { n: 6, dark: 0.6, light: lt }), { edge: 1 }),
     wing: sk.m(rmp(c.wing, { n: 6, dark: 0.6, light: lt }), { edge: 2 }),
     cov: sk.m(rmp(c.cov ?? c.wing, { n: 6, dark: 0.6, light: lt }), { edge: 2 }),
@@ -255,58 +264,57 @@ function mats(sk: Sk, L: Look) {
     under: sk.m(rmp(c.belly, { n: 5, dark: 0.5 }), { edge: 1, bias: -0.06 + (L.bellyBias ?? 0) * 0.5 }),
     tail: sk.m(rmp(c.tail ?? c.back, { n: 6, dark: 0.6, light: lt }), { edge: 2 }),
     tailW: sk.m(rmp('#f4f2ec', { n: 4, dark: 0.35, at: 2 }), { edge: 2 }),
-    bill: sk.m(rmp(c.bill, { n: 5, dark: 0.5, light: 0.45 }), { spec: 0.45 }),
+    bill: sk.m(rmp(c.bill, { n: 6, dark: 0.5, light: 0.45 }), { spec: 0.2 }),
     tip: sk.m(rmp(c.billTip ?? c.bill, { n: 5, dark: 0.5 }), { spec: 0.4 }),
     leg: sk.m(rmp(c.leg, { n: 5, dark: 0.45, cool: 0.08 }), { edge: 1 }),
     web: sk.m(rmp(c.web ?? c.leg, { n: 4, dark: 0.45, light: 0.4 }), { edge: 0 }),
     claw: sk.m(rmp(c.claw ?? '#2a2622', { n: 4, dark: 0.5 })),
-    mark: sk.m(rmp(c.mark, { n: 5, dark: 0.55 }), { edge: 1 }),
-    mark2: sk.m(rmp(c.mark2 ?? c.belly, { n: 4, dark: 0.4, at: 2 }), { edge: 1 }),
+    mark: sk.m(rmp(c.mark, { n: 5, dark: 0.55, light: 0.3 }), { edge: 1 }),
+    mark2: sk.m(rmp(c.mark2 ?? c.belly, { n: 5, dark: 0.4, at: 3 }), { edge: 1 }),
     mouth: sk.m(rmp('#6a2230', { n: 3, dark: 0.4 }), { edge: 0 }),
+    gape: sk.m(rmp('#2a1a18', { n: 3, dark: 0.4 }), { edge: 0 }),
     shell: sk.m(rmp('#2e3450', { n: 5, dark: 0.55, light: 0.45 }), { spec: 0.6 }),
     nacre: sk.m(rmp('#c8d2e4', { n: 4, dark: 0.4 }), { spec: 0.6 }),
     flesh: sk.m(rmp('#f08a4a', { n: 4, dark: 0.45 }), { spec: 0.3 }),
     bug: sk.m(rmp('#8a7658', { n: 4, dark: 0.5 }), { edge: 0 }),
-    spurM: sk.m(rmp('#f08a2a', { n: 4, dark: 0.45 }), { spec: 0.3 }),
+    spurM: sk.m(rmp('#f08a2a', { n: 4, dark: 0.45, light: 0.4 }), { spec: 0.3 }),
   };
 }
 type M = ReturnType<typeof mats>;
+const ID = { BODY: 1, BILL: 3, JAW: 4, TAIL: 7, TAIL2: 6, FOLD: 8, WING: 9, SPUR: 11, PREY: 14, HEAD: 2 };
 
 // ------------------------------------------------------------------ plumage
-/** per-species body pattern (u,v body-ellipse coords: u fwd, v down) */
-function bodyPat(L: Look, M: M, p: Px): number {
-  const belly = p.v > 0.12 - p.u * 0.3;
+/** per-species plumage of the body + head loft: f station index, dors, lat, head-local hx/hy */
+function plumage(L: Look, M: M, f: number, nb: number, dors: number, lat: number, hx: number, hy: number, along: number, px = 1): number {
+  const head = f >= nb;
   switch (L.id) {
     case 'swashrunner':
-      // a bold black necklace across the breast, white below, sand above
-      if (p.u > 0.55 && p.v > -0.45 && p.v < 0.3) return M.mark;
-      return belly ? M.belly : M.back;
+      if (head) {
+        // sandy crown, white forehead and throat; the black mask runs back through the eye
+        if (hy < -L.hry * 0.45 && hx < L.hrx * 0.15) return M.head;
+        // a black band over the white forehead (big heads only), the mask through the eye: a single
+        // pixel row on a small head so the white brow and throat still frame it
+        if (px > 3 && hy < -L.hry * 0.48 && hy > -L.hry * 0.8 && hx >= L.hrx * 0.15 && hx < L.hrx * 0.55) return M.mark;
+        if (Math.abs(hy + L.hry * 0.2) < Math.max(0.55 / px * L.hry, L.hry * 0.3) && hx < L.hrx * 0.35 && hx > -L.hrx * 0.8 && lat > 0.1) return M.mark;
+        return M.belly;
+      }
+      // a bold black necklace round the base of the neck, white below, sand above
+      if (f > nb - 2.2 && f < nb - 1.15 && dors < 0.7) return M.mark;
+      return dors > 0.12 ? M.back : M.belly;
     case 'shellwrench':
-      // jet black above and on the breast, clean white below
-      if (belly && p.u < 0.45) return M.belly;
-      return M.back;
+      // jet black above and on the head and breast, clean white below and behind
+      if (!head && f < nb - 2.2 && dors < -0.05 + along * 0) return M.belly;
+      return head ? M.head : M.back;
     default:
-      // twinfan: warm rufous breast and belly, sooty back, a paler rump
-      if (p.v > -0.3 - p.u * 0.55) return M.belly;
-      if (p.u < -0.62 && p.v > -0.4) return M.cov;
+      // twinfan: a white eyebrow, a white throat spot under a black band, rufous breast, sooty back
+      if (head) {
+        if (hy < -L.hry * 0.15 && hy > -L.hry * 0.62 && hx > -L.hrx * 0.55 && lat > 0.15) return M.mark2;
+        if (hy > L.hry * 0.5 && hx > -L.hrx * 0.1) return M.mark2;
+        if (hy > L.hry * 0.18 && hx > -L.hrx * 0.4) return M.mark;
+        return M.head;
+      }
+      if (dors < 0.5 - (f < 1.2 ? 0.5 : 0)) return M.belly;
       return M.back;
-  }
-}
-function headPat(L: Look, M: M, p: Px): number {
-  switch (L.id) {
-    case 'swashrunner':
-      // sandy crown, white forehead, cheeks and throat; the black eye-stripe runs back from the eye
-      if (p.v < -0.45) return M.head;
-      if (p.v > -0.2 && p.v < 0.22 && p.u < 0.05 && p.u > -0.75) return M.mark;
-      return M.belly;
-    case 'shellwrench':
-      return M.head;
-    default:
-      // twinfan: white eyebrow and a white throat spot below a black band
-      if (p.v < -0.3 && p.v > -0.62 && p.u > -0.4) return M.mark2;
-      if (p.v > 0.5 && p.u > 0) return M.mark2;
-      if (p.v > 0.25 && p.u > -0.2) return M.mark;
-      return M.head;
   }
 }
 
@@ -319,187 +327,402 @@ function drawBird(sk: Sk, L: Look, P: BP, eyeSt: BeastEye, juv: boolean): { head
   if (!P.air && !L.perch) sk.clipY = 0;
   const B = new Frame2(b, P.ba, k);
   const rx = L.rx * (1 + P.ruffle * 0.1), ry = L.ry * (1 + P.ruffle * 0.16);
-  const WL: WingLook = { ...L.wing, fill: (p, row, _i, under) => {
-    if (L.id === 'shellwrench' && (row === 'S' || (row === 'P' && _i < 3)) && p.t < 0.55) return M.mark2; // pied wing bar
-    if (L.id === 'swashrunner' && row === 'G') return M.belly; // pale wing stripe
-    return under ? (row === 'P' ? M.prim : row === 'S' ? M.wing : M.under) : row === 'P' ? M.prim : row === 'S' ? M.wing : M.cov;
-  } };
+  const V0 = new View3(0, 0, 0, [0, 0], 1);
+  const up2 = (a: number): V3 => [Math.sin(a), Math.cos(a), 0]; // body-space up of a screen frame rotated by a
+  const BP3 = (x: number, y: number): V3 => B3(B.p(x, y));
 
-  // --- legs (far first)
+  // --- neck and head frames
+  const nb2 = B.p(rx * 0.62, -ry * 0.28);
+  const nl = L.neckL * P.nl * k;
+  const hp2: V2 = [nb2[0] + Math.cos(P.na) * nl, nb2[1] + Math.sin(P.na) * nl];
+  const back = Math.cos(P.ha) < -0.3;
+  const hf: V3 = [Math.cos(P.ha), -Math.sin(P.ha), 0], hu: V3 = up2(P.ha);
+  const H = new HeadF(V0, B3(hp2), hf, hu);
+
+  // --- legs (far first), placed pixel by pixel
   const hip = B.p(L.hipX, ry * 0.45);
-  // bare legs below the belly feathers (the thigh would pick up a crimson shadow tone otherwise)
-  const legFill = { tib: L.id === 'twinfan' ? M.back : M.leg, tar: () => M.leg, toe: M.leg, claw: M.claw, web: M.web };
+  const legM = { tib: L.id === 'twinfan' ? M.back : L.id === 'shellwrench' ? M.belly : M.belly, leg: M.leg, toe: M.leg, web: M.web, claw: M.claw };
   const drawLeg = (near: boolean) => {
-    sk.np();
-    const z = near ? 3 : -3, bias = near ? 0 : -0.15;
-    const h: V2 = [hip[0] + (near ? 0.4 : -0.4) * k, hip[1]];
+    const z = near ? 6 : -6, lt = near ? 0 : -0.2;
+    const fa0 = S(P.feet[0]), fb0 = S(P.feet[1]);
+    const standClose = !P.air && P.tuck <= 0 && Math.abs(fa0[0] - fb0[0]) < (L.leg.thick ? 4.6 : 3.5) && fa0[1] > -0.6 && fb0[1] > -0.6;
+    const h: V2 = [hip[0] + (standClose ? 0.3 : near ? 0.3 : -0.7) * k, hip[1]];
     if (P.air || P.tuck > 0) {
-      const back = B.p(-rx * 0.9, ry * 0.95);
-      birdLeg(sk, h, [back[0] + (near ? 0.8 : -0.8) * k, back[1] + (1 - P.tuck) * 3 * k], L.leg, k, legFill, z, bias, 0, P.tuck);
+      if (P.tuck >= 1) return;
+      const bk = B.p(-rx * 0.9, ry * 0.95);
+      pxLeg(sk, h, [bk[0] + (near ? 0.8 : -0.8) * k, bk[1] + (1 - P.tuck) * 3 * k], L.leg, legM, z, k, { ta: Math.PI * 0.75, curl: L.perch ? 0.5 : 0, light: lt });
       return;
     }
     if (!near && P.lift1) {
       // resting on one leg: the other is drawn up into the belly feathers
-      const up = B.p(L.hipX - 0.5, ry * 0.95);
-      birdLeg(sk, h, up, { ...L.leg, tar: L.leg.tar * 0.5 }, k, legFill, z, bias, 1, 1);
       return;
     }
-    let foot = S(near ? P.feet[0] : P.feet[1]);
-    foot = [foot[0] + L.hipX * k * 0.3, foot[1]];
-    // perching birds grip the twig at the anchor with curled toes
-    birdLeg(sk, h, foot, L.leg, k, legFill, z, bias, L.perch ? 1 : 0, 0);
+    // feet closer than a few pixels are drawn one behind the other (the far one a pixel back), so
+    // two thin legs never fill in with outline between them
+    const fa = S(P.feet[0]), fb = S(P.feet[1]);
+    const close = Math.abs(fa[0] - fb[0]) < (L.leg.thick ? 4.6 : 3.5) && fa[1] > -0.6 && fb[1] > -0.6;
+    let foot = near ? fa : fb;
+    if (close && !near) return; // hidden behind the near leg
+    if (close) foot = [h[0] + 0.6 - L.hipX * k * 0.3, 0];
+    foot = [Math.round(foot[0] + L.hipX * k * 0.3) + 0.5, Math.min(-0.5, foot[1] - 0.5)];
+    const lifted = foot[1] < -1;
+    if (L.perch) pxLeg(sk, h, [foot[0], -0.5], L.leg, legM, z, k, { ta: 0, curl: 0.9, light: lt });
+    else pxLeg(sk, h, foot, L.leg, legM, z, k, { ta: lifted ? 0.7 : 0, ground: lifted ? undefined : 0, light: lt, vert: close });
   };
   drawLeg(false);
 
   // --- far spread wing
-  const sh3 = (side: 1 | -1): V3 => [rx * 0.3 * k, ry * 0.35 * k, side * ry * 0.45 * k];
-  if (P.wing !== 'fold') spreadWing(sk, b, sh3(-1), WL, P.wing[1], -1, k, -0.14);
+  const flying = P.wing !== 'fold';
+  const VW = new View3(0.38, -P.ba, 0.42, b, k);
+  const kw = (w: WingPose) => ({ elev: w.th, hand: w.hand, flex: w.fold, sweep: w.sweep - 0.12 });
+  const wf = wingFill(L, M);
+  if (flying) {
+    const R = Relief.full(sk);
+    wing(R, VW, wingFrame(L.wing.shape, kw((P.wing as [WingPose, WingPose])[1]), -1), L.wing.look, wf, { id: ID.WING, lt: -0.1 });
+    sk.np();
+    R.emit({ drop: 1, seam: 0.5, seamDark: 0.2, bias: -0.05 });
+  }
 
+  const BR = Relief.full(sk);
   // --- tail (the twinfan's is two fans, upper and lower)
   const rump = B.p(-rx * 0.82, -ry * 0.05);
   const tA = B.ang(Math.PI + 0.15 + P.tailA + (P.air ? 0 : Math.min(0, P.ba) * 0.7));
-  if (L.id === 'twinfan') twinFans(sk, M, L, rump, tA, P, k);
-  else tailFan(sk, rump, tA, L.tail.L * k, L.tail.hw, L.tail.n, L.tail.spread * P.tailSp, (p, i) => {
-    if (L.id === 'shellwrench' && p.t < 0.45) return M.mark2; // white rump band
-    return i === 0 || i === L.tail.n - 1 ? M.cov : M.tail;
-  }, -1, k, 0, 0.3);
+  if (L.id === 'twinfan') twinFans(BR, M, L, rump, tA, P, k);
+  else {
+    const dir: V3 = [Math.cos(tA), -Math.sin(tA), 0];
+    // a closed tail seen from the side: feathers fanned in the horizontal plane (+ a little toward us)
+    const F = fan(V0, B3(rump), dir, [0, -0.25, 1], L.tail.n, L.tail.spread * P.tailSp, t => L.tail.L * k * (1 - Math.abs(t - 0.5) * 0.25), { minW: 1.1 * k, notch: 0.08, base: 0.9 * k, point: 0.5 });
+    BR.region(spline(F.poly, 0.4), { z: -2, R: 0.8, H: 0.8, id: ID.TAIL, tex: (p, o) => {
+      const q = fanAt(F, p.x, p.y);
+      o.m = L.id === 'shellwrench' && q.u < 0.45 ? M.mark2 : q.i === 0 || q.i === L.tail.n - 1 ? M.cov : M.tail;
+      if (L.id === 'swashrunner' && q.u > 0.8) o.m = M.tailW;
+      if (q.edge < 0.3) o.z -= 0.3;
+    } });
+  }
 
-  // --- body
-  sk.np();
-  sk.ell(b[0], b[1], rx * k, ry * k, (p) => {
-    p.l += scallop(p.x, p.y, 2.6 * k, 2 * k, 3) * (L.sleek ? 0.25 : 0.5 + P.ruffle * 0.5);
-    return bodyPat(L, M, p);
-  }, { rot: P.ba, rz: ry * k * 0.9 });
-  const bodyPart = sk.pid;
-  if (!L.sleek || P.ruffle) sk.tufts(bodyPart, (_x, _y, nx, ny) => (ny > 0.3 ? [-0.3, 1] as V2 : nx < -0.6 ? [-1, 0.3] as V2 : null), { every: juv ? 2 : 3, len: 1 });
+  // --- body + neck + head: one contour through anatomical landmarks (rump, back, the nape, the
+  // occiput, crown and forehead, the chin, the throat, breast, belly and vent)
+  const bu = up2(P.ba);
+  const bodyR: [number, number, number, number][] = [[-0.98, 0.26, 0.2, 0.4], [-0.66, 0.72, 0.64, 0.8], [-0.12, 0.98, 1.0, 1.0], [0.4, 0.9, 0.96, 0.92], [0.72, 0.62, 0.78, 0.75]];
+  const bst: Station[] = bodyR.map(([x, ru, rl, rw]) => ({ c: BP3(rx * x, ry * (0.05 - (ru - rl) * 0.5)), up: bu, ru: ru * ry * k, rl: rl * ry * k, rw: rw * ry * k }));
+  const Lb = loft(V0, bst);
+  const nr0 = L.neckR0 * k, nr1 = L.neckR1 * k;
+  // the pattern helper spine: body, neck, head centre, forehead, bill base
+  const hst: Station[] = back ? bst : [
+    ...bst.slice(0, 4),
+    { c: B3(nb2), up: up2(P.na), ru: nr0, rl: nr0, rw: nr0 },
+    { c: B3(lerp2(nb2, hp2, 0.5)), up: up2(P.na), ru: (nr0 + nr1) / 2, rl: (nr0 + nr1) / 2, rw: (nr0 + nr1) / 2 },
+    { c: B3(hp2), up: hu, ru: L.hry * k, rl: L.hry * k * 0.85, rw: L.hry * k * 0.9 },
+    { c: H.p(L.hrx * 0.55 * k, 0), up: hu, ru: L.hry * k * 0.75, rl: L.hry * k * 0.6, rw: L.hry * k * 0.7 },
+    { c: H.p(L.hrx * 0.92 * k, 0.05 * k), up: hu, ru: L.hry * k * 0.42, rl: L.hry * k * 0.42, rw: L.hry * k * 0.4 },
+  ];
+  const nb = back ? 99 : 5.5;
+  const Lf = loft(V0, hst);
+  let outlineLM: LM[];
+  if (back) outlineLM = loftOutline(Lb, { head: 1 * k, tail: 0.5 * k });
+  else {
+    const nB = bst.length;
+    const tp = (i: number): LM => [Lb.s[i][0] + Lb.N[i][0] * Lb.top[i], Lb.s[i][1] + Lb.N[i][1] * Lb.top[i], 0];
+    const bt = (i: number): LM => [Lb.s[i][0] - Lb.N[i][0] * Lb.bot[i], Lb.s[i][1] - Lb.N[i][1] * Lb.bot[i], 0];
+    const inBody = (q: LM) => { const dx = q[0] - b[0], dy = q[1] - b[1], c = Math.cos(-P.ba), sn = Math.sin(-P.ba); const u = (dx * c - dy * sn) / (rx * k), v = (dx * sn + dy * c) / (ry * k); return u * u + v * v < 0.8; };
+    const inHead = (q: LM) => { const [hx, hy] = H.local(q[0], q[1]); return (hx / (L.hrx * k)) ** 2 + (hy / (L.hry * k)) ** 2 < 0.75; };
+    const T0: V2 = [-Lb.N[0][1], Lb.N[0][0]];
+    outlineLM = [[Lb.s[0][0] - T0[0] * 0.5 * k + Lb.N[0][0] * (Lb.top[0] - Lb.bot[0]) / 2, Lb.s[0][1] - T0[1] * 0.5 * k + Lb.N[0][1] * (Lb.top[0] - Lb.bot[0]) / 2, 0.2]];
+    for (let i = 0; i < nB - 1; i++) outlineLM.push(tp(i));
+    // the nape and the throat: either side of the neck's centre line
+    const nd: V2 = [hp2[0] - nb2[0], hp2[1] - nb2[1]], ndl = Math.hypot(nd[0], nd[1]) || 1;
+    const nL: V2 = [nd[1] / ndl, -nd[0] / ndl];
+    const neckPt = (t: number, sgn: number): LM => { const r = nr0 + (nr1 - nr0) * t; const c = lerp2(nb2, hp2, t); return [c[0] + nL[0] * r * sgn, c[1] + nL[1] * r * sgn, 0]; };
+    for (const t of [0.1, 0.45, 0.8]) { const q = neckPt(t, 1); if (!inBody(q) && !inHead(q)) outlineLM.push(q); }
+    const hs = (x: number, y: number, sh = 0): LM => H.s(x * L.hrx * k, y * L.hry * k, 0, sh);
+    const flat = L.id === 'shellwrench';
+    outlineLM.push(hs(-0.95, -0.02), hs(-0.68, flat ? -0.8 : -0.7), hs(-0.1, flat ? -0.96 : -1.0), hs(0.5, flat ? -0.74 : -0.86), hs(0.88, -0.4, 0.2), hs(0.88, 0.4, 0.2), hs(0.55, 0.8), hs(-0.05, 0.94), hs(-0.6, 0.74));
+    for (const t of [0.8, 0.45, 0.1]) { const q = neckPt(t, -1); if (!inBody(q) && !inHead(q)) outlineLM.push(q); }
+    for (let i = nB - 2; i >= 0; i--) outlineLM.push(bt(i));
+  }
+  let zc = 0;
+  const outline = spline(outlineLM, 0.45);
+  const poly = fringe(outline, 2 * k, 51, (_x, _y, nx, ny) => (P.ruffle > 0 && ny > -0.5 ? [0.9 * k, 0.4] : ny > 0.65 ? [0.5 * k, 0.5] : null));
+  BR.region(poly, {
+    zAt: () => zc, R: ry * 0.9 * k, H: ry * 0.9 * k, id: ID.BODY,
+    tex: (p: Sp, o: Tx) => {
+      const h = loftAt(Lf, p.x, p.y);
+      zc = h.z;
+      const seg = Math.min(Lf.n - 2, Math.floor(h.f));
+      const ang = Math.atan2(Lf.s[seg][1] - Lf.s[seg + 1][1], Lf.s[seg][0] - Lf.s[seg + 1][0]);
+      o.z += feathers(p.x, p.y, ang, 1.8 * k, 1.3 * k, 53) * (0.35 + P.ruffle * 0.3);
+      const [hx, hy] = h.f >= nb - 0.5 ? H.local(p.x, p.y) : [0, 0];
+      o.m = plumage(L, M, h.f, nb, h.dors, h.lat, hx / k, hy / k, h.along, L.hry * k);
+      if (FT.edge === 1 && o.m === M.back) o.m = M.backF;
+    },
+  });
+  const brc = B.p(rx * 0.45, ry * 0.35); BR.bump(brc[0], brc[1], rx * 0.5 * k, ry * 0.5 * k, 0.5, 0, ID.BODY);
+  if (back) {
+    // the head resting on the back, bill tucked into the scapulars
+    const hc = B.p(rx * 0.55, -ry * 0.75);
+    const Hr = new HeadF(V0, B3(hc), [-0.9, 0.2, 0], [0.2, 0.9, 0]);
+    const lm: LM[] = [Hr.s(-L.hrx * 0.9, 0), Hr.s(-L.hrx * 0.4, -L.hry * 0.95), Hr.s(L.hrx * 0.6, -L.hry * 0.8), Hr.s(L.hrx * 0.95, 0.2), Hr.s(0, L.hry * 0.8)];
+    BR.region(spline(lm.map(q => [q[0] * 1, q[1] * 1, 0] as LM).map((q, i) => [q[0], q[1], i === 3 ? 0.3 : 0] as LM), 0.4), { z: ry * k, R: L.hry * 0.8 * k, H: L.hry * k, id: ID.HEAD, tex: (p, o) => {
+      const [hx, hy] = Hr.local(p.x, p.y);
+      o.m = plumage(L, M, 99, 0, hy < 0 ? 0.6 : -0.3, 1, -hx / k, hy / k, 0);
+    } });
+  }
 
   // --- folded wing (+ the shellwrench's orange carpal spur at the wrist)
-  if (P.wing === 'fold') {
-    foldedWing(sk, B, rx * k, ry * k, WL, () => ry * k * 0.9 + 0.8, { ext: L.wing.foldExt, droop: P.droop, lift: P.lift, nP: 4, nS: 3 });
-    if (L.id === 'twinfan') {
-      // upright percher: the rufous breast puffs out in front of the folded wing
-      sk.np();
-      const bc = B.p(rx * 0.22, ry * 0.5);
-      sk.ell(bc[0], bc[1], rx * 0.62 * k, ry * 0.58 * k, M.belly, { rot: P.ba, rz: ry * 0.5 * k, z: ry * k * 0.9 + 8 });
-    }
+  if (!flying) {
+    const ext = L.wing.foldExt * k;
+    const len = rx * 1.62 * k + ext, dep = ry * (L.id === 'twinfan' ? 0.8 : 1.02) * k;
+    const c = B.p(rx * (L.id === 'twinfan' ? 0.3 : 0.5), -ry * (L.id === 'twinfan' ? 0.62 : 0.48) - P.lift * 0.8);
+    const a = B.ang(Math.PI + 0.06 - P.lift * 0.3 + P.droop * 0.2);
+    const FL: FoldLook = { len: 1, dep: 1, tert: L.id === 'twinfan' ? 0.62 : 0.55, nP: 5, cov: 0.38, gc: 0.58 };
+    const fm = foldMapBack(c, a, len, dep, P.droop * 0.5);
+    BR.region(spline(foldOutline(fm.map, FL), 0.4), { z: ry * 0.85 * k, R: 1 * k, H: 1.3 * k, id: ID.FOLD, tex: foldTex(FL, fm.inv, (f, o) => foldFill(L, M, f.zone, f.u, f.v, f.edge, f.fi, o)) });
     if (L.id === 'shellwrench') {
-      sk.np();
-      const w = B.p(rx * 0.42, -ry * 0.2 - P.spur * 0.6);
-      sk.ell(w[0], w[1], 0.9 * k + P.spur * 0.2, 0.8 * k + P.spur * 0.2, M.spurM, { z: 12 });
+      const w = fm.map(0.02, 0.38);
+      const tip: V2 = [w[0] + 1.6 * k, w[1] - 0.6 * k - P.spur * 1.4];
+      BR.region(spline([[w[0] - 0.6, w[1] - 0.8, 0], [tip[0], tip[1], 0.9], [w[0] + 0.2, w[1] + 1, 0]], 0.3), { z: ry * k + 3, R: 0.5, H: 0.6, id: ID.SPUR, tex: M.spurM });
     }
   }
 
-  // --- neck
-  const nb = B.p(rx * 0.62, -ry * 0.28);
-  const nl = L.neckL * P.nl * k;
-  const hp: V2 = [nb[0] + Math.cos(P.na) * nl, nb[1] + Math.sin(P.na) * nl];
-  if (nl > 0.6) {
-    sk.np();
-    sk.tube(qbez(nb, lerp2(nb, hp, 0.5), hp, 6), t => (L.neckR0 + (L.neckR1 - L.neckR0) * t) * k, (p) => {
-      if (L.id === 'swashrunner') return p.v > -0.15 ? M.mark : M.back; // the black necklace
-      if (L.id === 'twinfan') return p.v > 0.3 ? M.mark : M.head;
-      return M.head;
-    }, { z: 1.5 });
-  }
-
-  // --- head
-  const H = new Frame2(hp, P.ha, k);
+  // --- bill
+  const tipPt = back ? H.s2(0, 0) : drawBill(BR, M, L, H, P, k);
+  BR.shadow(ID.FOLD, 0.5, 1, 0.1, ID.BODY, 1);
   sk.np();
-  const hc = H.p(0, 0);
-  sk.ell(hc[0], hc[1], L.hrx * k, L.hry * k, (p) => headPat(L, M, p), { rot: P.ha, rz: L.hry * k * 0.95, z: 3 });
-  // bill
-  const tipPt = drawBill(sk, M, L, H, P, k);
-  // eye (red with an orange ring for the shellwrench)
-  const ep = H.p(L.hrx * 0.25, -L.hry * 0.2);
-  const eyeC = drawEye(sk, ep[0], ep[1], { ...L.eye, r: juv ? Math.max(0.5, L.eye.r * 0.8) : L.eye.r }, P.eye ?? eyeSt);
-  // twinfan rictal bristles
-  if (L.id === 'twinfan') { const q = H.p(L.hrx * 0.8, L.hry * 0.1); sk.over(q[0] + 1, q[1] - 1, hex('#2a2420')); sk.over(q[0] + 1, q[1] + 1, hex('#2a2420')); }
+  BR.emit({ drop: 1.3, seam: 0.55, seamDark: 0.24, ao: 0.05, aoR: 2 });
+  if (L.id === 'shellwrench' && !back) crossTips(sk, M, L, H, P, k);
+
+  // --- eye
+  let eyeC: V2;
+  if (back) {
+    eyeC = B.p(rx * 0.5, -ry * 0.75);
+    eyeC = drawEye(sk, eyeC[0], eyeC[1], { ...L.eye, r: juv ? Math.max(0.5, L.eye.r * 0.8) : L.eye.r }, P.eye ?? eyeSt);
+  } else {
+    const ep = H.s2(L.hrx * 0.22 * k, -L.hry * 0.22 * k, L.hry * k);
+    eyeC = drawEye(sk, ep[0], ep[1], { ...L.eye, r: juv ? Math.max(0.5, L.eye.r * 0.8) : L.eye.r }, P.eye ?? eyeSt);
+    if (L.id === 'shellwrench' && (P.eye ?? eyeSt) !== 'closed') {
+      // the orange orbital ring
+      const x = Math.floor(eyeC[0] - 0.5), y = Math.floor(eyeC[1] - 0.5), ring = hex('#f08a2a');
+      sk.overPaint(x - 1, y, ring); sk.overPaint(x - 1, y + 1, ring); sk.overPaint(x, y + 2, ring); sk.overPaint(x + 1, y + 2, ring);
+    }
+    if (L.id === 'swashrunner' && (P.eye ?? eyeSt) !== 'closed') {
+      // the yellow orbital ring that makes the eye show inside the black mask
+      const x = Math.floor(eyeC[0]), y = Math.floor(eyeC[1]);
+      sk.overPaint(x + 1, y, hex('#f2c84a'));
+      if (L.hry * k > 3) sk.overPaint(x - 1, y, hex('#f2c84a'));
+    }
+    if (L.id === 'twinfan') {
+      // rictal bristles round the gape
+      const q = H.s2(L.hrx * 0.95 * k, L.hry * 0.25 * k), c = hex('#2a2420');
+      sk.over(q[0] + 1, q[1] - 1, c); sk.over(q[0] + 1, q[1] + 1, c); sk.over(q[0] + 2, q[1] + 0, c);
+    }
+  }
 
   // --- near leg + near wing
   drawLeg(true);
-  if (P.wing !== 'fold') spreadWing(sk, b, sh3(1), WL, P.wing[0], 1, k, 0);
+  if (flying) {
+    const R = Relief.full(sk);
+    wing(R, VW, wingFrame(L.wing.shape, kw((P.wing as [WingPose, WingPose])[0]), 1), L.wing.look, wf, { id: ID.WING });
+    sk.np();
+    R.emit({ drop: 1, seam: 0.5, seamDark: 0.2 });
+  }
 
   // --- things in the bill
   if (P.prey) drawPrey(sk, M, P, tipPt, H, k);
-  const top = H.p(0, -L.hry - 2);
+  const top = H.s2(0, -L.hry * k - 2);
   return { head: [top[0], top[1] - 2 * k], eye: eyeC };
 }
 
-/** The bill of each species; returns the working tip. */
-function drawBill(sk: Sk, M: M, L: Look, H: Frame2, P: BP, k: number): V2 {
-  const openA = P.open * 0.45;
+/** a wing-local map pointing back along the body from the carpal c (axis angle a, screen) */
+function foldMapBack(c: V2, a: number, len: number, dep: number, droop: number) {
+  const ca = Math.cos(a), sa = Math.sin(a);
+  // u runs along (ca, sa) (backward), v runs across, downward on screen
+  let nx = -sa, ny = ca;
+  if (ny < 0) { nx = -nx; ny = -ny; }
+  const map = (u: number, v: number): V2 => {
+    const y = v * dep + droop * u * u * dep;
+    return [c[0] + ca * u * len + nx * y, c[1] + sa * u * len + ny * y];
+  };
+  const inv = (x: number, y: number): V2 => {
+    const dx = x - c[0], dy = y - c[1];
+    const det = ca * ny - sa * nx || 1e-6;
+    const ul = (dx * ny - dy * nx) / det, yl = (ca * dy - sa * dx) / det;
+    const u = ul / len;
+    return [u, (yl - droop * u * u * dep) / dep];
+  };
+  return { map, inv };
+}
+
+function foldFill(L: Look, M: M, zone: string, u: number, v: number, edge: number, fi: number, o: Tx) {
+  switch (L.id) {
+    case 'swashrunner':
+      // sandy feathers, each with a pale fringe and a dark centre (scaly), dark primaries
+      if (zone === 'pri') { o.m = edge < 0.3 ? M.wing : M.prim; return; }
+      if (zone === 'les') { o.m = edge < 0.35 ? M.belly : M.cov; return; }
+      if (zone === 'gc') { o.m = v > 0.5 ? M.belly : M.wing; return; }
+      o.m = edge < 0.3 ? M.cov : M.wing;
+      if (zone === 'ter' && fi % 2) o.t -= 0.05;
+      return;
+    case 'shellwrench':
+      // black with the broad white wing bar of the greater coverts' tips and secondaries' bases
+      if (zone === 'pri') { o.m = M.prim; if (edge < 0.3) o.t += 0.08; return; }
+      if (zone === 'gc' && v > 0.48) { o.m = M.mark2; return; }
+      if (zone === 'sec' && v > 0.66 && u < 0.45) { o.m = M.mark2; return; }
+      o.m = zone === 'les' ? M.cov : M.wing;
+      if (edge < 0.3) o.t += 0.06;
+      return;
+    default:
+      // twinfan: dusky brown with rufous-edged coverts and tertials, dark primaries
+      if (zone === 'pri') { o.m = M.prim; return; }
+      if (zone === 'gc') { o.m = v > 0.5 ? M.cov : M.wing; return; }
+      o.m = edge < 0.3 ? M.cov : M.wing;
+  }
+}
+
+function wingFill(L: Look, M: M) {
+  const nr = L.wing.look.rows.length;
+  return (w: WingPx, o: Tx) => {
+    switch (L.id) {
+      case 'swashrunner':
+        // sandy coverts, dark flight feathers with a long white wing stripe through their bases
+        if (w.top) {
+          if (w.zone < nr) { o.m = w.fu > 0.8 ? M.belly : M.cov; return; }
+          o.m = w.fu < 0.32 && w.c > 0.2 ? M.belly : w.edge < 0.3 ? M.wing : M.prim;
+          return;
+        }
+        o.m = w.zone < nr ? M.under : w.fu > 0.6 ? M.prim : M.under;
+        return;
+      case 'shellwrench':
+        // black with a white bar the length of the wing (the bases of the flight feathers)
+        if (w.top) {
+          if (w.zone < nr) { o.m = w.zone === nr - 1 && w.fu > 0.7 ? M.mark2 : M.cov; return; }
+          o.m = w.fu < 0.45 && w.s < 0.82 ? M.mark2 : M.prim;
+          if (w.edge < 0.3 && o.m === M.prim) o.t += 0.06;
+          return;
+        }
+        o.m = w.zone < nr ? M.mark2 : w.fu > 0.55 ? M.prim : M.mark2;
+        return;
+      default:
+        // twinfan: dusky wings with buff covert tips, rounded fingered hand
+        if (w.top) {
+          if (w.zone < nr) { o.m = w.fu > 0.8 ? M.cov : M.wing; return; }
+          o.m = w.edge < 0.3 ? M.wing : M.prim;
+          return;
+        }
+        o.m = w.zone < nr ? M.belly : M.wing;
+    }
+  };
+}
+
+/** The bill of each species, a contour in the head frame; returns the working tip. */
+function drawBill(R: Relief, M: M, L: Look, H: HeadF, P: BP, k: number): V2 {
+  const open = P.open;
+  const bx = L.hrx * 0.86 * k; // bill base (head-local x)
+  const z0 = L.hry * k + 2;
   if (L.id === 'shellwrench') {
-    // long and slim like a chisel, the mandible tips crossed like pliers; twisting flexes the cross
-    const len = 8.4 * k, base = H.p(L.hrx * 0.72, L.hry * 0.05);
-    const ua = P.ha + 0.05 - openA * 0.3;
-    const la = P.ha + 0.05 + openA;
-    const ut: V2 = [base[0] + Math.cos(ua) * len, base[1] + Math.sin(ua) * len];
-    const lb: V2 = [base[0] - 0.3, base[1] + 0.9 * k];
-    const lt: V2 = [lb[0] + Math.cos(la) * len * 0.96, lb[1] + Math.sin(la) * len * 0.96];
-    // lower mandible: the tip bends UP across the upper one
-    sk.np();
-    const lhook: V2 = [lt[0] + Math.cos(la - 1.1 - P.twist * 0.35) * 1.8 * k, lt[1] + Math.sin(la - 1.1 - P.twist * 0.35) * 1.8 * k];
-    sk.blade(lb[0], lb[1], lt[0], lt[1], s => Math.max(0.3, 0.55 * k * (1 - s * 0.4)), M.bill, { z0: 5.2, z1: 5.2, bias: -0.1 });
-    sk.line(lt[0], lt[1], lhook[0], lhook[1], M.tip, 0.5, 5.3);
-    // upper mandible: deeper at the base, the tip bends DOWN across the lower one
-    sk.np();
-    const uhook: V2 = [ut[0] + Math.cos(ua + 1.15 + P.twist * 0.35) * 1.7 * k, ut[1] + Math.sin(ua + 1.15 + P.twist * 0.35) * 1.7 * k];
-    sk.blade(base[0], base[1] - 0.2, ut[0], ut[1], s => Math.max(0.35, 0.85 * k * (1 - Math.pow(s, 1.3) * 0.6)), (p) => (p.t > 0.82 ? M.tip : M.bill), { z0: 5.6, z1: 5.6, curl: 0.5 });
-    sk.line(ut[0], ut[1], uhook[0], uhook[1], M.tip, 0.6, 5.7);
-    if (P.open > 0.3) sk.line(base[0], base[1] + 0.5, (ut[0] + lt[0]) / 2 - Math.cos(P.ha) * 2, (ut[1] + lt[1]) / 2, M.mouth, 0.2, 6, true);
-    return lerp2(uhook, lhook, 0.5);
+    // long, slim and flattened like a chisel; the tips cross like pliers (twist flexes the cross)
+    const len = 8.4 * k, tw = P.twist * 0.35 * k;
+    const oa = open * 0.3, co = Math.cos(oa), so = Math.sin(oa);
+    const J = (x: number, y: number, sh = 0): LM => { const dx = x - bx, dy = y; return H.s(bx + dx * co - dy * so, dx * so + dy * co, 0, sh); };
+    // lower mandible (its crossed tip is placed pixel by pixel after the lighting, see crossTips)
+    R.region(spline([J(bx - 0.2, 0.15), J(bx + len * 0.55, 0.3), J(bx + len * 0.97, 0.35, 0.5), J(bx + len * 0.97, 0.95 * k, 0.5), J(bx + len * 0.5, 1.0 * k), J(bx - 0.2, 1.1 * k)], 0.3), { z: z0, R: 0.5, H: 0.5, id: ID.JAW, tex: (p, o) => {
+      const [hx] = H.local(p.x, p.y);
+      o.m = hx > bx + len * 0.86 ? M.tip : M.bill;
+    } });
+    if (open > 0.3) R.region(spline([H.s(bx, 0.2), H.s(bx + len * 0.6, 0.15), J(bx + len * 0.6, 0.4), J(bx, 0.4)], 0.3), { z: z0 - 0.3, R: 0.3, H: 0.2, id: ID.JAW, tex: M.mouth });
+    // upper mandible: deeper at the base, flattened like a chisel
+    R.region(spline([H.s(bx - 0.3, -1.1 * k), H.s(bx + len * 0.5, -0.75 * k), H.s(bx + len, -0.6 * k, 0.5), H.s(bx + len, 0.3, 0.5), H.s(bx + len * 0.5, 0.3), H.s(bx - 0.2, 0.3)], 0.3), { z: z0 + 0.5, R: 0.6, H: 0.7, id: ID.BILL, tex: (p, o) => {
+      const [hx, hy] = H.local(p.x, p.y);
+      o.m = hx > bx + len * 0.88 ? M.tip : M.bill;
+      // the nostril groove along the base
+      if (hx < bx + len * 0.4 && Math.abs(hy + 0.35 * k) < 0.25) o.z -= 0.4;
+    } });
+    void tw;
+    return H.s2(bx + len * 0.98, 0.4 * k);
   }
   if (L.id === 'swashrunner') {
     // short black bill with a slightly swollen, touch-sensitive tip
-    const len = 2.6 * k, base = H.p(L.hrx * 0.75, L.hry * 0.08);
-    const ua = P.ha + 0.1 - openA * 0.3;
-    const tip: V2 = [base[0] + Math.cos(ua) * len, base[1] + Math.sin(ua) * len];
-    sk.np();
-    sk.blade(base[0], base[1] - 0.2, tip[0], tip[1], s => Math.max(0.4, 0.75 * k * (1 - s * 0.5) + (s > 0.8 ? 0.2 : 0)), M.bill, { z0: 5.5, z1: 5.5 });
-    if (P.open > 0.2) { const la = P.ha + 0.1 + openA; sk.line(base[0], base[1] + 0.6, base[0] + Math.cos(la) * len * 0.9, base[1] + 0.6 + Math.sin(la) * len * 0.9, M.bill, 0.3, 5.4); }
-    return tip;
+    const len = 2.3 * k;
+    const lo = open * 0.4;
+    R.region(spline([H.s(bx - 0.2, -0.75 * k), H.s(bx + len * 0.45, -0.45 * k), H.s(bx + len * 0.85, -0.5 * k), H.s(bx + len * 1.02, 0.05 * k, 0.6), H.s(bx + len * 0.85, 0.5 * k + lo), H.s(bx + len * 0.45, 0.4 * k + lo * 0.6), H.s(bx - 0.2, 0.7 * k)], 0.3), { z: z0, R: 0.5, H: 0.5, id: ID.BILL, tex: (p, o) => {
+      const [hx, hy] = H.local(p.x, p.y);
+      o.m = M.bill;
+      if (open > 0.2 && hy > 0.05 && hx < bx + len * 0.8) o.m = M.mouth;
+    } });
+    return H.s2(bx + len, 0.1 * k);
   }
-  // twinfan: tiny broad-based flycatcher bill
-  const len = 1.8 * k, base = H.p(L.hrx * 0.78, L.hry * 0.12);
-  const ua = P.ha + 0.05 - openA * 0.5, la = P.ha + 0.2 + openA * 1.2;
-  const ut: V2 = [base[0] + Math.cos(ua) * len, base[1] + Math.sin(ua) * len];
-  sk.np();
-  sk.blade(base[0], base[1] - 0.3, ut[0], ut[1], s => Math.max(0.35, 0.8 * (1 - s)), M.bill, { z0: 5.5, z1: 5.5 });
-  if (P.open > 0.2) sk.line(base[0], base[1] + 0.5, base[0] + Math.cos(la) * len, base[1] + 0.5 + Math.sin(la) * len, M.bill, 0.3, 5.4);
-  return ut;
+  // twinfan: a tiny, broad-based flycatcher bill, the lower mandible dropping open to snap insects
+  const len = 1.9 * k;
+  const lo = open * 1.1 * k;
+  R.region(spline([H.s(bx - 0.4, -0.8 * k), H.s(bx + len * 0.6, -0.45 * k), H.s(bx + len, 0.05 * k, 0.7), H.s(bx + len * 0.55, 0.3 * k), H.s(bx - 0.3, 0.45 * k)], 0.3), { z: z0 + 0.4, R: 0.4, H: 0.4, id: ID.BILL, tex: M.bill });
+  R.region(spline([H.s(bx - 0.3, 0.45 * k), H.s(bx + len * 0.85, 0.35 * k + lo * 0.8, 0.6), H.s(bx + len * 0.4, 0.8 * k + lo * 0.6), H.s(bx - 0.3, 0.85 * k)], 0.3), { z: z0, R: 0.4, H: 0.3, id: ID.JAW, tex: open > 0.3 ? M.mouth : M.bill });
+  return H.s2(bx + len, 0.2 * k);
+}
+
+/**
+ * The Shellwrench's crossed tips, placed pixel by pixel: the upper mandible's tip hooks down past the
+ * lower, the lower's tip bends up past the upper (an X at the end of the bill); twisting flexes it.
+ */
+function crossTips(sk: Sk, M: M, L: Look, H: HeadF, P: BP, k: number) {
+  const bx = L.hrx * 0.86 * k, len = 8.4 * k, tw = P.twist * 0.4 * k;
+  const oa = P.open * 0.3;
+  const zU = 40, zL = 39;
+  const u0 = H.s2(bx + len * 0.97, -0.2 * k), u1 = H.s2(bx + len + 1.2 * k, 1.5 * k + tw);
+  const lj = (x: number, y: number) => { const dx = x - bx; return H.s2(bx + dx * Math.cos(oa) - y * Math.sin(oa), dx * Math.sin(oa) + y * Math.cos(oa)); };
+  const l0 = lj(bx + len * 0.95, 0.7 * k), l1 = lj(bx + len + 1.1 * k, -0.95 * k - tw);
+  sk.line(l0[0], l0[1], l1[0], l1[1], M.tip, 0.5, zL);
+  sk.line(u0[0], u0[1], u1[0], u1[1], M.tip, 0.72, zU);
 }
 
 /** Twinfan: two separate fans on a split tail, upper and lower, flared independently. */
-function twinFans(sk: Sk, M: M, L: Look, rump: V2, tA: number, P: BP, k: number) {
-  // each fan: dark feathers with crisp white tips; open fans show a white outer edge
-  const fan = (a: number, spread: number, z: number, outer: 'up' | 'down') => {
+function twinFans(R: Relief, M: M, L: Look, rump: V2, tA: number, P: BP, k: number) {
+  const V0 = new View3(0, 0, 0, [0, 0], 1);
+  // each fan lies in the plane of the screen: dark feathers with crisp white tips; an open fan shows
+  // a white outer edge
+  const one = (a: number, spread: number, z: number, outer: 'up' | 'down', id: number) => {
     const n = 4;
-    tailFan(sk, rump, a, L.tail.L * k * (0.95 + spread * 0.15), L.tail.hw, n, 0.08 + spread * 0.7, (p, i) => {
-      if (p.t > 0.78) return M.tailW;
-      // (screen angles: a larger angle points a backward feather further up)
-      const edge = outer === 'up' ? i === n - 1 : i === 0;
-      if (edge && spread > 0.4 && p.t > 0.3) return M.tailW;
-      return M.tail;
-    }, z, k, 0, 0.15);
+    const dir: V3 = [Math.cos(a), -Math.sin(a), 0], lat: V3 = [Math.sin(a), Math.cos(a), 0];
+    const F: FanOut = fan(V0, B3(rump), dir, lat, n, 0.14 + spread * 0.95, t => L.tail.L * k * (0.95 + spread * 0.15) * (1 - Math.abs(t - 0.5) * 0.12), { minW: 1.2 * k, notch: 0.12, base: 0.7 * k, point: 0.35 });
+    R.region(spline(F.poly, 0.35), { z, R: 0.7, H: 0.8, id, tex: (p, o) => {
+      const q = fanAt(F, p.x, p.y);
+      o.m = M.tail;
+      if (q.u > 0.74) o.m = M.tailW;
+      // screen: a larger angle points a backward feather further down; outer edge by fan
+      const edgeI = outer === 'up' ? 0 : n - 1;
+      if (q.i === edgeI && spread > 0.3 && q.u > 0.25) o.m = M.tailW;
+      if (q.edge < 0.28) o.z -= 0.35;
+    } });
   };
-  fan(tA - 0.06 - P.fanL * 0.5, P.fanL, -1.2, 'down');
-  fan(tA + 0.06 + P.fanU * 0.55, P.fanU, -0.6, 'up');
+  one(tA - 0.06 - P.fanL * 0.5, P.fanL, -2.4, 'down', ID.TAIL2);
+  one(tA + 0.06 + P.fanU * 0.55, P.fanU, -1.6, 'up', ID.TAIL);
 }
 
-function drawPrey(sk: Sk, M: M, P: BP, tip: V2, H: Frame2, k: number) {
-  sk.np();
+function drawPrey(sk: Sk, M: M, P: BP, tip: V2, H: HeadF, k: number) {
+  const R = Relief.full(sk);
+  const hang = (cx: number, cy: number, rx: number, ry: number, a: number): LM[] => {
+    // a mussel: one blunt end, one pointed (a hand-shaped outline, not an ellipse)
+    const ca = Math.cos(a), sa = Math.sin(a);
+    const pts: [number, number, number][] = [[-1, 0, 0.2], [-0.7, -0.75, 0], [0.1, -0.95, 0], [0.75, -0.55, 0], [1, 0.05, 0.5], [0.6, 0.6, 0], [-0.2, 0.85, 0], [-0.8, 0.55, 0]];
+    return pts.map(([x, y, s]) => [cx + (x * rx * ca - y * ry * sa), cy + (x * rx * sa + y * ry * ca), s] as LM);
+  };
   if (P.prey === 'mussel') {
     // a blue-black mussel clamped in the crossed tips, turning as the head twists
-    const c: V2 = [tip[0] + 0.6 * k, tip[1] + 1.6 * k];
-    sk.ell(c[0], c[1], 2.2 * k, 1.3 * k, (p) => (p.v < -0.6 ? M.nacre : M.shell), { rot: H.a + 1.2 + P.twist * 0.35, z: 7 });
+    const c: V2 = [tip[0] + 0.6 * k, tip[1] + 1.8 * k];
+    const a = Math.atan2(H.fwd[1] * -1, H.fwd[0]) + 1.2 + P.twist * 0.35;
+    R.region(spline(hang(c[0], c[1], 2.3 * k, 1.3 * k, a), 0.35), { z: 12, R: 0.8, H: 1, id: ID.PREY, tex: (p, o) => {
+      const d = (p.x - c[0]) * Math.cos(a) + (p.y - c[1]) * Math.sin(a);
+      o.m = M.shell;
+      if (fr(d * 0.9) < 0.2) o.z -= 0.3; // growth rings
+    } });
   } else if (P.prey === 'musselOpen') {
     const c: V2 = [tip[0] + 0.6 * k, tip[1] + 1.4 * k];
-    sk.ell(c[0] - 1, c[1], 1.8 * k, 1 * k, M.shell, { rot: H.a + 0.6, z: 7 });
-    sk.ell(c[0] + 1, c[1] + 0.4, 1.8 * k, 1 * k, M.shell, { rot: H.a + 1.9, z: 7 });
-    sk.ell(c[0], c[1] - 0.2, 1.1 * k, 0.8 * k, M.flesh, { z: 8 });
+    R.region(spline(hang(c[0] - 1, c[1], 1.9 * k, 1 * k, 0.6), 0.35), { z: 12, R: 0.6, H: 0.8, id: ID.PREY, tex: M.shell });
+    R.region(spline(hang(c[0] + 1, c[1] + 0.4, 1.9 * k, 1 * k, 1.9), 0.35), { z: 12, R: 0.6, H: 0.8, id: ID.PREY + 1, tex: (p, o) => { o.m = M.nacre; if (Math.hypot(p.x - c[0] - 1, p.y - c[1] - 0.4) < 0.9 * k) o.m = M.flesh; } });
   } else if (P.prey === 'hopper' || P.prey === 'moth') {
-    sk.ell(tip[0] + 0.5, tip[1] + 0.3, 0.9 * k, 0.6 * k, M.bug, { z: 8 });
+    const m = P.prey === 'moth';
+    R.region(spline([[tip[0] - 0.4, tip[1] - 0.2, 0], [tip[0] + 1.2 * k, tip[1] - (m ? 1.2 : 0.4) * k, 0.6], [tip[0] + 1.4 * k, tip[1] + 0.4, 0], [tip[0] + 0.2, tip[1] + 0.8 * k, 0.6]], 0.3), { z: 12, R: 0.4, H: 0.4, id: ID.PREY, tex: M.bug });
   }
+  sk.np();
+  R.emit({ drop: 1, seam: 0.5, seamDark: 0.2 });
 }
 
 // ------------------------------------------------------------------ species
@@ -525,16 +748,21 @@ function makeBird(o: BirdOpts): SpeciesDef {
   };
 }
 const A = (frames: number, fps: number, loop = true): AnimDef => ({ frames, fps, loop });
+const seg = (len: number, sweep: number, flex: number, shrink: number, dih = 0.05) => ({ len, sweep, dih, flex, shrink });
 
 export const SWASHRUNNER = makeBird({
   look: {
     id: 'swashrunner', name: 'Swashrunner', len: 12, height: 12,
-    rx: 3.8, ry: 3.1, stance: -0.22, neckL: 1.4, neckR0: 2.3, neckR1: 2, hrx: 2.2, hry: 2,
-    leg: { tib: 2.6, tar: 3.8, rT: 0.9, rt: 0.45, toe: 2.4, talon: 0.3 }, hipX: -0.4,
-    tail: { L: 2.8, hw: 0.9, n: 5, spread: 0.3 },
-    wing: { arm: 5, hand: 5, sec: 3, prim: 5, nS: 4, nP: 5, finger: 0, pw: 0.8, sw: 1, round: 0.2, foldExt: 1.4 },
+    rx: 3.8, ry: 3.1, stance: -0.22, neckL: 1.3, neckR0: 2.2, neckR1: 1.9, hrx: 2.6, hry: 2.45,
+    leg: { tib: 2.8, tar: 4.0, toe: 3.5, foot: 'lobe', hallux: 1 }, hipX: -0.4,
+    tail: { L: 2.8, n: 5, spread: 0.3 },
+    wing: {
+      shape: { sh: [1.1, 1.1, 1.4], segs: [seg(2.5, -0.1, -0.6, 0.2), seg(3.0, 0.3, 0.9, 0.25), seg(6.0, -0.5, -0.9, 0.4, 0.02)], chord: [3.1, 3.3, 2.6, 0.4], spar: 0.5 },
+      look: { wrist: 2, nS: 5, scallop: 0.1, nP: 6, slot: 0.18, fingers: 2, rows: [0.3], spar: 0.55, minW: 1, point: 0.8, reach: 0.4 },
+      foldExt: 1.6,
+    },
     eye: { r: 0.6, iris: hex('#141012'), lash: hex('#141012') },
-    cols: { back: '#b8a88c', belly: '#f6f4ee', head: '#b0a084', wing: '#a89878', prim: '#4a4038', cov: '#c4b496', tail: '#5a4e42', bill: '#1e1a1c', leg: '#eca040', web: '#f4c070', mark: '#1e1a1c' },
+    cols: { back: '#b8a88c', belly: '#f6f4ee', head: '#b0a084', wing: '#8a7a62', prim: '#4a4038', cov: '#c4b496', tail: '#5a4e42', bill: '#1e1a1c', leg: '#eca040', web: '#f6c878', mark: '#1e1a1c' },
     flap: 1.1, bellyBias: 0.3,
   },
   anims: { idle: A(4, 3), walk: A(6, 10), run: A(6, 18), feed: A(4, 10), alert: A(2, 3), call: A(2, 6), rest: A(2, 1.2), takeoff: A(3, 12, false), fly: A(4, 16), glide: A(2, 3), land: A(3, 10, false) },
@@ -546,13 +774,17 @@ export const SWASHRUNNER = makeBird({
 export const SHELLWRENCH = makeBird({
   look: {
     id: 'shellwrench', name: 'Pied Shellwrench', len: 18, height: 17,
-    rx: 5.6, ry: 3.7, stance: -0.3, neckL: 2.2, neckR0: 2.7, neckR1: 2.3, hrx: 2.7, hry: 2.4,
-    leg: { tib: 3.8, tar: 4.4, rT: 1.3, rt: 0.55, toe: 2.4, talon: 0.4 }, hipX: -0.6,
-    tail: { L: 3.6, hw: 1.1, n: 5, spread: 0.3 },
-    wing: { arm: 8, hand: 7.5, sec: 4.5, prim: 8, nS: 5, nP: 6, finger: 0.1, pw: 1.2, sw: 1.4, round: 0.25, foldExt: 2.6 },
+    rx: 5.6, ry: 3.7, stance: -0.3, neckL: 2.0, neckR0: 2.5, neckR1: 2.2, hrx: 3.0, hry: 2.7,
+    leg: { tib: 3.8, tar: 4.4, toe: 3, foot: 'plain', thick: true, hallux: 0 }, hipX: -0.6,
+    tail: { L: 3.6, n: 6, spread: 0.3 },
+    wing: {
+      shape: { sh: [1.6, 1.3, 1.8], segs: [seg(3.4, -0.1, -0.6, 0.2), seg(4.6, 0.28, 0.9, 0.25), seg(8.2, -0.4, -0.9, 0.4, 0.02)], chord: [4.4, 4.6, 3.8, 0.6], spar: 0.6 },
+      look: { wrist: 2, nS: 7, scallop: 0.08, nP: 7, slot: 0.22, fingers: 3, rows: [0.18, 0.36], spar: 0.7, minW: 1.1, point: 0.75, reach: 0.4 },
+      foldExt: 2.6,
+    },
     eye: { r: 1, iris: hex('#e02a1e'), lash: hex('#140c0c'), ring: hex('#f08a2a') },
     cols: { back: '#1e1c22', belly: '#f4f2ec', head: '#18161c', wing: '#24222a', prim: '#141216', cov: '#2c2a32', tail: '#1a181e', bill: '#f0581e', billTip: '#f6c040', leg: '#e89a9a', mark: '#1e1c22', mark2: '#f4f2ec' },
-    flap: 0.95, light: 0.26, bellyBias: 0.22, sleek: true,
+    flap: 0.95, light: 0.22, bellyBias: 0.4,
   },
   anims: { idle: A(4, 2.5), walk: A(6, 8), run: A(6, 14), probe: A(4, 7), pry: A(6, 6), eat: A(4, 7), pipe: A(4, 8), alert: A(2, 3), call: A(2, 5), rest: A(2, 1.2), takeoff: A(3, 10, false), fly: A(6, 11), glide: A(2, 2), land: A(3, 8, false) },
   ground: { w: 44, h: 36, ox: 18, oy: 31 },
@@ -564,19 +796,23 @@ export const TWINFAN = makeBird({
   look: {
     id: 'twinfan', name: 'Twinfan', len: 15, height: 11,
     rx: 3.6, ry: 3, stance: -0.95, neckL: 0.7, neckR0: 2.3, neckR1: 2.1, hrx: 2.5, hry: 2.35,
-    leg: { tib: 1.6, tar: 2, rT: 0.9, rt: 0.5, toe: 1.6, talon: 0.45 }, hipX: -0.2,
-    tail: { L: 8.5, hw: 1, n: 4, spread: 0.2 },
-    wing: { arm: 5.5, hand: 5.5, sec: 3.2, prim: 5.2, nS: 4, nP: 5, finger: 0.2, pw: 0.95, sw: 1.05, round: 0.6, foldExt: 1 },
+    leg: { tib: 1.6, tar: 2, toe: 1.8, foot: 'perch', hallux: 1.6 }, hipX: -0.2,
+    tail: { L: 8.5, n: 4, spread: 0.2 },
+    wing: {
+      shape: { sh: [1.1, 1.1, 1.4], segs: [seg(2.4, -0.05, -0.6, 0.2), seg(3.1, 0.3, 0.9, 0.25), seg(5, -0.25, -0.9, 0.4, 0.02)], chord: [3.4, 3.6, 3.4, 1.4], spar: 0.5 },
+      look: { wrist: 2, nS: 5, scallop: 0.1, nP: 6, slot: 0.4, fingers: 4, rows: [0.32], spar: 0.55, minW: 1, point: 0.45, reach: 0.9 },
+      foldExt: 1,
+    },
     eye: { r: 0.8, iris: hex('#141012'), lash: hex('#141012') },
     cols: { back: '#4a3c32', belly: '#ec9e5a', head: '#3a3029', wing: '#3e3229', prim: '#221c18', cov: '#6a5848', tail: '#1e1814', bill: '#1a1616', leg: '#3a3230', mark: '#16120f', mark2: '#fbf8f2' },
-    flap: 1.15, sleek: true, perch: true, bellyBias: 0.15, light: 0.32,
+    flap: 1.15, perch: true, bellyBias: 0.15, light: 0.32,
   },
   anims: { idle: A(4, 4), hop: A(4, 10), fan: A(4, 8), call: A(2, 6), alert: A(2, 3), fly: A(4, 18), glide: A(2, 3), hawk: A(4, 14), land: A(3, 10, false) },
   ground: { w: 40, h: 36, ox: 19, oy: 26 },
   flight: { w: 48, h: 44, ox: 24, oy: 22 },
   airAnims: ['fly', 'glide', 'hawk', 'land'],
 });
-void hh;
+void hh; void clamp; void foldMap;
 
 /**
  * A bush twig for the twinfan to perch on (anchored at the perch point, the twig's top middle):

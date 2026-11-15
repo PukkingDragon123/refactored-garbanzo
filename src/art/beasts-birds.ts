@@ -1,11 +1,16 @@
-// V2 birds: one parametric bird body (egg body, neck chain, head, beak, IK legs, fanned tail,
-// layered folded wing, 3D spread wings) driven by per-species looks and a shared pose library.
-// Gale Hawk, Crag Auk, Torrent Dipper, Thunder Stork, Monarch and Nutcracker are all built from it.
+// V2 birds: a shared pose library (body centre and pitch, neck, head, beak, legs, wing poses) and
+// per-species looks giving the geometry. The Gale Hawk, Crag Auk, Torrent Dipper, Thunder Stork and
+// Nutcracker are painted by the sculpted Relief bird painter (beasts-lbird-paint.ts) from their designs
+// in beasts-lbird-looks.ts; the Monarch has its own painter (beasts-monarch.ts). drawBird below, the
+// older primitive-built body, is kept as the fallback for a look without a design.
 
 import { Sk, V2, V3, Px, rmp, drawEye, EyeSpec, BeastEye, SpeciesDef, AnimDef, TAU, gait, qbez, fr, hh } from './beasts-core';
 import { Frame2 } from './beasts-rig';
 import { spreadWing, foldedWing, birdLeg, tailFan, scallop, WingLook, WingPose, BirdLegLook } from './beasts-bird';
 import { hex } from './color';
+import { drawMonarch } from './beasts-monarch';
+import { drawLBird, LBDesign } from './beasts-lbird-paint';
+import { HAWK, AUK, DIPPER, STORK, NUTCRACKER_D } from './beasts-lbird-looks';
 
 // ------------------------------------------------------------------ look
 interface BirdCols {
@@ -561,6 +566,8 @@ interface BirdOpts {
   flight: { w: number; h: number; ox: number; oy: number };
   airAnims: string[];
   eyeFor?: (anim: string, frame: number) => BeastEye;
+  /** a sculpted design for the Relief bird painter (beasts-lbird-paint.ts) */
+  design?: LBDesign;
 }
 function makeBird(o: BirdOpts): SpeciesDef {
   const isAir = (a: string) => o.airAnims.includes(a);
@@ -579,6 +586,7 @@ function makeBird(o: BirdOpts): SpeciesDef {
       const n = o.anims[anim]?.frames ?? 1;
       const fn = (isAir(anim) ? AIR[anim] : G[anim]) ?? G.idle;
       const P = fn(o.look, frame, n);
+      if (o.design) { o.design.pose?.(anim, frame, n, P); return drawLBird(sk, o.look, o.design, P, eye, juv); }
       return drawBird(sk, o.look, P, eye, juv);
     },
     eyeFor: o.eyeFor ?? ((anim) => (anim === 'sleep' ? 'closed' : anim === 'alert' ? 'alert' : 'open')),
@@ -592,11 +600,11 @@ const BASE = { idle: A(4, 3), walk: A(6, 9), alert: A(2, 3), call: A(2, 5), pree
 export const GALEHAWK = makeBird({
   look: {
     name: 'Gale Hawk', len: 30, height: 26,
-    rx: 7.5, ry: 5.2, stance: -0.75, neckL: 3, neckR0: 3.6, neckR1: 3, neckS: 0.1,
+    rx: 7.5, ry: 5.2, stance: -0.95, neckL: 3, neckR0: 3.6, neckR1: 3, neckS: 0.1,
     hrx: 3.6, hry: 3.2, beak: { len: 3.4, d: 2.8, hook: 1.8, curve: 0.5, lower: 0.6 },
     leg: { tib: 4.6, tar: 4.2, rT: 2.2, rt: 0.9, toe: 2.6, talon: 1.3 }, hipX: -1,
     tail: { L: 10, hw: 1.5, n: 7, spread: 0.35 },
-    wing: { arm: 13, hand: 12, sec: 8, prim: 14, nS: 7, nP: 6, finger: 0.7, pw: 1.5, sw: 1.7, round: 0.5, foldExt: 5 },
+    wing: { arm: 12, hand: 11.5, sec: 8, prim: 13.5, nS: 7, nP: 6, finger: 0.7, pw: 1.5, sw: 1.7, round: 0.5, foldExt: 5 },
     eye: { r: 1.1, iris: hex('#f0b020'), lash: hex('#2a1c14'), brow: hex('#3a2818'), ring: hex('#f2d060') },
     cols: { back: '#6a4a30', belly: '#e8d8b8', head: '#5a3e2a', neck: '#7a5838', wing: '#5e4028', prim: '#2e2420', cov: '#7a5a3a', tail: '#8a6440', beak: '#3a3a44', beakTip: '#1e1e26', cere: '#f0c030', leg: '#f0c030', crest: '#3a2a1e', mask: '#2e241e' },
     crest: { n: 3, len: 4 }, bars: true, flap: 0.85,
@@ -605,6 +613,7 @@ export const GALEHAWK = makeBird({
   ground: { w: 60, h: 50, ox: 26, oy: 44 },
   flight: { w: 100, h: 90, ox: 50, oy: 45 },
   airAnims: ['fly', 'glide', 'soar', 'dive', 'strike', 'carry', 'land'],
+  design: HAWK,
   eyeFor: (a) => (a === 'sleep' ? 'closed' : a === 'strike' || a === 'dive' || a === 'threat' ? 'angry' : a === 'alert' ? 'alert' : 'open'),
 });
 G.threat = (L, f) => { const p = G.display(L, f, 4); p.open = 1; p.eye = 'angry'; return p; };
@@ -619,12 +628,13 @@ export const CRAGAUK = makeBird({
     wing: { arm: 6, hand: 6, sec: 3.5, prim: 6, nS: 5, nP: 5, finger: 0, pw: 1, sw: 1.1, round: 0.2, foldExt: 1 },
     eye: { r: 0.9, iris: hex('#2a1810'), lash: hex('#101014'), ring: hex('#f0e6d0') },
     cols: { back: '#23252e', belly: '#f2f0ea', head: '#1c1e26', wing: '#262832', prim: '#16161c', beak: '#2a2a30', beakTip: '#e8a020', leg: '#e87830', web: '#e06a28', throat: '#f0b830' },
-    throatFlare: true, flap: 1.1,
+    throatFlare: true, flap: 0.92,
   },
   anims: { ...BASE, fly: A(4, 14), display: A(4, 6), swim: A(4, 5), dive: A(4, 8), hop: A(4, 8) },
   ground: { w: 34, h: 30, ox: 15, oy: 26 },
   flight: { w: 50, h: 40, ox: 25, oy: 20 },
   airAnims: ['fly', 'glide'],
+  design: AUK,
 });
 
 export const TORRENTDIPPER = makeBird({
@@ -632,25 +642,26 @@ export const TORRENTDIPPER = makeBird({
     name: 'Torrent Dipper', len: 12, height: 10,
     rx: 4, ry: 3.3, stance: -0.3, neckL: 1, neckR0: 2.4, neckR1: 2.1, neckS: 0,
     hrx: 2.2, hry: 2, beak: { len: 1.7, d: 1.1, hook: 0, curve: 0.1 },
-    leg: { tib: 2, tar: 2.4, rT: 1, rt: 0.5, toe: 1.6, talon: 0.4 }, hipX: -0.5,
-    tail: { L: 2.6, hw: 0.9, n: 5, spread: 0.3, cock: 0.9 },
+    leg: { tib: 2, tar: 2.4, rT: 1, rt: 0.36, toe: 1.7, talon: 0.4 }, hipX: -0.5,
+    tail: { L: 3.6, hw: 0.9, n: 5, spread: 0.3, cock: 0.9 },
     wing: { arm: 4, hand: 4, sec: 2.6, prim: 4, nS: 4, nP: 4, finger: 0, pw: 0.8, sw: 0.9, round: 0.6, foldExt: 0.5 },
     eye: { r: 0.6, iris: hex('#1a1210'), lash: hex('#f4f4f0') },
     cols: { back: '#4a5a6e', belly: '#6a5040', head: '#3e4a5c', wing: '#44546a', prim: '#2c3644', beak: '#1e1e22', leg: '#9aa0a8', throat: '#f2f0ea' },
-    throatFlare: true, eyelid: true, flap: 1.1,
+    throatFlare: true, eyelid: true, flap: 0.9,
   },
   anims: { ...BASE, fly: A(4, 16), bob: A(4, 8), swim: A(4, 5), dive: A(4, 7), hop: A(4, 8) },
   ground: { w: 28, h: 24, ox: 12, oy: 20 },
   flight: { w: 36, h: 30, ox: 18, oy: 15 },
   airAnims: ['fly', 'glide'],
+  design: DIPPER,
 });
 
 export const SNAKESTORK = makeBird({
   look: {
     name: 'Thunder Stork', len: 40, height: 58,
-    rx: 10, ry: 6.5, stance: -0.2, neckL: 13, neckR0: 3.2, neckR1: 2.2, neckS: 0.45,
-    hrx: 3.4, hry: 2.8, beak: { len: 13, d: 3.2, hook: 0, curve: -0.05, lower: 0.95 },
-    leg: { tib: 13, tar: 15, rT: 2, rt: 1.1, toe: 4, talon: 0.6 }, hipX: 0,
+    rx: 10, ry: 6.5, stance: -0.2, neckL: 13, neckR0: 2.7, neckR1: 1.9, neckS: 0.6,
+    hrx: 3.6, hry: 3.0, beak: { len: 13, d: 3.2, hook: 0, curve: -0.05, lower: 0.95 },
+    leg: { tib: 13, tar: 15, rT: 1.45, rt: 0.72, toe: 4, talon: 0.6 }, hipX: 0,
     tail: { L: 6, hw: 1.6, n: 5, spread: 0.3 },
     wing: { arm: 20, hand: 18, sec: 11, prim: 17, nS: 8, nP: 7, finger: 0.85, pw: 1.8, sw: 2, round: 0.6, foldExt: 4 },
     eye: { r: 1, iris: hex('#e8d040'), lash: hex('#141418'), ring: hex('#c83a2a') },
@@ -661,25 +672,39 @@ export const SNAKESTORK = makeBird({
   ground: { w: 90, h: 90, ox: 36, oy: 80 },
   flight: { w: 150, h: 110, ox: 75, oy: 55 },
   airAnims: ['fly', 'glide'],
+  design: STORK,
 });
 
-export const MONARCH = makeBird({
-  look: {
-    name: 'Monarch', len: 70, height: 60,
-    rx: 16, ry: 10, stance: -0.55, neckL: 8, neckR0: 4.5, neckR1: 2.8, neckS: 0.35,
-    hrx: 4.8, hry: 4, beak: { len: 5.5, d: 4.2, hook: 2.6, curve: 0.45, lower: 0.6 },
-    leg: { tib: 9, tar: 8, rT: 3.6, rt: 1.6, toe: 4.5, talon: 1.4 }, hipX: -2,
-    tail: { L: 14, hw: 2.4, n: 9, spread: 0.45 },
-    wing: { arm: 40, hand: 38, sec: 18, prim: 30, nS: 10, nP: 7, finger: 1, pw: 2.6, sw: 3, round: 0.7, foldExt: 10 },
-    eye: { r: 1.3, iris: hex('#b83020'), lash: hex('#1e1414'), brow: hex('#6a4a40') },
-    cols: { back: '#3a2e2c', belly: '#e8e0d0', head: '#e0b0a0', neck: '#d8a898', wing: '#322826', prim: '#1a1616', cov: '#4a3a34', tail: '#2a2220', beak: '#d8c8a8', beakTip: '#6a5a4a', cere: '#c86a50', leg: '#9a8a80', claw: '#2a2420' },
-    bareNeck: true, flap: 0.55,
-  },
+const MONARCH_LOOK: BirdLook = {
+  name: 'Monarch', len: 70, height: 60,
+  rx: 16, ry: 10, stance: -0.55, neckL: 8, neckR0: 4.5, neckR1: 2.8, neckS: 0.35,
+  hrx: 4.8, hry: 4, beak: { len: 5.5, d: 4.2, hook: 2.6, curve: 0.45, lower: 0.6 },
+  leg: { tib: 9, tar: 8, rT: 3.6, rt: 1.6, toe: 4.5, talon: 1.4 }, hipX: -2,
+  tail: { L: 14, hw: 2.4, n: 9, spread: 0.45 },
+  wing: { arm: 40, hand: 38, sec: 18, prim: 30, nS: 10, nP: 7, finger: 1, pw: 2.6, sw: 3, round: 0.7, foldExt: 10 },
+  eye: { r: 1.3, iris: hex('#b83020'), lash: hex('#1e1414'), brow: hex('#6a4a40') },
+  cols: { back: '#3a2e2c', belly: '#e8e0d0', head: '#e0b0a0', neck: '#d8a898', wing: '#322826', prim: '#1a1616', cov: '#4a3a34', tail: '#2a2220', beak: '#d8c8a8', beakTip: '#6a5a4a', cere: '#c86a50', leg: '#9a8a80', claw: '#2a2420' },
+  bareNeck: true, flap: 0.55,
+};
+const MONARCH_BIRD = makeBird({
+  look: MONARCH_LOOK,
   anims: { idle: A(4, 2), walk: A(6, 6), alert: A(2, 3), preen: A(4, 4), sleep: A(2, 1.5), feed: A(4, 5), eat: A(4, 5), fly: A(6, 5), glide: A(2, 1.5), soar: A(2, 1), land: A(3, 5, false) },
   ground: { w: 150, h: 110, ox: 60, oy: 100 },
   flight: { w: 260, h: 170, ox: 130, oy: 85 },
   airAnims: ['fly', 'glide', 'soar', 'land'],
 });
+
+// the Monarch keeps the shared pose library but has its own painter (beasts-monarch.ts)
+export const MONARCH: SpeciesDef = {
+  ...MONARCH_BIRD,
+  draw(sk, anim, frame, eye, juv) {
+    const air = ['fly', 'glide', 'soar', 'land'].includes(anim);
+    const n = MONARCH_BIRD.anims[anim]?.frames ?? 1;
+    const L = MONARCH_LOOK;
+    const P = ((air ? AIR[anim] : G[anim]) ?? G.idle)(L, frame, n);
+    return drawMonarch(sk, P, eye, juv);
+  },
+};
 
 export const NUTCRACKER = makeBird({
   look: {
@@ -691,10 +716,11 @@ export const NUTCRACKER = makeBird({
     wing: { arm: 5, hand: 5, sec: 3, prim: 4.6, nS: 4, nP: 5, finger: 0.2, pw: 0.9, sw: 1, round: 0.6, foldExt: 1 },
     eye: { r: 0.8, iris: hex('#2a1810'), lash: hex('#1a1210'), ring: hex('#f0e8d0') },
     cols: { back: '#6e5236', belly: '#e8d8b0', head: '#4a3624', wing: '#3e2e22', prim: '#221a16', cov: '#56402c', tail: '#2a201a', beak: '#8a9098', beakTip: '#3a3e44', leg: '#5a4a40', crest: '#3a2a1e' },
-    spots: true, flap: 1.1,
+    spots: true, flap: 0.9,
   },
   anims: { ...BASE, fly: A(4, 16), hop: A(4, 9), crack: A(4, 8) },
   ground: { w: 30, h: 26, ox: 13, oy: 22 },
   flight: { w: 40, h: 32, ox: 20, oy: 16 },
   airAnims: ['fly', 'glide'],
+  design: NUTCRACKER_D,
 });

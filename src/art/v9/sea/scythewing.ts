@@ -5,12 +5,20 @@
 // band, white below with white underwings that flash when the whole flock wheels at once, long
 // legs and yellow-webbed feet for pattering on the water.
 //
+// Painted on the Relief layer through the seabird contour kit, so each pose is one contour: the
+// body, short neck and round petrel head lofted together; the wing a short arm of scalloped sooty
+// secondaries running into the fused blade, a smooth crescent with no feather slots at all, its
+// cutting edge catching a cold glint; a square tail with the white rump band; a black tube-nosed
+// bill; long legs placed pixel by pixel with yellow webs. At rest the two blades cross high over
+// the tail like a pair of scythes.
+//
 // Flight anims anchor on the body centre. 'bank' runs from the back view (frame 0) to the
 // underside (last frame): the flock flashes white as it turns. 'raft' anchors on the waterline.
 
-import { Sk, V2, V3, Px, rmp, drawEye, EyeSpec, BeastEye, SpeciesDef, AnimDef, TAU, hh } from '../../beasts-core';
+import { Sk, V2, V3, rmp, drawEye, EyeSpec, BeastEye, SpeciesDef, AnimDef, TAU, hh } from '../../beasts-core';
 import { hex } from '../../color';
-import { View3, WingShape, WingPose, wing3, body3, ball3, plate3 } from './seabird';
+import { View3, WingShape, WingPose } from './seabird';
+import { Relief, LM, Sp, Tx, spline, loft, loftOutline, loftAt, Station, HeadF, wingFrame, wing, WingLook, WingPx, fan, fanAt, v3add, v3norm } from './seabird-kit';
 
 const A = (frames: number, fps: number, loop = true): AnimDef => ({ frames, fps, loop });
 export const SCYTHE_BANK = 5;
@@ -31,31 +39,33 @@ const EYE: EyeSpec = { r: 0.5, iris: hex('#141014'), lash: hex('#141014') };
 function mats(sk: Sk) {
   return {
     soot: sk.m(rmp('#3b312f', { n: 6, dark: 0.55, light: 0.4 }), { edge: 1 }),
-    sootL: sk.m(rmp('#57493f', { n: 5, dark: 0.55 }), { edge: 1 }),
-    white: sk.m(rmp('#f2f1ec', { n: 5, dark: 0.3, at: 3 }), { edge: 1, bias: 0.12 }),
+    sootL: sk.m(rmp('#5e4f44', { n: 5, dark: 0.55, light: 0.35 }), { edge: 1 }),
+    white: sk.m(rmp('#f2f1ec', { n: 6, dark: 0.32, at: 4, cool: 0.5 }), { edge: 1, bias: 0.1 }),
     rump: sk.m(rmp('#fbfaf6', { n: 4, dark: 0.25 }), { edge: 0, bias: 0.16 }),
-    blade: sk.m(rmp('#221e24', { n: 6, dark: 0.5, light: 0.5 }), { edge: 1, spec: 0.7 }),
-    shine: sk.m(rmp('#7e8698', { n: 4, dark: 0.35 }), { edge: 0, noRim: true }),
-    lining: sk.m(rmp('#f4f3ef', { n: 4, dark: 0.3 }), { edge: 1, bias: 0.22 }),
-    bill: sk.m(rmp('#2a2426', { n: 4, dark: 0.45 }), { spec: 0.4 }),
-    leg: sk.m(rmp('#2e2a2c', { n: 4, dark: 0.4 }), { edge: 0 }),
+    blade: sk.m(rmp('#221e24', { n: 6, dark: 0.5, light: 0.5, cool: 0.6 }), { edge: 1, spec: 0.7 }),
+    shine: sk.m(rmp('#9aa4b8', { n: 4, dark: 0.35, light: 0.4 }), { edge: 0, noRim: true }),
+    lining: sk.m(rmp('#f4f3ef', { n: 4, dark: 0.3 }), { edge: 1, bias: 0.2 }),
+    bill: sk.m(rmp('#2a2426', { n: 4, dark: 0.45, light: 0.4 }), { spec: 0.4 }),
+    leg: sk.m(rmp('#4e464a', { n: 4, dark: 0.4, light: 0.35 }), { edge: 0 }),
     web: sk.m(rmp('#f0cc3a', { n: 4, dark: 0.45 }), { edge: 0 }),
   };
 }
 type M = ReturnType<typeof mats>;
+const ID = { BODY: 1, BILL: 3, TAIL: 7, WING: 9, BLADE: 12 };
 
 // a short arm reaching forward, then the fused blade curving back in two stiff sections: a scythe
 const WING: WingShape = {
   sh: [0.6, 0.6, 1],
   segs: [
-    { len: 2, sweep: 0.12, dih: 0.05, flex: -0.6, shrink: 0.2 },
-    { len: 2.4, sweep: 0.34, dih: 0.08, flex: 0.8, shrink: 0.2 },
-    { len: 3.4, sweep: -0.3, dih: 0.02, flex: -0.5, shrink: 0.12 },
-    { len: 3.4, sweep: -1.0, dih: 0, flex: -0.2, shrink: 0.1 },
+    { len: 1.4, sweep: 0.25, dih: 0.05, flex: -0.6, shrink: 0.2 },
+    { len: 1.9, sweep: 0.75, dih: 0.08, flex: 0.8, shrink: 0.2 },
+    { len: 3.7, sweep: -0.2, dih: 0.02, flex: -0.5, shrink: 0.12 },
+    { len: 4.4, sweep: -1.12, dih: 0, flex: -0.2, shrink: 0.1 },
   ],
-  chord: [2.5, 2.7, 2.3, 1.3, 0.3],
+  chord: [2.1, 2.2, 1.3, 0.75, 0.12],
   spar: 0.5,
 };
+const WL: WingLook = { wrist: 2, nS: 4, scallop: 0.14, nP: 2, slot: 0, fingers: 0, rows: [0.3], spar: 0.55, minW: 1, point: 0.9, reach: 0.4 };
 
 interface Pose {
   raft: boolean;
@@ -106,84 +116,111 @@ function pose(anim: string, f: number, n: number): Pose {
 }
 
 function wingFill(M: M) {
-  return (p: Px, s: number, c: number, top: boolean): number => {
-    const blade = s > 0.38;
-    if (top) {
-      if (blade) {
-        // the fused blade: glossy black, a cold shine line along the cutting edge
-        if (c < 0.16 && s < 0.9) return M.shine;
-        p.l += (1 - c) * 0.12;
-        return M.blade;
-      }
-      return c < 0.4 ? M.sootL : M.soot;
+  return (w: WingPx, o: Tx) => {
+    if (w.hand) {
+      // the fused blade: glossy black, a cold glint along the cutting (leading) edge
+      o.m = w.c < 0.2 && w.s < 0.93 ? M.shine : M.blade;
+      o.t += (0.5 - w.c) * 0.14;
+      return;
     }
-    if (blade) return c < 0.16 ? M.shine : M.blade;
-    return c > 0.75 ? M.soot : M.lining;
+    if (w.top) { o.m = w.zone === 0 ? (w.fu > 0.75 ? M.sootL : M.soot) : w.edge < 0.3 ? M.soot : M.soot; if (w.zone === 1 && w.fu > 0.7) o.m = M.sootL; return; }
+    o.m = w.zone === 1 && w.fu > 0.75 ? M.soot : M.lining;
   };
+}
+
+function bodyLoft(V: View3, hc: V3) {
+  const up: V3 = [0, 1, 0];
+  const hf: V3 = [1, -0.08, 0], hu: V3 = [0.08, 1, 0];
+  const st: Station[] = [
+    { c: [-3.5, 0.3, 0], up, ru: 0.8, rl: 0.6, rw: 0.9 },
+    { c: [-2.2, 0.15, 0], up, ru: 1.25, rl: 1.1, rw: 1.4 },
+    { c: [-0.4, 0, 0], up, ru: 1.5, rl: 1.65, rw: 1.7 },
+    { c: [1.2, 0.05, 0], up, ru: 1.4, rl: 1.6, rw: 1.5 },
+    { c: [hc[0] - 1.3, hc[1] - 0.35, 0], up: v3norm(v3add(up, hu)), ru: 1.05, rl: 1.2, rw: 1.15 },
+    { c: [hc[0] - 0.2, hc[1], 0], up: hu, ru: 1.35, rl: 1.2, rw: 1.25 },
+    { c: [hc[0] + 0.8, hc[1] - 0.05, 0], up: hu, ru: 1.05, rl: 0.85, rw: 0.9 },
+    { c: [hc[0] + 1.25, hc[1] - 0.1, 0], up: hu, ru: 0.6, rl: 0.55, rw: 0.5 },
+  ];
+  return { Lf: loft(V, st), H: new HeadF(V, hc, hf, hu) };
+}
+
+function drawBody(R: Relief, V: View3, M: M, hc: V3) {
+  const { Lf, H } = bodyLoft(V, hc);
+  let zc = 0;
+  R.region(spline(loftOutline(Lf, { head: 0.2, tail: 0.3 }), 0.4), {
+    zAt: () => zc, R: 1.3, H: 1.4, id: ID.BODY,
+    tex: (p: Sp, o: Tx) => {
+      const h = loftAt(Lf, p.x, p.y);
+      zc = h.z;
+      // sooty above, white below; a bright white rump band across the base of the tail
+      o.m = h.dors > -0.25 ? M.soot : M.white;
+      if (h.f < 1.25 && h.dors > -0.35) o.m = M.rump;
+      if (h.f > 4.4 && h.dors < 0.2 && h.dors > -0.5) o.m = M.sootL;
+    },
+  });
+  // the bill: short, black, a tube on top and a hooked tip
+  R.region(spline([H.s(1.0, -0.55), H.s(1.9, -0.6), H.s(2.6, -0.3), H.s(2.75, 0.35, 0.9), H.s(2.3, 0.15), H.s(1.2, 0.45)], 0.3), { z: H.zOf(2, 0, 0) + 1.4, R: 0.4, H: 0.4, id: ID.BILL, tex: M.bill });
+  return H;
+}
+
+function drawTail(R: Relief, V: View3, M: M, P: Pose) {
+  const F = fan(V, [-3.1, 0.3, 0], [-1, 0, 0], [0, 0, 1], 6, 0.5 * P.fan, () => 2.6, { minW: 0.9, notch: 0.05, base: 0.8, point: 0.2 });
+  R.region(spline(F.poly, 0.35), { z: -1, R: 0.6, H: 0.6, id: ID.TAIL, tex: (p, o) => { const q = fanAt(F, p.x, p.y); o.m = q.u < 0.3 ? M.rump : M.soot; if (q.edge < 0.3) o.z -= 0.3; } });
 }
 
 function drawAir(sk: Sk, M: M, P: Pose, eye: BeastEye) {
   const V = new View3(P.bank, P.pitch, P.yaw, [0, 0], 1);
   const wf = wingFill(M);
-  wing3(sk, V, WING, P.wings[1], -1, wf, { bias: -0.1, spar: top => (top ? M.sootL : M.lining) });
+  { const R = Relief.full(sk); wing(R, V, wingFrame(WING, P.wings[1], -1), WL, wf, { id: ID.WING, lt: -0.08 }); sk.np(); R.emit({ drop: 1, seam: 0.5, seamDark: 0.2, bias: -0.04 }); }
   const legs = (side: 1 | -1) => {
     if (P.legs <= 0) return;
-    sk.np();
     const ph = P.step + (side > 0 ? 0 : 0.5);
-    const hip = V.s([-0.6, -0.9, side * 0.5]);
-    const toe = V.s([-1.2 + Math.cos(ph * TAU) * 1.4, -5.2 + Math.max(0, Math.sin(ph * TAU)) * 1.2, side * 0.8]);
-    sk.tube([[hip[0], hip[1]], [toe[0], toe[1]]], 0.42, M.leg, { z: t => hip[2] + (toe[2] - hip[2]) * t, bias: side < 0 ? -0.1 : 0 });
-    sk.dot(toe[0] + 0.5, toe[1], M.web, 0.6, toe[2] + 1, true);
-    sk.dot(toe[0] - 0.4, toe[1], M.web, 0.6, toe[2] + 1, true);
+    const hip = V.s([-0.4 + side * 0.4, -0.9, side * 0.5]);
+    const toe = V.s([-1.0 + Math.cos(ph * TAU) * 3, -6.2 + Math.max(0, Math.sin(ph * TAU)) * 1.6, side * 0.8]);
+    // a long bare leg as one clean pixel line, the yellow web a two-pixel paddle slapping the water
+    const z = side > 0 ? 3 : -2, lt = side > 0 ? 0 : -0.12;
+    sk.line(hip[0], hip[1], toe[0], toe[1], M.leg, 0.55 + lt, z);
+    const ta = 0.35 + Math.sin(ph * TAU) * 0.45;
+    sk.dot(toe[0] + Math.cos(ta), toe[1] + Math.sin(ta), M.web, 0.62 + lt, z + 0.1);
+    sk.dot(toe[0] + Math.cos(ta) * 2, toe[1] + Math.sin(ta) * 2, M.web, 0.5 + lt, z + 0.1);
   };
   legs(-1);
-  // short square tail, dark with a white base (the rump band continues onto it)
+  const BR = Relief.full(sk);
+  drawTail(BR, V, M, P);
+  const H = drawBody(BR, V, M, [3.4, 0.6, 0]);
   sk.np();
-  const T = (x: number, z: number): V3 => [-3.2 + x, 0.3, z];
-  plate3(sk, V, [T(0.4, 0.9), T(-2.6, 1.2 * P.fan), T(-2.3, 0), T(-2.6, -1.2 * P.fan), T(0.4, -0.9)], (px) => (px.v < 0.28 ? M.rump : M.soot), [0, 1, 0]);
-  sk.np();
-  body3(sk, V, [[-3.4, 0.3, 0], [-1, 0, 0], [1.2, 0, 0], [2.6, 0.3, 0]], t => (t < 0.45 ? 1.1 + t * 1.8 : 1.9 - (t - 0.45) * 1),
-    (px, nb) => {
-      // white rump band across the back at the tail base; sooty back; white belly
-      if (px.x < -2 && nb[1] > -0.2) return M.rump;
-      return nb[1] > -0.3 ? M.soot : M.white;
-    });
-  sk.np();
-  const hc: V3 = [3.4, 0.6, 0];
-  ball3(sk, V, hc, 1.45, (_p, n) => (n[1] > -0.45 ? M.soot : M.white));
-  const b0 = V.s([4.5, 0.55, 0]), b1 = V.s([5.9, 0.35, 0]);
-  sk.tube([[b0[0], b0[1]], [b1[0], b1[1]]], t => 0.55 - t * 0.2, M.bill, { z: Math.max(b0[2], b1[2]) + 1.5 });
-  let ep: V2 = V.s2([3.9, 0.95, 1.2]);
-  if (V.faces([0.3, 0.2, 1], 0.1)) ep = drawEye(sk, ep[0], ep[1], EYE, eye);
+  BR.emit({ drop: 1.1, seam: 0.5, seamDark: 0.22 });
+  let ep: V2 = H.s2(0.35, -0.3, 1.0);
+  if (H.facing(0.1)) ep = drawEye(sk, ep[0], ep[1], EYE, eye);
   legs(1);
-  wing3(sk, V, WING, P.wings[0], 1, wf, { spar: top => (top ? M.sootL : M.lining) });
-  return { head: V.s2([hc[0], hc[1] + 3, 0]), eye: ep };
+  { const R = Relief.full(sk); wing(R, V, wingFrame(WING, P.wings[0], 1), WL, wf, { id: ID.WING }); sk.np(); R.emit({ drop: 1, seam: 0.5, seamDark: 0.2 }); }
+  return { head: V.s2([H.c[0], H.c[1] + 3, 0]), eye: ep };
 }
 
 function drawRaft(sk: Sk, M: M, P: Pose, eye: BeastEye) {
   const V = new View3(0, P.pitch, P.yaw, [0, -1.6], 1);
   sk.clipY = 0.5;
+  const R = Relief.full(sk);
+  // the folded blades crossed high over the tail like a pair of scythes
+  const blade = (side: 1 | -1) => {
+    const a = V.s([1.6, side > 0 ? 1.1 : 2.1, side * 1.3]), m = V.s([-2.4, side > 0 ? 2.3 : 2.5, side * 1.2]), b = V.s([-6.8, side > 0 ? 5.6 : 1.5, side * 1.1]);
+    const lm: LM[] = [[a[0], a[1] + 0.6, 0], [a[0] + 0.3, a[1] - 0.5, 0], [m[0], m[1] - 0.8, 0], [b[0], b[1], 0.9], [m[0] + 0.4, m[1] + 0.4, 0]];
+    R.region(spline(lm, 0.3), { z: (a[2] + b[2]) / 2 + side * 1.6, R: 0.6, H: 0.6, id: ID.BLADE + (side > 0 ? 0 : 1), tex: (p, o) => {
+      const d = (p.y - (a[1] + (b[1] - a[1]) * (p.x - a[0]) / (b[0] - a[0] || 1)));
+      o.m = d < -0.35 ? M.shine : M.blade;
+    } });
+  };
+  blade(-1);
+  drawTail(R, V, M, P);
+  const H = drawBody(R, V, M, [3.2, 1.3, 0]);
+  blade(1);
   sk.np();
-  // folded blades crossed high over the tail
-  for (const side of [-1, 1] as const) {
-    const a = V.s([1.6, 1.4, side * 1.3]), b = V.s([-6, 2.6, side * 1.1]);
-    sk.np();
-    sk.blade(a[0], a[1], b[0], b[1], s => Math.max(0.35, (1 - s * 0.7) * 0.95), (px) => (px.v < -0.4 ? M.shine : M.blade), { z0: a[2] + 1.5 * side, z1: b[2] + 1.5 * side, bias: side < 0 ? -0.12 : 0 });
-    if (side < 0) {
-      sk.np();
-      body3(sk, V, [[-3.2, 0.4, 0], [-1, 0, 0], [1.2, 0, 0], [2.4, 0.5, 0]], t => (t < 0.45 ? 1.3 + t * 1.6 : 2.0 - (t - 0.45) * 1),
-        (px, nb) => (px.x < -2.2 && nb[1] > 0 ? M.rump : nb[1] > -0.2 ? M.soot : M.white));
-    }
-  }
-  sk.np();
-  const hc: V3 = [3.2, 1.3, 0];
-  ball3(sk, V, hc, 1.5, (_p, n) => (n[1] > -0.5 ? M.soot : M.white));
-  const b0 = V.s([4.4, 1.2, 0]), b1 = V.s([5.8, 1.0, 0]);
-  sk.tube([[b0[0], b0[1]], [b1[0], b1[1]]], t => 0.55 - t * 0.2, M.bill, { z: Math.max(b0[2], b1[2]) + 1.5 });
-  const ep = drawEye(sk, V.s2([3.7, 1.7, 1.2])[0], V.s2([3.7, 1.7, 1.2])[1], EYE, eye);
+  R.emit({ drop: 1.1, seam: 0.5, seamDark: 0.22 });
+  const e = H.s2(0.35, -0.3, 1.0);
+  const ep = drawEye(sk, e[0], e[1], EYE, eye);
   sk.clipY = Infinity;
   for (let x = -5; x <= 5; x++) if (hh(x, 9, 2) > 0.4) sk.over(x, 0, hex('#dff1f6'));
-  return { head: V.s2([hc[0], hc[1] + 3, 0]), eye: ep };
+  return { head: V.s2([H.c[0], H.c[1] + 3, 0]), eye: ep };
 }
 
 export const SCYTHEWING: SpeciesDef = {

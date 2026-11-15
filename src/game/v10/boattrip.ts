@@ -10,6 +10,7 @@
 // At the far end (sites10/ocean.ts TripPlan.stop):
 //   fish    motor off on the Shelf: "Fish off the stern" (goFishing with this scene as its host)
 //   reef    anchored on Glass Reef: "Snorkel over the reef" (the dive), "Head home"
+//   kelp    anchored over the kelp forest: "Dive into the kelp forest" (V12, needs the air tank), "Head home"
 //   land    run her up the beach at Motu Ahi / the far coast (their FieldSites)
 //   maiden  once round the bay on Launch Day, then home
 // Coming home is returnToCamp('boat') (ocean.ts sailHome).
@@ -125,7 +126,7 @@ export class BoatTripScene extends FieldScene {
     };
   }
   private subLine() {
-    if (this.phase === 'stop') return this.plan.stop === 'fish' ? 'Fishing on the Shelf' : this.plan.stop === 'reef' ? 'At anchor over the reef' : 'Arrived';
+    if (this.phase === 'stop') return this.plan.stop === 'fish' ? 'Fishing on the Shelf' : this.plan.stop === 'reef' ? 'At anchor over the reef' : this.plan.stop === 'kelp' ? 'At anchor over the kelp' : 'Arrived';
     return `Under way · ${Math.round(clamp(this.dist / this.len) * 100)}%`;
   }
 
@@ -150,6 +151,8 @@ export class BoatTripScene extends FieldScene {
     for (const b of ['horizon', 'far', 'mid'] as const) st.addLayer('sea-' + b, BAND_P[b], 0, 0.6, 0, b === 'mid' ? 0.85 : BAND_P[b]).add(this.ocean.band(b));
     // the reef shows through the clear water on Glass Reef
     if (this.plan.stop === 'reef') st.layer('sea-mid').add(new Custom(5, rr => this.drawReefTint(rr)));
+    // V12: over the kelp forest the canopy floats on the swell around her, gold on the water
+    if (this.plan.stop === 'kelp') st.layer('sea-mid').add(new Custom(5, (rr, s) => this.drawKelpCanopy(rr, s.time)));
     // the boat plane: hull, crew, sail, motor, all rocking together
     const main = st.addLayer('main', 1, 0, 1, 0);
     main.xf = [PIV[0], PIV[1], 0, 0, 0];
@@ -248,7 +251,8 @@ export class BoatTripScene extends FieldScene {
     };
     it({ x: bx(34), label: 'Fish off the stern', w: 40, enabled: () => this.phase === 'stop' && this.plan.stop === 'fish' && !this.fishing, action: () => this.fish() });
     it({ x: bx(70), label: 'Snorkel over the reef', w: 40, enabled: () => this.phase === 'stop' && this.plan.stop === 'reef', action: () => this.dive() });
-    it({ x: SEATS.joshu + 6, label: 'Tell Joshu to head home', w: 16, enabled: () => this.phase === 'stop' && (this.plan.stop === 'fish' || this.plan.stop === 'reef'), action: () => this.headHome() });
+    it({ x: bx(70), label: 'Dive into the kelp forest', w: 40, enabled: () => this.phase === 'stop' && this.plan.stop === 'kelp', action: () => this.diveKelp() });
+    it({ x: SEATS.joshu + 6, label: 'Tell Joshu to head home', w: 16, enabled: () => this.phase === 'stop' && (this.plan.stop === 'fish' || this.plan.stop === 'reef' || this.plan.stop === 'kelp'), action: () => this.headHome() });
     it({ x: SEATS.aroha, label: 'Talk to Aroha', w: 12, enabled: () => !this.fishing && !this.cutscene, action: () => this.chat('aroha') });
     it({ x: SEATS.chunk, label: 'Scratch Chunk’s ears', w: 10, enabled: () => !this.fishing && !this.cutscene, action: () => this.pet() });
     void p;
@@ -516,6 +520,24 @@ export class BoatTripScene extends FieldScene {
     }
   }
 
+  /** V12 Te Moana Rimurimu: the kelp canopy floating on the surface, mats of blades lying with the swell */
+  private drawKelpCanopy(r: Renderer, t: number) {
+    const k = this.phase === 'stop' ? 1 : smoothstep(0.75, 1, this.dist / this.len);
+    if (k <= 0.01) return;
+    const x0 = Math.floor(r.visibleX0(10) / 6) * 6, x1 = r.visibleX1(10);
+    const gold = packColor(0.72, 0.6, 0.24, k), dark = packColor(0.4, 0.32, 0.12, k), lit = packColor(0.9, 0.8, 0.42, k);
+    for (let x = x0; x < x1; x += 6) {
+      // mats with open water between them (a hash of the column, not a stamp)
+      const h = Math.sin(x * 0.013) + Math.sin(x * 0.047 + 1.3) * 0.6;
+      if (h < 0.2) continue;
+      const y = Math.round(this.ocean.bandSurfaceY('mid', x) + 2 + ((x * 7) % 5) + Math.sin(t * 0.8 + x * 0.05));
+      const len = 3 + ((x * 13) % 4);
+      r.rect(x, y, len, 1, (x * 3) % 7 < 2 ? lit : gold);
+      r.rect(x + 1, y + 1, len - 1, 1, dark);
+      if ((x * 11) % 5 === 0) r.rect(x + len - 1, y - 1, 2, 1, gold);
+    }
+  }
+
   /** the catch held up in Mori's hand (from the fishing view): same as the Kittiwake's */
   private drawHeld(r: Renderer) {
     const h = this.held;
@@ -644,7 +666,8 @@ export class BoatTripScene extends FieldScene {
     if (this.plan.stop === 'fish') {
       this.life.cue('gulls');
       game.ui.toast('Fish off the stern, photograph whatever comes to look, and tell Joshu when to head home.', 'BOAT', 'teal', 5000);
-    } else game.ui.toast('Snorkel over the reef with your camera, or tell Joshu to head home.', 'BOAT', 'teal', 5000);
+    } else if (this.plan.stop === 'kelp') game.ui.toast('Gear up and dive the kelp forest, or tell Joshu to head home.', 'BOAT', 'teal', 5000);
+    else game.ui.toast('Snorkel over the reef with your camera, or tell Joshu to head home.', 'BOAT', 'teal', 5000);
   }
 
   // ---------------------------------------------------------------- at the stop
@@ -680,6 +703,22 @@ export class BoatTripScene extends FieldScene {
     await this.say([
       { who: 'aroha', text: 'Stay over the sand where you can. Don’t touch the coral, it cuts, and it is alive.', expr: 'serious' } as BubbleLine,
       { who: 'mori', text: 'Mask, snorkel, camera in its housing. See you in a bit!', expr: 'excited' } as BubbleLine,
+    ]);
+    audio.play('splashBig', { vol: 0.6 });
+    const { goStop } = await import('../sites10/ocean');
+    await goStop(this.plan.id);
+  }
+  /** V12 Te Moana Rimurimu: over the side with the air tank (the scuba gate), down the anchor line */
+  private async diveKelp() {
+    const { gateOk, GATES } = await import('../v12/gear');
+    if (!gateOk('scuba')) {
+      audio.play('wrong', { vol: 0.4 });
+      await this.say([{ who: 'mori', text: GATES.scuba.why, expr: 'worried' } as BubbleLine, { who: 'joshu', text: 'Jenna could rig a tank, if you brought her the plans. Till then, we look from up here.', expr: 'neutral' } as BubbleLine]);
+      return;
+    }
+    await this.say([
+      { who: 'aroha', text: 'Follow the anchor line down and back up. Watch your air, and stay out of the blue on your own.', expr: 'serious' } as BubbleLine,
+      { who: 'mori', text: 'Tank, mask, regulator, camera in its housing. Back roll... now!', expr: 'excited' } as BubbleLine,
     ]);
     audio.play('splashBig', { vol: 0.6 });
     const { goStop } = await import('../sites10/ocean');

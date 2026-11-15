@@ -1,9 +1,19 @@
-// Hunter Bat: a large bat that stalks the forest floor on its folded wings like a vampire bat —
-// elbows raised high, thumbs planted — with huge ears, a wrinkled noseleaf face and fangs.
-// Hunts frogs and insects at night; flies on membrane wings; roosts hanging upside down.
+// Hunter Bat (Ambulochiroptera venator): a big-eared bat that folds its wings into forelegs and stalks
+// the forest floor on all fours like a vampire bat — elbows raised high over its back, the thumbs'
+// hooked claws planted — snatching frogs and wetas in the dark.
+//
+// Painted on the Relief layer (beasts-relief.ts) from one contour per mass through anatomical landmarks:
+// a hunched, chocolate-furred body under a shaggy pale ruff that breaks the outline; a pug face of bare,
+// wrinkled skin with a lancet noseleaf on a horseshoe round the nostrils, beady eyes, upper fangs always
+// showing; enormous ears with ribbed pink insides and a pointed tragus; the wing-arm as a furred humerus,
+// the bare elbow and the long bony forearm with the folded fingers and pleated membrane bundled behind
+// it, the wingtip claw over the elbow and the big thumb claw; the membrane draping to the flank; the
+// backward-bent hind legs with hooked claws and the tail membrane. In flight the membrane is one
+// scalloped sheet between the finger bones, veined and lit through at its trailing edge. Roosting, the
+// wings wrap it like a pleated cloak with the forearms as ridges and the thumbs peeking out.
 
-import { Sk, V2, V3, rmp, drawEye, EyeSpec, BeastEye, SpeciesDef, TAU, fr, poly3, proj, v3add, v3mul, lerp2, along, cbez, ik2 } from './beasts-core';
-import { leg, LegSpec, scaleLeg, Frame2 } from './beasts-rig';
+import { Sk, V2, V3, rmp, drawEye, EyeSpec, BeastEye, SpeciesDef, TAU, fr, proj, ik2, hh, lumN } from './beasts-core';
+import { Relief, Sp, Tx, LM, spline, fringe, along, strands, FS } from './beasts-relief';
 import { hex } from './color';
 
 const ANIMS = {
@@ -21,159 +31,473 @@ const ANIMS = {
   screech: { frames: 2, fps: 8, loop: true },
 };
 
+
+
 const EYE: EyeSpec = { r: 1.2, iris: hex('#1a0c0c'), lash: hex('#2a1814'), dark: true, shine: hex('#ffd9a0') };
 
 function mats(sk: Sk) {
   return {
-    fur: sk.m(rmp('#57392c', { n: 6, dark: 0.6 }), { edge: 1 }),
-    chest: sk.m(rmp('#86634a', { n: 5, dark: 0.55 }), { edge: 1 }),
-    mem: sk.m(rmp('#3c2424', { n: 6, dark: 0.55, light: 0.28 }), { edge: 1, k: 0.7, bias: -0.08 }),
-    memL: sk.m(rmp('#553230', { n: 5, dark: 0.5, light: 0.3 }), { edge: 1, k: 0.7, bias: -0.08 }),
-    bone: sk.m(rmp('#a07a68', { n: 5, dark: 0.5 })),
-    skin: sk.m(rmp('#8c5c52', { n: 5, dark: 0.55 })),
-    inner: sk.m(rmp('#a86c66', { n: 5, dark: 0.5 })),
-    earS: sk.m(rmp('#6a4438', { n: 5, dark: 0.55 })),
-    claw: sk.m(rmp('#e6dccc', { n: 3, dark: 0.4 })),
-    tooth: sk.m(rmp('#f6f2e6', { n: 3, dark: 0.3 }), { edge: 0 }),
-    mouth: sk.m(rmp('#6a1a24', { n: 3, dark: 0.45 }), { edge: 0 }),
+    fur: sk.m(rmp('#5c3826', { n: 7, dark: 0.62, light: 0.4, warm: 0.4, cool: 0.3 }), { edge: 1 }),
+    furD: sk.m(rmp('#3a2219', { n: 6, dark: 0.6, light: 0.36, cool: 0.3 }), { edge: 1 }),
+    furR: sk.m(rmp('#8e5638', { n: 6, dark: 0.6, light: 0.4, warm: 0.4 }), { edge: 1 }),
+    mane: sk.m(rmp('#d2b48c', { n: 7, dark: 0.55, light: 0.4, warm: 0.3 }), { edge: 1 }),
+    maneD: sk.m(rmp('#8a6a50', { n: 6, dark: 0.55, light: 0.35 }), { edge: 1 }),
+    chest: sk.m(rmp('#a27c5e', { n: 6, dark: 0.55, light: 0.38 }), { edge: 1 }),
+    skin: sk.m(rmp('#c8988a', { n: 7, dark: 0.58, light: 0.4, warm: 0.3 }), { edge: 1 }),
+    skinD: sk.m(rmp('#6e4642', { n: 6, dark: 0.55, light: 0.35 }), { edge: 1 }),
+    inner: sk.m(rmp('#c87a76', { n: 6, dark: 0.5, light: 0.34 }), { edge: 0 }),
+    earM: sk.m(rmp('#a87a6e', { n: 7, dark: 0.58, light: 0.38, warm: 0.3 }), { edge: 1 }),
+    mem: sk.m(rmp('#2c1a20', { n: 7, dark: 0.55, light: 0.32, warm: 0.2 }), { edge: 1, k: 0.85 }),
+    memL: sk.m(rmp('#7a4840', { n: 6, dark: 0.5, light: 0.32, warm: 0.4 }), { edge: 1, k: 0.85 }),
+    vein: sk.m(rmp('#24141a', { n: 4, dark: 0.45, light: 0.3 }), { edge: 0 }),
+    bone: sk.m(rmp('#d4baa2', { n: 6, dark: 0.55, light: 0.4, at: 3 }), { edge: 1 }),
+    claw: sk.m(rmp('#e4d8c4', { n: 5, dark: 0.45, light: 0.35, at: 3 }), { edge: 1 }),
+    tooth: sk.m(rmp('#f6f2e6', { n: 4, dark: 0.3, at: 2 }), { edge: 0 }),
+    mouth: sk.m(rmp('#6a1a24', { n: 4, dark: 0.45 }), { edge: 0 }),
   };
 }
 type M = ReturnType<typeof mats>;
+const ID = { BODY: 1, MANE: 2, HEAD: 3, JAW: 4, LEAF: 5, ARM: 6, BUNDLE: 7, MEM: 8, LEG: 9, FOOT: 10, CLAW: 11, EAR: 12, INNER: 13, TOOTH: 14, MOUTH: 15, TAILM: 16, THUMB: 17, BONE: 18 };
 
-interface HeadP { jaw: number; ear: number; eye: BeastEye; k: number }
-/** Head in a frame whose +x points out of the face. */
-function drawHead(sk: Sk, M: M, H: Frame2, P: HeadP, z: number) {
-  const k = P.k;
-  // far ear
-  sk.np();
-  const ea = -1.85 + P.ear * 0.4;
-  earBig(sk, M, H.p(-0.4, -3), H.ang(ea - 0.3), 10.5 * k, 4.2 * k, z - 4, -0.15, false);
-  sk.np();
-  const skull = H.p(0.8, 0);
-  sk.ell(skull[0], skull[1], 4.4 * k, 4 * k, (p) => (p.v > 0.45 ? M.chest : M.fur), { rot: H.a, rz: 3.8 * k, z });
-  sk.tufts(sk.pid, (_x, _y, nx, ny) => (ny > 0 && nx < 0.5 ? [-0.5, 1] as V2 : null), { every: 2, len: 1 });
-  // pug snout with wrinkled skin
-  const sn = H.p(4.6, 0.9);
-  sk.ell(sn[0], sn[1], 2.5 * k, 2.3 * k, (p) => {
-    const w = (p.u + 1) * 2.2;
-    if (w - Math.floor(w) < 0.25) p.l -= 0.14;
-    return M.skin;
-  }, { rot: H.a, rz: 2.2 * k, z: z + 2 });
-  // noseleaf: a small upright spear on the nose
-  const nl0 = H.p(5.6, -0.6), nl1 = H.p(6.2, -3.8);
-  sk.blade(nl0[0], nl0[1], nl1[0], nl1[1], s => Math.sin(Math.min(1, s * 1.2) * Math.PI) * 1.2 * k + 0.2, (p) => (Math.abs(p.v) < 0.35 ? M.inner : M.skin), { z0: z + 5, z1: z + 5 });
-  // jaw, gape with fangs
-  const jA = H.ang(0.35 + P.jaw * 0.7);
-  const j0 = H.p(2, 2.4);
-  const j1: V2 = [j0[0] + Math.cos(jA) * 4.4 * k, j0[1] + Math.sin(jA) * 4.4 * k];
-  if (P.jaw > 0.15) {
-    const m0 = H.p(2.4, 2);
-    const up = H.p(6.2, 2.2);
-    sk.poly([m0[0], m0[1], up[0], up[1], j1[0], j1[1]], M.mouth, { z: z + 2.5 });
-  }
-  sk.np();
-  sk.tube([j0, j1], t => (1.5 - t * 0.6) * k, M.skin, { z: z + 3 });
-  // fangs: upper (always peeking) and lower
-  const f0 = H.p(5.4, 2.4);
-  sk.blade(f0[0], f0[1] - 0.4, f0[0] + 0.3 * k, f0[1] + 1.7 * k, s => (1 - s) * 0.7 * k + 0.25, M.tooth, { z0: z + 6, z1: z + 6 });
-  if (P.jaw > 0.3) {
-    const f1: V2 = [j1[0] - Math.cos(jA) * 0.8 * k, j1[1] - Math.sin(jA) * 0.8 * k];
-    sk.blade(f1[0], f1[1], f1[0] + 0.3 * k, f1[1] - 1.5 * k, s => (1 - s) * 0.6 * k + 0.25, M.tooth, { z0: z + 6, z1: z + 6 });
-  }
-  // near ear with ridged pink inner
-  sk.np();
-  earBig(sk, M, H.p(-1.2, -2.4), H.ang(ea), 11.5 * k, 4.8 * k, z + 4, 0, true);
-  const ec = H.p(2.6, -0.9);
-  const ep = drawEye(sk, ec[0], ec[1], { ...EYE, r: k < 0.8 ? 1 : 1.2 }, P.eye);
-  return { ep, top: H.p(0, -6) };
+const pt = (a: V2, u: V2, n2: V2, x: number, y: number, sh = 0): LM => [a[0] + u[0] * x + n2[0] * y, a[1] + u[1] * x + n2[1] * y, sh];
+/** a frame from a to b: unit u along, n2 its normal (screen: rotated +90 deg, i.e. to the right of travel when y is down) */
+const frame = (a: V2, b: V2): [V2, V2, number] => {
+  const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
+  return [[dx / l, dy / l], [-dy / l, dx / l], l];
+};
+
+/** fur: short strands lying along `ang`, frosted tips here and there */
+function furTex(M: M, ang: number, base: number, seed: number, amp = 0.7, len = 2.4) {
+  return (p: Sp, o: Tx) => {
+    o.z += strands(p.x, p.y, ang, len, 1.15, seed) * amp;
+    o.m = base;
+    if (FS.tip > 0.82 && hh(FS.row, FS.seg, seed + 1) < 0.12) o.m = base === M.mane ? M.chest : M.furR;
+  };
 }
 
-function earBig(sk: Sk, M: M, base: V2, a: number, len: number, wid: number, z: number, bias: number, inner: boolean) {
-  const tip: V2 = [base[0] + Math.cos(a) * len, base[1] + Math.sin(a) * len];
-  sk.blade(base[0], base[1], tip[0], tip[1], s => (s < 0.3 ? 0.6 + s * 2.6 : 1.4 - (s - 0.3) * 1.6) * wid * 0.72 + 0.3, (p) => {
-    if (!inner) return M.earS;
-    if (Math.abs(p.v) < 0.5 && p.t > 0.14 && p.t < 0.82) {
-      const r = p.t * 7;
-      if (r - Math.floor(r) < 0.25) p.l -= 0.12; // ridges
-      return M.inner;
+interface HeadP { jaw: number; ear: number; eye: BeastEye; k: number; flip?: boolean }
+/**
+ * The head, in its own relief: pug snout wrinkled across, the lancet noseleaf standing on a horseshoe
+ * round the nostrils, fangs, beady eyes; and the huge ribbed ears (each its own relief).
+ */
+function drawHead(sk: Sk, M: M, o0: V2, ha: number, P: HeadP, z: number) {
+  const k = P.k, fy = P.flip ? -1 : 1;
+  const c = Math.cos(ha), s = Math.sin(ha);
+  const hp = (x: number, y: number, sh = 0): LM => [o0[0] + (x * c - y * fy * s) * k, o0[1] + (x * s + y * fy * c) * k, sh];
+  const ja = P.jaw * 0.7;
+  const jp = (x: number, y: number, sh = 0): LM => {
+    const hx = 0.4, hy = 2.2, dx = x - hx, dy = y - hy, cj = Math.cos(ja), sj = Math.sin(ja);
+    return hp(hx + dx * cj - dy * sj, hy + dx * sj + dy * cj, sh);
+  };
+  const ear = (near: boolean) => {
+    const b = hp(near ? -1 : 0.4, near ? -2.6 : -3.1);
+    const R = new Relief(sk, b[0] - 16 * k, b[1] - 16 * k, b[0] + 16 * k, b[1] + 16 * k);
+    const a = ha + fy * (-1.62 + P.ear * 0.4 - (near ? 0 : 0.36));
+    const ca = Math.cos(a), sa = Math.sin(a), nx = -sa, ny = ca;
+    const L = 10.2 * k, Wd = 3.2 * k;
+    const q = (t: number, w: number, sh = 0): LM => [b[0] + ca * t * L + nx * w * Wd * fy, b[1] + sa * t * L + ny * w * Wd * fy, sh];
+    // a long ear, broad at the base, the front edge straight, the back edge bellied, the tip rounded
+    const ol: LM[] = [q(-0.1, -0.75), q(0.4, -0.85), q(0.8, -0.55), q(1, -0.12, 0.25), q(0.95, 0.35), q(0.7, 0.8), q(0.32, 1.12), q(-0.05, 0.9)];
+    const zE = z + (near ? 6 : -5) * k;
+    R.region(spline(ol, 0.5), { z: zE, R: 1.1 * k, H: 1.6 * k, id: ID.EAR, tex: (p, o) => {
+      const dx = p.x - b[0], dy = p.y - b[1], t = (dx * ca + dy * sa) / L, w = ((dx * nx + dy * ny) / Wd) * fy;
+      // the ear's leathery back, its rim dark; the near ear shows its ribbed, pink inside
+      o.m = near ? M.earM : M.skinD;
+      if (p.s < 0.75) { o.m = M.skinD; o.t -= 0.04; }
+      if (near && t > 0.1 && t < 0.88 && w > -0.3 && w < 0.72 * Math.sin(Math.PI * Math.min(1, t))) {
+        // the transverse ridges of the inner ear, pinker in the hollows
+        if (fr(t * 6.5) < 0.34) { o.z += 0.6; o.m = M.earM; } else { o.z -= 0.4; o.m = M.inner; }
+      }
+    } });
+    if (near) {
+      // the tragus: a small pointed lobe standing in front of the ear opening
+      const tg: LM[] = [q(0.02, -0.35), q(0.3, -0.25, 0.6), q(0.08, 0.1)];
+      R.region(spline(tg, 0.4), { z: zE + 2.2 * k, R: 0.6, H: 0.8, id: ID.INNER, tex: M.skin });
     }
-    return M.earS;
-  }, { z0: z, z1: z + 0.5, bias, bend: len * 0.08 });
-}
-
-/** A folded wing-arm planted on the ground: shoulder -> raised elbow -> wrist/thumb on the ground. */
-function foldedArm(sk: Sk, M: M, sh: V2, elbow: V2, wrist: V2, k: number, z: number, bias: number) {
-  // folded digits + membrane tucked behind the forearm, tips reaching back up past the elbow
+    sk.np();
+    R.emit({ bias: near ? 0 : -0.16, drop: 1.4, seam: 0.4, seamDark: 0.25, contrast: 1.1 });
+  };
+  ear(false);
+  const R = new Relief(sk, o0[0] - 10 * k, o0[1] - 10 * k, o0[0] + 12 * k, o0[1] + 10 * k);
+  const faceTex = (p: Sp, o: Tx) => {
+    const dx = (p.x - o0[0]) / k, dy = (p.y - o0[1]) / k;
+    const hx = dx * c + dy * s, hy = (-dx * s + dy * c) * fy;
+    if (hx > 2.9) {
+      // the bare, wrinkled snout
+      o.m = M.skin;
+      if (fr(hx * 1.3 + hy * 0.2) < 0.22) o.z -= 0.6;
+      return;
+    }
+    o.z += strands(p.x, p.y, ha + Math.PI, 1.6, 1, 61) * 0.5;
+    o.m = hy > 1.6 ? M.chest : M.fur;
+    if (hy < -1.6 && hx > 0.5) o.m = M.furR;
+  };
+  const head: LM[] = [hp(-3.6, -0.6), hp(-2, -3.6), hp(1, -4), hp(2.8, -3), hp(4.2, -1.6), hp(5.4, -0.8), hp(6, 0.6, 0.35), hp(5.7, 2.1, 0.2), hp(4.4, 2.6), jp(4.4, 3.2), jp(4, 3.9), jp(2, 4.7), jp(-0.2, 4.4), hp(-2.2, 3.8), hp(-3.8, 1.6)];
+  R.region(fringe(spline(head, 0.5), 1.1, 3, (x, y, nx, ny) => {
+    const hx = ((x - o0[0]) * c + (y - o0[1]) * s) / k;
+    return hx < 2.6 && (ny > 0.2 || nx < -0.4) ? [0.9 * k, -0.4] : null;
+  }), { z, R: 2.4 * k, H: 3.4 * k, id: ID.HEAD, blend: 0.8, tex: faceTex });
+  if (P.jaw > 0.15) {
+    const a = hp(2.2, 2.2), b = hp(6.2, 2.2), cc = jp(5, 3.1), d = jp(2.4, 3.4);
+    R.region(spline([[a[0], a[1], 0], [b[0], b[1], 0.3], [cc[0], cc[1], 0.3], [d[0], d[1], 0]], 0.4), { z: z + 2.2 * k, R: 0.6, H: 0.4, id: ID.MOUTH, tex: M.mouth });
+  }
+  // the noseleaf: a lancet on a horseshoe of skin round the nostrils
+  {
+    const leaf: LM[] = [hp(4.3, -1.2), hp(4.5, -2.8), hp(5, -4.4, 0.7), hp(5.6, -2.8), hp(5.9, -1), hp(5.3, -0.4)];
+    R.region(spline(leaf, 0.4), { z: z + 3.2 * k, R: 0.7 * k, H: 1 * k, id: ID.LEAF, tex: (p, o) => {
+      const dx = (p.x - o0[0]) / k, dy = (p.y - o0[1]) / k;
+      const hx = dx * c + dy * s;
+      o.m = Math.abs(hx - 5.05) < 0.35 ? M.inner : M.skin;
+    } });
+    R.line([hp(4.4, 0.4) as unknown as V2, hp(5, 1.1) as unknown as V2, hp(5.8, 1.2) as unknown as V2].map(q => [q[0], q[1]] as V2), 0.7 * k, -0.6 * k);
+  }
+  // the brow and cheek
+  { const b2 = hp(2.4, -2.2), cb = hp(1, 2); R.bump(b2[0], b2[1], 1.8 * k, 1.2 * k, 0.6 * k); R.bump(cb[0], cb[1], 2 * k, 1.6 * k, 0.6 * k); }
+  // fangs: the upper canines always show; the lower ones when the jaw drops
+  const fang = (a: LM, dirY: number, len: number) => {
+    const t: LM[] = [[a[0] - 0.5 * k, a[1], 0], [a[0] + 0.5 * k, a[1], 0], [a[0] + 0.15 * k - s * len * 0.2, a[1] + dirY * len, 0.8]];
+    R.region(spline(t, 0.3), { z: z + 4 * k, R: 0.4, H: 0.6, id: ID.TOOTH, tex: M.tooth });
+  };
+  fang(hp(4.6, 2.1), fy, 2 * k);
+  fang(hp(3.4, 2.4), fy, 1.2 * k);
+  if (P.jaw > 0.3) fang(jp(4.6, 3), -fy, 1.6 * k);
   sk.np();
-  const dir: V2 = [elbow[0] - wrist[0], elbow[1] - wrist[1]];
-  const L = Math.hypot(dir[0], dir[1]) || 1;
-  const ux = dir[0] / L, uy = dir[1] / L, px = uy, py = -ux; // perpendicular (toward the back when facing right)
-  const tip: V2 = [elbow[0] + ux * 2.5 * k - px * 2.2 * k, elbow[1] + uy * 2.5 * k - py * 2.2 * k];
-  const midB: V2 = [wrist[0] + dir[0] * 0.55 - px * 2.8 * k, wrist[1] + dir[1] * 0.55 - py * 2.8 * k];
-  sk.poly([wrist[0], wrist[1] - 1 * k, tip[0], tip[1], midB[0], midB[1]], M.mem, { z: z - 1.2, bias: bias - 0.06 });
-  sk.tube([[wrist[0] - px * 0.8, wrist[1] - 1 * k], midB, tip], 0.6 * k, M.bone, { z: z - 0.8, bias: bias - 0.04 });
-  // humerus + forearm
-  sk.np();
-  sk.tube([sh, elbow], t => (2.7 - t * 1.1) * k, M.fur, { z, bias });
-  sk.tube([elbow, wrist], t => (1.5 - t * 0.45) * k, M.skin, { z: z + 0.3, bias });
-  sk.ell(elbow[0], elbow[1], 1.6 * k, 1.6 * k, M.skin, { z: z + 0.5, bias });
-  // wrist pad + thumb claw
-  sk.ell(wrist[0], wrist[1] - 0.8 * k, 1.5 * k, 1.1 * k, M.skin, { z: z + 1, bias });
-  sk.blade(wrist[0] + 0.8 * k, wrist[1] - 1.2 * k, wrist[0] + 2.8 * k, Math.min(-0.2, wrist[1] + 0.2 * k), s2 => (1 - s2) * 0.7 * k + 0.2, M.claw, { z0: z + 2, z1: z + 2, bias });
-  return elbow;
+  R.emit({ drop: 1.4, seam: 0.5, seamDark: 0.3, ao: 0.06, aoR: 1 });
+  ear(true);
+  const ec = hp(2.7, -0.9);
+  const ep = drawEye(sk, ec[0], ec[1], { ...EYE, r: k < 0.8 ? 1 : 1.2 }, P.eye);
+  const ns = hp(5.4, 0.6);
+  sk.over(ns[0], ns[1], hex('#1a0e0e'));
+  return { ep, top: hp(0, -6) };
 }
 
 interface GP { hip: V2; sh: V2; head: V2; ha: number; jaw: number; ear: number; wn: V2; wf: V2; eN: V2; eF: V2; fN: V2; fF: V2; spread: number }
+
+/** a folded wing-arm planted on the ground: humerus up to the raised elbow, the long forearm down to the wrist and thumb */
+function wingArm(R: Relief, M: M, sh: V2, el: V2, wr: V2, k: number, z: number) {
+  // the folded hand: digits and membrane bundled along the back of the forearm, the wingtip past the elbow
+  {
+    const [u, n2] = frame(wr, el);
+    const tip = pt(el, u, n2, 3.2 * k, 1.6 * k);
+    const ol: LM[] = [pt(wr, u, n2, 0.5 * k, -0.8 * k), pt(wr, u, n2, 4 * k, 2.4 * k), pt(el, u, n2, -2 * k, 2.6 * k), [tip[0], tip[1], 0.7], pt(el, u, n2, 0.4 * k, -0.4 * k), pt(wr, u, n2, 2 * k, -1.2 * k)];
+    R.region(spline(ol, 0.5), { z: z - 1.5 * k, R: 1 * k, H: 1.4 * k, id: ID.BUNDLE, tex: (p, o) => {
+      // the folded digits as ridges along it, the membrane pleated between them
+      const a2 = (p.x - wr[0]) * n2[0] + (p.y - wr[1]) * n2[1];
+      const r = fr(a2 / (1.5 * k) + 0.3);
+      o.m = r < 0.2 ? M.bone : M.mem;
+      if (r < 0.2) o.z += 0.4;
+    } });
+    // the claw at the wingtip
+    const ct: LM[] = [[tip[0], tip[1], 0], [tip[0] + u[0] * 1.6 * k - n2[0] * 0.6 * k, tip[1] + u[1] * 1.6 * k - n2[1] * 0.6 * k, 0.8], [tip[0] - n2[0] * 0.5 * k, tip[1] - n2[1] * 0.5 * k, 0]];
+    R.region(spline(ct, 0.3), { z: z - 0.8 * k, R: 0.4, H: 0.5, id: ID.CLAW, tex: M.claw });
+  }
+  // humerus (furred near the shoulder) and the long, bare forearm
+  {
+    const ol: LM[] = [
+      along(sh, el, 0, 2.8 * k), along(sh, el, 0.6, 1.9 * k), along(sh, el, 0.95, 1.6 * k), along(sh, el, 1.14, 0, 0.5),
+      along(el, wr, 0.06, 1.5 * k), along(el, wr, 0.5, 1.1 * k), along(el, wr, 0.92, 1.1 * k), along(el, wr, 1.08, 0.6 * k, 0.3),
+      along(el, wr, 1.06, -1.4 * k, 0.3), along(el, wr, 0.9, -1 * k), along(el, wr, 0.5, -0.9 * k), along(el, wr, 0.1, -1.1 * k),
+      along(sh, el, 0.9, -1.4 * k), along(sh, el, 0.55, -2.2 * k), along(sh, el, 0.05, -3.2 * k),
+    ];
+    R.region(spline(ol, 0.5), { z, R: 1.2 * k, H: 2 * k, id: ID.ARM, tex: (p, o) => {
+      const t = ((p.x - sh[0]) * (el[0] - sh[0]) + (p.y - sh[1]) * (el[1] - sh[1])) / ((el[0] - sh[0]) ** 2 + (el[1] - sh[1]) ** 2 || 1);
+      const dEl = Math.hypot(p.x - el[0], p.y - el[1]);
+      if (t < 0.55 && dEl > 4 * k) { o.z += strands(p.x, p.y, Math.atan2(el[1] - sh[1], el[0] - sh[0]) + Math.PI, 1.8, 1, 71) * 0.5; o.m = M.fur; return; }
+      o.m = M.skin;
+      if (fr(dEl * 0.9) < 0.2 && dEl < 7 * k) { o.z -= 0.4; o.m = M.skinD; } // wrinkled skin round the elbow
+      else if (dEl > 7 * k && fr(dEl * 0.35) < 0.12) o.m = M.bone; // the bony shaft catching the light
+    } });
+    const eb = along(sh, el, 1.02, 0); R.bump(eb[0], eb[1], 1.4 * k, 1.4 * k, 0.8 * k);
+  }
+  // the wrist pad and the thumb, its big hooked claw planted on the ground
+  {
+    const th0: V2 = [wr[0] + 0.4 * k, wr[1] - 0.6 * k];
+    const thT: V2 = [wr[0] + 2.4 * k, Math.min(-0.4, wr[1] + 0.2 * k)];
+    const ol: LM[] = [[th0[0] - 1 * k, th0[1] - 0.8 * k, 0], [thT[0] - 0.4 * k, thT[1] - 1 * k, 0], [thT[0], thT[1] - 0.4 * k, 0.3], [th0[0] + 0.2 * k, th0[1] + 1 * k, 0]];
+    R.region(spline(ol, 0.4), { z: z + 0.8 * k, R: 0.7, H: 1, id: ID.THUMB, tex: M.skin });
+    const cl: LM[] = [[thT[0] - 0.4 * k, thT[1] - 1.1 * k, 0], [thT[0] + 1.6 * k, thT[1] - 0.5 * k, 0], [thT[0] + 1.9 * k, Math.min(-0.2, thT[1] + 0.9 * k), 0.85], [thT[0] + 0.1 * k, thT[1] + 0.1 * k, 0]];
+    R.region(spline(cl, 0.3), { z: z + 1.4 * k, R: 0.5, H: 0.7, id: ID.CLAW, tex: (p, o) => { o.m = M.claw; if (p.u > 0.6) o.t -= 0.08; } });
+  }
+}
+
+/** a hind leg: the thigh, the knee bent back, the slender shin, the foot with five hooked claws */
+function hindLeg(R: Relief, M: M, hip: V2, foot: V2, k: number, z: number) {
+  const fa = -Math.PI / 2 - 0.9;
+  const ank: V2 = [foot[0] + Math.cos(fa) * 2.4 * k, foot[1] + Math.sin(fa) * 2.4 * k];
+  const [kn] = ik2(hip, ank, 7.5 * k, 8 * k, 1);
+  const ol: LM[] = [
+    along(hip, kn, 0, -3.2 * k), along(hip, kn, 0.6, -2.2 * k), along(hip, kn, 1.1, -0.4 * k, 0.4),
+    along(kn, ank, 0.1, -1.2 * k), along(kn, ank, 0.6, -0.8 * k), along(kn, ank, 0.98, -0.9 * k),
+    along(kn, ank, 1.02, 0.9 * k), along(kn, ank, 0.5, 0.8 * k), along(kn, ank, 0.05, 1.2 * k),
+    along(hip, kn, 0.85, 1.6 * k), along(hip, kn, 0.4, 2.6 * k), along(hip, kn, -0.1, 3 * k),
+  ];
+  R.region(spline(ol, 0.5), { z, R: 1.2 * k, H: 1.8 * k, id: ID.LEG, tex: (p, o) => {
+    const t = ((p.x - hip[0]) * (kn[0] - hip[0]) + (p.y - hip[1]) * (kn[1] - hip[1])) / ((kn[0] - hip[0]) ** 2 + (kn[1] - hip[1]) ** 2 || 1);
+    if (t < 0.8) { o.z += strands(p.x, p.y, 1.9, 1.8, 1, 81) * 0.5; o.m = M.fur; } else o.m = M.skinD;
+  } });
+  // the foot and its claws
+  const fo: LM[] = [[ank[0] - 0.8 * k, ank[1] - 0.4 * k, 0], [foot[0] + 1.4 * k, foot[1] - 1.2 * k, 0], [foot[0] + 1.6 * k, foot[1], 0.3], [ank[0] - 0.6 * k, ank[1] + 1 * k, 0]];
+  R.region(spline(fo, 0.4), { z: z + 0.6 * k, R: 0.7, H: 1, id: ID.FOOT, tex: M.skinD });
+  for (let i = 0; i < 3; i++) {
+    const b: V2 = [foot[0] + (0.6 + i * 0.5) * k, foot[1] - (1.2 - i * 0.4) * k];
+    const cl: LM[] = [[b[0], b[1] - 0.4 * k, 0], [b[0] + 1.4 * k, b[1] - 0.1 * k, 0], [b[0] + 1.8 * k, Math.min(-0.2, b[1] + 0.9 * k), 0.85], [b[0] + 0.2 * k, b[1] + 0.4 * k, 0]];
+    R.region(spline(cl, 0.3), { z: z + 1 * k + i * 0.2, R: 0.4, H: 0.5, id: ID.CLAW, tex: M.claw });
+  }
+  return { kn, ank };
+}
 
 /** Grounded pose: torso from hip to shoulder, wing-arms planted, hind legs behind. */
 function drawGround(sk: Sk, M: M, G: GP, k: number, eye: BeastEye) {
   sk.clipY = 0;
   const S = (v: V2): V2 => [v[0] * k, v[1] * k];
   const hip = S(G.hip), sh = S(G.sh);
-  const HL: LegSpec = scaleLeg({ l1: 7.5, l2: 8, l3: 2.4, r1: 2.2, r2: 1.2, r3: 0.9, bend: 1 }, k);
-  // far wing-arm, far leg
-  foldedArm(sk, M, [sh[0] - 1 * k, sh[1] - 0.5 * k], S(G.eF), S(G.wf), k, -6, -0.14);
-  sk.np();
-  let j = leg(sk, [hip[0] - 1 * k, hip[1]], S(G.fF), HL, M.fur, -4, -Math.PI / 2 - 0.9, -0.14);
-  sk.blade(j[3][0], j[3][1] - 0.6, j[3][0] + 1.8 * k, Math.min(-0.2, j[3][1] + 0.4), s => (1 - s) * 0.6 * k + 0.2, M.claw, { z0: -3, z1: -3 });
-  // half-opened wings for screech: membranes spread up behind the arms
-  if (G.spread > 0) {
+  // ---- far side: wing-arm, hind leg (and the half-raised far wing when screeching)
+  {
+    const R = Relief.full(sk);
+    if (G.spread > 0) spreadFolded(R, M, [sh[0] - 0.5 * k, sh[1]], G.spread, k, -1, -8);
+    wingArm(R, M, [sh[0] - 1 * k, sh[1] - 0.5 * k], S(G.eF), S(G.wf), k, -6);
+    hindLeg(R, M, [hip[0] - 1 * k, hip[1]], S(G.fF), k, -5);
     sk.np();
-    const up = G.spread;
-    for (const [side, zz, bb] of [[-1, -7, -0.14], [1, 8, 0]] as [number, number, number][]) {
-      const base = [sh[0] + side * 0.5, sh[1]] as V2;
-      const tip1: V2 = [base[0] - 16 * k * up, base[1] - 20 * k * up + side * 2];
-      const tip2: V2 = [base[0] - 22 * k * up, base[1] - 8 * k * up];
-      const tip3: V2 = [base[0] - 16 * k * up, base[1] + 6 * k];
-      sk.poly([base[0], base[1], tip1[0], tip1[1], (tip1[0] + tip2[0]) / 2 + 2 * k, (tip1[1] + tip2[1]) / 2 + 1 * k, tip2[0], tip2[1], (tip2[0] + tip3[0]) / 2 + 2 * k, (tip2[1] + tip3[1]) / 2, tip3[0], tip3[1]], M.mem, { z: zz, bias: bb - 0.04 });
-      sk.tube([base, tip1], 0.8 * k, M.bone, { z: zz + 0.3, bias: bb });
-      sk.tube([base, tip2], 0.7 * k, M.bone, { z: zz + 0.3, bias: bb });
-      sk.tube([base, tip3], 0.6 * k, M.bone, { z: zz + 0.3, bias: bb });
+    R.emit({ bias: -0.16, drop: 1.4, seam: 0.5, seamDark: 0.3 });
+  }
+  const R = Relief.full(sk);
+  if (G.spread > 0) spreadFolded(R, M, [sh[0] + 0.5 * k, sh[1]], G.spread, k, 1, 8);
+  // ---- the tail membrane between the legs
+  {
+    const tt: V2 = [hip[0] - 4 * k, hip[1] + 3.5 * k];
+    const fl: V2 = S(G.fN);
+    const ol: LM[] = [[hip[0] + 1 * k, hip[1] - 1 * k, 0], [tt[0] - 1.6 * k, tt[1] - 1 * k, 0.6], [(tt[0] + fl[0]) / 2 - 1 * k, (tt[1] + fl[1]) / 2 - 0.5 * k, 0], [fl[0] - 1 * k, fl[1] - 3 * k, 0.3], [hip[0] + 1.6 * k, hip[1] + 4 * k, 0]];
+    R.region(spline(ol, 0.5), { z: -1, R: 0.8, H: 0.8, id: ID.TAILM, tex: (p, o) => { o.m = M.mem; if (fr((p.x + p.y) * 0.5) < 0.18) o.z -= 0.3; } });
+  }
+  // ---- the torso: a hunched, furry body from the rump to the shoulders
+  const [u, n2] = frame(hip, sh);
+  const T = (x: number, y: number, s2 = 0) => pt(hip, u, n2, x * k, y * k, s2);
+  const L0 = Math.hypot(sh[0] - hip[0], sh[1] - hip[1]) / k;
+  const torso: LM[] = [T(-3.4, 0.4), T(-2.2, -3.8), T(2, -5.4), T(L0 * 0.6, -5.6), T(L0 + 0.5, -4.6), T(L0 + 2.6, -1.4), T(L0 + 2.2, 2.6), T(L0 - 1, 4.8), T(L0 * 0.45, 5.4), T(0.5, 4.4), T(-2.4, 2.8)];
+  const bodyAng = Math.atan2(hip[1] - sh[1], hip[0] - sh[0]);
+  const tor = fringe(spline(torso, 0.6), 1.3, 5, (_x, _y, nx, ny) => [1.2 * k + 0.2, nx * u[0] + ny * u[1] > 0 ? -0.5 : 0.5]);
+  const bodyFur = furTex(M, bodyAng, M.fur, 51, 0.8, 2.6);
+  R.region(tor, { z: 0, R: 4.4 * k, H: 5 * k, id: ID.BODY, tex: (p, o) => {
+    bodyFur(p, o);
+    const v = (p.x - hip[0]) * n2[0] + (p.y - hip[1]) * n2[1];
+    if (v > 2.4 * k) o.m = M.chest;
+    else if (v < -3.4 * k) o.m = FS.tip > 0.7 ? M.furR : M.furD;
+  } });
+  { const sc = T(L0 * 0.75, -2.2), rp = T(-0.5, -1.4); R.bump(sc[0], sc[1], 3 * k, 2.2 * k, 1 * k); R.bump(rp[0], rp[1], 3 * k, 3 * k, 1 * k); }
+  // ---- the ruff: a shaggy pale mane round the neck and over the shoulders
+  {
+    const hd = S(G.head);
+    const ru: LM[] = [T(L0 * 0.4, -5.8), T(L0 + 0.5, -6.8), [hd[0] - 2.6 * k, hd[1] - 2.8 * k, 0], [hd[0] - 1.2 * k, hd[1] + 3 * k, 0], T(L0 + 3.2, 3.4), T(L0 + 0.6, 6), T(L0 - 2.6, 4.4), T(L0 * 0.45, 0)];
+    const rf = fringe(spline(ru, 0.5), 1.4, 9, (_x, _y, nx, ny) => [1.9 * k + 0.3, nx * u[0] + ny * u[1] > 0 ? -0.6 : 0.6]);
+    const mf = furTex(M, bodyAng + 0.3, M.mane, 53, 1, 2.8);
+    R.region(rf, { z: 2 * k, R: 2.6 * k, H: 4.4 * k, id: ID.MANE, blend: 1.2, tex: (p, o) => { mf(p, o); if (o.m === M.mane && FS.tip < 0.3) o.m = M.maneD; } });
+  }
+  // ---- near hind leg and near wing-arm
+  hindLeg(R, M, hip, S(G.fN), k, 4);
+  wingArm(R, M, sh, S(G.eN), S(G.wn), k, 8);
+  // the membrane draping from the arm to the flank, sagging and wrinkled
+  {
+    const el = S(G.eN), wr = S(G.wn), fl = S(G.fN);
+    void fl;
+    const [u2, n3] = frame(wr, el);
+    const m0 = pt(wr, u2, n3, 5 * k, 3.2 * k), m1 = pt(el, u2, n3, -6 * k, 4.6 * k);
+    const ol: LM[] = [pt(wr, u2, n3, 2.5 * k, 0.6 * k), m0, [(m1[0] + hip[0]) / 2 + 2 * k, (m1[1] + hip[1]) / 2 + 1 * k, 0], [sh[0] - 1.5 * k, sh[1] + 2.5 * k, 0], m1, pt(el, u2, n3, -2 * k, 1 * k)];
+    R.region(spline(ol, 0.5), { z: 6, R: 1, H: 1, id: ID.MEM, tex: (p, o) => {
+      o.m = M.mem;
+      // a few long sag folds hanging from the arm
+      if (fr((p.x - el[0]) * 0.22 + (p.y - el[1]) * 0.05) < 0.12) o.z -= 0.5;
+    } });
+  }
+  R.shadow(ID.MANE, 0.8 * k, 1.2 * k, 0.1, ID.BODY, 1);
+  R.shadow(ID.ARM, 1 * k, 0.8 * k, 0.1, ID.BODY, 1);
+  sk.np();
+  R.emit({ drop: 1.5, seam: 0.5, seamDark: 0.3, ao: 0.06, aoR: 2 });
+  const { ep, top } = drawHead(sk, M, S(G.head), G.ha, { jaw: G.jaw, ear: G.ear, eye, k: k * 1.2 }, 12);
+  return { head: [top[0], top[1] - 2 * k] as V2, eye: ep };
+}
+
+/** wings half-raised behind the arms (the screech threat display), as fans of membrane on long fingers */
+function spreadFolded(R: Relief, M: M, base: V2, up: number, k: number, side: number, z: number) {
+  const tips: V2[] = [[-14 * up, -21 * up + side * 2], [-22 * up, -12 * up], [-21 * up, -2 * up], [-15 * up, 6]];
+  const T = tips.map(t => [base[0] + t[0] * k, base[1] + t[1] * k] as V2);
+  const ol: LM[] = [[base[0], base[1], 0]];
+  for (let i = 0; i < T.length; i++) {
+    ol.push([T[i][0], T[i][1], 0.8]);
+    if (i < T.length - 1) {
+      const m: V2 = [(T[i][0] + T[i + 1][0]) / 2, (T[i][1] + T[i + 1][1]) / 2];
+      ol.push([m[0] + (base[0] - m[0]) * 0.22, m[1] + (base[1] - m[1]) * 0.22, 0]);
     }
   }
-  // torso
+  R.region(spline(ol, 0.6), { z, R: 1, H: 1, id: ID.MEM, tex: (p, o) => {
+    o.m = side < 0 ? M.mem : M.memL;
+    const a = Math.atan2(p.y - base[1], p.x - base[0]);
+    if (fr(a * 9) < 0.08) o.m = M.vein;
+  } });
+  for (const t of T) {
+    const tip: V2 = [base[0] + (t[0] - base[0]) * 0.96, base[1] + (t[1] - base[1]) * 0.96];
+    R.line([base, tip], 0.9 * k, 1 * k);
+    paintBone(R, M, [base, tip], ID.MEM);
+  }
+}
+
+/** paint a thin pale bone along a polyline over the pixels of element `onto` */
+function paintBone(R: Relief, M: M, pts: V2[], onto: number) {
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i], n = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) * 2);
+    for (let s = 0; s <= n; s++) {
+      const q = R.at(a[0] + (b[0] - a[0]) * (s / n), a[1] + (b[1] - a[1]) * (s / n));
+      if (q >= 0 && R.id[q] === onto) R.m[q] = M.bone;
+    }
+  }
+}
+
+/** a tapered bone between two points (a long thin contour with knuckle swellings at both ends) */
+function boneSeg(R: Relief, M: M, a: V2, b: V2, r0: number, r1: number, z: number, id = ID.BONE) {
+  const [u, n2, l] = frame(a, b);
+  if (l < 0.5) return;
+  const ol: LM[] = [pt(a, u, n2, -r0 * 0.8, 0), pt(a, u, n2, 0, -r0), pt(a, u, n2, l * 0.5, -(r0 + r1) * 0.38), pt(a, u, n2, l, -r1), pt(a, u, n2, l + r1 * 0.8, 0), pt(a, u, n2, l, r1), pt(a, u, n2, l * 0.5, (r0 + r1) * 0.38), pt(a, u, n2, 0, r0)];
+  R.region(spline(ol, 0.4), { z, R: Math.max(0.5, r1), H: Math.max(0.6, r0 * 0.8), id, tex: M.bone });
+}
+
+/** Membrane wing in 3D, projected: arm + four fingers from the wrist, the membrane scalloped between them. */
+function wing(sk: Sk, M: M, side: 1 | -1, th: number, fold: number, sweep: number, k: number, back: V3, bias: number, oy: number) {
+  const shoulder: V3 = [3 * k, 1 * k + oy, side * 3 * k];
+  const up = (s: number, c: number, handLag: number): V3 => {
+    const e = th + (s > 24 ? handLag : 0);
+    const sArm = Math.min(s, 24), sHand = Math.max(0, s - 24) * (1 - fold * 0.55);
+    const sa = Math.sin(th), ca = Math.cos(th), se = Math.sin(e), ce = Math.cos(e);
+    const x = shoulder[0] + sArm * Math.sin(sweep) + sHand * Math.sin(sweep + fold * 0.7) - c * (1 - fold * 0.3);
+    const y = shoulder[1] + sArm * sa + sHand * se;
+    const z = shoulder[2] + side * (sArm * ca + sHand * ce);
+    return [x, y, z];
+  };
+  const lag = -0.35 * Math.sin(th * 1.2) - fold * 0.6;
+  const K = (s: number, c: number) => up(s * k, c * k, lag);
+  const elbow = K(11, -1), wrist = K(24, 1.5);
+  const f2 = K(40, -0.5), f3 = K(47, 3), f4 = K(38, 17), f5 = K(27, 19.5);
+  const ankle: V3 = [back[0], back[1] + oy, back[2] * side];
+  const P2 = (q: V3): V2 => { const r = proj(q); return [r[0], r[1]]; };
+  const Z = (q: V3) => proj(q)[2];
+  const sh2 = P2(shoulder), el2 = P2(elbow), wr2 = P2(wrist), t2 = P2(f2), t3 = P2(f3), t4 = P2(f4), t5 = P2(f5), an2 = P2(ankle);
+  // the membrane plane's facing, for its light
+  const v3 = (a: V3, b: V3): V3 => [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const pa = proj(shoulder), pb = proj(wrist), pc = proj(f5);
+  const e1 = v3(pa, pb), e2 = v3(pa, pc);
+  let nx = e1[1] * e2[2] - e1[2] * e2[1], ny = e1[2] * e2[0] - e1[0] * e2[2], nz = e1[0] * e2[1] - e1[1] * e2[0];
+  const nl = Math.hypot(nx, ny, nz) || 1; nx /= nl; ny /= nl; nz /= nl;
+  if (nz < 0) { nx = -nx; ny = -ny; nz = -nz; }
+  const lt = (lumN(nx, ny, nz) - 0.6) * 0.8;
+  const zW = (Z(wrist) + Z(shoulder)) / 2;
+  const R = new Relief(sk, Math.min(sh2[0], el2[0], wr2[0], t2[0], t3[0], t4[0], t5[0], an2[0]) - 3, Math.min(sh2[1], el2[1], wr2[1], t2[1], t3[1], t4[1], t5[1], an2[1]) - 3,
+    Math.max(sh2[0], el2[0], wr2[0], t2[0], t3[0], t4[0], t5[0], an2[0]) + 3, Math.max(sh2[1], el2[1], wr2[1], t2[1], t3[1], t4[1], t5[1], an2[1]) + 3);
+  const scal = (a: V2, b: V2, d: number): LM => { const m: V2 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; return [m[0] + (wr2[0] - m[0]) * d, m[1] + (wr2[1] - m[1]) * d, 0]; };
+  const scalB = (a: V2, b: V2, d: number): LM => { const m: V2 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; const c2: V2 = [(sh2[0] + wr2[0]) / 2, (sh2[1] + wr2[1]) / 2]; return [m[0] + (c2[0] - m[0]) * d, m[1] + (c2[1] - m[1]) * d, 0]; };
+  const ol: LM[] = [[sh2[0], sh2[1], 0], [el2[0], el2[1], 0.3], [wr2[0], wr2[1], 0.4], [t2[0], t2[1], 0.9], scal(t2, t3, 0.18), [t3[0], t3[1], 0.9], scal(t3, t4, 0.26), [t4[0], t4[1], 0.9], scal(t4, t5, 0.24), [t5[0], t5[1], 0.9], scalB(t5, an2, 0.2), [an2[0], an2[1], 0.6]];
+  const under = ny < -0.2 ? 0 : 1;
+  R.region(spline(ol, 0.7), { z: zW - 1, R: 1.2 * k, H: 1, id: ID.MEM, lt: lt + bias, tex: (p, o) => {
+    o.m = under ? M.memL : M.mem;
+    // veins branching out from the arm and fingers, and the elastic fibres' fine pleats
+    const a = Math.atan2(p.y - wr2[1], p.x - wr2[0]);
+    if (fr(a * 5.2 + Math.hypot(p.x - wr2[0], p.y - wr2[1]) * 0.05) < 0.07) o.m = M.vein;
+    if (fr((p.x * 0.6 + p.y * 0.35) * 0.5) < 0.15) o.z -= 0.3;
+    // thin and lit through near the trailing edge
+    if (p.s < 1.6 * k && !under) o.m = M.memL;
+  } });
+  // the bones over the membrane
+  const zb = zW + 1;
+  boneSeg(R, M, sh2, el2, 1.7 * k, 1.2 * k, zb);
+  boneSeg(R, M, el2, wr2, 1.2 * k, 0.9 * k, zb);
+  for (const t of [t2, t3, t4, t5]) boneSeg(R, M, wr2, t, 0.7 * k, 0.4 * k, zb);
+  // the thumb claw at the wrist
+  const tc: LM[] = [[wr2[0] - 0.4 * k, wr2[1] - 0.4 * k, 0], [wr2[0] + 2.2 * k, wr2[1] - 1.4 * k, 0.8], [wr2[0] + 0.6 * k, wr2[1] + 0.6 * k, 0]];
+  R.region(spline(tc, 0.3), { z: zb + 1, R: 0.4, H: 0.6, id: ID.CLAW, tex: M.claw });
   sk.np();
-  const c = lerp2(hip, sh, 0.5);
-  const nrm: V2 = [-(sh[1] - hip[1]), sh[0] - hip[0]];
-  const nl = Math.hypot(nrm[0], nrm[1]) || 1;
-  const bow: V2 = [c[0] - (nrm[0] / nl) * 1.2 * k, c[1] - (nrm[1] / nl) * 1.2 * k];
-  const torso = cbez(hip, bow, bow, sh, 6);
-  sk.tube(torso, t => (5.2 - Math.abs(t - 0.45) * 2.4) * k, (p) => (p.v > 0.35 ? M.chest : M.fur), { z: 0 });
-  const tp = sk.pid;
-  sk.streaks(tp, () => [-0.6, 0.8] as V2, { spacing: 3, len: 2, amp: 0.09 });
-  sk.tufts(tp, (_x, _y, nx, ny) => [nx * 0.6, ny * 0.6 + 0.4] as V2, { every: 2, len: 1 });
-  // tail membrane stub between the legs
+  R.emit({ bias, drop: 1.2, seam: 0.5, seamDark: 0.3 });
+}
+
+function drawFly(sk: Sk, M: M, f: number, k: number, eye: BeastEye) {
+  const t = f / 6;
+  const th = Math.sin(t * TAU) * 0.78 + 0.08;
+  const fold = Math.max(0, Math.cos(t * TAU + 0.4)) * 0.7;
+  const sweep = -0.1 + Math.sin(t * TAU) * 0.08;
+  const bob = -Math.sin(t * TAU) * 1.5 * k;
+  wing(sk, M, -1, th, fold, sweep, k, [-8 * k, 0, 2 * k], -0.16, -bob);
+  // the body: furry, level, the legs trailing with the tail membrane between them
+  const R = new Relief(sk, -30 * k, -20 * k, 20 * k, 20 * k);
+  {
+    const hipP: V2 = [-6 * k, 1.2 * k + bob];
+    const tm: LM[] = [[hipP[0], hipP[1] - 1.5 * k, 0], [-14.5 * k, 2.8 * k + bob, 0.7], [-12 * k, 5.2 * k + bob, 0], [-10.5 * k, 6.4 * k + bob, 0.7], [-6 * k, 4.4 * k + bob, 0]];
+    R.region(spline(tm, 0.5), { z: -1, R: 0.8, H: 0.8, id: ID.TAILM, tex: (p, o) => { o.m = M.memL; if (fr(p.x * 0.6) < 0.15) o.m = M.vein; } });
+    for (const dz of [-1, 1]) {
+      const ft: V2 = [-12.5 * k, (4 + dz * 1.4) * k + bob];
+      R.region(spline([[hipP[0], hipP[1] - 0.8 * k, 0], [ft[0], ft[1] - 0.6 * k, 0.3], [ft[0] - 1.2 * k, ft[1] + 0.2 * k, 0.8], [ft[0], ft[1] + 0.8 * k, 0.3], [hipP[0], hipP[1] + 1.4 * k, 0]], 0.4), { z: dz, R: 0.8, H: 1.2, id: ID.LEG, tex: M.skinD });
+    }
+    const body: LM[] = [[-8.6 * k, 0.6 * k + bob, 0], [-6 * k, -3.2 * k + bob, 0], [0, -4.6 * k + bob, 0], [5 * k, -4 * k + bob, 0], [7.4 * k, -1 * k + bob, 0], [6 * k, 3.4 * k + bob, 0], [0, 4.6 * k + bob, 0], [-6 * k, 4 * k + bob, 0]];
+    const bf = furTex(M, Math.PI, M.fur, 57, 0.8, 2.6);
+    R.region(fringe(spline(body, 0.5), 1.3, 7, (_x, _y, nx) => [1.2 * k + 0.2, nx > 0 ? 0.3 : -0.3]), { z: 0, R: 3.4 * k, H: 4 * k, id: ID.BODY, tex: (p, o) => { bf(p, o); if (p.y > bob + 1.6 * k) o.m = M.chest; } });
+    const ru: LM[] = [[2 * k, -5 * k + bob, 0], [7 * k, -4.6 * k + bob, 0], [8.6 * k, 0, 0], [7 * k, 4 * k + bob, 0], [3 * k, 3.6 * k + bob, 0]];
+    const mf = furTex(M, Math.PI - 0.3, M.mane, 59, 1, 2.6);
+    R.region(fringe(spline(ru, 0.5), 1.4, 9, () => [1.6 * k + 0.2, 0.5]), { z: 2, R: 2 * k, H: 3.4 * k, id: ID.MANE, blend: 1, tex: mf });
+  }
   sk.np();
-  const tm = S([G.hip[0] - 3, G.hip[1] + 3]);
-  sk.poly([hip[0], hip[1], tm[0] - 3 * k, tm[1], tm[0] + 1 * k, tm[1] + 2 * k], M.mem, { z: -1 });
-  // head
-  const H = new Frame2(S(G.head), G.ha, k * 1.2);
-  const { ep, top } = drawHead(sk, M, H, { jaw: G.jaw, ear: G.ear, eye, k: k * 1.2 }, 4);
-  // near leg, near wing-arm
+  R.emit({ drop: 1.4, seam: 0.5, seamDark: 0.3 });
+  const { ep, top } = drawHead(sk, M, [8.6 * k, -1.2 * k + bob], 0.12, { jaw: 0.35, ear: -1, eye, k: k * 1.15 }, 6);
+  wing(sk, M, 1, th, fold, sweep, k, [-8 * k, 0, 2 * k], 0, -bob);
+  return { head: [top[0], top[1] - 2 * k] as V2, eye: ep };
+}
+
+/** a cloak of folded wings wrapped round the body: the forearms as bony ridges, pleats, the thumbs peeking out */
+function cloak(R: Relief, M: M, top: V2, bot: V2, wid: number, k: number, br: number, thumbsAt: number) {
+  const [u, n2, L] = frame(top, bot);
+  const C = (t: number, w: number, s2 = 0) => pt(top, u, n2, t * L, w * (wid + br), s2);
+  const ol: LM[] = [C(0.02, -0.25), C(0.2, -0.85), C(0.5, -1.02), C(0.8, -0.86), C(1, -0.3, 0.2), C(1.02, 0.25, 0.2), C(0.82, 0.92), C(0.5, 1.04), C(0.2, 0.86), C(0.02, 0.28)];
+  R.region(spline(ol, 0.6), { z: 0, R: 2.6 * k, H: 4.6 * k, id: ID.MEM, tex: (p, o) => {
+    const a2 = (p.x - top[0]) * n2[0] + (p.y - top[1]) * n2[1];
+    const t = ((p.x - top[0]) * u[0] + (p.y - top[1]) * u[1]) / L;
+    // pleats of the folded membrane running down the cloak, veins between them
+    const r = fr(a2 / (1.7 * k) + t * 0.6);
+    o.m = M.mem;
+    if (r < 0.2) { o.z -= 0.6; o.m = M.vein; } else if (r < 0.45) { o.z += 0.3; o.m = M.memL; }
+    if (Math.abs(a2) > (wid + br) * 0.8) o.m = M.memL;
+  } });
+  // the forearms: bony ridges down the front where the wings cross
+  for (const s of [-1, 1]) {
+    const a = C(0.12, s * 0.42), b = C(thumbsAt, s * 0.32), m = C((0.12 + thumbsAt) / 2, s * 0.55);
+    R.line([[a[0], a[1]], [m[0], m[1]], [b[0], b[1]]], 1.2 * k, 1 * k);
+    paintBone(R, M, [[a[0], a[1]], [m[0], m[1]], [b[0], b[1]]], ID.MEM);
+    const tb: V2 = [b[0], b[1]];
+    const cl: LM[] = [[tb[0] - 0.6 * k, tb[1], 0], [tb[0] + s * 1.6 * k + u[0] * 0.8 * k, tb[1] + u[1] * 2 * k, 0.85], [tb[0] + 0.6 * k, tb[1] + 0.3 * k, 0]];
+    R.region(spline(cl, 0.3), { z: 6 * k, R: 0.4, H: 0.6, id: ID.CLAW, tex: M.claw });
+  }
+}
+
+/** Roosting upside down: feet grip at the top (anchor), wings wrapped round like a cloak, head at the bottom. */
+function drawHang(sk: Sk, M: M, f: number, k: number, eye: BeastEye) {
+  const br = f * 0.4 * k;
+  const R = Relief.full(sk);
+  // feet gripping the perch at (0, 0), claws hooked over it
+  for (const dx of [-1.6, 1.6]) {
+    const ol: LM[] = [[dx * k - 0.9 * k, 0.6 * k, 0], [dx * k + 0.9 * k, 0.6 * k, 0], [dx * k * 0.8 + 0.8 * k, 6 * k, 0], [dx * k * 0.8 - 0.8 * k, 6 * k, 0]];
+    R.region(spline(ol, 0.4), { z: dx > 0 ? 2 : -2, R: 0.7, H: 1, id: ID.LEG, tex: M.skinD });
+    const cl: LM[] = [[dx * k - 0.6 * k, 1.2 * k, 0], [dx * k + 1.4 * k, -0.6 * k, 0.85], [dx * k + 0.6 * k, 1.4 * k, 0]];
+    R.region(spline(cl, 0.3), { z: 3, R: 0.4, H: 0.5, id: ID.CLAW, tex: M.claw });
+  }
+  cloak(R, M, [0, 4 * k], [0.6 * k, 27 * k], 7.4 * k, k, br, 0.86);
   sk.np();
-  j = leg(sk, hip, S(G.fN), HL, M.fur, 4, -Math.PI / 2 - 0.9);
-  sk.blade(j[3][0], j[3][1] - 0.6, j[3][0] + 1.8 * k, Math.min(-0.2, j[3][1] + 0.4), s => (1 - s) * 0.6 * k + 0.2, M.claw, { z0: 6, z1: 6 });
-  foldedArm(sk, M, sh, S(G.eN), S(G.wn), k, 8, 0);
+  R.emit({ drop: 1.6, seam: 0.5, seamDark: 0.3, ao: 0.05, aoR: 2 });
+  // the head hangs at the bottom, the face turned out, the ears pointing down
+  const { ep } = drawHead(sk, M, [1.4 * k, 28.6 * k], 0.35, { jaw: 0.1, ear: f ? 0.3 : 0, eye, k, flip: true }, 12);
+  return { head: [1.4 * k, 24.6 * k] as V2, eye: ep };
+}
+
+/** On the ground, wrapped in its wings, head tucked down on the chest. */
+function drawSleep(sk: Sk, M: M, f: number, k: number, eye: BeastEye) {
+  sk.clipY = 0;
+  const R = Relief.full(sk);
+  cloak(R, M, [-1 * k, -20 * k], [0.5 * k, -0.5 * k], 8 * k, k, f * 0.35 * k, 0.32);
+  sk.np();
+  R.emit({ drop: 1.6, seam: 0.5, seamDark: 0.3, ao: 0.05, aoR: 2 });
+  const { ep, top } = drawHead(sk, M, [2.6 * k, -17 * k], 0.75, { jaw: 0, ear: -1, eye, k }, 10);
   return { head: [top[0], top[1] - 2 * k] as V2, eye: ep };
 }
 
@@ -242,116 +566,11 @@ function groundPose(anim: string, f: number, n: number): GP {
       break;
     }
   }
+  // the elbows ride high behind the head, clear of the ears
+  G.eN = [G.eN[0] - 2, G.eN[1] + 4]; G.eF = [G.eF[0] - 2.5, G.eF[1] + 4];
   return G;
 }
 
-/** Membrane wing in 3D: arm + four fingers from the wrist, scalloped trailing edge. */
-function wing(sk: Sk, M: M, side: 1 | -1, th: number, fold: number, sweep: number, k: number, back: V3, bias: number) {
-  // wing-plane coordinates (s spanwise, c chordwise backward) -> body 3D
-  const shoulder: V3 = [3 * k, 1 * k, side * 3 * k];
-  const up = (s: number, c: number, handLag: number): V3 => {
-    const e = th + (s > 24 ? handLag : 0);
-    const sArm = Math.min(s, 24), sHand = Math.max(0, s - 24) * (1 - fold * 0.55);
-    const ca = Math.cos(th), sa = Math.sin(th), ce = Math.cos(e), se = Math.sin(e);
-    const sw = sweep;
-    const x = shoulder[0] + sArm * Math.sin(sw) + sHand * Math.sin(sw + fold * 0.7) - c * (1 - fold * 0.3);
-    const y = shoulder[1] + sArm * sa + sHand * se;
-    const z = shoulder[2] + side * (sArm * ca + sHand * ce);
-    return [x, y, z];
-  };
-  const lag = -0.35 * Math.sin(th * 1.2) - fold * 0.6;
-  const P = (s: number, c: number): V3 => v3mul(up(s, c, lag), 1);
-  const K = (s: number, c: number) => P(s * k, c * k);
-  const elbow = K(11, -1), wrist = K(24, 1.5);
-  const f2 = K(40, -0.5), f3 = K(47, 3), f4 = K(38, 17), f5 = K(27, 19.5);
-  const s23 = K(44, 1), s34 = K(38.5, 9.5), s45 = K(30.5, 15), s5b = K(13, 13.5);
-  const ankle: V3 = [back[0], back[1], back[2] * side];
-  // membranes: hand panels + arm panel
-  const panels: V3[][] = [
-    [wrist, f2, s23, f3],
-    [wrist, f3, s34, f4],
-    [wrist, f4, s45, f5],
-    [shoulder, elbow, wrist, f5, s5b, ankle],
-  ];
-  void s23;
-  sk.np();
-  for (const pn of panels) {
-    poly3(sk, 0, 0, pn, (p) => {
-      // faint veins
-      if (((p.u * 7) % 1) < 0.1 && p.v > 0.1) p.l -= 0.08;
-      return M.mem;
-    }, { bias, back: (p) => { p.l -= 0.02; return M.memL; } });
-  }
-  // bones on top
-  sk.np();
-  const S2 = (q: V3): V2 => { const r = proj(q); return [r[0], r[1]]; };
-  const zOf = (q: V3) => proj(q)[2];
-  const bone = (a: V3, b: V3, r: number) => sk.tube([S2(a), S2(b)], r * k, M.bone, { z: (zOf(a) + zOf(b)) / 2 + 0.6, bias });
-  bone(shoulder, elbow, 1.5); bone(elbow, wrist, 1.1);
-  bone(wrist, f2, 0.6); bone(wrist, f3, 0.55); bone(wrist, f4, 0.5); bone(wrist, f5, 0.5);
-  // thumb claw at the wrist
-  const w2 = S2(wrist);
-  sk.blade(w2[0], w2[1], w2[0] + 2.2 * k, w2[1] - 1 * k, s => (1 - s) * 0.6 * k + 0.2, M.claw, { z0: zOf(wrist) + 1, z1: zOf(wrist) + 1 });
-}
-
-function drawFly(sk: Sk, M: M, f: number, k: number, eye: BeastEye) {
-  const t = f / 6;
-  const th = Math.sin(t * TAU) * 0.78 + 0.08;
-  const fold = Math.max(0, Math.cos(t * TAU + 0.4)) * 0.7;
-  const sweep = -0.1 + Math.sin(t * TAU) * 0.08;
-  const bob = -Math.sin(t * TAU) * 1.5 * k;
-  // far wing behind the body
-  wing(sk, M, -1, th, fold, sweep, k, [-8 * k, 0, 2 * k], -0.14);
-  // legs trailing with the tail membrane
-  sk.np();
-  const hip: V2 = [-6 * k, 1 * k + bob];
-  sk.poly([hip[0], hip[1] - 1, -14 * k, 3 * k + bob, -11 * k, 6 * k + bob, -6 * k, 4 * k + bob], M.mem, { z: -1 });
-  sk.tube([hip, [-12 * k, 4.5 * k + bob]], 1 * k, M.fur, { z: 0.5 });
-  // torso horizontal
-  sk.np();
-  const body: V2[] = [[-7 * k, 1 * k + bob], [-1 * k, 0 + bob], [4.5 * k, -0.5 * k + bob]];
-  sk.tube(body, t2 => (4.8 - Math.abs(t2 - 0.5) * 2) * k, (p) => (p.v > 0.35 ? M.chest : M.fur), { z: 0 });
-  sk.streaks(sk.pid, () => [-1, 0.2] as V2, { spacing: 3, len: 2, amp: 0.08 });
-  const H = new Frame2([8 * k, -1.5 * k + bob], 0.12, k * 1.15);
-  const { ep, top } = drawHead(sk, M, H, { jaw: 0.3, ear: -1, eye, k: k * 1.15 }, 5);
-  // near wing in front
-  wing(sk, M, 1, th, fold, sweep, k, [-8 * k, 0, 2 * k], 0);
-  return { head: [top[0], top[1] - 2 * k] as V2, eye: ep };
-}
-
-/** Roosting upside down: feet grip at the top (anchor), wings wrapped round like a cloak. */
-function drawHang(sk: Sk, M: M, f: number, k: number, eye: BeastEye) {
-  const br = f * 0.4 * k;
-  // feet gripping the perch at (0,0)
-  sk.np();
-  for (const dx of [-1.5, 1.5]) {
-    sk.tube([[dx * k, 0.5 * k], [dx * k * 0.8, 6 * k]], 1 * k, M.fur, { z: dx > 0 ? 2 : -2 });
-    sk.blade(dx * k, 1.2 * k, dx * k + 1.2 * k, -0.6 * k, s => (1 - s) * 0.5 * k + 0.2, M.claw, { z0: 3, z1: 3 });
-  }
-  // wrapped wing cloak (body inside)
-  sk.np();
-  sk.ell(0, 16 * k, 7.2 * k + br, 11 * k, (p) => {
-    // fold lines of the wrapped membrane
-    const w = (p.u + 1) * 3.2 + p.v * 0.6;
-    if (w - Math.floor(w) < 0.14) p.l -= 0.14;
-    return M.mem;
-  }, { rz: 6 * k });
-  const cloak = sk.pid;
-  sk.paint(0, 5 * k, 0, 0, cloak);
-  // wrist claws peeking where the wings cross
-  for (const dx of [-3, 3]) sk.blade(dx * k, 8 * k, dx * k * 1.2, 5.8 * k, s => (1 - s) * 0.5 * k + 0.2, M.claw, { z0: 10, z1: 10 });
-  // bony finger ridges down the cloak
-  sk.np();
-  sk.tube([[-4 * k, 7 * k], [-5.5 * k, 16 * k], [-3 * k, 25 * k]], 0.7 * k, M.bone, { z: 7 });
-  sk.tube([[4 * k, 7 * k], [5.2 * k, 17 * k], [2.5 * k, 25.5 * k]], 0.7 * k, M.bone, { z: 7 });
-  // head hanging at the bottom, face forward-down, ears pointing down
-  const H = new Frame2([1.2 * k, 27.5 * k], Math.PI - 0.45, k, 1);
-  // mirror the head vertically: use a frame pointing down-right with the ears down
-  const H2 = new Frame2(H.o, 0.35, k);
-  const Hd = { p: (x: number, y: number) => H2.p(x, -y), ang: (a: number) => H2.ang(-a), a: H2.a, o: H2.o, k } as unknown as Frame2;
-  const { ep } = drawHead(sk, M, Hd, { jaw: 0.1, ear: f ? 0.3 : 0, eye, k }, 12);
-  return { head: [H.o[0], H.o[1] - 4 * k] as V2, eye: ep };
-}
 
 function draw(sk: Sk, anim: string, frame: number, eye: BeastEye, juv: boolean) {
   const n = ANIMS[anim as keyof typeof ANIMS]?.frames ?? 1;
@@ -359,23 +578,7 @@ function draw(sk: Sk, anim: string, frame: number, eye: BeastEye, juv: boolean) 
   const M = mats(sk);
   if (anim === 'fly') return drawFly(sk, M, frame, k, eye);
   if (anim === 'hang') return drawHang(sk, M, frame, k, eye);
-  if (anim === 'sleep') {
-    // on the ground, wrapped in its wings, head tucked
-    sk.clipY = 0;
-    sk.np();
-    const br = frame * 0.35;
-    sk.ell(0, -10 * k, 8 * k + br * k, 10 * k, (p) => {
-      const w = (p.u + 1) * 3 + p.v * 0.5;
-      if (w - Math.floor(w) < 0.14) p.l -= 0.14;
-      return M.mem;
-    }, { rz: 6 * k });
-    sk.np();
-    sk.tube([[-3 * k, -17 * k], [-6 * k, -6 * k], [-4 * k, -1 * k]], 0.8 * k, M.bone, { z: 7 });
-    sk.tube([[5 * k, -2 * k], [7.5 * k, -14 * k], [3.5 * k, -19 * k]], 1.1 * k, M.skin, { z: 7 });
-    const H = new Frame2([3 * k, -17.5 * k], 0.7, k);
-    const { ep, top } = drawHead(sk, M, H, { jaw: 0, ear: -1, eye, k }, 8);
-    return { head: [top[0], top[1] - 2 * k] as V2, eye: ep };
-  }
+  if (anim === 'sleep') return drawSleep(sk, M, frame, k, eye);
   const G = groundPose(anim, frame, n);
   return drawGround(sk, M, G, k, eye);
 }
@@ -388,4 +591,3 @@ export const HUNTERBAT: SpeciesDef = {
   eyeFor: (anim) => (anim === 'sleep' || anim === 'hang' ? 'closed' : anim === 'alert' ? 'alert' : anim === 'screech' || anim === 'grab' ? 'angry' : 'open'),
   anchor: { fly: 'centre', hang: 'grip' },
 };
-void fr; void v3add; void along;

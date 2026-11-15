@@ -29,6 +29,7 @@ import { SPOT, WRECK } from '../art/island4/layout';
 import { TRAILHEAD_X, LOG } from '../game/v11/forest/layout';
 import type { TimeOfDay } from '../world/timeofday';
 import type { SiteId } from '../game/species';
+import { TUA, TUA_SPOT, TUA_STRETCHES, tuaGround } from '../game/v12/backcountry/gen';
 
 // ---------------------------------------------------------------- small helpers
 export const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
@@ -321,18 +322,22 @@ export async function goSwamp(x: number, o: { high?: boolean; hour?: number; rai
 /** V12 Te Rua Pōuri, the deep dark cave (src/game/v12/cave): out on a trip from camp, standing on a tier
  *  at world x (the cave is tall: x alone doesn't say where). The storm lantern is made; `rope` false
  *  leaves the climbing rope unmade (the deep pitches stay shut); `lunge` has the Ghost Gulper already
- *  drawn to the shore (its tell, then the lunge); `pole` hangs the lantern on the caver's pole. */
-export async function goCave(x: number, tier: string, o: { hour?: number; rope?: boolean; lunge?: boolean; pole?: boolean; dim?: boolean } = {}) {
+ *  drawn to the shore (its tell, then the lunge); `pole` hangs the lantern on the caver's pole. Below the
+ *  lake: `gear` makes those blueprints too (grip_soles, climbing_gloves, trail_boots, wetsuit, snorkel)
+ *  and `without` unmakes them (to see a gate shut); `choke` false puts the boulder back in the narrows. */
+export async function goCave(x: number, tier: string, o: { hour?: number; rope?: boolean; lunge?: boolean; pole?: boolean; dim?: boolean; gear?: string[]; without?: string[]; choke?: boolean } = {}) {
   ensureLoop();
   findLocation('deepcave');
   const d = dayState();
   d.phase = 'out'; d.went = 'deepcave'; d.woke = dayNumber(); d.meals.breakfast = dayNumber();
   if (o.hour !== undefined) game.save.vars['v10:hour'] = o.hour;
   const bp = await import('../game/v11/blueprints');
-  for (const id of ['storm_lantern', ...(o.rope === false ? [] : ['climbing_rope'])]) {
+  for (const id of ['storm_lantern', ...(o.rope === false ? [] : ['climbing_rope']), ...(o.gear ?? [])]) {
     bp.grantBlueprint(id, 'dev');
     if (!bp.isBuilt(id)) bp.markMade(id);
   }
+  { const b = (game.save as unknown as { v10?: { blueprints?: { owned?: Record<string, unknown>; made?: Record<string, number> } } }).v10?.blueprints; for (const id of o.without ?? []) { if (b?.made) delete b.made[id]; if (b?.owned) delete b.owned[id]; } }
+  if (o.choke === false) delete game.save.flags['dc:choke']; else if (x > 470 || tier !== 't0') game.save.flags['dc:choke'] = true;
   delete game.save.flags['dev:gulperNow']; delete game.save.flags['dev:gulperPole']; delete game.save.flags['dev:caveDim'];
   if (o.lunge) game.save.flags['dev:gulperNow'] = true;
   if (o.pole) game.save.flags['dev:gulperPole'] = true;
@@ -355,6 +360,35 @@ export async function goCave(x: number, tier: string, o: { hour?: number; rope?:
   cam.x = cam.tx = x; cam.y = cam.ty = p.y - 38;
 }
 
+/** V12 Te Tuawhenua, the backcountry (src/game/v12/backcountry): out on a trip from camp, at world x;
+ *  `high` stands Mori on the highest thing there (the ledge over the den). The grip soles and the trail
+ *  boots are made, so both ways out (the village, the Hot Valley) are open. */
+export async function goBackcountry(x: number, o: { high?: boolean; hour?: number } = {}) {
+  ensureLoop();
+  findLocation('backcountry');
+  const d = dayState();
+  d.phase = 'out'; d.went = 'backcountry'; d.woke = dayNumber(); d.meals.breakfast = dayNumber();
+  if (o.hour !== undefined) game.save.vars['v10:hour'] = o.hour;
+  const bp = await import('../game/v11/blueprints');
+  for (const id of ['grip_soles', 'trail_boots']) {
+    bp.grantBlueprint(id, 'dev');
+    if (!bp.isBuilt(id)) bp.markMade(id);
+  }
+  game.persist();
+  await idle();
+  const ex = await import('../game/v10/expedition');
+  await ex.goExpedition('backcountry', { at: x });
+  refill();
+  const { FieldScene } = await import('../game/scenes/field');
+  await sceneWhere(s => s instanceof FieldScene && !!(s as InstanceType<typeof FieldScene>).player && ((s as InstanceType<typeof FieldScene>).site.id as string) === 'backcountry');
+  const f = game.scene as InstanceType<typeof FieldScene>;
+  const s = f.st.terrain.surfaceBelow(x, o.high ? -400 : tuaGround(x) - 12);
+  const p = f.player;
+  p.x = x; p.y = s?.y ?? tuaGround(x); p.vy = 0; p.onGround = true;
+  if (s) (p as unknown as { surface: unknown }).surface = s.s;
+  f.snapCamera();
+}
+
 export async function goTrip(id: string, stop = false) {
   ensureLoop();
   boatTo(6);
@@ -369,6 +403,26 @@ export async function goTrip(id: string, stop = false) {
   await sceneWhere(() => !!oc.currentTrip());
   await idle();
   await oc.goStop(id);
+}
+
+/** V12 Te Moana Rimurimu, the kelp-forest dive (src/game/v12/dive): anchored at the stop and in the water,
+ *  the dive gear made (snorkel, wetsuit, fins, the air tank, the speargun), at world x (and y, else a
+ *  little above the floor there) */
+export async function goDive(x: number, up = 54) {
+  ensureLoop();
+  boatTo(6);
+  const d = dayState();
+  d.phase = 'out'; d.woke = dayNumber(); d.meals.breakfast = dayNumber();
+  const bp = await import('../game/v11/blueprints');
+  for (const id of ['snorkel', 'wetsuit', 'fins', 'air_tank', 'speargun']) {
+    bp.grantBlueprint(id, 'dev');
+    if (!bp.isBuilt(id)) bp.markMade(id);
+  }
+  game.persist();
+  await idle();
+  const [{ goKelpDive }, L] = await Promise.all([import('../game/v12/dive/scene'), import('../game/v12/dive/layout')]);
+  await goKelpDive(0.5, { x, y: Math.max(L.SURF + 20, L.floorAt(x) - up) });
+  refill();
 }
 
 /** the Thunderbird hunt, ready to go: the signs found, the cloak, the kahu band, bait and rope; on the
@@ -401,6 +455,38 @@ async function tbHunt(feeding: boolean) {
   await until(() => !!h.huntOf(sc)?.bird, 8000);
   await sleep(500);
   h.startEncounter(sc, { feeding });
+}
+
+/** V12 the feud (src/game/v12/feud): the Rocky Hills' tussock basin stands in for the backcountry; the
+ *  director runs there with the den, the cache and the arena below, Mori at x, and the encounter staged */
+const FEUD_HILLS = { den: 580, cache: 720, arena: [820, 1080] as [number, number], kills: [960] };
+async function feudAt(kind: 'ambush' | 'fight' | 'raid' | 'sleep' | 'quiet', at: number, o: { awake?: boolean; hour?: number } = {}) {
+  ensureLoop();
+  if ((game.save.day ?? 1) < 4) game.save.day = 4;
+  F('aroha:met', 'v4:arohaJoined', 'feud:heard');
+  tool('slingshot');
+  V('v11:pebbles', 20);
+  const Qm = await import('../game/v12/feud/quest');
+  Qm.registerFeud();
+  if (questStatus('feud') === 'hidden') game.save.quests['feud'] = 'active';
+  const d = dayState();
+  d.phase = 'out'; d.went = 'hills'; d.woke = dayNumber(); d.meals.breakfast = dayNumber(); d.arrive = null;
+  game.save.vars['v10:hour'] = o.hour ?? 11;
+  game.persist();
+  await idle();
+  await (await import('../game/v10/expedition')).goExpedition('hills', { at });
+  refill();
+  if (!(await sceneWhere(s => (s as { site?: { id?: string } }).site?.id === 'hills'))) return;
+  await sleep(300);
+  const D = await import('../game/v12/feud/director');
+  const f = game.scene as unknown as Parameters<typeof D.attachFeud>[0];
+  const h = D.attachFeud(f, { ...FEUD_HILLS, ground: (x: number) => f.st.terrain.groundY(x) });
+  h.start(kind);
+  if (o.awake && h.bearer) {
+    h.bearer.x = 860; h.bearer.y = f.st.terrain.groundY(860); h.bearer.setAct('wander', 30); h.pause(true);
+    // the boa well out of the way, lying up at the bush line
+    if (h.boa) { h.boa.x = 260; h.boa.y = f.st.terrain.groundY(260); h.boa.setAct('ambush', 120); }
+  }
 }
 
 // ---------------------------------------------------------------- the list
@@ -514,6 +600,27 @@ export async function chapters(): Promise<DevChapter[]> {
       refill();
     } },
   ] });
+  // V12: the feud (src/game/v12/feud): Matikuku Nui the Bearer and Huruhuru the feathered boa
+  out.push({ id: 'feud', name: 'Matikuku Nui and Huruhuru, the claw and the plume', points: [
+    { id: 'feud:bearer', name: 'The Bearer up close', sub: 'Rocky Hills basin: Matikuku Nui awake and roaming. Walk up: it rears, then charges and swipes', icon: 'target', run: () => feudAt('quiet', 1130, { awake: true }) },
+    { id: 'feud:constrict', name: 'The boa constricting', sub: 'The boa in ambush in the basin, a torhopper grazing into reach', icon: 'eye', run: () => feudAt('ambush', 1150) },
+    { id: 'feud:fight', name: 'The fight', sub: 'A fresh kill in the boa’s coils; the Bearer smells it and comes. Watch from the scree', icon: 'bolt', variants: [
+      { label: 'Day', run: () => feudAt('fight', 1230) },
+      { label: 'Dusk', run: () => feudAt('fight', 1230, { hour: 18.5 }) },
+    ] },
+    { id: 'feud:raid', name: 'The boa raids the cache', sub: 'The Bearer asleep by its cache; the boa slides in from the bush line', icon: 'scroll', run: () => feudAt('raid', 960) },
+    { id: 'feud:sleep', name: 'The Bearer asleep', sub: 'On its den by the cache. Don’t wake it', icon: 'moon', run: () => feudAt('sleep', 900) },
+    { id: 'feud:koro', name: 'Tell Koro Wiremu', sub: 'The quest at its last step; Mori by Koro’s seat in Te Kāinga', icon: 'flag', run: async () => {
+      (await import('../game/v12/feud/quest')).registerFeud();
+      F('feud:heard', 'feud:sign:trunk', 'feud:sign:plume', 'feud:sign:bones', 'feud:photo:constrict', 'feud:photo:bearer', 'feud:witness', 'feud:photo:fight');
+      delete game.save.flags['feud:report']; delete game.save.flags['feud:raidSoon'];
+      game.save.quests['feud'] = 'active';
+      const m = await import('../game/v11/village/debug');
+      m.stage('start');
+      await m.go('day', 1110);
+    } },
+    { id: 'feud:art', name: 'Art sheet', sub: 'Every Bearer frame and the boa’s poses (a debug page: reload after)', icon: 'star', run: async () => { (await import('../game/v12/feud/gallery')).feudGallery({ boa: true }); } },
+  ] });
   // V11: the new people (src/game/v11/npcs)
   const people = async (o: { px?: number; loc?: string; day?: number; flags?: string[]; meet?: string[] }) => {
     ensureLoop();
@@ -533,6 +640,55 @@ export async function chapters(): Promise<DevChapter[]> {
     { id: 'n:helix', name: 'The Helix camp', sub: 'Dr Varga and Teo on the Serpent Coast', icon: 'map', run: () => people({ loc: 'coast' }) },
     { id: 'n:hills', name: 'The trappers’ camp', sub: 'Rua and Sunny in the Rocky Hills', icon: 'target', run: () => people({ loc: 'hills' }) },
     { id: 'n:visit', name: 'Camp: the craftspeople visit', sub: 'Tīpene and Ngaio at camp (met)', icon: 'wrench', run: () => people({ px: 2300, day: 5, flags: ['n:tipeneMet', 'n:ngaioMet'], meet: ['tipene', 'ngaio'] }) },
+  ] });
+  // V12 Big Hank, the dealer at the end of Te Huarahi (src/game/v11/npcs/hank.ts), and the weapon belt
+  // he barters (src/game/v12/arsenal.ts)
+  const dealerAt = async (tod: TimeOfDay, o: { met?: boolean; goods?: boolean; then?: 'talk' | 'wares' | 'lily'; lily?: boolean } = {}) => {
+    ensureLoop();
+    if ((game.save.day ?? 1) < 4) game.save.day = 4;
+    const S = await import('../game/v11/social');
+    if (o.met) { S.meet('hank'); S.setMemo('hank', 'intro', 1); if (S.affinity('hank') < 25) S.addAffinity('hank', 25 - S.affinity('hank'), 'debug'); }
+    if (o.goods) {
+      // (an empty pack first, so everything fits)
+      game.save.inv = game.save.inv.filter(st => st.id.startsWith('q_'));
+      for (const [id, n] of [['rope', 10], ['driftglass', 6], ['wire', 3], ['shell_fan', 4], ['kawakawa', 6], ['resin', 5], ['feather', 4], ['scrap', 3], ['flax', 4], ['glowcap', 5], ['shedskin', 3]] as [string, number][]) giveTo(id, n);
+      game.save.rp = Math.max(game.save.rp ?? 0, 200);
+    }
+    if (o.lily) {
+      S.setMemo('hank', 's:photo', 1); S.setMemo('hank', 's:snakes', 1);
+      if (questStatus('q_lily') === 'hidden') startQuest('q_lily', true);
+      game.save.flags['v4:photo:plumeboa'] = true;
+      delete game.save.flags['q_lily:given'];
+    }
+    game.persist();
+    const { X } = await import('../game/v11/village/layout');
+    const m = await import('../game/v11/village/debug');
+    m.stage('start');
+    await m.go(tod as 'day', Math.round((X.dealer[0] + X.dealer[1]) / 2) - 120);
+    // (not awaited: the jump is done once the scene is up; the talk plays on in it)
+    const then = o.then;
+    if (then) void sleep(1600).then(async () => (await import('../game/v11/npcs/hank')).hankDebug(then));
+  };
+  const weaponTest = async (id: import('../game/v12/arsenal').WeaponId) => {
+    ensureLoop(); tool('slingshot');
+    const A = await import('../game/v12/arsenal');
+    for (const w of A.WEAPONS) A.giveWeapon(w.id);
+    A.selectWeapon(id);
+    const d = dayState(); d.phase = 'out'; d.woke = dayNumber(); d.meals.breakfast = dayNumber();
+    game.persist(); await idle();
+    await (await import('../game/v10/expedition')).goExpedition('hills', { at: 1640 });
+    refill();
+    await sleep(1500);
+    const sc = game.scene as unknown as { player?: { x: number; facing: number }; animals?: unknown[] } | null;
+    if (!sc?.player || !sc.animals) return;
+    await (await import('../game/v11/predators')).spawnCerebralTiger(sc, sc.player.x + sc.player.facing * 300, { lurk: false, facing: sc.player.facing >= 0 ? -1 : 1 });
+  };
+  out.push({ id: 'dealer', name: 'Big Hank, the dealer at the crossroads', points: [
+    { id: 'd:meet', name: 'Meet Big Hank', sub: 'Te Huarahi by day (Day 4): the tarp stall at the end of the lane', icon: 'heart', run: () => dealerAt('day') },
+    { id: 'd:night', name: 'Hank at night', sub: 'Asleep in his chair under the lit bulbs (met)', icon: 'moon', run: () => dealerAt('night', { met: true }) },
+    { id: 'd:wares', name: 'Hank’s wares', sub: 'Goods in the pack and vouchers to spend: the trade opens', icon: 'gift', run: () => dealerAt('day', { met: true, goods: true, then: 'wares' }) },
+    { id: 'd:weapons', name: 'The weapon belt vs the Cerebral Tiger', sub: 'Every weapon, full ammo, a tiger prowling up (T cycles, G uses)', icon: 'target', variants: (['sling', 'bolas', 'flare', 'bangers', 'net', 'tranq', 'spray'] as const).map(w => ({ label: w[0].toUpperCase() + w.slice(1), run: () => weaponTest(w) })) },
+    { id: 'd:lily', name: 'A picture for Lily: the photo handed over', sub: 'The feathered boa photographed; Hank gets choked up', icon: 'star', run: () => dealerAt('day', { met: true, lily: true, then: 'lily' }) },
   ] });
   // the Region Map
   const order = ['home', 'interior', 'south', 'east', 'ocean', 'isle2'];
@@ -593,9 +749,64 @@ export async function chapters(): Promise<DevChapter[]> {
     { id: 'dc:stream', name: 'The dark stream: blind salamanders', sub: 'Te Awa Pōuri: shutter the lantern by the pools and wait', icon: 'heart', run: () => goCave(1205, 't3', { hour: 13 }), variants: [...dcT(1205, 't3'), { label: 'Lantern shuttered', run: () => goCave(1205, 't3', { hour: 13, dim: true }) }] },
     { id: 'dc:wet', name: 'The wet pitch', sub: 'Ropes down beside the underground waterfall', icon: 'map', run: () => goCave(700, 'w1', { hour: 13 }), variants: dcT(700, 'w1') },
     { id: 'dc:lake', name: 'The lake at the bottom', sub: 'Te Waha o te Pō: the caver\'s camp, the pole, the glowworm sky', icon: 'moon', run: () => goCave(560, 't4', { hour: 14 }), variants: [...dcT(560, 't4'), { label: 'The caver\'s camp', run: () => goCave(240, 't4', { hour: 14 }) }] },
+    // the way down got harder (V12): the obstacles, and the gear-gated tiers below the lake
+    { id: 'dc:choke', name: 'The choke, the crawl', sub: 'Te Kūaha: heave the wedged boulder (a mash), then hands and knees', icon: 'map', run: () => goCave(380, 't0', { hour: 10, choke: false }), variants: [...dcT(380, 't0'), { label: 'Boulder already moved', run: () => goCave(380, 't0', { hour: 10, choke: true }) }] },
+    { id: 'dc:crack', name: 'The crack', sub: 'Jump it (fall in and there\'s a scramble out either side)', icon: 'map', run: () => goCave(1150, 't0', { hour: 10 }), variants: dcT(1150, 't0') },
+    { id: 'dc:chimney', name: 'The wētā hall: the chimney and the rockfall pit', sub: 'Hard scrambles (breath), loose roof over the pit', icon: 'map', run: () => goCave(760, 't1', { hour: 10 }), variants: [...dcT(760, 't1'), { label: 'The rockfall pit', run: () => goCave(1450, 't1', { hour: 10 }) }, { label: 'Top of the breakdown pile', run: () => goCave(1300, 't1', { hour: 10 }) }] },
+    { id: 'dc:waterwall', name: 'Te Pakitara Wai, the water wall (grip soles)', sub: 'The wet flowstone down from the shore\'s west end, below the lake', icon: 'map', run: () => goCave(160, 't4', { hour: 14, gear: ['grip_soles'] }), variants: [{ label: 'No grip soles (shut)', run: () => goCave(160, 't4', { hour: 14, without: ['grip_soles'] }) }, { label: 'At its foot', run: () => goCave(200, 't5', { hour: 14, gear: ['grip_soles'] }) }] },
+    { id: 'dc:crystalsq', name: 'The crystal squeeze (grip gloves)', sub: 'Te Kūiti Tioata: a crawl between crystal blades; loose roof and drip pools before it', icon: 'map', run: () => goCave(640, 't5', { hour: 14, gear: ['grip_soles', 'climbing_gloves'] }), variants: [{ label: 'No gloves (shut)', run: () => goCave(640, 't5', { hour: 14, gear: ['grip_soles'], without: ['climbing_gloves'] }) }, { label: 'The loose roof', run: () => goCave(380, 't5', { hour: 14, gear: ['grip_soles'] }) }] },
+    { id: 'dc:mud', name: 'Te Paru, the mud slope (trail boots)', sub: 'The moonmilk cave, then down the mud to the sump', icon: 'map', run: () => goCave(1080, 't5', { hour: 14, gear: ['grip_soles', 'climbing_gloves', 'trail_boots'] }), variants: [{ label: 'No boots (shut)', run: () => goCave(1080, 't5', { hour: 14, gear: ['grip_soles', 'climbing_gloves'], without: ['trail_boots'] }) }] },
+    { id: 'dc:sump', name: 'Te Ruku, the sump (wetsuit or snorkel)', sub: 'The passage goes under the water: an old diver\'s line through it', icon: 'map', run: () => goCave(1420, 't5', { hour: 14, gear: ['grip_soles', 'climbing_gloves', 'trail_boots', 'wetsuit'] }), variants: [{ label: 'No wetsuit or snorkel (shut)', run: () => goCave(1420, 't5', { hour: 14, gear: ['grip_soles', 'climbing_gloves', 'trail_boots'], without: ['wetsuit', 'snorkel'] }) }] },
+    { id: 'dc:deepest', name: 'Te Puna Tioata, the deepest chamber', sub: 'Giant crystals, the glowing nursery pool (salamanders guarding eggs), cave pearls', icon: 'heart', run: () => goCave(1960, 't5', { hour: 14, gear: ['grip_soles', 'climbing_gloves', 'trail_boots', 'wetsuit'] }), variants: [{ label: 'At the nursery, lantern shuttered', run: () => goCave(2040, 't5', { hour: 14, dim: true, gear: ['grip_soles', 'climbing_gloves', 'trail_boots', 'wetsuit'] }) }] },
     { id: 'dc:lunge', name: 'The Ghost Gulper\'s lunge', sub: 'At the water\'s edge, lantern bright: watch the tell', icon: 'heart', run: () => goCave(760, 't4', { hour: 14, lunge: true }), variants: [
       { label: 'Lunge', run: () => goCave(760, 't4', { hour: 14, lunge: true }) }, { label: 'Lure: lantern on the pole, hidden', run: () => goCave(680, 't4', { hour: 14, pole: true }) },
     ] },
+  ] });
+  // V12 Te Tuawhenua, the backcountry (one big procedural map): a point per stretch, the story spots
+  const tuT = (x: number, high = false) => [
+    { label: 'Morning', run: () => goBackcountry(x, { high, hour: 7.5 }) }, { label: 'Midday', run: () => goBackcountry(x, { high, hour: 12 }) },
+    { label: 'Dusk', run: () => goBackcountry(x, { high, hour: 18.6 }) }, { label: 'Night', run: () => goBackcountry(x, { high, hour: 21.5 }) },
+  ];
+  const tuAt = (b: number, u: number) => Math.round(TUA_STRETCHES[b].x0 + (TUA_STRETCHES[b].x1 - TUA_STRETCHES[b].x0) * u);
+  const tuCrest = Math.round((TUA.crest[0] + TUA.crest[1]) / 2), tuArena = Math.round((TUA_SPOT.arena[0] + TUA_SPOT.arena[1]) / 2);
+  const tuWide = TUA.streams[Math.floor(TUA.streams.filter(q => q.kind === 'braid').length / 2)].x;
+  out.push({ id: 'backcountry', name: 'Te Tuawhenua, the backcountry (one big procedural map)', points: [
+    { id: 'tu:edge', name: 'The way in', sub: 'West end, up from the crossroads behind Te Kāinga\'s market lane', icon: 'map', run: () => goBackcountry(92, { hour: 9 }), variants: tuT(92) },
+    { id: 'tu:scrub', name: 'Ngā Mānuka, the kānuka scrub', sub: 'Kānuka and mānuka stands, cairns, the first claw-scored trunk', icon: 'map', run: () => goBackcountry(tuAt(0, 0.45), { hour: 10 }), variants: tuT(tuAt(0, 0.45)) },
+    { id: 'tu:flats', name: 'Te Awa Whiri, the braided river', sub: 'The boa\'s drag trail across the gravel, the braids', icon: 'map', run: () => goBackcountry(TUA.tracks[0].x - 60, { hour: 11 }), variants: tuT(TUA.tracks[0].x - 60) },
+    { id: 'tu:wade', name: 'The widest braid', sub: 'Thigh deep in the milky water', icon: 'map', run: () => goBackcountry(tuWide, { hour: 12 }), variants: tuT(tuWide) },
+    { id: 'tu:prints', name: 'The Bearer\'s prints', sub: 'Four toes and one great hooked claw, pressed into the river gravel', icon: 'map', run: () => goBackcountry(TUA.tracks[1].x - 40, { hour: 12 }), variants: tuT(TUA.tracks[1].x - 40) },
+    { id: 'tu:burnt', name: 'Te Hiwi Pango, the burnt ridge', sub: 'The crest: charred trunks, ash, regrowth, the long view', icon: 'map', run: () => goBackcountry(tuCrest, { hour: 13 }), variants: tuT(tuCrest) },
+    { id: 'tu:boa', name: 'Te Kōawa Huruhuru, the feathered gully', sub: 'The boa ground: tree ferns, the shed skin on the log', icon: 'map', run: () => goBackcountry(TUA.skins[0] + 60, { hour: 10 }), variants: tuT(TUA.skins[0] + 60) },
+    { id: 'tu:arena', name: 'The fern clearing (the arena)', sub: 'Te Ātea: TUA_SPOT.arena, the wallow beside it', icon: 'heart', run: () => goBackcountry(tuArena, { hour: 15 }), variants: tuT(tuArena) },
+    { id: 'tu:tussock', name: 'Ngā Pātītī, the tussock clearings', sub: 'A kill site: a serpent\'s picked-clean bones', icon: 'map', run: () => goBackcountry(TUA_SPOT.kills[1] - 50, { hour: 14 }), variants: tuT(TUA_SPOT.kills[1] - 50) },
+    { id: 'tu:gorge', name: 'Te Kapiti Matikuku, the claw gorge', sub: 'Between the walls: the den under the overhang, the cache', icon: 'heart', run: () => goBackcountry(TUA_SPOT.den - 140, { hour: 16 }), variants: tuT(TUA_SPOT.den - 140) },
+    { id: 'tu:ledge', name: 'The ledge over the den (the high way)', sub: 'Looking down on the den mouth', icon: 'map', run: () => goBackcountry(TUA.ledge.x1 - 30, { high: true, hour: 16 }), variants: tuT(TUA.ledge.x1 - 30, true) },
+    { id: 'tu:end', name: 'The gorge\'s end', sub: 'East end: the steam of the Hot Valley', icon: 'map', run: () => goBackcountry(13800, { hour: 17 }), variants: tuT(13800) },
+  ] });
+  // V12 Te Ara Matatū (src/game/v12/arc): each chapter staged (the ones before it done) and travelled to
+  const arcAt = (n: number, then: () => Promise<unknown>) => async () => {
+    await idle();
+    ensureLoop();
+    const A = await import('../game/v12/arc/arc');
+    A.registerArc();
+    for (const k of ['raid:started', 'raid:won', 'raid:report', 'arc:heard', 'v10:koroBlessing']) game.save.flags[k] = true;
+    A.ARC_QUESTS.forEach((q, i) => { game.save.quests[q.id] = i + 1 < n ? 'done' : i + 1 === n ? 'active' : 'hidden'; });
+    if (n >= 5) { const B = await import('../game/v11/blueprints'); B.grantBlueprint('wetsuit', 'dev'); B.markMade('wetsuit'); }
+    if (n >= 7) for (const k of ['arc:ch4:eye', 'arc:ch5:eye', 'arc:ch6:eye']) game.save.flags[k] = true;
+    game.persist();
+    await then();
+  };
+  out.push({ id: 'arc', name: 'Te Ara Matatū · the path of the watchers', points: [
+    { id: 'arc:start', name: 'The arc begins', sub: 'Dinner at camp after the raid: Aroha brings Koro\'s word', icon: 'scroll', run: async () => { await idle(); ensureLoop(); for (const k of ['raid:started', 'raid:won', 'raid:report']) game.save.flags[k] = true; game.persist(); await (await flow()).goCamp(); } },
+    { id: 'arc:ch1', name: 'Ch1 The Ruins\' Eyes', sub: 'Three carved eyes, the sealed whare, the cave-in', icon: 'map', run: arcAt(1, () => goLocation('ruins')) },
+    { id: 'arc:ch2', name: 'Ch2 The Fossil Wall', sub: 'The skull, Varga\'s race, the scree', icon: 'map', run: arcAt(2, () => goLocation('fossils')) },
+    { id: 'arc:ch3', name: 'Ch3 The Glow Forest at Night', sub: 'The lantern gecko, the hunter in the dark', icon: 'moon', run: arcAt(3, () => goLocation('glowforest')) },
+    { id: 'arc:ch4', name: 'Ch4 The Ground Breathes', sub: 'The geyser field and the eruption', icon: 'bolt', run: arcAt(4, () => goLocation('geovalley')) },
+    { id: 'arc:ch5', name: 'Ch5 The Drowned Eye', sub: 'The grotto sump, the octopus, the chase', icon: 'map', run: arcAt(5, () => goLocation('grotto')) },
+    { id: 'arc:ch6', name: 'Ch6 The Plunderers', sub: 'The storm crossing to Motu Ahi, the crabs', icon: 'boat', run: arcAt(6, async () => (await import('../game/sites10/ocean')).debugTrip('motuahi')) },
+    { id: 'arc:ch7', name: 'Ch7 Te Korokoro', sub: 'The five eyes, the Old One, the end', icon: 'star', run: arcAt(7, () => goLocation('unknown')) },
+    { id: 'arc:feats', name: 'Feats: grant all / reset', sub: 'Every medal in the notebook (run twice to reset)', icon: 'star', run: async () => { const Fm = await import('../game/v12/feats'); if (Fm.hasFeat('first_frame') && Fm.FEATS.every(f => Fm.hasFeat(f.id))) Fm.resetFeats(); else Fm.grantAllFeats(); } },
   ] });
   out.push({ id: 'map', name: 'Region Map · Expeditions', points: locs.map(l => ({
     id: 'loc:' + l.id, name: l.name, sub: `${l.sub ? l.sub + ' · ' : ''}${l.region}${l.secret ? ' · secret' : ''}`, icon: l.kind === 'camp' ? 'flag' : l.kind === 'cave' ? 'moon' : 'map',
@@ -603,11 +814,18 @@ export async function chapters(): Promise<DevChapter[]> {
   })) });
   out.push({ id: 'boat', name: 'Boat trips (the Kitten)', points: Object.values(TRIPS).map(t => ({
     id: 'trip:' + t.id, name: t.name, sub: t.sub, icon: 'boat',
-    variants: t.stop === 'land' || t.stop === 'reef'
-      ? [{ label: 'Sail out', run: () => goTrip(t.id) }, { label: t.stop === 'reef' ? 'Dive' : 'Landed', run: () => goTrip(t.id, true) }]
+    variants: t.stop === 'land' || t.stop === 'reef' || t.stop === 'kelp'
+      ? [{ label: 'Sail out', run: () => goTrip(t.id) }, { label: t.stop === 'reef' || t.stop === 'kelp' ? 'Dive' : 'Landed', run: () => goTrip(t.id, true) }]
       : undefined,
     run: () => goTrip(t.id),
   })) });
+  // V12 Te Moana Rimurimu: straight into the water in each zone, the gear made
+  out.push({ id: 'dive', name: 'Te Moana Rimurimu · the kelp dive', points: [
+    { id: 'dive:kelp', name: 'The kelp shallows', sub: 'Under the Kitten: the anchor line, the giant kelp, the bull-kelp pinnacle', icon: 'boat', run: () => goDive(330, 90) },
+    { id: 'dive:reef', name: 'The boulder reef', sub: 'Crayfish holes, stalked kelp, the sand channel', icon: 'map', run: () => goDive(1900, 60) },
+    { id: 'dive:dropoff', name: 'The drop-off', sub: 'Over the 20 m ledge: the walls, their caves', icon: 'map', run: () => goDive(3170, 70) },
+    { id: 'dive:blue', name: 'The blue', sub: 'The deep floor and the groper\'s cave', icon: 'eye', run: () => goDive(4080, 66) },
+  ] });
   // the V2 scenes
   const sites: SiteId[] = ['fernwood', 'canopy', 'falls', 'mangrove', 'coast'];
   const siteName: Record<string, string> = { fernwood: 'Fernwood Floor', canopy: 'Emerald Canopy', falls: 'Thunder Falls', mangrove: 'Blackwater Mangroves', coast: 'Serpent Coast' };
@@ -625,6 +843,18 @@ export async function chapters(): Promise<DevChapter[]> {
       const { FieldScene } = await import('../game/scenes/field');
       await game.go(() => new FieldScene(COAST_DEEP, t));
     } })) },
+  ] });
+  const raid = () => import('../game/v12/raid');
+  const vilR = () => import('../game/v11/village/debug');
+  const raidGo = async (to: 'prep' | 'ready' | 'won', tod: 'dawn' | 'day' | 'dusk' | 'night', x: number) => { ensureLoop(); (await vilR()).stage('done'); (await raid()).stageRaid(to); await (await vilR()).go(tod, x); };
+  out.push({ id: 'raid', name: 'Te Pō o te Matikuku · the night of the claw', points: [
+    { id: 'raid:prep', name: 'Get the village ready', sub: 'Three stake piles to lash across the market lane', icon: 'wrench', run: () => raidGo('prep', 'day', 3240) },
+    { id: 'raid:wait', name: 'Barricades up: wait for dark', sub: 'At the fire on the marae', icon: 'sun', run: () => raidGo('ready', 'day', 1240) },
+    { id: 'raid:fight', name: 'The Bearer comes through the gate', sub: 'Night, barricades up', icon: 'bolt', variants: [
+      { label: 'Sling only', run: () => raidGo('ready', 'night', 3300) },
+      { label: 'Fully armed (every weapon from Hank)', run: async () => { const A = await import('../game/v12/arsenal'); for (const id of A.WEAPON_IDS) A.giveWeapon(id); await raidGo('ready', 'night', 3300); } },
+    ] },
+    { id: 'raid:after', name: 'The morning after', sub: 'Claw marks on the gateway; Koro by the fire', icon: 'moon', run: () => raidGo('won', 'dawn', 1240) },
   ] });
   out.push({ id: 'mini', name: 'Minigames and screens', points: [
     { id: 'm:engine', name: 'Engine repair minigame', icon: 'wrench', run: async () => { await zl().engine?.(); } },
@@ -705,6 +935,7 @@ export async function chapters(): Promise<DevChapter[]> {
     ] },
     { id: 'v:guitar', name: 'Guitar by the fire with Aunty Hana', sub: 'The guitar close-up (a rhythm game)', icon: 'star', variants: ([['Te Ahi (easy)', 'ahi'], ['Hoki Mai', 'hoki'], ['Te Rere o te Manu (hard)', 'manu']] as const).map(([label, s]) => ({ label, run: async () => { const m = await vil(); m.stage('start'); await m.life('evening', 'dusk', 19.5, 1300); const { runGuitar } = await import('../ui/v12/closeup/guitar'); await runGuitar({ song: s, who: 'hana' }); } })) },
     { id: 'v:life', name: 'Village life through the day', sub: 'Chores, work and play, the fire and Hana’s guitar, bedtime', icon: 'sun', variants: ([['Morning chores', 'morning', 'dawn', 8.5, 640], ['Midday work and play', 'midday', 'day', 13, 1500], ['Evening at the fire', 'evening', 'dusk', 19.5, 1150], ['Night (asleep)', 'night', 'night', 23.5, 1760]] as const).map(([label, ph, tod, h, x]) => ({ label, run: async () => { const m = await vil(); m.stage('start'); await m.life(ph, tod, h, x); } })) },
+    { id: 'v:lane', name: 'Te Huarahi, the market lane', sub: 'The families from across the sea: the fale, the Lees’ store, the stalls, the gum-digger', icon: 'map', variants: TODS.map(t => ({ label: TOD_LABEL[t], run: async () => { const m = await vil(); m.stage('start'); await m.go(t, 2600); } })) },
   ] });
   return out;
 }
