@@ -405,6 +405,26 @@ export async function goTrip(id: string, stop = false) {
   await oc.goStop(id);
 }
 
+/** V12 Te Moana Rimurimu, the kelp-forest dive (src/game/v12/dive): anchored at the stop and in the water,
+ *  the dive gear made (snorkel, wetsuit, fins, the air tank, the speargun), at world x (and y, else a
+ *  little above the floor there) */
+export async function goDive(x: number, up = 54) {
+  ensureLoop();
+  boatTo(6);
+  const d = dayState();
+  d.phase = 'out'; d.woke = dayNumber(); d.meals.breakfast = dayNumber();
+  const bp = await import('../game/v11/blueprints');
+  for (const id of ['snorkel', 'wetsuit', 'fins', 'air_tank', 'speargun']) {
+    bp.grantBlueprint(id, 'dev');
+    if (!bp.isBuilt(id)) bp.markMade(id);
+  }
+  game.persist();
+  await idle();
+  const [{ goKelpDive }, L] = await Promise.all([import('../game/v12/dive/scene'), import('../game/v12/dive/layout')]);
+  await goKelpDive(0.5, { x, y: Math.max(L.SURF + 20, L.floorAt(x) - up) });
+  refill();
+}
+
 /** the Thunderbird hunt, ready to go: the signs found, the cloak, the kahu band, bait and rope; on the
  *  ridge top with the storm coming (feeding: the bird already down on the bait) */
 async function tbHunt(feeding: boolean) {
@@ -794,11 +814,18 @@ export async function chapters(): Promise<DevChapter[]> {
   })) });
   out.push({ id: 'boat', name: 'Boat trips (the Kitten)', points: Object.values(TRIPS).map(t => ({
     id: 'trip:' + t.id, name: t.name, sub: t.sub, icon: 'boat',
-    variants: t.stop === 'land' || t.stop === 'reef'
-      ? [{ label: 'Sail out', run: () => goTrip(t.id) }, { label: t.stop === 'reef' ? 'Dive' : 'Landed', run: () => goTrip(t.id, true) }]
+    variants: t.stop === 'land' || t.stop === 'reef' || t.stop === 'kelp'
+      ? [{ label: 'Sail out', run: () => goTrip(t.id) }, { label: t.stop === 'reef' || t.stop === 'kelp' ? 'Dive' : 'Landed', run: () => goTrip(t.id, true) }]
       : undefined,
     run: () => goTrip(t.id),
   })) });
+  // V12 Te Moana Rimurimu: straight into the water in each zone, the gear made
+  out.push({ id: 'dive', name: 'Te Moana Rimurimu · the kelp dive', points: [
+    { id: 'dive:kelp', name: 'The kelp shallows', sub: 'Under the Kitten: the anchor line, the giant kelp, the bull-kelp pinnacle', icon: 'boat', run: () => goDive(330, 90) },
+    { id: 'dive:reef', name: 'The boulder reef', sub: 'Crayfish holes, stalked kelp, the sand channel', icon: 'map', run: () => goDive(1900, 60) },
+    { id: 'dive:dropoff', name: 'The drop-off', sub: 'Over the 20 m ledge: the walls, their caves', icon: 'map', run: () => goDive(3170, 70) },
+    { id: 'dive:blue', name: 'The blue', sub: 'The deep floor and the groper\'s cave', icon: 'eye', run: () => goDive(4080, 66) },
+  ] });
   // the V2 scenes
   const sites: SiteId[] = ['fernwood', 'canopy', 'falls', 'mangrove', 'coast'];
   const siteName: Record<string, string> = { fernwood: 'Fernwood Floor', canopy: 'Emerald Canopy', falls: 'Thunder Falls', mangrove: 'Blackwater Mangroves', coast: 'Serpent Coast' };
