@@ -1,6 +1,8 @@
 // V12 Te Rua Pōuri finds: cave water, a cave crystal, bat guano from the roost at the mouth, a skin
-// swab from a blind salamander (caught in the catch close-up and let go), and the lost caver's journal
-// (definitions with weights and lab text, and their illustrated item art). Imported at boot by
+// swab from a blind salamander (caught in the catch close-up and let go), the lost caver's journal, and
+// from the bottom of it all, below the lake: cave pearls out of the deepest chamber's rimstone pool and
+// a jar of moonmilk off the walls of the moonmilk cave (definitions with weights and lab text, and their
+// illustrated item art). Imported at boot by
 // ./species.ts so saves that carry them load anywhere.
 
 import { defineItem, ITEMS } from '../../items';
@@ -19,6 +21,12 @@ if (!ITEMS.smp_cavewater) {
   defineItem({ id: 'smp_salswab', name: 'Blind salamander swab', kind: 'material', stack: 4, weight: 0.05, where: 'The pools of Te Awa Pōuri',
     desc: 'A cotton swab of skin mucus from a blind salamander, sealed in a glass tube. The salamander went back in the pool none the worse.',
     lab: { rp: 30, time: 5, species: 'blindsal', text: 'The skin is packed with light-sensitive cells: no eyes, but the whole animal can feel the difference between light and dark. Its DNA says its family has been in this cave for millions of years, cut off since the headland rose.' } });
+  defineItem({ id: 'smp_cavepearl', name: 'Cave pearls', kind: 'material', stack: 6, weight: 0.1, where: 'Te Puna Tioata, the deepest chamber',
+    desc: 'Three little stones from the bed of the deepest rimstone pool, round as marbles and smooth as soap, creamy white with a faint shine.',
+    lab: { rp: 34, time: 5, text: 'Cut one in half and it is rings inside rings, like an onion: calcite laid down around a grain of sand, a layer at a time, while dripping water rolled it gently in the pool. Pearls like these take centuries and only form where the water is never disturbed. Nothing has disturbed this pool. Ever.' } });
+  defineItem({ id: 'smp_moonmilk', name: 'Moonmilk', kind: 'material', stack: 6, weight: 0.3, where: 'Te Ana Waiū, the moonmilk cave',
+    desc: 'A jar of soft white paste scraped off the wall below the lake. Cold, wet, like cream cheese made of stone.',
+    lab: { rp: 26, time: 4, text: 'Not stone, not quite: crystals of calcite finer than flour, grown by bacteria that live in the paste and eat the minerals in the rock. Koro says his grandmother put moonmilk on wounds. Jenna says it is full of things that make antibiotics. They might both be right.' } });
   defineItem({ id: 'dc_journal', name: 'The caver\'s journal', kind: 'key', stack: 1, weight: 0.3, where: 'The lost caver\'s camp by the lake',
     desc: 'An oilskin notebook, swollen with damp, pencil entries in a neat hand. Inside the cover: "D. Pike, NZ Speleological Society, 1974. If found, please return."' });
 }
@@ -82,6 +90,34 @@ art('smp_salswab', fp(1, 1), p => {
   for (let y = 6; y < 17; y++) { p.px(11, y, H('#c8a070')); p.px(12, y, H('#9a7448')); }
   for (let y = 16; y < 20; y++) for (let x = 10; x < 14; x++) p.px(x, y, H(y === 16 || x === 10 ? '#fff4f2' : hash(x, y, 4) > 0.5 ? '#f0c4c4' : '#e8d8d4'));
   for (let y = 6; y < 21; y += 3) p.px(13, y, glass[3]);
+});
+
+art('smp_cavepearl', fp(1, 1), p => {
+  // three cave pearls on a scrap of oilskin: creamy spheres, each lit top left, a soft shine, a dark crease under
+  const C = rp('#3a3226', '#6a604c', '#a09478', '#c8bea2', '#e4dcc4', '#fbf6e8');
+  for (let x = 3; x < 21; x++) for (let y = 17; y < 21; y++) p.px(x, y, H(y === 17 ? '#5a6248' : hash(x, y, 4) > 0.6 ? '#3a4030' : '#464e38'));
+  for (const [cx, cy, r] of [[8, 13, 4.6], [15, 14, 3.8], [12, 8, 3.2]] as const) {
+    for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++) for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) {
+      const dx = (x + 0.5 - cx) / r, dy = (y + 0.5 - cy) / r, d = dx * dx + dy * dy;
+      if (d > 1 + (hash(x, y, 7) - 0.5) * 0.12) continue;
+      const l = 0.62 - dx * 0.25 - dy * 0.32 + (d > 0.8 ? -0.18 : 0);
+      p.px(x, y, p.tn(C, l, x, y, 0.35));
+    }
+    p.px(Math.round(cx - r * 0.4), Math.round(cy - r * 0.45), C[5]);
+  }
+});
+
+art('smp_moonmilk', fp(1, 1), p => {
+  jar(p, 4, 1, 16, 22, {
+    lid: RP.tin, level: 0.72,
+    fill: (inner, top) => p.fill(inner, (x, y) => {
+      if (y < top) return -1;
+      const M = rp('#6a6c66', '#8e908a', '#b2b2aa', '#d0d0c6', '#e8e8de', '#fafaf2');
+      // soft white paste, smeared up the glass, lumpy at the top
+      return p.tn(M, 0.7 + (y === top ? 0.2 : 0) - (x - 4) * 0.015 + (hash(x, y, 6) - 0.5) * 0.18, x, y, 0.4);
+    }),
+    label: { y: 17, h: 4 },
+  });
 });
 
 art('dc_journal', fp(1, 1), p => {

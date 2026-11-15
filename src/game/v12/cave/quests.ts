@@ -1,7 +1,8 @@
 // V12 Te Rua Pōuri, what there is to find and do: the places to photograph (the wētā hall, the glowworm
-// curtains, the fungus hall, the crystal gallery, the falls, the glowworm sky over the lake), the
-// samples (cave water, a crystal, bat guano), the lost caver's camp and his journal, and two side
-// quests pinned to the camp board (src/game/v10/campquests.ts):
+// curtains, the fungus hall, the crystal gallery, the falls, the glowworm sky over the lake, and below
+// the lake the water wall, the moonmilk cave, the deepest chamber and its nursery pool), the samples
+// (cave water, a crystal, bat guano; moonmilk and cave pearls for whoever gets that deep), the lost
+// caver's camp and his journal, and two side quests pinned to the camp board (src/game/v10/campquests.ts):
 //
 //   Te Kēhua o te Pō      Aroha: Koro's story of a pale ghost in the black water under the hill, that
 //   (the Ghost in the     swallows the lights of those who go too deep. A caver went down in 1974 and
@@ -36,8 +37,8 @@ const at = (tier: string, x: number) => ({ x, y: floorOf(tier, x) });
 // ---------------------------------------------------------------- the finds
 export const CAVE_POINTS: Point10[] = [
   { id: 'eco:dc:mouth', kind: 'cave', name: 'Te Rua Pōuri', ...at('t0', 260), photo: { w: 220, h: 110 }, note: 'Behind the glowworm cave a dry chimney climbs into the headland, then the cave drops away in tiers into the dark.' },
-  { id: 'lm:dc:roost', kind: 'landmark', name: 'The bat roost', ...at('t0', 930), photo: { w: 120, h: 90, dy: 0 }, note: 'Long-tailed bats hanging from the roof of the mouth, and a heap of their guano under them.' },
-  { id: 'pt:dc:guano', kind: 'sample', name: 'Bat guano', ...at('t0', 950), art: () => findArt.dig('#3a2a1a'), take: { item: 'smp_guano', verb: 'Scoop up some guano (ew)', time: 1.6, line: 'For SCIENCE. Breathe through your mouth, Mori.' } },
+  { id: 'lm:dc:roost', kind: 'landmark', name: 'The bat roost', ...at('t0', SPOT.roost), photo: { w: 120, h: 90, dy: 0 }, note: 'Long-tailed bats hanging from the roof of the mouth, and a heap of their guano under them.' },
+  { id: 'pt:dc:guano', kind: 'sample', name: 'Bat guano', ...at('t0', SPOT.roost + 20), art: () => findArt.dig('#3a2a1a'), take: { item: 'smp_guano', verb: 'Scoop up some guano (ew)', time: 1.6, line: 'For SCIENCE. Breathe through your mouth, Mori.' } },
   { id: 'lm:dc:wetahall', kind: 'landmark', name: 'The wētā hall', ...at('t1', 1180), photo: { w: 260, h: 200 }, note: 'A hall as tall as a house, every wall crawling with cave wētā, antennae waving at the lantern.' },
   { id: 'eco:dc:glowworms', kind: 'ecosystem', name: 'Glowworm curtains', ...at('t3', 1320), photo: { w: 200, h: 140, dy: 30 }, note: 'Glowworms on the roof of the dark stream: each a larva in a silk tube, fishing with threads of glue beads that catch the light.' },
   { id: 'eco:dc:fungi', kind: 'ecosystem', name: 'The fungus hall', ...at('t2', 1150), photo: { w: 240, h: 120 }, note: 'Ghost fungi growing on old roots washed down the cave, their gills glowing green in the dark.' },
@@ -46,6 +47,12 @@ export const CAVE_POINTS: Point10[] = [
   { id: 'pt:dc:water', kind: 'sample', name: 'Cave water', ...at('t3', 1250), art: () => findArt.sampleSpot('#3a5a64'), take: { item: 'smp_cavewater', verb: 'Fill a jar from the pool', time: 1.6, line: 'Freezing! There\'s something tiny and white swimming in it. A shrimp. A BLIND shrimp.' } },
   { id: 'lm:dc:falls', kind: 'landmark', name: 'Te Tāheke, the hidden falls', x: FALLS.x, y: FALLS.bottom, photo: { w: 80, h: 300, dy: 0 }, note: 'The dark stream sinks through the floor and comes out of the wall again as a waterfall, falling into the lake chamber.' },
   { id: 'eco:dc:lake', kind: 'ecosystem', name: 'Te Waha o te Pō', ...at('t4', 700), photo: { w: 300, h: 220, dy: 40 }, note: 'The lake at the bottom of the dark: black water under a sky of glowworms. Something lives in it.' },
+  // ---- below the lake (grip soles, grip gloves, trail boots, and a wetsuit or a snorkel)
+  { id: 'lm:dc:waterwall', kind: 'landmark', name: 'Te Pakitara Wai, the water wall', ...at('t5', 170), photo: { w: 90, h: 220, dy: 90 }, note: 'Below the lake shore the rock drops away in a wall of wet flowstone, poured like candle wax and glistening: the lake leaking down into the hill.' },
+  { id: 'pt:dc:moonmilk', kind: 'sample', name: 'Moonmilk', ...at('t5', SPOT.moonmilk), art: () => findArt.sampleSpot('#e8e8de'), take: { item: 'smp_moonmilk', verb: 'Scrape some moonmilk into a jar', time: 1.8, line: 'It\'s like cold cream cheese. Made of ROCK. Jenna is going to lose her mind.' } },
+  { id: 'lm:dc:deepest', kind: 'landmark', name: 'Te Puna Tioata, the deepest chamber', ...at('t5', SPOT.deep), photo: { w: 320, h: 260, dy: 80 }, note: 'Past the sump, the deepest place in the hill: a hall of crystal blades taller than a house, rimstone terraces stepping down to a pool that glows from below.' },
+  { id: 'eco:dc:nursery', kind: 'ecosystem', name: 'The salamanders\' nursery', ...at('t5', SPOT.pearls), photo: { w: 170, h: 60, dy: 4 }, note: 'The glowing rimstone pool where the blind salamanders come down to lay their eggs, and the mothers stay with them, fanning them with their tails, for months.' },
+  { id: 'pt:dc:pearls', kind: 'sample', name: 'Cave pearls', ...at('t5', SPOT.pearls + 40), art: () => findArt.glint('#f4eedc'), take: { item: 'smp_cavepearl', verb: 'Lift a few cave pearls from the pool\'s rim', time: 2.4, line: 'Pearls. Stone pearls. Round as marbles... centuries, each one. I\'ll take three. Just three.' } },
   {
     id: 'ruin:dc:camp', kind: 'ruin', name: 'The lost caver\'s camp', ...at('t4', SPOT.camp), photo: { w: 110, h: 50 },
     note: 'A camp from 1974: a collapsed canvas tent, a bedroll, a primus stove, a smashed lantern. Nobody came back for it.',
@@ -82,7 +89,7 @@ const REQS: Req[] = [
     id: 'r_gulper', giver: 'aroha', title: 'Te Kēhua o te Pō', unlock: unlocked,
     desc: 'Koro tells of a pale ghost in black water under the hill, behind the glowworm cave: it swallows the lights of those who go too deep. In 1974 a caver went down there and never came back. Aroha wants to know if the story is true.',
     steps: [
-      { text: 'Reach the lake at the bottom of Te Rua Pōuri', done: () => F('dc:lake'), hint: 'Up the dry chimney behind the glowworms (storm lantern), then down: the old ladder, the scree, the rope pitch, the wet pitch beside the falls. You\'ll need a climbing rope.' },
+      { text: 'Reach the lake at the bottom of Te Rua Pōuri', done: () => F('dc:lake'), hint: 'Up the dry chimney behind the glowworms (storm lantern). Heave the boulder out of the narrows, jump the crack, down the old ladder, up the wētā hall\'s chimney, down the scree, then the rope pitch and the wet pitch beside the falls. You\'ll need a climbing rope.' },
       { text: 'Find out what happened to the lost caver', done: () => F('dc:journal'), hint: 'His camp is by the lake, against the west wall. Look for a notebook on a flat stone.' },
       { text: 'Photograph the Ghost Gulper with its jaws wide open', done: () => docBeh(GULPER_ID, 'gaping'), hint: 'Light draws it. Hang the lantern on the caver\'s pole at the water\'s edge and get behind the rock. When the rings close in and the bubbles come, keep still. Then develop the photo at the laptop.' },
     ],

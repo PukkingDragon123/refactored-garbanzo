@@ -15,6 +15,8 @@
 import { Sk, V2, V3, rmp, lumN, SpeciesDef, BeastEye, hh, sm } from '../../beasts-core';
 import { hex, C } from '../../color';
 import { clamp } from '../../../core/math';
+import { Field, strip, spline } from './contour';
+import type { FP, LP } from './contour';
 
 export interface ClawP {
   /** -0.5 lowered to the ground (scraping) .. 0 held before the face .. 1 raised high in threat */
@@ -109,7 +111,9 @@ const GROUP_B = [false, true, false, true]; // left side; the right side is the 
 
 // round ringed spots across the carapace: (u = x/W, v = z/D, r in W units)
 /** the world sprite: five bold spots */
-const SPOTS_SMALL: [number, number, number][] = [[0, 0.3, 0.19], [-0.52, 0.3, 0.15], [0.52, 0.3, 0.15], [-0.27, 0.74, 0.12], [0.27, 0.74, 0.12], [-0.84, 0.18, 0.09], [0.84, 0.18, 0.09]];
+// (on the anatomical regions, not a grid: the gastric spot, the paired branchial and hepatic spots, the
+// cardiac spot, small ones toward the margins, each a little different in size)
+const SPOTS_SMALL: [number, number, number][] = [[0.02, 0.2, 0.15], [-0.5, 0.06, 0.13], [0.53, 0.02, 0.12], [-0.3, -0.42, 0.11], [0.27, -0.46, 0.1], [0.0, -0.72, 0.09], [-0.37, 0.58, 0.085], [0.4, 0.55, 0.08], [-0.8, 0.3, 0.06], [0.82, 0.26, 0.06]];
 const SPOTS: [number, number, number][] = [[0, 0.06, 0.25], [0, -0.7, 0.13]];
 for (const s of [-1, 1]) SPOTS.push([s * 0.4, 0.5, 0.15], [s * 0.56, -0.02, 0.19], [s * 0.3, -0.46, 0.17], [s * 0.83, -0.18, 0.1], [s * 0.64, -0.62, 0.11], [s * 0.78, 0.38, 0.08], [s * 0.15, 0.7, 0.08]);
 
@@ -172,9 +176,18 @@ function footD(x: number, z: number): number {
   const e = v > 0 ? 2.5 : 2.1;
   let d = Math.pow(Math.pow(Math.abs(u), e) + Math.pow(Math.abs(v), e), 1 / e);
   const a = Math.atan2(v, Math.abs(u) + 1e-6);
-  if (a > 0.08 && a < 1.18) d *= 1 - 0.035 * Math.pow(Math.max(0, Math.sin((a - 0.08) / 1.1 * Math.PI * 4.5)), 2);
-  // a shallow frontal notch between the eyes
+  // the anterolateral margin: five sharp, forward-hooked teeth (a sawtooth, tips leaning forward)
+  if (a > 0.06 && a < 1.2) {
+    const q = ((a - 0.06) / 1.14) * 5, f = q - Math.floor(q);
+    const tooth = f < 0.72 ? f / 0.72 : (1 - f) / 0.28;
+    d *= 1 - 0.07 * tooth * (0.7 + 0.3 * Math.sin((a - 0.06) / 1.14 * Math.PI));
+  }
+  // the orbits: a notch either side of the front where the eye stalks sit
+  const ob = (Math.abs(u) - 0.36) / 0.09;
+  if (v > 0.55) d *= 1 + 0.06 * Math.exp(-ob * ob);
+  // the front between the eyes: two blunt lobes and a median notch
   if (v > 0.6 && Math.abs(u) < 0.12) d *= 1 + 0.05 * (1 - Math.abs(u) / 0.12);
+  if (v > 0.6 && Math.abs(u) > 0.1 && Math.abs(u) < 0.26) d *= 1 - 0.02;
   return d;
 }
 
@@ -186,19 +199,19 @@ function heightTop(x: number, z: number, detail: number, k: number): number {
   // gastric and branchial swellings
   y += H * 0.12 * Math.exp(-((u * u) / 0.05 + ((v - 0.15) * (v - 0.15)) / 0.1));
   y += H * 0.06 * Math.exp(-(((Math.abs(u) - 0.5) ** 2) / 0.04 + (v * v) / 0.12));
-  if (detail > 0) {
+  {
     // the H-shaped groove between the regions
     const g1 = Math.exp(-((Math.abs(u) - 0.3) ** 2) / 0.0025) * (v < 0.35 && v > -0.55 ? 1 : 0);
     const g2 = Math.exp(-((v + 0.08 + 0.25 * u * u) ** 2) / 0.003) * (Math.abs(u) < 0.3 ? 1 : 0);
     y -= H * 0.05 * Math.max(g1, g2);
   }
-  if (detail > 1) {
-    // granules: tiny domes on a jittered grid (world scale so they stay pixel sized)
-    const s = 1.35 / 1, gx = x * k / (s * k * 0.9), gz = z * k / (s * k * 0.9);
+  {
+    // granules: tiny domes on a jittered grid, sized in pixels so they stay readable at every scale
+    const s = detail > 1 ? 1.35 : 2.1 / k, gx = x / (s * 0.9), gz = z / (s * 0.9);
     const ix = Math.floor(gx), iz = Math.floor(gz);
     const cx = ix + 0.3 + hh(ix, iz, 11) * 0.4, cz = iz + 0.3 + hh(iz, ix, 12) * 0.4;
     const q = (gx - cx) ** 2 + (gz - cz) ** 2;
-    if (q < 0.09 && hh(ix, iz, 13) < 0.55) y += H * 0.018 * (1 - q / 0.09);
+    if (q < 0.09 && hh(ix, iz, 13) < (detail > 1 ? 0.55 : 0.4)) y += H * (detail > 1 ? 0.018 : 0.014) * (1 - q / 0.09);
   }
   return y;
 }
@@ -234,7 +247,7 @@ function cloudFor(k: number, detail: number, parasite: boolean): Cloud {
         const q = Math.hypot(x - su * W, (z - sv * D) * (k < 2 ? 0.72 : 1)) / (sr * W);
         if (q >= 1) continue;
         const px = spotPx(sr);
-        const rim = k < 2 ? 0 : Math.max(0.12, Math.min(0.42, 0.8 / px));
+        const rim = k < 2 ? 0.42 : Math.max(0.12, Math.min(0.42, 0.8 / px));
         const ring = k < 2 ? 0 : px > 2.6 ? Math.max(0.16, Math.min(0.3, 1.4 / px)) : 0;
         m = q > 1 - rim ? SLOT.spotRim : q > 1 - rim - ring ? SLOT.spotR : SLOT.spotC;
         b = m === SLOT.spotC ? 0.06 : 0;
@@ -242,7 +255,7 @@ function cloudFor(k: number, detail: number, parasite: boolean): Cloud {
       }
       if (m === SLOT.shell) {
         if (d > (k < 2 ? 0.9 : 0.93)) m = SLOT.rim;
-        else if (detail > 0) {
+        else {
           const u = x / W, v = z / D;
           const g1 = Math.abs(Math.abs(u) - 0.3) < 0.035 && v < 0.35 && v > -0.55;
           const g2 = Math.abs(v + 0.08 + 0.25 * u * u) < 0.04 && Math.abs(u) < 0.3;
@@ -250,6 +263,9 @@ function cloudFor(k: number, detail: number, parasite: boolean): Cloud {
           // a darker saddle toward the back and the flanks
           else if (v < -0.62 || Math.abs(u) > 0.86) b = -0.05;
           if (detail > 1 && hh(Math.floor(x * k * 0.8), Math.floor(z * k * 0.8), 21) < 0.06) b += 0.08;
+          // a mottled, weathered shell: darker blotches and paler wear on the high points
+          const mo = Math.sin(x * 0.9 + Math.sin(z * 0.7) * 2) * Math.sin(z * 1.1 - x * 0.4);
+          if (mo > 0.55) b -= 0.06; else if (mo < -0.7) b += 0.04;
         }
       }
       push(x, y, z, n, m, b);
@@ -323,7 +339,7 @@ function mats(sk: Sk, hue: number, detail: number, small = false): Mats {
     claw: sk.m(rmp(c('claw'), { n, dark: 0.66, light: 0.5, cool: 0.45 }), { edge: 2 }),
     crushTip: sk.m(rmp(c('crushTip'), { n: 4, dark: 0.4, light: 0.32 }), { edge: 1 }),
     tooth: sk.m(rmp(c('tooth'), { n: 5, dark: 0.55, light: 0.3, warm: 0.2 }), { edge: 1 }),
-    eye: sk.m(rmp(c('eye'), { n: 4, dark: 0.4, light: detail > 1 ? 0.5 : 1.2 }), { edge: 0, k: detail > 1 ? 1 : 1.3 }),
+    eye: sk.m(rmp(c('eye'), { n: detail > 1 ? 6 : 4, dark: 0.4, light: detail > 1 ? 0.7 : 1.2, cool: 0.5 }), { edge: 0, k: detail > 1 ? 1 : 1.3 }),
     stalk: sk.m(rmp(c('stalk'), { n: 5, dark: 0.6, light: 0.45 }), { edge: 1 }),
     mouth: sk.m(rmp(c('mouth'), { n: 5, dark: 0.6, light: 0.5 }), { edge: 1 }),
     fork: sk.m(rmp(c('fork'), { n: 5, dark: 0.6, light: 0.5 }), { edge: 1 }),
@@ -342,6 +358,47 @@ function mats(sk: Sk, hue: number, detail: number, small = false): Mats {
     antenna: sk.m(rmp('#6a2a24', { n: 4, dark: 0.5, light: 0.6 }), { edge: 0, noRim: true }),
     stalkHi: sk.m(rmp('#e8905a', { n: 6, dark: 0.6, light: 0.4, warm: 0.2 }), { edge: 1 }),
   };
+}
+
+// ------------------------------------------------------------------ organic limb segments
+/**
+ * One jointed limb segment as a contour (never a tube): a dorsal and a ventral margin profile, a
+ * slight bow, optional spines on the dorsal margin and granules as relief, lit as a height field.
+ * fill gets t (0 proximal .. 1 distal) and v (-1 ventral .. +1 dorsal edge).
+ */
+function limbSeg(sk: Sk, a: V2, b: V2, wD: (t: number) => number, wV: (t: number) => number, z: number,
+  fill: (p: FP, t: number, v: number) => number,
+  o: { spines?: number[]; spineLen?: number; capA?: number; capB?: number; bend?: number; granule?: number; spec?: number; bias?: number } = {}) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1e-3;
+  const ux = dx / L, uy = dy / L;
+  // the strip's "up" side is left of travel, (uy, -ux); the dorsal side is the one facing screen-up
+  const upDorsal = ux > 0 || (Math.abs(ux) < 1e-3 && uy < 0);
+  const ndx = upDorsal ? uy : -uy, ndy = upDorsal ? -ux : ux;
+  const bend = (o.bend ?? 0) * L;
+  const mid: V2 = [(a[0] + b[0]) / 2 + ndx * bend, (a[1] + b[1]) / 2 + ndy * bend];
+  const path = bend ? spline([a, mid, b], false, 6) : [a, b];
+  const c = strip(path, upDorsal ? wD : wV, upDorsal ? wV : wD, {
+    capA: o.capA ?? 0.8, capB: o.capB ?? 0.8,
+    spines: o.spines && o.spines.length && (o.spineLen ?? 0) >= 0.5 ? { side: upDorsal ? 1 : -1, at: o.spines, len: o.spineLen!, lean: 0.9 } : undefined,
+  });
+  sk.np();
+  const F = new Field(sk, [c], { round: Math.max(0.6, Math.min(wD(0.5), wV(0.5)) * 0.9), dome: Math.min(wD(0.5), wV(0.5)) * 0.35 });
+  const g = o.granule ?? 0;
+  if (g > 0) F.add((x, y) => {
+    const gx = Math.floor(x / g), gy = Math.floor(y / g);
+    const cx = (gx + 0.3 + hh(gx, gy, 17) * 0.4) * g, cy = (gy + 0.3 + hh(gy, gx, 18) * 0.4) * g;
+    const q = ((x - cx) ** 2 + (y - cy) ** 2) / (g * g * 0.12);
+    return q < 1 && hh(gx, gy, 19) < 0.5 ? 0.2 * (1 - q) : 0;
+  });
+  F.emit((p) => {
+    const rx = p.x - a[0], ry = p.y - a[1];
+    const t = (rx * ux + ry * uy) / L;
+    const off = rx * ndx + ry * ndy - bend * 4 * Math.max(0, Math.min(1, t)) * (1 - Math.max(0, Math.min(1, t)));
+    const tc = Math.max(0, Math.min(1, t));
+    const v = off >= 0 ? off / Math.max(0.3, wD(tc)) : off / Math.max(0.3, wV(tc));
+    return fill(p, t, Math.max(-1, Math.min(1, v)));
+  }, { z, spec: o.spec ?? 0, bias: o.bias ?? 0 });
+  return c;
 }
 
 // ------------------------------------------------------------------ the painter
@@ -594,10 +651,15 @@ export function drawTrycop(sk: Sk, P: TrycopPose, o: TrycopOpts): TrycopOut {
     const e2 = pr(ec);
     const er = (small ? 1.05 : 1.08) * k;
     // up close the cornea reads as a compound eye: a faint lattice of facets under the glint
-    sk.ell(e2[0], e2[1], er * 1.05, er, (p) => {
-      if (detail > 1 && p.u * p.u + p.v * p.v < 0.75 && ((Math.floor(p.x) + Math.floor(p.y)) & 1)) p.l += 0.07;
-      return M.eye;
-    }, { z: e2[2] + 0.5 * k, rz: er });
+    if (small) {
+      sk.ell(e2[0], e2[1], er * 1.05, er, M.eye, { z: e2[2] + 0.5 * k, rz: er });
+    } else {
+      // a kidney-shaped cornea, broader than tall, pinched where it sits on the stalk, its facets in relief
+      const kid: LP[] = [[-1.12, 0.25], [-0.98, -0.42], [-0.45, -0.92], [0.32, -0.95], [0.98, -0.52], [1.14, 0.16], [0.72, 0.72], [0.2, 0.55], [-0.2, 0.58], [-0.68, 0.76]];
+      const EF = new Field(sk, [spline(kid.map(([x, y]) => [e2[0] + x * er, e2[1] + y * er] as LP), true, 5)], { round: er * 0.55, dome: er * 0.35 });
+      if (detail > 1) EF.add((x, y) => (((Math.floor(x) + Math.floor(y)) & 1) ? 0.12 : 0));
+      EF.emit((p) => { if (p.d < 0.8) p.l -= 0.1; return M.eye; }, { z: e2[2] + 0.5 * k, spec: 1.2, specPow: 24 });
+    }
     const hx = Math.floor(e2[0] - er * 0.35), hy = Math.floor(e2[1] - er * 0.45);
     if (detail > 1) {
       // a wet sheen across the facets rather than a cartoon catch-light
@@ -665,18 +727,31 @@ export function drawTrycop(sk: Sk, P: TrycopPose, o: TrycopOpts): TrycopOut {
       const hint: V3 = [s * 0.3, 1, zc * 0.05];
       const [knee, ank] = ik3(coxa, ankle, 5.9, 5.3, hint);
       const tip = vadd(ank, vmul(vnorm(vsub(foot, ankle)), 3.1));
-      sk.np();
       const c2 = pr(coxa), k2 = pr(knee), a2 = pr(ank), f2 = pr(tip);
-      const zfn = (a: V3, b: V3) => (t: number) => a[2] + (b[2] - a[2]) * t;
-      const legFill = (band0: number) => (p: { t: number; v: number; l: number }) => {
-        if (p.t > band0) return M.band;
-        if (detail > 0 && Math.abs(p.v) > 0.8 && p.t > 0.1) p.l -= 0.05;
+      const lr = small ? 0.8 : 1;
+      const gran = detail >= 2 ? Math.max(1.6, 0.42 * k) : 0;
+      const zm = (a: V3, b: V3) => (a[2] + b[2]) / 2;
+      // the merus: long, flattened, its dorsal margin set with a row of forward-leaning spines
+      limbSeg(sk, [c2[0], c2[1]], [k2[0], k2[1]], t => (0.86 + 0.34 * Math.sin(Math.PI * Math.min(1, t * 1.08))) * k * lr, t => (0.7 + 0.16 * Math.sin(Math.PI * t)) * k * lr, zm(c2, k2), (p, t, v) => {
+        if (t > 0.94) { p.l -= 0.04; return M.band; } // the soft articular membrane at the knee
+        if (v > 0.5) p.l += 0.07; // the dorsal crest catches the light
+        if (v < -0.55) p.l -= 0.06;
         return M.leg;
-      };
-      const lr = small ? 0.72 : 1;
-      sk.tube([[c2[0], c2[1]], [k2[0], k2[1]]], t => (1.2 - t * 0.12) * k * lr, legFill(0.86), { z: zfn(c2, k2) });
-      sk.tube([[k2[0], k2[1]], [a2[0], a2[1]]], t => (1.02 - t * 0.2) * k * lr, legFill(0.84), { z: zfn(k2, a2) });
-      sk.tube([[a2[0], a2[1]], [f2[0], f2[1]]], t => (0.78 - t * 0.58) * k * lr + 0.18, (p) => (p.t > 0.55 ? M.tip : M.leg), { z: zfn(a2, f2) });
+      }, { spines: detail >= 1 ? [0.3, 0.48, 0.66, 0.84] : [], spineLen: 0.42 * k * lr, granule: gran, bend: 0.03, spec: spec * 0.6 });
+      // carpus + propodus: a short knee joint, then the longer propodus with its setal fringe
+      const pinch = (t: number) => 1 - 0.2 * Math.exp(-(((t - 0.3) / 0.06) ** 2));
+      limbSeg(sk, [k2[0], k2[1]], [a2[0], a2[1]], t => (0.78 - 0.16 * t) * pinch(t) * k * lr, t => (0.66 - 0.12 * t) * pinch(t) * k * lr, zm(k2, a2) + 0.2 * k, (p, t, v) => {
+        if (t < 0.05 || t > 0.95) return M.band;
+        if (Math.abs(t - 0.3) < 0.04) { p.l -= 0.12; return M.leg; }
+        if (v > 0.5) p.l += 0.06;
+        return M.leg;
+      }, { spines: detail >= 1 ? [0.18, 0.55, 0.8] : [], spineLen: 0.3 * k * lr, granule: gran, bend: -0.04, spec: spec * 0.6 });
+      // the dactyl: a tapering, slightly hooked point, dark-tipped
+      limbSeg(sk, [a2[0], a2[1]], [f2[0], f2[1]], t => (0.55 * (1 - t) ** 0.9 + 0.08) * k * lr + 0.15, t => (0.46 * (1 - t) ** 0.9 + 0.06) * k * lr + 0.15, zm(a2, f2) + 0.4 * k, (p, t) => {
+        if (t > 0.62) return M.tip;
+        if (t > 0.5) { p.l -= 0.08; return M.leg; }
+        return M.leg;
+      }, { capB: 0, bend: 0.06, spec: spec * 0.8 });
       // setae: a fringe of short hairs along the back of the leg (close-up)
       if (detail > 1) {
         const segs: [V3, V3, number][] = [[k2, a2, 1.0], [a2, f2, 0.7]];
@@ -740,10 +815,18 @@ export function drawTrycop(sk: Sk, P: TrycopPose, o: TrycopOpts): TrycopOut {
     const [elb] = ik3(sh, wrist, 5.6, 4.8, X.dir([s * 1, 0.3, -0.25]));
     const s0 = pr(sh), e0 = pr(elb), w0 = pr(wrist);
     const armR = crusher ? 1.7 : 1.4;
-    sk.np();
-    sk.tube([[s0[0], s0[1]], [e0[0], e0[1]]], t => (armR - t * 0.15) * k, (p) => (p.t > 0.86 ? M.band : M.claw), { z: t => s0[2] + (e0[2] - s0[2]) * t });
-    sk.np();
-    sk.tube([[e0[0], e0[1]], [w0[0], w0[1]]], t => (armR * (1.05 - t * 0.1)) * k, M.claw, { z: t => e0[2] + (w0[2] - e0[2]) * t });
+    const granA = detail >= 2 ? Math.max(1.6, 0.42 * k) : detail >= 1 ? 2.2 : 0;
+    // the cheliped's merus (spined along its upper edge) and the carpus with its inner tooth
+    limbSeg(sk, [s0[0], s0[1]], [e0[0], e0[1]], t => (armR * 0.92 + 0.35 * Math.sin(Math.PI * t)) * k, t => (armR * 0.8 + 0.15 * Math.sin(Math.PI * t)) * k, (s0[2] + e0[2]) / 2, (p, t, v) => {
+      if (t > 0.93) return M.band;
+      if (v > 0.5) p.l += 0.06;
+      return M.claw;
+    }, { spines: detail >= 1 ? [0.35, 0.55, 0.75] : [], spineLen: 0.5 * k, granule: granA, bend: 0.05, spec: spec * 0.7 });
+    limbSeg(sk, [e0[0], e0[1]], [w0[0], w0[1]], t => armR * (1.02 - t * 0.08) * k, t => armR * (0.9 - t * 0.06) * k, (e0[2] + w0[2]) / 2 + 0.3 * k, (p, t, v) => {
+      if (t < 0.05) return M.band;
+      if (v > 0.45) p.l += 0.06;
+      return M.claw;
+    }, { spines: detail >= 1 ? [0.5] : [], spineLen: 0.7 * k, granule: granA, bend: -0.06, spec: spec * 0.7 });
     // the palm (propodus), laid along the projected axis
     // pl: palm length, ph: half its height
     const pl = crusher ? 9.2 : 9.4, ph = crusher ? 3.1 : 2.15;
@@ -762,19 +845,18 @@ export function drawTrycop(sk: Sk, P: TrycopPose, o: TrycopOpts): TrycopOut {
     const fore = clamp(al, 0.45, 1);
     const rx = Math.max(ph * 1.02, pl * 0.5 * fore) * k, ry = ph * k * 0.92;
     sk.np();
-    const spots: [number, number, number][] = crusher ? [[-0.3, -0.25, 0.24], [0.25, 0.1, 0.22], [-0.45, 0.42, 0.14], [0.55, -0.35, 0.13]] : [[-0.2, -0.15, 0.26], [0.42, 0.22, 0.17]];
+    // (the small sprite keeps only the big ocelli, each with a dark ring, so they never read as noise)
+    const spots: [number, number, number][] = small ? (crusher ? [[-0.32, -0.18, 0.3], [0.32, 0.2, 0.22]] : [[-0.18, -0.08, 0.3]])
+      : crusher ? [[-0.3, -0.25, 0.24], [0.25, 0.1, 0.22], [-0.45, 0.42, 0.14], [0.55, -0.35, 0.13]] : [[-0.2, -0.15, 0.26], [0.42, 0.22, 0.17]];
     const palmFill = (p: { u: number; v: number; l: number }) => {
       for (const [u, v, r] of spots) {
         const q = Math.hypot(p.u - u, (p.v - v) * (ry / rx)) / r;
-        if (q < 1) return q > 0.7 ? M.spotRim : q > 0.5 && r * rx > 2.6 ? M.spotR : M.spotC;
+        if (q < 1) return q > (small ? 0.55 : 0.7) ? M.spotRim : q > 0.5 && r * rx > 2.6 ? M.spotR : M.spotC;
       }
       if (detail > 0 && Math.abs(p.v) > 0.78) p.l -= 0.05;
       return M.claw;
     };
-    // v = +1 is the dactyl (upper) side when the ellipse is rotated by aS; flip the fill's v to match n
-    const vs = (-Math.sin(aS) * nx + Math.cos(aS) * ny) > 0 ? 1 : -1;
-    sk.ell(pc2[0], pc2[1], rx, ry, (p) => { p.v *= vs; return palmFill(p); }, { rot: aS, z: pc2[2] + 0.6 * k, rz: ry * 1.15 });
-    // fingers: the fixed pollex continues the lower edge, the dactyl hinges on the upper corner
+    // fingers: the fixed pollex grows out of the palm's lower distal corner, the dactyl hinges above it
     const fl = (crusher ? 6.0 : 7.2) * k * (0.7 + fore * 0.3);
     const fw = (crusher ? 1.55 : 1.0) * k;
     const openA = 0.08 + C0.open * (crusher ? 0.72 : 0.9);
@@ -787,43 +869,78 @@ export function drawTrycop(sk: Sk, P: TrycopPose, o: TrycopOpts): TrycopOut {
     const dd: V2 = [ux * co + nx * so, uy * co + ny * so];
     // bias the dactyl down to close on the pollex when shut
     const dd2: V2 = C0.open < 0.15 ? [dd[0] - nx * 0.08, dd[1] - ny * 0.08] : dd;
-    const fingerFill = (dac: boolean) => (p: { t: number; v: number; l: number }) => {
-      if (crusher && p.t > 0.58) return M.crushTip;
-      if (!crusher && p.t > 0.84) return M.tip;
-      // denticles on the biting edge, calcified and worn like the fingers themselves: one big rounded
-      // molar near the crusher's base and smaller blunt tubercles toward its tip; an uneven saw of
-      // small teeth on the cutter, each a slightly different size
-      const biting = dac ? p.v < -0.35 : p.v > 0.35;
-      if (biting && p.t > 0.08) {
-        const av = Math.abs(p.v);
-        if (crusher && p.t < 0.56) {
-          const seg = (p.t - 0.08) * 6.2, i = Math.floor(seg), f = seg - i;
-          const sz = i === 0 ? 0.44 : 0.3 - i * 0.03 + hh(i, dac ? 3 : 4, 51) * 0.08;
-          const hgt = i === 0 ? 0.3 : 0.5;
-          if (Math.abs(f - 0.5) < sz && av > hgt + Math.abs(f - 0.5) * 0.5) { p.l += av > 0.8 ? -0.08 : 0.04; return M.tooth; }
-        }
-        if (!crusher && p.t < 0.84) {
-          const n = detail > 1 ? 11 : 6, seg = p.t * n, i = Math.floor(seg), f = seg - i;
-          if (f < 0.32 + hh(i, dac ? 1 : 2, 52) * 0.3 && av > 0.5 + f * 0.3) { p.l -= f * 0.12; return M.tooth; }
-        }
-        if (av > 0.7) p.l -= 0.05;
+    const L2 = (u: number, v: number): LP => [pc2[0] + ux * u * rx + nx * v * ry, pc2[1] + uy * u * rx + ny * v * ry];
+    // the pollex's own frame: along pd, and its perpendicular toward the dactyl
+    let qx = -pd[1], qy = pd[0];
+    if (qx * nx + qy * ny < 0) { qx = -qx; qy = -qy; }
+    const pw = (t: number) => (1 - t * 0.74) * fw * 1.08 + 0.3;
+    const pollexAt = (t: number, side: number): LP => [pollexB[0] + pd[0] * fl * t + qx * pw(t) * side, pollexB[1] + pd[1] * fl * t + qy * pw(t) * side];
+    // one contour: wrist, the swollen upper margin, the hinge, the cleft, out along the pollex's biting
+    // edge (with its molar knobs), round its tip, back along its underside and the palm's lower margin
+    const palm: LP[] = [L2(-1.0, -0.05), L2(-0.94, 0.55), L2(-0.58, 0.9), L2(-0.05, 1.02), L2(0.42, 0.98), L2(0.7, 0.82), L2(0.82, 0.52)];
+    const nT = 8;
+    for (let i = 0; i <= nT; i++) {
+      const t = 0.04 + (i / nT) * 0.9;
+      const knob = crusher && i > 0 && i < 6 && i % 2 === 1 ? 0.35 * k : (!crusher && i > 0 && i < 7 ? (i % 2) * 0.2 * k : 0);
+      const q = pollexAt(t, 1);
+      palm.push([q[0] + qx * knob, q[1] + qy * knob, knob ? 1 : 0] as LP);
+    }
+    palm.push([pollexB[0] + pd[0] * fl * 1.03, pollexB[1] + pd[1] * fl * 1.03, 1]);
+    for (let i = nT; i >= 0; i--) palm.push(pollexAt(0.04 + (i / nT) * 0.9, -1.08));
+    palm.push(L2(0.62, -1.0), L2(0.2, -1.04), L2(-0.4, -1.0), L2(-0.82, -0.84));
+    sk.np();
+    const PF = new Field(sk, [spline(palm, true, small ? 3 : 5)], { round: Math.min(ry, 2.2 * k) * 0.8, dome: ry * 0.45 });
+    if (granA) PF.add((x, y) => {
+      const g = granA, gx = Math.floor(x / g), gy = Math.floor(y / g);
+      const cx = (gx + 0.3 + hh(gx, gy, 27) * 0.4) * g, cy = (gy + 0.3 + hh(gy, gx, 28) * 0.4) * g;
+      const q = ((x - cx) ** 2 + (y - cy) ** 2) / (g * g * 0.12);
+      return q < 1 && hh(gx, gy, 29) < 0.5 ? 0.22 * (1 - q) : 0;
+    });
+    PF.emit((p) => {
+      const dx = p.x - pc2[0], dy = p.y - pc2[1];
+      const pu = (dx * ux + dy * uy) / rx, pv = (dx * nx + dy * ny) / ry;
+      // along the pollex
+      const ft = ((p.x - pollexB[0]) * pd[0] + (p.y - pollexB[1]) * pd[1]) / fl;
+      if (ft > 0.05) {
+        const fv = ((p.x - pollexB[0]) * qx + (p.y - pollexB[1]) * qy) / pw(Math.min(1, ft));
+        if (crusher && ft > 0.58) return M.crushTip;
+        if (!crusher && ft > 0.84) return M.tip;
+        if (fv > 0.55 && ft < (crusher ? 0.56 : 0.84)) { p.l += 0.04; return M.tooth; }
+        if (crusher && ft > 0.45) { p.l -= 0.1; return M.claw; }
+        return M.claw;
       }
-      if (p.v * (dac ? 1 : -1) > 0.6) p.l += 0.07;
-      return M.claw;
-    };
-    const blade = (b: V2, d: V2, len: number, dac: boolean, z0: number) => {
+      return palmFill({ u: pu, v: pv, l: p.l } as { u: number; v: number; l: number }) === M.claw ? (pv > 0.75 ? (p.l += 0.06, M.claw) : M.claw) : palmFill({ u: pu, v: pv, l: p.l });
+    }, { z: pc2[2] + 0.6 * k, zk: 0.5, spec: spec * 0.9 });
+    void aS;
+    // the dactyl: a curved, toothed finger hinged at the palm's upper corner
+    {
+      const len = fl * 1.03;
+      const e: V2 = [dacB[0] + dd2[0] * len, dacB[1] + dd2[1] * len];
+      let tx = -dd2[1], ty = dd2[0];
+      if (tx * nx + ty * ny < 0) { tx = -tx; ty = -ty; }
+      // bow it toward the pollex
+      const mid: V2 = [dacB[0] + dd2[0] * len * 0.5 + tx * 0.28 * k, dacB[1] + dd2[1] * len * 0.5 + ty * 0.28 * k];
+      const path = spline([dacB, mid, [e[0] - tx * 0.3 * k, e[1] - ty * 0.3 * k]], false, 6);
+      // which strip side faces the pollex (inner, biting) side?
+      const sdx = path[2][0] - path[0][0], sdy = path[2][1] - path[0][1];
+      const upInner = (sdy * -tx + -sdx * -ty) > 0;
+      const dw = (t: number) => (1 - t * 0.74) * fw + 0.3;
+      const teeth = crusher ? [0.2, 0.36, 0.5] : [0.15, 0.27, 0.39, 0.51, 0.63, 0.75];
+      const c = strip(path, dw, dw, { capA: 0.9, capB: 0, spines: detail >= 1 ? { side: upInner ? 1 : -1, at: teeth, len: (crusher ? 0.45 : 0.3) * k, lean: 0.3 } : undefined });
       sk.np();
-      const e: V2 = [b[0] + d[0] * len, b[1] + d[1] * len];
-      // blade v is measured left of travel: flip so +v means the dactyl side for both fingers
-      const sideV = (-d[1] * nx + d[0] * ny) > 0 ? 1 : -1;
-      const f = fingerFill(dac);
-      sk.blade(b[0], b[1], e[0], e[1], t => (1 - t * 0.74) * fw * (dac ? 1 : 1.08) + 0.3, (p) => { p.v *= sideV; return f(p); },
-        { z0, z1: z0 - 0.2 * k, bend: (dac ? -1 : 1) * sideV * 0.28 * k, n: [0, -0.3, 1] });
-      return e;
-    };
-    const fe = blade(pollexB, pd, fl, false, pc2[2] + 0.7 * k);
-    const de = blade(dacB, dd2, fl * 1.03, true, pc2[2] + 1.1 * k);
-    return [(fe[0] + de[0]) / 2, (fe[1] + de[1]) / 2];
+      const DF = new Field(sk, [c], { round: fw * 0.7, dome: fw * 0.3 });
+      DF.emit((p) => {
+        const t = ((p.x - dacB[0]) * dd2[0] + (p.y - dacB[1]) * dd2[1]) / len;
+        const v = ((p.x - dacB[0]) * tx + (p.y - dacB[1]) * ty) / dw(Math.max(0, Math.min(1, t)));
+        if (crusher && t > 0.58) return M.crushTip;
+        if (!crusher && t > 0.84) return M.tip;
+        if (v < -0.45 && t > 0.08) return M.tooth;
+        if (v > 0.5) p.l += 0.07;
+        return M.claw;
+      }, { z: pc2[2] + 1.1 * k, spec: spec * 0.9 });
+      const fe: V2 = [pollexB[0] + pd[0] * fl, pollexB[1] + pd[1] * fl];
+      return [(fe[0] + e[0]) / 2, (fe[1] + e[1]) / 2] as V2;
+    }
   };
   const crushTip = claw(0), cutTip = claw(1);
   void bodyPart;
@@ -848,6 +965,9 @@ export function trycopPoseAt(name: string, f: number, n: number): TrycopPose {
   P.t = t * 2;
   switch (name) {
     case 'idle':
+      // claws held a little up and apart, so the crusher, the cutter and the fork all read
+      P.crush = { raise: 0.68, open: 0.45, reach: 0 }; P.cut = { raise: 0.62, open: 0.35, reach: 0 }; P.rear = 0.12;
+      P.fork = { ext: 0.5, open: 0.4, side: 0.2, lift: 0.3 };
       P.bob = Math.sin(t * Math.PI * 2) * 0.3;
       P.mouth = f % 2 ? 0.5 : 0.1;
       P.eyes[0].sw = Math.sin(t * 6.28) * 0.4; P.eyes[1].sw = Math.sin(t * 6.28 + 1) * 0.4;

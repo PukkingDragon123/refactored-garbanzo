@@ -26,7 +26,7 @@ import { add, fits, count, remove } from '../../inventory';
 import { addHunger } from '../hunger';
 import { hitMori, moriHidden } from '../wilds';
 import { CAVE_CTX, SAL_ID, GULPER_ID, caveKeep } from './species';
-import { LAKE, SPOT, POOLS, floorOf, poolTop } from './layout';
+import { LAKE, SPOT, POOLS, TIER, floorOf } from './layout';
 import { LAMP, lanternFrames, drawLanternGlow } from './dark';
 import type { CaveRuntime } from './site';
 
@@ -35,7 +35,7 @@ const BAITS = ['fishbait', 'grublure', 'scentlure'];
 export function attachLife(f: FieldScene, run: CaveRuntime) {
   const p = f.player;
   const shoreY = () => floorOf('t4', SPOT.pole);
-  const onShore = () => p.y > 1700 && p.x > 100 && p.x < 800;
+  const onShore = () => p.x > TIER.t4.x0 && p.x < 800 && Math.abs(p.y - floorOf('t4', clamp(p.x, TIER.t4.x0, TIER.t4.x1))) < 14;
   const gulper = () => f.animals.find(a => a.species === GULPER_ID && !a.gone && !a.dead) ?? null;
   let bait: { x: number; life: number } | null = null;
   let told = { tell: false, gape: false, weta: false, sal: false, seen: false, lake: false, hit: false };
@@ -69,7 +69,7 @@ export function attachLife(f: FieldScene, run: CaveRuntime) {
   CAVE_CTX.rumble = a => {
     f.sfx('callWhale', a.x, 0.7, 0.32);
     f.sfx('callGrowl', a.x, 0.4, 0.22);
-    if (Math.abs(p.x - a.x) < 500 && p.y > 1500) {
+    if (Math.abs(p.x - a.x) < 500 && p.y > LAKE.top - 140 && p.y < LAKE.top + 40) {
       f.st.shake(0.8, 1.2);
       void floatText({ text: told.tell ? rand.pick(['Rings. RINGS. Back off!', 'The water\'s moving again...']) : '...the water\'s moving. Rings, closing in on one spot. Pike wrote about this. BACK. OFF.', style: 'scared', ms: 2600 });
       told.tell = true;
@@ -237,8 +237,7 @@ export function attachLife(f: FieldScene, run: CaveRuntime) {
     action: () => { void catchSal(); },
   } as Interactable);
 
-  // ---- every frame: the calm the salamanders need, the bait, the lake, the pools underfoot
-  let waded = false, splashT = 0;
+  // ---- every frame: the calm the salamanders need, the bait, the lake (wading is the site's: ./site.ts)
   f.main.add(new Custom(0, () => {}, dt => {
     if (game.scene !== f || !(dt > 0)) return;
     // (still, with the lantern shuttered or hung on the pole: the cave forgets him)
@@ -261,14 +260,6 @@ export function attachLife(f: FieldScene, run: CaveRuntime) {
       setTimeout(() => void floatText({ text: LAMP.mode === 'bright' ? 'Something pale in the pool... gone. It went the moment the light touched it. Shutter the lantern, Mori. Sit. Wait.' : 'There. Pale, pink, no eyes, little red feathers for gills. A blind salamander. Don\'t. Move.', style: 'whisper', ms: 3200 }), 400);
       break;
     }
-    // wading through a pool
-    let wading = false;
-    for (const q of POOLS) if (p.onGround && p.x > q.x0 + 3 && p.x < q.x1 - 3 && p.y > poolTop(q) + 2 && Math.abs(p.y - floorOf(q.tier, p.x)) < 3) wading = true;
-    if (wading) {
-      p.wadeK = 0.74; waded = true;
-      splashT -= dt * Math.abs(p.vx) / 40;
-      if (Math.abs(p.vx) > 6 && splashT <= 0) { splashT = 0.5; audio.play('stepWater', { vol: 0.3, pitch: rand.range(0.6, 0.8) }); run.water.ring(p.x, p.y - Math.max(0, p.y - floorOf('t3', p.x)), 6, 0.8, 0.6); }
-    } else if (waded) { waded = false; if (p.wadeK === 0.74) p.wadeK = 1; }
     // the Gulper's own faint glow and the lake under it
     void A;
   }));

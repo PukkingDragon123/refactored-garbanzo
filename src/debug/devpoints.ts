@@ -322,18 +322,22 @@ export async function goSwamp(x: number, o: { high?: boolean; hour?: number; rai
 /** V12 Te Rua Pōuri, the deep dark cave (src/game/v12/cave): out on a trip from camp, standing on a tier
  *  at world x (the cave is tall: x alone doesn't say where). The storm lantern is made; `rope` false
  *  leaves the climbing rope unmade (the deep pitches stay shut); `lunge` has the Ghost Gulper already
- *  drawn to the shore (its tell, then the lunge); `pole` hangs the lantern on the caver's pole. */
-export async function goCave(x: number, tier: string, o: { hour?: number; rope?: boolean; lunge?: boolean; pole?: boolean; dim?: boolean } = {}) {
+ *  drawn to the shore (its tell, then the lunge); `pole` hangs the lantern on the caver's pole. Below the
+ *  lake: `gear` makes those blueprints too (grip_soles, climbing_gloves, trail_boots, wetsuit, snorkel)
+ *  and `without` unmakes them (to see a gate shut); `choke` false puts the boulder back in the narrows. */
+export async function goCave(x: number, tier: string, o: { hour?: number; rope?: boolean; lunge?: boolean; pole?: boolean; dim?: boolean; gear?: string[]; without?: string[]; choke?: boolean } = {}) {
   ensureLoop();
   findLocation('deepcave');
   const d = dayState();
   d.phase = 'out'; d.went = 'deepcave'; d.woke = dayNumber(); d.meals.breakfast = dayNumber();
   if (o.hour !== undefined) game.save.vars['v10:hour'] = o.hour;
   const bp = await import('../game/v11/blueprints');
-  for (const id of ['storm_lantern', ...(o.rope === false ? [] : ['climbing_rope'])]) {
+  for (const id of ['storm_lantern', ...(o.rope === false ? [] : ['climbing_rope']), ...(o.gear ?? [])]) {
     bp.grantBlueprint(id, 'dev');
     if (!bp.isBuilt(id)) bp.markMade(id);
   }
+  { const b = (game.save as unknown as { v10?: { blueprints?: { owned?: Record<string, unknown>; made?: Record<string, number> } } }).v10?.blueprints; for (const id of o.without ?? []) { if (b?.made) delete b.made[id]; if (b?.owned) delete b.owned[id]; } }
+  if (o.choke === false) delete game.save.flags['dc:choke']; else if (x > 470 || tier !== 't0') game.save.flags['dc:choke'] = true;
   delete game.save.flags['dev:gulperNow']; delete game.save.flags['dev:gulperPole']; delete game.save.flags['dev:caveDim'];
   if (o.lunge) game.save.flags['dev:gulperNow'] = true;
   if (o.pole) game.save.flags['dev:gulperPole'] = true;
@@ -725,6 +729,15 @@ export async function chapters(): Promise<DevChapter[]> {
     { id: 'dc:stream', name: 'The dark stream: blind salamanders', sub: 'Te Awa Pōuri: shutter the lantern by the pools and wait', icon: 'heart', run: () => goCave(1205, 't3', { hour: 13 }), variants: [...dcT(1205, 't3'), { label: 'Lantern shuttered', run: () => goCave(1205, 't3', { hour: 13, dim: true }) }] },
     { id: 'dc:wet', name: 'The wet pitch', sub: 'Ropes down beside the underground waterfall', icon: 'map', run: () => goCave(700, 'w1', { hour: 13 }), variants: dcT(700, 'w1') },
     { id: 'dc:lake', name: 'The lake at the bottom', sub: 'Te Waha o te Pō: the caver\'s camp, the pole, the glowworm sky', icon: 'moon', run: () => goCave(560, 't4', { hour: 14 }), variants: [...dcT(560, 't4'), { label: 'The caver\'s camp', run: () => goCave(240, 't4', { hour: 14 }) }] },
+    // the way down got harder (V12): the obstacles, and the gear-gated tiers below the lake
+    { id: 'dc:choke', name: 'The choke, the crawl', sub: 'Te Kūaha: heave the wedged boulder (a mash), then hands and knees', icon: 'map', run: () => goCave(380, 't0', { hour: 10, choke: false }), variants: [...dcT(380, 't0'), { label: 'Boulder already moved', run: () => goCave(380, 't0', { hour: 10, choke: true }) }] },
+    { id: 'dc:crack', name: 'The crack', sub: 'Jump it (fall in and there\'s a scramble out either side)', icon: 'map', run: () => goCave(1150, 't0', { hour: 10 }), variants: dcT(1150, 't0') },
+    { id: 'dc:chimney', name: 'The wētā hall: the chimney and the rockfall pit', sub: 'Hard scrambles (breath), loose roof over the pit', icon: 'map', run: () => goCave(760, 't1', { hour: 10 }), variants: [...dcT(760, 't1'), { label: 'The rockfall pit', run: () => goCave(1450, 't1', { hour: 10 }) }, { label: 'Top of the breakdown pile', run: () => goCave(1300, 't1', { hour: 10 }) }] },
+    { id: 'dc:waterwall', name: 'Te Pakitara Wai, the water wall (grip soles)', sub: 'The wet flowstone down from the shore\'s west end, below the lake', icon: 'map', run: () => goCave(160, 't4', { hour: 14, gear: ['grip_soles'] }), variants: [{ label: 'No grip soles (shut)', run: () => goCave(160, 't4', { hour: 14, without: ['grip_soles'] }) }, { label: 'At its foot', run: () => goCave(200, 't5', { hour: 14, gear: ['grip_soles'] }) }] },
+    { id: 'dc:crystalsq', name: 'The crystal squeeze (grip gloves)', sub: 'Te Kūiti Tioata: a crawl between crystal blades; loose roof and drip pools before it', icon: 'map', run: () => goCave(640, 't5', { hour: 14, gear: ['grip_soles', 'climbing_gloves'] }), variants: [{ label: 'No gloves (shut)', run: () => goCave(640, 't5', { hour: 14, gear: ['grip_soles'], without: ['climbing_gloves'] }) }, { label: 'The loose roof', run: () => goCave(380, 't5', { hour: 14, gear: ['grip_soles'] }) }] },
+    { id: 'dc:mud', name: 'Te Paru, the mud slope (trail boots)', sub: 'The moonmilk cave, then down the mud to the sump', icon: 'map', run: () => goCave(1080, 't5', { hour: 14, gear: ['grip_soles', 'climbing_gloves', 'trail_boots'] }), variants: [{ label: 'No boots (shut)', run: () => goCave(1080, 't5', { hour: 14, gear: ['grip_soles', 'climbing_gloves'], without: ['trail_boots'] }) }] },
+    { id: 'dc:sump', name: 'Te Ruku, the sump (wetsuit or snorkel)', sub: 'The passage goes under the water: an old diver\'s line through it', icon: 'map', run: () => goCave(1420, 't5', { hour: 14, gear: ['grip_soles', 'climbing_gloves', 'trail_boots', 'wetsuit'] }), variants: [{ label: 'No wetsuit or snorkel (shut)', run: () => goCave(1420, 't5', { hour: 14, gear: ['grip_soles', 'climbing_gloves', 'trail_boots'], without: ['wetsuit', 'snorkel'] }) }] },
+    { id: 'dc:deepest', name: 'Te Puna Tioata, the deepest chamber', sub: 'Giant crystals, the glowing nursery pool (salamanders guarding eggs), cave pearls', icon: 'heart', run: () => goCave(1960, 't5', { hour: 14, gear: ['grip_soles', 'climbing_gloves', 'trail_boots', 'wetsuit'] }), variants: [{ label: 'At the nursery, lantern shuttered', run: () => goCave(2040, 't5', { hour: 14, dim: true, gear: ['grip_soles', 'climbing_gloves', 'trail_boots', 'wetsuit'] }) }] },
     { id: 'dc:lunge', name: 'The Ghost Gulper\'s lunge', sub: 'At the water\'s edge, lantern bright: watch the tell', icon: 'heart', run: () => goCave(760, 't4', { hour: 14, lunge: true }), variants: [
       { label: 'Lunge', run: () => goCave(760, 't4', { hour: 14, lunge: true }) }, { label: 'Lure: lantern on the pole, hidden', run: () => goCave(680, 't4', { hour: 14, pole: true }) },
     ] },

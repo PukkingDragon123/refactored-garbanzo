@@ -353,8 +353,8 @@ const HEADS: Record<HeadKind, HeadSpec> = {
   },
   blunt: {
     w: 1.06, len: 2.2, kt: [-0.22, 0, 0.25, 0.55, 0.8, 0.93, 1],
-    top: [0.78, 0.92, 0.96, 0.87, 0.68, 0.5, 0.28], bot: [-0.78, -0.95, -0.92, -0.76, -0.58, -0.42, -0.14],
-    mo: [-0.32, -0.34, -0.32, -0.28, -0.22, -0.15, -0.05],
+    top: [0.78, 0.92, 0.97, 0.9, 0.74, 0.56, 0.3], bot: [-0.78, -0.98, -0.9, -0.68, -0.5, -0.38, -0.14],
+    mo: [-0.36, -0.42, -0.4, -0.34, -0.26, -0.18, -0.06],
     hinge: 0.08, jaw: 0.95, eyeT: 0.56, eyeU: 0.36, eyeR: 0.3, brow: 0.6, nos: [0.9, 0.4], pupil: 'round', teeth: 'needle', topW: 0.95, labials: true,
   },
   croc: {
@@ -396,6 +396,28 @@ interface LegPose {
   hx: number; hy: number; kx: number; ky: number; ax: number; ay: number; fx: number; fy: number;
   dx: number; dy: number; lift: number; far: boolean; front: boolean; side: number;
   r0: number; r1: number; r2: number; r3: number; spec: LegSpec; drawn: boolean; top: boolean;
+}
+
+/** head plate centres (head fraction a, height fraction b above the lip) around an eye at eyeT */
+const PLATES = new Map<number, number[]>();
+function HEAD_PLATES(E: number): number[] {
+  const hit = PLATES.get(E);
+  if (hit) return hit;
+  const lo = E + (0.9 - E) * 0.45;
+  const out = [
+    0.985, 0.42,           // rostral
+    0.9, 0.5,              // nasal (the nostril sits in it)
+    lo, 0.55,              // loreal
+    E + 0.12, 0.6,         // preocular
+    E - 0.1, 0.68, E - 0.1, 0.36, // postoculars
+    E, 0.98,               // supraocular
+    0.9, 0.96, lo + 0.02, 0.98, // internasal, prefrontal
+    E - 0.24, 1.02, E - 0.5, 0.98, // parietals
+    E - 0.26, 0.6, E - 0.44, 0.56, E - 0.4, 0.82, E - 0.62, 0.66, // temporals
+    E + 0.03, 0.2, E - 0.2, 0.18, // the labial row's upper neighbours
+  ];
+  PLATES.set(E, out);
+  return out;
 }
 
 // ================================================================== the painter
@@ -911,6 +933,8 @@ export class SerpentPainter {
     const scars = this.scars.length > 0 && detail >= 2;
     const scaleOn = detail >= 1 && this.scaleId !== S_NONE;
     const hideS = this.hl * 0.1; // pattern starts behind the head
+    const SL = this.scaleLen, SR = this.scaleRows;
+    const latticeOn = scaleOn && (this.scaleId === S_SMOOTH || this.scaleId === S_KEELED || this.scaleId === S_BEAD);
     for (let y = y0; y <= y1; y++) {
       let idx = y * W + x0;
       for (let x = x0; x <= x1; x++, idx++) {
@@ -948,8 +972,19 @@ export class SerpentPainter {
         } else if (s < hideS) {
           _mat = phi < this.phiB ? M_THROAT : M_BASE;
           _off = 0;
+        } else if (latticeOn && phi >= this.phiB && SL >= 3 && (Math.PI / SR) * w * Math.cos(phi) >= 3) {
+          // colour patterns are laid down scale by scale: sample the pattern at the centre of this
+          // pixel's scale, so band and blotch edges step along the scale rows like a real snake's,
+          // and give every scale its own slight tone
+          const la = s / SL, lb = ((phi + HALF_PI) * SR) / Math.PI;
+          const pc = Math.floor(la + lb) + 0.5, qc = Math.floor(la - lb) + 0.5;
+          const sc = ((pc + qc) * 0.5) * SL, phc = ((pc - qc) * 0.5) * Math.PI / SR - HALF_PI;
+          this.pattern(sc, phc, sc / total, w, k, x, y, time);
+          _off += (hash2(pc | 0, qc | 0, this.seed) - 0.5) * 0.6;
         } else {
           this.pattern(s, phi, u, w, k, x, y, time);
+          // small bodies: still a faint tone per scale, so the hide never reads as flat
+          if (latticeOn && phi >= this.phiB) _off += (hash2(Math.floor(s / SL + ((phi + HALF_PI) * SR) / Math.PI), Math.floor(s / SL - ((phi + HALF_PI) * SR) / Math.PI), this.seed) - 0.5) * 0.45;
         }
         // moss over the back
         if (mossAmt > 0 && phi > 0.05 && _mat !== M_BELLY) {
@@ -2105,7 +2140,7 @@ export class SerpentPainter {
       }
       // brow bump over the eye
       const de = (t - H.eyeT) / 0.13;
-      tp += browK * 0.1 * hh * Math.exp(-de * de);
+      tp += browK * 0.15 * hh * Math.exp(-de * de);
       if (smile) mo += smile * 0.22 * hh * Math.max(0, 1 - Math.max(0, t) * 2.2) ** 2;
       if (t > 1) { tp = bt = mo = 0; }
       LT[i] = tp; LB[i] = bt; LM[i] = mo;
@@ -2188,7 +2223,19 @@ export class SerpentPainter {
           const dLo = pu - pmo;         // above the lower lip (jaw frame)
           const depth = Math.min(dUp, dLo);
           const tt = f / hl;
-          let c = R[M_MOUTH * NR + (depth < 1 ? 5 : depth < 2.2 ? 4 : tt < 0.35 ? 1 : 2)];
+          let mi = depth < 1 ? 5 : depth < 2.2 ? 4 : tt < 0.35 ? 1 : 2;
+          if (detail >= 1 && depth >= 2.2 && tt >= 0.3) {
+            const span = dUp + dLo;
+            if (dLo < span * 0.42 && tt < 0.86) {
+              // the tongue lying in the floor of the mouth, a groove down its middle
+              mi = Math.abs(dLo - span * 0.22) < 0.6 ? 2 : dLo < span * 0.12 ? 3 : 4;
+            } else if (dUp < span * 0.5) {
+              // the palate: transverse ridges (rugae), and the throat darkening toward the back
+              mi = mod(f, Math.max(2.2, hh * 0.35)) < 0.9 ? 4 : 3;
+              if (tt < 0.45) mi -= 1;
+            } else mi = tt < 0.5 ? 1 : 2;
+          }
+          let c = R[M_MOUTH * NR + mi];
           // teeth
           if (teeth === 'fangs') {
             const fl = hh * 0.55 * smoothstep(0.08, 0.45, jaw);
@@ -2249,6 +2296,66 @@ export class SerpentPainter {
           }
           // snout sensory pits / scale texture on the croc
           if (this.patId === P_CROC && tt > 0.35 && hash2(x, y, this.seed) > 0.86) lvl -= 0.9;
+        }
+        // form: the canthus (the edge where the crown turns down to the side) catches the light from the
+        // eye to the snout; the cheek under the eye and behind the jaw angle falls into shadow
+        if (part === 1 && detail >= 1 && hh >= 2.6 && mat === M_BASE) {
+          const can = ptp - Math.max(1, hh * 0.22);
+          if (Math.abs(pu - can) < Math.max(0.5, hh * 0.07) && pf > eyeF - er && tt < 0.96) lvl += 0.9;
+          else if (pu < eyeU - er * 0.6 && pf < eyeF + er * 1.6) lvl -= 0.35;
+          if (pf < fh + hh * 0.3 && pf > -back * 0.5 && pu < (eyeU + pmo) * 0.5) lvl -= 0.3; // the jaw angle's hollow
+        }
+        // head scalation (side view): plates on the upper head (rostral, nasal, loreal, pre- and
+        // postoculars, the supraocular shield over the eye, internasals, prefrontal, parietals,
+        // temporals), small granular scales on a boa's crown, infralabials, chin shields and gular
+        // scales under the jaw. Each plate is a cell with a dark seam and a lit upper half.
+        if (detail >= 1 && hh >= 2.6 && mat !== M_PAT) {
+          const de2 = (pf - eyeF) ** 2 + (pu - eyeU) ** 2;
+          if (part === 1 && de2 > (er + 0.9) ** 2) {
+            const hgt = Math.max(1, ptp - pmo);
+            const ub = (pu - pmo) / hgt;
+            const lab = H.labials ? Math.max(1.1, hh * 0.24) : 0;
+            if (pu - pmo >= lab && pf > -back * 0.3) {
+              let d1 = 1e9, d2 = 1e9, su = 0;
+              if (L.head === 'blunt' || L.head === 'leviathan' || L.head === 'salamander' || L.head === 'croc' || L.head === 'gecko') {
+                // small scales on a jittered grid, larger over the eye (the supraocular) and at the snout
+                const cs = Math.max(2.1, hh * (L.head === 'blunt' ? 0.3 : 0.4));
+                const gi = Math.floor(pf / cs), gj = Math.floor(pu / (cs * 0.85));
+                for (let jj = -1; jj <= 1; jj++) for (let ii = -1; ii <= 1; ii++) {
+                  const cx = (gi + ii + 0.5 + (hash2(gi + ii, gj + jj, this.seed + 3) - 0.5) * 0.6) * cs;
+                  const cy = (gj + jj + 0.5 + (hash2(gj + jj, gi + ii, this.seed + 4) - 0.5) * 0.6) * cs * 0.85;
+                  const d = Math.hypot(pf - cx, pu - cy);
+                  if (d < d1) { d2 = d1; d1 = d; su = cy; } else if (d < d2) d2 = d;
+                }
+                const so = Math.hypot(pf - eyeF, (pu - (eyeU + er * 1.4)) * 1.4);
+                if (so < er * 1.25) { d1 = so; d2 = er * 1.25 + 1; su = eyeU + er * 1.4; }
+              } else {
+                const E = H.eyeT;
+                const seeds = HEAD_PLATES(E);
+                for (let i = 0; i < seeds.length; i += 2) {
+                  const sx = seeds[i] * hl, sy = pmo + seeds[i + 1] * hgt;
+                  const d = Math.hypot(pf - sx, (pu - sy) * 1.15);
+                  if (d < d1) { d2 = d1; d1 = d; su = sy; } else if (d < d2) d2 = d;
+                }
+              }
+              if (d2 - d1 < (hh >= 6 ? 0.9 : 0.65)) lvl -= hh >= 5 ? 1.0 : 0.75;
+              else lvl += pu > su ? 0.35 : -0.12;
+            }
+            // the shadow under the supraocular's overhang, and its lit rim above
+            const dfE = Math.abs(pf - eyeF);
+            if (dfE < er * 1.35 && pu > eyeU + er * 0.85 && pu < eyeU + er * 0.85 + Math.max(1, hh * 0.12)) lvl -= 1.2;
+          } else if (part === 2 && pf > fh) {
+            // under the jaw: infralabials along the lip, then chin shields and rows of gular scales
+            const depth = pmo - pu;
+            const labD = Math.max(1.2, hh * 0.28);
+            if (depth > labD) {
+              const gs = Math.max(2, hh * 0.32);
+              const ga = (pf + (Math.floor(depth / (gs * 0.8)) & 1) * gs * 0.5) / gs;
+              const ca = mod(ga, 1), cb = mod(depth, gs * 0.8) / (gs * 0.8);
+              if (ca * gs < 0.6 || cb * gs * 0.8 < 0.55) lvl -= 0.5;
+              else lvl += cb < 0.5 ? 0.2 : -0.1;
+            }
+          }
         }
         // edges read as form: top edge catches light, mouth line dark
         if (part === 1 && pu - pmo < 0.75 && pf > fh * 0.5 && tt < 0.97) { mat = M_BASE; lvl = 0.3; }
