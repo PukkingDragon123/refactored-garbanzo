@@ -380,7 +380,8 @@ function install(f: FieldScene) {
     if (!live(f)) return;
     tickHints();
     // came back with the gate open and the shots not done: it waits in the dark
-    if (active7() && F('arc:ch7:gate') && !F('arc:ch7:shot3') && !s.old && Math.abs(f.player.x - GATE_X) < 260) {
+    // (not while the gate is opening: the flag is set before openGate brings the Old One out itself)
+    if (active7() && F('arc:ch7:gate') && !F('arc:ch7:shot3') && !s.old && !s.busy && !f.cutscene && Math.abs(f.player.x - GATE_X) < 260) {
       s.old = spawnArc(f, ANCIENT_ID, GATE_X - 40, G(GATE_X - 40), { facing: -1, act: 'idle', anim: 'idle' });
       void bossLoop(f, s);
     }
