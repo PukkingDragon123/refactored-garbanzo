@@ -126,7 +126,7 @@ export function build(f: FieldScene, r: TripRun | null) {
   ]);
   f.main.add(new Custom(0, () => {}, dt => {
     if (game.scene !== (f as never)) return;
-    if (active('arc_ch2') && F('arc:ch2:arrived')) hint(dt);
+    if (active('arc_ch2') && F('arc:ch2:arrived') && !S.chase && !S.race) hint(dt);
     S.race?.tick(dt);
     S.chase?.tick(dt);
   }));

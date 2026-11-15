@@ -267,6 +267,6 @@ export function spawnGlowGecko(f: FieldScene, x: number, o: { home?: [number, nu
 
 FUN[GLOW_ID] = 'A lantern gecko can switch every one of its lights off in under a tenth of a second: faster than you can blink.';
 WEB.push(
-  [GLOW_ID, 'eats', 'skymoth', 'lured in by the lantern on its tail'],
+  [GLOW_ID, 'eats', 'lanternmoth', 'lured in by the lantern on its tail'],
   [GLOW_ID, 'eats', 'lanternbeetle', 'snapped up under the glowcaps'],
 );

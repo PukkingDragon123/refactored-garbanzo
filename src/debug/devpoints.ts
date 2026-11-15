@@ -751,6 +751,30 @@ export async function chapters(): Promise<DevChapter[]> {
     { id: 'tu:ledge', name: 'The ledge over the den (the high way)', sub: 'Looking down on the den mouth', icon: 'map', run: () => goBackcountry(TUA.ledge.x1 - 30, { high: true, hour: 16 }), variants: tuT(TUA.ledge.x1 - 30, true) },
     { id: 'tu:end', name: 'The gorge\'s end', sub: 'East end: the steam of the Hot Valley', icon: 'map', run: () => goBackcountry(13800, { hour: 17 }), variants: tuT(13800) },
   ] });
+  // V12 Te Ara Matatū (src/game/v12/arc): each chapter staged (the ones before it done) and travelled to
+  const arcAt = (n: number, then: () => Promise<unknown>) => async () => {
+    await idle();
+    ensureLoop();
+    const A = await import('../game/v12/arc/arc');
+    A.registerArc();
+    for (const k of ['raid:started', 'raid:won', 'raid:report', 'arc:heard', 'v10:koroBlessing']) game.save.flags[k] = true;
+    A.ARC_QUESTS.forEach((q, i) => { game.save.quests[q.id] = i + 1 < n ? 'done' : i + 1 === n ? 'active' : 'hidden'; });
+    if (n >= 5) { const B = await import('../game/v11/blueprints'); B.grantBlueprint('wetsuit', 'dev'); B.markMade('wetsuit'); }
+    if (n >= 7) for (const k of ['arc:ch4:eye', 'arc:ch5:eye', 'arc:ch6:eye']) game.save.flags[k] = true;
+    game.persist();
+    await then();
+  };
+  out.push({ id: 'arc', name: 'Te Ara Matatū · the path of the watchers', points: [
+    { id: 'arc:start', name: 'The arc begins', sub: 'Dinner at camp after the raid: Aroha brings Koro\'s word', icon: 'scroll', run: async () => { await idle(); ensureLoop(); for (const k of ['raid:started', 'raid:won', 'raid:report']) game.save.flags[k] = true; game.persist(); await (await flow()).goCamp(); } },
+    { id: 'arc:ch1', name: 'Ch1 The Ruins\' Eyes', sub: 'Three carved eyes, the sealed whare, the cave-in', icon: 'map', run: arcAt(1, () => goLocation('ruins')) },
+    { id: 'arc:ch2', name: 'Ch2 The Fossil Wall', sub: 'The skull, Varga\'s race, the scree', icon: 'map', run: arcAt(2, () => goLocation('fossils')) },
+    { id: 'arc:ch3', name: 'Ch3 The Glow Forest at Night', sub: 'The lantern gecko, the hunter in the dark', icon: 'moon', run: arcAt(3, () => goLocation('glowforest')) },
+    { id: 'arc:ch4', name: 'Ch4 The Ground Breathes', sub: 'The geyser field and the eruption', icon: 'bolt', run: arcAt(4, () => goLocation('geovalley')) },
+    { id: 'arc:ch5', name: 'Ch5 The Drowned Eye', sub: 'The grotto sump, the octopus, the chase', icon: 'map', run: arcAt(5, () => goLocation('grotto')) },
+    { id: 'arc:ch6', name: 'Ch6 The Plunderers', sub: 'The storm crossing to Motu Ahi, the crabs', icon: 'boat', run: arcAt(6, async () => (await import('../game/sites10/ocean')).debugTrip('motuahi')) },
+    { id: 'arc:ch7', name: 'Ch7 Te Korokoro', sub: 'The five eyes, the Old One, the end', icon: 'star', run: arcAt(7, () => goLocation('unknown')) },
+    { id: 'arc:feats', name: 'Feats: grant all / reset', sub: 'Every medal in the notebook (run twice to reset)', icon: 'star', run: async () => { const Fm = await import('../game/v12/feats'); if (Fm.hasFeat('first_frame') && Fm.FEATS.every(f => Fm.hasFeat(f.id))) Fm.resetFeats(); else Fm.grantAllFeats(); } },
+  ] });
   out.push({ id: 'map', name: 'Region Map · Expeditions', points: locs.map(l => ({
     id: 'loc:' + l.id, name: l.name, sub: `${l.sub ? l.sub + ' · ' : ''}${l.region}${l.secret ? ' · secret' : ''}`, icon: l.kind === 'camp' ? 'flag' : l.kind === 'cave' ? 'moon' : 'map',
     run: () => goLocation(l.id),

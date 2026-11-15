@@ -117,23 +117,32 @@ const vn1 = (x: number, y: number) => { const xi = Math.floor(x), yi = Math.floo
 export function drawDust(r: import('../../../gfx/renderer').Renderer, front: number, ground: (x: number) => number, dir: number, t: number, o: { h?: number; w?: number; col?: [number, number, number] } = {}) {
   const H = o.h ?? 170, Wd = o.w ?? 110, c = o.col ?? [0.42, 0.37, 0.31];
   const tones = [0.72, 0.86, 1, 1.16].map(k => packColor0(c[0] * k, c[1] * k, c[2] * k));
+  // a mass of billows (cumulus puffs) rolling up off a low layer of dust: the union of the puffs, its
+  // edge boiling with noise
+  const puffs: [number, number, number][] = [];
+  for (let i = 0; i < 9; i++) {
+    const u = i / 8, bell = Math.sin(Math.min(1, u * 1.25) * Math.PI);
+    const r = (0.13 + 0.16 * bell) * H * (0.85 + 0.3 * vn1(i * 1.7, t * 0.5));
+    const px = 6 + u * Wd * 0.85 + Math.sin(t * 0.9 + i * 2.1) * 4;
+    const py = r * 0.6 + bell * H * 0.3 + Math.sin(t * 0.7 + i) * H * 0.04 + (i % 2) * H * 0.06;
+    puffs.push([px, py, r]);
+  }
   const inside = (dx: number, h: number) => {
-    // dx: px behind the front; h: px above the ground
-    const top = Math.min(H, 34 + dx * 1.4 + (vn1(dx * 0.05 + t * 0.4, 3.1) - 0.5) * 50);
-    const edge = (vn1(h * 0.06 + t * 1.2, t * 0.3) - 0.5) * 22 + (vn1(h * 0.15 - t * 2, 7) - 0.5) * 8;
-    return dx - edge + Math.min(0, (top - h) * 1.2) + (vn1(dx * 0.08 - t * 0.5, h * 0.08 + t * 0.7) - 0.5) * 16;
+    let v = Math.min(H * 0.18 - h, (Wd * 0.95 - dx) * 0.6, dx + 6);
+    for (const [px, py, r] of puffs) v = Math.max(v, r - Math.hypot(dx - px, (h - py) * 1.1));
+    return v + (vn1(dx * 0.12 + t * 1.1, h * 0.12 - t * 0.6) - 0.5) * 9 + (vn1(h * 0.07 + t * 1.6, 9.3) - 0.5) * (dx < 20 ? 10 : 2);
   };
-  for (let cx = -14; cx < Wd / 2; cx++) {
+  for (let cx = -14; cx < Wd / 2 + 10; cx++) {
     const dx = cx * 2, wx = Math.round(front - dir * dx), g = ground(wx);
     for (let cy = 0; cy < H / 2; cy++) {
       const h = cy * 2, v = inside(dx, h);
       if (v <= -2) continue;
       const th = B4[((cy & 3) << 2) | (cx & 3)];
-      if (v < 6 && th > (v + 2) / 8) continue;
-      let k = v > 26 ? 1 : v > 10 ? 2 : 1;
+      if (v < 4 && th > (v + 2) / 6) continue;
+      let k = v > 10 ? 1 : 2;
       if (inside(dx, h + 4) <= 0) k = 3;
       else if (inside(dx - 4, h) <= 0) k = Math.max(k, 2);
-      if (v > 40 && th < 0.4) k = 0;
+      if (v > 22 && th < 0.1) k = 0;
       r.rect(wx - (dir > 0 ? 1 : 0), Math.round(g - h - 2), 2, 2, tones[k]);
     }
   }

@@ -204,7 +204,7 @@ export function build(f: FieldScene) {
     { id: 'arc:ch1:h:stone3', x: STONES[2].x, text: 'The third one faces the afternoon. Late light.' },
     { id: 'arc:ch1:h:whare', x: WHARE_X, text: 'A whare. Built INTO the bank. And the door\'s been sealed with clay.', when: () => F('arc:ch1:arrived') },
   ]);
-  f.main.add(new Custom(0, () => {}, dt => { if (game.scene === (f as never) && active('arc_ch1') && F('arc:ch1:arrived')) hint(dt); S.run?.tick(dt); }));
+  f.main.add(new Custom(0, () => {}, dt => { if (game.scene === (f as never) && active('arc_ch1') && F('arc:ch1:arrived') && !S.run) hint(dt); S.run?.tick(dt); }));
   const ex = f.exit.bind(f);
   f.exit = () => { S.run?.dispose(); ex(); };
   if (active('arc_ch1') && !F('arc:ch1:arrived')) void arrive(f);

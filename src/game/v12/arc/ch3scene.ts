@@ -201,7 +201,7 @@ export function build(f: FieldScene) {
     { id: 'arc:ch3:h:log', x: LOGS[0].x, r: 90, text: 'A hollow log full of glowing fungus. I could get right down behind that.', when: () => night },
     { id: 'arc:ch3:h:stone', x: WAYSTONE_X, r: 120, text: 'There\'s a big stone here. Too dark to see what\'s on it.', when: () => !F('arc:ch3:done') },
   ]);
-  f.main.add(new Custom(0, () => {}, dt => { if (game.scene === (f as never) && active('arc_ch3')) hint(dt); }));
+  f.main.add(new Custom(0, () => {}, dt => { if (game.scene === (f as never) && active('arc_ch3') && !S.hunt) hint(dt); }));
   const ex = f.exit.bind(f);
   f.exit = () => { S.hunt?.dispose(); if (!S.busy) holdFetch(false); ex(); };
   if (active('arc_ch3')) void arrive(f, S, night);

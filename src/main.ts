@@ -59,6 +59,8 @@ async function boot() {
   // V12: the Thunderbird quest and the harder, more hostile wilds
   try { await (await import('./game/v12/thunderbird')).bootThunderbird(); } catch (e) { console.warn('[thunderbird] boot', e); }
   try { await (await import('./game/v12/feud')).bootFeud(); } catch (e) { console.warn('[feud] boot', e); }
+  // V12: Te Ara Matatū, the path of the watchers (the main arc after the raid)
+  try { (await import('./game/v12/arc/arc')).bootArc(); } catch (e) { console.warn('[arc] boot', e); }
   // V12: daily agency bounties, field set pieces and the new side quests
   try { (await import('./game/v12/bounty')).initFieldContent(); } catch (e) { console.warn('[field content] boot', e); }
   const scene = params.get('scene');
