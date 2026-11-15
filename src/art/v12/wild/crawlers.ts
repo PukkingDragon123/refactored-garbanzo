@@ -422,11 +422,11 @@ export const WORM_ANIMS: Record<string, AnimDef> = {
 };
 /** how far forward of the anchor the slime jets reach at full stretch (px) */
 export const WORM_REACH = 34;
-const WORM_L = 16;
-/** the legs take the bottom two rows; the body sits on them */
-const WORM_LEG = 2;
+const WORM_L = 20;
+/** the legs take the bottom rows; the body sits on them */
+const WORM_LEG = 2.2;
 /** radius (px) along the worm: a rounded head, the plump body, a blunt rounded rear */
-const WORM_R: [number, number][] = [[0, 1.05], [0.04, 1.5], [0.12, 1.86], [0.82, 1.92], [0.93, 1.6], [1, 1.05]];
+const WORM_R: [number, number][] = [[0, 1.15], [0.035, 1.6], [0.1, 2.0], [0.5, 2.18], [0.84, 2.1], [0.94, 1.7], [1, 1.1]];
 const WORM_TILT = 0.42;
 /** the curl: the ring's centre height and where the head starts round it */
 const CURL_CY = -5.4, CURL_A0 = -1.25;
@@ -499,7 +499,7 @@ function wspine(P: WP, k: number): Spine {
     const b = P.bend * Math.sin((u - 0.5) * Math.PI);
     return [Math.cos(a) * Math.cos(b), -Math.sin(a), Math.cos(a) * Math.sin(b)];
   };
-  const cy = -(WORM_LEG + 1.9) * k + (P.fold ? 0.8 * k : 0);
+  const cy = -(WORM_LEG + 2.1) * k + (P.fold ? 0.9 * k : 0);
   P3[ic] = [0, cy, 0];
   for (let i = ic + 1; i <= N; i++) { const d = dir((i - 0.5) / N), q = P3[i - 1]; P3[i] = [q[0] - d[0] * ds, q[1] - d[1] * ds, q[2] - d[2] * ds]; }
   for (let i = ic - 1; i >= 0; i--) { const d = dir((i + 0.5) / N), q = P3[i + 1]; P3[i] = [q[0] + d[0] * ds, q[1] + d[1] * ds, q[2] + d[2] * ds]; }
@@ -513,31 +513,32 @@ function wdraw(sk: Sk, anim: string, frame: number, _eye: BeastEye, juv: boolean
   const P = wpose(anim, frame, n);
   const k = juv ? 0.7 : 1;
   const S = wspine(P, k);
+  const H = (a: string[]) => a.map(c => hex(c));
   const M = {
-    // matte velvet: low contrast, the dorsal stripe and its diamonds kept crisp (no rim)
-    stripe: sk.m(rmp('#1d1f48', { n: 5, dark: 0.4, light: 0.45, cool: 0.05, warm: 0.5 }), { edge: 1, k: 0.4, noRim: true }),
-    diamond: sk.m(rmp('#f08a2e', { n: 4, dark: 0.32, light: 0.35, warm: 0.4, cool: 0.05 }), { edge: 1, k: 0.4, noRim: true }),
-    back: sk.m(rmp('#2d3c92', { n: 5, dark: 0.45, light: 0.32, cool: 0.05, warm: 0.1 }), { edge: 1, k: 0.4 }),
-    teal: sk.m(rmp('#1d6a76', { n: 5, dark: 0.45, light: 0.32, cool: 0.05, warm: 0.1 }), { edge: 1, k: 0.4 }),
-    under: sk.m(rmp('#5e6290', { n: 4, dark: 0.4, light: 0.3, cool: 0.05 }), { edge: 1, k: 0.4 }),
-    leg: sk.m(rmp('#2a5f86', { n: 4, dark: 0.4, light: 0.3, cool: 0.05 }), { edge: 0, k: 0.3, noRim: true }),
-    legF: sk.m(rmp('#1b3354', { n: 4, dark: 0.4, light: 0.3, cool: 0.05 }), { edge: 0, k: 0.3, noRim: true }),
-    foot: sk.m(rmp('#8e8cb0', { n: 4, dark: 0.35, light: 0.3, cool: 0.05 }), { edge: 0, k: 0.3, noRim: true }),
-    papilla: sk.m(rmp('#d0b4c4', { n: 4, dark: 0.35, light: 0.35, cool: 0.05 }), { edge: 1, k: 0.5 }),
+    // velvet: matte, the papillae catching the light; indigo above, teal down the flank, a lilac belly
+    back: sk.m(H(['#0c0e2a', '#141a44', '#1c2862', '#283a82', '#3650a0', '#5270bc', '#8698d8']), { edge: 1, noRim: true }),
+    teal: sk.m(H(['#081c24', '#0c2e38', '#124650', '#1a6068', '#267a7e', '#3e9898']), { edge: 1, noRim: true }),
+    under: sk.m(H(['#24223a', '#383652', '#4e4c6c', '#68668a', '#8886a8']), { edge: 1, noRim: true }),
+    stripe: sk.m(H(['#06061a', '#0c0e26', '#141834', '#1e2444']), { edge: 1, noRim: true }),
+    diamond: sk.m(H(['#4a1c06', '#7e340e', '#b85418', '#e47c28', '#fca850']), { edge: 1, noRim: true }),
+    leg: sk.m(H(['#0e1c2e', '#16304a', '#204a66', '#2e6482', '#44809c']), { edge: 1, noRim: true }),
+    legF: sk.m(H(['#080e1a', '#0e1828', '#162438', '#1e3048']), { edge: 1, noRim: true }),
+    foot: sk.m(H(['#4a4864', '#76749a', '#a8a6c8', '#d0cee6']), { edge: 1, noRim: true }),
+    papilla: sk.m(H(['#5a3e4c', '#8e6a7e', '#c09cb0', '#e4c8d6']), { edge: 1 }),
     preyB: sk.m(rmp('#86562a', { n: 5, dark: 0.5, light: 0.4, warm: 0.4, cool: 0.1 }), { edge: 1, k: 0.6 }),
     preyL: sk.m(rmp('#a87a44', { n: 4, dark: 0.45, light: 0.35, cool: 0.1 }), { edge: 0, k: 0.5 }),
   };
   const R = (u: number) => tab(WORM_R, u) * k * (1 + P.breathe * 0.03);
-  const head = S.p[0], F: V2 = [-S.t[0][0], -S.t[0][1]];
-  const zTop = Math.max(...S.z) + 4;
+  const head = S.p[0], F0: V2 = [-S.t[0][0], -S.t[0][1]];
+  const zTop = Math.max(...S.z) + 6;
   const SLIME = hex('#f4f5ee'), SLIME2 = hex('#c4c8bc', 230), SLIME3 = hex('#9ea494', 170);
 
   /** a fine antenna, ringed light and dark, curving forward and up from its base, the tip drooping */
   const ANT = [hex('#262c62'), hex('#a8b4ec')], ANTF = [hex('#1a1e46'), hex('#5a6498')];
   const antenna = (b: V2, near: boolean) => {
-    let a = Math.atan2(F[1], F[0]) - (near ? 0.5 : 0.85) + P.ant * (near ? 1 : -0.8) - P.fold * 2.2;
+    let a = Math.atan2(F0[1], F0[0]) - (near ? 0.5 : 0.85) + P.ant * (near ? 1 : -0.8) - P.fold * 2.2;
     let q: V2 = b;
-    const L = 5.2 * k * (P.fold ? 0.85 : 1);
+    const L = 6.2 * k * (P.fold ? 0.85 : 1);
     let lastC = '';
     let i = 0;
     for (let d = 0; d < L; d += 0.35) {
@@ -546,80 +547,124 @@ function wdraw(sk: Sk, anim: string, frame: number, _eye: BeastEye, juv: boolean
       const c = Math.floor(q[0]) + ',' + Math.floor(q[1]);
       if (c === lastC) continue;
       lastC = c;
-      sk.over(q[0], q[1], (near ? ANT : ANTF)[i++ % 2]);
+      if (!near && sk.has(q[0], q[1])) { i++; continue; }
+      sk.over(q[0], q[1], (near ? ANT : ANTF)[(i++ >> (d < 2.5 ? 0 : 1)) % 2]);
     }
   };
 
   if (P.peek) {
-    // under cover: the round tip of the head low by the ground, and the antennae feeling the air
-    sk.np();
-    const hx = 5.5 * k, hy = -2.1 * k;
-    sk.ell(hx, hy, 2.2 * k, 1.7 * k, (p: Px) => (p.v < -0.45 ? M.stripe : p.v > 0.4 ? M.teal : M.back), { z: 2 });
-    antenna([hx + 0.3, hy - 1.3 * k], false);
-    antenna([hx + 1.2, hy - 1.1 * k], true);
-    sk.over(hx + 0.8, hy - 0.6 * k, hex('#04050a'));
-    return { head: [hx, hy - 6] as V2, eye: [hx + 0.8, hy - 0.6] as V2 };
+    // under cover: the round tip of the head low by the ground, the antennae feeling the air
+    const hx = 5.5 * k, hy = -2.3 * k;
+    const F = HField.full(sk);
+    const tip: V2[] = spline([[hx - 2.6 * k, hy + 1.8 * k], [hx - 2.4 * k, hy - 1.4 * k], [hx - 0.6 * k, hy - 1.9 * k], [hx + 1.4 * k, hy - 1.2 * k], [hx + 2.1 * k, hy + 0.2 * k], [hx + 1.2 * k, hy + 1.6 * k]], 4, true);
+    F.inflate(tip, 1.8 * k, 0, 1, 0, (x, y, _d, _s, o) => {
+      const ring = Math.sin((x - hx) * 3.4);
+      o.m = y < hy - 1.2 * k ? M.stripe : y > hy + 0.6 * k ? M.teal : M.back;
+      if (ring > 0.55) o.z -= 0.25;
+      if (hh(x * 1.7, y * 1.3, 61) < 0.08) o.t += 0.16;
+    });
+    F.emit({ seam: 1, ao: 0.08, aoR: 2, shadow: 0.1, contrast: 0.8 });
+    antenna([hx + 0.3, hy - 1.5 * k], false);
+    antenna([hx + 1.2, hy - 1.3 * k], true);
+    sk.over(hx + 0.8, hy - 0.8 * k, hex('#04050a'));
+    return { head: [hx, hy - 6] as V2, eye: [hx + 0.8, hy - 0.8] as V2 };
   }
 
-  // ---- antennae (the far one first, behind the head)
+  // ---- antennae (the far one first, passing behind the head)
   const ab = at(S, R, 0.035, 0.62);
-  antenna([ab[0] - 0.7, ab[1] - 0.9], false);
 
-  // ---- legs: a pixel column each, sixteen pairs: the near legs (paler, clawed feet) alternating with the
-  // far ones (darker, in the gaps); a wave of lifted feet runs forward along them as it crawls
+  const F = HField.full(sk);
+  const N = S.n;
+  const zAtI = (f: number) => { const i = Math.min(N - 1, Math.max(0, Math.floor(f))); return S.z[i] + (S.z[i + 1] - S.z[i]) * (f - i); };
+  // ---- legs: sixteen pairs of stubby lobopods under the body, each tapering to a pale pad with its
+  // little claws; the near ones (paler, clawed) alternating with the far ones (darker, in the gaps); a
+  // wave of lifted feet runs forward along them as it crawls
+  const legCols: (() => void)[] = [];
   if (!P.curl) {
-    const x0 = Math.ceil(S.p[S.n][0] + 0.8 * k), x1 = Math.floor(head[0] - 0.6 * k);
+    const x0 = Math.ceil(S.p[S.n][0] + 1.6 * k), x1 = Math.floor(head[0] - 1.2 * k);
     for (let x = x0; x <= x1; x++) {
       // the body's underside above this column
       let bu = 0.5, by = 0;
       for (let i = 0; i < S.n; i++) {
-        const a = S.p[i], b = S.p[i + 1];
-        if ((x + 0.5 - a[0]) * (x + 0.5 - b[0]) <= 0) { const t = (x + 0.5 - a[0]) / ((b[0] - a[0]) || 1e-6); bu = (i + t) / S.n; by = a[1] + (b[1] - a[1]) * t; break; }
+        const a2 = S.p[i], b2 = S.p[i + 1];
+        if ((x + 0.5 - a2[0]) * (x + 0.5 - b2[0]) <= 0) { const t = (x + 0.5 - a2[0]) / ((b2[0] - a2[0]) || 1e-6); bu = (i + t) / S.n; by = a2[1] + (b2[1] - a2[1]) * t; break; }
       }
-      const bottom = by + R(bu) * 0.9;
-      const near = (x & 1) === 0;
+      const bottom = by + R(bu) * 0.85;
+      const near = ((x - x0) & 1) === 0;
       const ph = P.ph - x * 0.75 + (near ? 0 : Math.PI);
       const lifted = P.step > 0 && Math.sin(ph) > 0.45;
-      const reach = Math.min(-0.5, bottom + 2.6 * k);
-      const footY = P.fold ? Math.min(-0.5, bottom + 1) : lifted ? Math.min(reach, -1.5) : reach;
-      const z = zAt(S, bu) - 1;
-      for (let y = Math.floor(bottom - 0.5); y <= Math.floor(footY); y++) {
-        const foot = y === Math.floor(footY) && near && !P.fold;
-        sk.dot(x + 0.5, y + 0.5, near ? (foot ? M.foot : M.leg) : M.legF, 0.5, z);
-      }
+      const footY = P.fold ? Math.min(-0.5, bottom + 1) : lifted ? -1.5 * k : -0.5;
+      const z = zAtI(bu * N) - (near ? 0.4 : 2.4) * k;
+      legCols.push(() => {
+        for (let y = Math.floor(bottom - 0.5); y <= Math.floor(footY); y++) {
+          const isFoot = y === Math.floor(footY) && !P.fold;
+          sk.dot(x + 0.5, y + 0.5, near ? (isFoot ? M.foot : M.leg) : M.legF, near ? (isFoot ? 0.7 : 0.55 - (Math.floor(footY) - y) * 0.06) : 0.45, z);
+        }
+        // the claws: a dark point at the front of each near pad
+        if (near && !P.fold && !lifted && !juv && ((x - x0) >> 1) % 2 === 0) sk.over(x + 1, Math.floor(footY), hex('#1a1830'));
+      });
     }
   }
 
-  // ---- the body: velvet in rings with papillae catching the light; indigo above, teal on the flanks, a pale
-  // underside; a dark dorsal stripe with the orange diamonds down it
-  const fill = (p: Px, u: number, dors: number) => {
-    const along = u * WORM_L;
-    const col = Math.floor(p.x + 64);
-    if (col % 2) p.l -= 0.07;
-    if (hh(p.x * 1.7, p.y * 1.3, 61) < 0.07) p.l += 0.16;
-    if (u < 0.05) return dors > -0.35 ? M.back : M.teal;
-    const cell = (along - 0.4) / 2.7, fq = cell - Math.floor(cell);
-    if (dors > 0.55 && u < 0.95) {
-      // the diamonds: a bead of orange in the dark stripe, its edges glowing into it
-      if (u > 0.1 && u < 0.92 && fq > 0.32 && fq < 0.7) return M.diamond;
-      if (u > 0.1 && u < 0.92 && (fq > 0.15 && fq < 0.85)) { p.l += 0.35; return M.stripe; }
-      return M.stripe;
-    }
-    if (dors > 0.02) { if (fq > 0.35 && fq < 0.67 && u > 0.1 && u < 0.9) p.l += 0.16; return M.back; }
-    // indigo melts into blue-green down the flank (dithered)
-    if (dors > -0.18 || (dors > -0.3 && (Math.floor(p.x) + Math.floor(p.y)) % 2 === 0)) return M.back;
-    if (dors > -0.62) return M.teal;
-    return M.under;
-  };
-  bodyTube(sk, S, R, fill, { chunk: P.curl || P.bend ? 4 : 0 });
+  // ---- the body: one outline (in chunks when it coils over itself), velvet in rings, each ring set with
+  // papillae that catch the light; indigo above, teal down the flank, a lilac underside; the dark dorsal
+  // stripe with its row of orange diamonds
+  const CH = P.curl || P.bend ? 5 : N;
+  for (let a = 0; a < N; a += CH) {
+    const i0 = Math.max(0, a - 1), i1 = Math.min(N, a + CH + 1);
+    const pts = S.p.slice(i0, i1 + 1);
+    const pc = arcs(pts), pL = pc[pc.length - 1] || 1;
+    const fI = (t: number) => i0 + t * (i1 - i0);
+    // the velvet's ring-folds break the outline: a ripple along the back's edge
+    const sgn = S.sg[Math.min(N, Math.round((i0 + i1) / 2))];
+    const ripple = (t: number) => (Math.sin(fI(t) / N * WORM_L * k * 5.6) > 0.3 ? 0.22 * k : 0);
+    const backW = (t: number) => R(fI(t) / N) + ripple(t);
+    const bellyW = (t: number) => R(fI(t) / N) * 0.98;
+    const cont = ribbon(pts, sgn < 0 ? backW : bellyW, sgn < 0 ? bellyW : backW, Math.ceil(pL * 3), i0 === 0 ? 0.8 : 0, i1 === N ? 0.8 : 0);
+    F.inflate(cont, 2.0 * k, (x, y) => zAtI(fI(lineDist(pts, x, y, pc)[1])), 1, 0.6 * k, (x, y, _d, _s, o) => {
+      const [, t] = lineDist(pts, x, y, pc);
+      const f = fI(t), u = f / N, i = Math.min(N, Math.round(f));
+      const q = along(pts, t, pc);
+      const off = (x - q.p[0]) * q.n[0] + (y - q.p[1]) * q.n[1];
+      const dors = (off * S.sg[i] * -1) / Math.max(0.4, R(u)); // +1 back .. -1 belly
+      const along2 = u * WORM_L;
+      // the rings: a groove between each, and the papillae on every ring's crest
+      const rp = (along2 * 1.25) % 1;
+      if (rp < 0.32) { o.z -= 0.28 * k; o.t -= 0.05; }
+      else if (hh(Math.floor(along2 * 1.25), Math.floor((dors + 2) * 2.2), 61) < 0.3) { o.z += 0.12 * k; o.t += 0.12; }
+      // the head: rounded, the rings fine and close
+      if (u < 0.05) { o.m = dors > -0.3 ? M.back : M.teal; return; }
+      const cell = (along2 - 0.6) / 2.4, fq = cell - Math.floor(cell);
+      if (dors > 0.55 && u < 0.96) {
+        // the dark stripe down the back, an orange diamond in it every few rings, its edges glowing
+        const dw = 0.5 - Math.abs(fq - 0.5);
+        if (u > 0.08 && u < 0.92 && dw > 0.3 && dors > 0.7) { o.m = M.diamond; o.t += 0.06; return; }
+        o.m = M.stripe;
+        return;
+      }
+      if (dors > 0.05) { o.m = M.back; if (dw2(fq) && u > 0.08 && u < 0.92) o.t += 0.1; return; }
+      // indigo melting into blue-green down the flank (dithered on the line), the pale underside
+      if (dors > -0.12 || (dors > -0.26 && ((Math.floor(x) + Math.floor(y)) & 1) === 0)) { o.m = M.back; return; }
+      o.m = dors > -0.62 ? M.teal : M.under;
+    }, 0.6);
+  }
+  // the head: a crease where the head lobe meets the first ring; the oral papillae either side of the mouth
+  if (!P.curl) {
+    F.groove([at(S, R, 0.055, 0.9), at(S, R, 0.06, 0.1), at(S, R, 0.055, -0.8)], 0.5 * k, 0.25, 0, -0.05);
+    const pap = at(S, R, 0.012, -0.55);
+    const pc: V2 = [pap[0] + F0[0] * (0.7 + P.jet * 0.6) * k, pap[1] + F0[1] * 0.7 * k + 0.4];
+    const pp = spline([[pc[0] - 0.9 * k, pc[1] - 0.6 * k], [pc[0] + 0.3 * k, pc[1] - 0.8 * k], [pc[0] + 1.0 * k, pc[1] - 0.1 * k], [pc[0] + 0.4 * k, pc[1] + 0.7 * k], [pc[0] - 0.7 * k, pc[1] + 0.5 * k]], 3, true);
+    F.inflate(pp, 0.7 * k, zTop - 1, 5, 0, (_x, _y, _d, _s, o) => { o.m = M.papilla; });
+  }
+  F.emit({ seam: 0.8, seamDark: 0.25, ao: 0.08, aoR: 2, shadow: 0.12, shadowR: 5, contrast: 0.9, drop: 1.6 });
+  sk.np();
+  for (const f of legCols) f();
 
-  // ---- the head: a tiny eye at the base of the antenna, the oral papillae either side of the mouth
+  // ---- the eye at the base of the antenna, the antennae
   const eye = at(S, R, 0.07, 0.42);
   if (!P.curl) {
+    antenna([ab[0] - 0.7, ab[1] - 0.9], false);
     sk.over(eye[0], eye[1], hex('#04050a'));
-    const pap = at(S, R, 0.012, -0.55);
-    sk.np();
-    sk.ell(pap[0] + F[0] * (0.7 + P.jet * 0.5) * k, pap[1] + F[1] * 0.7 * k + 0.3, 0.75 * k, 0.6 * k, M.papilla, { z: zTop - 1 });
     antenna(ab, true);
   } else {
     // rolled up: the legs folded in, their pale feet ringing the hole in the middle; the head tucked against
@@ -628,11 +673,11 @@ function wdraw(sk: Sk, anim: string, frame: number, _eye: BeastEye, juv: boolean
     for (let u = 0.08; u < 0.97; u += 0.055) {
       const ang = CURL_A0 - u * TAU * 0.93, r = (2.5 + u * 1.1) * k - R(u) * 0.95;
       if (r < 0.6) continue;
-      sk.over(Math.cos(ang) * r, cy + Math.sin(ang) * r, Math.floor(u * 18) % 2 ? hex('#8e8cb0') : hex('#2a5f86'));
+      sk.over(Math.cos(ang) * r, cy + Math.sin(ang) * r, Math.floor(u * 18) % 2 ? hex('#a8a6c8') : hex('#2e6482'));
     }
     const c = S.p[0], e = at(S, R, 0.06, 0.45);
     sk.over(e[0], e[1], hex('#04050a'));
-    antenna([c[0] + F[0] * 0.8, c[1] + F[1] * 0.8 - 0.5], true);
+    antenna([c[0] + F0[0] * 0.8, c[1] + F0[1] * 0.8 - 0.5], true);
   }
 
   // ---- the prey: a wētā glued down in a net of slime, the head bent over it, working
@@ -654,7 +699,7 @@ function wdraw(sk: Sk, anim: string, frame: number, _eye: BeastEye, juv: boolean
   // ---- the slime jets: two fine sticky strands thrown forward from the papillae in wiggling arcs that cross
   if (P.jet > 0) {
     const pap = at(S, R, 0.012, -0.55);
-    const q0: V2 = [pap[0] + F[0] * 1.4 * k, pap[1] + 0.4];
+    const q0: V2 = [pap[0] + F0[0] * 1.6 * k, pap[1] + 0.4];
     const full = Math.max(1, WORM_REACH - q0[0]), reach = full * P.jet;
     for (let s = 0; s < 2; s++) {
       const sgn = s ? -1 : 1;
@@ -680,6 +725,8 @@ function wdraw(sk: Sk, anim: string, frame: number, _eye: BeastEye, juv: boolean
   }
   return { head: [head[0], head[1] - 5 * k] as V2, eye };
 }
+/** the band either side of a diamond, where its orange glows into the indigo */
+const dw2 = (fq: number) => fq > 0.3 && fq < 0.7;
 
 export const NGAOKEOKE: SpeciesDef = {
   name: 'Ngaokeoke', kind: 'other', len: 16, height: 6,
