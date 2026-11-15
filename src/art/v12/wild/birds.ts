@@ -22,11 +22,26 @@
 // two beats), perch, fly (broad, soft, silent wings), pounce (dropping on prey, talons thrown forward),
 // sleep.
 //
+// How they are painted (on the relief layer, beasts-relief.ts, with ./wildbird-kit.ts): never balls and
+// tubes. Each mass is one continuous contour through anatomical landmarks that follow the pose: the kea's
+// body and tail in one (breast, belly, vent, the square tail with its black band, rump, mantle), its head
+// and neck in another (crown, forehead, the face, chin and throat flowing into the breast), the long
+// hooked bill as two mandibles of its own; the folded wing a third contour from the bend to the primary
+// tips over the tail, its tracts in steps (scaled bronze coverts, black-tipped secondaries, blue-edged
+// primaries). The ruru: broad shoulders tapering into a short barred tail, the big flat-crowned head set
+// straight on them (its shadow across the breast), the folded wing with its white scapular spots, the
+// face in hand-placed pixels. Spread wings are one contour each (wildbird-kit cwing): leading edge, the
+// fingertips, the scalloped trailing edge, the covert rows and flight feathers inside.
+//
 // All anchors are at the feet (or the hollow's lip): the flight frames too, so a bird lands without a jump.
 
-import { Sk, V2, Px, rmp, SpeciesDef, BeastEye, TAU, hh, ik2, cbez } from '../../beasts-core';
+import { Sk, V2, rmp, SpeciesDef, BeastEye, TAU, hh, ik2 } from '../../beasts-core';
 import { Frame2 } from '../../beasts-rig';
-import { spreadWing, WingPose, WingLook } from '../../beasts-bird';
+import type { WingPose } from '../../beasts-bird';
+import { Relief, spline } from '../../beasts-relief';
+import type { LM } from '../../beasts-relief';
+import { cwing, cell2 } from './wildbird-kit';
+import type { CWingLook, WFill } from './wildbird-kit';
 import { hex } from '../../color';
 import type { C } from '../../color';
 
@@ -39,40 +54,6 @@ function inv(F: Frame2, x: number, y: number): V2 {
   const c = Math.cos(F.a), s = Math.sin(F.a);
   const lx = dx * c + dy * s, ly = -dx * s + dy * c;
   return [lx / (F.k * F.mx), ly / F.k];
-}
-
-/**
- * Scaled plumage: a jittered, staggered field of overlapping feathers whose tips point back and down.
- * Returns 2 on a dark tip crescent, 1 just inside it (the lit sheen of the feather), 0 elsewhere.
- */
-function featherTip(lx: number, ly: number, cw: number, ch: number, seed: number, w = 0.24): number {
-  const gy = Math.floor(ly / ch);
-  let d1 = 1e9, d2 = 1e9, c1x = 0, c1y = 0;
-  for (let j = -1; j <= 1; j++) {
-    const ry = gy + j;
-    const off = (ry & 1) * 0.5;
-    const gx = Math.floor(lx / cw - off);
-    for (let i = -1; i <= 1; i++) {
-      const rx = gx + i;
-      const cx = (rx + off + 0.5 + (hh(rx + 50, ry + 50, seed) - 0.5) * 0.4) * cw;
-      const cy = (ry + 0.5 + (hh(rx + 50, ry + 50, seed + 1) - 0.5) * 0.3) * ch;
-      const d = Math.hypot((lx - cx) / cw, (ly - cy) / ch);
-      if (d < d1) { d2 = d1; d1 = d; c1x = cx; c1y = cy; } else if (d < d2) d2 = d;
-    }
-  }
-  const tip = (lx - c1x) * -0.5 / cw + (ly - c1y) * 0.86 / ch;
-  if (d2 - d1 < w && tip > 0.02) return 2;
-  if (d2 - d1 < w * 2.4 && tip > 0.1) return 1;
-  return 0;
-}
-
-/** scale rows (wing coverts): staggered rows of rounded feathers; 2 on the dark lower edge of a feather */
-function scaleRow(lx: number, ly: number, cw: number, ch: number): number {
-  const r = Math.floor(ly / ch);
-  const fx = lx / cw + (r & 1) * 0.5;
-  const c = Math.floor(fx);
-  const u = fx - c - 0.5, v = ly / ch - r;
-  return v > 0.58 + u * u * 1.2 ? 2 : 0;
 }
 
 // ================================================================== the Kea
@@ -246,9 +227,9 @@ function kpose(anim: string, f: number, n: number): KP {
 
 function kmats(sk: Sk) {
   return {
-    olive: sk.m(rmp('#526026', { n: 6, dark: 0.55, light: 0.18, warm: 0.35, cool: 0.12 }), { edge: 1 }),
+    olive: sk.m(rmp('#5a6a28', { n: 6, dark: 0.55, light: 0.24, warm: 0.4, cool: 0.12 }), { edge: 1 }),
     breast: sk.m(rmp('#5e5b2a', { n: 6, dark: 0.55, light: 0.18, warm: 0.3, cool: 0.08 }), { edge: 1 }),
-    head: sk.m(rmp('#5a5f30', { n: 6, dark: 0.55, light: 0.2, warm: 0.3, cool: 0.1 }), { edge: 1 }),
+    head: sk.m(rmp('#6a6c30', { n: 6, dark: 0.55, light: 0.26, warm: 0.4, cool: 0.1 }), { edge: 1 }),
     tip: sk.m(rmp('#1e1d10', { n: 3, dark: 0.35, light: 0.22 }), { edge: 0 }),
     bronze: sk.m(rmp('#76702e', { n: 4, dark: 0.45, light: 0.15, warm: 0.4 }), { edge: 0 }),
     cov: sk.m(rmp('#5a6c2a', { n: 6, dark: 0.58, light: 0.26, warm: 0.45, cool: 0.12 }), { edge: 1 }),
@@ -262,7 +243,7 @@ function kmats(sk: Sk) {
     tail: sk.m(rmp('#475424', { n: 6, dark: 0.6, light: 0.16, warm: 0.3, cool: 0.1 }), { edge: 2 }),
     tailTip: sk.m(rmp('#76782e', { n: 5, dark: 0.55, light: 0.22, warm: 0.4 }), { edge: 1 }),
     band: sk.m(rmp('#24261a', { n: 4, dark: 0.45, light: 0.22 }), { edge: 1 }),
-    bill: sk.m(rmp('#2c2c32', { n: 5, dark: 0.5, light: 0.22, cool: 0.3 }), { edge: 1, spec: 0.4 }),
+    bill: sk.m(rmp('#46454e', { n: 5, dark: 0.6, light: 0.32, cool: 0.3 }), { edge: 1, spec: 0.4 }),
     leg: sk.m(rmp('#6a6e76', { n: 5, dark: 0.52, light: 0.3, cool: 0.3 }), { edge: 1 }),
     claw: sk.m(rmp('#26262a', { n: 3, dark: 0.4 }), { edge: 0 }),
     mouth: sk.m(rmp('#3a1c20', { n: 3, dark: 0.4 }), { edge: 0 }),
@@ -271,7 +252,6 @@ function kmats(sk: Sk) {
   };
 }
 
-const KEA_WING: Omit<WingLook, 'fill'> = { arm: 7.4, hand: 6.8, sec: 6.2, prim: 9.6, nS: 6, nP: 6, finger: 0.3, pw: 1.25, sw: 1.35, round: 0.55 };
 const K_EYE: C = hex('#120c08'), K_RING = hex('#8a8670'), K_SHINE = hex('#d8d2bc');
 
 function kdraw(sk: Sk, anim: string, frame: number, eyeSt: BeastEye, juv: boolean) {
@@ -281,8 +261,9 @@ function kdraw(sk: Sk, anim: string, frame: number, eyeSt: BeastEye, juv: boolea
   const M = kmats(sk);
   const b: V2 = [P.b[0] * k, P.b[1] * k];
   const B = P.flip ? new Frame2(b, P.ba + Math.PI, k, -1) : new Frame2(b, P.ba, k, 1);
-  const RX = 5.8, RY = 3.9 * (1 + P.ruffle * 0.08);
+  const RY = 3.9 * (1 + P.ruffle * 0.08), rf = 1 + P.ruffle * 0.1;
   const air = P.feet === 'tuck';
+  const flying = P.wing !== 'fold';
   // ------------------------------------------------ far leg, far wing
   const hip = B.p(0.7, 2.7);
   const legs = (near: boolean) => {
@@ -297,12 +278,19 @@ function kdraw(sk: Sk, anim: string, frame: number, eyeSt: BeastEye, juv: boolea
       foot = P.flip ? B.p(f[0], f[1]) : [f[0] * k, f[1] * k];
     }
     const [knee, end] = ik2(h, foot, 2.3 * k, 2.2 * k, P.flip ? -1 : 1);
-    // feathered thigh, bare grey tarsus
-    sk.tube([h, knee], t => (1.5 - t * 0.4) * k, M.olive, { z, bias });
-    sk.tube([knee, end], 0.62 * k, M.leg, { z: z + 0.3, bias });
+    // the feathered thigh (its own little contour, olive scaled like the flank), the bare grey tarsus
+    const ta = Math.atan2(knee[1] - h[1], knee[0] - h[0]), tc = Math.cos(ta), ts = Math.sin(ta);
+    const tp = (u: number, w: number): LM => [h[0] + tc * u - ts * w, h[1] + ts * u + tc * w, 0];
+    const tl = Math.hypot(knee[0] - h[0], knee[1] - h[1]);
+    const TR = new Relief(sk, Math.min(h[0], knee[0]) - 3, Math.min(h[1], knee[1]) - 3, Math.max(h[0], knee[0]) + 3, Math.max(h[1], knee[1]) + 3);
+    TR.region(spline([tp(-0.6, -1.5 * k), tp(tl * 0.6, -1.2 * k), tp(tl + 0.3, -0.5 * k), tp(tl + 0.3, 0.6 * k), tp(tl * 0.5, 1.4 * k), tp(-0.6, 1.5 * k)], 0.4), {
+      z, R: 1, H: 1.2, id: 1, tex: (p, o) => { o.m = M.olive; if (cell2(p.x, p.y, ta, 1.8, 1.5, 9) === 2) o.m = M.tip; },
+    });
+    TR.emit({ bias, drop: 1 });
+    sk.np();
+    sk.tube([knee, end], 0.6 * k, M.leg, { z: z + 0.3, bias });
     // zygodactyl foot: two toes forward, two back (curled shut in flight and when gripping)
     const curl = air || (near && P.grab) ? 1 : 0;
-    // on its back: the toes splay and grasp at the air
     const grasp = P.flip && !air;
     const fwdA = P.flip ? -0.15 : 0.05, backA = Math.PI - (P.flip ? -0.2 : 0.25);
     const toes: [number, number][] = curl ? [[0.9, 1.2], [1.4, 1.0], [Math.PI - 1.2, 0.9]]
@@ -315,112 +303,154 @@ function kdraw(sk: Sk, anim: string, frame: number, eyeSt: BeastEye, juv: boolea
     }
     return end;
   };
-  const farFoot = legs(false);
-  void farFoot;
-  if (P.wing !== 'fold') kspread(sk, M, b, P.wing[1], -1, k);
+  legs(false);
+  if (flying) kspread(sk, M, b, (P.wing as [WingPose, WingPose])[1], -1, k);
 
-  // ------------------------------------------------ tail: blunt, olive above with a dark band, yellowish below
-  sk.np();
-  const root = B.p(-4.6, 0.3);
+  // ------------------------------------------------ the body and tail: one contour, breast to tail tip to nape
+  const root = B.p(-4.5, 0.2);
   const tA = P.tailA;
   const tEnd: V2 = [root[0] + Math.cos(tA) * P.tailL * k, Math.min(root[1] + Math.sin(tA) * P.tailL * k, air || P.flip ? 99 : -0.6)];
   const tdx = tEnd[0] - root[0], tdy = tEnd[1] - root[1], tl = Math.hypot(tdx, tdy) || 1;
-  for (let i = 0; i < 3; i++) {
-    const side = (i - 1) * (air ? 1.15 : 0.55);
-    const nx = -tdy / tl, ny = tdx / tl;
-    const e: V2 = [tEnd[0] + nx * side * k + (i === 1 ? tdx / tl * 0.4 : 0), tEnd[1] + ny * side * k + (i === 1 ? tdy / tl * 0.4 : 0)];
-    sk.np();
-    sk.blade(root[0], root[1], e[0], e[1], s => Math.max(0.5, (1.05 + s * 0.35) * k * (s > 0.9 ? 1 - (s - 0.9) * 4 : 1)), (q: Px) => {
-      if (q.t > 0.86) return M.tailTip;
-      if (q.t > 0.7) return M.band;
-      return M.tail;
-    }, { z0: -1 + (i === 1 ? 0.6 : 0), z1: -1 + (i === 1 ? 0.6 : 0), curl: 0.3 });
-  }
+  const tux = tdx / tl, tuy = tdy / tl;
+  // the tail's belly side
+  const bd = B.p(0, 1), b0 = B.p(0, 0);
+  let tnx = -tuy, tny = tux;
+  if (tnx * (bd[0] - b0[0]) + tny * (bd[1] - b0[1]) < 0) { tnx = -tnx; tny = -tny; }
+  const T = (u: number, w: number, sh = 0): LM => [root[0] + tux * u + tnx * w * k, root[1] + tuy * u + tny * w * k, sh];
+  const sp = (air ? 1.15 : 0.55);
+  const bl = (x: number, y: number, sh = 0): LM => [...B.p(x, y * rf), sh] as LM;
+  const body: LM[] = [
+    bl(5.0, -1.0), bl(5.5, 0.9), bl(4.4, 2.9), bl(2.2, 3.9), bl(-0.5, 4.1), bl(-2.8, 3.3), bl(-4.3, 2.0),
+    T(0.6, 1.4), T(tl * 0.7, 1.05 + sp * 0.4), T(tl - 0.4, 0.9 + sp * 0.5, 0.5), T(tl + 0.4, 0, 0.3), T(tl - 0.4, -0.9 - sp * 0.5, 0.5), T(tl * 0.6, -1.0 - sp * 0.3), T(0.4, -1.5),
+    bl(-4.8, -1.6), bl(-3.2, -3.3), bl(-0.5, -3.9), bl(2.4, -3.6), bl(4.3, -2.5),
+  ];
+  const R = Relief.full(sk);
+  const rumpShow = P.lift > 0.1 || flying;
+  const BI = (x: number, y: number) => inv(B, x, y);
+  R.region(spline(body, 0.4), {
+    z: 0, R: 3 * k, H: 3.4 * k, id: 1, pow: 0.9,
+    tex: (p, o) => {
+      const su = (p.x - root[0]) * tux + (p.y - root[1]) * tuy;
+      if (su > 0.6) {
+        // the tail: olive, a black band near the end, a yellowish-olive tip; a dark seam down the middle
+        const f = su / tl;
+        const across = (p.x - root[0]) * tnx + (p.y - root[1]) * tny;
+        o.m = f > 0.86 ? M.tailTip : f > 0.68 ? M.band : M.tail;
+        if (Math.abs(across) < 0.35 && f < 0.68) o.t -= 0.1;
+        return;
+      }
+      const [lx, ly] = BI(p.x, p.y);
+      // the rump: orange-scarlet, showing when the wings come up
+      if (rumpShow && lx < -2.4 && ly < -0.6 + (lx + 2.4) * -0.2) { o.m = M.scarlet; if (cell2(lx, ly, Math.PI, 2.2, 1.6, 5) === 2) o.t -= 0.12; return; }
+      // breast and belly: a touch browner; every contour feather tipped black, so it all looks scaled
+      const under = ly > 0.4 - lx * 0.35;
+      const c = under ? cell2(lx, ly, Math.PI * 0.62, 2.6, 2, 11) : cell2(lx, ly, Math.PI * 0.95, 3, 2, 12);
+      o.m = under ? M.breast : M.olive;
+      if (c === 2) { o.m = M.tip; o.t -= 0.06; }
+      else if (c === 1) o.t += 0.06;
+    },
+  });
 
-  // ------------------------------------------------ body
+  // ------------------------------------------------ the neck and head: one contour from the nape over the crown to the chin, into the body
+  const nb = B.p(3.9, -1.5);
+  const hc: V2 = [nb[0] + Math.cos(P.na) * P.nl * k, nb[1] + Math.sin(P.na) * P.nl * k];
+  const H = P.flip ? new Frame2(hc, P.ha + Math.PI, k, -1) : new Frame2(hc, P.ha, k, 1);
+  const hl = (x: number, y: number, sh = 0): LM => [...H.p(x, y), sh] as LM;
+  {
+    const ndx = hc[0] - nb[0], ndy = hc[1] - nb[1], nl2 = Math.hypot(ndx, ndy) || 1;
+    let px = -ndy / nl2, py = ndx / nl2;
+    const hd = H.p(0, 1), h0 = H.p(0, 0);
+    if (px * (hd[0] - h0[0]) + py * (hd[1] - h0[1]) < 0) { px = -px; py = -py; }
+    const nw = 2.5 * k * rf;
+    const nbT = B.p(3.6, -0.6), nbN = B.p(3.0, -2.9);
+    const head: LM[] = [
+      hl(-0.7, -3.0), hl(1.1, -2.75), hl(2.05, -1.9, 0.3), hl(2.25, 0.3), hl(1.5, 2.0), hl(-0.2, 2.7),
+      [nbT[0] + px * nw * 0.3, nbT[1] + py * nw * 0.3, 0], [nbN[0] - px * nw * 0.3, nbN[1] - py * nw * 0.3, 0],
+      hl(-2.8, -0.6), hl(-2.5, -2.3),
+    ];
+    const HI = (x: number, y: number) => inv(H, x, y);
+    R.region(spline(head, 0.4), {
+      z: 1.2 * k, R: 2.2 * k, H: 2.8 * k, id: 2, blend: 1.4 * k,
+      tex: (p, o) => {
+        const [lx, ly] = HI(p.x, p.y);
+        o.m = M.head;
+        // the crown and nape finely scaled; the face plain, the lores a shade darker
+        if (ly < -1.4 || lx < -1.3) { const c = cell2(lx, ly, Math.PI * 0.9, 2, 1.6, 21); if (c === 2) o.m = M.tip; else if (c === 1) o.t += 0.05; }
+        else if (lx > 1.2 && ly < 1.2) o.t -= 0.1;
+        else o.t += 0.06;
+      },
+    });
+  }
   sk.np();
-  sk.ell(b[0], b[1], RX * k, RY * k, (p: Px) => {
-    const [lx, ly] = inv(B, p.x, p.y);
-    // the breast and belly: a touch browner, every feather tipped dark in fine rows
-    if (ly > 0.5 - lx * 0.4) return scaleRow(lx + 9, ly + 9.4, 2.2, 1.7) === 2 && lx > -3 ? M.tip : M.breast;
-    return scaleRow(lx + 9, ly + 9, 2.4, 1.8) === 2 && ly > -1 ? M.tip : M.olive;
-  }, { rot: B.a, rz: RY * k * 0.95 });
-  // the rump: orange-scarlet, only showing when the wings come up
-  if (P.lift > 0.1 || P.wing !== 'fold') {
+  R.emit({ drop: 1.4 * k, seam: 0.8, seamDark: 0.25, ao: 0.05, aoR: 2 });
+
+  // ------------------------------------------------ the bill: a long, narrow hook far overhanging the short lower mandible
+  {
+    const gape = P.open * 0.55;
+    const piv: V2 = [1.9, 0.9];
+    const lowerL: [number, number, number][] = [[1.8, 0.7, 0], [3.0, 1.0, 0], [3.5, 1.6, 0.6], [2.5, 1.95, 0], [1.6, 1.7, 0]];
+    const lw = lowerL.map(([x, y, s2]): LM => { const c = Math.cos(gape), s = Math.sin(gape), dx = x - piv[0], dy = y - piv[1]; return hl(piv[0] + dx * c - dy * s, piv[1] + dx * s + dy * c, s2); });
+    const BR = new Relief(sk, hc[0] - 8 * k, hc[1] - 8 * k, hc[0] + 8 * k, hc[1] + 8 * k);
+    if (P.open > 0.25) {
+      const m: LM[] = [hl(1.9, 0.6), hl(3.6, 0.9), ...lw.slice(1, 3).reverse()];
+      BR.region(spline(m, 0.3), { z: RY * k + 4.6, R: 0.5, H: 0.4, id: 3, tex: M.mouth });
+    }
+    BR.region(spline(lw, 0.3), { z: RY * k + 5, R: 0.7, H: 0.8, id: 4, tex: M.bill });
+    const up: LM[] = [hl(1.6, -1.8), hl(3.4, -1.85 - gape * 0.3), hl(4.8, -1.15 - gape * 0.4), hl(5.5, 0.4 - gape * 0.5), hl(5.25, 2.2 - gape * 0.8), hl(4.45, 3.45 - gape * 1.0, 1),
+      hl(4.25, 1.9 - gape * 0.7), hl(3.5, 0.75), hl(1.8, 0.45)];
+    BR.region(spline(up, 0.3), { z: RY * k + 5.5, R: 0.9, H: 1.2, id: 5, tex: (p, o) => {
+      o.m = M.bill;
+      const [lx, ly] = inv(H, p.x, p.y);
+      // the cere at the base, a dull grey band; a gleam along the culmen
+      if (lx < 2.3) o.t -= 0.12;
+      else if (ly < -1.2 && lx < 4.4) o.t += 0.1;
+    } });
     sk.np();
-    const r = B.p(-3.6, -1.9);
-    sk.ell(r[0], r[1], 2.2 * k, 1.3 * k, M.scarlet, { rot: B.a, z: RY * k + 0.6, rz: 1.2 });
+    BR.emit({ drop: 1, seam: 0.5, seamDark: 0.3 });
+    const ns = H.p(2.0, -1.1);
+    sk.over(Math.floor(ns[0]), Math.floor(ns[1]), hex('#1c1a1e'));
   }
 
-  // ------------------------------------------------ folded wing: scaled coverts, dark-tipped secondaries, dusky primaries over the tail
+  // ------------------------------------------------ the folded wing: one contour from the bend to the primaries' tips over the tail
   if (P.wing === 'fold') {
     const W = B.sub(2.6, -1.9, -P.lift * (P.flip ? -1 : 1));
     const wz = RY * k + 1.2;
-    // the underwing, peeping orange where the wing has come off the body
+    // the orange underwing, peeping where the wing has come off the body
     if (P.lift > 0.1) {
+      const UR = new Relief(sk, b[0] - 14, b[1] - 12, b[0] + 14, b[1] + 12);
+      UR.region(spline([W.p(0, 1.2), W.p(-3, 2.6), W.p(-7, 3.0), W.p(-6.5, 1.6), W.p(-2, 0.6)].map(q => [...q, 0] as LM), 0.4), { z: wz - 0.6, R: 1, H: 1, id: 1, tex: M.orange });
       sk.np();
-      const u = W.p(-3.4, 1.8);
-      sk.ell(u[0], u[1], 3.6 * k, 1.6 * k, M.orange, { rot: W.a, z: wz - 0.4, rz: 1 });
+      UR.emit({ drop: 1 });
     }
-    const taper = (w: number, from: number) => (s: number) => Math.max(0.5, w * k * (s < from ? 1 : 1 - (s - from) / (1 - from) * 0.65));
-    // primaries: the long dusky tips crossing the tail, a blue-green sheen on their outer edges
-    for (let i = 0; i < 2; i++) {
-      sk.np();
-      const a0 = W.p(-3.6, 1.0 + i * 0.7), e = W.p(-12.0 + i * 1.0, 2.2 + i * 0.7);
-      sk.blade(a0[0], a0[1], e[0], e[1], taper(1.2, 0.55), (q: Px) => (q.v < -0.45 && q.t < 0.7 ? M.blue : M.prim), { z0: wz + i * 0.2, z1: wz + i * 0.2, curl: 0.25 });
-    }
-    // secondaries and tertials, stepped, each with a black tip
-    for (let i = 0; i < 3; i++) {
-      sk.np();
-      const a0 = W.p(-1.6 + i * 0.5, 1.4 + i * 0.45), e = W.p(-7.6 + i * 0.9, 2.5 + i * 0.45);
-      sk.blade(a0[0], a0[1], e[0], e[1], taper(1.35, 0.7), (q: Px) => (q.t > 0.84 || (q.v > 0.6 && q.t > 0.5) ? M.tip : M.sec), { z0: wz + 0.8 + i * 0.2, z1: wz + 0.8 + i * 0.2, curl: 0.3 });
-    }
-    // the coverts: rows of olive scales, a bronze gleam where the light catches them
+    const wl = (x: number, y: number, sh = 0): LM => [...W.p(x, y), sh] as LM;
+    const wing: LM[] = [wl(1.0, -0.2), wl(-0.6, -1.0), wl(-4.0, -0.7), wl(-7.6, 0.3), wl(-11.6, 2.0, 0.8), wl(-8.6, 2.9), wl(-5.0, 3.1), wl(-2.0, 2.6), wl(0.7, 1.4)];
+    const WR = new Relief(sk, b[0] - 16, b[1] - 14, b[0] + 16, b[1] + 14);
+    WR.region(spline(wing, 0.35), {
+      z: wz, R: 1.2 * k, H: 1.4 * k, id: 1,
+      tex: (p, o) => {
+        const [lx, ly] = inv(W, p.x, p.y);
+        if (lx < -7.0) {
+          // primaries: dusky, stacked, a blue-green outer web along the top
+          o.m = ly < 0.4 + (lx + 7) * -0.24 ? M.blue : M.prim;
+          o.t -= 0.12;
+          return;
+        }
+        if (lx < -3.2 || ly > 1.6) {
+          // secondaries and tertials: stepped, each tipped black along the lower edge
+          o.m = M.sec;
+          const e = ((lx + 12) / 2) % 1;
+          if (ly > 2.0 + (lx + 4) * -0.06 || (e < 0.22 && ly > 0.8)) o.m = M.tip;
+          return;
+        }
+        // the coverts: rows of olive scales, a bronze gleam where the light catches them
+        const c = cell2(lx, ly, Math.PI + 0.25, 2.5, 1.8, 31);
+        o.m = c === 2 ? M.tip : c === 1 ? M.bronze : M.cov;
+        o.t += 0.08;
+      },
+    });
     sk.np();
-    const cv = W.p(-1.9, 0.9);
-    sk.ell(cv[0], cv[1], 4.3 * k, 2.3 * k, (q: Px) => {
-      const [lx, ly] = inv(W, q.x, q.y);
-      if (scaleRow(lx + 9, ly + 1.2, 2.4, 1.55) === 2) return M.tip;
-      return q.l > 0.86 ? M.bronze : M.cov;
-    }, { rot: W.a + 0.06, z: wz + 1.6, rz: 1.6 });
+    WR.emit({ drop: 1.1, seam: 0.6, seamDark: 0.25 });
   }
-
-  // ------------------------------------------------ neck and head
-  const nb = B.p(3.9, -1.5);
-  const hc: V2 = [nb[0] + Math.cos(P.na) * P.nl * k, nb[1] + Math.sin(P.na) * P.nl * k];
-  sk.np();
-  sk.tube([nb, hc], t => (2.5 - t * 0.3) * k * (1 + P.ruffle * 0.1), (p: Px) => {
-    const [lx, ly] = inv(B, p.x, p.y);
-    return scaleRow(lx + 9, ly + 9, 2.0, 1.5) === 2 && ly > -2.6 ? M.tip : M.olive;
-  }, { z: RY * k * 0.6 });
-  const H = P.flip ? new Frame2(hc, P.ha + Math.PI, k, -1) : new Frame2(hc, P.ha, k, 1);
-  sk.np();
-  const hrx = 3.0, hry = 2.7;
-  sk.ell(hc[0], hc[1], hrx * k, hry * k, (p: Px) => {
-    const [lx, ly] = inv(H, p.x, p.y);
-    // the nape is scaled like the back; the face is plain
-    if (lx < -1.4 && ly > -1.2 && scaleRow(lx + 9, ly + 9, 1.8, 1.4) === 2) return M.tip;
-    return M.head;
-  }, { rot: H.a, rz: hry * k, z: RY * k + 2.5 });
-  const headPart = sk.pid;
-  void headPart;
-
-  // ------------------------------------------------ the bill: a long narrow hook far overhanging the short lower mandible
-  const gape = P.open * 0.55;
-  sk.np();
-  const lo = [H.p(1.7, 0.9), H.p(2.4, 1.3 + gape * 1.6), H.p(3.0, 1.5 + gape * 2.4)];
-  sk.tube(lo, t => (0.62 - t * 0.25) * k, M.bill, { z: RY * k + 5, bias: -0.1 });
-  if (P.open > 0.25) {
-    sk.np();
-    const m0 = H.p(1.8, 0.7), m1 = H.p(2.9, 0.9 + gape * 1.6);
-    sk.tube([m0, m1], 0.55 * k, M.mouth, { z: RY * k + 5.2 });
-  }
-  sk.np();
-  const up = cbez(H.p(1.7, -0.9), H.p(4.0, -1.4 - gape * 0.4), H.p(5.2, 0.4 - gape * 0.6), H.p(4.2, 2.6 - gape * 1.2), 10);
-  sk.tube(up, t => Math.max(0.4, (0.98 - t * 0.7) * k), (q: Px) => (q.t < 0.18 ? M.bill : M.bill), { z: RY * k + 5.5 });
-  // the nostril in the cere
-  const ns = H.p(2.0, -0.8);
-  sk.over(Math.floor(ns[0]), Math.floor(ns[1]), hex('#1c1a1e'));
 
   // ------------------------------------------------ the stolen pouch
   const pouch = (c: V2, rot: number) => {
@@ -454,36 +484,34 @@ function kdraw(sk: Sk, anim: string, frame: number, eyeSt: BeastEye, juv: boolea
 
   // ------------------------------------------------ near leg, near wing
   legs(true);
-  if (P.wing !== 'fold') kspread(sk, M, b, P.wing[0], 1, k);
-  const top = H.p(0, -hry - 1);
+  if (flying) kspread(sk, M, b, (P.wing as [WingPose, WingPose])[0], 1, k);
+  const top = H.p(0, -3.7);
   return { head: [top[0], top[1] - 1] as V2, eye: ep };
 }
 
 type KM = ReturnType<typeof kmats>;
+const KEA_CW: CWingLook = { arm: 7.4, hand: 6.8, sec: 6.4, prim: 9.8, nS: 6, nP: 6, finger: 0.35, round: 0.55 };
 /** a spread kea wing: scaled olive coverts and blue-green primaries above; orange-scarlet coverts below */
 function kspread(sk: Sk, M: KM, b: V2, w: WingPose, side: 1 | -1, k: number) {
-  const W: WingLook = {
-    ...KEA_WING,
-    fill: (p, row, i, under) => {
-      if (under) {
-        // the underwing glows: lift it out of the body's shadow
-        p.l += 0.16;
-        if (row === 'L' || row === 'M') return M.scarlet;
-        if (row === 'G') return M.orange;
-        // flight feathers from below: the secondaries washed orange, the primaries dusky with two
-        // orange-yellow bars, every tip dark
-        if (p.t > 0.8) return M.underF;
-        if (row === 'S') return p.t < 0.62 ? M.orange : M.bar;
-        if ((p.t > 0.16 && p.t < 0.32) || (p.t > 0.46 && p.t < 0.6)) return M.bar;
-        return M.underF;
-      }
-      if (row === 'P') return p.v < -0.3 && p.t < 0.8 ? M.blue : M.prim;
-      if (row === 'S') return p.t > 0.86 ? M.tip : M.sec;
-      if (p.t > 0.78) return M.tip;
-      return row === 'L' && p.l > 0.7 ? M.bronze : M.cov;
-    },
+  const fill: WFill = (q, o) => {
+    if (!q.top) {
+      // the underwing glows: the lining orange-scarlet, the flight feathers dusky with orange-yellow bars
+      o.t += 0.14;
+      if (q.tract === 'L' || q.tract === 'M') o.m = M.scarlet;
+      else if (q.tract === 'G') o.m = M.orange;
+      else if (q.u > 0.84) o.m = M.underF;
+      else if (q.tract === 'S') o.m = q.u < 0.62 ? M.orange : M.bar;
+      else o.m = (q.u > 0.2 && q.u < 0.34) || (q.u > 0.48 && q.u < 0.62) ? M.bar : M.underF;
+      if (q.seam) o.t -= 0.18;
+      if (q.rowEdge) o.t -= 0.12;
+      return;
+    }
+    if (q.tract === 'P') o.m = q.v < -0.25 && q.u < 0.82 ? M.blue : M.prim;
+    else if (q.tract === 'S') o.m = q.u > 0.86 ? M.tip : M.sec;
+    else o.m = q.rowEdge ? M.tip : q.tract === 'L' ? M.bronze : M.cov;
+    if (q.seam) o.t -= 0.16;
   };
-  spreadWing(sk, b, [2.0 * k, 1.4 * k, side * 1.8 * k], W, w, side, k, side < 0 ? -0.16 : -0.18);
+  cwing(sk, b, [2.0 * k, 1.4 * k, side * 1.8 * k], KEA_CW, w, side, k, fill, side > 0 ? 7 : -7, side < 0 ? -0.16 : -0.06);
 }
 
 export const KEA: SpeciesDef = {
@@ -591,11 +619,12 @@ function rpose(anim: string, f: number, n: number): RP {
 function rmats(sk: Sk) {
   return {
     brown: sk.m(rmp('#53321d', { n: 6, dark: 0.55, light: 0.2, warm: 0.35, cool: 0 }), { edge: 1 }),
+    breast: sk.m(rmp('#6c4628', { n: 6, dark: 0.55, light: 0.24, warm: 0.4, cool: 0 }), { edge: 1 }),
     back: sk.m(rmp('#422616', { n: 6, dark: 0.55, light: 0.2, warm: 0.3, cool: 0 }), { edge: 1 }),
     disc: sk.m(rmp('#3c2618', { n: 5, dark: 0.5, light: 0.2, cool: 0 }), { edge: 1 }),
     buff: sk.m(rmp('#c49c68', { n: 5, dark: 0.45, light: 0.25, warm: 0.35, cool: 0 }), { edge: 0 }),
     white: sk.m(rmp('#e4d8bc', { n: 4, dark: 0.3, light: 0.3, cool: 0 }), { edge: 0 }),
-    wing: sk.m(rmp('#4a2b1a', { n: 6, dark: 0.55, light: 0.2, warm: 0.3, cool: 0 }), { edge: 2 }),
+    wing: sk.m(rmp('#3e2414', { n: 6, dark: 0.55, light: 0.22, warm: 0.3, cool: 0 }), { edge: 2 }),
     bar: sk.m(rmp('#a07a50', { n: 5, dark: 0.45, light: 0.22, warm: 0.3, cool: 0 }), { edge: 0 }),
     under: sk.m(rmp('#94785a', { n: 5, dark: 0.45, light: 0.2, cool: 0, sat: 0 }), { edge: 1 }),
     tail: sk.m(rmp('#46291a', { n: 5, dark: 0.55, light: 0.2, cool: 0 }), { edge: 2 }),
@@ -609,22 +638,22 @@ const R_COL = {
   eye: hex('#f4c628'), eyeHi: hex('#fde98e'), eyeLo: hex('#c8901a'), pupil: hex('#120a06'),
   brow: hex('#e2d6ba'), browLo: hex('#c4ac84'), disc: hex('#3a2416'), discLo: hex('#2a180e'), bristle: hex('#94785a'),
   lid: hex('#5a3c26'), lash: hex('#22140c'), bill: hex('#3c3634'), billHi: hex('#7c746a'), mouth: hex('#4a1e1a'),
-  spot: hex('#d8caa8'), throat: hex('#e2d6bc'),
+  spot: hex('#d8caa8'), throat: hex('#e2d6bc'), ruff: hex('#a2724a'),
 };
 
 /**
  * The face, pixel by pixel, for each way the head can look. Rows top to bottom from the head centre
  * row - 2; columns from the head centre column - 3. Keys: . leave the head as painted, D disc,
  * d disc shadow, W pale brow, w brow shadow, E an eye cell (painted by its state), B bill, b bill
- * highlight, r bristles beside the bill, s pale spot (crown and nape).
+ * highlight, r bristles beside the bill, s pale spot (crown and nape), f the pale rufous ruff framing the disc.
  */
 const mirrorFace = (m: string[]) => m.map(r => r.split('').reverse().join(''));
 const FACE_L3 = [
   '....s..',
   'ww.ww..',
-  'EWEED..',
-  'EBEEd..',
-  'rbrd...',
+  'EWEEDf.',
+  'EBEEdf.',
+  'rbrff..',
 ];
 const FACE_L = [
   '.....s.',
@@ -637,9 +666,9 @@ const FACES: Record<Yaw, string[]> = {
   F: [
     '..s..s.',
     '.ww.ww.',
-    'DEEWEED',
-    'DEEBEED',
-    '.drbrd.',
+    'fEEWEEf',
+    'fEEBEEf',
+    '.frbrf.',
   ],
   L3: FACE_L3,
   L: FACE_L,
@@ -691,68 +720,109 @@ function rdraw(sk: Sk, anim: string, frame: number, eyeSt: BeastEye, juv: boolea
   legs(false);
   if (P.wing !== 'fold') rspread(sk, M, b, P.wing[1], -1, k);
 
-  // ------------------------------------------------ tail: brown, crossed by narrow pale bars
-  sk.np();
-  const tr = B.p(-rx * 0.55, ry * 0.55);
+  // ------------------------------------------------ body and tail: one contour, broad shoulders, the round breast, the short barred tail
+  const tr = B.p(-rx * 0.62, ry * 0.5);
   const tA = B.ang(P.tailA);
   const tl = (air ? 5.2 : 5.6) * k;
-  const te: V2 = [tr[0] + Math.cos(tA) * tl, tr[1] + Math.sin(tA) * tl];
-  sk.blade(tr[0], tr[1], te[0], te[1], s => Math.max(0.6, (1.2 + s * 0.4) * k * (s > 0.88 ? 1 - (s - 0.88) * 3 : 1)), (q: Px) => (fr(q.t * 3.2 + 0.1) < 0.24 && q.t > 0.25 ? M.bar : M.tail), { z0: -1.5, z1: -1.5, curl: 0.3 });
-
-  // ------------------------------------------------ body: a chocolate back, the breast streaked buff and white
+  const tux = Math.cos(tA), tuy = Math.sin(tA);
+  // the tail's belly side
+  const bdn = B.p(0, 1), bo = B.p(0, 0);
+  let tnx = -tuy, tny = tux;
+  if (tnx * (bdn[0] - bo[0]) + tny * (bdn[1] - bo[1]) < 0) { tnx = -tnx; tny = -tny; }
+  const T = (u: number, w: number, sh = 0): LM => [tr[0] + tux * u + tnx * w * k, tr[1] + tuy * u + tny * w * k, sh];
+  const bl = (x: number, y: number, sh = 0): LM => [...B.p(x * rx / 3.1, y * ry / 3.6), sh] as LM;
+  const body: LM[] = [
+    bl(1.4, -3.4), bl(2.9, -2.1), bl(3.45, 0), bl(3.0, 2.0), bl(1.9, 3.5), bl(0.3, 4.05), bl(-1.2, 3.7),
+    T(0.8, 1.3), T(tl * 0.75, 1.3), T(tl, 0.6, 0.5), T(tl + 0.2, -0.3, 0.4), T(tl * 0.8, -1.3), T(0.2, -1.6),
+    bl(-3.2, 0.9), bl(-3.3, -1.1), bl(-2.6, -3.0), bl(-0.8, -3.9), bl(0.6, -3.95),
+  ];
+  const R = Relief.full(sk);
+  const BI = (x: number, y: number) => inv(B, x, y);
+  const hc0: V2 = [b[0] + P.h[0] * k, b[1] + P.h[1] * k];
+  R.region(spline(body, 0.35), {
+    z: 0, R: 2.6 * k, H: 3.2 * k, id: 1, pow: 0.85,
+    tex: (p, o) => {
+      const su = (p.x - tr[0]) * tux + (p.y - tr[1]) * tuy;
+      if (su > 1.0) {
+        // the tail: brown, three narrow pale bars
+        const f = su / tl;
+        o.m = fr(f * 3.4 + 0.15) < 0.26 && f > 0.2 ? M.bar : M.tail;
+        return;
+      }
+      const [lx, ly] = BI(p.x, p.y);
+      if (lx > -0.5 + ly * 0.1) {
+        // the breast: warm brown, streaked and blotched: white teardrops up top, buff lower down
+        o.m = M.breast;
+        // the shadow the big head casts across the top of the breast
+        const hy = (p.x - hc0[0]) * 0, under = p.y - (hc0[1] + 2.6 * k) - hy;
+        if (under > -0.6 && under < 1.2 && Math.abs(p.x - hc0[0]) < 3 * k) { o.t -= 0.2; return; }
+        const row = Math.floor((ly + 4) / 2.1), col = Math.floor((lx + (row & 1) * 1.0) / 2.0);
+        const fy = (ly + 4) / 2.1 - row, fx = (lx + (row & 1) * 1.0) / 2.0 - col;
+        // each breast feather: a pale shaft streak widening to a teardrop at its tip, a dark edge below
+        if (hh(row, col, 77) > 0.18 && Math.abs(fx - 0.5) < 0.22 + fy * 0.12 && fy > 0.2 && fy < 0.82) {
+          o.m = ly < -1.4 ? M.white : M.buff;
+          o.t += 0.04;
+        } else if (fy > 0.86) o.t -= 0.1;
+        return;
+      }
+      // the back: darker, unmarked but for the feather edges
+      o.m = M.back;
+      if (cell2(lx, ly, Math.PI * 0.6, 2.4, 1.8, 82) === 2) o.t -= 0.1;
+    },
+  });
   sk.np();
-  const bodyFill = (p: Px) => {
-    const [lx, ly] = inv(B, p.x, p.y);
-    return lx > -0.4 + ly * 0.12 ? M.brown : M.back;
-  };
-  // an owl's shape: broad shoulders as wide as the head, tapering to the belly
-  sk.ell(b[0], b[1], rx * k, ry * k, bodyFill, { rot: B.a, rz: ry * k * 0.9 });
-  const ch = B.p(0.2, -ry * 0.42);
-  sk.ell(ch[0], ch[1], (rx + 0.55) * k, ry * 0.66 * k, bodyFill, { rot: B.a, rz: ry * k * 0.85 });
-  const bodyPart = sk.pid;
-  // the breast: short pale streaks in staggered rows (white up top, buff lower down), painted pixel by pixel
-  for (let r = 0; r < 4; r++) {
-    const ly = -2.0 + r * 1.6;
-    for (let c = 0; c < 2; c++) {
-      const lx = (r & 1 ? 0.4 : 1.3) + c * 1.9;
-      if (hh(r, c, 77) < 0.2) continue;
-      const q = B.p(lx, ly), q2 = B.p(lx, ly + 0.9);
-      sk.paint(q[0], q[1], r < 1 ? M.white : M.buff, 0.05, bodyPart);
-      if (r < 3 && hh(c, r, 78) > 0.45) sk.paint(q2[0], q2[1], M.buff, -0.05, bodyPart);
-    }
-  }
+  R.emit({ drop: 1.2 * k, seam: 0.7, seamDark: 0.25, ao: 0.05, aoR: 2 });
 
-  // ------------------------------------------------ folded wing: dark brown, a line of white scapular spots, barred flight feathers
+  // ------------------------------------------------ folded wing: one contour, chocolate, white scapular spots, the flight feathers barred
   if (P.wing === 'fold') {
-    sk.np();
     const W = B.sub(-0.5, -ry * 0.72, 0);
-    const a0 = W.p(0.3, 0), e0 = W.p(-1.7, ry * 1.8);
-    sk.blade(a0[0], a0[1], e0[0], e0[1], s => Math.max(0.6, (s < 0.5 ? 1.7 + s * 0.8 : 2.1 - (s - 0.5) * 3.2) * k), (q: Px) => (q.t > 0.66 && fr(q.t * 4.6) < 0.22 ? M.bar : M.wing), { z0: ry * k + 1, z1: ry * k + 0.6, curl: 0.35, n: [-0.2, -0.3, 0.93] });
-    const wp = sk.pid;
-    // scapular spots down the front edge of the wing, and a few on the coverts
-    for (const [x, y] of [[0.9, 1.0], [0.5, 2.9], [-1.0, 1.9]] as V2[]) {
-      const q = W.p(x, y);
-      sk.paint(q[0], q[1], M.white, 0.1, wp);
-    }
+    const wl = (x: number, y: number, sh = 0): LM => [...W.p(x, y), sh] as LM;
+    const wing: LM[] = [wl(0.7, -0.3), wl(1.3, 1.6), wl(0.9, 4.0), wl(-1.1, 6.5, 0.8), wl(-2.3, 4.4), wl(-2.0, 1.2), wl(-0.8, -0.5)];
+    const WR = new Relief(sk, b[0] - 10, b[1] - 10, b[0] + 10, b[1] + 10);
+    WR.region(spline(wing, 0.3), {
+      z: ry * k + 0.8, R: 1 * k, H: 1.3 * k, id: 1,
+      tex: (p, o) => {
+        const [lx, ly] = inv(W, p.x, p.y);
+        o.m = M.wing;
+        // the flight feathers' ends: narrow pale bars
+        if (ly > 3.6 && fr(ly * 0.62) < 0.26) o.m = M.bar;
+        // white spots down the scapulars at the front edge, buff ones on the coverts
+        const spots: V2[] = [[0.8, 0.5], [0.7, 2.3], [-0.6, 1.5], [-1.1, 3.0]];
+        spots.forEach(([sx, sy], q) => { if (Math.hypot(lx - sx, ly - sy) < 0.62) o.m = q < 2 ? M.white : M.buff; });
+      },
+    });
+    sk.np();
+    WR.emit({ drop: 1, seam: 0.6, seamDark: 0.25 });
   }
 
-  // ------------------------------------------------ head: round, the face turned to look
-  const nk = B.p(0.4, -ry * 0.85);
-  const hc: V2 = [nk[0] + P.h[0] * k * 0 + (P.h[0] - 0.7) * k, b[1] + (P.h[1] - ry * 0.0) * k - ry * 0 * k];
-  // (head centre: forward/up of the body centre; P.h is relative to the body centre)
-  hc[0] = b[0] + P.h[0] * k; hc[1] = b[1] + P.h[1] * k;
-  void nk;
+  // ------------------------------------------------ head: broad and flat-crowned, set straight on the shoulders, the face turned to look
+  const hc: V2 = [b[0] + P.h[0] * k, b[1] + P.h[1] * k];
   const hrx = 3.4 * (1 + P.ruffle * 0.04), hry = 2.9;
-  // (soft: no dark collar line where the head sits into the shoulders)
-  sk.np(true);
-  sk.ell(hc[0], hc[1], hrx * k, hry * k, (q: Px) => {
-    // throat puffing white under the bill as it calls
-    if (P.puff > 0.2 && q.v > 0.45 && Math.abs(q.u) < 0.55 * P.puff) return M.white;
-    return M.brown;
-  }, { rot: P.roll, rz: hry * k, z: ry * k + 3 });
-  if (P.puff > 0.2) {
-    sk.np();
-    sk.ell(hc[0] + 0.3, hc[1] + hry * k * 0.95, 1.4 * P.puff * k + 0.4, 1.0 * P.puff * k + 0.3, M.white, { z: ry * k + 4.5, rz: 1 });
+  {
+    const c = Math.cos(P.roll), sn = Math.sin(P.roll);
+    const hp = (x: number, y: number, sh = 0): LM => { const X = x * hrx / 3.4 * k, Y = y * hry / 2.9 * k; return [hc[0] + X * c - Y * sn, hc[1] + X * sn + Y * c, sh]; };
+    const head: LM[] = [hp(-3.1, -1.5), hp(-2.3, -2.65), hp(-0.8, -3.15), hp(0.8, -3.15), hp(2.3, -2.65), hp(3.1, -1.5), hp(3.5, 0.1), hp(3.2, 1.5), hp(2.2, 2.6), hp(0, 3.15), hp(-2.2, 2.6), hp(-3.2, 1.5), hp(-3.5, 0.1)];
+    const HR = new Relief(sk, hc[0] - 6, hc[1] - 6, hc[0] + 6, hc[1] + 7);
+    const side = P.yaw === 'K' ? 0 : P.yaw === 'F' ? 0 : P.yaw.startsWith('L') ? -1 : 1;
+    HR.region(spline(head, 0.3), {
+      z: ry * k + 3, R: 2.4 * k, H: 2.8 * k, id: 1,
+      tex: (p, o) => {
+        const dx = p.x - hc[0], dy = p.y - hc[1];
+        const lx = (dx * c + dy * sn) / k, ly = (-dx * sn + dy * c) / k;
+        o.m = M.brown;
+        // throat puffing white under the bill as it calls
+        if (P.puff > 0.2 && ly > 1.6 && Math.abs(lx - side * 0.8) < 1.8 * P.puff) { o.m = M.white; return; }
+        // the ruff: a thin pale rufous rim framing the face from cheek to cheek under the chin
+        if (P.yaw !== 'K' && p.s < 1.05 && ly > -0.6 && lx * (side || 1) > (side ? -1.6 : -9)) { o.m = M.bar; o.t += 0.26; return; }
+        // the facial disc a shade darker and flatter; tiny pale spots over the crown and nape
+        const discX = lx - side * 1.0;
+        if (P.yaw !== 'K' && Math.hypot(discX / 3.0, (ly - 0.4) / 2.3) < 1) { o.m = M.disc; o.z -= 0.4; }
+        else if (ly < -1.4 || P.yaw === 'K') { if (hh(Math.floor(lx * 1.1 + 9), Math.floor(ly * 1.2 + 9), 83) > 0.8) o.m = M.white; }
+      },
+    });
+    if (P.puff > 0.2) HR.region(spline([hp(-1.4 + side, 2.4), hp(1.4 + side, 2.4), hp(1.1 * P.puff + side, 3.5 + P.puff * 0.6), hp(-1.1 * P.puff + side, 3.5 + P.puff * 0.6)], 0.3), { z: ry * k + 4.5, R: 0.8, H: 1, id: 2, tex: M.white });
+    sk.np(true);
+    HR.emit({ drop: 1.1, seam: 0.6, seamDark: 0.2 });
   }
   // the bill in profile sticks out past the head
   if (P.yaw === 'R' || P.yaw === 'L') {
@@ -798,6 +868,7 @@ function rface(sk: Sk, hc: V2, P: RP) {
       else if (ch === 'b') col = C.billHi;
       else if (ch === 'r') col = C.bristle;
       else if (ch === 's') col = C.spot;
+      else if (ch === 'f') col = C.ruff;
       // staring: the outer ends of the brows lift a pixel
       const outerBrow = ch === 'w' && (c === 0 || c === map[r].length - 1 || map[r][c - 1] === '.' || (c > 0 && map[r][c - 1] !== 'w' && map[r][c + 1] === 'w' && c < 3) || (map[r][c + 1] === '.' && c > 3));
       if (col && P.brow > 0 && outerBrow) { sk.overPaint(x, y - 1, C.brow); col = C.disc; }
@@ -827,21 +898,23 @@ function rface(sk: Sk, hc: V2, P: RP) {
 }
 
 type RM = ReturnType<typeof rmats>;
-const RURU_WING: Omit<WingLook, 'fill'> = { arm: 4.8, hand: 4.4, sec: 4.6, prim: 6.0, nS: 5, nP: 5, finger: 0.45, pw: 1.2, sw: 1.35, round: 0.9 };
+const RURU_CW: CWingLook = { arm: 4.8, hand: 4.4, sec: 4.8, prim: 6.2, nS: 5, nP: 5, finger: 0.5, round: 0.9 };
 /** broad, soft owl wings: brown barred buff above with white-spotted coverts; pale and barred below */
 function rspread(sk: Sk, M: RM, b: V2, w: WingPose, side: 1 | -1, k: number) {
-  const W: WingLook = {
-    ...RURU_WING,
-    fill: (p, row, i, under) => {
-      if (under) {
-        if (row === 'P' || row === 'S') return fr(p.t * 3.4 + i * 0.13) < 0.3 ? M.wing : M.under;
-        return M.under;
-      }
-      if (row === 'P' || row === 'S') return fr(p.t * 3.6 + i * 0.11) < 0.26 && p.t > 0.15 ? M.bar : M.wing;
-      return hh(i + 30, row.charCodeAt(0), 17) < 0.35 && p.t > 0.5 ? M.white : M.back;
-    },
+  const fill: WFill = (q, o) => {
+    if (!q.top) {
+      // below: pale buff-grey, the flight feathers crossed by dark bars, a dark patch at the wrist
+      o.t += 0.1;
+      if (q.tract === 'P' || q.tract === 'S') o.m = fr(q.u * 3.4 + q.i * 0.13) < 0.3 ? M.wing : M.under;
+      else o.m = q.tract === 'L' && q.i >= 5 ? M.wing : M.under;
+      if (q.seam) o.t -= 0.15;
+      return;
+    }
+    if (q.tract === 'P' || q.tract === 'S') o.m = fr(q.u * 3.6 + q.i * 0.11) < 0.26 && q.u > 0.15 ? M.bar : M.wing;
+    else o.m = hh(q.i + 30, q.tract.charCodeAt(0), 17) < 0.4 && q.u > 0 && Math.abs(q.v) < 0.5 ? M.white : M.back;
+    if (q.seam || q.rowEdge) o.t -= 0.14;
   };
-  spreadWing(sk, b, [0.6 * k, 1.6 * k, side * 1.6 * k], W, w, side, k, side < 0 ? -0.16 : -0.04);
+  cwing(sk, b, [0.6 * k, 1.6 * k, side * 1.6 * k], RURU_CW, w, side, k, fill, side > 0 ? 6 : -6, side < 0 ? -0.16 : -0.04);
 }
 
 export const RURU: SpeciesDef = {
