@@ -37,19 +37,20 @@ const EYE: EyeSpec = { r: 1.2, iris: hex('#1a0c0c'), lash: hex('#2a1814'), dark:
 
 function mats(sk: Sk) {
   return {
-    fur: sk.m(rmp('#42281f', { n: 7, dark: 0.62, light: 0.4, warm: 0.4, cool: 0.3 }), { edge: 1 }),
-    furD: sk.m(rmp('#3a2420', { n: 6, dark: 0.6, light: 0.36, cool: 0.3 }), { edge: 1 }),
-    furR: sk.m(rmp('#7e4630', { n: 6, dark: 0.6, light: 0.4, warm: 0.4 }), { edge: 1 }),
+    fur: sk.m(rmp('#5c3826', { n: 7, dark: 0.62, light: 0.4, warm: 0.4, cool: 0.3 }), { edge: 1 }),
+    furD: sk.m(rmp('#3a2219', { n: 6, dark: 0.6, light: 0.36, cool: 0.3 }), { edge: 1 }),
+    furR: sk.m(rmp('#8e5638', { n: 6, dark: 0.6, light: 0.4, warm: 0.4 }), { edge: 1 }),
     mane: sk.m(rmp('#d2b48c', { n: 7, dark: 0.55, light: 0.4, warm: 0.3 }), { edge: 1 }),
     maneD: sk.m(rmp('#8a6a50', { n: 6, dark: 0.55, light: 0.35 }), { edge: 1 }),
-    chest: sk.m(rmp('#8e6a52', { n: 6, dark: 0.55, light: 0.38 }), { edge: 1 }),
-    skin: sk.m(rmp('#a87a68', { n: 7, dark: 0.58, light: 0.4, warm: 0.3 }), { edge: 1 }),
-    skinD: sk.m(rmp('#4e302e', { n: 6, dark: 0.55, light: 0.35 }), { edge: 1 }),
-    inner: sk.m(rmp('#a0645c', { n: 6, dark: 0.5, light: 0.34 }), { edge: 0 }),
-    mem: sk.m(rmp('#30201f', { n: 7, dark: 0.55, light: 0.3, warm: 0.2 }), { edge: 1, k: 0.85 }),
-    memL: sk.m(rmp('#5e3830', { n: 6, dark: 0.5, light: 0.3, warm: 0.4 }), { edge: 1, k: 0.85 }),
-    vein: sk.m(rmp('#2a1a1c', { n: 4, dark: 0.45, light: 0.3 }), { edge: 0 }),
-    bone: sk.m(rmp('#8e6c5e', { n: 6, dark: 0.55, light: 0.4 }), { edge: 1 }),
+    chest: sk.m(rmp('#a27c5e', { n: 6, dark: 0.55, light: 0.38 }), { edge: 1 }),
+    skin: sk.m(rmp('#c8988a', { n: 7, dark: 0.58, light: 0.4, warm: 0.3 }), { edge: 1 }),
+    skinD: sk.m(rmp('#6e4642', { n: 6, dark: 0.55, light: 0.35 }), { edge: 1 }),
+    inner: sk.m(rmp('#c87a76', { n: 6, dark: 0.5, light: 0.34 }), { edge: 0 }),
+    earM: sk.m(rmp('#a87a6e', { n: 7, dark: 0.58, light: 0.38, warm: 0.3 }), { edge: 1 }),
+    mem: sk.m(rmp('#2c1a20', { n: 7, dark: 0.55, light: 0.32, warm: 0.2 }), { edge: 1, k: 0.85 }),
+    memL: sk.m(rmp('#7a4840', { n: 6, dark: 0.5, light: 0.32, warm: 0.4 }), { edge: 1, k: 0.85 }),
+    vein: sk.m(rmp('#24141a', { n: 4, dark: 0.45, light: 0.3 }), { edge: 0 }),
+    bone: sk.m(rmp('#d4baa2', { n: 6, dark: 0.55, light: 0.4, at: 3 }), { edge: 1 }),
     claw: sk.m(rmp('#e4d8c4', { n: 5, dark: 0.45, light: 0.35, at: 3 }), { edge: 1 }),
     tooth: sk.m(rmp('#f6f2e6', { n: 4, dark: 0.3, at: 2 }), { edge: 0 }),
     mouth: sk.m(rmp('#6a1a24', { n: 4, dark: 0.45 }), { edge: 0 }),
@@ -93,20 +94,20 @@ function drawHead(sk: Sk, M: M, o0: V2, ha: number, P: HeadP, z: number) {
     const R = new Relief(sk, b[0] - 16 * k, b[1] - 16 * k, b[0] + 16 * k, b[1] + 16 * k);
     const a = ha + fy * (-1.62 + P.ear * 0.4 - (near ? 0 : 0.36));
     const ca = Math.cos(a), sa = Math.sin(a), nx = -sa, ny = ca;
-    const L = 9.4 * k, Wd = 2.9 * k;
+    const L = 10.2 * k, Wd = 3.2 * k;
     const q = (t: number, w: number, sh = 0): LM => [b[0] + ca * t * L + nx * w * Wd * fy, b[1] + sa * t * L + ny * w * Wd * fy, sh];
     // a long ear, broad at the base, the front edge straight, the back edge bellied, the tip rounded
     const ol: LM[] = [q(-0.1, -0.75), q(0.4, -0.85), q(0.8, -0.55), q(1, -0.12, 0.25), q(0.95, 0.35), q(0.7, 0.8), q(0.32, 1.12), q(-0.05, 0.9)];
     const zE = z + (near ? 6 : -5) * k;
     R.region(spline(ol, 0.5), { z: zE, R: 1.1 * k, H: 1.6 * k, id: ID.EAR, tex: (p, o) => {
       const dx = p.x - b[0], dy = p.y - b[1], t = (dx * ca + dy * sa) / L, w = ((dx * nx + dy * ny) / Wd) * fy;
-      o.m = M.skinD;
-      if (near && t > 0.12 && t < 0.86 && w > -0.25 && w < 0.7 * Math.sin(Math.PI * Math.min(1, t))) {
-        o.m = M.skin;
+      // the ear's leathery back, its rim dark; the near ear shows its ribbed, pink inside
+      o.m = near ? M.earM : M.skinD;
+      if (p.s < 0.75) { o.m = M.skinD; o.t -= 0.04; }
+      if (near && t > 0.1 && t < 0.88 && w > -0.3 && w < 0.72 * Math.sin(Math.PI * Math.min(1, t))) {
         // the transverse ridges of the inner ear, pinker in the hollows
-        if (fr(t * 6.5) < 0.34) { o.z += 0.6; } else { o.z -= 0.4; o.m = M.inner; }
+        if (fr(t * 6.5) < 0.34) { o.z += 0.6; o.m = M.earM; } else { o.z -= 0.4; o.m = M.inner; }
       }
-      if (p.s < 0.7) o.t += 0.04;
     } });
     if (near) {
       // the tragus: a small pointed lobe standing in front of the ear opening
@@ -183,8 +184,8 @@ function wingArm(R: Relief, M: M, sh: V2, el: V2, wr: V2, k: number, z: number) 
       // the folded digits as ridges along it, the membrane pleated between them
       const a2 = (p.x - wr[0]) * n2[0] + (p.y - wr[1]) * n2[1];
       const r = fr(a2 / (1.5 * k) + 0.3);
-      o.m = r < 0.16 ? M.bone : M.mem;
-      if (r < 0.16) o.z += 0.4;
+      o.m = r < 0.2 ? M.bone : M.mem;
+      if (r < 0.2) o.z += 0.4;
     } });
     // the claw at the wingtip
     const ct: LM[] = [[tip[0], tip[1], 0], [tip[0] + u[0] * 1.6 * k - n2[0] * 0.6 * k, tip[1] + u[1] * 1.6 * k - n2[1] * 0.6 * k, 0.8], [tip[0] - n2[0] * 0.5 * k, tip[1] - n2[1] * 0.5 * k, 0]];
@@ -204,6 +205,7 @@ function wingArm(R: Relief, M: M, sh: V2, el: V2, wr: V2, k: number, z: number) 
       if (t < 0.55 && dEl > 4 * k) { o.z += strands(p.x, p.y, Math.atan2(el[1] - sh[1], el[0] - sh[0]) + Math.PI, 1.8, 1, 71) * 0.5; o.m = M.fur; return; }
       o.m = M.skin;
       if (fr(dEl * 0.9) < 0.2 && dEl < 7 * k) { o.z -= 0.4; o.m = M.skinD; } // wrinkled skin round the elbow
+      else if (dEl > 7 * k && fr(dEl * 0.35) < 0.12) o.m = M.bone; // the bony shaft catching the light
     } });
     const eb = along(sh, el, 1.02, 0); R.bump(eb[0], eb[1], 1.4 * k, 1.4 * k, 0.8 * k);
   }
@@ -331,7 +333,22 @@ function spreadFolded(R: Relief, M: M, base: V2, up: number, k: number, side: nu
     const a = Math.atan2(p.y - base[1], p.x - base[0]);
     if (fr(a * 9) < 0.08) o.m = M.vein;
   } });
-  for (const t of T) R.line([base, [base[0] + (t[0] - base[0]) * 0.96, base[1] + (t[1] - base[1]) * 0.96]], 0.9 * k, 1 * k);
+  for (const t of T) {
+    const tip: V2 = [base[0] + (t[0] - base[0]) * 0.96, base[1] + (t[1] - base[1]) * 0.96];
+    R.line([base, tip], 0.9 * k, 1 * k);
+    paintBone(R, M, [base, tip], ID.MEM);
+  }
+}
+
+/** paint a thin pale bone along a polyline over the pixels of element `onto` */
+function paintBone(R: Relief, M: M, pts: V2[], onto: number) {
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i], n = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) * 2);
+    for (let s = 0; s <= n; s++) {
+      const q = R.at(a[0] + (b[0] - a[0]) * (s / n), a[1] + (b[1] - a[1]) * (s / n));
+      if (q >= 0 && R.id[q] === onto) R.m[q] = M.bone;
+    }
+  }
 }
 
 /** a tapered bone between two points (a long thin contour with knuckle swellings at both ends) */
@@ -440,13 +457,14 @@ function cloak(R: Relief, M: M, top: V2, bot: V2, wid: number, k: number, br: nu
     // pleats of the folded membrane running down the cloak, veins between them
     const r = fr(a2 / (1.7 * k) + t * 0.6);
     o.m = M.mem;
-    if (r < 0.2) { o.z -= 0.6; o.m = M.vein; } else if (r < 0.45) o.z += 0.3;
-    if (Math.abs(a2) > (wid + br) * 0.75) o.m = M.memL;
+    if (r < 0.2) { o.z -= 0.6; o.m = M.vein; } else if (r < 0.45) { o.z += 0.3; o.m = M.memL; }
+    if (Math.abs(a2) > (wid + br) * 0.8) o.m = M.memL;
   } });
   // the forearms: bony ridges down the front where the wings cross
   for (const s of [-1, 1]) {
     const a = C(0.12, s * 0.42), b = C(thumbsAt, s * 0.32), m = C((0.12 + thumbsAt) / 2, s * 0.55);
     R.line([[a[0], a[1]], [m[0], m[1]], [b[0], b[1]]], 1.2 * k, 1 * k);
+    paintBone(R, M, [[a[0], a[1]], [m[0], m[1]], [b[0], b[1]]], ID.MEM);
     const tb: V2 = [b[0], b[1]];
     const cl: LM[] = [[tb[0] - 0.6 * k, tb[1], 0], [tb[0] + s * 1.6 * k + u[0] * 0.8 * k, tb[1] + u[1] * 2 * k, 0.85], [tb[0] + 0.6 * k, tb[1] + 0.3 * k, 0]];
     R.region(spline(cl, 0.3), { z: 6 * k, R: 0.4, H: 0.6, id: ID.CLAW, tex: M.claw });
@@ -549,7 +567,7 @@ function groundPose(anim: string, f: number, n: number): GP {
     }
   }
   // the elbows ride high behind the head, clear of the ears
-  G.eN = [G.eN[0] - 4, G.eN[1] + 0.5]; G.eF = [G.eF[0] - 4, G.eF[1] + 0.5];
+  G.eN = [G.eN[0] - 2, G.eN[1] + 4]; G.eF = [G.eF[0] - 2.5, G.eF[1] + 4];
   return G;
 }
 
