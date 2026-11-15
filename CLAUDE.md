@@ -74,6 +74,10 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
   landmarks, folds, cast shadows) and per-region texture (fur breaking the edge, scales and scutes,
   wrinkles, patterns), so every few pixels carry detail. Every species gets a distinctive, believable
   design true to its field-guide text. Judge at game scale and against the reference standard.
+  The toolkits for this are `src/art/beasts-relief.ts` (spline outlines through landmarks, shaded from
+  the edge, used by the boneface, monarch and torhopper), `src/art/beasts-hfield.ts` (height fields:
+  the reefback, egg thief and lantern gecko), `src/art/sculpt.ts` (the tiger, cave salamanders) and
+  `src/art/v9/wild/contour.ts` (the small critters). Build new creatures on them.
 - **Never show the player's first-person hands** (user: "never ever show player first person
   hand"). Close-ups show the tools and what they touch, not Mori's hands or sleeves
   (`FIRST_PERSON_HANDS = false` in `src/ui/v12/closeup/hands.ts`, `HANDS3D.enabled = false`).
