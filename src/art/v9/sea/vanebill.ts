@@ -1,16 +1,24 @@
 // Fluting Vanebill: the great glider of the Kittiwake's seas. A white-bodied ocean wanderer with a
-// sooty saddle and upperwings, a tall bony keel ("vane") standing on its hooked bill, paired tube
-// nostrils that end in flute holes (they whistle as it turns into the wind) and wings with THREE
-// locking joints (elbow, wrist and an extra knuckle), each marked by a horny hinge spur on the
-// leading edge. On the water the wings fold into a Z-pack along the back.
+// sooty saddle and upperwings, a tall coral keel ("vane") swept back like a sail on its plated,
+// hooked bill, paired tube nostrils that end in flute holes (they whistle as it turns into the
+// wind) and wings with THREE locking joints (elbow, wrist and an extra knuckle), each marked by a
+// horny hinge spur on the leading edge. On the water the wings fold into a Z-pack along the back.
+//
+// Painted on the Relief layer through the seabird contour kit: the body, neck and head are one
+// lofted contour (heavy albatross chest, thick neck, steep forehead); the bill is a contour of
+// horny plates (the culmen, the side plate, the hooked nail, the lower mandible) with grooves
+// between them; the vane is a separate fin contour with growth ridges and a pale rim; each wing is
+// one contour round a cranked three-joint leading edge, the long arm's scalloped secondaries and
+// the narrow hand of primaries with slotted tips, covert tracts in rows.
 //
 // Flight anims face right with the body centre as anchor; 'bank' runs from underside (frame 0) to
 // back (last frame) so the game can roll it through a soaring loop. Water anims anchor on the
 // waterline under the body.
 
-import { Sk, V2, V3, Px, rmp, drawEye, EyeSpec, BeastEye, SpeciesDef, AnimDef, TAU, hh } from '../../beasts-core';
+import { Sk, V2, V3, rmp, drawEye, EyeSpec, BeastEye, SpeciesDef, AnimDef, TAU, hh, fr } from '../../beasts-core';
 import { hex } from '../../color';
-import { View3, WingShape, WingPose, wing3, body3, ball3, plate3, rows } from './seabird';
+import { View3, WingShape, WingPose } from './seabird';
+import { Relief, LM, Sp, Tx, spline, fringe, loft, loftOutline, loftAt, Station, HeadF, wingFrame, wing, WingLook, WingPx, WingFrame, fan, fanAt, feathers, FT, foldOutline, foldTex, foldMap3, FoldLook, leg, LegLook, clamp, v3add, v3mul, v3norm } from './seabird-kit';
 
 const A = (frames: number, fps: number, loop = true): AnimDef => ({ frames, fps, loop });
 export const VANEBILL_BANK = 9;
@@ -33,31 +41,40 @@ const EYE: EyeSpec = { r: 0.9, iris: hex('#2a1a14'), lash: hex('#2a2426'), ring:
 
 function mats(sk: Sk) {
   return {
-    white: sk.m(rmp('#f1eee6', { n: 6, dark: 0.34, light: 0.6, at: 3 }), { edge: 1 }),
-    saddle: sk.m(rmp('#8c847e', { n: 6, dark: 0.55 }), { edge: 1 }),
+    white: sk.m(rmp('#f1eee6', { n: 7, dark: 0.36, light: 0.6, at: 4, cool: 0.5 }), { edge: 1 }),
+    whiteF: sk.m(rmp('#dcd6cc', { n: 6, dark: 0.4, light: 0.4, cool: 0.5 }), { edge: 1 }),
+    saddle: sk.m(rmp('#8c847e', { n: 6, dark: 0.55, light: 0.35 }), { edge: 1 }),
+    saddleF: sk.m(rmp('#b0a69c', { n: 5, dark: 0.5, light: 0.3 }), { edge: 1 }),
     brow: sk.m(rmp('#6e6666', { n: 5, dark: 0.5 }), { edge: 1 }),
-    wing: sk.m(rmp('#342c2b', { n: 6, dark: 0.6, light: 0.36 }), { edge: 2 }),
-    cov: sk.m(rmp('#62564e', { n: 6, dark: 0.58, light: 0.42 }), { edge: 2 }),
-    mirror: sk.m(rmp('#bdb2a6', { n: 5, dark: 0.45 }), { edge: 1 }),
-    lining: sk.m(rmp('#f5f2eb', { n: 5, dark: 0.3, at: 3 }), { edge: 1, bias: 0.22 }),
-    under: sk.m(rmp('#cfc9c1', { n: 5, dark: 0.4 }), { edge: 1, bias: 0.16 }),
-    margin: sk.m(rmp('#342e2e', { n: 5, dark: 0.5 }), { edge: 1, bias: 0.1 }),
-    tip: sk.m(rmp('#211d1e', { n: 4, dark: 0.5, light: 0.3 }), { edge: 1 }),
-    spur: sk.m(rmp('#eadbb8', { n: 4, dark: 0.45 }), { edge: 0, spec: 0.3 }),
+    wing: sk.m(rmp('#342c2b', { n: 6, dark: 0.6, light: 0.36 }), { edge: 2, bias: -0.16 }),
+    cov: sk.m(rmp('#5a4e47', { n: 6, dark: 0.58, light: 0.4 }), { edge: 2, bias: -0.14 }),
+    covF: sk.m(rmp('#8a7c70', { n: 6, dark: 0.55, light: 0.4 }), { edge: 2, bias: -0.1 }),
+    mirror: sk.m(rmp('#c4b8aa', { n: 5, dark: 0.45, light: 0.35 }), { edge: 1 }),
+    shaft: sk.m(rmp('#a89a8c', { n: 4, dark: 0.45 }), { edge: 0 }),
+    lining: sk.m(rmp('#f5f2eb', { n: 5, dark: 0.3, at: 3, cool: 0.5 }), { edge: 1, bias: 0.28 }),
+    under: sk.m(rmp('#cfc9c1', { n: 5, dark: 0.4 }), { edge: 1, bias: 0.2 }),
+    margin: sk.m(rmp('#342e2e', { n: 5, dark: 0.5, light: 0.3 }), { edge: 1 }),
+    tip: sk.m(rmp('#211d1e', { n: 5, dark: 0.5, light: 0.32 }), { edge: 1 }),
+    spur: sk.m(rmp('#eadbb8', { n: 5, dark: 0.5, light: 0.4 }), { edge: 0, spec: 0.3 }),
     tailT: sk.m(rmp('#7a736e', { n: 5, dark: 0.55 }), { edge: 1 }),
     tailTip: sk.m(rmp('#2c2728', { n: 4, dark: 0.5 }), { edge: 1 }),
-    bill: sk.m(rmp('#d9d2c8', { n: 5, dark: 0.45, light: 0.5 }), { spec: 0.4, edge: 1 }),
-    hook: sk.m(rmp('#8a8e98', { n: 5, dark: 0.5 }), { spec: 0.45 }),
-    keel: sk.m(rmp('#ea7a40', { n: 5, dark: 0.45, light: 0.5 }), { spec: 0.35, edge: 1 }),
+    bill: sk.m(rmp('#e8d8a6', { n: 6, dark: 0.5, light: 0.5, warm: 0.4 }), { spec: 0.45, edge: 1 }),
+    billD: sk.m(rmp('#b09a78', { n: 5, dark: 0.5, light: 0.4 }), { spec: 0.3, edge: 1 }),
+    hook: sk.m(rmp('#5e6474', { n: 5, dark: 0.5, light: 0.5 }), { spec: 0.5 }),
+    gape: sk.m(rmp('#4a3c3a', { n: 4, dark: 0.4, light: 0.3 }), { edge: 0 }),
+    keel: sk.m(rmp('#ea7a40', { n: 6, dark: 0.5, light: 0.45, warm: 0.4 }), { spec: 0.35, edge: 1 }),
+    keelD: sk.m(rmp('#b8482e', { n: 5, dark: 0.5, light: 0.4 }), { edge: 1 }),
     keelRim: sk.m(rmp('#f6dc86', { n: 4, dark: 0.35 }), { edge: 0 }),
-    tube: sk.m(rmp('#c9bfb4', { n: 4, dark: 0.45 }), { spec: 0.3 }),
+    tube: sk.m(rmp('#c9bfb4', { n: 5, dark: 0.5, light: 0.4 }), { spec: 0.35 }),
     hole: sk.m(rmp('#3a2020', { n: 3, dark: 0.4 }), { edge: 0, noRim: true }),
-    mouth: sk.m(rmp('#b0546a', { n: 3, dark: 0.45 }), { edge: 0 }),
-    foot: sk.m(rmp('#d9b6c4', { n: 4, dark: 0.45 }), { edge: 1 }),
-    web: sk.m(rmp('#c89aac', { n: 4, dark: 0.45 }), { edge: 0 }),
+    mouth: sk.m(rmp('#b0546a', { n: 4, dark: 0.45 }), { edge: 0 }),
+    foot: sk.m(rmp('#d9b6c4', { n: 5, dark: 0.45 }), { edge: 1 }),
+    web: sk.m(rmp('#c89aac', { n: 5, dark: 0.45 }), { edge: 1 }),
+    claw: sk.m(rmp('#5a4a4e', { n: 4, dark: 0.45 }), { edge: 0 }),
   };
 }
 type M = ReturnType<typeof mats>;
+const ID = { BODY: 1, HEAD: 2, BILL: 3, JAW: 4, KEEL: 5, TUBE: 6, TAIL: 7, FOLD: 8, WING: 9, SPUR: 11, LEG: 20 };
 
 // wing: humerus, forearm, the extra "vane-hand" segment and the pointed primaries
 const WING: WingShape = {
@@ -68,9 +85,11 @@ const WING: WingShape = {
     { len: 9.5, sweep: -0.1, dih: 0.03, flex: -1.1, shrink: 0.3 },
     { len: 10, sweep: -0.42, dih: -0.03, flex: 0.5, shrink: 0.35 },
   ],
-  chord: [6.6, 7, 6, 4.8, 0.6],
+  chord: [6.8, 7.2, 6.2, 4.6, 0.6],
   spar: 0.75,
 };
+const WL: WingLook = { wrist: 2, nS: 13, scallop: 0.07, nP: 8, slot: 0.35, fingers: 3, rows: [0.1, 0.24, 0.4], spar: 0.95, minW: 1.4, point: 0.75, reach: 0.6 };
+const LEG: LegLook = { tib: 3.2, tar: 3.4, rTib: 0.9, rTar: 0.62, toe: 3.6, foot: 'web', claw: 0.4, feath: 0.6 };
 
 interface Pose {
   sit: boolean;
@@ -183,195 +202,309 @@ function pose(anim: string, f: number, n: number): Pose {
   return p;
 }
 
-// ------------------------------------------------------------------ drawing
+// ------------------------------------------------------------------ wings
 function wingFill(M: M) {
-  return (p: Px, s: number, c: number, top: boolean): number => {
-    // trailing edge: secondaries end in soft scallops on the arm, the hand is a clean pointed blade
-    if (s < 0.62 && c > 0.9) {
-      const notch = Math.abs(((s * 26) % 1) - 0.5) * 2;
-      if (c > 0.9 + notch * 0.12) return 0;
+  return (w: WingPx, o: Tx) => {
+    const nr = WL.rows.length;
+    if (w.top) {
+      if (w.zone < nr) {
+        // covert tracts: dusky brown rows, each with a paler fringe along its trailing border
+        o.m = w.zone === 0 ? M.wing : w.fu > 0.8 && w.edge > 0.2 ? M.covF : M.cov;
+        return;
+      }
+      if (w.hand) {
+        // the vane-hand: a pale knuckle mirror, then the black primaries with pale shafts
+        if (w.s > 0.6 && w.s < 0.73 && w.fu < 0.62) { o.m = w.edge < 0.3 ? M.covF : M.mirror; return; }
+        o.m = w.edge < 0.25 ? M.tip : w.edge > 0.88 && w.fu < 0.7 ? M.shaft : M.wing;
+        if (w.fu > 0.7) o.m = M.tip;
+        return;
+      }
+      o.m = w.edge < 0.3 ? M.tip : M.wing;
+      if (w.fu > 0.85) o.t -= 0.05;
+      return;
     }
-    if (top) {
-      p.l += rows(s * 30 + c * 2, 1, 0.18) * 0.6;
-      // pale knuckle mirror on the vane-hand, dark primaries, dusky coverts toward the leading edge
-      if (s > 0.5 && s < 0.66 && c > 0.25 && c < 0.7) return M.mirror;
-      if (s > 0.74) return M.tip;
-      if (c < 0.32 + (s < 0.5 ? 0.08 : 0)) return M.cov;
-      return M.wing;
+    // underwing: white lining, a black leading-edge band (broad on the hand), a dark trailing
+    // edge and tip, the flight feathers grey with dark shafts
+    if (w.c < 0.1 + (w.hand ? 0.12 : 0.02)) { o.m = M.margin; return; }
+    if (w.hand && (w.s > 0.82 || w.zone === nr && w.fu > 0.55)) { o.m = w.edge < 0.25 ? M.margin : M.tip; return; }
+    if (w.zone === nr) {
+      o.m = w.fu > 0.72 ? M.margin : w.edge < 0.25 ? M.under : M.lining;
+      if (w.hand) o.m = w.edge < 0.3 ? M.margin : M.under;
+      return;
     }
-    // underwing: white lining with a black leading edge band, broad dark trailing edge and tip
-    if (s > 0.8) return M.tip;
-    if (c < 0.11 + s * 0.05) return M.margin;
-    if (c > 0.78 - s * 0.35) { p.l += rows(s * 26, 1, 0.25) * 0.5; return s > 0.55 ? M.margin : M.under; }
-    return M.lining;
+    o.m = w.zone === nr - 1 && w.edge < 0.3 ? M.under : M.lining;
   };
 }
 
-/** the horny hinge spurs on the leading edge at the wrist and the knuckle */
-function spurs(sk: Sk, V: View3, M: M, le: V3[]) {
-  for (const i of [2, 3]) {
-    const a = le[i];
-    const b: V3 = [a[0] + 1.9, a[1] + 0.25, a[2]];
-    const pa = V.s(a), pb = V.s(b);
-    sk.blade(pa[0], pa[1], pb[0], pb[1], s => (1 - s) * 0.7 * V.k + 0.25, M.spur, { z0: pa[2] + 0.8, z1: pb[2] + 0.8 });
+/** the horny hinge spurs on the leading edge at the elbow, wrist and knuckle */
+function spurs(R: Relief, V: View3, M: M, F: WingFrame) {
+  for (const i of [1, 2, 3]) {
+    const a = F.le[i], fwd = v3mul(F.cd[i], -1);
+    const along = v3norm([F.le[i + 1][0] - F.le[i - 1][0], F.le[i + 1][1] - F.le[i - 1][1], F.le[i + 1][2] - F.le[i - 1][2]]);
+    const L = i === 1 ? 1.5 : 2.1;
+    const tip = v3add(v3add(a, v3mul(fwd, L)), v3mul(along, L * 0.45));
+    const b0 = v3add(a, v3mul(along, -0.9)), b1 = v3add(a, v3mul(along, 0.9));
+    const S = (q: V3, sh = 0): LM => { const s = V.s(q); return [s[0], s[1], sh]; };
+    const z = V.s(a)[2] + 0.8;
+    R.region(spline([S(b0), S(v3add(a, v3mul(fwd, 0.5))), S(tip, 0.9), S(b1)], 0.3), { z, R: 0.6, H: 0.6, id: ID.SPUR, tex: (p, o) => {
+      o.m = M.spur;
+      const d = Math.hypot(p.x - V.s(a)[0], p.y - V.s(a)[1]);
+      if (d < 0.9) o.t -= 0.12;
+    } });
   }
+}
+
+// ------------------------------------------------------------------ body, head, bill
+type Loft2 = ReturnType<typeof loft>;
+interface Built { H: HeadF; Lf: Loft2 }
+
+function bodyStations(P: Pose, sit: boolean): { st: Station[]; hc: V3; hf: V3; hu: V3 } {
+  const nk = P.neck;
+  const hc: V3 = sit ? [8.4, 4.4 + nk, 0] : [8.8, 1.3 + nk, 0];
+  const ha = P.headA;
+  const hf: V3 = [Math.cos(ha), -Math.sin(ha), 0], hu: V3 = [Math.sin(ha), Math.cos(ha), 0];
+  const up: V3 = [0, 1, 0];
+  const nu = v3norm(v3add(up, hu));
+  const H = (x: number, y: number): V3 => [hc[0] + hf[0] * x + hu[0] * y, hc[1] + hf[1] * x + hu[1] * y, 0];
+  const st: Station[] = [
+    { c: [-8.8, 0.5, 0], up, ru: 1.4, rl: 1.0, rw: 1.6 },
+    { c: [-6.4, 0.3, 0], up, ru: 2.6, rl: 2.2, rw: 2.9 },
+    { c: [-2.6, 0, 0], up, ru: 3.4, rl: 3.7, rw: 3.9 },
+    { c: [1.4, 0.15, 0], up, ru: 3.3, rl: 4.0, rw: 3.8 },
+    { c: [4.4, 0.55 + (nk + (sit ? 1.4 : 0)) * 0.28, 0], up, ru: 2.6, rl: 3.5, rw: 3.0 },
+    { c: [6.0, 0.95 + (nk + (sit ? 1.4 : 0)) * 0.62, 0], up: nu, ru: 2.0, rl: 2.6, rw: 2.3 },
+    { c: H(-2.3, 0.15), up: hu, ru: 2.45, rl: 2.5, rw: 2.4 },
+    { c: H(-0.6, 0), up: hu, ru: 3.25, rl: 2.6, rw: 2.6 },
+    { c: H(1.2, -0.05), up: hu, ru: 2.9, rl: 2.15, rw: 2.1 },
+    { c: H(2.5, 0.1), up: hu, ru: 1.65, rl: 1.55, rw: 1.3 },
+  ];
+  return { st, hc, hf, hu };
+}
+
+function drawBody(R: Relief, V: View3, M: M, P: Pose, sit: boolean, zb = 0): Built {
+  const { st, hc, hf, hu } = bodyStations(P, sit);
+  const Lf = loft(V, st);
+  const H = new HeadF(V, hc, hf, hu);
+  const head0 = st.length - 4;
+  const outline = loftOutline(Lf, { head: 0.4, tail: 0.8 });
+  const poly = fringe(spline(outline, 0.5), 2.4, 31, (_x, _y, nx, ny) => (ny > 0.55 ? [0.7, 0.5] : nx < -0.6 ? [0.6, 0] : null));
+  R.region(poly, {
+    zAt: () => LHz + zb, R: 3.4, H: 3.6, id: ID.BODY,
+    tex: (p: Sp, o: Tx) => {
+      const h = loftAt(Lf, p.x, p.y);
+      LHz = h.z;
+      const seg = Math.min(Lf.n - 2, Math.floor(h.f));
+      const ang = Math.atan2(Lf.s[seg][1] - Lf.s[seg + 1][1], Lf.s[seg][0] - Lf.s[seg + 1][0]);
+      o.z += feathers(p.x, p.y, ang, 2.3, 1.7, 11) * 0.55;
+      const fringeE = FT.edge;
+      o.m = M.white;
+      // the sooty saddle across the back between the wings, frayed at its edge
+      const sad = 0.48 + (h.f > 3 ? (h.f - 3) * 0.35 : 0) + (FT.col & 1) * 0.06;
+      if (h.f < 4.6 && h.dors > sad) o.m = fringeE === 0.5 ? M.saddleF : M.saddle;
+      else if (fringeE === 1 && h.dors > -0.2) o.m = M.whiteF;
+      if (h.f >= head0 - 0.4) {
+        // the dusky brow smudge over and behind the eye: the stern look
+        const [hx, hy] = H.local(p.x, p.y);
+        if (h.lat > 0.15 && hy < -0.25 && hy > -2.1 + hx * 0.15 && hx < 1.2 && hx > -2.8) o.m = M.brow;
+      }
+      if (h.v < -0.6) o.t -= 0.03;
+    },
+  });
+  // the keeled breast and the shoulder
+  const br = V.s([2, -2, 2]); R.bump(br[0], br[1], 4, 3, 0.9, 0, ID.BODY);
+  const ne = V.s([5, 1.4 + P.neck * 0.4, 2]); R.bump(ne[0], ne[1], 2.2, 2, -0.5, 0, ID.BODY);
+  return { H, Lf };
+}
+let LHz = 0;
+
+function drawBill(R: Relief, H: HeadF, M: M, P: Pose) {
+  const open = P.open;
+  const z0 = H.zOf(4, 0, 0);
+  // lower mandible: hinged at the gape, drops with the gape
+  const oa = open * 0.32, co = Math.cos(oa), so = Math.sin(oa);
+  const J = (x: number, y: number, sh = 0): LM => { const dx = x - 2.3, dy = y - 0.6; return H.s(2.3 + dx * co - dy * so, 0.6 + dx * so + dy * co, 0, sh); };
+  R.region(spline([J(2.2, 0.75), J(6, 0.8), J(9.3, 0.85), J(10.3, 1.1, 0.8), J(9.8, 1.6, 0.3), J(6.6, 2.0, 0.3), J(3.6, 2.2), J(2.0, 1.9)], 0.4), {
+    z: z0 + 1.2, R: 0.7, H: 0.9, id: ID.JAW, tex: (p, o) => {
+      const [hx] = H.local(p.x, p.y);
+      const [, hy] = H.local(p.x, p.y);
+      o.m = hx > 9.3 ? M.hook : hx < 3.2 ? M.billD : M.bill;
+      if (fr(hx * 0.9) < 0.12 && hx < 9) o.z -= 0.25;
+      if (hy < 0.85 + open * (hx - 2.3) * 0.33) o.m = M.gape;
+    },
+  });
+  if (open > 0.2) {
+    R.region(spline([H.s(2.4, 0.6), H.s(9, 0.5), J(9, 0.7), J(3, 0.75)], 0.4), { z: z0 + 1.0, R: 0.4, H: 0.2, id: ID.HEAD, tex: M.mouth });
+  }
+  // upper mandible: plated, a groove along the side plate, a deep dark hooked nail
+  R.region(spline([H.s(1.9, -1.6), H.s(4.6, -1.4), H.s(7.6, -1.05), H.s(9.7, -0.75), H.s(10.9, 0.0), H.s(11.2, 1.55, 0.9), H.s(10.4, 1.0, 0.4), H.s(9.4, 0.45), H.s(6, 0.35), H.s(2.6, 0.62), H.s(1.8, 0.2)], 0.4), {
+    z: z0 + 1.6, R: 0.9, H: 1.3, id: ID.BILL, tex: (p, o) => {
+      const [hx, hy] = H.local(p.x, p.y);
+      o.m = hx > 9.45 ? M.hook : hx < 2.8 ? M.billD : M.bill;
+      // the side plate's groove (latericorn) and the nail's groove
+      if (Math.abs(hy - (-0.35 + hx * 0.03)) < 0.28 && hx > 3.4 && hx < 9.3) { o.z -= 0.5; o.m = M.billD; }
+      if (Math.abs(hx - 9.45) < 0.3) { o.z -= 0.45; o.m = M.billD; }
+      // the cutting edge: a dark line along the commissure
+      if (hy > 0.05 + (hx > 9.4 ? (hx - 9.4) * 0.5 : 0) && hx < 10.4) o.m = M.gape;
+    },
+  });
+}
+
+/** the vane: a coral keel swept back like a sail on the culmen, with growth ridges and a pale rim */
+function drawKeel(R: Relief, H: HeadF, M: M) {
+  const K: LM[] = [H.s(3.6, -1.4), H.s(3.25, -3.2), H.s(2.85, -5.3), H.s(2.7, -7.0, 0.85), H.s(3.75, -6.1), H.s(5.0, -4.3), H.s(6.3, -2.6), H.s(7.7, -1.3, 0.4)];
+  const zk = H.zOf(4, -2, 0) + 2.2;
+  const lead = [H.s2(2.7, -7.0), H.s2(3.75, -6.1), H.s2(5.0, -4.3), H.s2(6.3, -2.6), H.s2(7.7, -1.3)];
+  const root = H.s2(4.8, -1.1);
+  R.region(spline(K, 0.35), { z: zk, R: 0.8, H: 0.7, id: ID.KEEL, tex: (p, o) => {
+    // bony growth ridges fanning up from the root, a pale rim on the leading edge
+    const a = Math.atan2(p.y - root[1], p.x - root[0]);
+    const r = Math.hypot(p.x - root[0], p.y - root[1]);
+    o.m = M.keel;
+    if (fr(a * 3.2) < 0.22) { o.z -= 0.4; o.m = M.keelD; }
+    if (r < 1.6) o.m = M.keelD;
+    let dl = Infinity;
+    for (let i = 1; i < lead.length; i++) {
+      const s = lead[i - 1], e = lead[i], ex = e[0] - s[0], ey = e[1] - s[1], LL = ex * ex + ey * ey || 1;
+      let k = ((p.x - s[0]) * ex + (p.y - s[1]) * ey) / LL; k = k < 0 ? 0 : k > 1 ? 1 : k;
+      dl = Math.min(dl, Math.hypot(p.x - s[0] - ex * k, p.y - s[1] - ey * k));
+    }
+    if (dl < 0.8) { o.m = M.keelRim; o.z += 0.3; }
+  } });
+  // paired tube nostrils at the keel's foot, ending in dark flute holes
+  if (H.facing(0)) {
+    const t0 = H.s2(2.4, -1.0, 0.7), t1 = H.s2(5.0, -1.15, 0.7);
+    R.tube([t0, t1], t => 0.72 - t * 0.12, { z: H.zOf(3.5, -1, 1.2) + 2.4, id: ID.TUBE, tex: (p, o) => { o.m = p.t > 0.86 ? M.hole : M.tube; if (fr(p.s / 1.2) < 0.25) o.z -= 0.2; } });
+  }
+}
+
+/** the short wedge of a tail in the horizontal plane */
+function drawTail(R: Relief, V: View3, M: M, P: Pose, root: V3, zb = 0) {
+  const ct = Math.cos(P.tail), stl = Math.sin(P.tail);
+  const back: V3 = [-ct, -stl, 0];
+  const F = fan(V, root, back, [0, 0, 1], 9, 0.95 * P.fan, t => 6 * P.fan ** 0.25 * (1 - Math.abs(t - 0.5) * 0.55), { minW: 1.3, notch: 0.1, base: 1.4, point: 0.55 });
+  const z = V.s(root)[2] - 1 + zb;
+  R.region(spline(F.poly, 0.4), { z, R: 1, H: 1.2, id: ID.TAIL, tex: (p, o) => {
+    const q = fanAt(F, p.x, p.y);
+    o.m = q.u > 0.74 ? M.tailTip : V.faces([0, 1, 0]) ? M.tailT : M.white;
+    if (q.edge < 0.3) o.z -= 0.35;
+  } });
+}
+
+function drawFoot(R: Relief, V: View3, M: M, P: Pose, side: 1 | -1) {
+  const hip = V.s([-3.2, -1.4, side * 1.4]);
+  let toe: V3;
+  if (P.feet === 'tuck') toe = [-11.6, -0.6, side * 1.2];
+  else if (P.feet === 'brake') toe = [2.2, -8.2, side * 2.6];
+  else {
+    const ph = P.run + (side > 0 ? 0 : 0.5);
+    toe = [-2 + Math.cos(ph * TAU) * 4, -8.6 + Math.max(0, Math.sin(ph * TAU)) * 2.5, side * 2];
+  }
+  const f = V.s(toe);
+  const ta = P.feet === 'tuck' ? Math.atan2(V.s([-12.5, -0.6, 0])[1] - V.s([-10, -0.6, 0])[1], V.s([-12.5, -0.6, 0])[0] - V.s([-10, -0.6, 0])[0]) : P.feet === 'brake' ? 0.5 : 0.9 - Math.sin((P.run + (side > 0 ? 0 : 0.5)) * TAU) * 0.6;
+  leg(R, [hip[0], hip[1]], [f[0], f[1]], LEG, { tib: M.white, leg: M.foot, toe: M.foot, web: M.web, claw: M.claw }, (hip[2] + f[2]) / 2, 1, { ta, spread: P.feet === 'tuck' ? 0.3 : 1, bend: P.feet === 'tuck' ? -1 : 1 }, ID.LEG);
 }
 
 function drawFlight(sk: Sk, M: M, P: Pose, eye: BeastEye): { head: V2; eye: V2 } {
   const V = new View3(P.bank, P.pitch, P.yaw, [0, 0], 1);
   const wf = wingFill(M);
-  // far wing first
-  const fw = wing3(sk, V, WING, P.wings[1], -1, wf, { bias: -0.12, spar: top => (top ? M.cov : M.margin) });
-  spurs(sk, V, M, fw.le);
-  // feet: tucked with the toes just past the tail (a tubenose trait), thrown forward to brake, or running
-  const drawFoot = (side: 1 | -1) => {
+  // far wing and its spurs
+  {
+    const R = Relief.full(sk);
+    const F = wingFrame(WING, P.wings[1], -1);
+    wing(R, V, F, WL, wf, { id: ID.WING, lt: -0.08 });
+    spurs(R, V, M, F);
     sk.np();
-    const hip: V3 = [-3.5, -1.8, side * 1.4];
-    let toe: V3;
-    if (P.feet === 'tuck') toe = [-11.2, -0.9, side * 1.2];
-    else if (P.feet === 'brake') toe = [2.5, -8.5, side * 2.8];
-    else {
-      const ph = P.run + (side > 0 ? 0 : 0.5);
-      toe = [-2 + Math.cos(ph * TAU) * 4, -9 + Math.max(0, Math.sin(ph * TAU)) * 2.5, side * 2];
-    }
-    const a = V.s(hip), b = V.s(toe);
-    sk.tube([[a[0], a[1]], [b[0], b[1]]], 0.62, M.foot, { z: t => a[2] + (b[2] - a[2]) * t, bias: side < 0 ? -0.12 : 0 });
-    // webbed foot fanned open
-    const w1: V3 = P.feet === 'tuck' ? [-12.8, -0.6, side * 1.9] : [toe[0] + 1.6, toe[1] - 0.6, toe[2] + side * 1.4];
-    const w2: V3 = P.feet === 'tuck' ? [-12.9, -1.3, side * 0.5] : [toe[0] + 1.8, toe[1] + 0.4, toe[2] - side * 1];
-    plate3(sk, V, [toe, w1, w2], () => M.web, [0, 1, 0]);
-  };
-  // tucked feet only show from below
+    R.emit({ drop: 1.2, seam: 0.5, seamDark: 0.22, bias: -0.16 });
+  }
+  // feet: tucked with the toes just past the tail (a tubenose trait, only seen from below), thrown forward to brake, or running
   const feet = P.feet !== 'none' && (P.feet !== 'tuck' || P.bank < -0.45);
-  if (feet) drawFoot(-1);
-  // tail: short wedge fan in the horizontal plane
+  const BR = Relief.full(sk);
+  if (feet) drawFoot(BR, V, M, P, -1);
+  drawTail(BR, V, M, P, [-7.6, 0.4, 0]);
+  const { H } = drawBody(BR, V, M, P, false);
+  drawBill(BR, H, M, P);
+  drawKeel(BR, H, M);
+  if (feet) drawFoot(BR, V, M, P, 1);
+  BR.shadow(ID.KEEL, 0.6, 0.9, 0.08, ID.BILL, 1);
   sk.np();
-  const tl = 5.6 * P.fan ** 0.3, tw = 2.4 * P.fan;
-  const ct = Math.cos(P.tail), stl = Math.sin(P.tail);
-  const T = (x: number, z: number): V3 => [-7 + x * ct, 0.3 - x * stl, z];
-  plate3(sk, V, [T(0.5, 1.6), T(-tl * 0.85, tw), T(-tl, 0), T(-tl * 0.85, -tw), T(0.5, -1.6)], (p, top) => {
-    if (p.v > 0.72 || p.u > 0.8) return M.tailTip;
-    return top ? M.tailT : M.white;
-  }, [0, 1, 0]);
-  // body: white, with the sooty saddle over the back
-  sk.np();
-  body3(sk, V, [[-8, 0.5, 0], [-4, 0.1, 0], [0, -0.1, 0], [3.8, 0.2, 0], [6.2, 0.8 + P.neck * 0.3, 0]],
-    t => (t < 0.42 ? 2.3 + t * 4.4 : 4.15 - (t - 0.42) * 1.6), (p, nb) => {
-      if (nb[1] > 0.55 - (p.x < 2 ? 0 : 0.25)) return M.saddle;
-      return M.white;
-    });
-  const bodyPart = sk.pid;
-  sk.tufts(bodyPart, (_x, _y, _nx, ny) => (ny > 0.4 ? [-0.4, 1] as V2 : null), { every: 4, len: 1 });
-  // head and bill
-  const hc: V3 = [8.6, 1.3 + P.neck, 0];
-  const hd = drawHead(sk, V, M, hc, P, eye);
-  // near wing and foot
-  if (feet) drawFoot(1);
-  const nw = wing3(sk, V, WING, P.wings[0], 1, wf, { spar: top => (top ? M.cov : M.margin) });
-  spurs(sk, V, M, nw.le);
-  return hd;
-}
-
-function drawHead(sk: Sk, V: View3, M: M, hc: V3, P: Pose, eye: BeastEye) {
-  sk.np();
-  // thick neck
-  const nb = V.s([5.2, 0.7, 0]), nh = V.s(hc);
-  sk.tube([[nb[0], nb[1]], [nh[0], nh[1]]], t => (3.3 - t * 0.5) * V.k, M.white, { z: t => nb[2] + (nh[2] - nb[2]) * t });
-  ball3(sk, V, hc, 3.15, (p, n) => {
-    // dusky brow smudge over and behind the eye ("the stern look")
-    if (n[1] > 0.05 && n[1] < 0.75 && n[0] < 0.5 && n[0] > -0.75 && n[2] > 0.2) return M.brow;
-    return M.white;
-  });
-  // head-local frame: x along the bill, y DOWN; headA tips the bill down (+)
-  const ha = P.headA, ca = Math.cos(ha), sa = Math.sin(ha);
-  const Hp = (x: number, y: number, z = 0): V3 => [hc[0] + x * ca - y * sa, hc[1] - x * sa - y * ca, z];
-  const open = P.open;
-  // lower mandible (behind the upper)
-  sk.np();
-  const lo: V3[] = [Hp(2.1, 1.0), Hp(6, 1.05 + open * 1.4), Hp(9.8, 0.95 + open * 3)];
-  const los = lo.map(q => V.s(q));
-  sk.tube(los.map(q => [q[0], q[1]] as V2), t => (1.05 - t * 0.4) * V.k, M.bill, { z: t => los[0][2] + (los[2][2] - los[0][2]) * t + 0.6, bias: -0.12 });
-  if (open > 0.2) {
-    const m0 = V.s(Hp(2.4, 0.55)), m1 = V.s(Hp(8.6, 0.5 + open * 1.6));
-    sk.line(m0[0], m0[1], m1[0], m1[1], M.mouth, 0.3, Math.max(m0[2], m1[2]) + 2, true);
+  BR.emit({ drop: 1.5, seam: 0.6, seamDark: 0.26, ao: 0.05, aoR: 2 });
+  const ep = eyeOf(sk, H, P.eye ?? eye);
+  // near wing
+  {
+    const R = Relief.full(sk);
+    const F = wingFrame(WING, P.wings[0], 1);
+    wing(R, V, F, WL, wf, { id: ID.WING });
+    spurs(R, V, M, F);
+    sk.np();
+    R.emit({ drop: 1.2, seam: 0.5, seamDark: 0.22, bias: -0.1 });
   }
-  // upper mandible: long, plated, ending in a deep dark hook
-  sk.np();
-  const up: V3[] = [Hp(2.2, -0.35), Hp(6, -0.3), Hp(9.4, -0.1), Hp(10.8, 0.25)];
-  const ups = up.map(q => V.s(q));
-  sk.tube(ups.map(q => [q[0], q[1]] as V2), t => (1.35 - t * 0.6) * V.k, p => (p.t > 0.84 ? M.hook : M.bill), { z: t => ups[0][2] + (ups[3][2] - ups[0][2]) * t + 1 });
-  const hk0 = V.s(Hp(10.4, -0.2)), hk1 = V.s(Hp(11.1, 1.6));
-  sk.blade(hk0[0], hk0[1], hk1[0], hk1[1], s => (1 - s) * 0.95 * V.k + 0.3, M.hook, { z0: hk0[2] + 1.2, z1: hk1[2] + 1.2 });
-  // the vane: a thin coral keel standing on the culmen like a sail, taller than the crown
-  sk.np();
-  const keel = [Hp(3.5, -1.0), Hp(4.2, -4.3), Hp(5.2, -6.5), Hp(6.5, -6.2), Hp(7.8, -3.4), Hp(8.8, -0.9)];
-  plate3(sk, V, keel, (p) => {
-    // bony growth ridges fanning up the plate
-    p.l += rows(p.u * 5 + p.v * 2.4, 1, 0.3) * 0.9 + 0.04;
-    return M.keel;
-  }, [0, 0, 1], { zb: 0.8 });
-  const rim = keel.slice(1, 5).map(q => V.s2(q));
-  sk.tube(rim, 0.5 * V.k, M.keelRim, { z: V.s(keel[2])[2] + 1.4 });
-  // paired tube nostrils along the keel's foot, ending in dark flute holes
-  sk.np();
-  for (const zs of [-0.62, 0.62]) {
-    const t0 = V.s(Hp(2.5, -0.8, zs)), t1 = V.s(Hp(4.8, -1.05, zs));
-    sk.tube([[t0[0], t0[1]], [t1[0], t1[1]]], 0.66 * V.k, M.tube, { z: t => t0[2] + (t1[2] - t0[2]) * t + 1.6 });
-    if (zs > 0) sk.dot(t1[0] + 0.4, t1[1], M.hole, 0.2, t1[2] + 3, true);
-  }
-  // eye (near side of the head only)
-  const ev = Hp(0.55, -0.55, 2.55);
-  let ep: V2 = V.s2(ev);
-  if (V.faces([0.3, 0.1, 1], 0.05)) ep = drawEye(sk, ep[0], ep[1], EYE, P.eye ?? eye);
-  const top = V.s2([hc[0], hc[1] + 6, 0]);
-  return { head: top, eye: ep };
+  return { head: V.s2([H.c[0], H.c[1] + 6, 0]), eye: ep };
 }
 
 // ------------------------------------------------------------------ on the water
+const FOLD: FoldLook = { len: 1, dep: 1, tert: 0.5, nP: 6, cov: 0.4, gc: 0.58 };
+
+/** the Z-folded wing: the arm along the flank, the vane-hand folded back over it, spurs at the hinges */
+function foldPack(R: Relief, V: View3, M: M, side: 1 | -1, P: Pose) {
+  const lift = P.sky;
+  const z = side * 3.2;
+  const c: V3 = [4.4, 2.9 + lift * 1.2, z];
+  const ax = v3norm([-1, 0.06 + lift * 0.38, 0]);
+  const dnv: V3 = [-ax[1], ax[0], 0];
+  const F = foldMap3(V, c, ax, dnv, 17.5, 4.4, 0.1);
+  const zz = V.s(c)[2] + (side > 0 ? 1 : -1);
+  R.region(spline(foldOutline(F.map, FOLD), 0.4), { z: zz, R: 1.4, H: 1.6, id: ID.FOLD + (side > 0 ? 0 : 20), tex: foldTex(FOLD, F.inv, (f, o) => {
+    if (f.zone === 'les') o.m = f.edge < 0.3 ? M.wing : M.cov;
+    else if (f.zone === 'gc') o.m = f.edge < 0.3 ? M.wing : f.v > FOLD.gc - 0.1 ? M.covF : M.cov;
+    else if (f.zone === 'ter') o.m = f.u > 0.36 && f.u < 0.46 && f.v < 0.5 ? M.mirror : f.edge < 0.3 ? M.tip : M.wing;
+    else if (f.zone === 'sec') o.m = f.edge < 0.3 ? M.tip : M.wing;
+    else o.m = f.edge < 0.3 ? M.wing : M.tip;
+  }) });
+  if (side > 0) {
+    // hinge spurs at the wrist (front of the pack) and at the knuckle fold on top
+    for (const [u, v, L, a] of [[0.0, 0.42, 1.8, Math.PI * 1.02], [0.47, 0.1, 1.6, -Math.PI * 0.62 - lift * 0.4]] as [number, number, number, number][]) {
+      const b = F.map(u, v);
+      const tip: V2 = [b[0] + Math.cos(a) * L, b[1] + Math.sin(a) * L];
+      const pa = Math.atan2(tip[1] - b[1], tip[0] - b[0]) + Math.PI / 2;
+      R.region(spline([[b[0] + Math.cos(pa) * 0.9, b[1] + Math.sin(pa) * 0.9, 0], [tip[0], tip[1], 0.9], [b[0] - Math.cos(pa) * 0.9, b[1] - Math.sin(pa) * 0.9, 0]], 0.3), { z: zz + 2.5, R: 0.5, H: 0.6, id: ID.SPUR, tex: M.spur });
+    }
+  }
+}
+
 function drawWater(sk: Sk, M: M, P: Pose, eye: BeastEye): { head: V2; eye: V2 } {
   // anchor = waterline under the body; the hull floats half sunk
   const V = new View3(0, P.pitch, P.yaw, [0, -3.6 + P.bob], 1);
   sk.clipY = 0.6;
-  // tail cocked up out of the water
+  const BR = Relief.full(sk);
+  // the tail cocked up out of the water
+  drawTail(BR, V, M, { ...P, tail: P.tail }, [-7.2, 0.9, 0]);
+  foldPack(BR, V, M, -1, P);
+  const { H } = drawBody(BR, V, M, P, true);
+  drawBill(BR, H, M, P);
+  drawKeel(BR, H, M);
+  foldPack(BR, V, M, 1, P);
+  BR.shadow(ID.FOLD, 0.6, 1.2, 0.1, ID.BODY, 1);
   sk.np();
-  const ct = Math.cos(P.tail), st = Math.sin(P.tail);
-  const T = (x: number, z: number): V3 => [-7 + x * ct, 0.6 - x * st, z];
-  plate3(sk, V, [T(0.5, 1.4), T(-4.6, 2.2 * P.fan), T(-5.6, 0), T(-4.6, -2.2 * P.fan), T(0.5, -1.4)], (p, top) => (p.v > 0.7 ? M.tailTip : top ? M.tailT : M.white), [0, 1, 0]);
-  foldPack(sk, V, M, -1, P);
-  sk.np();
-  body3(sk, V, [[-8, 0.8, 0], [-4, 0.2, 0], [0, 0, 0], [4, 0.3, 0], [6.4, 1.2 + P.neck * 0.25, 0]],
-    t => (t < 0.45 ? 2.4 + t * 3.8 : 4.1 - (t - 0.45) * 2), (_p, nb) => (nb[1] > 0.5 ? M.saddle : M.white));
-  sk.tufts(sk.pid, (_x, _y, nx, ny) => (ny < -0.4 && nx < 0.3 ? [-0.5, -0.8] as V2 : null), { every: 4, len: 1 });
-  foldPack(sk, V, M, 1, P);
-  const hd = drawHead(sk, V, M, [8.4, 2.6 + P.neck, 0], P, eye);
-  // wake ripples around the waterline
+  BR.emit({ drop: 1.5, seam: 0.6, seamDark: 0.26, ao: 0.05, aoR: 2 });
+  const ep = eyeOf(sk, H, P.eye ?? eye);
+  // wake ripples round the waterline
   sk.clipY = Infinity;
   for (let x = -12; x <= 12; x++) if (hh(x, 3, 11) > 0.35) sk.over(x, 0, hex('#dff1f6'));
   sk.over(-13, 1, hex('#bfe0ea')); sk.over(13, 1, hex('#bfe0ea'));
-  return hd;
+  return { head: V.s2([H.c[0], H.c[1] + 6, 0]), eye: ep };
 }
 
-/** the Z-folded wing: three stacked layers along the back, hinge spurs at the folds, tips crossed over the tail */
-function foldPack(sk: Sk, V: View3, M: M, side: 1 | -1, P: Pose) {
-  const z = side * 3.1;
-  const lift = P.sky;
-  const layers: [V3, V3, number, number][] = [
-    // [front, back, half width, material]
-    [[4.6, 2.4 + lift * 1.5, z], [-9.5, 3.0 + lift * 4, z], 1.55, M.wing],
-    [[3.6, 3.3 + lift * 3, z * 0.95], [-7, 3.4 + lift * 6.5, z * 0.95], 1.2, M.cov],
-    [[2.8, 4.0 + lift * 5, z * 0.9], [-12.5, 4.6 + lift * 9, z * 0.85], 1.05, M.tip],
-  ];
-  layers.forEach(([a, b, w, m], i) => {
-    const pa = V.s(a), pb = V.s(b);
-    sk.np();
-    sk.blade(pa[0], pa[1], pb[0], pb[1], s => (s < 0.12 ? 0.6 + s * 6 : 1 - Math.pow(Math.max(0, s - 0.55) / 0.45, 1.3) * 0.75) * w * V.k,
-      (p) => { p.l += rows(p.t * 9, 1, 0.2) * 0.5; return m; }, { z0: pa[2] + 1 + i * 0.6 * side, z1: pb[2] + 1 + i * 0.6 * side, bias: side < 0 ? -0.12 : 0 });
-    // hinge spur at each fold
-    if (i < 2 && side > 0) {
-      const s0 = V.s([a[0] + 0.2, a[1] + 0.4, a[2]]), s1 = V.s([a[0] + 1.8, a[1] + 1.1 + lift, a[2]]);
-      sk.blade(s0[0], s0[1], s1[0], s1[1], s => (1 - s) * 0.6 + 0.25, M.spur, { z0: s0[2] + 3, z1: s1[2] + 3 });
-    }
-  });
+/** the eye with a thin pale-blue ring crescent below and behind it, inside the dusky brow */
+function eyeOf(sk: Sk, H: HeadF, st: BeastEye): V2 {
+  let ep: V2 = H.s2(0.35, -0.55, 2.1);
+  if (!H.facing(0.05)) return ep;
+  ep = drawEye(sk, ep[0], ep[1], EYE, st);
+  if (st !== 'closed') {
+    const X = Math.floor(ep[0] - 1), Y = Math.floor(ep[1] - 1);
+    const ring = hex('#a8d0dc');
+    sk.overPaint(X - 1, Y + 1, ring); sk.overPaint(X, Y + 2, ring); sk.overPaint(X + 1, Y + 2, ring);
+  }
+  return ep;
 }
 
 function draw(sk: Sk, anim: string, frame: number, eye: BeastEye): { head: V2; eye: V2 } {
@@ -390,3 +523,4 @@ export const VANEBILL: SpeciesDef = {
   eyeFor: (anim) => (anim === 'snatch' ? 'angry' : anim === 'display' ? 'alert' : 'open'),
   anchor: Object.fromEntries(AIR.map(a => [a, 'centre'])) as Record<string, 'centre'>,
 };
+void clamp;
