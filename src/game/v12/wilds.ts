@@ -75,6 +75,7 @@ const OW = ['OOF!', 'Ow ow ow...', 'Nope. Nope nope nope.', 'I am NOT a threat! 
 export function hitMori(f: FieldScene, from: number, o: { sev: 1 | 2 | 3; drop?: boolean; what?: string }) {
   const p = f.player;
   if (p.state === 'stunned' || p.hurtT > 0.4) return;
+  { const v = game.save.vars; v['fs:hits'] = (v['fs:hits'] ?? 0) + 1; v['fs:hitDay'] = game.save.day || 1; } // V12 feats (./feats.ts)
   const dir = Math.sign(p.x - from) || 1;
   p.cancelWork();
   f.cam?.raise(false);
