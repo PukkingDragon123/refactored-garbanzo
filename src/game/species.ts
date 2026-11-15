@@ -15,6 +15,7 @@ import { KEA_SPECIES, RURU_SPECIES } from './v12/wild/birds';
 import { TUNA_SPECIES, NGAOKEOKE_SPECIES } from './v12/wild/crawlers';
 import { GLOW_SPECIES } from './v12/arc/species1';
 import { WHEKE_SPECIES, THIEF_SPECIES, ANCIENT_SPECIES } from './v12/arc/species4';
+import { DIVE_SPECIES, SEAL_SWIM } from './v12/dive/lifeguide';
 
 export type SiteId = 'fernwood' | 'canopy' | 'falls' | 'mangrove' | 'coast';
 export type Group = 'Serpent' | 'Bird' | 'Mammal' | 'Reptile' | 'Amphibian' | 'Fish' | 'Crustacean' | 'Mollusc' | 'Insect' | 'Parasite' | 'Arachnid' | 'Myriapod' | 'Worm' | 'Cnidarian';
@@ -375,6 +376,13 @@ SPECIES.push(BEARER_SPECIES, PLUMEBOA_SPECIES);
 SPECIES.push(TITIWAI_SPECIES, KEA_SPECIES, RURU_SPECIES, TUNA_SPECIES, NGAOKEOKE_SPECIES);
 // V12 Te Ara Matatū (src/game/v12/arc)
 SPECIES.push(GLOW_SPECIES, WHEKE_SPECIES, THIEF_SPECIES, ANCIENT_SPECIES);
+// V12 Te Moana Rimurimu, the kelp dive (src/game/v12/dive): its shark and big fish, and the Corvex
+// Seal's underwater behaviours added to its shore entry
+SPECIES.push(...DIVE_SPECIES);
+{
+  const seal = SPECIES.find(s => s.id === 'corvexseal');
+  if (seal) { Object.assign(seal.behaviors, SEAL_SWIM.behaviors); for (const f of SEAL_SWIM.facts) if (!seal.facts.some(q => q.id === f.id)) seal.facts.push(f); }
+}
 
 export const SPECIES_BY_ID: Record<string, Species> = Object.fromEntries(SPECIES.map(s => [s.id, s]));
 export const CLUE_BY_ID: Record<string, ClueDef> = Object.fromEntries(CLUES.map(c => [c.id, c]));

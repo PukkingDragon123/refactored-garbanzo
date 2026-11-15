@@ -157,6 +157,11 @@ export const FEATS: FeatDef[] = [
   { id: 'one_breath', tier: 'legend', hidden: true, title: 'One Breath', desc: 'All of chapter five’s dive without coming up for air.', check: () => F('arc:ch5:noSurface') },
   { id: 'no_sling', tier: 'legend', hidden: true, title: 'No Sling', desc: 'Chapter six, and never once reach for a weapon.', check: () => F('arc:ch6:unarmed') },
   { id: 'perfect_finale', tier: 'legend', hidden: true, title: 'Perfect Finale', desc: 'The finale without a single mistake.', check: () => F('arc:ch7:perfect') },
+  // Te Moana Rimurimu, the kelp-forest dive (dive/quest.ts sets the flags)
+  { id: 'seal_dance', tier: 'silver', title: 'Seal Dance', desc: 'Photograph a seal barrel-rolling under the kelp.', check: () => F('dive:roll') },
+  { id: 'not_today', tier: 'gold', title: 'Not Today', desc: 'Turn a charging shark with the speargun’s blunt end.', check: () => F('dive:bang') },
+  { id: 'the_blue', tier: 'gold', title: 'The Blue', desc: 'Find the old hāpuku in its cave, out past the drop-off.', check: () => F('dive:groper') },
+  { id: 'full_basket', tier: 'gold', title: 'Full Basket', desc: 'Bring five fish home from a single dive.', check: () => F('dive:basket') },
   { id: 'legend_of_the_island', tier: 'legend', title: 'Legend of the Island', desc: 'Earn every other feat.',
     check: () => FEATS.every(f => f.id === 'legend_of_the_island' || hasFeat(f.id)), progress: () => [FEATS.filter(f => f.id !== 'legend_of_the_island' && hasFeat(f.id)).length, FEATS.length - 1] },
 ];

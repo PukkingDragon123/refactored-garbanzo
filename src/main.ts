@@ -63,6 +63,7 @@ async function boot() {
   try { (await import('./game/v12/arc/arc')).bootArc(); } catch (e) { console.warn('[arc] boot', e); }
   // V12: daily agency bounties, field set pieces and the new side quests
   try { (await import('./game/v12/bounty')).initFieldContent(); } catch (e) { console.warn('[field content] boot', e); }
+  try { (await import('./game/v12/dive/quest')).registerDiveQuest(); } catch (e) { console.warn('[dive quest] boot', e); }
   const scene = params.get('scene');
   const flow = await import('./game/scenes/flow');
   if (params.has('flags')) for (const f of params.get('flags')!.split(',')) game.save.flags[f] = true;

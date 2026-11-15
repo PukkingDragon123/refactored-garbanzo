@@ -28,6 +28,7 @@ import { Relief, Sp, Tx, LM, spline as cspline, fringe, strands, FS, memoTex, vn
 import { hex } from '../../color';
 import { clamp } from '../../../core/math';
 import { arcs, onPath, frac } from './shore-kit';
+import { diveFishHeld } from '../../v12/dive/bigfish';
 type Eye = 'open' | 'half' | 'closed' | 'angry' | 'alert';
 
 interface P {
@@ -54,18 +55,38 @@ interface P {
   eye: Eye;
   crowns: number;        // leech crowns open 0..1
   crownPh: number;
+  // ---- in the water (the kelp dive's swim anims)
+  swim: number;          // 1: afloat (no ground, body round its own axis, flippers free)
+  pitch: number;         // whole-body pitch (rad, - = nose up)
+  flipV: boolean;        // rolled upside down (the barrel roll's far half)
+  fN: [number, number, number]; // near fore-flipper: wrist reach angle from the shoulder (rad, body frame), reach px, hand angle
+  fF: [number, number, number]; // far fore-flipper, the same
+  hindA: number;         // hind flippers' trailing angle offset (rad, + = down)
+  hindS: number;         // their spread (far flipper's extra angle)
+  fish: number;          // a fish held crosswise in the beak
+  bubbles: number;       // bubbles rising from the beak (0 none .. 1 a stream), phase in sandPh
 }
 const base = (): P => ({
   br: 0.5, lift: 0, hump: 0, waveA: 0, wave: 0, stretch: 1, flat: 0, neck: -0.3, nl: 1, head: 0.1,
   gape: 0, sac: 0, tongue: 0, mane: 0, shake: 0, foreN: [52, 0], foreF: [46, 0], hind: 0, sand: 0, sandPh: 0,
   eye: 'open', crowns: 0.3, crownPh: 0,
+  swim: 0, pitch: 0, flipV: false, fN: [1.6, 14, 2], fF: [1.7, 13, 2.1], hindA: 0, hindS: 0.18, fish: 0, bubbles: 0,
 });
 
 const A = (frames: number, fps: number, loop = true) => ({ frames, fps, loop });
 export const SEAL_ANIMS = {
   sleep: A(6, 1.6), idle: A(4, 2), scratch: A(8, 9), flick: A(6, 8), yawn: A(6, 5, false),
   wake: A(6, 7, false), roar: A(6, 8), gallop: A(8, 11.5), lunge: A(4, 12), pin: A(4, 2), tired: A(6, 6),
+  // the kelp dive: graceful in water (anchored on the body's middle, not the ground)
+  swim: A(8, 8), glide: A(4, 3), roll: A(8, 10), bubble: A(6, 6), hang: A(4, 3), grab: A(4, 12, false), carry: A(6, 8),
 };
+/** the swim anims (afloat: their anchor is the body centre) */
+export const SEAL_SWIM_ANIMS = ['swim', 'glide', 'roll', 'bubble', 'hang', 'grab', 'carry'];
+
+/** afloat: the body free of the ground, the neck level, the mane lying flat in the stream */
+function water(p: P) {
+  p.swim = 1; p.lift = 0; p.flat = 0; p.hump = 0; p.neck = -0.08; p.head = 0.02; p.crowns = 0; p.mane = 0; p.shake = -0.35;
+}
 
 function pose(anim: string, f: number, n: number): P {
   const p = base();
@@ -173,6 +194,69 @@ function pose(anim: string, f: number, n: number): P {
       p.foreN = [60, 0]; p.foreF = [54, 0];
       break;
     }
+    case 'swim': {
+      // flying through the water on the fore-flippers: a deep downstroke sweeping back, the recovery
+      // feathered forward; the body rides each stroke in a slow undulation, the hind flippers trail
+      water(p);
+      const a = t * TAU;
+      p.fN = [0.95 + 1.45 * Math.sin(a), 30, 1.4 + 1.45 * Math.sin(a) + 0.3 * Math.cos(a)];
+      p.fF = [1.05 + 1.35 * Math.sin(a + 0.35), 28, 1.5 + 1.35 * Math.sin(a + 0.35) + 0.3 * Math.cos(a + 0.35)];
+      p.waveA = 2.4; p.wave = t;
+      p.hindA = Math.sin(a + 1.2) * 0.12; p.neck = -0.06 + Math.sin(a) * 0.03; p.head = 0.02;
+      p.br = 0.5 + 0.2 * Math.sin(a);
+      break;
+    }
+    case 'glide': {
+      // streamlined: flippers swept back along the flanks, the body a long slow wave
+      water(p);
+      p.fN = [2.3, 30, 2.75 + Math.sin(t * TAU) * 0.06]; p.fF = [2.25, 28, 2.7];
+      p.waveA = 1.6; p.wave = t; p.hindA = Math.sin(t * TAU) * 0.06; p.hindS = 0.1;
+      p.eye = f === 2 ? 'half' : 'open';
+      break;
+    }
+    case 'roll': {
+      // the barrel roll: the near flipper sweeps up over the back as it turns belly up, then down again
+      water(p);
+      const k = [0, 1, 2, 2, 0, 2, 1, 0][f];      // 0 square, 1 near flipper rising, 2 flippers wide
+      p.flipV = f >= 3 && f <= 5;
+      const up = k === 1 ? -0.2 : k === 2 ? -1.1 : 1.9;
+      p.fN = [up, 30, up + 0.4]; p.fF = [k ? 1.8 : 1.9, 28, k ? 1.4 : 2.3];
+      p.waveA = 2; p.wave = t * 2; p.hindA = -0.1 + k * 0.08; p.hindS = 0.25;
+      p.neck = -0.12; p.head = -0.05; p.eye = 'open';
+      break;
+    }
+    case 'bubble': {
+      // stops face on, swells its throat a little and lets a string of bubbles go from the beak
+      water(p);
+      p.fN = [2.0 + Math.sin(t * TAU) * 0.25, 29, 2.35 + Math.sin(t * TAU) * 0.3]; p.fF = [2.05 + Math.sin(t * TAU + 1) * 0.25, 28, 2.4 + Math.sin(t * TAU + 1) * 0.3];
+      p.sac = 0.25 + 0.2 * Math.max(0, Math.sin(t * TAU)); p.gape = 0.12; p.bubbles = 1; p.sandPh = t;
+      p.neck = -0.18; p.head = -0.1; p.pitch = -0.12; p.waveA = 0.8; p.wave = t;
+      break;
+    }
+    case 'hang': {
+      // hanging upright in the water, sculling, the head cocked at you (it copies what you do)
+      water(p);
+      p.pitch = -1.15; p.neck = -0.05; p.head = 0.32 + Math.sin(t * TAU) * 0.08;
+      p.fN = [0.9 + Math.sin(t * TAU) * 0.5, 29, 0.4 + Math.sin(t * TAU) * 0.6]; p.fF = [1.0 + Math.sin(t * TAU + 2) * 0.5, 28, 0.5 + Math.sin(t * TAU + 2) * 0.6];
+      p.hindA = 0.35 + Math.sin(t * TAU) * 0.1; p.hindS = 0.3; p.waveA = 0.8; p.wave = t;
+      break;
+    }
+    case 'grab': {
+      // the snatch: a lunge, beak wide, snapping shut on the fish
+      water(p);
+      p.stretch = [1, 1.08, 1.1, 1.04][f]; p.neck = [-0.1, 0.02, 0.04, -0.02][f]; p.nl = [1, 1.15, 1.2, 1.05][f];
+      p.gape = [0.5, 1, 0.6, 0][f]; p.fish = f === 3 ? 1 : 0; p.eye = f === 1 ? 'angry' : 'open';
+      p.fN = [2.3, 30, 2.8]; p.fF = [2.25, 28, 2.75]; p.waveA = 1; p.wave = t;
+      break;
+    }
+    case 'carry': {
+      // swimming off with the fish crosswise in its beak, pleased with itself
+      water(p);
+      const a = t * TAU;
+      p.fN = [1.2 + 1.1 * Math.sin(a), 30, 1.65 + 1.1 * Math.sin(a)]; p.fF = [1.3 + 1 * Math.sin(a + 0.35), 28, 1.75 + 1 * Math.sin(a + 0.35)];
+      p.waveA = 2.4; p.wave = t; p.hindA = Math.sin(a + 1.2) * 0.12; p.fish = 1; p.gape = 0.18; p.neck = -0.14;
+      break;
+    }
     case 'tired': {
       // collapsed, flanks heaving, beak open, tongue lolling out, panting
       p.flat = 0.45; p.br = f % 2 ? 1 : 0.1;
@@ -219,7 +303,7 @@ function mats(sk: Sk) {
 type M = ReturnType<typeof mats>;
 const COL = {
   brow: hex('#f6f2ea'), brow2: hex('#cfcac2'), brow3: hex('#e2dcd2'), nostril: hex('#2a0e10'), pit: hex('#e8a8a0'),
-  whisk: hex('#f0e8dc'), whisk2: hex('#c8bfb2'), nail: hex('#e8dcc4'), crownT: hex('#e4fdff'), crown: hex('#9ee8f4'), crown2: hex('#bff4fa'), crownC: hex('#98a8e8'),
+  whisk: hex('#f0e8dc'), whisk2: hex('#c8bfb2'), nail: hex('#e8dcc4'), bubRim: hex('#c8f0ff', 230), bubIn: hex('#a8e0f4', 90), bubHi: hex('#ffffff'), crownT: hex('#e4fdff'), crown: hex('#9ee8f4'), crown2: hex('#bff4fa'), crownC: hex('#98a8e8'),
 };
 
 // ------------------------------------------------------------------ spine
@@ -258,20 +342,25 @@ function draw(sk: Sk, anim: string, frame: number, eyeIn: BeastEye): { head: V2;
   const n = SEAL_ANIMS[anim as keyof typeof SEAL_ANIMS]?.frames ?? 1;
   const P = pose(anim, frame, n);
   const M = mats(sk);
-  sk.clipY = 0;
+  sk.clipY = P.swim ? Infinity : 0;
   const eyeSt: Eye = eyeIn === 'open' ? P.eye : eyeIn === 'scared' ? 'alert' : eyeIn;
 
   // ---- spine: lying on the sand, the chest lifted (rear stays down), humped, rippling
   const ctrl: V2[] = [], rad: number[] = [];
   for (let i = 0; i < SX.length; i++) {
     const u = i / (SX.length - 1);
-    const r = SR[i] * (1 + P.br * 0.04 * Math.sin(Math.PI * Math.min(1, u * 1.2))) * (1 - P.flat * 0.1);
-    const x = SX[i] * P.stretch + (P.stretch - 1) * 12;
-    let y = -r * (0.88 - P.flat * 0.2);
+    const r = SR[i] * (1 + P.br * 0.04 * Math.sin(Math.PI * Math.min(1, u * 1.2))) * (1 - P.flat * 0.1) * (P.swim ? 0.88 : 1);
+    const x = SX[i] * P.stretch * (P.swim ? 1.06 : 1) + (P.stretch - 1) * 12;
+    let y = P.swim ? 0 : -r * (0.88 - P.flat * 0.2);
     y -= P.lift * 62 * sm((u - 0.5) / 0.42);
     y -= P.hump * Math.sin(Math.PI * clamp((u - 0.05) / 0.85));
     y -= P.waveA * Math.sin(TAU * (P.wave - u * 0.8)) * Math.sin(Math.PI * u);
     ctrl.push([x, y]); rad.push(r);
+  }
+  // afloat, the whole body pitches about its middle
+  if (P.swim && P.pitch) {
+    const c = Math.cos(P.pitch), sn = Math.sin(P.pitch);
+    for (const q of ctrl) { const x = q[0], y = q[1]; q[0] = x * c - y * sn; q[1] = x * sn + y * c; }
   }
   const sp = spline(ctrl, rad, 16);
   const at = (u: number) => {
@@ -282,7 +371,7 @@ function draw(sk: Sk, anim: string, frame: number, eyeIn: BeastEye): { head: V2;
   const sh = ctrl[ctrl.length - 1], shR = rad[rad.length - 1];
   const bodyA = at(0.93).a;
   // ---- neck and head placement
-  const neckA = P.neck + bodyA * 0.7;
+  const neckA = P.neck + bodyA * 0.7 + (P.swim ? P.pitch * 0.3 : 0);
   const nl = 20 * P.nl;
   const n0: V2 = [sh[0] + 7, sh[1] - 2];
   const hc: V2 = [n0[0] + Math.cos(neckA) * nl, n0[1] + Math.sin(neckA) * nl];
@@ -317,7 +406,7 @@ function draw(sk: Sk, anim: string, frame: number, eyeIn: BeastEye): { head: V2;
   const bp = (u: number, k: number, sharp = 0): LM => { const q = at(u), d = up(q.a); return [q.p[0] + d[0] * q.r * k, q.p[1] + d[1] * q.r * k, sharp]; };
   const t0 = at(0), td = up(t0.a);
   const tailTip: LM = [t0.p[0] - Math.cos(t0.a) * 5 + td[0] * 1, t0.p[1] - Math.sin(t0.a) * 5 + td[1] * 1, 0.4];
-  const sag = 0.06 + P.flat * 0.06;
+  const sag = P.swim ? 0.01 : 0.06 + P.flat * 0.06;
   const body: LM[] = [
     tailTip,
     bp(0.04, 0.9), bp(0.12, 0.92), bp(0.24, 0.95), bp(0.38, 0.97), bp(0.52, 0.98), bp(0.66, 0.99), bp(0.78, 1.01), bp(0.88, 1.03),
@@ -331,7 +420,9 @@ function draw(sk: Sk, anim: string, frame: number, eyeIn: BeastEye): { head: V2;
   ];
   let poly = cspline(body, 1.2);
   // guard hair breaks the outline: long on the back and nape, shorter along the belly
-  poly = fringe(poly, 2.6, 5, (_x, _y, nx, ny) => (ny < -0.35 ? [4.6, -0.6] : ny > 0.5 ? [2.2, 0.35] : nx < -0.6 ? [2.6, 0] : null));
+  // (in the water the coat lies slicked back and short)
+  const fl = P.swim ? 0.55 : 1;
+  poly = fringe(poly, 2.6, 5, (_x, _y, nx, ny) => (ny < -0.35 ? [4.6 * fl, -0.6 - P.swim * 0.3] : ny > 0.5 ? [2.2 * fl, 0.35] : nx < -0.6 ? [2.6 * fl, 0] : null));
 
   // ---- the axis (spine + neck) the fur and the markings follow
   const axis: V2[] = [...sp.pts.slice(0, 15), nb, n0, lerp2(n0, hc, 0.5), hc];
@@ -510,8 +601,55 @@ function draw(sk: Sk, anim: string, frame: number, eyeIn: BeastEye): { head: V2;
       sk.ell(x, y, r, r, M.sand, { z: 120 });
     }
   }
+  // ---- a fish held in the beak (the steal), dangling by its head
+  if (P.fish > 0) {
+    const tip = H.p(25, 4);
+    const fh = diveFishHeld('kingfish', 36, H.a - Math.PI / 2 + 0.55, 0.84);
+    for (let y = 0; y < fh.buf.h; y++) for (let x = 0; x < fh.buf.w; x++) {
+      const c = fh.buf.data[y * fh.buf.w + x];
+      if (c >>> 24) sk.over(tip[0] + x - fh.ax, tip[1] + y - fh.ay, c);
+    }
+  }
+  // ---- bubbles let go from the beak, wobbling up
+  if (P.bubbles > 0) {
+    const o = H.p(20, -3);
+    for (let i = 0; i < 4; i++) {
+      const ph = (P.sandPh + i / 4) % 1;
+      const r = 1.2 + ph * 2.2 + (i % 2) * 0.6;
+      bubble(sk, o[0] + Math.sin(ph * 9 + i) * 2.5 + ph * 4, o[1] - 3 - ph * 34, r);
+    }
+  }
   const top = H.p(-2, -16);
+  // ---- rolled belly-up: mirror the whole painting about the body's axis and relight it from above
+  if (P.flipV) { flipSk(sk); return { head: [top[0], -(top[1] - 4)], eye: [ep[0], -ep[1]] }; }
   return { head: [top[0], top[1] - 4], eye: ep };
+}
+
+/** a bubble ring: a pale rim, a clear middle, a glint (overlay pixels) */
+function bubble(sk: Sk, cx: number, cy: number, r: number) {
+  const R = Math.ceil(r) + 1;
+  for (let y = -R; y <= R; y++) for (let x = -R; x <= R; x++) {
+    const d = Math.hypot(x + 0.5 - (cx % 1), y + 0.5 - (cy % 1));
+    const X = Math.floor(cx) + x, Y = Math.floor(cy) + y;
+    if (d <= r + 0.45 && d > r - 0.65) sk.over(X, Y, x < 0 && y < 0 ? COL.bubHi : COL.bubRim);
+    else if (d <= r - 0.65) sk.over(X, Y, COL.bubIn);
+  }
+  if (r >= 1.8) sk.over(Math.floor(cx) - 1, Math.floor(cy) - 1, COL.bubHi);
+}
+
+/** mirror a painting top to bottom about local y = 0 (the canvas must be symmetric about its origin row)
+ *  and turn its light over, so the belly that now faces up is lit */
+function flipSk(sk: Sk) {
+  const W = sk.w, H = sk.h, oy = sk.oy;
+  const rows = (a: { [i: number]: number }, r0: number, r1: number) => {
+    for (let x = 0; x < W; x++) { const i = r0 * W + x, j = r1 * W + x, t = a[i]; a[i] = a[j]; a[j] = t; }
+  };
+  for (let r = 0; r < oy; r++) {
+    const m = 2 * oy - 1 - r;
+    if (m < 0 || m >= H || m <= r) continue;
+    rows(sk.mat, r, m); rows(sk.lum, r, m); rows(sk.z, r, m); rows(sk.part, r, m); rows(sk.ov, r, m);
+  }
+  for (let i = 0; i < W * H; i++) if (sk.mat[i]) sk.lum[i] = 1 - sk.lum[i];
 }
 
 /** Crimson face's beak-plates (upper keeled and hooked, lower hinged), the mouth, the throat sac, whiskers. */
@@ -658,6 +796,13 @@ function foreGeo(R: Rig, near: boolean) {
   const { P, at } = R;
   const s = at(0.8);
   const shoulder: V2 = [s.p[0] + (near ? 3 : -2), s.p[1] + s.r * 0.3];
+  if (P.swim) {
+    // afloat: the flipper reaches out from the shoulder at its own angle (body frame, pitched)
+    const [ang, reach, hand] = near ? P.fN : P.fF;
+    const wA = ang + P.pitch, wr: V2 = [shoulder[0] + Math.cos(wA) * reach, shoulder[1] + Math.sin(wA) * reach];
+    const [elbow, w] = ik2(shoulder, wr, 17, 17, near ? -1 : -1);
+    return { shoulder, elbow, w, ha: hand + P.pitch };
+  }
   const target = near ? P.foreN : P.foreF;
   const wrist: V2 = [target[0] - 10, Math.min(-3, target[1] - 3)];
   const [elbow, w] = ik2(shoulder, wrist, 17, 17, 1);
@@ -705,12 +850,12 @@ function foreFlipper(FR: Relief, R: Rig, near: boolean) {
     const v = -3.6 + d * 1.9;
     FR.line([[hp(2, v * 0.5)[0], hp(2, v * 0.5)[1]], [hp(12.4 - Math.abs(d - 2) * 0.8, v)[0], hp(12.4 - Math.abs(d - 2) * 0.8, v)[1]]], 1.1, 0.9, { only: ID.HAND });
   }
-  // three hooked claws on the leading digits, curling down to the sand
-  for (let k = 0; k < 3; k++) {
+  // three hooked claws on the leading digits, curling down to the sand (afloat they lie folded in the web)
+  for (let k = 0; k < (R.P.swim ? 0 : 3); k++) {
     const b = hp(12.4 - k * 0.6, -1.6 + k * 2.1);
     const ca = ha + 0.45 + k * 0.12;
     const L = 6 - Math.abs(k - 1) * 1.2;
-    const tip: V2 = [b[0] + Math.cos(ca) * L, Math.min(-0.3, b[1] + Math.sin(ca) * L)];
+    const tip: V2 = [b[0] + Math.cos(ca) * L, R.P.swim ? b[1] + Math.sin(ca) * L : Math.min(-0.3, b[1] + Math.sin(ca) * L)];
     const bn: V2 = [-Math.sin(ca), Math.cos(ca)];
     const cl: LM[] = [[b[0] - bn[0] * 1.3, b[1] - bn[1] * 1.3, 0], [(b[0] + tip[0]) / 2 - bn[0] * 1.1, (b[1] + tip[1]) / 2 - bn[1] * 1.1 - 0.6, 0], [tip[0], tip[1], 0.9], [(b[0] + tip[0]) / 2 + bn[0] * 0.3, (b[1] + tip[1]) / 2 + bn[1] * 0.3, 0], [b[0] + bn[0] * 1.3, b[1] + bn[1] * 1.3, 0]];
     FR.region(cspline(cl, 0.4), { z: z + 6, R: 0.9, H: 1.4, id: ID.CLAW + 0, tex: (p, q) => { q.m = Math.hypot(p.x - b[0], p.y - b[1]) < L * 0.4 ? M.horn : M.claw; } });
@@ -720,6 +865,11 @@ function foreFlipper(FR: Relief, R: Rig, near: boolean) {
 /** Hind flipper geometry. */
 function hindGeo(R: Rig, near: boolean) {
   const { P, at, tail } = R;
+  if (P.swim) {
+    // afloat: both hind flippers trail straight back off the tail, a little apart, steering
+    const t0 = at(0.02);
+    return { root: [tail[0] + 4 * Math.cos(t0.a), tail[1] + 4 * Math.sin(t0.a)] as V2, a: t0.a + Math.PI + 0.04 + P.hindA + (near ? 0 : P.hindS) };
+  }
   const hip = at(0.2);
   const root = lerp2([tail[0] + 5, tail[1] + 1], [hip.p[0], hip.p[1] + hip.r * 0.55], P.hind);
   const a0 = near ? Math.PI + 0.3 : Math.PI + 0.62;
@@ -780,7 +930,8 @@ function nails(sk: Sk, R: Rig) {
 export const CORVEXSEAL: SpeciesDef = {
   name: 'Corvex Seal', kind: 'mammal', len: 170, height: 50,
   anims: SEAL_ANIMS,
-  canvas: () => ({ w: 250, h: 160, ox: 112, oy: 148 }),
+  canvas: anim => (SEAL_SWIM_ANIMS.includes(anim) ? { w: 300, h: 280, ox: 150, oy: 140 } : { w: 250, h: 160, ox: 112, oy: 148 }),
+  anchor: Object.fromEntries(SEAL_SWIM_ANIMS.map(k => [k, 'centre'])) as Record<string, 'centre'>,
   draw: (sk, anim, frame, eye) => draw(sk, anim, frame, eye),
-  eyeFor: (anim, f) => (anim === 'roar' || anim === 'gallop' || anim === 'lunge' ? 'angry' : anim === 'sleep' || anim === 'pin' ? 'closed' : anim === 'wake' && f > 0 && f < 3 ? 'alert' : 'open'),
+  eyeFor: (anim, f) => (anim === 'roar' || anim === 'gallop' || anim === 'lunge' || (anim === 'grab' && f === 1) ? 'angry' : anim === 'sleep' || anim === 'pin' ? 'closed' : anim === 'wake' && f > 0 && f < 3 ? 'alert' : 'open'),
 };
