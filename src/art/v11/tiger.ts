@@ -7,15 +7,23 @@
 // faded umber stripes and is caked with mud from the elbows down; fresh out of a wallow the whole
 // animal is sheeted in dark wet mud.
 //
-// Painted with the beast sketch core (beasts-core.ts) as a posed 2D rig with depth: a barrel torso
-// (spine tube + belly, chest, shoulder and haunch masses), IK legs with splayed paws, a hinged jaw,
-// folding ears and nostrils, a tail chain. One geometry pass resolves twice: dry (caked, cracked mud)
-// and wet (dark glossy mud, wet fur), so the world can show it dripping fresh out of the mud.
+// Sculpted in 2.5D (src/art/sculpt.ts) into the beast sketch core (beasts-core.ts) from a posed rig with
+// depth. Every form is ONE continuous outline through anatomical landmarks (the withers, the dipped back,
+// the croup, the buttock, the sagging belly and the brisket; the nape and the dewlap; each leg's front and
+// back edge with the point of the shoulder, the triceps, the elbow, the forearm, the wrist, the thigh,
+// the stifle, the calf and the point of the hock; the paw's toe lobes), shaded from its distance in
+// from the edge, with the anatomy underneath painted in as relief: the shoulder blade, the ribs, the
+// flank hollow, the hip bone, the haunch, the jaw muscle, the eye turret and the dome, plus skin folds,
+// hair, fur tufts breaking the edge, cracked mud plates. The head is a single sculpted form (the jaw a
+// second one when it opens). One geometry pass resolves twice: dry (caked, cracked mud) and wet (dark
+// glossy mud, wet fur), so the world can show it dripping fresh out of the mud.
 //
 // Everything faces RIGHT; the anchor is the ground under the body (the mud surface for the wallow).
 
-import { Sk, V2, Px, rmp, drawEye, EyeSpec, BeastEye, SpeciesDef, gait, TAU, hh, kf, cbez } from '../beasts-core';
-import { Frame2, leg, LegSpec, scaleLeg } from '../beasts-rig';
+import { Sk, V2, rmp, drawEye, EyeSpec, BeastEye, SpeciesDef, gait, TAU, hh, cbez, ik2 } from '../beasts-core';
+import { Frame2 } from '../beasts-rig';
+import { noise2 } from '../../core/math';
+import { Lay, Tx, Keys, shape, spline, limbOutline, fringe, densify, crv, cl, ss, gs, frc, cell, CELL, rotP } from '../sculpt';
 import { hex, C } from '../color';
 import { PixelBuffer } from '../pixel';
 
@@ -332,10 +340,10 @@ export function tigerEyeFor(anim: string, frame: number): BeastEye {
 // ------------------------------------------------------------------ materials
 type M = ReturnType<typeof mats>;
 function mats(sk: Sk) {
-  const coatR = rmp('#a5693a', { n: 7, dark: 0.6, cool: 0.3, light: 0.4, warm: 0.3, sat: 0.08 });
-  const stripeR = rmp('#4a2b1b', { n: 5, dark: 0.5, light: 0.3 });
-  const fadedR = rmp('#7c4a2a', { n: 6, dark: 0.56, light: 0.3 });
-  const creamR = rmp('#e4d0a6', { n: 6, dark: 0.5, light: 0.4 });
+  const coatR = rmp('#a8703e', { n: 8, dark: 0.58, cool: 0.12, light: 0.42, warm: 0.3, sat: 0.0 });
+  const stripeR = rmp('#3e2618', { n: 5, dark: 0.5, light: 0.32, cool: 0.12 });
+  const fadedR = rmp('#7a4c2c', { n: 6, dark: 0.56, light: 0.32, cool: 0.12 });
+  const creamR = rmp('#e6d4ac', { n: 7, dark: 0.5, light: 0.42, cool: 0.18 });
   return {
     coat: sk.m(coatR),
     stripe: sk.m(stripeR, { edge: 1 }),
@@ -343,12 +351,12 @@ function mats(sk: Sk) {
     cream: sk.m(creamR),
     // fur that wet mud covers once it has been under (the flanks, the chest, the face below the eyes)
     coatW: sk.m(coatR), stripeW: sk.m(stripeR, { edge: 1 }), fadedW: sk.m(fadedR, { edge: 1 }), creamW: sk.m(creamR),
-    mud: sk.m(rmp('#9c8b70', { n: 6, dark: 0.52, light: 0.34 })),
-    mud2: sk.m(rmp('#86745b', { n: 6, dark: 0.52, light: 0.3 })),
-    crack: sk.m(rmp('#6a5a46', { n: 4, dark: 0.45 }), { edge: 0 }),
+    mud: sk.m(rmp('#958060', { n: 7, dark: 0.55, light: 0.34, cool: 0.15 })),
+    mud2: sk.m(rmp('#7e6a4e', { n: 7, dark: 0.55, light: 0.3, cool: 0.15 })),
+    crack: sk.m(rmp('#4e3e2c', { n: 4, dark: 0.45 }), { edge: 0 }),
     wetMud: sk.m(rmp('#3f2d1e', { n: 6, dark: 0.62, light: 0.62 }), { k: 1.2 }),
     skin: sk.m(rmp('#4e3530', { n: 5, dark: 0.5, light: 0.35 })),
-    mouth: sk.m(rmp('#6a2630', { n: 4, dark: 0.5 }), { edge: 0 }),
+    mouth: sk.m(rmp('#7a2c36', { n: 6, dark: 0.6, light: 0.35 }), { edge: 0, spec: 0.5 }),
     gum: sk.m(rmp('#a24a52', { n: 4, dark: 0.5 })),
     tongue: sk.m(rmp('#c4666c', { n: 5, dark: 0.5, light: 0.35 })),
     tooth: sk.m(rmp('#efe4c8', { n: 4, dark: 0.35, at: 2 })),
@@ -386,8 +394,8 @@ function applyWet(sk: Sk, m: M) {
       if (!wet.has(mt) || sk.ov[i]) continue;
       const l = sk.lum[i];
       const r = hh(x >> 1, y, 91);
-      if (l > 0.92 && r < 0.2) { sk.ov[i] = WET_HI; if (sk.mat[i + 1] && !sk.ov[i + 1] && r < 0.1) sk.ov[i + 1] = WET_HI2; }
-      else if (l > 0.84 && r < 0.07) sk.ov[i] = WET_HI2;
+      if (l > 1.0 && r < 0.16) { sk.ov[i] = WET_HI; if (sk.mat[i + 1] && !sk.ov[i + 1] && r < 0.08) sk.ov[i + 1] = WET_HI2; }
+      else if (l > 0.93 && r < 0.05) sk.ov[i] = WET_HI2;
     }
 }
 
@@ -396,12 +404,12 @@ function applyWet(sk: Sk, m: M) {
 function stripeAt(lx: number, d: number, seed = 0): number {
   // irregular bands: the spacing wanders, each tapers down the flank, slants back, some fork
   const x = lx + 3.2 * Math.sin(lx * 0.11 + 1) + d * 13 + d * d * 5 + Math.sin(d * 5 + lx * 0.18) * 1.2;
-  const per = 7.8;
+  const per = 8.6;
   const u = (x + 400) / per, i = Math.floor(u), f = u - i;
-  const len = 0.32 + hh(i, 1, seed) * 0.42;
+  const len = 0.38 + hh(i, 1, seed) * 0.42;
   if (d > len) return 0;
   const taper = 1 - d / len;
-  const w = (0.13 + 0.3 * taper) * (0.75 + hh(i, 2, seed) * 0.55);
+  const w = (0.18 + 0.36 * taper) * (0.75 + hh(i, 2, seed) * 0.55);
   const c = 0.5 + (hh(i, 3, seed) - 0.5) * 0.3;
   let on = Math.abs(f - c) < w * 0.5;
   if (!on && hh(i, 5, seed) < 0.45 && d > len * 0.3) on = Math.abs(f - c - 0.3 - d * 0.15) < w * 0.25;
@@ -409,7 +417,7 @@ function stripeAt(lx: number, d: number, seed = 0): number {
   const brk = hh(i, Math.floor(d * 7), seed + 4);
   if (brk < 0.12 && d > 0.15) return 0;
   // dark near the spine, faded lower down (and wherever old mud has stained the coat)
-  return d < len * 0.45 && brk > 0.35 ? 2 : 1;
+  return d < len * 0.62 && brk > 0.25 ? 2 : 1;
 }
 
 /** dried-mud line down the flank (depth 0..1) at body-local x: wavy, with splash tongues reaching up */
@@ -440,447 +448,639 @@ function crackAt(x: number, y: number, k: number): boolean {
 // ------------------------------------------------------------------ the painter
 export interface TigerOut { head: V2; eye: V2; mouth: V2; nose: V2; paw: V2; tail: V2; m: M }
 
+/** keys keyed by joint index + fraction along the next bone -> keys keyed by arc fraction of the whole chain */
+function jointKeys(chain: V2[], keys: [number, number][]): [number, number][] {
+  const cum: number[] = [0];
+  for (let i = 1; i < chain.length; i++) cum.push(cum[i - 1] + Math.hypot(chain[i][0] - chain[i - 1][0], chain[i][1] - chain[i - 1][1]));
+  const T = cum[cum.length - 1] || 1;
+  return keys.map(([j, w]) => {
+    const i = Math.min(chain.length - 2, Math.floor(j)), f = j - i;
+    return [(cum[i] + (cum[i + 1] - cum[i]) * f) / T, w] as [number, number];
+  });
+}
+
+/** the brain maze on the dome: meandering lines (contours of warped noise), 0 off .. 1 on the line */
+function mazeAt(x: number, y: number, s: number): number {
+  const wx = x + (noise2(x * 0.21 + 3.1, y * 0.21, 37) - 0.5) * 5;
+  const wy = y + (noise2(x * 0.21, y * 0.21 + 7.7, 38) - 0.5) * 5;
+  const n = noise2(wx / (3.4 * s), wy / (3.4 * s), 39) * 0.75 + noise2(wx / (1.8 * s), wy / (1.8 * s), 40) * 0.25;
+  return 1 - Math.min(1, Math.abs(n - 0.5) / 0.16);
+}
+
 export function drawTiger(sk: Sk, P: TigerPose, k = 1, detail = 0): TigerOut {
   void detail;
   const m = mats(sk);
   sk.clipY = 0;
   const lieK = P.lie;
-  const lowDrop = P.low * 10 + lieK * 6;
+  const lowDrop = P.low * 9 + lieK * 7;
   const B = new Frame2([(-6 + P.bx) * k, (-34 + P.by + lowDrop + P.sink * SINK) * k], P.tilt, k);
+  const invC = Math.cos(-B.a), invS = Math.sin(-B.a), invO: V2 = [0, 0];
+  /** body-local coords of a pixel (a reused pair: read it at once) */
   const inv = (x: number, y: number): V2 => {
     const dx = (x - B.o[0]) / k, dy = (y - B.o[1]) / k;
-    const c = Math.cos(-B.a), s = Math.sin(-B.a);
-    return [dx * c - dy * s, dx * s + dy * c];
+    invO[0] = dx * invC - dy * invS; invO[1] = dx * invS + dy * invC;
+    return invO;
   };
-
-  // ---- the torso profile (local): spine points and radii; tops and bottoms for the depth lookup
-  const st = P.stretch;
-  const breathe = P.br * 0.8;
-  const shake = P.shake;
+  const st = P.stretch, br = P.br, shake = P.shake;
   const wob = (i: number) => (shake ? Math.sin(P.t * TAU * 2 - i * 0.9) * 1.6 * shake : 0);
-  const spineL: V2[] = [
-    [-40 - st * 0.4, -1 + wob(4)], [-27 - st * 0.2, -5 + wob(3)], [-6, -4 + wob(2)],
-    [14 + st * 0.3, -7 + wob(1) - P.hump * 0.6], [27 + st * 0.5, -3 + wob(0)],
+  const spec = new Map<number, number>();
+  const wetSpec = (v: number) => { for (const id of [m.mud, m.mud2, m.crack]) spec.set(id, v); };
+  wetSpec(0.05);
+
+  // ---------------------------------------------------------------- the body's outline (body-local landmarks)
+  const TOPK: [number, number][] = [
+    [20 + st * 0.3, -23 - P.hump * 1.5 + wob(1)], [5, -20.2 + wob(2)], [-11, -19.8 + wob(2)], [-26, -20.8 + wob(3)],
+    [-38 - st * 0.25, -22.4 + wob(4)], [-48 - st * 0.4, -17.5 + wob(4)], [-53 - st * 0.4, -10],
   ];
-  const prof = [15, 19.5 + breathe * 0.3, 21.5 + breathe, 20 + breathe * 0.6, 15.5];
-  const radAt = (t: number) => {
-    const u = t * (prof.length - 1), i = Math.min(prof.length - 2, Math.floor(u)), f = u - i;
-    const e = f * f * (3 - 2 * f);
-    return (prof[i] + (prof[i + 1] - prof[i]) * e) * k;
+  const BOTK: [number, number][] = [
+    [-56 - st * 0.4, -1], [-52 - st * 0.35, 10], [-39, 17], [-23, 21 + P.jig * 0.5 + br * 0.4], [-5, 24 + P.jig + br],
+    [12, 23 + br * 0.6 + P.jig * 0.3], [24 + st * 0.3, 19], [33 + st * 0.4, 10],
+  ];
+  // depth down the flank (0 at the back, 1 at the belly) for the stripes and the mud line
+  const topKeys = TOPK.slice().reverse() as [number, number][];
+  const botKeys = BOTK as [number, number][];
+  const topY = (lx: number) => crv(topKeys, lx);
+  const botY = (lx: number) => crv(botKeys, lx);
+  const depth = (lx: number, ly: number) => (ly - topY(lx)) / Math.max(4, botY(lx) - topY(lx));
+
+  // ---------------------------------------------------------------- neck and head frames
+  const N0 = B.p(26 + st * 0.5, -8);
+  const nA = B.a - 0.62 + P.neck;
+  const nL = 14 * k;
+  const HS = 1.22;
+  // (lying under the mud, the head settles low too: only the dome, the eye turrets and the nostrils break the surface)
+  const Ho: V2 = [N0[0] + Math.cos(nA) * nL, N0[1] + Math.sin(nA) * nL + P.sink * 9 * k];
+  const ha = B.a + P.neck * 0.55 + P.head + 0.06 + (shake ? Math.sin(P.t * TAU * 2) * 0.12 : 0);
+  const hc = Math.cos(ha), hs = Math.sin(ha);
+  const hp = (x: number, y: number): V2 => [Ho[0] + (x * hc - y * hs) * k * HS, Ho[1] + (x * hs + y * hc) * k * HS];
+  const hInvO: V2 = [0, 0];
+  /** head-local coords of a pixel (a reused pair: read it at once) */
+  const hInv = (px: number, py: number): V2 => { const rx = (px - Ho[0]) / (k * HS), ry = (py - Ho[1]) / (k * HS); hInvO[0] = rx * hc + ry * hs; hInvO[1] = -rx * hs + ry * hc; return hInvO; };
+  const HINGE: V2 = [4, 5];
+  const jawA = P.jaw * 0.95;
+  const jl = (x: number, y: number): V2 => rotP([x, y], HINGE, jawA);
+  const jp = (x: number, y: number): V2 => { const q = jl(x, y); return hp(q[0], q[1]); };
+  const jInv = (px: number, py: number): V2 => rotP(hInv(px, py), HINGE, -jawA);
+
+  // ---------------------------------------------------------------- fur, stripes, mud
+  /** short sleek hair: fine strokes along the lie of the coat (dir in radians), a little light jitter */
+  const hair = (x: number, y: number, dir: number, o: Tx, amp = 0.05) => {
+    const c = Math.cos(dir), s = Math.sin(dir);
+    const al = (x * c + y * s) / k, ac = (-x * s + y * c) / k;
+    const n = noise2(al / 2.6, ac / 0.75, 17);
+    if (n > 0.66) o.t += amp; else if (n < 0.3) o.t -= amp * 1.2;
   };
-  // depth lookup tables (body-local x from -80 to 60)
-  const TOP = new Float32Array(141).fill(1e9), BOT = new Float32Array(141).fill(-1e9);
-  const segL: number[] = [0];
-  for (let i = 1; i < spineL.length; i++) segL.push(segL[i - 1] + Math.hypot(spineL[i][0] - spineL[i - 1][0], spineL[i][1] - spineL[i - 1][1]));
-  const total = segL[segL.length - 1];
-  for (let s = 0; s <= 60; s++) {
-    const dd = (s / 60) * total;
-    let j = 1;
-    while (j < spineL.length - 1 && segL[j] < dd) j++;
-    const f = (dd - segL[j - 1]) / Math.max(1e-6, segL[j] - segL[j - 1]);
-    const x = spineL[j - 1][0] + (spineL[j][0] - spineL[j - 1][0]) * f, y = spineL[j - 1][1] + (spineL[j][1] - spineL[j - 1][1]) * f;
-    const r = radAt(s / 60) / k;
-    for (let lx = Math.floor(x - r); lx <= Math.ceil(x + r); lx++) {
-      const ix = lx + 80;
-      if (ix < 0 || ix > 140) continue;
-      const h = Math.sqrt(Math.max(0, r * r - (lx - x) * (lx - x)));
-      TOP[ix] = Math.min(TOP[ix], y - h);
-      BOT[ix] = Math.max(BOT[ix], y + h);
-    }
-  }
-  // the belly sags below the spine tube, the chest is deep
-  const bellyC: V2 = [-4, 8.5 + P.jig * 0.5], bellyR: V2 = [27 + st * 0.3, 11.5 + breathe * 0.5 + P.jig * 0.15];
-  const chestC: V2 = [17 + st * 0.3, 5], chestR: V2 = [14.5, 14 + breathe];
-  const sag = (c: V2, r: V2) => {
-    for (let lx = Math.floor(c[0] - r[0]); lx <= Math.ceil(c[0] + r[0]); lx++) {
-      const ix = lx + 80, u = (lx - c[0]) / r[0];
-      if (ix < 0 || ix > 140 || Math.abs(u) >= 1) continue;
-      BOT[ix] = Math.max(BOT[ix], c[1] + r[1] * Math.sqrt(1 - u * u));
-    }
-  };
-  sag(bellyC, bellyR);
-  sag(chestC, chestR);
-  const depth = (lx: number, ly: number) => {
-    const ix = Math.max(0, Math.min(140, Math.round(lx) + 80));
-    const top = TOP[ix] < 1e8 ? TOP[ix] : -20, bot = BOT[ix] > -1e8 ? BOT[ix] : 20;
-    return (ly - top) / Math.max(1, bot - top);
+  const mudTex = (x: number, y: number, o: Tx, edge: number) => {
+    // dried mud: plates crazed with cracks, crumbs at the edge; shiny-dark once it is wet (applyWet)
+    if (edge < 0.06) o.t += 0.06;
+    // plates of dried mud, each a little raised slab with bevelled edges, cracked apart
+    cell(x / k, y / k, 5.4, 4.2, 211, 0.9);
+    const gap = CELL.F2 - CELL.F1;
+    if (gap < 0.075 && edge > 0.04 && CELL.CI > 0.12) { o.m = m.crack; o.z -= 0.5 * k; return; }
+    o.z += (Math.min(1, gap * 4) - 0.5) * 0.9 * k;
+    o.m = CELL.CI < 0.6 ? m.mud : m.mud2;
+    // crumbs and grit
+    if (hh(Math.floor(x / k * 1.3), Math.floor(y / k * 1.3), 217) < 0.06) { o.z += 0.4 * k; o.t += 0.05; }
   };
 
-  // ---- coat fill for the body masses
-  const wetLine = 0.17;
-  const bodyFill = (p: Px) => {
-    const [lx, ly] = inv(p.x, p.y);
-    const d = depth(lx, ly);
+  const bodyTex = (x: number, y: number, d: number, o: Tx) => {
+    const [lx, ly] = inv(x, y);
+    const dd = depth(lx, ly);
     const ml = mudLine(lx);
-    if (d > ml) {
-      if (d > ml + 0.06 && crackAt(lx * k, ly * k, k)) return m.crack;
-      if (d < ml + 0.06) p.l += 0.06;
-      return hh(Math.floor(lx / 4), Math.floor(ly / 3), 21) < 0.75 ? m.mud : m.mud2;
-    }
-    const W = d > wetLine + Math.sin(lx * 0.4) * 0.04;
-    // countershading: the back is deeper, the flank paler
-    if (d < 0.3) p.l -= (0.3 - d) * 0.28;
-    // haunch: stripes curve round the thigh
-    let s = 0;
-    const hx = lx + 31, hy = ly + 1;
-    const hr = Math.hypot(hx, hy);
-    if (hr < 16 && hr > 6 && hy < 3 && hx < 7) {
-      const u = (hr + Math.atan2(hy, hx) * 1.2) / 6.2, i = Math.floor(u);
-      if (u - i < 0.3 && hh(i, 3, 9) > 0.3) s = hh(i, 4, 9) < 0.4 ? 2 : 1;
-    } else s = stripeAt(lx, d);
-    // the belly and the inside of the chest are pale
-    if (d > 0.8 && lx > 8) return W ? m.creamW : m.cream;
-    if (s === 2) return W ? m.stripeW : m.stripe;
-    if (s === 1) return W ? m.fadedW : m.faded;
-    return W ? m.coatW : m.coat;
+    // anatomy under the skin: the shoulder blade and its spine, the ribcage, the hollow of the flank,
+    // the hip bone, the great haunch; folds of loose skin behind the elbow and in the flank
+    let z = 0;
+    z += 3.2 * gs(lx - (16 + st * 0.3), 6) * gs(ly + 9 + P.hump, 7);         // scapula
+    z -= 1.2 * gs(lx - (10 + st * 0.3), 2.2) * gs(ly + 6, 6) * (1 - P.hump * 0.3); // behind the scapula
+    z += 2.4 * gs(lx + 6, 15) * gs(ly - 5, 8);                              // ribcage barrel
+    z += 0.5 * Math.sin((lx + 40) / 4.1) * gs(lx + 2, 9) * gs(ly - 4, 5);   // ribs reading through
+    z -= 1.8 * gs(lx + 27, 4) * gs(ly - 3, 6);                              // flank hollow
+    z += 2.0 * gs(lx + 37, 3.5) * gs(ly + 14, 3.5);                          // point of the hip
+    z += 4.0 * gs(lx + 42, 9) * gs(ly + 2, 10);                              // haunch
+    // a heavy skin fold curving down behind the elbow, and the flank fold
+    const f1 = Math.abs((lx - (8 + st * 0.3)) - (ly - 6) * 0.25 + Math.sin(ly * 0.5) * 0.6);
+    if (f1 < 1.2 && ly > -4 && ly < 18) { z -= 1.0 * (1 - f1 / 1.2); o.t -= 0.05; }
+    const f2 = Math.abs((lx + 30) + (ly - 8) * 0.55);
+    if (f2 < 1.1 && ly > 2 && ly < 16) { z -= 0.8 * (1 - f2 / 1.1); o.t -= 0.04; }
+    o.z = z * k;
+    // under the mud line: caked mud
+    if (dd > ml) { mudTex(x, y, o, dd - ml); return; }
+    const W = dd > 0.17 + Math.sin(lx * 0.4) * 0.04;
+    // countershading: a darker saddle, paler down the flank, cream at the belly and inside the chest
+    if (dd < 0.3) o.t -= (0.3 - dd) * 0.3;
+    o.t -= 0.12 * cl((dd - 0.35) / 0.5);
+    hair(x, y, B.a + Math.PI - 0.25 - dd * 0.9, o, 0.045);
+    const s = stripeAt(lx + (noise2(lx / 3, ly / 3, 9) - 0.5) * 1.6, dd);
+    if (dd > 0.78 && lx > 4) { o.m = W ? m.creamW : m.cream; return; }
+    o.m = s === 2 ? (W ? m.stripeW : m.stripe) : s === 1 ? (W ? m.fadedW : m.faded) : W ? m.coatW : m.coat;
+    void d;
   };
 
-  // ---- the legs
-  const lk = 1 - P.low * 0.4;
-  const FL: LegSpec = scaleLeg({ l1: 13 * lk + 4, l2: 12.5, l3: 4.5, r1: 9.2, r2: 7.2, r3: 6.2, bend: 1 }, k);
-  const HL: LegSpec = scaleLeg({ l1: 13 * lk + 4, l2: 12.5, l3: 8.5, r1: 11.5, r2: 7.2, r3: 5.8, bend: -1 }, k);
+  // ---------------------------------------------------------------- legs
+  const lk = 1 - P.low * 0.35;
+  interface LegG { chain: V2[]; paw: V2; pawA: number; lifted: boolean; front: boolean; near: boolean }
   let pawNear: V2 = [0, 0];
-  const legFill = (front: boolean) => (p: Px) => {
-    // mud socks: the lower leg and the paw; faint bands above
-    const lu = p.t * 26, lv = p.v * 4;
-    if (p.t > 0.5 || (p.t > 0.34 && hh(Math.floor(lu), Math.floor(lv), front ? 17 : 18) < 0.5)) {
-      if (p.t > 0.62 && crackAt(lu * k, lv * k, k)) return m.crack;
-      return hh(Math.floor(lu / 3), Math.floor(lv / 2), 19) < 0.82 ? m.mud : m.mud2;
-    }
-    const band = (p.t * (front ? 7.5 : 6) + 0.3) % 1;
-    if (band < 0.3 && hh(Math.floor(p.t * (front ? 7.5 : 6) + 0.3), front ? 1 : 2, 33) > 0.3 && p.v > -0.5) return m.fadedW;
-    return m.coatW;
-  };
-  const paw = (f: V2, z: number, front: boolean, bias: number, claws: number, lifted: boolean, ang = 0) => {
-    // a wide paw with four splayed, webbed toes (mud shoes) and retractile claws
-    const w = (front ? 7 : 6) * k, h = (front ? 3.3 : 3) * k;
-    const ca = Math.cos(ang), sa = Math.sin(ang);
-    const P2 = (x: number, y: number): V2 => [f[0] + (x * ca - y * sa) * k, f[1] + (x * sa + y * ca) * k];
-    const c = P2(0.8, -h / k * 0.45);
-    sk.np();
-    sk.ell(c[0], c[1], w, h, (p) => (crackAt(p.x - c[0], p.y - c[1], k) ? m.crack : m.mud), { z: z + 2, bias, rot: ang });
-    // webbing between the spread toes
-    const wb = P2(4.6, -1.2);
-    sk.ell(wb[0], wb[1], 3.8 * k, 1.6 * k, m.skin, { z: z + 2.6, bias: bias - 0.05, rot: ang });
-    for (let i = 0; i < 4; i++) {
-      const tx = 2.4 + i * 1.85 + (lifted ? 0 : i * 0.3), ty = -1.4 + i * 0.25 + (i === 0 ? -0.5 : 0);
-      const q = P2(tx, ty);
-      sk.ell(q[0], Math.min(q[1], lifted ? q[1] : -0.6 * k), 1.8 * k, 1.6 * k, (p) => (p.u + p.v > 0.9 ? m.mud2 : m.mud), { z: z + 3 + i * 0.15, bias });
-      if (claws > 0.05) {
-        const cl = (1.4 + claws * 2.6) * k;
-        const a = ang + (lifted ? 0.7 : 0.85) - claws * 0.3;
-        const bx = q[0] + Math.cos(ang) * 1.2 * k, by = q[1] + Math.sin(ang) * 0.4 * k;
-        sk.blade(bx, by, bx + Math.cos(a) * cl, by + Math.sin(a) * cl, s => (1 - s) * 0.8 * k + 0.2, m.claw, { z0: z + 4, z1: z + 4.2, bias, bend: 0.4 * k });
-      }
-    }
-  };
-  const drawLeg = (which: number) => {
+  const legGeom = (which: number): LegG => {
     const front = which < 2, near = which % 2 === 0;
-    // a near foreleg reaching out (pounce, swipe, climbing out of the mud) passes in front of the head
-    const out = front && near ? Math.max(P.reach, P.swipe > -8 ? 1 : 0) : 0;
-    const z = near ? 13 + out * 24 : -13, bias = near ? 0 : -0.14;
-    const L = front ? FL : HL;
-    sk.np();
-    const hip = B.p(front ? 17 + st * 0.3 : -31 - st * 0.25, front ? 2 : 1);
-    const restX = front ? 13 : -37;
-    let foot: V2 = [(restX + P.bx + P.feet[which][0] + (near ? 0 : front ? -3 : 2)) * k, Math.min(0, P.feet[which][1]) * k];
+    const top = front ? B.p(17 + st * 0.3, -17 - P.hump * 1.2) : B.p(-40 - st * 0.25, -15);
+    const hip = front ? B.p(24 + st * 0.3, 2) : B.p(-40 - st * 0.25, -2);
+    const restX = front ? 15 : -36;
+    let foot: V2 = [(restX + P.bx + P.feet[which][0] + (near ? 0 : front ? -4 : 3)) * k, Math.min(0, P.feet[which][1]) * k];
     let lifted = P.feet[which][1] < -0.5;
     let ang = 0;
     if (front && (near ? P.reach : P.reachF) > 0) {
       const r = near ? P.reach : P.reachF;
-      // reaching: the paw comes forward and up out of the body line
-      const tgt = near ? B.p(48 + r * 15, 14 - r * 5) : B.p(46 + r * 12, 15 - r * 4);
+      const tgt = near ? B.p(50 + r * 14, 14 - r * 5) : B.p(47 + r * 12, 15 - r * 4);
       foot = [foot[0] + (tgt[0] - foot[0]) * r, foot[1] + (tgt[1] - foot[1]) * r];
-      lifted = true;
-      ang = -0.5 * r;
+      lifted = true; ang = -0.5 * r;
     }
     if (front && near && P.swipe > -8) {
-      const sh = B.p(17, -3);
-      const len = 30 * k;
-      foot = [sh[0] + Math.sin(P.swipe) * len, sh[1] + Math.cos(P.swipe) * len];
-      lifted = true;
-      ang = -P.swipe * 0.8;
+      // the wind-up raises the paw high in front of the chest, the strike swings it down and forward
+      const sh = B.p(20, -3), len = 29 * k;
+      const a = P.swipe < 0 ? Math.PI * 0.5 - P.swipe * 0.3 : P.swipe;
+      foot = [sh[0] + Math.sin(a) * len, sh[1] + Math.cos(a) * len];
+      lifted = true; ang = -a * 0.45;
     }
     if (!front && P.tuck > 0) {
-      const tgt = B.p(-16, 18);
+      const tgt = B.p(-18, 18);
       foot = [foot[0] + (tgt[0] - foot[0]) * P.tuck, foot[1] + (tgt[1] - foot[1]) * P.tuck];
       lifted = true;
     }
     if (lieK > 0.01) {
-      // lying: forelegs stretched out in front, hind legs folded under the haunch
-      const tgt = front ? B.p(near ? 40 : 36, 12) : B.p(near ? -18 : -22, 12);
+      const tgt = front ? B.p(near ? 44 : 40, 12) : B.p(near ? -20 : -24, 12);
       foot = [foot[0] + (tgt[0] - foot[0]) * lieK, foot[1] + (tgt[1] - foot[1]) * lieK];
-      ang = front ? -0.1 : 0;
+      ang = front ? -0.08 : 0;
     }
-    const footAng = front ? -Math.PI / 2 - 0.18 - (lifted ? 0.5 : 0) : -Math.PI / 2 - 0.6;
-    const j = leg(sk, hip, foot, L, legFill(front), z, footAng, bias);
-    if (near && front) pawNear = j[3];
-    // the elbow: a thick knot of muscle
-    if (front) sk.ell(j[1][0], j[1][1], 6.6 * k, 5.8 * k, legFill(true), { z: z + 0.5, bias });
-    paw(j[3], z, front, bias, P.claws, lifted, ang);
+    // the bones: upper arm / thigh, forearm / shin, the short pastern / long hock
+    const l1 = (front ? 15 * lk + 3.5 : 15 * lk + 4) * k, l2 = (front ? 13 : 12.5) * k, l3 = (front ? 5 : 9) * k;
+    const footAng = front ? -Math.PI / 2 - 0.12 - (lifted ? 0.45 : 0) + ang * 0.5 : -Math.PI / 2 - 0.62 + ang * 0.3;
+    const pawTop: V2 = [foot[0] + Math.cos(ang - Math.PI / 2) * 3.5 * k, foot[1] + Math.sin(ang - Math.PI / 2) * 3.5 * k];
+    const ankle: V2 = [pawTop[0] + Math.cos(footAng) * l3, pawTop[1] + Math.sin(footAng) * l3];
+    const [knee, end] = ik2(hip, ankle, l1, l2, front ? 1 : -1);
+    return { chain: [top, hip, knee, end, pawTop], paw: foot, pawA: ang, lifted, front, near };
   };
-  if (P.sink < 0.98) {
-    drawLeg(1);
-    drawLeg(3);
-  }
-
-  // ---- the tail: thick and muscular, a sculling rudder in the wallow
-  sk.np();
-  const tb = B.p(-49 - st * 0.4, -5);
-  const ta = B.ang(Math.PI * 0.72 - P.tail * 0.9);
-  const wv = Math.sin(P.tailWave * TAU) * 3;
-  const c1: V2 = [tb[0] + Math.cos(ta) * 15 * k, tb[1] + Math.sin(ta) * 15 * k];
-  const c2: V2 = [c1[0] - 12 * k, c1[1] + (7 - P.tail * 12 + wv) * k];
-  const tipA = Math.PI + 0.3 - P.tailCurl * 1.6 + P.tail * 0.4;
-  const tip: V2 = [c2[0] + Math.cos(tipA) * 11 * k, c2[1] + Math.sin(tipA) * 11 * k];
-  const tPts = cbez(tb, c1, c2, tip, 14);
-  sk.tube(tPts, t => (7.6 - t * 4.6) * k, (p) => {
-    if (p.ny > 0.42 && p.t < 0.75) return crackAt(p.t * 50 * k, p.v * 5 * k, k) ? m.crack : m.mud;
-    if (p.t > 0.88) return m.stripe;
-    if (p.t > 0.2 && (p.t * 6.2 + 0.15) % 1 < 0.34) return p.t > 0.55 ? m.stripe : m.faded;
-    return m.coatW;
-  }, { z: -3, rz: 0.9 });
-
-  // ---- the torso: spine tube, haunch, belly, chest and shoulder masses
-  sk.np();
-  sk.tube(spineL.map(([x, y]) => B.p(x, y)), radAt, bodyFill, { z: 0, rz: 0.95 });
-  const bodyPart = sk.pid;
-  const haunch = B.p(-31 - st * 0.25, -1);
-  sk.ell(haunch[0], haunch[1], 16.5 * k, 16.5 * k, bodyFill, { rot: B.a, rz: 15 * k, z: 2 });
-  const belly = B.p(bellyC[0], bellyC[1]);
-  sk.ell(belly[0], belly[1], bellyR[0] * k, bellyR[1] * k, bodyFill, { rot: B.a, rz: 12 * k });
-  const chest = B.p(chestC[0], chestC[1]);
-  sk.ell(chest[0], chest[1], chestR[0] * k, chestR[1] * k, bodyFill, { rot: B.a, rz: 13 * k, z: 2 });
-  const shoulder = B.p(16 + st * 0.3, -6 - P.hump * 1.4);
-  sk.ell(shoulder[0], shoulder[1], 13 * k, 15.5 * k, bodyFill, { rot: B.a - 0.15, rz: 12 * k, z: 4 });
-  // sleek coat: faint streaks running back along the body
-  sk.streaks(bodyPart, () => [-0.96, 0.28], { spacing: 4, len: 3, amp: 0.035, seed: 5 });
-  // heavy skin folds behind the shoulder and in the flank
-  for (const [fx, fy, len, a] of [[4, -2, 9, 1.65], [6, 7, 6, 1.85], [-16, 1, 8, 1.4]] as [number, number, number, number][]) {
-    const a0 = B.p(fx, fy), dv = B.dir(a, len);
-    const nn = Math.ceil(len * k);
-    for (let i = 0; i <= nn; i++) sk.paint(a0[0] + (dv[0] * i) / nn + Math.sin(i * 0.9) * 0.4, a0[1] + (dv[1] * i) / nn, 0, -0.1);
-  }
-
-  // ---- neck and head (the head is big: HK)
-  const HK = 1.3, hk = k * HK;
-  const N0 = B.p(24 + st * 0.5, -5);
-  const nA = B.a - 0.52 + P.neck;
-  const nL = 15 * k;
-  const Ho: V2 = [N0[0] + Math.cos(nA) * nL, N0[1] + Math.sin(nA) * nL];
-  const H = new Frame2(Ho, B.a + P.neck * 0.55 + P.head + 0.12, hk);
-  const neckFill = (p: Px) => {
-    // a heavy neck: throat pale and muddy underneath
-    const hx = p.x - N0[0], hy = p.y - N0[1];
-    const across = (hy * Math.cos(nA) - hx * Math.sin(nA)) / k; // + = under the neck
-    const u = (hx * Math.cos(nA) + hy * Math.sin(nA)) / k;
-    if (across > 9) return crackAt(across * k, u * k, k) ? m.crack : m.mud;
-    if (across < -6 && ((u + 30) / 5.5) % 1 < 0.32 && hh(Math.floor((u + 30) / 5.5), 2, 27) > 0.25) return m.faded;
-    if (across < -10) p.l -= 0.05;
-    return m.coatW;
+  /** the paw: a broad mud-shoe of four splayed, webbed toes; claws out when they are needed */
+  const pawPts = (g: LegG): V2[] => {
+    const s = g.front ? 1 : 0.92, a = g.pawA, c = Math.cos(a), sn = Math.sin(a);
+    const P2 = (x: number, y: number): V2 => [g.paw[0] + (x * c - y * sn) * k * s, g.paw[1] + (x * sn + y * c) * k * s];
+    const spread = g.lifted ? 0.3 : 1;
+    const sp = spread, nd = 1.0 + sp * 0.5;
+    const raw: [number, number][] = [
+      [-4.8, -4.4], [-5.9, -2.0], [-4.6, -0.2], [-2.6, 0], [-0.5, -0.2], [0.3, -nd], [1.0, 0], [3.2, 0], [3.9, -nd], [4.6, 0], [6.8, 0],
+      [7.5, -nd * 0.95], [8.3, 0], [10.4 + sp * 0.4, -0.3], [11.1 + sp * 0.4, -1.8], [10.3 + sp * 0.2, -3.4], [9.1, -3.7], [8.2, -3.2],
+      [6.8, -4.5], [5.6, -3.9], [4.0, -5.1], [2.6, -6.2],
+    ];
+    return raw.map(([x, y]) => P2(x, y));
   };
-  sk.tube([N0, [(N0[0] + Ho[0]) / 2, (N0[1] + Ho[1]) / 2 - 0.5 * k], Ho], t => (15.5 - t * 3.5) * k, neckFill, { z: 3, rz: 0.95 });
-  const hz = 14;
-  const headLocal = (p: Px): V2 => {
-    const dx = (p.x - H.o[0]) / hk, dy = (p.y - H.o[1]) / hk;
-    const c = Math.cos(-H.a), s = Math.sin(-H.a);
-    return [dx * c - dy * s, dx * s + dy * c];
-  };
-  const headFill = (p: Px) => {
-    const [hx, hy] = headLocal(p);
-    const nz = hh(Math.floor(hx), Math.floor(hy * 0.5), 57) * 0.9;
-    // the throat and the underside of the jaw: caked mud
-    if (hy > 9.4 + Math.sin(hx * 0.8) * 0.8) return crackAt(hx * hk, hy * hk, hk) ? m.crack : m.mud;
-    // the muzzle: plain orange bridge on top, pale upper lip and whisker pad below, rows of whisker spots
-    if (hx > 12) {
-      if (hy > 1 + nz * 0.5) {
-        if (hy > 1.2 && hy < 5.6 && hx > 12.5 && hx < 19 && (Math.floor(hx * 0.95) + Math.floor(hy * 0.9)) % 3 === 0 && hh(Math.floor(hx), Math.floor(hy), 51) < 0.65) return m.fadedW;
-        return m.creamW;
+  const drawLeg = (L: Lay, g: LegG, id: number, zBase: number) => {
+    const ch = g.chain;
+    // half-widths at the landmarks (joint index + fraction): back of the leg (A), front (B)
+    const A = g.front
+      ? jointKeys(ch, [[0, 7.5], [0.6, 9.5], [1, 10.5], [1.45, 10], [1.85, 8.6], [2, 7.6], [2.3, 6.4], [2.75, 4.9], [3, 4.4], [3.4, 4.6], [4, 4.4]])
+      : jointKeys(ch, [[0, 12], [0.6, 14.5], [1, 15.5], [1.4, 13.5], [1.8, 9.5], [2, 7.6], [2.35, 7.2], [2.75, 4.8], [3, 4.6], [3.25, 3.7], [3.7, 3.5], [4, 4.2]]);
+    const Bw = g.front
+      ? jointKeys(ch, [[0, 6], [0.7, 8.5], [1, 9.4], [1.35, 7.4], [1.8, 6.4], [2, 6.4], [2.35, 6.8], [2.75, 4.8], [3, 4.0], [3.5, 4.2], [4, 4.2]])
+      : jointKeys(ch, [[0, 9], [0.6, 11], [1, 12], [1.5, 10], [1.85, 7.2], [2, 6.8], [2.4, 5.0], [2.8, 4.0], [3, 3.8], [3.5, 3.7], [4, 4.2]]);
+    const AK = A.map(([s, w]) => [s, w * k] as [number, number]), BK = Bw.map(([s, w]) => [s, w * k] as [number, number]);
+    const tip = pawPts(g);
+    // limbOutline gives side A (left of travel: the back of a right-facing leg) down, the tip, side B up
+    let ol = limbOutline(ch, AK, BK, [], 30);
+    // splice the paw in between the two sides
+    const half = Math.floor(ol.length / 2);
+    ol = spline([...ol.slice(0, half), ...tip, ...ol.slice(half)], true, 2);
+    // fur breaking the edge at the elbow and the back of the thigh
+    const elbow = ch[2];
+    ol = fringe(densify(ol, 1.2 * k), p => {
+      const de = Math.hypot(p[0] - elbow[0], p[1] - elbow[1]) / k;
+      return g.front ? cl(1 - de / 6) : cl(1 - Math.abs(p[1] - ch[1][1]) / (8 * k)) * (p[0] < ch[1][0] - 6 * k ? 1 : 0) * 0.7;
+    }, 1.3 * k, 2.6 * k, 31 + (g.front ? 1 : 2), -0.4);
+    // depth: the top runs back into the body, the rest stands in front of it
+    const cum: number[] = [0];
+    for (let i = 1; i < ch.length; i++) cum.push(cum[i - 1] + Math.hypot(ch[i][0] - ch[i - 1][0], ch[i][1] - ch[i - 1][1]));
+    const total = cum[cum.length - 1];
+    const sOf = (x: number, y: number) => {
+      let best = 1e9, bs = 0;
+      for (let i = 1; i < ch.length; i++) {
+        const ax = ch[i - 1][0], ay = ch[i - 1][1], dx = ch[i][0] - ax, dy = ch[i][1] - ay, l2 = dx * dx + dy * dy || 1;
+        const t = cl(((x - ax) * dx + (y - ay) * dy) / l2);
+        const ex = x - ax - dx * t, ey = y - ay - dy * t, d2 = ex * ex + ey * ey;
+        if (d2 < best) { best = d2; bs = (cum[i - 1] + Math.sqrt(l2) * t) / total; }
       }
-      return m.coat;
-    }
-    // a small white spot of eyebrow over the eye
-    if (Math.hypot(hx - 8.9, hy + 8.2) < 1.25) return m.cream;
-    // the dome: a maze of dark stripes, uncannily like a brain (hence the folk name)
-    const dq = ((hx - 4) / 9.5) ** 2 + ((hy + 9) / 8.5) ** 2;
-    if (dq < 1 && hy < -6.8) {
-      const v = Math.sin(hx * 0.82 + 1.5 * Math.sin(hy * 0.66 + 0.5)) + Math.sin(hy * 1.0 + 1.3 * Math.sin(hx * 0.58 + 1));
-      if (Math.abs(v) < 0.44 + dq * 0.1) return dq > 0.82 ? m.faded : m.stripe;
-      if (dq < 0.3) p.l += 0.05;
-      return m.coat;
-    }
-    // the lower side of the head is pale (cheek and ruff), crossed by stripes sweeping back from the eye
-    const cheekTop = 2.4 - (hx - 2) * 0.14 + nz * 0.7;
-    if (hy > cheekTop && hx > -11 && hx < 8.5) {
-      const u = (hy + 0.24 * hx + 40) / 3.3, i = Math.floor(u);
-      if (u - i < 0.34 && hx < 7 && hx > -10 && hy < 6 && i % 2 === 0) return hy > 3.5 ? m.stripeW : m.stripe;
-      return hy > 3.5 ? m.creamW : m.cream;
-    }
-    // stripes on the side of the head above the cheek
-    const bu = (hy + 0.5 * hx + 40) / 4, bi = Math.floor(bu);
-    if (hx < 2 && hx > -13 && bu - bi < 0.28 && bi % 2 === 1) return m.faded;
-    return hy > -3 ? m.coatW : m.coat;
-  };
-  // the ears: small and round, set on the back of the dome; they fold flat and seal shut
-  const earUp = Math.max(0, P.ear), earFlat = Math.max(0, -P.ear);
-  const earAt = (bx: number, by: number, zz: number, near: boolean) => {
-    sk.np();
-    const base = H.p(bx, by);
-    const a = H.ang(-1.95 + earUp * 0.2 - earFlat * 1.0 + (shake ? Math.sin(P.t * TAU * 4) * 0.4 : 0));
-    const len = (5.4 - earFlat * 2.3) * hk, wid = (3.5 - earFlat * 0.9) * hk;
-    const tip: V2 = [base[0] + Math.cos(a) * len, base[1] + Math.sin(a) * len];
-    sk.blade(base[0], base[1], tip[0], tip[1], s => Math.sin(Math.min(1, s * 1.1) * Math.PI) * wid + 0.4,
-      (p) => {
-        if (!near) return p.t > 0.68 ? m.earBack : m.coat;
-        // the back of the ear: black with the white "eye spot" every tiger has
-        if (p.t > 0.3 && p.t < 0.72 && Math.abs(p.v) < 0.42) return earFlat >= 0.5 ? m.spot : m.earIn;
-        return p.t > 0.68 ? m.earBack : m.coat;
+      return bs;
+    };
+    const sElbow = cum[2] / total, sWrist = cum[3] / total;
+    const near = g.near;
+    shape(L, ol, {
+      R: (g.front ? 7 : 9) * k, hs: 0.9, id, blend: 3 * k,
+      z0: (x, y) => { const s = sOf(x, y); return zBase + (near ? (-15 + 15 * (g.front ? ss(0.08, 0.3, s) : ss(0.02, 0.2, s))) * k : 0); },
+      tex: (x, y, d, o) => {
+        const s = sOf(x, y);
+        // muscle and bone: the deltoid / quadriceps at the top, the elbow / knee, the forearm / calf
+        // bellies, the knobs of the wrist and the point of the hock, tendons down the cannon
+        const sk2 = (s - sElbow) * total / k;
+        o.z = (g.front ? 1.6 * gs(sk2 + 7, 3.5) + 1.4 * gs(sk2, 1.8) + 1.2 * gs(sk2 - 4, 3) + 0.8 * gs((s - sWrist) * total / k, 1.2)
+          : 2.2 * gs(sk2 + 9, 4) + 1.4 * gs(sk2, 1.6) + 1.6 * gs(sk2 - 3.5, 2.5) + 1.2 * gs((s - sWrist) * total / k, 1.2)) * k;
+        // mud socks from the elbow / hock down, ragged at the top; the paw caked
+        const mudTop = sElbow + (g.front ? 0.04 : 0.1) + (noise2(x / (2.2 * k), y / (2.2 * k), g.front ? 61 : 62) - 0.5) * 0.12;
+        // paw-local coordinates (x forward along the sole, y up negative)
+        const pc = Math.cos(-g.pawA), pn = Math.sin(-g.pawA), rx = (x - g.paw[0]) / k, ry = (y - g.paw[1]) / k;
+        const px = rx * pc - ry * pn, py = rx * pn + ry * pc;
+        const onPaw = s > 0.8 && py > -6.6 && px > -7 && px < 13;
+        if (s > mudTop || onPaw) {
+          mudTex(x, y, o, s - mudTop);
+          // the toes: creases between them, the pads underneath, the webbing
+          if (onPaw) {
+            const tx = px / (g.front ? 1 : 0.92);
+            for (const cx of [0.3, 3.9, 7.5]) if (Math.abs(tx - cx - (py + 1.2) * 0.3) < 0.5 && py > -4.4) { o.t -= 0.16; o.z -= 0.7 * k; if (!g.lifted && py > -1.8) o.m = m.skin; }
+            // each toe a rounded knuckle
+            o.z += 0.6 * k * Math.sin(frc((tx + 3.3) / 3.6) * Math.PI) * (py < -2 ? 1 : 0.4);
+            if (py > -1.1 && tx < -1.5) { o.m = m.skin; o.t -= 0.04; }
+          }
+          return;
+        }
+        // fur: bands across the upper limb, the coat's lie running down the leg
+        const along = s * total / k;
+        const band = frc(along / (g.front ? 5.6 : 6.4) + 0.3);
+        o.m = band < 0.28 && hh(Math.floor(along / 6), g.front ? 1 : 2, 33) > 0.3 && s > 0.18 ? m.fadedW : m.coatW;
+        if (!g.front && s < 0.3) {
+          // the haunch carries the body's stripes
+          const [lx, ly] = inv(x, y);
+          const sAt = stripeAt(lx, cl(depth(lx, ly)));
+          if (sAt) o.m = sAt === 2 ? m.stripeW : m.fadedW;
+        }
+        const ci = ch[Math.min(3, Math.floor(s * 4))], cj = ch[Math.min(4, Math.floor(s * 4) + 1)];
+        hair(x, y, Math.atan2(cj[1] - ci[1], cj[0] - ci[0]), o, 0.05);
+        o.t -= near ? 0 : 0.02;
       },
-      { z0: zz, z1: zz + 0.4 });
+    });
+    // claws: hooked, pale horn, out of the toe tips when it means it
+    if (P.claws > 0.05) {
+      const s = g.front ? 1 : 0.92, a = g.pawA, c = Math.cos(a), sn = Math.sin(a);
+      const P2 = (x: number, y: number): V2 => [g.paw[0] + (x * c - y * sn) * k * s, g.paw[1] + (x * sn + y * c) * k * s];
+      for (const tx of [2.2, 5.9, 9.6]) {
+        const L0 = 1.6 + P.claws * 2.4;
+        const ca = 0.55 + (g.lifted ? 0.15 : 0);
+        const base = P2(tx + 0.6, -1.9), mid = P2(tx + 0.6 + Math.cos(ca - 0.5) * L0 * 0.6, -1.9 + Math.sin(ca - 0.5) * L0 * 0.6), tp = P2(tx + 0.6 + Math.cos(ca) * L0, -1.9 + Math.sin(ca) * L0 + 0.4);
+        const cw = 0.75 * k;
+        const ol2 = spline([[base[0] - cw, base[1] - cw * 0.6], [mid[0], mid[1] - cw * 0.5], tp, [mid[0] - cw * 0.3, mid[1] + cw * 0.4], [base[0] - cw * 0.4, base[1] + cw]], true, 3);
+        shape(L, ol2, { R: 0.8 * k, z0: zBase + 12 * k, id: id + 10, tex: (_x, _y, _d, o) => { o.m = m.claw; } });
+      }
+    }
+    if (g.front && g.near) pawNear = [g.paw[0] + 5 * k, g.paw[1] - 2 * k];
   };
-  earAt(-9, -8.6, hz - 4, false);
-  sk.np();
-  // the cranium and the high dome of the brow
-  const cran = H.p(-3, -1);
-  sk.ell(cran[0], cran[1], 12 * hk, 10 * hk, headFill, { rot: H.a, rz: 10 * hk, z: hz });
-  const dome = H.p(4, -9);
-  sk.ell(dome[0], dome[1], 9.5 * hk, 8.5 * hk, headFill, { rot: H.a - 0.12, rz: 8.2 * hk, z: hz + 3 });
-  // eye turret: the eye rides up on a bump of the skull so it stays above the mud
-  const tur = H.p(9.8, -5.2);
-  sk.ell(tur[0], tur[1], 3.4 * hk, 2.8 * hk, headFill, { rot: H.a, rz: 2.5 * hk, z: hz + 8.5 });
-  // heavy jowls and the cheek ruff
-  const jowl = H.p(2, 3.2);
-  sk.ell(jowl[0], jowl[1], 10 * hk, 6.6 * hk, headFill, { rot: H.a + 0.08, rz: 8 * hk, z: hz + 2 });
-  const ruff = H.p(-6, 4.2);
-  sk.ell(ruff[0], ruff[1], 6.2 * hk, 6.2 * hk, headFill, { rot: H.a + 0.5, rz: 5.5 * hk, z: hz + 1 });
-  sk.tufts(sk.pid, (_x, _y, nx, ny) => (ny > 0 && nx <= 0 ? [nx * 0.6 - 0.6, 0.9] : null), { every: 2, seed: 8, len: 1 });
-  // the nose bridge and deep, short muzzle, the puffy whisker pad under it
-  const mz0 = H.p(9, -2.4), mz1 = H.p(17, -1.4);
-  sk.tube([mz0, mz1], t => (5.4 - t * 0.5) * hk, headFill, { z: hz + 6 });
-  const pad = H.p(16, 2.6);
-  sk.ell(pad[0], pad[1], 4.9 * hk, 4.4 * hk, headFill, { rot: H.a, rz: 4.2 * hk, z: hz + 9 });
-  // nose leather with the nostrils on top (they pinch shut)
-  const nose = H.p(20, -2);
-  sk.ell(nose[0], nose[1], 2.5 * hk, 2.3 * hk, m.skin, { rot: H.a, rz: 2.2 * hk, z: hz + 11 });
-  const nosP = H.p(18.2, -5.2);
-  if (P.nos < 0.5) {
-    sk.ell(nosP[0], nosP[1], 1.6 * hk, 0.95 * hk, m.skin, { rot: H.a - 0.25, z: hz + 12, bias: -0.2 });
-    sk.paint(nosP[0], nosP[1], m.mouth, -0.2);
-  } else sk.ell(nosP[0], nosP[1], 1.8 * hk, 0.55 * hk, m.skin, { rot: H.a - 0.25, z: hz + 12, bias: 0.05 });
-  // the jaw: hinged far back for the hippo gape
-  const jA = H.ang(0.14 + P.jaw * 1.04);
-  const j0 = H.p(0, 7.2);
-  const jl = 15.5 * hk;
-  const j1: V2 = [j0[0] + Math.cos(jA) * jl, j0[1] + Math.sin(jA) * jl];
-  const upTip = H.p(16.6, 6.2);
-  if (P.jaw > 0.12) {
-    // the mouth: the dark throat, the tongue, the gum line
+
+  const legsG = [0, 1, 2, 3].map(legGeom);
+  /** a layer just big enough for what it will hold (points plus a margin), so frames paint fast */
+  const layAround = (pts: V2[], pad: number) => {
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (const q of pts) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); y0 = Math.min(y0, q[1]); y1 = Math.max(y1, q[1]); }
+    return new Lay(sk, x0 - pad, y0 - pad, x1 + pad, y1 + pad);
+  };
+  const legPts = (g: LegG): V2[] => [...g.chain, g.paw];
+  // ---------------------------------------------------------------- the far legs (behind the body)
+  if (P.sink < 0.98) {
     sk.np();
-    const lipBack = H.p(3, 6.6);
-    sk.poly([lipBack[0], lipBack[1], upTip[0], upTip[1], j1[0], j1[1] - 1.4 * hk, j0[0], j0[1]], (p) => {
-      p.l -= Math.max(0, 0.35 - Math.hypot(p.x - j0[0], p.y - j0[1]) / jl) * 0.8;
-      return m.mouth;
-    }, { z: hz + 4 });
-    const tg: V2 = [(j0[0] + j1[0]) / 2 + 1.5 * hk, (j0[1] + j1[1]) / 2 - 1.6 * hk];
-    sk.ell(tg[0], tg[1], 6 * hk, 2.4 * hk, m.tongue, { rot: jA - 0.15, z: hz + 4.6, rz: 2 * hk });
-    sk.tube([lipBack, upTip], 1.15 * hk, m.gum, { z: hz + 5 });
+    const L = layAround([...legPts(legsG[1]), ...legPts(legsG[3])], 20 * k);
+    drawLeg(L, legsG[1], 1, -10 * k);
+    drawLeg(L, legsG[3], 21, -10 * k);
+    L.emit({ bias: -0.22, drop: 3 * k, ao: 0.05, aoR: 3, spec, specP: 12, contrast: 1.2 });
   }
-  // lower jaw with its small chin
+
+  // ---------------------------------------------------------------- the tail: thick, muscular, a sculling rudder
+  let tailTip: V2;
+  {
+    sk.np();
+    const tb = B.p(-50 - st * 0.4, -6);
+    const ta = B.ang(Math.PI * 0.72 - P.tail * 0.9);
+    const wv = Math.sin(P.tailWave * TAU) * 3;
+    const c1: V2 = [tb[0] + Math.cos(ta) * 16 * k, tb[1] + Math.sin(ta) * 16 * k];
+    const c2: V2 = [c1[0] - 12 * k, c1[1] + (8 - P.tail * 12 + wv) * k];
+    const tipA = Math.PI + 0.3 - P.tailCurl * 1.6 + P.tail * 0.4;
+    tailTip = [c2[0] + Math.cos(tipA) * 12 * k, c2[1] + Math.sin(tipA) * 12 * k];
+    const tPts = cbez(tb, c1, c2, tailTip, 10);
+    const ol = limbOutline(tPts, [[0, 8.5 * k], [0.3, 6.8 * k], [0.7, 4.6 * k], [0.95, 3.4 * k], [1, 2.4 * k]], [[0, 8.5 * k], [0.3, 6.6 * k], [0.7, 4.4 * k], [0.95, 3.2 * k], [1, 2.4 * k]],
+      [[tailTip[0] + Math.cos(tipA) * 1.6 * k, tailTip[1] + Math.sin(tipA) * 1.6 * k]], 24);
+    const L = layAround(tPts, 12 * k);
+    const tcum: number[] = [0];
+    for (let i = 1; i < tPts.length; i++) tcum.push(tcum[i - 1] + Math.hypot(tPts[i][0] - tPts[i - 1][0], tPts[i][1] - tPts[i - 1][1]));
+    const tT = tcum[tcum.length - 1];
+    shape(L, spline(ol, true, 2), {
+      R: 6.5 * k, id: 1, tex: (x, y, d, o) => {
+        let best = 1e9, bs = 0, side = 0;
+        for (let i = 1; i < tPts.length; i++) {
+          const ax = tPts[i - 1][0], ay = tPts[i - 1][1], dx = tPts[i][0] - ax, dy = tPts[i][1] - ay, l2 = dx * dx + dy * dy || 1;
+          const t = cl(((x - ax) * dx + (y - ay) * dy) / l2);
+          const ex = x - ax - dx * t, ey = y - ay - dy * t, d2 = ex * ex + ey * ey;
+          if (d2 < best) { best = d2; bs = (tcum[i - 1] + Math.sqrt(l2) * t) / tT; side = dx * ey - dy * ex; }
+        }
+        // rings, darkening to the tip; the underside dragged through the mud
+        const ring = frc(bs * 6.4 + 0.15);
+        hair(x, y, Math.atan2(tailTip[1] - tb[1], tailTip[0] - tb[0]), o, 0.05);
+        if (side < 0 && bs < 0.8 && d < 3.2 * k) { mudTex(x, y, o, d / k); return; }
+        o.m = bs > 0.9 ? m.stripe : bs > 0.18 && ring < 0.34 ? (bs > 0.55 ? m.stripe : m.faded) : m.coatW;
+        o.z = (bs < 0.2 ? 1.5 * (1 - bs / 0.2) : 0) * k;
+      },
+    });
+    L.emit({ bias: -0.1, drop: 3 * k, ao: 0.05, spec, specP: 12, contrast: 1.2 });
+  }
+
+  // ---------------------------------------------------------------- the torso and neck, with the near legs
+  const LB = layAround([...TOPK.map(([x, y]) => B.p(x, y)), ...BOTK.map(([x, y]) => B.p(x, y)), hp(-8, -16), hp(14, 14), ...legPts(legsG[0]), ...legPts(legsG[2])], 22 * k);
   sk.np();
-  sk.tube([j0, j1], t => (4.4 - t * 1.2) * hk, (p) => (p.ny > 0.3 || (p.t > 0.8 && p.ny > 0) ? (crackAt(p.t * 18 * hk, p.v * 4 * hk, hk) ? m.crack : m.mud) : m.creamW), { z: hz + 5 });
+  {
+    // the neck's outline joins the body's: crest up to the nape, dewlap down to the throat
+    const nape = hp(-3, -12), throat = hp(3, 11);
+    const withers = B.p(TOPK[0][0], TOPK[0][1]);
+    const brisket = B.p(BOTK[BOTK.length - 1][0], BOTK[BOTK.length - 1][1]);
+    const crest: V2 = [(withers[0] + nape[0]) / 2 + Math.cos(nA - Math.PI / 2) * 2.5 * k, (withers[1] + nape[1]) / 2 + Math.sin(nA - Math.PI / 2) * 2.5 * k];
+    const dew: V2 = [(brisket[0] + throat[0]) / 2 + Math.cos(nA + Math.PI / 2) * 3.5 * k, (brisket[1] + throat[1]) / 2 + Math.sin(nA + Math.PI / 2) * 3.5 * k];
+    const pts: V2[] = [hp(8, -12), nape, crest, ...TOPK.map(([x, y]) => B.p(x, y)), ...BOTK.map(([x, y]) => B.p(x, y)), dew, throat, hp(12, 8)];
+    let ol = spline(pts, true, 4);
+    // short fur fringing the belly line and the dewlap
+    ol = fringe(densify(ol, 1.2 * k), p => {
+      const [lx, ly] = inv(p[0], p[1]);
+      const belly = ly > 10 && lx > -40 && lx < 30 ? 1 : 0;
+      const dewl = Math.hypot(p[0] - dew[0], p[1] - dew[1]) < 9 * k ? 0.8 : 0;
+      return Math.max(belly, dewl);
+    }, 1.4 * k, 2.4 * k, 41, -0.5);
+    const neckTex = (x: number, y: number, d: number, o: Tx) => {
+      const hx = x - N0[0], hy = y - N0[1];
+      const across = (hy * Math.cos(nA) - hx * Math.sin(nA)) / k; // + = under the neck
+      const u = (hx * Math.cos(nA) + hy * Math.sin(nA)) / k;
+      // the neck's thick muscle and the heavy folds of the dewlap
+      o.z = (2 * gs(across + 5, 4) - 0.8 * (frc((u + across * 0.3) / 4.2) < 0.2 && across > 3 ? 1 : 0)) * k;
+      if (across > 7.5 + Math.sin(u * 0.7) * 1.2) { mudTex(x, y, o, (across - 7.5) / 10); return; }
+      hair(x, y, nA + Math.PI - 0.6, o, 0.045);
+      if (across < -3 && frc((u + 30) / 5.4) < 0.3 && hh(Math.floor((u + 30) / 5.4), 2, 27) > 0.25) o.m = across < -7 ? m.stripe : m.faded;
+      else o.m = across > 2 ? m.creamW : m.coatW;
+      if (across < -8) o.t -= 0.05;
+      void d;
+    };
+    shape(LB, ol, {
+      R: 24 * k, hs: 0.95, id: 1, blend: 4 * k,
+      tex: (x, y, d, o) => {
+        const [lx] = inv(x, y);
+        if (lx > 27 + st * 0.4) { neckTex(x, y, d, o); if (lx < 34) { const t: Tx = { z: 0, m: 0, t: 0 }; bodyTex(x, y, d, t); const f = (lx - 27) / 7; o.z = o.z * f + t.z * (1 - f); } return; }
+        bodyTex(x, y, d, o);
+      },
+    });
+  }
+  // the near legs, merging into the body at the shoulder and the haunch
+  if (P.sink < 0.98) {
+    drawLeg(LB, legsG[2], 40, 22 * k);
+    drawLeg(LB, legsG[0], 60, 21 * k + Math.max(P.reach, P.swipe > -8 ? 1 : 0) * 24 * k);
+  }
+  LB.emit({ bias: -0.1, drop: 3.2 * k, ao: 0.045, aoR: 3, seam: 2 * k, spec, specP: 12, contrast: 1.25 });
+
+  // ---------------------------------------------------------------- the head: one sculpted form
+  const earUp = Math.max(0, P.ear), earFlat = Math.max(0, -P.ear);
+  const LH = layAround([hp(-10, -32), hp(42, -32), hp(42, 16), hp(-10, 16), jp(-4, 16), jp(36, 16), jp(36, 4)], 6 * k);
+  sk.np();
+  // the far ear first
+  const earShape = (L: Lay, bx: number, by: number, near: boolean, id: number) => {
+    const a = -1.85 + earUp * 0.25 - earFlat * 1.05 + (shake ? Math.sin(P.t * TAU * 4) * 0.4 : 0);
+    const len = 6.2 - earFlat * 2.6, wid = 3.6 - earFlat * 0.8;
+    const ca = Math.cos(a), sa = Math.sin(a), nx = -sa, ny = ca;
+    const E = (u: number, w: number): V2 => hp(bx + ca * u + nx * w, by + sa * u + ny * w);
+    const ol = spline([E(-1, -wid), E(len * 0.55, -wid * 1.05), E(len, -wid * 0.35), E(len * 1.04, wid * 0.2), E(len * 0.6, wid * 0.95), E(-1, wid * 0.9)], true, 4);
+    shape(L, ol, {
+      R: 1.6 * k, z0: near ? 16 * k : -3 * k, id, tex: (x, y, d, o) => {
+        const [ex, ey] = hInv(x, y);
+        const u = ((ex - bx) * ca + (ey - by) * sa) / len, w = ((ex - bx) * nx + (ey - by) * ny) / wid;
+        // the back of the ear black with the white spot every tiger has; the rim furred
+        o.m = u > 0.55 ? m.earBack : near && u > 0.22 && u < 0.62 && Math.abs(w) < 0.45 ? (earFlat >= 0.5 ? m.spot : m.earIn) : m.coat;
+        if (!near) o.t -= 0.08;
+        o.z = -0.6 * gs(w, 0.35) * (1 - earFlat) * k;
+        void d;
+      },
+    });
+  };
+  earShape(LH, -1.5, -14.5, false, 3);
+  // the head's outline: occiput, the high domed brow, the eye turret, the stop, the bridge with the
+  // nostrils on top, the nose, the whisker pad, the flews; and the lower jaw (or the hinge when it gapes)
+  const open = P.jaw > 0.1;
+  const upperPts: [number, number][] = [
+    [-6, 2], [-6, -5], [-4.6, -12], [-0.5, -18.6], [5.5, -23], [12, -22.6], [16.4, -19.4],
+    [18.6, -16.8], [20.2, -17.2], [22.4, -16.6], [23.8, -14.2],
+    [25.2, -11.8], [28.2, -10.9], [30.2, -11.7 + P.nos * 0.4], [31.8, -11.1],
+    [33.8, -9.0], [35.4, -6.2], [35.7, -3.0], [34.9, 0.4], [33.0, 3.4], [29.2, 5.2], [23, 5.8 - P.snarl * 0.8], [16, 6.3],
+  ];
+  const closedJaw: [number, number][] = [[27.4, 6.6], [27.6, 8.4], [25.6, 10.6], [19, 12.0], [9, 12.6], [2.5, 11.6], [-2.6, 9.2]];
+  const upperOl = spline((open ? [...upperPts, [9, 6.4], [HINGE[0], HINGE[1]], [0.5, 8.4], [-3.5, 7.6]] : [...upperPts, ...closedJaw]).map(([x, y]) => hp(x, y)) as V2[], true, 4);
+  // the cheek ruff breaks the outline behind the jaw
+  const ruffed = fringe(densify(upperOl, 1.1 * k), p => { const [x, y] = hInv(p[0], p[1]); return x < 4 && y > 0 ? 1 : x < -2 ? 0.4 : 0; }, 1.1 * k, 2.0 * k, 51, 0.5);
+  const EYE_C: V2 = [21.2, -13.4];
+  const headTex = (hx: number, hy: number, d: number, o: Tx, jaw: boolean) => {
+    const nz = hh(Math.floor(hx), Math.floor(hy * 0.5), 57) * 0.9;
+    // sculpture: the dome, the eye turret's bony ring, the cheekbone, the jaw muscle, the whisker pad,
+    // the nose leather, the nostril mounds, the brow over the eye
+    let z = 0;
+    z += 3.4 * gs(hx - 7, 6.5) * gs(hy + 14, 5);
+    const de = Math.hypot(hx - EYE_C[0], hy - EYE_C[1]);
+    z += 2.0 * gs(de - 2.5, 0.8) - 1.2 * gs(de, 1.2);
+    z += 1.4 * gs(hy + 5.4 - (hx - 16) * 0.12, 1.0) * ss(3, 8, hx) * (1 - ss(16, 20, hx));
+    z += 2.8 * gs(hx - 7, 4.2) * gs(hy - 3, 3.5);
+    z += 2.4 * gs(hx - 30.4, 3) * gs(hy - 1.0, 2.6);
+    z += 1.6 * gs(hx - 34.2, 1.6) * gs(hy + 4.5, 1.8);
+    z += 1.2 * gs(hx - 30.2, 1.3) * gs(hy + 11.0, 0.9);
+    z -= 1.0 * gs(hx - 24.6, 1.6) * gs(hy + 11, 2);
+    // the form turns away underneath: the light falls off down the head
+    o.t -= 0.07 * cl((hy + 6) / 16, -0.6, 1);
+    // the snarl wrinkles the bridge
+    if (P.snarl > 0.35 && hx > 23 && hx < 30 && hy < -6 && hy > -10.5 && frc((hx + hy * 0.3) / 1.6) < 0.3) { z -= 0.7; o.t -= 0.12; }
+    o.z = z * k;
+    // the nostrils: slits on top of the snout, pinched shut or open
+    if (Math.abs(hx - 30.2) < 1.5 && Math.abs(hy + 11.2 + (hx - 30.2) * 0.2) < (P.nos > 0.5 ? 0.25 : 0.6)) { o.m = m.skin; o.t -= 0.25; return; }
+    // the nose leather
+    if (hx > 32.6 && hy < -1.0 && hy > -9.4 + (hx - 32.6) * 0.62) { o.m = m.skin; o.t += 0.04; return; }
+    // the throat and the underside of the jaw: caked mud
+    if (hy > 10.4 + Math.sin(hx * 0.8) * 0.8 + ss(10, 24, hx) * 2 && hx > -2) { mudTex(hx * k, hy * k, o, (hy - 10.4) / 4); return; }
+    // the lips: a dark line
+    if (!jaw && hx > 12 && hx < 34 && Math.abs(hy - crvLip(hx)) < 0.42) { o.m = m.skin; o.t -= 0.06; return; }
+    // the closed lower jaw under the lip: a white chin, shadowed underneath
+    if (!jaw && hx > 9 && hy > crvLip(Math.max(12, hx))) { o.m = m.creamW; o.t -= 0.1 + 0.1 * cl((hy - 7) / 4); return; }
+    if (jaw) {
+      // the lower jaw: a white chin, the lip dark, mud underneath
+      o.m = hx > 22 ? m.creamW : m.creamW;
+      if (hx < 20 && frc((hx + hy * 0.4) / 3.4) < 0.25 && hy > 7.5) o.m = m.fadedW;
+      return;
+    }
+    // the whisker pad: puffed, pale, with rows of dark whisker spots
+    const pad = ((hx - 30.4) / 5.6) ** 2 + ((hy - 0.9) / 4.5) ** 2;
+    if (pad < 1 + nz * 0.15) {
+      if (hy > -2.4 && hy < 3.0 && hx > 26 && hx < 33 && (Math.floor(hx * 0.95) + Math.floor(hy * 0.9)) % 3 === 0 && hh(Math.floor(hx), Math.floor(hy), 51) < 0.65) { o.m = m.fadedW; return; }
+      o.m = m.creamW; return;
+    }
+    // pale brow over the eye and a pale crescent under it
+    if (((hx - 19.4) / 2.6) ** 2 + ((hy + 16.9) / 1.2) ** 2 < 1 || ((hx - 21.6) / 2.2) ** 2 + ((hy + 10.6) / 0.8) ** 2 < 1) { o.m = m.cream; return; }
+    // the dark tear line from the eye's front corner down toward the lip
+    if (Math.abs((hx - 23.4) + (hy + 11) * 0.45) < 0.6 && hy > -11.6 && hy < -3) { o.m = m.stripe; return; }
+    // the dome: a maze of dark lines, uncannily like a brain (hence the folk name), raised between them
+    const domeLine = -6.5 - (hx + 4) * 0.34;
+    if (hy < domeLine && hx < 22) {
+      const mz = mazeAt(hx, hy, 1);
+      const edge = cl((domeLine - hy) / 3);
+      o.z += (0.45 - mz) * 0.9 * k * edge;
+      if (mz > 0.2 + (1 - edge) * 0.4) { o.m = edge < 0.5 ? m.faded : m.stripe; o.t -= 0.06; return; }
+      o.t += 0.07;
+      o.m = m.coat; return;
+    }
+    // the bridge: plain, with short bars at the stop
+    if (hx > 22 && hy < -4.2) {
+      if (hy < -8.6 && hx < 28 && hx > 24 && frc((hx - 22) / 1.9) < 0.38) { o.m = m.faded; return; }
+      o.m = m.coat; hair(hx * k, hy * k, ha + Math.PI, o, 0.04); return;
+    }
+    if (hx > 22) { o.m = m.coatW; return; }
+    // the cheek: the white jowl below the cheekbone, crossed by black stripes sweeping back from the eye
+    const cheekLine = -3.6 - (hx - 4) * 0.06 + nz * 0.6;
+    const u = (hy + 0.42 * hx + 40) / 3.3, i = Math.floor(u);
+    if (u - i < 0.34 && i % 2 === 0 && hx > -5 && hx < 16 && hy > -7.5 && hy < 6 - Math.max(0, hx - 6) * 0.5) { o.m = hy > 3.5 ? m.stripeW : m.stripe; return; }
+    if (hy > cheekLine) { o.m = hy > 3.5 ? m.creamW : m.cream; hair(hx * k, hy * k, ha + Math.PI + 0.5, o, 0.035); return; }
+    o.m = hy > -3 ? m.coatW : m.coat;
+    hair(hx * k, hy * k, ha + Math.PI + 0.2, o, 0.04);
+    void d;
+  };
+  // the lip line (head units)
+  const LIP: Keys = [[12, 6.2], [16, 6.3], [23, 5.8 - P.snarl * 0.8], [29.2, 5.2], [33, 3.4]];
+  function crvLip(x: number) { return crv(LIP, x); }
+  shape(LH, ruffed, {
+    R: 10 * k, hs: 0.95, id: 1, blend: 2 * k, z0: 8 * k,
+    tex: (x, y, d, o) => { const [hx, hy] = hInv(x, y); headTex(hx, hy, d, o, false); },
+  });
+  if (open) {
+    // the open mouth: the palate's ridges going back into the dark throat, the gums, the thick tongue
+    const mouthPts: V2[] = [hp(HINGE[0], HINGE[1]), hp(16, 6.3), hp(23, 5.8 - P.snarl * 0.8), hp(29.2, 5.2), hp(31.4, 5.8), jp(28.4, 6.8), jp(22, 6.9), jp(14, 6.6)];
+    shape(LH, spline(mouthPts, true, 4), {
+      R: 3 * k, z0: 2 * k, id: 4, tex: (x, y, d, o) => {
+        const [hx, hy] = hInv(x, y);
+        const [jx, jy] = jInv(x, y);
+        const dh = Math.hypot(hx - HINGE[0], hy - HINGE[1]);
+        const back = cl(1 - (hx - HINGE[0]) / 18);
+        // the gullet, going black at the back
+        const gR = 4.5 + P.jaw * 3.5;
+        if (dh < gR) { o.m = m.mouth; o.t -= 0.32 * (1 - dh / gR) + 0.06; return; }
+        // the upper gum along the lip, a row of cheek teeth in it
+        const lipU = crvLip(hx);
+        if (hy < lipU + 1.1) { o.m = hy > lipU + 0.45 && hx > 11 && hx < 23 && frc(hx / 1.7) < 0.55 ? m.tooth : m.gum; return; }
+        // the lower gum and teeth along the jaw
+        if (jy > 6.0 && jx > 8) { o.m = jy > 6.2 && jx > 11 && jx < 24 && frc(jx / 1.8) < 0.5 ? m.tooth : m.gum; return; }
+        // the thick tongue lying on the floor of the mouth, lit along its top, grooved down the middle
+        const tTop = 4.6 - gs(jx - 17, 6) * 1.8;
+        if (jy > tTop && jx > 6 && jx < 27) { o.m = m.tongue; o.z = 1.4 * k * gs(jy - tTop - 0.9, 1); if (Math.abs(jy - tTop - 0.8) < 0.22 && jx > 10) o.t -= 0.12; else if (jy < tTop + 0.5) o.t += 0.06; return; }
+        // the palate: ridged across, wet, going dark toward the throat
+        o.m = m.mouth; o.t -= back * 0.14;
+        if (frc((hx + (hy - lipU) * 0.35) / 2.1) < 0.32) { o.t -= 0.09; o.z = -0.3 * k; } else o.t += 0.05;
+        void d;
+      },
+    });
+    // the lower jaw
+    const jawOl = spline([[HINGE[0] - 0.5, HINGE[1] + 0.5], [14, 6.6], [22, 6.9], [28.4, 6.8], [29.4, 8.8], [27.4, 11.6], [20, 13.2], [9, 13.4], [2.6, 11.8], [-1.4, 9]].map(([x, y]) => jp(x, y)) as V2[], true, 4);
+    shape(LH, jawOl, {
+      R: 4.5 * k, z0: 6 * k, id: 5, tex: (x, y, d, o) => {
+        const [jx, jy] = jInv(x, y);
+        if (jy > 10.4 + Math.sin(jx * 0.8) * 0.8 + ss(10, 24, jx) * 2) { mudTex(jx * k, jy * k, o, (jy - 10.4) / 4); return; }
+        if (jy < 7.4 && jx > 10) { o.m = m.skin; o.t -= 0.04; return; }
+        headTex(jx, jy, d, o, true);
+        o.z = 1.4 * gs(jx - 6, 3.5) * gs(jy - 9, 2.5) * k;
+      },
+    });
+  }
   // teeth: the upper canines show under the lip even at rest; more when it snarls or gapes
   {
-    sk.np();
-    const cA = H.ang(Math.PI / 2 + 0.1);
-    const clen = (2.6 + P.snarl * 1.8 + P.jaw * 2.8) * hk;
-    const cb0 = H.p(14.4, 6.4);
-    sk.blade(cb0[0], cb0[1], cb0[0] + Math.cos(cA) * clen, cb0[1] + Math.sin(cA) * clen, s => (1 - s) * 1.05 * hk + 0.25, m.tooth, { z0: hz + 12, z1: hz + 12.2, bend: 0.25 * hk });
-    if (P.jaw > 0.2) {
-      // the lower canines, small incisors, carnassials along the open jaw
-      const lc: V2 = [j1[0] - Math.cos(jA) * 2.4 * hk, j1[1] - Math.sin(jA) * 2.4 * hk];
-      const la = jA - Math.PI / 2 - 0.15;
-      const ll = (2.2 + P.jaw * 1.6) * hk;
-      sk.blade(lc[0], lc[1], lc[0] + Math.cos(la) * ll, lc[1] + Math.sin(la) * ll, s => (1 - s) * 0.9 * hk + 0.2, m.tooth, { z0: hz + 12, z1: hz + 12.1 });
-      for (let i = 0; i < 3; i++) {
-        const q = H.p(17.2 - i * 0.9, 6.6 + i * 0.1);
-        sk.dot(q[0], q[1], m.tooth, 0.8, hz + 12);
-      }
-      for (let i = 0; i < 3; i++) {
-        const q: V2 = [j0[0] + Math.cos(jA) * (7 + i * 2.4) * hk, j0[1] + Math.sin(jA) * (7 + i * 2.4) * hk - 1.1 * hk];
-        sk.dot(q[0], q[1], m.tooth, 0.7, hz + 11);
-      }
+    const fang = (base: V2, dir: number, len: number, w: number, id: number) => {
+      const c = Math.cos(dir), s = Math.sin(dir), nx = -s, ny = c;
+      const P2 = (u: number, v: number): V2 => [base[0] + (c * u + nx * v) * k, base[1] + (s * u + ny * v) * k];
+      const ol = spline([P2(0, -w), P2(len * 0.5, -w * 0.8 - 0.15), P2(len, 0.25), P2(len * 0.55, w * 0.6), P2(0, w)], true, 3);
+      shape(LH, ol, { R: 0.9 * k, z0: 14 * k, id, tex: (_x, _y, _d, o) => { o.m = m.tooth; } });
+    };
+    const clen = 2.4 + P.snarl * 1.6 + P.jaw * 2.4;
+    const ub = hp(25.4, 5.5 - P.snarl * 0.7);
+    fang(ub, ha + Math.PI / 2 + 0.12, clen, 0.95, 6);
+    if (open) {
+      const lb = jp(27.2, 7.0);
+      fang(lb, ha + jawA - Math.PI / 2 - 0.2, 2.0 + P.jaw * 1.4, 0.85, 7);
+      for (let i = 0; i < 3; i++) { const q = hp(29.6 + i * 1.0, 5.4 - i * 0.3); const kk = LH.at(q[0], q[1]); if (kk >= 0) LH.put(kk, 15 * k, m.tooth, 0.1, 8, 0); }
+      for (let i = 0; i < 3; i++) { const q = jp(19 + i * 2.6, 6.5); const kk = LH.at(q[0], q[1]); if (kk >= 0) LH.put(kk, 15 * k, m.tooth, 0, 8, 0); }
     }
     if (P.tongue > 0.1) {
-      const tq: V2 = [j1[0] - Math.cos(jA) * 3 * hk, j1[1] - Math.sin(jA) * 3 * hk];
-      sk.ell(tq[0] + 1.2 * hk, tq[1] + 2.2 * hk * P.tongue, 2.2 * hk, (1.4 + P.tongue) * hk, m.tongue, { z: hz + 13, rz: 1.5 * hk });
+      const tq = jp(28, 7.4);
+      const tol = spline([[tq[0] - 1.5 * k, tq[1]], [tq[0] + 1.2 * k, tq[1] - 0.4 * k], [tq[0] + 2.8 * k, tq[1] + (1.5 + P.tongue * 2.2) * k], [tq[0] + 1.0 * k, tq[1] + (2.6 + P.tongue * 2.2) * k], [tq[0] - 0.8 * k, tq[1] + 1.4 * k]], true, 3);
+      shape(LH, tol, { R: 1.6 * k, z0: 16 * k, id: 9, tex: (x, _y, _d, o) => { o.m = m.tongue; if (Math.abs(x - tq[0] - 0.8 * k) < 0.4 * k) o.t -= 0.08; } });
     }
   }
-  // the snarl wrinkles the nose bridge
-  if (P.snarl > 0.4) {
-    for (let i = 0; i < 3; i++) {
-      const a = H.p(11.6 + i * 1.6, -7.4 + i * 0.3), b = H.p(12.6 + i * 1.6, -5);
-      sk.line(a[0], a[1], b[0], b[1], m.faded, 0.35, hz + 13);
-    }
-  }
-  // near ear
-  earAt(-7, -9.4, hz + 9, true);
-  // the small eye up on its turret, under the brow, and a dark tear line down the cheek
-  const ec = H.p(10.1, -5.6);
+  earShape(LH, 0.5, -15.4, true, 10);
+  LH.emit({ bias: -0.08, drop: 2.6 * k, ao: 0.05, aoR: 2, seam: 1.6 * k, spec, specP: 12, contrast: 1.22 });
+
+  // the small eye up on its turret, under the brow; whiskers off the pad
+  const ec = hp(EYE_C[0], EYE_C[1]);
   const ep = drawEye(sk, ec[0], ec[1], { ...EYE, r: EYE.r * Math.min(2.6, k) }, P.eye ?? 'open');
   {
-    const a = H.p(8.6, -4), b = H.p(6.2, -0.4);
-    sk.line(a[0], a[1], b[0], b[1], m.stripe, 0.3, hz + 10);
+    const wc = hex('#efe6d2'), wc2 = hex('#c9bca0');
+    for (let i = 0; i < 4; i++) {
+      const a0 = hp(30.8 - i * 0.6, 0.6 + i * 1.1);
+      const a = ha + 0.05 + i * 0.16 - (open ? 0.1 : 0);
+      const len = (8 + (i === 1 ? 2 : 0)) * k;
+      for (let s2 = 2; s2 < len; s2 += 1) {
+        const x = a0[0] + Math.cos(a) * s2 + 0.04 * s2 * s2 / k * 0, y = a0[1] + Math.sin(a) * s2 + s2 * s2 * 0.012 / k;
+        if (hh(i, Math.floor(s2), 3) < 0.15) continue;
+        sk.over(x, y, s2 > len * 0.6 ? wc2 : wc);
+      }
+    }
   }
 
-  // ---- near legs in front
-  if (P.sink < 0.98) {
-    drawLeg(0);
-    drawLeg(2);
-  }
-
-  // ---- mud: the surface collar when sunk, sheets and globs when erupting
+  // ---------------------------------------------------------------- mud: the surface collar when sunk, sheets and globs erupting
   if (P.sink > 0.02) {
     sk.np();
-    // where the body breaks the surface: a glossy lip of mud heaped round it, with ripples
     let x0 = Infinity, x1 = -Infinity;
     for (let x = 0; x < sk.w; x++) {
       const xi = x - sk.ox + 0.5;
       for (let y = -6; y < 0; y++) if (sk.has(xi, y)) { x0 = Math.min(x0, xi); x1 = Math.max(x1, xi); break; }
     }
     if (x1 > x0) {
+      const L = new Lay(sk, -sk.ox, -sk.oy, sk.w - sk.ox, sk.h - sk.oy);
       const cx = (x0 + x1) / 2, rx = (x1 - x0) / 2 + 4 * k;
-      sk.ell(cx, -0.4 * k, rx, 2.6 * k, m.wetMud, { z: 60, rz: 1.6 * k, bias: 0.06 });
+      // a glossy lip of mud heaped round where the body breaks the surface, lumpy, with ripples out from it
+      const lip: V2[] = [];
+      for (let i = 0; i <= 24; i++) { const u = i / 24, x = cx - rx + u * rx * 2; lip.push([x, (-2.2 - Math.sin(u * Math.PI) * 0.8 - (noise2(x / (3 * k), P.t * 3, 81) - 0.5) * 1.6) * k]); }
+      lip.push([cx + rx + 1.5 * k, 0.5 * k], [cx - rx - 1.5 * k, 0.5 * k]);
+      shape(L, spline(lip, true, 2), { R: 2 * k, z0: 60 * k, id: 1, tex: (x, _y, _d, o) => { o.m = m.wetMud; o.t = 0.06 + (noise2(x / (2 * k), 3, 83) - 0.5) * 0.1; } });
       for (let i = 0; i < 4; i++) {
         const rx2 = rx + (6 + i * 7 + Math.sin(P.t * TAU + i) * 2) * k;
-        for (const sgn of [-1, 1]) sk.ell(cx + sgn * rx2, -0.6 * k, (2.5 - i * 0.4) * k, 0.8 * k, m.wetMud, { z: 61, bias: 0.12 - i * 0.04 });
+        for (const sgn of [-1, 1]) {
+          const x = cx + sgn * rx2, w = (2.6 - i * 0.4) * k;
+          shape(L, spline([[x - w, 0], [x - w * 0.4, -0.9 * k], [x + w * 0.5, -0.8 * k], [x + w, 0], [x, 0.4 * k]], true, 3), { R: 0.8 * k, z0: 61 * k, id: 2 + i, tex: (_x, _y, _d, o) => { o.m = m.wetMud; o.t = 0.12 - i * 0.04; } });
+        }
       }
+      L.emit({ drop: 1.5 * k, spec: new Map([[m.wetMud, 0.5]]), specP: 10 });
     }
   }
   if (P.sheet > 0.02) {
     // mud sheets pouring off the back and the head, and thrown globs
     sk.np();
+    const L = new Lay(sk, -sk.ox, -sk.oy, sk.w - sk.ox, sk.h - sk.oy);
     const n = Math.round(11 * P.sheet);
     for (let i = 0; i < n; i++) {
       const lx = -46 + (i / Math.max(1, n - 1)) * 80 + hh(i, 1, 71) * 6;
-      const top = TOP[Math.max(0, Math.min(140, Math.round(lx) + 80))];
-      if (top > 1e8) continue;
-      const a = B.p(lx, top + 2);
+      const a = B.p(lx, topY(lx) + 2);
       const len = (4 + hh(i, 2, 71) * 10) * P.sheet * k;
-      const ph = (P.sheetPh * 3 + hh(i, 3, 71)) % 1;
-      const y0 = a[1] + ph * len * 0.6;
-      sk.blade(a[0], y0, a[0] + (hh(i, 4, 71) - 0.5) * 2 * k, y0 + len, s => (1 - s * 0.7) * 1.4 * k, m.wetMud, { z0: 40, z1: 41 });
+      const ph2 = (P.sheetPh * 3 + hh(i, 3, 71)) % 1;
+      const y0 = a[1] + ph2 * len * 0.6, w = 1.4 * k, dx = (hh(i, 4, 71) - 0.5) * 2 * k;
+      shape(L, spline([[a[0] - w, y0], [a[0] + w, y0], [a[0] + dx + w * 0.6, y0 + len * 0.8], [a[0] + dx, y0 + len + w], [a[0] + dx - w * 0.6, y0 + len * 0.8]], true, 3), { R: 1.2 * k, z0: 40 * k, id: 1 + (i % 200), tex: (_x, _y, _d, o) => { o.m = m.wetMud; } });
     }
     for (let i = 0; i < Math.round(8 * P.sheet); i++) {
       const gx = (-40 + hh(i, 5, 72) * 100) * k, gy = (-72 - hh(i, 6, 72) * 30 + P.sheetPh * 30) * k;
       if (gy > -2) continue;
-      sk.ell(gx, gy, (1 + hh(i, 7, 72) * 1.6) * k, (0.9 + hh(i, 8, 72)) * k, m.wetMud, { z: 70 });
+      const r = (1 + hh(i, 7, 72) * 1.6) * k;
+      shape(L, spline([[gx - r, gy], [gx - r * 0.3, gy - r * 0.9], [gx + r * 0.8, gy - r * 0.5], [gx + r, gy + r * 0.4], [gx, gy + r * 0.8]], true, 3), { R: r, z0: 70 * k, id: 100 + i, tex: (_x, _y, _d, o) => { o.m = m.wetMud; } });
     }
+    L.emit({ drop: 1.5 * k, spec: new Map([[m.wetMud, 0.5]]), specP: 10 });
   }
 
-  const headTop = H.p(4, -20);
+  const headTop = hp(6, -25);
+  const upTip = hp(32, 5), j1 = jp(29, 8);
   return {
-    head: [headTop[0], headTop[1]], eye: ep, mouth: [(upTip[0] + j1[0]) / 2, (upTip[1] + j1[1]) / 2], nose,
-    paw: pawNear, tail: tip, m,
+    head: [headTop[0], headTop[1]], eye: ep, mouth: [(upTip[0] + j1[0]) / 2, (upTip[1] + j1[1]) / 2], nose: hp(35, -4.5),
+    paw: pawNear, tail: tailTip, m,
   };
 }
 
