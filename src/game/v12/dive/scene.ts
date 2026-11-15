@@ -158,7 +158,10 @@ export class KelpDiveScene extends FieldScene {
     const site: FieldSite = {
       id: KELP_LOC as never, name: 'Te Moana Rimurimu', width: W, camY: 120, followY: true, minY: SURF - 34, maxY: BOT - 140,
       spawnX: o.x ?? LADDER.x + 30, exitX: 0, waterY: SURF, underwater: true, ambience: 'underwater', music: 'wonder', ground: 'sand',
-      noGuide: true, noExit: true, spawns: [], build: () => me!.buildDive(),
+      noGuide: true, noExit: true,
+      // the island's sea serpent cruises the blue, out past the drop-off
+      spawns: [{ species: 'leviathan', n: [1, 1], x: [KELP_ZONES.blue[0] + 100, KELP_ZONES.blue[1] - 200], medium: 'water', y: 430, chance: 1 }],
+      build: () => me!.buildDive(),
     };
     super(site, 'day');
     me = this;

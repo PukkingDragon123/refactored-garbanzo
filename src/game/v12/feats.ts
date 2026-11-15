@@ -161,6 +161,7 @@ export const FEATS: FeatDef[] = [
   { id: 'seal_dance', tier: 'silver', title: 'Seal Dance', desc: 'Photograph a seal barrel-rolling under the kelp.', check: () => F('dive:roll') },
   { id: 'not_today', tier: 'gold', title: 'Not Today', desc: 'Turn a charging shark with the speargun’s blunt end.', check: () => F('dive:bang') },
   { id: 'the_blue', tier: 'gold', title: 'The Blue', desc: 'Find the old hāpuku in its cave, out past the drop-off.', check: () => F('dive:groper') },
+  { id: 'sea_serpent', tier: 'gold', title: 'Sea Serpent', desc: 'Photograph the Finned Leviathan in the blue, on the kelp dive.', check: () => F('dive:serpent') },
   { id: 'full_basket', tier: 'gold', title: 'Full Basket', desc: 'Bring five fish home from a single dive.', check: () => F('dive:basket') },
   { id: 'legend_of_the_island', tier: 'legend', title: 'Legend of the Island', desc: 'Earn every other feat.',
     check: () => FEATS.every(f => f.id === 'legend_of_the_island' || hasFeat(f.id)), progress: () => [FEATS.filter(f => f.id !== 'legend_of_the_island' && hasFeat(f.id)).length, FEATS.length - 1] },

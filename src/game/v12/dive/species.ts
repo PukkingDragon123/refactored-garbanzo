@@ -57,6 +57,8 @@ import { hitMori } from '../wilds';
 import { floatText } from '../../../ui/v12/float';
 import type { FloatStyle } from '../../../ui/v12/float';
 import { ITEMS } from '../../items';
+import { ReefFish } from '../../sites10/oceanreef';
+import { cineFocusOn, cineRelease } from '../../v11/cine';
 
 type V2 = [number, number];
 const TAU = Math.PI * 2;
@@ -946,6 +948,38 @@ class Life implements Drawable {
   draw(): void {}
 }
 
+/** the leviathan in the blue: the first sighting (a held breath, a long look) and the sharks giving it room */
+class Serpentwatch implements Drawable {
+  z = -1;
+  private seen = false;
+  private gave = new Map<Shark, number>();
+  constructor(readonly f: FieldScene, readonly sharks: Shark[]) {}
+  update(dt: number) {
+    if (C().scene !== this.f) return;
+    const lev = this.f.animals.find(a => a.species === 'leviathan' && !a.gone && !a.dead);
+    if (!lev) return;
+    for (const s of this.sharks) {
+      const t = (this.gave.get(s) ?? 0) - dt;
+      this.gave.set(s, t);
+      if (t <= 0 && Math.hypot(s.x - lev.x, s.y - lev.y) < 300) { s.repel(lev.x, lev.y); this.gave.set(s, 6); }
+    }
+    const p = this.f.player;
+    if (this.seen || game.save.flags['dive:serpentSeen'] || this.f.cutscene || Math.hypot(lev.x - p.x, lev.y - p.y) > 450) return;
+    this.seen = true;
+    game.save.flags['dive:serpentSeen'] = true;
+    void (async () => {
+      audio.play('roar', { vol: 0.25, pitch: 0.35 });
+      void floatText({ text: '(bubbles) ...that is not a shark. That is NOT a shark.', style: 'whisper', ms: 3200 });
+      await cineFocusOn({ x: lev.x, y: lev.y, height: 70 } as never, { zoom: 1.2, secs: 1.4, dof: 1.2 });
+      await new Promise(r => setTimeout(r, 2200));
+      await cineFocusOn(null);
+      await cineRelease(this.f.st, 1);
+      void floatText({ text: 'The Finned Leviathan. Out here. Camera. CAMERA.', style: 'scared', ms: 2600 });
+    })();
+  }
+  draw(): void {}
+}
+
 // ==================================================================== dev / story hooks
 const ofScene = <T extends DiveBeast>(f: FieldScene, k: new (...a: never[]) => T) => f.animals.filter(a => (a as unknown) instanceof k) as unknown as T[];
 /** dev jumps and set pieces: the nearest shark comes for Mori now (it circles, warns, charges) */
@@ -1004,7 +1038,29 @@ export function installDiveLife(f: FieldScene): void {
     for (const s of sharks) s.hear(x, y);
     for (const s of pod) s.hear(x, y);
   });
+  // ---- the island's own fish (the ones Mori knows from the line), swimming free by habitat
+  const fl = (x: number) => C().floorAt(x), SY = C().surfaceY;
+  const reef = (sp: string, len: number, n: number, x0: number, x1: number, top: number, above: number, cruise: number, mode: 'swim' | 'bottom' | 'hover' = 'swim') => {
+    const y0 = SY + top, y1 = Math.max(y0 + 8, fl((x0 + x1) / 2) - above);
+    for (let i = 0; i < n; i++) {
+      const fish = new ReefFish(sp, len, [x0, x1], [y0, y1], cruise * rand.range(0.85, 1.15), f, mode, fl);
+      f.main.add(fish);
+      f.animals.push(fish as unknown as Animal);
+    }
+  };
+  const Z = KELP_ZONES;
+  reef('glassmaomao', 16, 14, 220, 1300, 30, 70, 22);
+  reef('bubblepuffer', 18, 3, 140, 700, 24, 90, 8, 'hover');
+  reef('snoutbass', 32, 3, 500, 1350, 60, 0, 12, 'bottom');
+  reef('hammersnapper', 44, 3, Z.reef[0] + 100, Z.reef[1] - 100, 80, 50, 18);
+  reef('sixfinger', 26, 3, Z.reef[0] + 60, Z.reef[1] - 60, 100, 0, 8, 'bottom');
+  reef('spinnaker', 36, 4, Z.reef[0], Z.dropoff[0] + 200, 40, 120, 30);
+  reef('mirrordory', 24, 3, Z.dropoff[0] + 100, Z.dropoff[1], 160, 120, 14, 'hover');
+  reef('ribboneel', 56, 2, Z.dropoff[0] + 200, Z.blue[0] + 300, 220, 90, 10);
+  reef('lanterncod', 30, 2, gx - 120, gx + 140, 330, 26, 6, 'hover');
+  reef('sunwheel', 48, 2, Z.blue[0] + 100, Z.blue[1] - 120, 200, 260, 12);
   f.main.add(new Life(f, [school]));
+  f.main.add(new Serpentwatch(f, sharks));
   // ---- everything else warms in the background, the animals nearest Mori first
   const px = f.player.x;
   const order: [string, number][] = [[SEAL_ID, sx], [KING_ID, kx], [COD_ID, cx], [RAY_ID, rx], [SHARK_ID, px0], [HAPUKU_ID, gx], [SUN_ID, ux], [CLEAN_ID, ux + 1]];

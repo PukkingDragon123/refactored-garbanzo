@@ -343,7 +343,7 @@ export class SpineBody implements Body {
         pts: this.pts, facing: a.facing, jaw: Math.max(a.jaw, this.crest * 0.6), tongue: this.tongue, legPhase: this.legPhase,
         legLift: a.medium === 'ground' && Math.abs(a.vx) > 2 ? 1 : 0.1, grounded: a.medium === 'ground',
         groundY: this.surfY(a), flatten: this.flatten, swell: this.swell > 0.05 ? { at: 0.45, k: this.swell } : undefined,
-        blink: this.blinkT < 0 || a.act === 'sleep', submerge: a.medium === 'water' && a.host.waterY !== null ? a.host.waterY : undefined,
+        blink: this.blinkT < 0 || a.act === 'sleep', submerge: a.medium === 'water' && a.host.waterY !== null && !a.host.player.underwater ? a.host.waterY : undefined, // (seen from under water, its whole body is in view, not a dark shape below the surface)
         eye: a.eye === 'scared' ? 'alert' : a.eye, crest: this.crest, dewlap: this.dewlap, vertical: a.medium === 'trunk',
       };
       this.painter.paint(buf, st, this.ox, this.oy, this.t);

@@ -179,7 +179,8 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
   bigger fish, seals ... absolute perfection"): a boat stop (`kelpforest` in `src/game/sites10/ocean.ts`,
   gated by `gateOk('scuba')`, the `air_tank` blueprint). `src/game/v12/dive/`: `ctx.ts` (`DIVE_CTX` joins
   the parts), `scene.ts` / `layout.ts` (four zones), `species.ts` / `lifeguide.ts` (the Glasseye Whaler,
-  the seal pod, hāpuku, kingfish, blue cod, sunfish, eagle ray), `air.ts` (the tank, the watch's dive face),
+  the seal pod, hāpuku, kingfish, blue cod, sunfish, eagle ray; the island's ten line fish swim there too as
+  `ReefFish` from `oceanreef.ts`, and the Finned Leviathan cruises the blue), `air.ts` (the tank, the watch's dive face),
   `quest.ts` (Joshu's Te Ara Moana). The speargun is `src/game/v12/arsenal-harpoon.ts`; kelp is a
   `'kelp'` foliage kind on a water surge; art in `src/art/v12/dive/`. Dev jumps `dive:kelp|reef|dropoff|blue`.
 - **Rooms behind doors and windows:** never a black hole. `src/art/v11/village/interior.ts` paints the

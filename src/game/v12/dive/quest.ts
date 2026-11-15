@@ -43,8 +43,9 @@ function tick() {
   const f = DIVE_CTX.scene;
   if (f && !hooked.has(f)) {
     hooked.add(f);
-    onPhoto(f, [SEAL_ID, HAPUKU_ID, SHARK_ID], (sub, stars) => {
+    onPhoto(f, [SEAL_ID, HAPUKU_ID, SHARK_ID, 'leviathan'], (sub, stars) => {
       if (stars < 2) return;
+      if (sub.species === 'leviathan') setF('serpent');
       if (sub.species === SEAL_ID && sub.behavior === 'barrelroll' && !F('roll')) {
         setF('roll');
         void floatText({ text: 'A barrel roll! It’s showing off. ...It’s SHOWING OFF for me.', style: 'happy', ms: 2600 });
