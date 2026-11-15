@@ -6,6 +6,7 @@ import { Sk, V2, V3, Px, rmp, drawEye, EyeSpec, BeastEye, SpeciesDef, AnimDef, T
 import { Frame2 } from './beasts-rig';
 import { spreadWing, foldedWing, birdLeg, tailFan, scallop, WingLook, WingPose, BirdLegLook } from './beasts-bird';
 import { hex } from './color';
+import { drawMonarch } from './beasts-monarch';
 
 // ------------------------------------------------------------------ look
 interface BirdCols {
@@ -663,23 +664,36 @@ export const SNAKESTORK = makeBird({
   airAnims: ['fly', 'glide'],
 });
 
-export const MONARCH = makeBird({
-  look: {
-    name: 'Monarch', len: 70, height: 60,
-    rx: 16, ry: 10, stance: -0.55, neckL: 8, neckR0: 4.5, neckR1: 2.8, neckS: 0.35,
-    hrx: 4.8, hry: 4, beak: { len: 5.5, d: 4.2, hook: 2.6, curve: 0.45, lower: 0.6 },
-    leg: { tib: 9, tar: 8, rT: 3.6, rt: 1.6, toe: 4.5, talon: 1.4 }, hipX: -2,
-    tail: { L: 14, hw: 2.4, n: 9, spread: 0.45 },
-    wing: { arm: 40, hand: 38, sec: 18, prim: 30, nS: 10, nP: 7, finger: 1, pw: 2.6, sw: 3, round: 0.7, foldExt: 10 },
-    eye: { r: 1.3, iris: hex('#b83020'), lash: hex('#1e1414'), brow: hex('#6a4a40') },
-    cols: { back: '#3a2e2c', belly: '#e8e0d0', head: '#e0b0a0', neck: '#d8a898', wing: '#322826', prim: '#1a1616', cov: '#4a3a34', tail: '#2a2220', beak: '#d8c8a8', beakTip: '#6a5a4a', cere: '#c86a50', leg: '#9a8a80', claw: '#2a2420' },
-    bareNeck: true, flap: 0.55,
-  },
+const MONARCH_LOOK: BirdLook = {
+  name: 'Monarch', len: 70, height: 60,
+  rx: 16, ry: 10, stance: -0.55, neckL: 8, neckR0: 4.5, neckR1: 2.8, neckS: 0.35,
+  hrx: 4.8, hry: 4, beak: { len: 5.5, d: 4.2, hook: 2.6, curve: 0.45, lower: 0.6 },
+  leg: { tib: 9, tar: 8, rT: 3.6, rt: 1.6, toe: 4.5, talon: 1.4 }, hipX: -2,
+  tail: { L: 14, hw: 2.4, n: 9, spread: 0.45 },
+  wing: { arm: 40, hand: 38, sec: 18, prim: 30, nS: 10, nP: 7, finger: 1, pw: 2.6, sw: 3, round: 0.7, foldExt: 10 },
+  eye: { r: 1.3, iris: hex('#b83020'), lash: hex('#1e1414'), brow: hex('#6a4a40') },
+  cols: { back: '#3a2e2c', belly: '#e8e0d0', head: '#e0b0a0', neck: '#d8a898', wing: '#322826', prim: '#1a1616', cov: '#4a3a34', tail: '#2a2220', beak: '#d8c8a8', beakTip: '#6a5a4a', cere: '#c86a50', leg: '#9a8a80', claw: '#2a2420' },
+  bareNeck: true, flap: 0.55,
+};
+const MONARCH_BIRD = makeBird({
+  look: MONARCH_LOOK,
   anims: { idle: A(4, 2), walk: A(6, 6), alert: A(2, 3), preen: A(4, 4), sleep: A(2, 1.5), feed: A(4, 5), eat: A(4, 5), fly: A(6, 5), glide: A(2, 1.5), soar: A(2, 1), land: A(3, 5, false) },
   ground: { w: 150, h: 110, ox: 60, oy: 100 },
   flight: { w: 260, h: 170, ox: 130, oy: 85 },
   airAnims: ['fly', 'glide', 'soar', 'land'],
 });
+
+// the Monarch keeps the shared pose library but has its own painter (beasts-monarch.ts)
+export const MONARCH: SpeciesDef = {
+  ...MONARCH_BIRD,
+  draw(sk, anim, frame, eye, juv) {
+    const air = ['fly', 'glide', 'soar', 'land'].includes(anim);
+    const n = MONARCH_BIRD.anims[anim]?.frames ?? 1;
+    const L = MONARCH_LOOK;
+    const P = ((air ? AIR[anim] : G[anim]) ?? G.idle)(L, frame, n);
+    return drawMonarch(sk, P, eye, juv);
+  },
+};
 
 export const NUTCRACKER = makeBird({
   look: {

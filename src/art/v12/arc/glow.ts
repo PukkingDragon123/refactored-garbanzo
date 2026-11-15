@@ -19,6 +19,7 @@
 // top of the dark so the lights shine where the body itself is lost in the night.
 
 import { Sk, rmp, drawEye, TAU, hh, ik2, lmix, cbez } from '../../beasts-core';
+import { HField, crv, ribbon, spline, arcs, along, lineDist, cell, scaleH, fbm } from '../../beasts-hfield';
 import type { EyeSpec, BeastEye, SpeciesDef, V2, Px } from '../../beasts-core';
 import { PixelBuffer } from '../../pixel';
 import { hex } from '../../color';
@@ -81,228 +82,236 @@ function pose(anim: string, f: number): Pose {
 interface GlowNote { mats: Set<number>; k: Map<number, number> }
 const NOTES = new WeakMap<Sk, GlowNote>();
 
+/**
+ * The body's outline, drawn round its spine from the snout to the lantern: half-widths above (the
+ * eye bulge, the flat crown, the neck, the shoulders, the back, the hips, the fat tail swelling behind
+ * its waist, the lantern) and below (the chin, the jowls, the throat, the chest, the sagging belly with
+ * its scalloped fringe of skin, the vent, the tail), by distance from the snout (px at k = 1).
+ */
+const TOPW: [number, number][] = [[0, 0.5], [0.8, 1.1], [2.0, 1.9], [3.4, 2.75], [4.6, 2.7], [5.8, 2.1], [7.0, 1.35], [8.0, 1.3], [9.8, 2.0], [12.5, 2.2], [15, 2.35], [17.2, 2.2], [18.6, 1.4], [20.4, 2.1], [22.6, 2.0], [25, 1.5], [27.6, 1.0], [29.8, 0.7], [30.8, 1.0], [31.9, 1.6], [33.0, 1.65], [33.9, 1.1], [34.4, 0.3]];
+const BOTW: [number, number][] = [[0, 0.5], [0.8, 0.9], [2.0, 1.15], [3.4, 1.5], [4.8, 1.95], [6.2, 1.9], [7.4, 1.4], [9.2, 1.9], [12, 2.45], [14.5, 2.6], [16.6, 2.3], [18, 1.5], [19.6, 2.0], [21.8, 1.9], [24.5, 1.3], [27.6, 0.85], [29.8, 0.65], [30.8, 0.9], [31.9, 1.5], [33.0, 1.55], [33.9, 1.0], [34.4, 0.3]];
+const EYE_S = 3.5, LANTERN_S = 30.9;
+
 function draw(sk: Sk, anim: string, frame: number, eye: BeastEye, juv: boolean) {
   const P = pose(anim, frame);
   const k = juv ? 0.7 : 1;
   const note: GlowNote = { mats: new Set(), k: new Map() };
   NOTES.set(sk, note);
   const M = {
-    skin: sk.m(rmp('#4e5030', { n: 8, dark: 0.66, light: 0.4, cool: 0.55, warm: 0.4 }), { edge: 1, spec: 0.08, bias: -0.06 }),
+    skin: sk.m(rmp('#4c4e2e', { n: 8, dark: 0.66, light: 0.42, cool: 0.55, warm: 0.4 }), { edge: 1 }),
+    bark: sk.m(rmp('#5e5434', { n: 7, dark: 0.62, light: 0.4, cool: 0.45, warm: 0.45 }), { edge: 1 }),
     dark: sk.m(rmp('#221e12', { n: 6, dark: 0.55, light: 0.32, cool: 0.4 }), { edge: 1 }),
-    pale: sk.m(rmp('#8a8452', { n: 6, dark: 0.5, light: 0.36, warm: 0.5 }), { edge: 1, bias: -0.05 }),
-    tub: sk.m(rmp('#6c6a3c', { n: 6, dark: 0.55, light: 0.45, warm: 0.5 }), { edge: 1 }),
-    belly: sk.m(rmp('#928c66', { n: 6, dark: 0.5, light: 0.3, cool: 0.25, warm: 0.2 }), { edge: 1, noRim: true }),
+    pale: sk.m(rmp('#8e8656', { n: 6, dark: 0.5, light: 0.36, warm: 0.5 }), { edge: 1 }),
+    tub: sk.m(rmp('#7a7444', { n: 6, dark: 0.55, light: 0.42, warm: 0.5 }), { edge: 1 }),
+    moss: sk.m(rmp('#5c6a2a', { n: 6, dark: 0.55, light: 0.4, warm: 0.3 }), { edge: 1 }),
+    belly: sk.m(rmp('#968e66', { n: 6, dark: 0.5, light: 0.3, cool: 0.25, warm: 0.2 }), { edge: 1, noRim: true }),
     toe: sk.m(rmp('#4a462c', { n: 6, dark: 0.6, light: 0.4 }), { edge: 1 }),
-    pad: sk.m(rmp('#8a8258', { n: 5, dark: 0.45, light: 0.35 }), { edge: 0 }),
-    spot: sk.m(rmp('#80eed4', { n: 5, dark: 0.32, light: 0.5, warm: 0.1 }), { edge: 0, spec: 0.25, noRim: true }),
-    lantern: sk.m(rmp('#a6fbe6', { n: 6, dark: 0.4, light: 0.6, warm: 0.1 }), { edge: 0, spec: 0.5 }),
-    hood: sk.m(rmp('#3e4a30', { n: 6, dark: 0.55, light: 0.4, cool: 0.5 }), { edge: 1 }),
-    mouth: sk.m(rmp('#c46a6a', { n: 5, dark: 0.5, light: 0.4 }), { edge: 0, spec: 0.4 }),
+    pad: sk.m(rmp('#7e7650', { n: 5, dark: 0.45, light: 0.35 }), { edge: 0 }),
+    spot: sk.m(rmp('#80eed4', { n: 5, dark: 0.32, light: 0.5, warm: 0.1 }), { edge: 0, noRim: true }),
+    spotOff: sk.m(rmp('#6c7a62', { n: 5, dark: 0.4, light: 0.35 }), { edge: 0, noRim: true }),
+    lantern: sk.m(rmp('#a6fbe6', { n: 6, dark: 0.4, light: 0.6, warm: 0.1 }), { edge: 0 }),
+    hood: sk.m(rmp('#3a4430', { n: 6, dark: 0.55, light: 0.4, cool: 0.5 }), { edge: 1 }),
+    mouth: sk.m(rmp('#c46a6a', { n: 5, dark: 0.5, light: 0.4 }), { edge: 0 }),
   };
   note.mats.add(M.spot); note.mats.add(M.lantern);
+  const F = HField.full(sk);
   const flat = P.flat;
-  const bodyR = (2.35 - flat * 0.55) * k;
-  const bodyY = -(3.5 + P.lift - flat * 1.3) * k;
+  const bodyY = -(4.5 + P.lift - flat * 2.0) * k;
   const breath = 1 + P.breathe * 0.07;
-  // ---------------------------------------------------------------- the spine of the body
+  // ---------------------------------------------------------------- the spine: snout, head, neck, body, the tail
   const hip: V2 = [-5.2 * k, bodyY + 0.2 * k];
   const mid: V2 = [-0.6 * k, bodyY - 0.35 * k * (1 - flat)];
   const sho: V2 = [4 * k, bodyY + (0.1 + P.headDown * 0.35) * k];
   const neck: V2 = [6.6 * k, bodyY + (-0.4 - P.headUp * 1.1 + P.headDown * 1.5) * k];
-  const bodyPts = cbez(hip, mid, sho, neck, 10);
-  const radAt = (t: number) => (t < 0.35 ? 2 + t / 0.35 * 0.45 : t < 0.78 ? 2.45 - (t - 0.35) / 0.43 * 0.3 : 2.15 - (t - 0.78) / 0.22 * 0.7) / 2.35 * bodyR * (t > 0.15 && t < 0.7 ? breath : 1);
-  // the chevrons: dark W bands slanting back down the flanks, each with a pale fleck behind it
-  const chev = (along: number, v: number, x: number, y: number): number | null => {
-    if (v > 0.4) return null;
-    const ph = along / (3.3 * k) + Math.abs(v) * 0.55 + (hh(x, y, 71) - 0.5) * 0.12;
-    const fp = ph - Math.floor(ph);
-    if (fp < 0.24) return M.dark;
-    if (fp < 0.33 && v < 0.1) return M.pale;
-    return null;
+  const ha = -P.headUp * 0.42 + P.headDown * 0.55;
+  const hd = (d: number): V2 => [neck[0] + Math.cos(ha) * d * k, neck[1] + Math.sin(ha) * d * k];
+  const cl0 = P.curl;
+  const T0: V2 = [hip[0] - 0.4 * k, hip[1] + 0.3 * k];
+  const lerpV = (a: V2, b: V2, t: number): V2 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  const lie = [T0, [-11 * k, bodyY + 1.6 * k], [-16.5 * k, -1.6 * k - cl0 * 2 * k], [-21 * k, -2.2 * k - cl0 * 6 * k]] as V2[];
+  const upC = [T0, [-11.5 * k, bodyY - 1.5 * k], [-11 * k, bodyY - 10.5 * k], [(-4.5 + P.wave * 2.4) * k, bodyY - 13 * k]] as V2[];
+  const wrap = [T0, [-10 * k, bodyY + 2 * k], [-3 * k, -1.2 * k], [9 * k, -1.1 * k]] as V2[];
+  const ctl = cl0 >= 0 ? lie.map((q, i) => lerpV(q, upC[i], Math.max(0, (cl0 - 0.2) / 0.8))) : lie.map((q, i) => lerpV(q, wrap[i], -cl0));
+  const tail = cbez(ctl[0], ctl[1], ctl[2], ctl[3], 16);
+  const torso = cbez(neck, sho, mid, hip, 10);
+  const spine: V2[] = [hd(7.2), hd(5.2), hd(3), hd(1.2), ...torso, ...tail.slice(1)];
+  // rescale the width tables to this spine's length (the tail stretches or shortens with the pose)
+  const cum = arcs(spine), L = cum[cum.length - 1];
+  const headL = Math.hypot(spine[0][0] - neck[0], spine[0][1] - neck[1]);
+  const torsoL = arcs(torso)[torso.length - 1];
+  const sOf = (d: number) => {
+    // distance along the spine (px) -> table coordinate: head 0..7.2, torso 7.2..18.4, tail 18.4..34.4
+    if (d <= headL) return (d / headL) * 7.2;
+    if (d <= headL + torsoL) return 7.2 + ((d - headL) / torsoL) * 11.2;
+    return 18.4 + ((d - headL - torsoL) / Math.max(1, L - headL - torsoL)) * 16;
   };
-  const skinFill = (along: (p: Px) => number, belly = true) => (p: Px) => {
-    if (p.v > 0.66 - flat * 0.25 && belly) return M.belly;
-    const c = chev(along(p), p.v, p.x, p.y);
-    // granular skin: a light grain, and here and there a raised tubercle (lit on top, a dark tuck under)
-    const g = hh(p.x * 1.0 + 40, p.y + 40, 17);
-    if (g > 0.93 && p.v < 0.3) { p.l += 0.14; return M.tub; }
-    if (g < 0.05) p.l -= 0.08;
-    if (c !== null) return c;
-    return M.skin;
+  const fringe = (s: number) => (s > 4.4 && s < 6.6 ? Math.max(0, Math.sin((s - 4.4) * 4.2)) * 0.3 : 0);
+  const topW = (t: number) => { const s = sOf(t * L); return crv(TOPW, s) * k * (s > 8 && s < 18 ? breath : 1) * (1 - flat * 0.18); };
+  const botW = (t: number) => { const s = sOf(t * L); return (crv(BOTW, s) + fringe(s) * (1 - flat * 0.5)) * k * (s > 8 && s < 18 ? breath : 1) * (1 - flat * 0.25); };
+  // the spine runs snout -> tail (leftward), so the ribbon's left edge is the belly, the right edge the back
+  const outline = ribbon(spine, botW, topW, Math.ceil(L * 3), 0, 0);
+  // where a pixel lies on the body: s along (table units) and across (-1 belly .. +1 back)
+  const where = (x: number, y: number): [number, number, number] => {
+    const [, t] = lineDist(spine, x, y, cum);
+    const q = along(spine, t, cum);
+    const off = -((x - q.p[0]) * q.n[0] + (y - q.p[1]) * q.n[1]); // + toward the back
+    const s = sOf(t * L);
+    const w = off >= 0 ? Math.max(0.3, topW(t)) : Math.max(0.3, botW(t));
+    return [s, off / w, t];
   };
-  // ---------------------------------------------------------------- legs
+  // ---------------------------------------------------------------- the legs (far pair first)
   const g0 = P.gait;
+  const legs: { foot: V2; toes: V2[]; pads: V2[]; near: boolean }[] = [];
   const leg = (front: boolean, near: boolean) => {
-    sk.np();
-    const z = near ? 7 : -7, bias = near ? 0.06 : -0.17;
-    // diagonal pairs: near-front with far-hind
+    const z = near ? 6 : -6, bias = near ? 0.04 : -0.2;
     const ph = Number.isNaN(g0) ? 0 : g0 + ((front === near) ? 0 : 0.5);
     const sw = Number.isNaN(g0) ? 0 : Math.sin(ph * TAU);
     const up = Number.isNaN(g0) ? 0 : Math.max(0, Math.cos(ph * TAU)) * (P.stride > 4 ? 1.6 : 1.1);
-    const root: V2 = front ? [sho[0] - 0.6 * k, sho[1] + bodyR * 0.45] : [hip[0] + 0.5 * k, hip[1] + bodyR * 0.45];
+    const root: V2 = front ? [sho[0] - 0.6 * k, sho[1] + 1.1 * k] : [hip[0] + 0.5 * k, hip[1] + 1.1 * k];
     const spread = near ? 0.4 : -0.6;
     let fx = front ? root[0] + (2.2 + spread) * k : root[0] - (1.6 - spread) * k;
     fx += sw * P.stride * 0.5 * k;
     if (P.curl < -0.5 && !front) fx += 1.2 * k;
     if (flat > 0.5) fx += (front ? 1.2 : -1.2) * k;
     const foot: V2 = [fx, -up * k];
-    const l1 = (front ? 2.5 : 2.9) * k, l2 = (front ? 2.4 : 2.7) * k;
+    const l1 = (front ? 2.6 : 3.0) * k, l2 = (front ? 2.5 : 2.8) * k;
     // the elbow points back, the knee forward: the sprawl, seen from the side
     const [j] = ik2(root, foot, l1, l2, front ? -1 : 1);
-    sk.tube([root, j], t => (front ? 1.2 - t * 0.3 : 1.45 - t * 0.35) * k, skinFill(p => p.x * 0.6, false), { z, bias: bias - 0.04 });
-    sk.tube([j, foot], t => (front ? 0.85 - t * 0.2 : 0.95 - t * 0.25) * k, skinFill(p => p.x * 0.6, false), { z: z + 0.5, bias: bias - 0.08 });
-    // the toes: splayed, each ending in a wide pale pad
-    const n = front ? 4 : 5;
+    // one outline from the shoulder (hip) through the elbow (knee) to the wrist (ankle): muscled above, slim below
+    const limb = spline([root, lerpV(root, j, 0.55), j, lerpV(j, foot, 0.5), foot], 3);
+    const lw = (t: number) => (front ? (t < 0.45 ? 0.8 - t * 0.45 : t < 0.55 ? 0.58 : 0.56 - (t - 0.55) * 0.5) : (t < 0.45 ? 1.0 - t * 0.6 : t < 0.55 ? 0.7 : 0.66 - (t - 0.55) * 0.6)) * k;
+    const lc = arcs(limb);
+    F.inflate(ribbon(limb, lw, lw, 0, 0.6, 0.2), 1.1 * k, z, near ? (front ? 21 : 22) : (front ? 11 : 12), 0, (x, y, d, s, o) => {
+      const t = lineDist(limb, x, y, lc)[1];
+      o.m = t > 0.3 && t < 0.62 && hh(Math.floor(x * 1.2), 3, 33) > 0.5 ? M.dark : M.skin;
+      o.t = bias - 0.08;
+      cell(x * 2.2, y * 2.2, 1.3, 1.3, 31, 0.8);
+      o.z += scaleH(2.4) * 0.15;
+    }, 0.9);
+    // the toes: splayed, each ending in a broad adhesive pad
+    const n = 5, toes: V2[] = [], pads: V2[] = [];
     for (let i = 0; i < n; i++) {
-      const a = (front ? -0.25 : 0.55) + (i / (n - 1) - 0.5) * (front ? 1.5 : 1.9);
-      const len = (1.6 + (i === 1 || i === 2 ? 0.6 : 0)) * k;
-      const dir = front ? 1 : -1;
-      const tip: V2 = [foot[0] + Math.cos(a) * len * dir, foot[1] + Math.sin(a) * len * 0.35 + 0.15];
-      sk.line(foot[0], foot[1] - 0.2, tip[0], tip[1], M.toe, 0.38 + bias + (near ? 0.06 : 0), z + 0.8);
-      if (i % 2 === 0) sk.dot(tip[0], tip[1], M.pad, 0.5 + bias, z + 1);
+      // splayed in a fan over the ground, the middle toes longest
+      const a = (front ? -0.1 : Math.PI + 0.1) + (i / (n - 1) - 0.5) * (front ? 2.2 : -2.4);
+      const len = (1.6 + (i === 2 ? 0.9 : i === 1 || i === 3 ? 0.6 : 0)) * k;
+      toes.push([foot[0] + Math.cos(a) * len, foot[1] + Math.min(0.3, Math.sin(a) * len * 0.5)]);
     }
+    for (const tp of toes) pads.push(tp);
+    legs.push({ foot, toes, pads, near });
+    void z;
   };
   leg(false, false);
   leg(true, false);
-  // ---------------------------------------------------------------- the tail
-  sk.np();
-  const tailPart = sk.pid;
-  const cl = P.curl;
-  // control points: lying out behind (curl 0), raised in a curl over the back (1), wrapped forward (-1)
-  const T0: V2 = [hip[0] - 0.4 * k, hip[1] + 0.3 * k];
-  const lerpV = (a: V2, b: V2, t: number): V2 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-  const lie = [T0, [-11 * k, bodyY + 1.6 * k], [-16.5 * k, -1.6 * k - cl * 2 * k], [-21 * k, -2.2 * k - cl * 6 * k]] as V2[];
-  const up = [T0, [-11.5 * k, bodyY - 1.5 * k], [-11 * k, bodyY - 10.5 * k], [(-4.5 + P.wave * 2.4) * k, bodyY - 13 * k]] as V2[];
-  const wrap = [T0, [-10 * k, bodyY + 2 * k], [-3 * k, -1.2 * k], [9 * k, -1.1 * k]] as V2[];
-  const ctl = cl >= 0 ? lie.map((q, i) => lerpV(q, up[i], Math.max(0, (cl - 0.2) / 0.8))) : lie.map((q, i) => lerpV(q, wrap[i], -cl));
-  const tail = cbez(ctl[0], ctl[1], ctl[2], ctl[3], 14);
-  // (the tail of a gecko is its larder: fat at the base, tapering, then the lantern bulb)
-  const tailR = (t: number) => (2.15 - t * 1.4 - (t > 0.82 ? (t - 0.82) * 0.6 : 0)) * k * (1 - flat * 0.15);
-  let tl = 0;
-  const cum: number[] = [0];
-  for (let i = 1; i < tail.length; i++) { tl += Math.hypot(tail[i][0] - tail[i - 1][0], tail[i][1] - tail[i - 1][1]); cum.push(tl); }
-  sk.tube(tail, tailR, skinFill(p => -p.t * tl - 6 * k, false), { z: t => -0.6 + t * (cl > 0.5 ? -1.5 : cl < -0.5 ? 3 : 0) });
-  // ---------------------------------------------------------------- the body
-  sk.np();
-  const bodyPart = sk.pid;
-  sk.tube(bodyPts, radAt, skinFill(p => p.x), { z: 0 });
-  // ---------------------------------------------------------------- the head: broad and flat, the snout rounded
-  sk.np();
-  const headPart = sk.pid;
-  const ha = -P.headUp * 0.42 + P.headDown * 0.55;
-  const rot = (dx: number, dy: number): V2 => [dx * Math.cos(ha) - dy * Math.sin(ha), dx * Math.sin(ha) + dy * Math.cos(ha)];
-  const hc: V2 = [neck[0] + rot(2.6 * k, -0.3 * k)[0], neck[1] + rot(2.6 * k, -0.3 * k)[1]];
-  const at = (dx: number, dy: number): V2 => { const r = rot(dx * k, dy * k); return [hc[0] + r[0], hc[1] + r[1]]; };
-  const headFill = (p: Px) => {
-    if (p.v > 0.45) { p.l += 0.02; return M.belly; }
-    const g = hh(p.x + 40, p.y + 40, 19);
-    if (g > 0.9 && p.v < 0.1) { p.l += 0.1; return M.tub; }
-    // a dark stripe from the snout through the eye to the ear
-    const s = at(0, 0), rel = [p.x - s[0], p.y - s[1]];
-    const ly = -rel[0] * Math.sin(ha) + rel[1] * Math.cos(ha);
-    if (ly > -1.0 * k && ly < -0.2 * k && p.v < 0.15 && p.v > -0.4 && rel[0] * Math.cos(ha) + rel[1] * Math.sin(ha) < 4 * k) return M.dark;
-    return M.skin;
+  // ---------------------------------------------------------------- the body: one outline, sculpted
+  F.inflate(outline, 2.3 * k, 0, 1, 0, (x, y, d, s, o) => {
+    const [ss, ac] = where(x, y);
+    o.m = M.skin;
+    // granular skin: a fine grain of tiny domed scales everywhere
+    cell(x * 2.4 + 50, y * 2.4 + 50, 1.25, 1.25, 17, 0.85);
+    o.z += scaleH(2.6) * 0.16;
+    if (ss >= LANTERN_S) {
+      o.m = ss < LANTERN_S + 0.6 ? M.hood : M.lantern;
+      return;
+    }
+    // the cream belly
+    if (ac < -0.62 + flat * 0.2) { o.m = M.belly; if (hh(Math.floor(ss * 2), Math.round(ac * 3), 19) > 0.6) o.z -= 0.15; return; }
+    // rows of raised tubercles down the back and flanks
+    if (ss > 6.5 && ss < 29) {
+      const rowA = Math.abs(ac - 0.62) < 0.18 || Math.abs(ac - 0.12) < 0.16;
+      const ph = (ss * 0.9 + (ac > 0.4 ? 0 : 0.5)) % 1;
+      if (rowA && ph < 0.4) o.z += 0.3;
+    }
+    // W-shaped chevrons: dark bands slanting back down the flanks, a pale fleck behind each
+    if (ss > 7 && ss < 30) {
+      const ph = ss / 3.3 + Math.abs(ac - 0.25) * 0.55 + (hh(Math.floor(x * 2), Math.floor(y * 2), 71) - 0.5) * 0.1;
+      const fp = ph - Math.floor(ph);
+      if (fp < 0.24 && ac > -0.45) o.m = M.dark;
+      else if (fp < 0.35 && ac > -0.1) o.m = M.pale;
+      else if (ac > 0.75) o.m = M.bark;
+    }
+    // the tail's whorls of scales
+    if (ss > 19 && Math.abs(((ss - 19) / 1.15) % 1 - 0.5) < 0.12) o.z -= 0.3;
+    // the head: a dark stripe from the snout through the eye to the ear
+    if (ss < 6.8 && ac > -0.2 && ac < 0.12 && ss > 2.4) o.m = M.bark;
+    if (ss < 7.2 && ac < -0.3) o.m = ac < -0.65 ? M.belly : M.pale;
+  }, 0.9);
+  // anatomy carved in: the eye bulge, the mouth line, the ear opening, the waist of the tail, the hips and shoulders
+  const at = (s: number, ac: number): V2 => {
+    // invert sOf roughly by sampling
+    let best = 0, bd = 1e9;
+    for (let i = 0; i <= 60; i++) { const t = i / 60, d = Math.abs(sOf(t * L) - s); if (d < bd) { bd = d; best = t; } }
+    const q = along(spine, best, cum);
+    const w = ac >= 0 ? topW(best) : botW(best);
+    return [q.p[0] - q.n[0] * ac * w, q.p[1] - q.n[1] * ac * w];
   };
-  // the jowls and skull
-  sk.ell(hc[0], hc[1], 3.4 * k, (2.35 - flat * 0.45) * k, headFill, { rot: ha, rz: 2.4 * k, z: 2 });
-  const sn = at(3.3, 0.55);
-  sk.ell(sn[0], sn[1], 2.7 * k, (1.55 - flat * 0.25) * k, headFill, { rot: ha + 0.1, rz: 1.6 * k, z: 2.6 });
-  // the mouth: a long faint smile from the snout back under the eye; the nostril
-  for (let i = 0; i <= 10; i++) {
-    const t = i / 10;
-    const q = at(5.6 - t * 6.4, 1.35 - Math.sin(t * Math.PI) * 0.3 + t * 0.1);
-    sk.paint(q[0], q[1], 0, -0.22, headPart);
-  }
-  const nos = at(5.3, 0);
-  sk.paint(nos[0], nos[1], M.dark, -0.1, headPart);
-  // the tongue: fleshy, lapping down at what it's licking
+  const ep = at(EYE_S, 0.42);
+  F.bump(ep[0], ep[1], 2.4 * k, 1.1, 0, 0.05, 2 * k, 1);
+  const mouthL = spline([at(0.35, -0.1), at(2.2, -0.3), at(4.4, -0.32), at(5.6, -0.12)], 3);
+  F.groove(mouthL, 0.6 * k, 0.6, M.dark, -0.12, 1);
+  { const q = at(6.3, 0.05); F.bump(q[0], q[1], 0.7 * k, -0.6, M.dark, -0.1, 0.7 * k, 1); }
+  { const q = at(18.6, 0); F.groove([at(18.6, 0.9), q, at(18.6, -0.9)], 0.55 * k, 0.35, 0, -0.05, 1); }
+  { const q = at(9.8, 0.2); F.bump(q[0], q[1], 2 * k, 0.5, 0, 0.03, 1.6 * k, 1); }
+  { const q = at(17, 0.15); F.bump(q[0], q[1], 2.2 * k, 0.5, 0, 0.03, 1.8 * k, 1); }
+  // ---------------------------------------------------------------- the tongue
   if (P.tongue > 0.05) {
-    sk.np();
-    const m0 = at(5.8, 1.2), m1 = at(5.8 + P.tongue * 1.3, 1.5 + P.tongue * 0.9);
-    sk.tube([m0, m1], t => (0.55 - t * 0.1) * k, M.mouth, { z: 4 });
+    const m0 = at(0.6, -0.4), m1: V2 = [m0[0] + P.tongue * 1.4 * k + 0.4, m0[1] + P.tongue * 1.1 * k];
+    F.inflate(ribbon([m0, m1], () => 0.55 * k, () => 0.5 * k, 6, 0.6, 0.6), 0.6 * k, 4, 30, 0, (x, y, d, s, o) => { o.m = M.mouth; }, 0.8);
   }
   // ---------------------------------------------------------------- near legs
   leg(true, true);
   leg(false, true);
-  // ---------------------------------------------------------------- the lantern at the tail tip
   sk.np();
-  const tip = tail[tail.length - 1], pre = tail[tail.length - 3];
-  const ta = Math.atan2(tip[1] - pre[1], tip[0] - pre[0]);
-  const lc: V2 = [tip[0] + Math.cos(ta) * 0.6 * k, tip[1] + Math.sin(ta) * 0.6 * k];
-  const lr = 1.4 * k;
-  // a dark hood of skin over the base of the bulb, the bulb itself pale and wet
-  sk.ell(tip[0] - Math.cos(ta) * 0.6 * k, tip[1] - Math.sin(ta) * 0.6 * k, 1.05 * k, 1.05 * k, M.hood, { z: 3 + (cl < -0.5 ? 3 : 0) });
-  const lanternZ = 3.5 + (cl < -0.5 ? 3 : 0);
-  sk.ell(lc[0], lc[1], lr, lr * 0.92, M.lantern, { rot: ta, z: lanternZ });
+  F.emit({ seam: 1.0, seamDark: 0.32, ao: 0.08, aoR: 2, shadow: 0.2, shadowR: 6,
+    spec: (m) => (m === M.lantern ? 0.6 : m === M.skin || m === M.bark || m === M.tub ? 0.12 : 0), specPow: 14 });
+  // the toes and their pads (1px digits splayed on the ground, each ending in a broad pad)
+  for (const lg of legs) {
+    const bias = lg.near ? 0.0 : -0.2;
+    for (let i = 0; i < lg.toes.length; i++) {
+      const tp = lg.toes[i];
+      sk.line(lg.foot[0], lg.foot[1] - 0.2, tp[0], tp[1], M.toe, 0.32 + bias, lg.near ? 9 : -4);
+      if (i > 0 && i < 4) sk.dot(tp[0], tp[1], M.pad, 0.5 + bias, lg.near ? 10 : -3);
+    }
+  }
+  // ---------------------------------------------------------------- the lights
   const lk = Math.min(1, P.glow * 1.15) * (0.82 + 0.18 * Math.sin(P.pulse * TAU + 1));
-  // ---------------------------------------------------------------- the photophores
   const setK = (x: number, y: number, v: number) => { const i = sk.idx(x, y); if (i >= 0) note.k.set(i, Math.max(note.k.get(i) ?? 0, v)); };
-  for (let yy = -lr - 1; yy <= lr + 1; yy++) for (let xx = -lr - 1; xx <= lr + 1; xx++) {
+  const lc = at(32.5, 0);
+  for (let yy = -3; yy <= 3; yy++) for (let xx = -3; xx <= 3; xx++) {
     const x = lc[0] + xx, y = lc[1] + yy;
     const i = sk.idx(x, y);
-    if (i >= 0 && sk.mat[i] === M.lantern) setK(x, y, lk * (Math.hypot(xx, yy) < lr * 0.55 ? 1 : 0.72));
+    if (i >= 0 && sk.mat[i] === M.lantern) setK(x, y, lk * (Math.hypot(xx, yy) < 1.2 ? 1 : 0.72));
   }
   const waveK = (s: number) => P.glow * (0.5 + 0.5 * (0.5 + 0.5 * Math.sin((s / 13 - P.pulse) * TAU)));
-  /** one bead of light at (x, y) on part `part`, its ring a shade darker */
-  const bead = (x: number, y: number, part: number, s: number, big: boolean) => {
+  const skinM = new Set([M.skin, M.bark, M.dark, M.pale, M.tub, M.moss]);
+  /** one bead of light, ringed darker */
+  const bead = (q: V2, s: number, big: boolean) => {
+    const x = Math.floor(q[0]), y = Math.floor(q[1]);
     const i = sk.idx(x, y);
-    if (i < 0 || sk.part[i] !== part || !sk.mat[i] || sk.mat[i] === M.belly) return;
+    if (i < 0 || !skinM.has(sk.mat[i])) return;
     const v = waveK(s);
-    sk.paint(x, y, M.spot, 0.1);
-    setK(x, y, v);
-    if (big) { sk.paint(x + 1, y, M.spot, 0.02, part); if (sk.mat[sk.idx(x + 1, y)] === M.spot) setK(x + 1, y, v * 0.85); }
-    // the dark ring of skin round each one
+    const lit = P.glow > 0.15;
+    sk.mat[i] = lit ? M.spot : M.spotOff; sk.lum[i] = 0.62;
+    if (lit) setK(x, y, v);
+    if (big && lit) { const j = sk.idx(x + 1, y); if (j >= 0 && skinM.has(sk.mat[j])) { sk.mat[j] = M.spot; sk.lum[j] = 0.5; setK(x + 1, y, v * 0.85); } }
     for (const [dx, dy] of [[0, -1], [-1, 0], [big ? 2 : 1, 0]] as V2[]) {
       const j = sk.idx(x + dx, y + dy);
-      if (j >= 0 && sk.part[j] === part && sk.mat[j] !== M.spot && sk.mat[j] !== M.belly) sk.lum[j] -= 0.12;
+      if (j >= 0 && skinM.has(sk.mat[j])) sk.lum[j] -= 0.14;
     }
   };
-  // two rows along each flank of the body, staggered
-  const nb = bodyPts.length;
-  const along = (pts: V2[], t: number): { p: V2; n: V2 } => {
-    const f = t * (pts.length - 1), i = Math.min(pts.length - 2, Math.floor(f)), u = f - i;
-    const a = pts[i], b = pts[i + 1];
-    const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1;
-    return { p: [a[0] + dx * u, a[1] + dy * u], n: [dy / L, -dx / L] };
-  };
-  void nb;
-  const bodyLen = Math.hypot(neck[0] - hip[0], neck[1] - hip[1]);
-  for (let s = 1.4 * k, i = 0; s < bodyLen - 1.5 * k; s += 3 * k, i++) {
-    const t = s / bodyLen, { p, n } = along(bodyPts, t), r = radAt(t);
-    // (n points up out of the back)
-    const a = [p[0] + n[0] * r * 0.5, p[1] + n[1] * r * 0.5];
-    const b = [p[0] - n[0] * r * 0.05 + 1.15 * k, p[1] - n[1] * r * 0.05];
-    if (i % 2 === 0) bead(Math.floor(a[0]), Math.floor(a[1]), bodyPart, s + 8, false);
-    if (flat < 0.8) bead(Math.floor(b[0]), Math.floor(b[1]), bodyPart, s + 8.8, i % 2 === 1);
+  // two rows along each flank of the body, staggered; rings round the tail; one behind the eye, one at the jaw
+  for (let s = 8.8, i = 0; s < 18; s += 3.2, i++) {
+    bead(at(s + 1.6, 0.25), s + 8, false);
+    if (flat < 0.8) bead(at(s, -0.38), s + 8.8, false);
   }
-  // rings round the tail
-  for (let s = 2.6 * k, i = 0; s < tl - 2.6 * k; s += 3.2 * k, i++) {
-    let j = 0;
-    while (j < cum.length - 1 && cum[j + 1] < s) j++;
-    const u = (s - cum[j]) / Math.max(0.01, cum[j + 1] - cum[j]);
-    const a = tail[j], b = tail[Math.min(tail.length - 1, j + 1)];
-    const x = a[0] + (b[0] - a[0]) * u, y = a[1] + (b[1] - a[1]) * u;
-    const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1;
-    const r = tailR(s / tl);
-    // the side of the tail facing us: a bead off the upper side (raised: off the outer side of the curl)
-    const nx = dy / L, ny = -dx / L;
-    const side = ny < 0 ? 1 : -1;
-    bead(Math.floor(x + nx * r * 0.35 * side), Math.floor(y + ny * r * 0.35 * side), tailPart, -s, false);
-  }
-  // one behind the eye, one at the corner of the jaw
-  const e1 = at(-1.6, -0.6), e2 = at(-0.6, 0.9);
-  bead(Math.floor(e1[0]), Math.floor(e1[1]), headPart, 14, false);
-  if (flat < 0.8) bead(Math.floor(e2[0]), Math.floor(e2[1]), headPart, 13, false);
-  // ---------------------------------------------------------------- the eye: huge, gold, the slit pupil
-  const ep = at(1.0, -0.95);
-  // a pale scaly rim round the eye, then the eye itself
+  for (let s = 21; s < 30; s += 3.0) bead(at(s, 0.3), -s, false);
+  bead(at(5.6, 0.35), 14, false);
+  if (flat < 0.8) bead(at(6.4, -0.45), 13, false);
+  // ---------------------------------------------------------------- the eye: huge, gold, the slit pupil, a pale scaly rim
   const er = juv ? 1.1 : 1.5;
-  for (let a = 0; a < TAU; a += TAU / 14) {
-    const x = ep[0] + Math.cos(a) * (er + 1.1), y = ep[1] + Math.sin(a) * (er + 1.1);
-    if (Math.sin(a) < -0.3) sk.paint(x, y, M.pale, 0.05, headPart);
-  }
-  const e = drawEye(sk, ep[0], ep[1], { ...EYE, r: er }, eye);
-  return { head: at(1, -3) as V2, eye: e };
+  const e = drawEye(sk, ep[0], ep[1] - 0.2, { ...EYE, r: er }, eye);
+  // the nostril
+  { const q = at(0.7, 0.35); sk.over(q[0], q[1], hex('#1a160c')); }
+  return { head: at(3.5, 2.4) as V2, eye: e };
 }
 
 export const GECKO: SpeciesDef = {

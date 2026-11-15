@@ -29,6 +29,7 @@ import { Sk, V2, rmp, SpeciesDef, TAU, sm, hh } from '../../beasts-core';
 import type { Px, BeastEye, AnimDef } from '../../beasts-core';
 import { hex } from '../../color';
 import { clamp } from '../../../core/math';
+import { HField, ribbon, arcs, along, lineDist, spline, fbm } from '../../beasts-hfield';
 
 type V3 = [number, number, number];
 const A = (frames: number, fps: number, loop = true): AnimDef => ({ frames, fps, loop });
@@ -115,7 +116,7 @@ const EEL_C = 0.42;
 /** we look very slightly down into the pool: what is nearer sits lower */
 const EEL_TILT = 0.3;
 /** radius (px) along the body: blunt snout, a broad head, the thick barrel of the body, the long taper */
-const EEL_R: [number, number][] = [[0, 1.05], [0.02, 1.6], [0.05, 2.05], [0.09, 2.3], [0.14, 2.45], [0.3, 2.62], [0.45, 2.58], [0.6, 2.3], [0.75, 1.86], [0.88, 1.28], [0.96, 0.84], [1, 0.58]];
+const EEL_R: [number, number][] = [[0, 1.2], [0.02, 1.85], [0.05, 2.45], [0.09, 2.75], [0.12, 2.6], [0.16, 2.75], [0.3, 3.05], [0.45, 3.0], [0.6, 2.65], [0.75, 2.1], [0.88, 1.45], [0.96, 0.95], [1, 0.62]];
 /** the dorsal fin starts a quarter of the way down; the anal fin not until halfway (the longfin's tell) */
 const DORSAL0 = 0.25, ANAL0 = 0.47;
 
@@ -194,158 +195,208 @@ function edraw(sk: Sk, anim: string, frame: number, _eye: BeastEye, juv: boolean
   const k = juv ? 0.6 : 1;
   const S = eelSpine(P, k);
   const M = {
-    // low contrast: the countershading reads first and the light second (a dark back stays dark)
-    back: sk.m(rmp('#36331f', { n: 5, dark: 0.4, light: 0.32, cool: 0.08, warm: 0.2 }), { edge: 1, k: 0.4, noRim: true, bias: -0.13 }),
-    sheen: sk.m(rmp('#86845f', { n: 4, dark: 0.3, light: 0.35, cool: 0.05 }), { edge: 1, k: 0.35 }),
-    flank: sk.m(rmp('#5a533a', { n: 5, dark: 0.4, light: 0.32, cool: 0.08, warm: 0.2 }), { edge: 1, k: 0.4 }),
-    belly: sk.m(rmp('#9e967b', { n: 5, dark: 0.35, light: 0.3, cool: 0.05 }), { edge: 1, k: 0.4, bias: 0.04 }),
-    fin: sk.m(rmp('#625a3a', { n: 4, dark: 0.4, light: 0.3, cool: 0.05, warm: 0.3 }), { edge: 0, k: 0.3, bias: -0.06 }),
-    pec: sk.m(rmp('#8a8262', { n: 4, dark: 0.35, light: 0.35, cool: 0.05 }), { edge: 1, k: 0.5 }),
-    mouth: sk.m(rmp('#8e6458', { n: 4, dark: 0.5, light: 0.3, cool: 0.05 }), { edge: 0, noRim: true }),
+    back: sk.m(rmp('#2e2c1a', { n: 7, dark: 0.5, light: 0.42, cool: 0.12, warm: 0.25 }), { edge: 1, bias: -0.2 }),
+    blot: sk.m(rmp('#211f12', { n: 6, dark: 0.45, light: 0.38, cool: 0.12 }), { edge: 1, bias: -0.2 }),
+    flank: sk.m(rmp('#5a5232', { n: 7, dark: 0.5, light: 0.4, cool: 0.1, warm: 0.3 }), { edge: 1, bias: -0.08 }),
+    gold: sk.m(rmp('#6a6036', { n: 6, dark: 0.5, light: 0.4, warm: 0.3 }), { edge: 1, bias: -0.08 }),
+    belly: sk.m(rmp('#a29a80', { n: 6, dark: 0.45, light: 0.32, cool: 0.08 }), { edge: 1 }),
+    scar: sk.m(rmp('#8a8468', { n: 5, dark: 0.4, light: 0.3 }), { edge: 0 }),
+    fin: sk.m(rmp('#3e3822', { n: 6, dark: 0.5, light: 0.4, warm: 0.3, cool: 0.05 }), { edge: 1, bias: -0.16 }),
+    finE: sk.m(rmp('#5e5434', { n: 5, dark: 0.45, light: 0.35, warm: 0.3, cool: 0.05 }), { edge: 0, bias: -0.1 }),
+    finA: sk.m(rmp('#7c7658', { n: 6, dark: 0.45, light: 0.35, warm: 0.2, cool: 0.02, sat: 0 }), { edge: 1, bias: -0.04 }),
+    pec: sk.m(rmp('#8a7c52', { n: 5, dark: 0.45, light: 0.35, warm: 0.2 }), { edge: 1 }),
+    lip: sk.m(rmp('#6e6040', { n: 5, dark: 0.5, light: 0.4, warm: 0.3 }), { edge: 1 }),
+    mouth: sk.m(rmp('#8e6458', { n: 5, dark: 0.5, light: 0.3, cool: 0.05 }), { edge: 0, noRim: true }),
   };
+  const F = HField.full(sk);
   const throat = (u: number) => 1 + P.throat * 0.12 * Math.max(0, 1 - Math.abs(u - 0.11) / 0.06);
   const R = (u: number) => tab(EEL_R, u) * k * throat(u);
   // the dark of the hole under the bank, deepening down the body behind the head
   const dark = (u: number) => P.shade * sm((u - 0.16) / 0.5) * 0.55;
-  const chunked = P.turn > 0 || P.coil > 0 || P.curl > 0;
-
-  // ---- the fins: one long ribbon above from a quarter of the way down, one below from halfway, merging
-  // round the tail into a paddle; behind the body so the body's edge draws a fine line along them
-  sk.np();
-  const hD = (u: number) => (u < DORSAL0 ? 0 : (1.45 * sm((u - DORSAL0) / 0.07) + 0.15 * sm((u - 0.7) / 0.3)) * k);
-  const hA = (u: number) => (u < ANAL0 ? 0 : (1.3 * sm((u - ANAL0) / 0.07) + 0.15 * sm((u - 0.72) / 0.28)) * k);
-  const finFill = (u: number) => (p: Px) => { p.l -= dark(u); return M.fin; };
-  const strip = (h: (u: number) => number, side: 1 | -1, from: number) => {
-    const N = S.n;
-    for (let i = Math.floor(from * N); i < N; i++) {
-      const u0 = i / N, u1 = (i + 1) / N;
-      if (h(u1) <= 0.05) continue;
-      const a0 = at(S, R, u0, side * 0.2), b0 = at(S, R, u0, side * (1 + h(u0) / Math.max(0.3, R(u0))));
-      const a1 = at(S, R, u1, side * 0.2), b1 = at(S, R, u1, side * (1 + h(u1) / Math.max(0.3, R(u1))));
-      sk.poly([a0[0], a0[1], b0[0], b0[1], b1[0], b1[1], a1[0], a1[1]], finFill((u0 + u1) / 2), { z: (S.z[i] + S.z[i + 1]) / 2 - 2.6 });
-    }
-  };
-  strip(hD, 1, DORSAL0);
-  strip(hA, -1, ANAL0);
-  {
-    // the paddle round the tail tip
-    const N = S.n, tp = S.p[N], tt = S.t[N], dd = S.d[N];
-    const up = at(S, R, 1, 1 + hD(1) / R(1)), dn = at(S, R, 1, -1 - hA(1) / R(1));
-    const e = 3.2 * k;
-    const q = (fx: number, fy: number): number[] => [tp[0] + tt[0] * fx + dd[0] * fy, tp[1] + tt[1] * fx + dd[1] * fy];
-    sk.poly([tp[0], tp[1], up[0], up[1], ...q(e * 0.45, 1.55 * k), ...q(e * 0.85, 0.75 * k), ...q(e, 0), ...q(e * 0.85, -0.7 * k), ...q(e * 0.45, -1.45 * k), dn[0], dn[1]], finFill(1), { z: S.z[N] - 2.6 });
+  const N = S.n;
+  /** spine sample index -> u */
+  const uOf = (i: number) => i / N;
+  // the body's outline in overlapping chunks (so its coils sort by depth); the chunks merge seamlessly
+  const CH = P.turn > 0 || P.coil > 0 || P.curl > 0 ? 6 : N;
+  const zAtI = (f: number) => { const i = Math.min(N - 1, Math.max(0, Math.floor(f))); return S.z[i] + (S.z[i + 1] - S.z[i]) * (f - i); };
+  const hD = (u: number) => (u < DORSAL0 ? 0 : (2.0 * sm((u - DORSAL0) / 0.06) + 0.3 * sm((u - 0.7) / 0.3)) * k * (P.coil > 0 && u > 0.5 ? 0.7 : 1));
+  const hA = (u: number) => (u < ANAL0 ? 0 : (1.8 * sm((u - ANAL0) / 0.06) + 0.25 * sm((u - 0.72) / 0.28)) * k);
+  // an old tear in the dorsal fin
+  const tear = (u: number) => (Math.abs(u - 0.58) < 0.025 ? 0.45 : 1);
+  for (let a = 0; a < N; a += CH) {
+    const i0 = Math.max(0, a - 2), i1 = Math.min(N, a + CH + 2);
+    const pts = S.p.slice(i0, i1 + 1);
+    const pc = arcs(pts), pL = pc[pc.length - 1] || 1;
+    const fI = (t: number) => i0 + t * (i1 - i0);
+    // the fins first: a ribbon membrane above (from a quarter of the way down) and below (from halfway)
+    const fin = (side: 1 | -1, h: (u: number) => number) => {
+      if (h(uOf(i1)) <= 0.05) return;
+      const outer = (t: number) => { const u = uOf(fI(t)); return h(u) > 0.05 ? (R(u) * 0.92 + h(u) * (side > 0 ? tear(u) : 1)) : R(u) * 0.5; };
+      const inner = (t: number) => -R(uOf(fI(t))) * 0.2;
+      // the ribbon's "left" side is the back where the spine runs right-to-left
+      const sgnBack = S.sg[Math.min(N, Math.round((i0 + i1) / 2))];
+      const wantLeft = (side > 0) === (sgnBack < 0);
+      const cont = ribbon(pts, wantLeft ? outer : inner, wantLeft ? inner : outer, Math.ceil(pL * 2.5), 0, 0);
+      F.inflate(cont, 0.8 * k, (x, y) => { const t = lineDist(pts, x, y, pc)[1]; return zAtI(fI(t)) - 2.4 * k; }, side > 0 ? 3 : 4, 0, (x, y, d, s, o) => {
+        const [dd, t] = lineDist(pts, x, y, pc);
+        const u = uOf(fI(t));
+        o.t = -dark(u);
+        // soft rays fanning back through the membrane, its free edge paler and translucent
+        o.m = dd > R(u) * 0.92 + h(u) * 0.72 ? M.finE : side > 0 ? M.fin : M.finA;
+        if (Math.sin((t * pL) * 2.2 + dd * 0.9) > 0.55) o.z -= 0.2 * k;
+      }, 0.18);
+    };
+    fin(1, hD);
+    fin(-1, hA);
+    // the body chunk
+    const cont = ribbon(pts, (t) => R(uOf(fI(t))), (t) => R(uOf(fI(t))), Math.ceil(pL * 2.5), i0 === 0 ? 0.7 : 0, i1 === N ? 0.6 : 0);
+    F.inflate(cont, 2.9 * k, (x, y) => { const t = lineDist(pts, x, y, pc)[1]; return zAtI(fI(t)); }, 1, 1.4 * k, (x, y, d, s, o) => {
+      const [dd, t] = lineDist(pts, x, y, pc);
+      const f = fI(t), u = uOf(f), i = Math.min(N, Math.round(f));
+      const q = along(pts, t, pc);
+      const off = (x - q.p[0]) * q.n[0] + (y - q.p[1]) * q.n[1];
+      const dors = (off * S.sg[i] * -1) / Math.max(0.4, R(u)); // +1 back .. -1 belly
+      void dd;
+      o.t = -dark(u);
+      // countershaded: the dark olive-brown back, a golden-olive flank, the pale belly; mottled in soft clouds
+      const mot = fbm(u * 7 + 2, dors * 0.7 + 3, 11, 3);
+      o.t += (mot - 0.5) * 0.22;
+      if (dors > 0.12) o.m = mot > 0.66 ? M.blot : M.back;
+      else if (dors > -0.45) {
+        o.m = M.flank;
+        // the lateral line: a row of pale pores
+        if (Math.abs(dors + 0.12) < 0.1 && u > 0.14 && u < 0.9 && Math.floor(u * EEL_L * 1.1) % 2 === 0) o.t += 0.1;
+      } else o.m = M.belly;
+      if (u < 0.1 && dors < -0.1) o.m = M.lip;
+      // the skin: scales buried in it in a basket weave, faint, under the slime's sheen
+      const sx = u * EEL_L * 1.6, sy = dors * 2.6;
+      if ((Math.floor(sx + sy) + Math.floor(sx - sy)) % 2 === 0 && u > 0.12) o.z -= 0.06 * k;
+      // old healed scars: pale nicks along the back
+      if (u > 0.3 && u < 0.8 && dors > 0.2 && Math.abs(((u * 7.3) % 1) - 0.5) < 0.03 && hh(Math.floor(u * 7.3), 1, 15) > 0.55) { o.m = M.scar; o.z -= 0.2 * k; }
+      // the head: broad and flat on top
+      if (u < 0.12) { if (dors > 0.3) o.z -= (0.12 - u) * 3 * k; }
+    }, 0.95);
   }
-
-  // ---- the body: dark olive-brown back, the flank, a pale grey-brown belly; a broken wet sheen on top
-  const bodyFill = (p: Px, u: number, dors: number) => {
-    p.l -= dark(u);
-    // countershaded in bands: the back, a wet highlight running along it (broken here and there), the
-    // dark back again, the olive flank with the faint dotted lateral line, and the pale belly
-    if (dors > 0.62) return M.back;
-    if (dors > 0.26) return u > 0.01 && u < 0.88 && hh(Math.floor(u * EEL_L / 3.2), 1, 3) > 0.2 && dark(u) < 0.2 ? M.sheen : M.back;
-    if (dors > -0.12) return M.back;
-    if (dors > -0.5) { if (u > 0.16 && u < 0.86 && Math.floor(u * EEL_L) % 3 === 0) p.l += 0.12; return M.flank; }
-    return M.belly;
-  };
-  bodyTube(sk, S, R, bodyFill, { chunk: chunked ? 5 : 0 });
-
-  // ---- the head
+  // ---- the head: the gill slit, the pectoral fin, the thick lips and the mouth, the small eye, the nostrils
   const fwd = S.fwd;
   const side = Math.abs(fwd[0]) > 0.42 || Math.abs(fwd[1]) > 0.5;
-  const F: V2 = [-S.t[0][0], -S.t[0][1]];
+  const Fd: V2 = [-S.t[0][0], -S.t[0][1]];
   const D0 = S.d[0];
   const zh = zAt(S, 0.05) + R(0.05) + 1.5;
+  let mouthLine: V2[] | null = null;
   if (side) {
-    // the gill slit, just in front of the pectoral fin
-    for (let s = -0.1; s >= -0.65; s -= 0.28) { const g = at(S, R, 0.128, s); sk.paint(g[0], g[1], 0, -0.3); }
-    // the mouth: thick lips from the snout tip back past the eye; open, the lower jaw drops
-    const corner = at(S, R, 0.098, -0.2);
-    const tipU: V2 = [S.p[0][0] + F[0] * 0.55 * k - D0[0] * 0.15 * R(0), S.p[0][1] + F[1] * 0.55 * k - D0[1] * 0.15 * R(0)];
+    // the gill slit, a short crescent just in front of the pectoral fin
+    F.groove([at(S, R, 0.126, -0.05), at(S, R, 0.13, -0.38), at(S, R, 0.127, -0.66)], 0.55 * k, 0.6, M.blot, -0.1, 1);
+    // the fleshy lips: swollen ridges either side of the mouth line, running back past the eye
+    const corner = at(S, R, 0.1, -0.22);
+    const tipU: V2 = [S.p[0][0] + Fd[0] * 0.5 * k - D0[0] * 0.15 * R(0), S.p[0][1] + Fd[1] * 0.5 * k - D0[1] * 0.15 * R(0)];
+    mouthLine = [tipU, at(S, R, 0.04, -0.2), corner];
+    F.groove(mouthLine.map(q => [q[0] + D0[0] * 0.9 * k, q[1] + D0[1] * 0.9 * k] as V2), 0.8 * k, -0.45, M.lip, 0.04, 1);
+    F.groove(mouthLine.map(q => [q[0] - D0[0] * 0.9 * k, q[1] - D0[1] * 0.9 * k] as V2), 0.8 * k, -0.4, M.lip, 0, 1);
+    F.groove(mouthLine, 0.5 * k, 0.7, 0, -0.12, 1);
+    // the jowl and the cheek muscle behind the eye
+    { const q = at(S, R, 0.075, -0.1); F.bump(q[0], q[1], 2.2 * k, 0.6, 0, 0.03, 1.6 * k, 1); }
     if (P.jaw > 0.04) {
-      sk.np();
       const al = P.jaw * 0.8;
       const vx = tipU[0] - corner[0], vy = tipU[1] - corner[1];
-      // rotate the jaw away from the back
       const cs = Math.cos(al), sn = Math.sin(al);
       const away: V2 = [-D0[0], -D0[1]];
       const jx = vx * cs + away[0] * Math.hypot(vx, vy) * sn, jy = vy * cs + away[1] * Math.hypot(vx, vy) * sn;
       const jtip: V2 = [corner[0] + jx * 0.95, corner[1] + jy * 0.95];
-      sk.poly([corner[0], corner[1], tipU[0] + F[0] * 0.2, tipU[1] + F[1] * 0.2, jtip[0] + F[0] * 0.4, jtip[1] + F[1] * 0.4], (p: Px) => { p.l = 0.32 + (hh(p.x, p.y, 5) - 0.5) * 0.1; return M.mouth; }, { z: zh + 1 });
-      sk.np();
-      sk.tube([[corner[0] - F[0] * 0.3, corner[1] - F[1] * 0.3], [corner[0] + jx * 0.5, corner[1] + jy * 0.5], jtip], t => (1.05 - t * 0.3) * k, (p: Px) => (p.v * Math.sign(-(jx * away[1] - jy * away[0]) || 1) > 0.2 ? M.belly : M.flank), { z: zh + 2 });
-      // a pale row of tiny teeth along the upper jaw
-      for (let i = 1; i <= 3; i++) { const q: V2 = [corner[0] + vx * i / 4, corner[1] + vy * i / 4]; sk.over(q[0] - away[0] * 0.6, q[1] - away[1] * 0.6, hex('#d8cfb6')); }
-    } else {
-      const steps = Math.ceil(Math.hypot(tipU[0] - corner[0], tipU[1] - corner[1]) * 1.5) + 1;
-      for (let i = 0; i <= steps; i++) {
-        const q: V2 = [corner[0] + (tipU[0] - corner[0]) * i / steps, corner[1] + (tipU[1] - corner[1]) * i / steps];
-        sk.over(q[0], q[1], hex('#1c160e'));
-        // the fleshy lips either side of it
-        if (i > 0 && i < steps) { sk.paint(q[0] + D0[0], q[1] + D0[1], 0, 0.12); sk.paint(q[0] - D0[0], q[1] - D0[1], 0, 0.08); }
-      }
+      // the gape, pink inside, a row of tiny teeth; the heavy lower jaw dropped
+      F.inflate([corner, [tipU[0] + Fd[0] * 0.2, tipU[1] + Fd[1] * 0.2], [jtip[0] + Fd[0] * 0.4, jtip[1] + Fd[1] * 0.4]], 0.5 * k, zh + 1, 7, 0, (x, y, d, s, o) => { o.m = M.mouth; o.t = -0.12 + (hh(x, y, 5) - 0.5) * 0.1; }, 0.4);
+      const jaw = [[corner[0] - Fd[0] * 0.3, corner[1] - Fd[1] * 0.3], [corner[0] + jx * 0.5, corner[1] + jy * 0.5], jtip] as V2[];
+      const jc = arcs(jaw);
+      F.inflate(ribbon(jaw, (t) => (1.15 - t * 0.35) * k, (t) => (1.15 - t * 0.35) * k, 0, 0.6, 0.7), 1.1 * k, zh + 2, 8, 0, (x, y, d, s, o) => {
+        const q = along(jaw, lineDist(jaw, x, y, jc)[1], jc);
+        const below = ((x - q.p[0]) * away[0] + (y - q.p[1]) * away[1]) > 0;
+        o.m = below ? M.belly : M.lip;
+      }, 0.9);
+      for (let i = 1; i <= 3; i++) { const q: V2 = [corner[0] + vx * i / 4, corner[1] + vy * i / 4]; TEETH.push([q[0] - away[0] * 0.6, q[1] - away[1] * 0.6]); }
+      mouthLine = null;
     }
-    // the eye: small and dark, a bronze glint
-    const E = at(S, R, 0.047, 0.42);
+    // the pectoral fin: small, rounded, sculling, its rays fanned
+    const B = at(S, R, 0.142, -0.2);
+    const ii = Math.round(0.142 * N), tt = S.t[ii], dd = S.d[ii];
+    const ang = 0.35 + P.pec * 0.3;
+    const dir: V2 = [tt[0] * Math.cos(ang) - dd[0] * Math.sin(ang), tt[1] * Math.cos(ang) - dd[1] * Math.sin(ang)];
+    const dl = Math.hypot(dir[0], dir[1]) || 1;
+    const Lp = 3.0 * k;
+    const tip: V2 = [B[0] + dir[0] / dl * Lp, B[1] + dir[1] / dl * Lp];
+    const pw = (t: number) => (0.45 + Math.sin(Math.min(1, t * 1.1) * Math.PI) * 0.95) * k;
+    F.inflate(ribbon([B, tip], pw, pw, 10, 0.3, 0.9), 0.7 * k, zAt(S, 0.142) + R(0.142) + 1.4, 9, 0, (x, y, d, s, o) => {
+      o.m = d < 0.45 * k ? M.finE : M.pec;
+      o.t = -dark(0.14) * 0.5;
+      const a2 = Math.atan2(y - B[1], x - B[0]);
+      if (Math.sin(a2 * 9) > 0.5) o.z -= 0.2 * k;
+    }, 0.6);
+  }
+  sk.np();
+  F.emit({ seam: 1.0, seamDark: 0.3, ao: 0.06, aoR: 2, shadow: 0.16, shadowR: 6, contrast: 0.75,
+    spec: (m) => (m === M.back || m === M.blot ? 0.75 : m === M.flank || m === M.gold ? 0.4 : m === M.belly ? 0.2 : m === M.lip ? 0.3 : 0), specPow: 34 });
+  if (mouthLine) {
+    // the closed mouth: a dark line between the lips
+    const q0 = mouthLine[0], q2 = mouthLine[2];
+    const steps = Math.ceil(Math.hypot(q2[0] - q0[0], q2[1] - q0[1]) * 1.5) + 1;
+    const ml = spline(mouthLine, 4);
+    for (let i = 0; i <= steps; i++) { const q = along(ml, i / steps).p; sk.over(q[0], q[1], hex('#1c160e')); }
+  }
+  for (const q of TEETH) sk.over(q[0], q[1], hex('#d8cfb6'));
+  TEETH.length = 0;
+  if (side) {
+    // the eye: small and dark, set high, a bronze iris rim and a glint
+    const E = at(S, R, 0.045, 0.4);
     sk.over(E[0], E[1], hex('#0c0a08'));
-    sk.over(E[0] - F[0], E[1] - F[1], hex('#3a2e1a'));
-    // the nostrils: a tube at the very tip of the snout, a pore in front of the eye
-    const ns = at(S, R, 0.004, 0.55);
-    sk.dot(ns[0] + F[0] * 0.7, ns[1] + F[1] * 0.7, M.back, 0.62, zh);
-    const pn = at(S, R, 0.026, 0.5);
-    sk.paint(pn[0], pn[1], 0, -0.22);
+    sk.over(E[0] - Fd[0], E[1] - Fd[1], hex('#7a5e2c'));
+    sk.over(E[0] + Fd[0], E[1] + Fd[1], hex('#3a2e18'));
+    sk.over(E[0], E[1] - 1, hex('#a49c78'));
+    // the nostrils: a short tube at the tip of the snout, a pore in front of the eye
+    const ns = at(S, R, 0.006, 0.5);
+    sk.over(ns[0] + Fd[0] * 0.8, ns[1] + Fd[1] * 0.8 - 0.4, hex('#4a4428'));
+    const pn = at(S, R, 0.026, 0.48);
+    sk.over(pn[0], pn[1], hex('#16120a'));
   } else {
-    // seen head-on in the turn: two small eyes over a wide mouth
+    // seen head-on in the turn: two small eyes over a wide, thick-lipped mouth
     const c = S.p[0];
-    sk.over(c[0] - 1.2 * k, c[1] - 0.9 * k, hex('#0c0a08'));
-    sk.over(c[0] + 1.2 * k, c[1] - 0.9 * k, hex('#0c0a08'));
+    sk.over(c[0] - 1.3 * k, c[1] - 0.9 * k, hex('#0c0a08'));
+    sk.over(c[0] + 1.3 * k, c[1] - 0.9 * k, hex('#0c0a08'));
     for (let i = -1; i <= 1; i++) sk.over(c[0] + i * k, c[1] + 0.9 * k, hex('#1c160e'));
   }
-  // ---- the pectoral fin, small and rounded, sculling
-  if (side) {
-    sk.np();
-    const B = at(S, R, 0.142, -0.18);
-    const tt = S.t[Math.round(0.142 * S.n)], dd = S.d[Math.round(0.142 * S.n)];
-    const ang = 0.35 + P.pec * 0.3;
-    const dir = nrm([tt[0] * Math.cos(ang) - dd[0] * Math.sin(ang), tt[1] * Math.cos(ang) - dd[1] * Math.sin(ang)]);
-    const L = 2.7 * k;
-    sk.blade(B[0], B[1], B[0] + dir[0] * L, B[1] + dir[1] * L, s => (0.5 + Math.sin(Math.min(1, s * 1.15) * Math.PI) * 0.78) * k, (p: Px) => { p.l -= dark(0.14) * 0.5; return M.pec; },
-      { z0: zAt(S, 0.142) + R(0.142) + 1, z1: zAt(S, 0.142) + R(0.142) + 0.6, n: [0, -0.3, 1] });
-  }
   // ---- the swirl on the surface as it takes
-  if (P.swirl > 0) {
-    const hx = S.p[0][0], sy = TUNA_SURF;
-    const rx = (4 + P.swirl * 7) * k, ry = (0.8 + P.swirl * 0.9) * k;
-    const bright = hex('#e4f2ee', 235), mid = hex('#b6d4d0', 200), foam = hex('#f6fbf8', 255);
-    const cx = hx - 1.5 * k;
-    for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
-      const q = (x + 0.5 - cx) / rx;
-      if (Math.abs(q) > 1) continue;
-      const h = Math.sqrt(1 - q * q) * ry;
-      // the near arc (a crest of churned water) and the far arc, broken
-      if (hh(x, frame, 41) > 0.18) sk.over(x, Math.round(sy + h), Math.abs(q) < 0.55 ? bright : mid);
-      if (hh(x, frame, 43) > 0.4) sk.over(x, Math.round(sy - h), mid);
-    }
-    // the second, outer ring once it spreads
-    if (P.swirl > 0.75) {
-      const r2 = rx + 4 * k;
-      for (let x = Math.floor(cx - r2); x <= Math.ceil(cx + r2); x++) {
-        const q = (x + 0.5 - cx) / r2;
-        if (Math.abs(q) > 1 || Math.abs(q) < 0.45 || hh(x, frame, 47) < 0.45) continue;
-        sk.over(x, Math.round(sy + Math.sqrt(1 - q * q) * (ry + 0.8)), hex('#cfe4e0', 160));
-      }
-    }
-    // the slurp: spray and drops thrown up as the jaws shut
-    if (frame === 1 || frame === 2) {
-      for (let i = 0; i < 7; i++) {
-        const dx = (hh(i, frame, 51) - 0.4) * 9 * k, dy = -1 - hh(i, frame, 53) * (frame === 1 ? 6 : 4) * k;
-        sk.over(hx + dx, sy + dy, i % 3 ? bright : foam);
-      }
-    }
-    // white water hugging the head where it breaks through
-    if (frame <= 2) for (let i = -2; i <= 2; i++) sk.over(hx + i - 2.5 * k, sy, foam);
-  }
+  if (P.swirl > 0) swirl(sk, S, P, k, frame);
   const E = at(S, R, 0.047, 0.42);
   return { head: [S.p[0][0], S.p[0][1] - 4 * k] as V2, eye: E };
+}
+const TEETH: V2[] = [];
+
+/** the swirl on the surface as it takes: churned rings, the slurp's spray, white water hugging the head */
+function swirl(sk: Sk, S: Spine, P: EP, k: number, frame: number) {
+  const hx = S.p[0][0], sy = TUNA_SURF;
+  const rx = (4 + P.swirl * 7) * k, ry = (0.8 + P.swirl * 0.9) * k;
+  const bright = hex('#e4f2ee', 235), mid = hex('#b6d4d0', 200), foam = hex('#f6fbf8', 255);
+  const cx = hx - 1.5 * k;
+  for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
+    const q = (x + 0.5 - cx) / rx;
+    if (Math.abs(q) > 1) continue;
+    const h = Math.sqrt(1 - q * q) * ry;
+    if (hh(x, frame, 41) > 0.18) sk.over(x, Math.round(sy + h), Math.abs(q) < 0.55 ? bright : mid);
+    if (hh(x, frame, 43) > 0.4) sk.over(x, Math.round(sy - h), mid);
+  }
+  if (P.swirl > 0.75) {
+    const r2 = rx + 4 * k;
+    for (let x = Math.floor(cx - r2); x <= Math.ceil(cx + r2); x++) {
+      const q = (x + 0.5 - cx) / r2;
+      if (Math.abs(q) > 1 || Math.abs(q) < 0.45 || hh(x, frame, 47) < 0.45) continue;
+      sk.over(x, Math.round(sy + Math.sqrt(1 - q * q) * (ry + 0.8)), hex('#cfe4e0', 160));
+    }
+  }
+  if (frame === 1 || frame === 2) {
+    for (let i = 0; i < 7; i++) {
+      const dx = (hh(i, frame, 51) - 0.4) * 9 * k, dy = -1 - hh(i, frame, 53) * (frame === 1 ? 6 : 4) * k;
+      sk.over(hx + dx, sy + dy, i % 3 ? bright : foam);
+    }
+  }
+  if (frame <= 2) for (let i = -2; i <= 2; i++) sk.over(hx + i - 2.5 * k, sy, foam);
 }
 
 export const TUNA: SpeciesDef = {
