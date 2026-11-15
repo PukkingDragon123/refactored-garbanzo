@@ -66,7 +66,7 @@ export function speciesSprite(id: string): string {
       const n = 20, spc = L / n;
       const pts: [number, number][] = [];
       for (let i = 0; i <= n; i++) pts.push([L + 12 - i * spc, 24 + Math.sin(i * 0.55) * lk.radius * 1.3 - (i < 3 ? (3 - i) * 1.5 : 0)]);
-      buf = new PixelBuffer(Math.ceil(L + 30), 44);
+      buf = new PixelBuffer(Math.ceil(L + 30 + (lk.headLen ?? 0)), 44); // room for a long head (the ironjaw's snout)
       sp.paint(buf, { pts, facing: 1, jaw: 0, tongue: 0.6, legPhase: 0.6, legLift: 1, grounded: true, groundY: () => 40, flatten: 0 }, 0, 0, 0);
       buf = buf.trim(1).buf;
     } else if (BIRDS[id]) buf = drawBird(BIRDS[id], birdPoses.stand(0)).trim(1).buf;

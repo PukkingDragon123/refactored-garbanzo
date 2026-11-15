@@ -64,6 +64,13 @@ export interface LegSpec {
   stride?: number;
   /** three-bone runner's leg: thigh, shin, long metatarsus, toes (sprint viper) */
   digitigrade?: boolean;
+  /** sprawling limb (lizards, crocodilians): the upper bone points out toward the viewer, so the side view
+   *  shows a foreshortened muscle mass, then the lower leg down to a flat foot (0..1, default 0) */
+  sprawl?: number;
+  /** webbing between the toes (crocodilian hind feet) */
+  web?: boolean;
+  /** muscle bulk of the thigh / upper arm (x radius, default 0.25) */
+  bulk?: number;
 }
 
 export interface FinSpec {
@@ -168,6 +175,16 @@ export interface SerpentLook {
    *  SerpentState.crest, a crest on the crown. Absent: the serpent is painted exactly as before. */
   feathers?: FeatherSpec;
   seed?: number;
+
+  // ---------------------------------------------------------------- V13 anatomy (all optional)
+  /** body cross-section (side view): superellipse exponents of the belly half (high = flat belly with a
+   *  ventrolateral angle) and the back half (low = a roof up to the vertebral ridge), depth = how wide
+   *  the body is toward the viewer (x half-height), ridge = vertebral ridge strength. Default per head. */
+  section?: { bot?: number; top?: number; depth?: number; ridge?: number };
+  /** outline: keeled-scale serration on the back (px), belly sag (fraction), muscle-band relief 0..1 */
+  edge?: { serr?: number; sag?: number; muscle?: number; gloss?: number };
+  /** the lower flank's own colour (a crocodile's yellow-olive sides, a boa's paler lateral band) */
+  flank?: C;
 }
 
 /** V12 plumage: feathers hand-shaped pixel by pixel (vane, shaft, barbs, splits, an iridescent sheen) */
@@ -241,6 +258,10 @@ type V = [number, number];
 
 const NR = 8; // ramp length per material
 const LX = -0.49, LY = -0.686, LZ = 0.539; // key light: top-left, toward the viewer
+// the form light used on the body and head: steeper, so the back and crown planes separate clearly
+// from the flank and cheek (a pixel artist's top light) while the limbs keep the softer key
+const FX = -0.4, FY = -0.82, FZ = 0.41;
+const GX = -0.238, GY = -0.488, GZ = 0.839; // its half vector: the gloss on smooth scales
 const L2X = -0.581, L2Y = -0.814; // in-plane light direction
 const HX = -0.28, HY = -0.39, HZ = 0.877; // half vector (light + view) for wet speculars
 const HALF_PI = Math.PI / 2;
@@ -257,7 +278,7 @@ for (let i = 0; i <= LUTN; i++) {
 // material ids (each owns NR ramp entries)
 const M_BASE = 0, M_PAT = 1, M_PAT2 = 2, M_BELLY = 3, M_THROAT = 4, M_MOSS = 5, M_SCAR = 6, M_LURE = 7,
   M_PHOTO = 8, M_SKIN = 9, M_FIN = 10, M_FIN2 = 11, M_GILL = 12, M_MOUTH = 13, M_TOOTH = 14, M_X1 = 15,
-  M_X2 = 16, M_LEG = 17, M_EYE = 18, M_CLAW = 19, M_SHEEN = 20;
+  M_X2 = 16, M_LEG = 17, M_EYE = 18, M_CLAW = 19, M_SHEEN = 20, M_FLANK = 26;
 
 // pattern ids
 const P_PLAIN = 0, P_BANDS = 1, P_DIAMONDS = 2, P_STRIPE = 3, P_BLOTCH = 4, P_RINGS = 5, P_SPECKLE = 6,
@@ -272,6 +293,14 @@ const S_NONE = 0, S_SMOOTH = 1, S_KEELED = 2, S_BEAD = 3, S_SKIN = 4, S_OSTEO = 
 const SCALE_IDS: Record<ScaleKind, number> = { none: S_NONE, smooth: S_SMOOTH, keeled: S_KEELED, bead: S_BEAD, skin: S_SKIN, osteoderm: S_OSTEO };
 
 const mod = (a: number, m: number) => a - Math.floor(a / m) * m;
+/** a sine table for the per-pixel relief (index = phase * SINK, masked) */
+const SINN = 1024, SINK = SINN / (Math.PI * 2);
+const SINL = new Float32Array(SINN);
+/** cos(phi) for phi in [-pi/2, pi/2] */
+const COSN = 256, COSK = COSN / Math.PI;
+const COSL = new Float32Array(COSN + 1);
+for (let i = 0; i <= COSN; i++) COSL[i] = Math.cos(-HALF_PI + (i / COSN) * Math.PI);
+for (let i = 0; i < SINN; i++) SINL[i] = Math.sin((i / SINN) * Math.PI * 2);
 
 /** resample a hand-picked ramp to n entries */
 function resampleRamp(cols: C[], n = NR): C[] {
@@ -331,71 +360,118 @@ interface HeadSpec {
   /** top-view half-width, x half-height */
   topW: number;
   labials: boolean;
+  /** a muscle / gland bulge (venom glands, jaw adductors, parotoids): t, u (x hh), radius (x hh), strength */
+  jowl: number[];
+  /** head cross-section exponents (crown half, jaw half): high = flat cheek meeting the crown at a canthus */
+  sx: number[];
 }
 const HEADS: Record<HeadKind, HeadSpec> = {
+  // pit viper: deep jowls over the venom glands, a flat crown under a shelf of supraoculars, a short
+  // snout dropping off the canthus, a long mouth line that turns down at the corner
   viper: {
-    w: 1.28, len: 2.25, kt: [-0.24, 0, 0.18, 0.42, 0.64, 0.82, 0.93, 1],
-    top: [0.62, 0.86, 0.98, 1, 0.9, 0.7, 0.52, 0.28], bot: [-0.62, -0.95, -1, -0.86, -0.66, -0.5, -0.36, -0.14],
-    mo: [-0.32, -0.36, -0.36, -0.32, -0.27, -0.21, -0.15, -0.07],
-    hinge: 0.06, jaw: 1.1, eyeT: 0.58, eyeU: 0.4, eyeR: 0.3, brow: 1, nos: [0.9, 0.4], pupil: 'slit', teeth: 'fangs', topW: 1, labials: true,
+    w: 1.28, len: 2.25, kt: [-0.26, -0.06, 0.1, 0.28, 0.46, 0.62, 0.76, 0.87, 0.95, 1],
+    top: [0.56, 0.8, 0.9, 0.93, 0.94, 0.92, 0.82, 0.66, 0.5, 0.3], bot: [-0.6, -0.97, -1.05, -0.98, -0.82, -0.66, -0.52, -0.4, -0.28, -0.12],
+    mo: [-0.46, -0.54, -0.5, -0.42, -0.35, -0.29, -0.23, -0.17, -0.11, -0.04],
+    hinge: 0.04, jaw: 1.1, eyeT: 0.6, eyeU: 0.4, eyeR: 0.29, brow: 1, nos: [0.9, 0.42], pupil: 'slit', teeth: 'fangs', topW: 1, labials: true,
+    jowl: [0.18, -0.18, 0.46, 1.1], sx: [3.4, 2.2],
   },
+  // the sprint viper's longer raptorial head
   raptor: {
-    w: 1.18, len: 2.5, kt: [-0.2, 0, 0.2, 0.45, 0.7, 0.88, 1],
-    top: [0.6, 0.84, 0.95, 0.9, 0.72, 0.54, 0.3], bot: [-0.6, -0.95, -0.98, -0.8, -0.6, -0.42, -0.14],
-    mo: [-0.26, -0.3, -0.3, -0.26, -0.2, -0.14, -0.06],
-    hinge: 0.05, jaw: 1.0, eyeT: 0.54, eyeU: 0.42, eyeR: 0.29, brow: 0.9, nos: [0.9, 0.42], pupil: 'slit', teeth: 'fangs', topW: 0.95, labials: true,
+    w: 1.18, len: 2.5, kt: [-0.22, -0.04, 0.14, 0.34, 0.52, 0.68, 0.82, 0.92, 1],
+    top: [0.58, 0.8, 0.9, 0.9, 0.86, 0.75, 0.6, 0.46, 0.26], bot: [-0.6, -0.95, -1.0, -0.86, -0.7, -0.56, -0.44, -0.32, -0.12],
+    mo: [-0.3, -0.37, -0.37, -0.32, -0.26, -0.2, -0.15, -0.1, -0.04],
+    hinge: 0.05, jaw: 1.0, eyeT: 0.55, eyeU: 0.42, eyeR: 0.28, brow: 0.9, nos: [0.9, 0.42], pupil: 'slit', teeth: 'fangs', topW: 0.95, labials: true,
+    jowl: [0.16, -0.12, 0.42, 0.9], sx: [3.2, 2.4],
   },
+  // tree snake: a long pointed snout, a big eye with a sighting groove in front of it
   slim: {
-    w: 1.12, len: 2.5, kt: [-0.26, 0, 0.3, 0.58, 0.84, 1],
-    top: [0.72, 0.88, 0.92, 0.8, 0.56, 0.3], bot: [-0.72, -0.88, -0.82, -0.62, -0.42, -0.15],
-    mo: [-0.3, -0.32, -0.28, -0.22, -0.15, -0.05],
-    hinge: 0.1, jaw: 0.9, eyeT: 0.56, eyeU: 0.28, eyeR: 0.4, brow: 0.35, nos: [0.9, 0.35], pupil: 'round', teeth: 'needle', topW: 0.85, labials: true,
+    w: 1.12, len: 2.6, kt: [-0.26, 0, 0.2, 0.42, 0.62, 0.8, 0.92, 1],
+    top: [0.7, 0.86, 0.9, 0.86, 0.72, 0.52, 0.36, 0.2], bot: [-0.7, -0.88, -0.86, -0.7, -0.52, -0.36, -0.24, -0.1],
+    mo: [-0.3, -0.33, -0.3, -0.24, -0.17, -0.11, -0.06, -0.02],
+    hinge: 0.1, jaw: 0.9, eyeT: 0.5, eyeU: 0.3, eyeR: 0.42, brow: 0.35, nos: [0.9, 0.32], pupil: 'round', teeth: 'needle', topW: 0.85, labials: true,
+    jowl: [0.14, -0.08, 0.4, 0.4], sx: [3.0, 2.4],
   },
+  // boa: a long flat-topped head, small eyes under heavy brows, a squared snout, pitted lips
   blunt: {
-    w: 1.06, len: 2.2, kt: [-0.22, 0, 0.25, 0.55, 0.8, 0.93, 1],
-    top: [0.78, 0.92, 0.97, 0.9, 0.74, 0.56, 0.3], bot: [-0.78, -0.98, -0.9, -0.68, -0.5, -0.38, -0.14],
-    mo: [-0.36, -0.42, -0.4, -0.34, -0.26, -0.18, -0.06],
-    hinge: 0.08, jaw: 0.95, eyeT: 0.56, eyeU: 0.36, eyeR: 0.3, brow: 0.6, nos: [0.9, 0.4], pupil: 'round', teeth: 'needle', topW: 0.95, labials: true,
+    w: 1.06, len: 2.6, kt: [-0.22, -0.02, 0.16, 0.36, 0.56, 0.74, 0.86, 0.95, 1],
+    top: [0.72, 0.85, 0.89, 0.88, 0.86, 0.8, 0.71, 0.56, 0.32], bot: [-0.76, -0.95, -0.93, -0.82, -0.69, -0.58, -0.49, -0.38, -0.17],
+    mo: [-0.36, -0.42, -0.4, -0.35, -0.29, -0.23, -0.18, -0.12, -0.04],
+    hinge: 0.08, jaw: 0.95, eyeT: 0.6, eyeU: 0.4, eyeR: 0.27, brow: 0.6, nos: [0.91, 0.42], pupil: 'round', teeth: 'needle', topW: 0.95, labials: true,
+    jowl: [0.16, -0.1, 0.46, 0.8], sx: [3.6, 2.2],
   },
+  // crocodile: skull table, raised orbits, a long armoured snout with a nasal boss, festooned jaw line,
+  // the mandible's deep back end under the jaw muscles
   croc: {
-    w: 0.86, len: 4.7, kt: [-0.1, 0, 0.1, 0.19, 0.3, 0.5, 0.74, 0.88, 0.95, 1],
-    top: [0.86, 0.94, 1.02, 1.02, 0.78, 0.62, 0.54, 0.56, 0.54, 0.34], bot: [-0.9, -1.02, -1.04, -0.96, -0.84, -0.62, -0.5, -0.44, -0.38, -0.24],
-    mo: [-0.16, -0.16, -0.17, -0.18, -0.16, -0.1, -0.06, -0.04, -0.02, 0.02],
-    hinge: 0.03, jaw: 0.8, eyeT: 0.16, eyeU: 0.72, eyeR: 0.2, brow: 1.2, nos: [0.95, 0.5], pupil: 'slit', teeth: 'croc', topW: 0.8, labials: false,
+    w: 0.86, len: 4.7, kt: [-0.08, 0, 0.06, 0.12, 0.18, 0.24, 0.31, 0.42, 0.58, 0.74, 0.85, 0.915, 0.96, 1],
+    top: [0.8, 0.84, 0.86, 1.02, 1.08, 0.9, 0.64, 0.56, 0.5, 0.46, 0.46, 0.56, 0.5, 0.3],
+    bot: [-0.98, -1.1, -1.12, -1.02, -0.88, -0.76, -0.66, -0.56, -0.48, -0.44, -0.42, -0.4, -0.34, -0.2],
+    mo: [0.1, 0.08, 0.0, -0.08, -0.13, -0.15, -0.15, -0.13, -0.18, -0.12, -0.17, -0.06, -0.15, -0.08],
+    hinge: 0.03, jaw: 0.8, eyeT: 0.16, eyeU: 0.78, eyeR: 0.2, brow: 1.2, nos: [0.93, 0.5], pupil: 'slit', teeth: 'croc', topW: 0.8, labials: false,
+    jowl: [0.04, -0.62, 0.42, 1.1], sx: [4.2, 2.6],
   },
+  // marine serpent: a broad flat head, a deep gape running back past the eye, a lower jaw that juts
   leviathan: {
-    w: 0.96, len: 2.3, kt: [-0.16, 0, 0.3, 0.6, 0.85, 1],
-    top: [0.9, 1, 0.96, 0.8, 0.6, 0.34], bot: [-0.9, -1, -0.95, -0.78, -0.56, -0.26],
-    mo: [-0.14, -0.2, -0.18, -0.12, -0.06, 0.0],
-    hinge: 0.14, jaw: 0.75, eyeT: 0.62, eyeU: 0.34, eyeR: 0.2, brow: 0.5, nos: [0.93, 0.35], pupil: 'round', teeth: 'needle', topW: 0.9, labials: false,
+    w: 0.9, len: 2.75, kt: [-0.16, 0, 0.16, 0.36, 0.54, 0.64, 0.72, 0.82, 0.92, 0.97, 1],
+    top: [0.86, 0.95, 0.94, 0.86, 0.8, 0.84, 0.74, 0.6, 0.52, 0.42, 0.24], bot: [-0.9, -1.02, -1.0, -0.9, -0.78, -0.7, -0.64, -0.58, -0.52, -0.44, -0.26],
+    mo: [-0.06, -0.14, -0.18, -0.17, -0.15, -0.13, -0.1, -0.06, -0.02, 0.02, 0.0],
+    hinge: 0.1, jaw: 0.75, eyeT: 0.62, eyeU: 0.42, eyeR: 0.15, brow: 1.2, nos: [0.92, 0.36], pupil: 'round', teeth: 'needle', topW: 0.9, labials: false,
+    jowl: [0.2, -0.45, 0.5, 0.9], sx: [3.2, 2.6],
   },
+
+  // water snake: a flattened head, eyes and nostrils high on top
   eel: {
-    w: 1.02, len: 2.3, kt: [-0.24, 0, 0.3, 0.6, 0.85, 1],
-    top: [0.8, 0.9, 0.9, 0.78, 0.56, 0.3], bot: [-0.8, -0.9, -0.85, -0.66, -0.45, -0.18],
-    mo: [-0.3, -0.32, -0.28, -0.22, -0.14, -0.05],
-    hinge: 0.1, jaw: 0.8, eyeT: 0.6, eyeU: 0.5, eyeR: 0.24, brow: 0.2, nos: [0.9, 0.62], pupil: 'round', teeth: 'needle', topW: 0.9, labials: true,
+    w: 1.02, len: 2.3, kt: [-0.24, 0, 0.26, 0.52, 0.76, 0.9, 1],
+    top: [0.78, 0.86, 0.84, 0.76, 0.6, 0.44, 0.24], bot: [-0.8, -0.92, -0.86, -0.7, -0.52, -0.36, -0.14],
+    mo: [-0.32, -0.34, -0.3, -0.23, -0.15, -0.09, -0.03],
+    hinge: 0.1, jaw: 0.8, eyeT: 0.62, eyeU: 0.54, eyeR: 0.24, brow: 0.2, nos: [0.9, 0.62], pupil: 'round', teeth: 'needle', topW: 0.9, labials: true,
+    jowl: [0.14, -0.1, 0.4, 0.5], sx: [3.8, 2.4],
   },
+  // gecko: a broad triangular head, the huge lidless eye, the ear opening behind the mouth corner
   gecko: {
-    w: 1.25, len: 2.4, kt: [-0.2, 0, 0.3, 0.6, 0.85, 1],
-    top: [0.72, 0.9, 0.94, 0.76, 0.52, 0.26], bot: [-0.7, -0.86, -0.82, -0.62, -0.42, -0.18],
-    mo: [-0.2, -0.22, -0.22, -0.2, -0.13, -0.05],
-    hinge: 0.05, jaw: 0.7, eyeT: 0.46, eyeU: 0.26, eyeR: 0.44, brow: 0.4, nos: [0.92, 0.3], pupil: 'slit', teeth: 'none', topW: 0.9, labials: false,
+    w: 1.25, len: 2.4, kt: [-0.22, 0, 0.18, 0.4, 0.62, 0.8, 0.92, 1],
+    top: [0.66, 0.86, 0.94, 0.92, 0.76, 0.58, 0.42, 0.2], bot: [-0.64, -0.86, -0.86, -0.74, -0.58, -0.44, -0.32, -0.14],
+    mo: [-0.18, -0.22, -0.24, -0.22, -0.17, -0.12, -0.07, -0.02],
+    hinge: 0.05, jaw: 0.7, eyeT: 0.5, eyeU: 0.26, eyeR: 0.46, brow: 0.4, nos: [0.93, 0.3], pupil: 'slit', teeth: 'none', topW: 0.9, labials: false,
+    jowl: [0.1, -0.2, 0.42, 0.7], sx: [3.0, 2.6],
   },
+  // salamander: a broad flat head, a wide mouth curving back, small eyes high up, parotoid bulges
   salamander: {
-    w: 1.05, len: 1.9, kt: [-0.2, 0, 0.3, 0.6, 0.85, 1],
-    top: [0.72, 0.86, 0.92, 0.82, 0.64, 0.34], bot: [-0.72, -0.9, -0.86, -0.72, -0.52, -0.24],
-    mo: [-0.06, -0.1, -0.17, -0.18, -0.13, -0.05],
-    hinge: 0.02, jaw: 0.6, eyeT: 0.55, eyeU: 0.62, eyeR: 0.26, brow: 0.1, nos: [0.93, 0.45], pupil: 'round', teeth: 'none', topW: 1.1, labials: false,
+    w: 1.05, len: 1.95, kt: [-0.2, 0, 0.2, 0.45, 0.68, 0.86, 0.96, 1],
+    top: [0.72, 0.82, 0.88, 0.85, 0.74, 0.6, 0.44, 0.26], bot: [-0.76, -0.92, -0.9, -0.8, -0.66, -0.5, -0.34, -0.16],
+    mo: [-0.06, -0.1, -0.16, -0.18, -0.15, -0.1, -0.06, -0.02],
+    hinge: 0.02, jaw: 0.6, eyeT: 0.58, eyeU: 0.56, eyeR: 0.25, brow: 0.1, nos: [0.94, 0.42], pupil: 'round', teeth: 'none', topW: 1.1, labials: false,
+    jowl: [0.08, 0.42, 0.44, 0.9], sx: [2.8, 2.6],
   },
 };
 
+// ---------------------------------------------------------------- cross-sections
+// A snake is not a tube: its body is a loaf, a flat belly of wide ventral scutes meeting the flank at a
+// ventrolateral angle, the flanks rising to a back that roofs up to the vertebral ridge. A viper's is a
+// rounded triangle, a boa's a heavy loaf, a tree snake's tall with keeled belly edges, an eel's laterally
+// compressed, a crocodile's a broad armoured box. Each is a superellipse per half (side view: y = up
+// the flank, z = toward the viewer); the shading reads its normals from a LUT.
+interface SecSpec { bot: number; top: number; depth: number; ridge: number }
+const SECTIONS: Record<HeadKind, SecSpec> = {
+  viper: { bot: 4.2, top: 1.75, depth: 1.05, ridge: 0.7 },
+  raptor: { bot: 3.6, top: 2.2, depth: 0.95, ridge: 0.45 },
+  slim: { bot: 5, top: 1.8, depth: 0.85, ridge: 0.5 },
+  blunt: { bot: 3.4, top: 2.15, depth: 1.12, ridge: 0.35 },
+  eel: { bot: 2.3, top: 2.4, depth: 0.7, ridge: 0.2 },
+  leviathan: { bot: 2.5, top: 2.5, depth: 0.72, ridge: 0.1 },
+  croc: { bot: 4.6, top: 3.6, depth: 1.4, ridge: 0 },
+  gecko: { bot: 3.6, top: 3.0, depth: 1.45, ridge: 0.3 },
+  salamander: { bot: 3.2, top: 2.6, depth: 1.3, ridge: 0.45 },
+};
+
 // scratch outputs of the pattern function (avoid per-pixel allocation)
-let _mat = 0, _off = 0;
+let _mat = 0, _off = 0, _str = 0, _v = 0, _hw = 1;
 
 interface LegPose {
   hx: number; hy: number; kx: number; ky: number; ax: number; ay: number; fx: number; fy: number;
   dx: number; dy: number; lift: number; far: boolean; front: boolean; side: number;
   r0: number; r1: number; r2: number; r3: number; spec: LegSpec; drawn: boolean; top: boolean;
+  /** how far a sprawling limb is folded out toward the viewer (0 flat in the picture .. 1) */
+  fore: number;
 }
 
 /** head plate centres (head fraction a, height fraction b above the lip) around an eye at eyeT */
@@ -439,6 +515,30 @@ export class SerpentPainter {
   private readonly scars: number[] = [];
   private readonly seed: number;
   private readonly poses: LegPose[] = [];
+  // cross-section LUT (side view): normal along the body normal, toward the viewer, and the angular
+  // body coordinate phi, all indexed like ASIN by v
+  private readonly SN = new Float32Array(LUTN + 1);
+  private readonly SZ = new Float32Array(LUTN + 1);
+  private readonly SP = new Float32Array(LUTN + 1);
+  // the head's own cross-section LUT (flat cheeks, crown plane, rounded jaw)
+  private readonly HN = new Float32Array(LUTN + 1);
+  /** phi bin -> v index (inverse of SP) */
+  private readonly PINV = new Int16Array(LUTN + 1);
+  /** where the tail begins behind the vent (the belly steps in), 2 = none */
+  private readonly ventU: number;
+  private readonly HZ = new Float32Array(LUTN + 1);
+  /** v of the ventrolateral angle and of the vertebral ridge line */
+  private readonly vKeel: number;
+  private readonly vRidge: number;
+  private readonly serr: number;
+  private readonly sag: number;
+  private readonly muscle: number;
+  private readonly gloss: number;
+  /** where the tail starts (behind the hind legs), 0..1 */
+  private readonly tailU: number;
+  /** the costal-groove span (an amphibian's flank between its legs) */
+  private readonly cg0: number;
+  private readonly cg1: number;
 
   // per-paint spine samples
   private n = 0;
@@ -458,6 +558,18 @@ export class SerpentPainter {
   private WW = new Float32Array(0);
   private SWK = new Float32Array(0); // swell amount 0..1 per sample
   private FH = new Float32Array(0);  // fin height per sample (scratch)
+  private WU = new Float32Array(0);  // contour: back edge distance from the spine
+  private WD = new Float32Array(0);  // contour: belly edge distance from the spine
+  private KK = new Float32Array(0);  // signed curvature (+ = bending toward the back)
+  private MPH = new Float32Array(0); // muscle-block phase per sample
+  private hLT = new Float32Array(0); // head profile LUTs (reused)
+  private hLB = new Float32Array(0);
+  private hLM = new Float32Array(0);
+  private FNZ = new Float32Array(0); // fold jitter per sample
+  private SCK = new Uint8Array(0);   // 1 where a scar can be
+  private OVL = new Uint8Array(0);   // 1 where a coil can lie on the body
+  private gHead = new Int32Array(0);
+  private gNext = new Int32Array(0);
   private cum = new Float32Array(0);
 
   // G-buffer
@@ -500,6 +612,71 @@ export class SerpentPainter {
     this.scaleLen = L.scale?.len ?? Math.max(2.2, L.radius * 0.36);
     this.scaleRows = L.scale?.rows ?? clamp(Math.round(L.radius * 1.1), 4, 16);
 
+    // ---- cross-section LUT
+    {
+      const d0 = SECTIONS[L.head] ?? SECTIONS.blunt;
+      const S = { bot: L.section?.bot ?? d0.bot, top: L.section?.top ?? d0.top, depth: L.section?.depth ?? d0.depth, ridge: L.section?.ridge ?? d0.ridge };
+      const zf = (y: number) => {
+        const a = y < 0 ? -y : y, p = y < 0 ? S.bot : S.top;
+        let z = S.depth * Math.pow(Math.max(0, 1 - Math.pow(Math.min(1, a), p)), 1 / p);
+        // the vertebral ridge: the back roofs up to a crest just under the top edge
+        if (y > 0.55) z += S.ridge * S.depth * 0.07 * Math.exp(-(((y - 0.86) / 0.07) ** 2));
+        return z;
+      };
+      const arc = new Float32Array(LUTN + 1);
+      let acc = 0, vk = -0.8, bestK = -1;
+      for (let i = 0; i <= LUTN; i++) {
+        const y = (i / LUTN) * 2 - 1;
+        const h = 1 / LUTN;
+        const ya = Math.max(-1, y - h), yb = Math.min(1, y + h);
+        const dz = (zf(yb) - zf(ya)) / (yb - ya);
+        const q = 1 / Math.sqrt(1 + dz * dz);
+        this.SN[i] = -dz * q;
+        this.SZ[i] = q;
+        if (i > 0) acc += Math.hypot(2 / LUTN, zf(y) - zf(y - 2 / LUTN));
+        arc[i] = acc;
+        // the ventrolateral angle: where the belly half turns fastest
+        if (y < -0.4 && y > -0.98) {
+          const d2 = Math.abs(zf(Math.min(1, y + h)) - 2 * zf(y) + zf(Math.max(-1, y - h)));
+          if (d2 > bestK) { bestK = d2; vk = y; }
+        }
+      }
+      for (let i = 0; i <= LUTN; i++) {
+        const pa = -HALF_PI + Math.PI * (arc[i] / Math.max(1e-6, acc));
+        this.SP[i] = ASIN[i] * 0.45 + pa * 0.55;
+      }
+      this.vKeel = vk;
+      for (let j = 0, i = 0; j <= LUTN; j++) {
+        const target = -HALF_PI + (j / LUTN) * Math.PI;
+        while (i < LUTN && this.SP[i] < target) i++;
+        this.PINV[j] = i;
+      }
+      this.ventU = L.legs || L.head === 'leviathan' || L.head === 'croc' ? 2 : L.head === 'slim' ? 0.74 : L.head === 'blunt' ? 0.87 : L.head === 'eel' ? 0.8 : 0.83;
+      const sx = this.hs.sx;
+      const hz = (y: number) => {
+        const a = y < 0 ? -y : y, p = y < 0 ? sx[1] : sx[0];
+        return 0.95 * Math.pow(Math.max(0, 1 - Math.pow(Math.min(1, a), p)), 1 / p);
+      };
+      for (let i = 0; i <= LUTN; i++) {
+        const y = (i / LUTN) * 2 - 1, h = 1 / LUTN;
+        const ya = Math.max(-1, y - h), yb = Math.min(1, y + h);
+        const dz = (hz(yb) - hz(ya)) / (yb - ya);
+        const q = 1 / Math.sqrt(1 + dz * dz);
+        this.HN[i] = -dz * q;
+        this.HZ[i] = q;
+      }
+      this.vRidge = S.ridge > 0.05 ? 0.84 : 2;
+      const E = L.edge;
+      const sk2 = L.scale?.kind ?? 'smooth';
+      this.serr = E?.serr ?? (sk2 === 'keeled' ? 0.6 : sk2 === 'bead' ? 0.3 : sk2 === 'smooth' ? 0.22 : 0);
+      this.sag = E?.sag ?? 0.04;
+      this.muscle = E?.muscle ?? (L.radius >= 8 ? 0.6 : L.radius >= 4.5 ? 0.3 : 0);
+      this.tailU = L.legs && L.legs.length ? Math.max(...L.legs.map(g => g.at)) + 0.05 : 0.7;
+      this.cg0 = L.legs && L.legs.length > 1 ? Math.min(...L.legs.map(g => g.at)) + 0.05 : 2;
+      this.cg1 = L.legs && L.legs.length > 1 ? Math.max(...L.legs.map(g => g.at)) - 0.03 : 2;
+      this.gloss = E?.gloss ?? (sk2 === 'smooth' ? 0.8 : sk2 === 'skin' ? 0.6 : sk2 === 'bead' ? 0.35 : 0.2);
+    }
+
     // ---- material ramps
     const ramps: C[][] = [];
     const D = L.dorsal;
@@ -532,6 +709,8 @@ export class SerpentPainter {
       ramps[M_SHEEN + i] = around(mix(sheen![a], sheen![b], f - a), -0.62, 0.42);
     }
     this.nSheen = nSheen;
+    ramps[M_FLANK] = L.flank ? around(L.flank, -0.55, 0.32, 4) : ramps[M_BASE];
+    for (let m = 0; m < M_FLANK; m++) if (!ramps[m]) ramps[m] = ramps[M_BASE];
     this.R = new Uint32Array(ramps.length * NR);
     for (let m = 0; m < ramps.length; m++) for (let i = 0; i < NR; i++) this.R[m * NR + i] = ramps[m][i];
 
@@ -558,7 +737,7 @@ export class SerpentPainter {
     // ---- leg pose pool
     const nl = (L.legs?.length ?? 0) * 2;
     for (let i = 0; i < nl; i++) {
-      this.poses.push({ hx: 0, hy: 0, kx: 0, ky: 0, ax: 0, ay: 0, fx: 0, fy: 0, dx: 1, dy: 0, lift: 0, far: false, front: true, side: 1, r0: 1, r1: 1, r2: 1, r3: 1, spec: L.legs![i >> 1], drawn: false, top: false });
+      this.poses.push({ hx: 0, hy: 0, kx: 0, ky: 0, ax: 0, ay: 0, fx: 0, fy: 0, dx: 1, dy: 0, lift: 0, far: false, front: true, side: 1, r0: 1, r1: 1, r2: 1, r3: 1, spec: L.legs![i >> 1], drawn: false, top: false, fore: 0 });
     }
   }
 
@@ -696,6 +875,8 @@ export class SerpentPainter {
     this.TX = new Float32Array(c); this.TY = new Float32Array(c);
     this.NX = new Float32Array(c); this.NY = new Float32Array(c);
     this.WW = new Float32Array(c); this.SWK = new Float32Array(c); this.FH = new Float32Array(c);
+    this.WU = new Float32Array(c); this.WD = new Float32Array(c); this.KK = new Float32Array(c);
+    this.MPH = new Float32Array(c); this.FNZ = new Float32Array(c);
   }
 
   private resample(pts: [number, number][], ox: number, oy: number, facing: number) {
@@ -752,6 +933,15 @@ export class SerpentPainter {
       this.NX[k] = -this.TY[k] * f;
       this.NY[k] = this.TX[k] * f;
     }
+    // signed curvature, smoothed over a few px (+ = the spine turns toward the back: the back is the
+    // inside of the bend and folds, the belly stretches)
+    const KK = this.KK, TX = this.TX, TY = this.TY, NX = this.NX, NY = this.NY;
+    const st = Math.max(1, Math.round(2.2 / this.ds));
+    for (let k = 0; k < n; k++) {
+      const a = k - st < 0 ? 0 : k - st, b = k + st > n - 1 ? n - 1 : k + st;
+      if (b <= a) { KK[k] = 0; continue; }
+      KK[k] = ((TX[b] - TX[a]) * NX[k] + (TY[b] - TY[a]) * NY[k]) / ((b - a) * this.ds);
+    }
   }
 
   private widths(st: SerpentState, flat: number) {
@@ -789,6 +979,79 @@ export class SerpentPainter {
       WW[k] = r * widen;
       SWK[k] = swk;
     }
+    // ---- the contour: not a swept tube. The belly sags and flattens onto the ground, the back carries a
+    // serration of keeled scale tips, and on big bodies the epaxial muscle blocks ripple the topline.
+    const WU = this.WU, WD = this.WD;
+    const side = !this.topView && this.flatK < 0.5;
+    const serr = side ? this.serr * (1 - this.flatK) : 0;
+    const sag = side ? this.sag : 0;
+    const SL = Math.max(1.6, this.scaleLen);
+    const mus = side ? this.muscle : 0;
+    const R0 = L.radius, mP = Math.max(5, R0 * 1.9);
+    const sHead = this.hl * 0.25;
+    const lureU = L.lure ? 1 - (L.lureLen ?? 0.07) : 2;
+    for (let k = 0; k < n; k++) {
+      const s = k === n - 1 ? total : k * this.ds;
+      const u = s / total;
+      const r = WW[k];
+      let up = r * (1 - sag * 0.45), dn = r * (1 + sag);
+      // the vent: behind the cloaca the tail's underside steps in
+      if (side && u > this.ventU) { const e = Math.min(1, (u - this.ventU) / 0.012); dn *= 1 - 0.13 * e; }
+      if (serr > 0 && s > sHead && u < lureU && r > 1.1) {
+        // a keeled scale's free tip points to the tail: the edge rises along each scale, then drops
+        const ph = s / SL + hash2(Math.floor(s / SL), 7, this.seed) * 0.25;
+        const fr = ph - Math.floor(ph);
+        up += serr * Math.min(1, r / 2.5) * (fr < 0.72 ? fr / 0.72 : (1 - fr) / 0.28) - serr * 0.4;
+      }
+      if (mus > 0 && u > 0.04 && u < 0.85) {
+        const env = Math.sin(Math.min(1, (u - 0.04) / 0.81) * Math.PI);
+        const m = Math.sin((s / mP) * Math.PI * 2 + noise1(s * 0.05, this.seed) * 2.5);
+        up += m * R0 * 0.035 * mus * env;
+        dn += Math.max(0, m) * R0 * 0.018 * mus * env;
+      }
+      WU[k] = up;
+      WD[k] = dn;
+      this.MPH[k] = ((s / Math.max(5, R0 * 1.7)) * Math.PI * 2 + noise1(s * 0.05, this.seed) * 2.5) * SINK;
+      this.FNZ[k] = noise1(s * 0.21, this.seed + 5) - 0.5;
+    }
+  }
+
+  /** per sample: 1 where a part of the body nearer the head (more than `gapS` px along) comes within
+   *  touching distance, i.e. where a coil can lie on it; a spatial hash keeps it O(n) */
+  private overlaps(gapS: number): Uint8Array {
+    const n = this.n, PX = this.PX, PY = this.PY, WU = this.WU, WD = this.WD;
+    if (this.OVL.length < this.cap) this.OVL = new Uint8Array(this.cap);
+    const out = this.OVL;
+    out.fill(0, 0, n);
+    let wmax = 1, x0 = 1e9, y0 = 1e9;
+    for (let k = 0; k < n; k++) {
+      const w = Math.max(WU[k], WD[k]);
+      if (w > wmax) wmax = w;
+      if (PX[k] < x0) x0 = PX[k];
+      if (PY[k] < y0) y0 = PY[k];
+    }
+    const cs = wmax * 2 + 2, gk = Math.max(1, Math.round(gapS / this.ds));
+    const GW = 64;
+    if (this.gHead.length < GW * GW) this.gHead = new Int32Array(GW * GW);
+    if (this.gNext.length < this.cap) this.gNext = new Int32Array(this.cap);
+    const head = this.gHead, next = this.gNext;
+    head.fill(-1);
+    const cell = (x: number, y: number) => ((Math.floor((x - x0) / cs) & (GW - 1)) * GW) + (Math.floor((y - y0) / cs) & (GW - 1));
+    for (let k = 0; k < n; k++) { const c = cell(PX[k], PY[k]); next[k] = head[c]; head[c] = k; }
+    const r2 = cs * cs;
+    for (let k = gk; k < n; k++) {
+      const cx = Math.floor((PX[k] - x0) / cs), cy = Math.floor((PY[k] - y0) / cs);
+      let hit = 0;
+      for (let dx = -1; dx <= 1 && !hit; dx++) for (let dy = -1; dy <= 1 && !hit; dy++) {
+        for (let j = head[(((cx + dx) & (GW - 1)) * GW) + ((cy + dy) & (GW - 1))]; j >= 0; j = next[j]) {
+          if (j >= k - gk) continue;
+          const ex = PX[j] - PX[k], ey = PY[j] - PY[k];
+          if (ex * ex + ey * ey < r2) { hit = 1; break; }
+        }
+      }
+      if (hit) { const a = Math.max(0, k - 2), b = Math.min(n - 1, k + 2); for (let q = a; q <= b; q++) out[q] = 1; }
+    }
+    return out;
   }
 
   private sampleAt(u: number) {
@@ -864,13 +1127,13 @@ export class SerpentPainter {
   }
 
   private rasterBody() {
-    const n = this.n, PX = this.PX, PY = this.PY, NX = this.NX, NY = this.NY, WW = this.WW, ds = this.ds;
+    const n = this.n, PX = this.PX, PY = this.PY, NX = this.NX, NY = this.NY, WU = this.WU, WD = this.WD, ds = this.ds;
     for (let k = n - 2; k >= 0; k--) {
       const k1 = k + 1;
       const s0 = k * ds, s1 = k1 === n - 1 ? this.total : k1 * ds;
-      const w0 = WW[k], w1 = WW[k1];
-      const lx0 = PX[k] + NX[k] * w0, ly0 = PY[k] + NY[k] * w0, rx0 = PX[k] - NX[k] * w0, ry0 = PY[k] - NY[k] * w0;
-      const lx1 = PX[k1] + NX[k1] * w1, ly1 = PY[k1] + NY[k1] * w1, rx1 = PX[k1] - NX[k1] * w1, ry1 = PY[k1] - NY[k1] * w1;
+      const u0 = WU[k], u1 = WU[k1], d0 = WD[k], d1 = WD[k1];
+      const lx0 = PX[k] + NX[k] * u0, ly0 = PY[k] + NY[k] * u0, rx0 = PX[k] - NX[k] * d0, ry0 = PY[k] - NY[k] * d0;
+      const lx1 = PX[k1] + NX[k1] * u1, ly1 = PY[k1] + NY[k1] * u1, rx1 = PX[k1] - NX[k1] * d1, ry1 = PY[k1] - NY[k1] * d1;
       this.tri(lx1, ly1, s1, 1, rx1, ry1, s1, -1, rx0, ry0, s0, -1, 1);
       this.tri(lx1, ly1, s1, 1, rx0, ry0, s0, -1, lx0, ly0, s0, 1, 1);
     }
@@ -927,6 +1190,7 @@ export class SerpentPainter {
     const glow = clamp(st.glow ?? 1);
     const mossAmt = L.moss ? clamp(st.mossy ?? L.moss.amount) : 0;
     const coilT = Math.max(6, this.look.radius * 2.6);
+    const OVL = this.overlaps(coilT);
     const lureU = L.lure ? 1 - (L.lureLen ?? 0.07) : 2;
     const sheenN = this.nSheen;
     const photo = !!L.photophores;
@@ -935,6 +1199,28 @@ export class SerpentPainter {
     const hideS = this.hl * 0.1; // pattern starts behind the head
     const SL = this.scaleLen, SR = this.scaleRows;
     const latticeOn = scaleOn && (this.scaleId === S_SMOOTH || this.scaleId === S_KEELED || this.scaleId === S_BEAD);
+    const WU = this.WU, WD = this.WD, KK = this.KK, SN = this.SN, SZ = this.SZ, SP = this.SP;
+    const sec = !top && this.flatK < 0.02;
+    const vK = this.vKeel, vR = this.vRidge;
+    const mus = detail >= 2 && sec ? this.muscle : 0;
+    const mPK = (0.85 / Math.max(5, L.radius * 1.7)) * Math.PI * 2 * SINK;
+    const MPH = this.MPH, FNZ = this.FNZ;
+    // samples a scar can reach (skips the scar loop everywhere else)
+    if (this.SCK.length < this.n) this.SCK = new Uint8Array(this.cap);
+    const SCK = this.SCK;
+    SCK.fill(0, 0, this.n);
+    if (scars) for (let i = 0; i < this.scars.length; i += 5) {
+      const a = Math.max(0, Math.floor((this.scars[i] * total - 3) / this.ds)), b = Math.min(this.n - 1, Math.ceil((this.scars[i] * total + this.scars[i + 2] + 3) / this.ds));
+      SCK.fill(1, a, b + 1);
+    }
+    const neckS = this.hh * 1.25;
+    const bsc0 = L.bellyScute ?? 0;
+    const foldP = Math.max(2.4, Math.min(L.radius * 0.55, this.scaleLen * 1.5));
+    const relief = detail >= 1 && sec;
+    const PINV = this.PINV;
+    let cP = -1e9, cQ = -1e9, cM = 0, cO = 0;
+    const perScale = sec && latticeOn && detail >= 1;
+    const gloss = this.gloss;
     for (let y = y0; y <= y1; y++) {
       let idx = y * W + x0;
       for (let x = x0; x <= x1; x++, idx++) {
@@ -950,15 +1236,32 @@ export class SerpentPainter {
         let v = gV[idx];
         if (v > 1) v = 1; else if (v < -1) v = -1;
         const vi = ((v + 1) * (LUTN / 2) + 0.5) | 0;
-        // lighting
-        const vn = v * flatN;
-        const nz = flatN < 1 ? Math.sqrt(1 - vn * vn) : SQRT1[vi];
-        const nxv = NX[k] * vn, nyv = NY[k] * vn;
-        let lum = nxv * LX + nyv * LY + nz * LZ;
-        let phi = ASIN[vi] + roll;
-        if (phi > HALF_PI) phi = Math.PI - phi;
+        // lighting: the side view reads the body's cross-section (flat belly, flank, roofed back); top
+        // views and the flattening glider keep the rolled round section
+        let nN: number, nz: number, phi: number;
+        if (sec) { nN = SN[vi]; nz = SZ[vi]; phi = SP[vi]; }
+        else {
+          nN = v * flatN;
+          nz = flatN < 1 ? Math.sqrt(1 - nN * nN) : SQRT1[vi];
+          phi = ASIN[vi] + roll;
+          if (phi > HALF_PI) phi = Math.PI - phi;
+        }
+        const nxv = NX[k] * nN, nyv = NY[k] * nN;
+        let lum = sec ? nxv * FX + nyv * FY + nz * FZ : nxv * LX + nyv * LY + nz * LZ;
         const u = s / total;
+        if (perScale && phi >= this.phiB && s > hideS && u < lureU) {
+          // each scale takes the light as one small plate: the shading steps scale by scale, so the
+          // highlight along the back is a row of lit scales, not a stripe
+          const la = s / SL, lb = ((phi + HALF_PI) * SR) / Math.PI;
+          const pcI = Math.floor(la + lb), qcI = Math.floor(la - lb);
+          let pj = ((((pcI - qcI) * 0.5) / SR) * LUTN + 0.5) | 0;
+          if (pj < 0) pj = 0; else if (pj > LUTN) pj = LUTN;
+          const vc = PINV[pj];
+          const lc = (NX[k] * FX + NY[k] * FY) * SN[vc] + SZ[vc] * FZ;
+          lum = lc * 0.68 + lum * 0.32;
+        }
         const w = WW[k];
+        const hw = (WU[k] + WD[k]) * 0.5;
         // ---- material + pattern
         if (u >= lureU) {
           _mat = M_LURE;
@@ -969,18 +1272,29 @@ export class SerpentPainter {
             const er = R[M_LURE * NR + Math.min(7, 5 + (seg < 0.3 ? 2 : 1))];
             edata[idx] = ((er & 0x00ffffff) | (Math.round(255 * glow) << 24)) >>> 0;
           }
+        } else if (u > lureU - 0.14) {
+          // the caudal lure: the tail pales and is ringed like a grub toward the glowing bulb
+          const m = mod(s, Math.max(2, L.radius * 0.75));
+          const t2 = (u - (lureU - 0.14)) / 0.14;
+          if (m < 0.9) { _mat = M_PAT; _off = 0.6; } else { _mat = t2 > 0.35 ? M_THROAT : M_BELLY; _off = m < 1.8 ? 0.6 : -0.2; }
         } else if (s < hideS) {
           _mat = phi < this.phiB ? M_THROAT : M_BASE;
           _off = 0;
-        } else if (latticeOn && phi >= this.phiB && SL >= 3 && (Math.PI / SR) * w * Math.cos(phi) >= 3) {
+        } else if (latticeOn && phi >= this.phiB && SL >= 3 && (Math.PI / SR) * w * COSL[((phi + HALF_PI) * COSK + 0.5) | 0] >= 3) {
           // colour patterns are laid down scale by scale: sample the pattern at the centre of this
           // pixel's scale, so band and blotch edges step along the scale rows like a real snake's,
           // and give every scale its own slight tone
           const la = s / SL, lb = ((phi + HALF_PI) * SR) / Math.PI;
-          const pc = Math.floor(la + lb) + 0.5, qc = Math.floor(la - lb) + 0.5;
-          const sc = ((pc + qc) * 0.5) * SL, phc = ((pc - qc) * 0.5) * Math.PI / SR - HALF_PI;
-          this.pattern(sc, phc, sc / total, w, k, x, y, time);
-          _off += (hash2(pc | 0, qc | 0, this.seed) - 0.5) * 0.6;
+          const pcI = Math.floor(la + lb), qcI = Math.floor(la - lb);
+          if (pcI === cP && qcI === cQ) { _mat = cM; _off = cO; }
+          else {
+            // one pattern sample per scale (cached across the scale's pixels in the scanline)
+            const pc = pcI + 0.5, qc = qcI + 0.5;
+            const sc = ((pc + qc) * 0.5) * SL, phc = ((pc - qc) * 0.5) * Math.PI / SR - HALF_PI;
+            this.pattern(sc, phc, sc / total, w, k, x, y, time);
+            _off += (hash2(pcI, qcI, this.seed) - 0.5) * 0.6;
+            cP = pcI; cQ = qcI; cM = _mat; cO = _off;
+          }
         } else {
           this.pattern(s, phi, u, w, k, x, y, time);
           // small bodies: still a faint tone per scale, so the hide never reads as flat
@@ -996,11 +1310,36 @@ export class SerpentPainter {
             _off = (h > 0.7 ? 1.2 : h < 0.25 ? -1.1 : 0) + (cover > 1.05 - mossAmt * 0.6 ? 0.6 : -0.3);
           }
         }
+        // ---- anatomy relief: folds on the inside of a bend, stretched skin on the outside, the
+        // ventrolateral angle, the vertebral ridge, oblique muscle blocks, the shadow under the jaw
+        let rel = 0;
+        _str = 0;
+        if (relief && hw >= 2.2 && u < lureU) {
+          const kc = KK[k] * hw * (v > 0 ? 1 : -1);
+          const av0 = v < 0 ? -v : v;
+          if (kc > 0.07 && s > neckS) {
+            const e0 = av0 < 0.15 ? 0 : av0 > 0.75 ? 1 : (av0 - 0.15) / 0.6;
+            const amt = Math.min(1, (kc - 0.07) * 6) * e0 * e0 * (3 - 2 * e0);
+            const m = mod(s + FNZ[k] * foldP * 0.9 + v * hw * 0.35, foldP);
+            if (m < 0.9) rel -= 1.5 * amt; else if (m < 1.9) rel += 0.55 * amt;
+          } else if (kc < -0.07) _str = Math.min(1, (-kc - 0.07) * 4) * (av0 < 0.1 ? 0 : av0 > 0.7 ? 1 : (av0 - 0.1) / 0.6);
+          const dk = (v - vK) * hw;
+          if (hw >= 2.6 && dk > -0.55 && dk < 0.45 && s > neckS * 0.6) rel -= bsc0 > 0 && mod(s, bsc0) < 0.9 ? 1.3 : 0.6;
+          else if (hw >= 3.5 && dk >= 0.45 && dk < 1.45) rel += 0.3;
+          const dr = (v - vR) * hw;
+          if (hw >= 2.6 && dr > -0.5 && dr < 0.5 && s > neckS * 0.5 && mod(s, SL) < SL * 0.6) rel += 0.85;
+          if (mus > 0 && av0 < 0.8 && u > 0.04 && u < 0.88) {
+            const mm = SINL[((MPH[k] - v * hw * mPK) | 0) & (SINN - 1)];
+            rel += mm * 0.55 * mus * (1 - av0 * av0);
+          }
+          if (s < neckS && v < 0.35) rel -= (1 - s / neckS) * 1.4 * (0.35 - v);
+        }
         // ---- scales
+        _v = v; _hw = hw;
         let sc = 0;
         if (scaleOn && _mat !== M_MOSS && _mat !== M_LURE) sc = this.scaleTex(s, phi, w, k, SWK[k], detail, x, y);
         // ---- scars
-        if (scars && _mat !== M_BELLY) {
+        if (scars && SCK[k] && _mat !== M_BELLY) {
           const S = this.scars;
           for (let i = 0; i < S.length; i += 5) {
             const su = S[i] * total, len = S[i + 2];
@@ -1040,18 +1379,22 @@ export class SerpentPainter {
           }
         }
         // ---- light -> level
-        let lvl = (0.5 + 0.5 * lum) * 7 - 1 + _off + sc;
-        if (_mat === M_BELLY || _mat === M_THROAT) lvl = lvl * 0.55 + 2.6 + _off * 0.45;
+        let lvl = (0.5 + 0.5 * lum) * 7 - 1 + _off + sc + rel;
+        if (_mat === M_BELLY || _mat === M_THROAT) lvl = sec ? lvl * 0.72 + 1.45 + _off * 0.45 : lvl * 0.55 + 2.6 + _off * 0.45;
         // rim light: underside / back edge facing away from the key light
         const av = v < 0 ? -v : v;
         if (av > 0.8) {
           const side = (v > 0 ? 1 : -1) * (NX[k] * L2X + NY[k] * L2Y);
           if (side < -0.25) lvl += (av - 0.8) * 9 * Math.min(1, -side);
         }
-        // wet specular streak
+        // wet specular streak; smooth scales carry a glossy sheen band along the upper flank
         if (wet > 0) {
           const spec = nxv * HX + nyv * HY + nz * HZ;
           if (spec > 0.985 - wet * 0.03) lvl += 1.2 + wet * 1.3;
+        }
+        if (gloss > 0 && sec && _mat !== M_MOSS) {
+          const sp2 = nxv * GX + nyv * GY + nz * GZ;
+          if (sp2 > 0.975) lvl += gloss * 1.3; else if (sp2 > 0.94) lvl += gloss * 0.55;
         }
         // iridescent sheen replaces the base ramp
         let mat = _mat;
@@ -1063,7 +1406,7 @@ export class SerpentPainter {
         if (lvl < 0) li = 0; else if (li > 7) li = 7;
         let c = R[mat * NR + li];
         // coil contact line: a body part lying on top of this one (smaller s = nearer the head)
-        if (s > coilT) {
+        if (s > coilT && OVL[k]) {
           const lim = s - coilT;
           if ((y > 0 && gM[idx - W] === 1 && gS[idx - W] < lim) || (x > 0 && gM[idx - 1] === 1 && gS[idx - 1] < lim) ||
             (x < W - 1 && gM[idx + 1] === 1 && gS[idx + 1] < lim) || (y < this.gh - 1 && gM[idx + W] === 1 && gS[idx + W] < lim)) c = tint(c, 0.72);
@@ -1151,7 +1494,8 @@ export class SerpentPainter {
         const cell = Math.floor(s / P);
         const m = s - cell * P;
         const off = hash2(cell, 3, seed);
-        const d = Math.hypot((m - P * (0.3 + off * 0.4)) / (P * 0.32), (q - 0.45) / 0.55);
+        const da = (m - P * (0.3 + off * 0.4)) / (P * 0.32), db = (q - 0.45) / 0.55;
+        const d = Math.sqrt(da * da + db * db);
         if (d < 0.75) _mat = M_PAT; else if (d < 1 && L.patternCol2) _mat = M_PAT2;
         return;
       }
@@ -1204,11 +1548,21 @@ export class SerpentPainter {
         // gecko: bark streaks, dark forward-pointing chevrons, pale lichen flecks
         if (isBelly) { _mat = M_BELLY; return; }
         const st = noise2(s * 0.12, phi * 5.5, seed);
-        if (st < 0.34) _off = -0.9; else if (st > 0.7) _off = 0.6;
+        if (st < 0.3) _off = -0.6; else if (st > 0.72) _off = 0.5;
+        // the tail ringed dark and pale
+        if (u > this.tailU + 0.06) {
+          const mt = mod(s, P * 0.9);
+          if (mt < P * 0.32) { _mat = M_PAT; _off = 0.3; } else if (mt < P * 0.32 + 1) _off += 0.9;
+          return;
+        }
+        // forward-pointing dark chevrons, pale-edged behind; a dark streak back from the eye
         const m = mod(s + (1 - q) * P * 0.45, P);
-        if (q > 0.05 && m < 1.3) { _mat = M_PAT; _off = 0; }
-        else if (q > 0.05 && m < 2.1) _off += 0.8;
-        if (hash2(Math.floor(s / 1.5), Math.floor(phi * w / 1.5), seed + 5) > 0.93) { _mat = M_PAT2; _off = 0; }
+        if (q > 0.0 && m < 1.3) { _mat = M_PAT; _off = 0.2; }
+        else if (q > 0.0 && m < 2.2) _off += 0.9;
+        else if (q < -0.05 && q > -0.45 && u < 0.3) { _mat = M_PAT; _off = 0.5; }
+        // lichen: small pale-green clusters
+        const ci = Math.floor(s / 2), cj = Math.floor(phi * w / 2);
+        if (hash2(ci, cj, seed + 5) > 0.88 && q > -0.3) { _mat = M_PAT2; _off = hash2(ci, cj, seed + 6) > 0.5 ? 0.4 : -0.3; }
         return;
       }
       case P_COUNTER: {
@@ -1257,19 +1611,35 @@ export class SerpentPainter {
         return;
       }
       case P_CROC: {
+        // crocodilian: bold dark crossbands on the tail, broken ones over the back, the flanks mottled
+        // dark with paler scales between, a cream belly
         if (isBelly) { _mat = M_BELLY; return; }
-        if (u > 0.4) {
-          const m = mod(s + (noise1(s * 0.2, seed) - 0.5) * 3, P);
-          if (m < P * 0.32 && q > -0.5) { _mat = M_PAT; if (m < 1) _off = -0.5; return; }
+        const tk = smoothstep(this.tailU - 0.06, this.tailU + 0.04, u);
+        const cell = Math.floor(s / P);
+        const m = mod(s + (noise1(s * 0.2, seed) - 0.5) * 3.2 - q * P * 0.18, P);
+        if (tk > 0.5 ? m < P * 0.34 && q > -0.6 : m < P * 0.16 && q > 0.25 && hash2(cell, 1, seed) > 0.45) { _mat = M_PAT; if (m < 1) _off = -0.5; return; }
+        const nm = noise2(s * 0.17, q * 3, seed);
+        // the lower flank pales toward the belly, blotched dark
+        if (q < 0.12 && L.flank) {
+          const nb = noise2(s * 0.33, q * 5, seed + 4);
+          if (nm < 0.3 || (nb < 0.22 && q > -0.4)) { _mat = M_PAT; _off = 0.9; }
+          else { _mat = M_FLANK; _off = q > 0 ? -0.5 : 0; }
+          return;
         }
-        const nm = noise2(s * 0.13, q * 2.5, seed);
-        if (q < 0.3 && nm < 0.3) _mat = M_PAT;
-        else if (nm > 0.74) _off = 0.5;
+        if (q < 0.3 && nm < 0.28) { _mat = M_PAT; _off = 0.5; }
+        else if (nm > 0.7) _off = 0.45;
         return;
       }
       case P_SKIN: {
-        // amphibian: darker back, pale spots and a scatter of pores
+        // amphibian: darker back, pale spots and a scatter of pores; costal grooves ring the flank
+        // between the legs
         if (isBelly) { _mat = M_BELLY; return; }
+        if (u > this.cg0 && u < this.cg1 && q < 0.55) {
+          const gp = Math.max(1.8, L.radius * 0.6);
+          const m = mod(s, gp);
+          if (m < 0.75) { _off = -1.3; return; }
+          if (m < 1.5 && q > -0.2) _off = 0.5;
+        }
         const cs = 3.2;
         const ci = Math.floor(s / cs), cj = Math.floor((phi + 2) * w / cs);
         const h = hash2(ci, cj, seed);
@@ -1294,6 +1664,12 @@ export class SerpentPainter {
     const L = this.look;
     const isBelly = !this.topView && phi < this.phiB;
     if (isBelly) {
+      if (this.scaleId === S_OSTEO) {
+        // a crocodile's belly: the square scales of the leather, in neat rows
+        const g = Math.max(2, (L.osteoderms?.len ?? 5) * 0.5);
+        const ga = mod(s, g), gb = mod((_v + 1) * _hw, g * 0.9);
+        return ga < 0.8 || gb < 0.7 ? -1.1 : gb > g * 0.55 ? 0.3 : 0;
+      }
       const sc = L.bellyScute ?? 0;
       if (sc <= 0) return 0;
       const m = mod(s, sc);
@@ -1307,31 +1683,55 @@ export class SerpentPainter {
     }
     const id = this.scaleId;
     if (id === S_SKIN) return 0;
-    const cosPhi = Math.cos(phi);
+    const ci = ((phi + HALF_PI) * COSK + 0.5) | 0;
+    const cosPhi = COSL[ci < 0 ? 0 : ci > COSN ? COSN : ci];
     if (id === S_OSTEO) {
+      // crocodilian armour, laid out by height up the side (_v): square ventral scales below, then the
+      // flank's oval scales set in wrinkled skin, then transverse rows of keeled osteoderms over the
+      // back; the tail is ringed in rectangular scales
       const O = L.osteoderms;
-      const rows = O?.rows ?? 5, len = O?.len ?? 5;
-      const p0 = -0.35;
-      if (phi < p0) {
-        // small flank scales below the armour
-        const a = s / (len * 0.55), b = (phi + HALF_PI) * w / 2.2;
-        const fa = a - Math.floor(a + (Math.floor(b) & 1) * 0.5), fb = b - Math.floor(b);
-        return fa < 0.28 || fb < 0.3 ? -0.9 : 0;
+      const len = O?.len ?? 5;
+      const v = _v, hw = _hw;
+      const tail = s > this.total * this.tailU;
+      const yPx = (v + 1) * hw; // px up from the belly edge
+      if (tail) {
+        const a = s / (len * 0.8);
+        const fa = (a - Math.floor(a)) * len * 0.8;
+        const rowH = Math.max(2, hw * 0.42);
+        const fb = yPx - Math.floor(yPx / rowH) * rowH;
+        if (fa < 0.9) return -1.5;
+        if (fb < 0.8) return -1;
+        if (fb > rowH - 1 && fa > len * 0.3) return 0.7;
+        return fa > len * 0.55 ? -0.3 : 0.2;
       }
-      const rh = (HALF_PI - p0) / rows;
-      const b = (phi - p0) / rh;
-      const row = Math.floor(b);
-      const fb = b - row;
-      const a = s / len + (row & 1) * 0.5 * (row < rows - 2 ? 1 : 0);
-      const fa = a - Math.floor(a);
-      const rowPx = rh * w * cosPhi + 0.4;
-      const bpx = fb * rowPx;
-      const apx = fa * len;
-      if (apx < 1 || bpx < 0.9) return -1.7;
-      if (bpx > rowPx - 1.05) return 0.9;
-      // central keel along the plate
-      if (detail >= 2 && Math.abs(apx - len * 0.55) < len * 0.3 && Math.abs(bpx - rowPx * 0.55) < 0.6) return 1.1;
-      return bpx < rowPx * 0.4 ? -0.35 : 0.15;
+      if (v > 0.2) {
+        const rows = O?.rows ?? 5;
+        const rowH = Math.max(1.8, (hw * 0.8 * 2) / rows * 0.9);
+        const yb = (1 - v) * hw;
+        const row = Math.floor(yb / rowH);
+        const fb = yb - row * rowH;
+        const a = s / len + (hash2(row, Math.floor(s / len), this.seed) - 0.5) * 0.08;
+        const fa = (a - Math.floor(a)) * len;
+        if (fa < 0.9 || fb < 0.85) return -1.7;
+        // the keel down each plate's middle: lit crest, a shadow line under it
+        if (detail >= 2 && fa > len * 0.25 && fa < len * 0.85) {
+          const kc = rowH * 0.45;
+          if (Math.abs(fb - kc) < 0.5) return 1.2;
+          if (fb > kc + 0.5 && fb < kc + 1.4) return -0.6;
+        }
+        return fb < rowH * 0.4 ? 0.35 : -0.2;
+      }
+      if (v > -0.5) {
+        // flank: oval scales in skin
+        const a = s / (len * 0.55), b = yPx / 2.1;
+        const rb = Math.floor(b);
+        const fa = a + (rb & 1) * 0.5 - Math.floor(a + (rb & 1) * 0.5), fb = b - rb;
+        const ex = fa - 0.5, ey = fb - 0.5;
+        const d = ex * ex * 1.4 + ey * ey;
+        if (d > 0.2) return -1.1;
+        return ey < -0.05 ? 0.5 : 0;
+      }
+      return 0;
     }
     // diamond lattice in (s, phi)
     const SL = this.scaleLen, SR = this.scaleRows;
@@ -1341,7 +1741,9 @@ export class SerpentPainter {
     const rowPx = (Math.PI / SR) * w * cosPhi; // on-screen scale height
     const small = rowPx < 2.2 || SL < 2.6;
     if (id === S_BEAD || small) {
-      // readable granular texture for small bodies: one light bead + one dark notch per scale
+      // readable granular texture for small bodies: one light bead + one dark notch per scale (on a tiny
+      // lizard only along the back, where the light rakes across it)
+      if (L.radius < 3 && phi < 0.45) return 0;
       const cx = fp - 0.5, cy = fq - 0.5;
       if (fp < 0.2 && fq < 0.2) return -1.1;
       if (id === S_KEELED && Math.abs(cx - cy) < 0.18) return 0.9;
@@ -1351,10 +1753,11 @@ export class SerpentPainter {
       }
       return 0;
     }
-    // individual scales: dark gap line, lit dome side, shadowed far side
-    const gap = 0.1 + swk * 0.22;
+    // individual scales: dark gap line, lit dome side, shadowed far side; where the skin is stretched
+    // (the swallowed meal, the outside of a bend) the scales part and the skin between them shows
+    const gap = 0.1 + swk * 0.22 + _str * 0.14;
     if (fp < gap || fq < gap) {
-      if (swk > 0.25) { _mat = M_SKIN; return 0.2; }
+      if (swk > 0.25 || _str > 0.45) { _mat = M_SKIN; return swk > 0.25 ? 0.2 : -0.4; }
       return -1.7;
     }
     const da = (fp + fq) * 0.5 - 0.5 - gap * 0.5; // along the body (lattice units)
@@ -1437,8 +1840,9 @@ export class SerpentPainter {
           continue;
         }
         // ---- side view
-        const hx = px - nx * w * 0.28 + (far ? nx * 0.8 - tx * f * 0.0 : 0);
-        const hy = py - ny * w * 0.28 + (far ? ny * 0.8 : 0);
+        const hd = 0.28 + (sp.sprawl ?? 0) * (far ? 0 : 0.16);
+        const hx = px - nx * w * hd + (far ? nx * 0.8 : 0);
+        const hy = py - ny * w * hd + (far ? ny * 0.8 : 0);
         P.hx = hx; P.hy = hy;
         const rest = (front ? 0.14 : -0.1) * len + (far ? 0.16 * len : 0);
         const ax2 = rest * (1 - gait) + (along + rest * 0.4) * gait;
@@ -1486,12 +1890,24 @@ export class SerpentPainter {
       ay = fy - Math.sin(g) * l3;
       P.dx = f * Math.cos(P.lift * 0.9); P.dy = Math.sin(P.lift * 0.9);
     } else {
-      l1 = len * 0.47; l2 = len * 0.43;
-      const foot = len * 0.2;
+      const spw = sp.sprawl ?? 0;
+      l1 = len * (0.47 - 0.17 * spw); l2 = len * (0.43 + 0.03 * spw);
+      const foot = len * (0.2 + 0.06 * spw);
       const g = P.lift * 0.8 + 0.12;
       ax = fx - f * Math.cos(g) * foot;
       ay = fy - Math.sin(g) * foot;
       P.dx = f * Math.cos(P.lift * 0.7); P.dy = Math.sin(P.lift * 0.7);
+    }
+    // a sprawler folds its limb out toward the viewer rather than in the picture plane: the projected
+    // bones shorten, the knee stays near the flank and the upper limb reads as a foreshortened mass
+    P.fore = 0;
+    const spw = sp.sprawl ?? 0;
+    if (spw > 0) {
+      const d0 = Math.hypot(ax - P.hx, ay - P.hy);
+      const k = clamp(d0 / ((l1 + l2) * 0.86), 0.72, 1);
+      const kk = 1 - (1 - k) * spw;
+      l1 *= kk; l2 *= kk;
+      P.fore = 1 - kk;
     }
     // two-bone IK hip -> ankle
     let dx = ax - P.hx, dy = ay - P.hy;
@@ -1557,54 +1973,86 @@ export class SerpentPainter {
     const sp = P.spec;
     const bias = P.far && !P.top ? -2.2 : 0;
     const border = !P.far && !P.top;
-    const ring = P.r0 > 2.2 ? 2.6 : 0;
-    // borders first (so the joints stay clean), then fills
+    const sprawl = sp.sprawl ?? 0;
+    const bulk = (sp.bulk ?? 0.25) * (sp.digitigrade ? 1.6 : 1);
+    // a limb is muscle on bone, not a capsule: the thigh / upper arm swells out of the body, narrows to
+    // the knee, the calf / forearm bulges under it and tapers into the ankle; seen end-on, a sprawler's
+    // upper limb is a short heavy mass
+    const rA = P.r0 * (1.05 + sprawl * 0.12 + P.fore * 0.4), rB = P.r1 * (1 + sprawl * 0.08 + P.fore * 0.25);
+    const bU = P.r0 * bulk * (1 + sprawl * 0.4), bL = P.r1 * bulk * 0.55;
+    const scl = Math.max(1.5, Math.min(3.2, P.r0 * 0.7));
     if (border) {
-      this.limb(buf, P.hx, P.hy, P.r0, P.kx, P.ky, P.r1, bias, 1, ring, 0.5);
-      this.limb(buf, P.kx, P.ky, P.r1, P.ax, P.ay, P.r2, bias, 1, ring, 0);
-      this.limb(buf, P.ax, P.ay, P.r2, P.fx, P.fy, P.r3, bias, 1, 0, 0);
+      this.seg(buf, P.hx, P.hy, rA, P.kx, P.ky, rB, bU, 0.32, bias, 1, 0, 0.45);
+      this.seg(buf, P.kx, P.ky, rB, P.ax, P.ay, P.r2, bL, 0.3, bias, 1, 0, 0);
+      this.seg(buf, P.ax, P.ay, P.r2, P.fx, P.fy, P.r3, 0, 0.5, bias, 1, 0, 0);
     }
-    this.limb(buf, P.hx, P.hy, P.r0, P.kx, P.ky, P.r1, bias, 0, ring, 0);
-    this.limb(buf, P.kx, P.ky, P.r1, P.ax, P.ay, P.r2, bias, 0, ring, 0);
-    this.limb(buf, P.ax, P.ay, P.r2, P.fx, P.fy, P.r3, bias, 0, 0, 0);
+    // foot and toes, shin, then the thigh (its root lies over the body)
+    this.seg(buf, P.ax, P.ay, P.r2, P.fx, P.fy, P.r3, 0, 0.5, bias, 0, scl * 0.7, 0);
     this.digits(buf, P);
-    void sp;
+    this.seg(buf, P.kx, P.ky, rB, P.ax, P.ay, P.r2, bL, 0.3, bias, 0, scl * 0.8, 0);
+    this.seg(buf, P.hx, P.hy, rA, P.kx, P.ky, rB, bU, 0.32, bias, 0, scl, 0);
+    // the crease at the knee / elbow on the inside of the bend
+    if (!P.top && P.r1 >= 1.2) {
+      const ux = P.hx - P.kx, uy = P.hy - P.ky, vx = P.ax - P.kx, vy = P.ay - P.ky;
+      const ul = Math.hypot(ux, uy) || 1, vl = Math.hypot(vx, vy) || 1;
+      let bx = ux / ul + vx / vl, by = uy / ul + vy / vl;
+      const bl = Math.hypot(bx, by);
+      if (bl > 0.2) {
+        bx /= bl; by /= bl;
+        const dk = tint(this.R[M_LEG * NR + Math.max(0, 1 + Math.round(bias))], 0.35);
+        for (let q = 0.4; q < rB * 0.95; q += 0.5) buf.paint(P.kx + bx * q, P.ky + by * q, dk);
+      }
+    }
   }
 
   /**
-   * Tapered capsule with cylinder lighting from the leg ramp.
-   * mode 0 = shaded fill, 1 = dark border ring (only drawn past `from` along the segment)
+   * One limb segment: a bone axis from a to b with a radius profile (linear ra -> rb plus a muscle bulge
+   * peaking at `peak` along it), lit as a rounded form under the form light, with a lattice of small
+   * scales (scl px, 0 = none). mode 0 = shaded fill, 1 = dark border ring over the body (past `from`).
    */
-  private limb(buf: PixelBuffer, ax: number, ay: number, ar: number, bx: number, by: number, br: number,
-    bias: number, mode: number, ring: number, from: number) {
+  private seg(buf: PixelBuffer, ax: number, ay: number, ra: number, bx: number, by: number, rb: number,
+    bulge: number, peak: number, bias: number, mode: number, scl: number, from: number) {
     const R = this.R, data = buf.data, W = buf.w, H = buf.h;
+    const rmax = Math.max(ra, rb) + bulge;
     const grow = mode === 1 ? 1 : 0;
-    const x0 = Math.max(0, Math.floor(Math.min(ax - ar, bx - br) - 1 - grow)), x1 = Math.min(W - 1, Math.ceil(Math.max(ax + ar, bx + br) + 1 + grow));
-    const y0 = Math.max(0, Math.floor(Math.min(ay - ar, by - br) - 1 - grow)), y1 = Math.min(H - 1, Math.ceil(Math.max(ay + ar, by + br) + 1 + grow));
+    const x0 = Math.max(0, Math.floor(Math.min(ax, bx) - rmax - 1 - grow)), x1 = Math.min(W - 1, Math.ceil(Math.max(ax, bx) + rmax + 1 + grow));
+    const y0 = Math.max(0, Math.floor(Math.min(ay, by) - rmax - 1 - grow)), y1 = Math.min(H - 1, Math.ceil(Math.max(ay, by) + rmax + 1 + grow));
     const dx = bx - ax, dy = by - ay;
     const l2 = dx * dx + dy * dy || 1e-6;
     const len = Math.sqrt(l2);
+    const ex = dx / len, ey = dy / len;
     const dark = tint(R[M_LEG * NR + 1], 0.55);
+    const iw = 1 / 0.3;
     for (let y = y0; y <= y1; y++) {
       for (let x = x0; x <= x1; x++) {
         const qx = x + 0.5 - ax, qy = y + 0.5 - ay;
         let t = (qx * dx + qy * dy) / l2;
         if (t < 0) t = 0; else if (t > 1) t = 1;
-        const r = ar + (br - ar) * t;
+        const pk = (t - peak) * iw;
+        const pq = 1 - pk * pk * 0.5;
+        const r = ra + (rb - ra) * t + (pq > 0 ? bulge * pq * pq : 0);
         const cx = qx - dx * t, cy = qy - dy * t;
         const d2 = cx * cx + cy * cy;
         const idx = y * W + x;
         if (mode === 1) {
-          const rb = r + 1;
-          if (d2 <= rb * rb && t >= from && (data[idx] >>> 24) !== 0) data[idx] = dark;
+          const rr = r + 1;
+          if (d2 <= rr * rr && t >= from && (data[idx] >>> 24) !== 0) data[idx] = dark;
           continue;
         }
         if (d2 > r * r) continue;
         const nx = cx / r, ny = cy / r;
         const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
-        const lum = nx * LX + ny * LY + nz * LZ;
-        let lvl = (0.5 + 0.5 * lum) * 7 - 0.8 + bias;
-        if (ring > 0 && mod(t * len, ring) < 0.9 && r > 1.4) lvl -= 1.1;
+        const lum = nx * FX + ny * FY + nz * FZ;
+        let lvl = (0.5 + 0.5 * lum) * 7 - 0.9 + bias;
+        if (scl > 0 && r > 1.3) {
+          // small scales in rows round the limb: a dark seam, a lit crown on the upper side
+          const across = cx * -ey + cy * ex;
+          const a = (t * len) / scl, b2 = across / (scl * 0.8) + 50;
+          const row = Math.floor(b2);
+          const fa = a + (row & 1) * 0.5 - Math.floor(a + (row & 1) * 0.5), fb = b2 - row;
+          if (fa < 0.16 || fb < 0.18) lvl -= 0.7;
+          else if (fb > 0.5 && fa > 0.3 && fa < 0.8 && ny < 0.3) lvl += 0.55;
+        }
         let li = (lvl + 0.5) | 0;
         if (lvl < 0) li = 0; else if (li > 7) li = 7;
         data[idx] = R[M_LEG * NR + li];
@@ -1617,13 +2065,15 @@ export class SerpentPainter {
     const len = sp.len;
     const top = P.top;
     const nd = sp.digits ?? (top ? 5 : 3);
-    const dl = Math.max(1.4, len * (top ? 0.2 : 0.2));
+    const dl = Math.max(1.4, len * (top ? 0.2 : 0.22));
     const far = P.far && !top;
-    const base = far ? 1 : 3;
-    const claw = R[M_CLAW * NR + (far ? 2 : 5)];
-    const pad = sp.pads ? R[M_LEG * NR + (far ? 3 : 6)] : 0;
-    const count = far ? Math.min(2, nd) : nd;
-    const spread = top ? (P.lift > 0.5 ? 0.5 : 1.25) : 0.55;
+    const bias = far ? -2 : 0;
+    const claw = R[M_CLAW * NR + (far ? 2 : 5)], clawD = R[M_CLAW * NR + (far ? 1 : 3)];
+    const count = far ? Math.min(3, nd) : nd;
+    const spread = top ? (P.lift > 0.5 ? 0.5 : 1.25) : 0.6;
+    const thick = Math.max(0.5, P.r3 * 0.7);
+    const tips: number[] = [];
+    // toes: tapered, jointed, each with its claw (or adhesive pad), webbed at the base on a crocodilian
     for (let i = count - 1; i >= 0; i--) {
       const t = count === 1 ? 0 : i / (count - 1) - 0.5;
       let dxv: number, dyv: number;
@@ -1632,26 +2082,50 @@ export class SerpentPainter {
         const c = Math.cos(ang), sn = Math.sin(ang);
         dxv = P.dx * c - P.dy * sn; dyv = P.dx * sn + P.dy * c;
       } else {
-        // side view: toes fan upward from the ground line, the longest one flat on the ground
+        // side view: toes fan from the ground line, the longest flat on the ground, the rest rising
         const lift = (t + 0.5) * spread;
-        dxv = P.dx; dyv = P.dy - lift * 0.9;
+        dxv = P.dx; dyv = P.dy - lift * 0.85;
       }
       const L2 = Math.hypot(dxv, dyv) || 1;
       dxv /= L2; dyv /= L2;
-      const dlen = dl * (top ? 1 - Math.abs(t) * 0.35 : 1 - (t + 0.5) * 0.35);
-      const col = R[M_LEG * NR + base + (i === 0 ? 0 : 1)];
+      const dlen = dl * (top ? 1 - Math.abs(t) * 0.35 : 1 - (t + 0.5) * 0.3) * (sp.pads ? 0.85 : 1);
+      const steps = Math.max(2, Math.round(dlen * 2));
       let x = P.fx, y = P.fy;
-      const steps = Math.max(1, Math.round(dlen * 2));
-      for (let j = 1; j <= steps; j++) {
-        x = P.fx + dxv * (j / steps) * dlen;
-        y = P.fy + dyv * (j / steps) * dlen;
-        buf.set(x, y, col);
+      for (let j = 0; j <= steps; j++) {
+        const f = j / steps;
+        x = P.fx + dxv * f * dlen;
+        y = P.fy + dyv * f * dlen;
+        const w = thick * (1 - f * 0.55);
+        const lit = (j & 3) === 2 ? 1 : 0; // the knuckles catch the light
+        const c = R[M_LEG * NR + Math.max(0, Math.min(7, 3 + bias + (i === count - 1 ? 1 : 0) + lit))];
+        buf.set(x, y, c);
+        if (w > 0.8) buf.set(x - dyv * 0.7, y + dxv * 0.7, R[M_LEG * NR + Math.max(0, 1 + bias)]);
       }
-      if (pad) buf.set(x + dxv * 0.6, y + dyv * 0.6, pad);
-      else if (sp.claw !== undefined || !top) {
-        // claw hooks down/forward
-        buf.set(x + dxv, y + dyv + (top ? 0 : 0.6), claw);
-        if (len > 12) buf.set(x + dxv * 1.8, y + dyv * 1.8 + (top ? 0 : 1.2), claw);
+      tips.push(x, y);
+      if (sp.pads) {
+        // the gecko's expanded toe pad with its lamellae
+        const pc = R[M_LEG * NR + (far ? 3 : 6)], pd = R[M_LEG * NR + (far ? 1 : 3)];
+        buf.set(x + dxv * 0.6, y + dyv * 0.6, pc);
+        buf.set(x + dxv * 0.6 - dyv * 0.8, y + dyv * 0.6 + dxv * 0.8, pd);
+        if (len > 5) buf.set(x + dxv * 1.3, y + dyv * 1.3, pc);
+      } else if (sp.claw !== undefined || !top) {
+        // claw: dark at the root, pale hooked tip curling down
+        buf.set(x + dxv * 0.8, y + dyv * 0.8 + (top ? 0 : 0.2), clawD);
+        buf.set(x + dxv * 1.6, y + dyv * 1.6 + (top ? 0 : 0.7), claw);
+        if (len > 12) buf.set(x + dxv * 2.3, y + dyv * 2.3 + (top ? 0 : 1.3), claw);
+      }
+    }
+    // webbing: a dark membrane between the toes' bases, its trailing edge scalloped
+    if (sp.web && tips.length >= 4 && !top) {
+      const mem = R[M_LEG * NR + Math.max(0, 2 + bias)];
+      for (let i = 0; i + 3 < tips.length; i += 2) {
+        const ax2 = P.fx + (tips[i] - P.fx) * 0.62, ay2 = P.fy + (tips[i + 1] - P.fy) * 0.62;
+        const bx2 = P.fx + (tips[i + 2] - P.fx) * 0.62, by2 = P.fy + (tips[i + 3] - P.fy) * 0.62;
+        const mx = (ax2 + bx2) * 0.5, my = (ay2 + by2) * 0.5;
+        buf.polyFn([P.fx, P.fy, ax2, ay2, mx + (P.fx - mx) * 0.25, my + (P.fy - my) * 0.25, bx2, by2], (xx, yy) => {
+          const d = buf.data[yy * buf.w + xx];
+          return (d >>> 24) === 255 ? -1 : mem;
+        });
       }
     }
   }
@@ -1703,23 +2177,30 @@ export class SerpentPainter {
     void flat;
   }
 
-  /** side view: patagium folded along the flank between the legs (partly spread with flatten) */
+  /** side view: the patagium folded along the lower flank between the legs, a loose skin fold that
+   *  hangs in shallow scallops between its supporting ribs, pale-rimmed; it drops as `flatten` rises */
   private drawFoldedPatagia(buf: PixelBuffer, flat: number) {
     const L = this.look;
     const specs = L.legs;
     if (!specs || specs.length < 2) return;
     const k0 = this.sampleAt(Math.min(specs[0].at, specs[1].at)), k1 = this.sampleAt(Math.max(specs[0].at, specs[1].at));
     const R = this.R;
-    const drop = 0.6 + flat * 3;
+    const drop = 0.8 + flat * 3;
+    const rib = Math.max(2, L.radius * 0.8);
     for (let k = k0; k <= k1; k++) {
       const t = (k - k0) / Math.max(1, k1 - k0);
-      const h = Math.sin(t * Math.PI) * drop;
-      const w = this.WW[k];
-      const bx = this.PX[k] - this.NX[k] * w * 0.72, by = this.PY[k] - this.NY[k] * w * 0.72;
-      for (let j = 0; j <= Math.ceil(w * 0.3 + h); j++) {
+      const s = k * this.ds;
+      const sc = mod(s, rib) / rib;
+      const h = Math.sin(t * Math.PI) * drop * (0.75 + 0.25 * Math.sin(sc * Math.PI));
+      const w = this.WD[k];
+      const bx = this.PX[k] - this.NX[k] * w * 0.6, by = this.PY[k] - this.NY[k] * w * 0.6;
+      const n = Math.ceil(w * 0.4 + h);
+      for (let j = 0; j <= n; j++) {
         const x = bx - this.NX[k] * j, y = by - this.NY[k] * j;
-        const edge = j >= Math.ceil(w * 0.3 + h) - 0.5;
-        buf.set(x, y, R[(edge ? M_X2 : M_X1) * NR + (edge ? 2 : 3 + (j & 1 ? 0 : 1))]);
+        const edge = j >= n - 0.5;
+        const vein = sc < 0.18;
+        const c = edge ? R[M_X2 * NR + 5] : vein ? R[M_X2 * NR + 1] : R[M_X1 * NR + (j < n * 0.5 ? 2 : 4)];
+        buf.set(x, y, c);
       }
     }
   }
@@ -1769,33 +2250,49 @@ export class SerpentPainter {
     }
   }
 
-  /** crocodile: raised dorsal scutes, a double saw-toothed crest on the tail */
+  /** crocodile: the nuchal shield behind the skull, paired keeled scutes down the back, then the tail's
+   *  double saw-toothed crest (two rows, near row lit, far row in shadow) merging into one near the tip */
   private drawCrestScutes(buf: PixelBuffer, st: SerpentState) {
     const O = this.look.osteoderms!;
     const R = this.R;
     const len = O.len, H = O.crest ?? 0;
     const total = this.total;
     const moss = this.look.moss ? clamp(st.mossy ?? this.look.moss.amount) : 0;
-    const sStart = this.hl * 0.15 + 3;
-    for (let s = sStart + len * 0.5; s < total - 2; s += len) {
-      const u = s / total;
-      const k = Math.min(this.n - 1, Math.round(s / this.ds));
-      const tail = smoothstep(0.38, 0.5, u);
-      const h = (0.9 + tail * H * (1 - smoothstep(0.75, 1, u) * 0.75)) * (u < 0.06 ? 0.4 : 1);
-      if (h < 0.6) continue;
-      const w = this.WW[k];
-      const bx = this.PX[k] + this.NX[k] * (w - 0.6), by = this.PY[k] + this.NY[k] * (w - 0.6);
-      const hb = Math.max(1.2, len * 0.42);
-      const ax = bx + this.TX[k] * hb * 0.8, ay = by + this.TY[k] * hb * 0.8;   // toward tail
-      const cx = bx - this.TX[k] * hb * 0.8, cy = by - this.TY[k] * hb * 0.8;   // toward head
-      const tx = bx + this.NX[k] * h + this.TX[k] * h * 0.35, ty = by + this.NY[k] * h + this.TY[k] * h * 0.35;
+    const sStart = this.hl * 0.12 + 2;
+    const tail0 = this.look.legs && this.look.legs.length > 1 ? Math.max(...this.look.legs.map(l => l.at)) + 0.04 : 0.45;
+    const WU = this.WU, TX = this.TX, TY = this.TY, NX = this.NX, NY = this.NY, PX = this.PX, PY = this.PY;
+    const scute = (s: number, h: number, hb: number, lean: number, row: number) => {
+      const k = Math.min(this.n - 1, Math.max(0, Math.round(s / this.ds)));
+      const w = WU[k];
+      const bx = PX[k] + NX[k] * (w - 0.7), by = PY[k] + NY[k] * (w - 0.7);
+      const ax = bx + TX[k] * hb, ay = by + TY[k] * hb;     // toward the tail
+      const cx = bx - TX[k] * hb, cy = by - TY[k] * hb;     // toward the head
+      const tx = bx + NX[k] * h + TX[k] * h * lean, ty = by + NY[k] * h + TY[k] * h * lean;
       const mossy = moss > 0 && noise2(s * 0.16, HALF_PI * 2.6, this.seed) * 0.75 + 0.3 > 1.02 - moss;
-      const lit = R[(mossy ? M_MOSS : M_BASE) * NR + 5], dk = R[(mossy ? M_MOSS : M_BASE) * NR + 2];
+      const M = mossy ? M_MOSS : M_BASE;
+      const lit = R[M * NR + (row ? 3 : 6)], mid = R[M * NR + (row ? 2 : 4)], dk = R[M * NR + (row ? 1 : 2)];
       buf.polyFn([cx, cy, tx, ty, ax, ay], (x, y) => {
-        // lit face toward the head/top, dark face toward the tail
-        const side = (x + 0.5 - tx) * this.TX[k] + (y + 0.5 - ty) * this.TY[k];
-        return side < 0 ? lit : dk;
+        // the lit face toward the head and the light, the keel's edge, the shaded face toward the tail
+        const side = (x + 0.5 - tx) * TX[k] + (y + 0.5 - ty) * TY[k];
+        const up = (x + 0.5 - bx) * NX[k] + (y + 0.5 - by) * NY[k];
+        if (side < -0.5) return up > h * 0.55 ? lit : mid;
+        return side < 0.5 ? mid : dk;
       });
+    };
+    // nuchal shield: a cluster of big bosses just behind the skull
+    for (let i = 0; i < 3; i++) scute(sStart + i * len * 0.95, 1.6 + (i === 1 ? 0.6 : 0), len * 0.42, 0.1, 0);
+    // dorsal scute keels (two rows read as alternating bumps), then the double crest of the tail
+    const s0 = sStart + len * 3.4;
+    for (let pass = 0; pass < 2; pass++) for (let s = s0 + (pass === 0 ? len * 0.5 : 0); s < total - 2; s += len) {
+      const u = s / total;
+      const tail = smoothstep(tail0 - 0.03, tail0 + 0.06, u);
+      const single = smoothstep(0.78, 0.86, u);
+      const far = pass === 0;
+      if (far && single > 0.5) continue;
+      let h = (0.75 + tail * H * (1 - smoothstep(0.84, 1, u) * 0.7)) * (far ? 0.82 : 1);
+      if (!tail && far) h *= 0.8;
+      if (h < 0.6) continue;
+      scute(s + (far ? len * 0.12 : 0), h, Math.max(1.1, len * (tail > 0.5 ? 0.36 : 0.3)), tail * 0.3, far ? 1 : 0);
     }
   }
 
@@ -2119,7 +2616,8 @@ export class SerpentPainter {
     const eyeState: EyeState = st.blink ? 'closed' : st.eye ?? 'open';
     // profile LUT (0.5 px steps)
     const nL = Math.ceil((back + hl) * 2) + 3;
-    const LT = new Float32Array(nL), LB = new Float32Array(nL), LM = new Float32Array(nL);
+    if (this.hLT.length < nL) { this.hLT = new Float32Array(nL + 16); this.hLB = new Float32Array(nL + 16); this.hLM = new Float32Array(nL + 16); }
+    const LT = this.hLT, LB = this.hLB, LM = this.hLM;
     const kt = H.kt;
     for (let i = 0; i < nL; i++) {
       const f = i * 0.5 - back;
@@ -2154,10 +2652,18 @@ export class SerpentPainter {
     const uh = LM[lut(fh)];
     const eyeF = H.eyeT * hl, eyeU = H.eyeU * hh;
     const er = Math.max(1.4, hh * H.eyeR * (L.eyeSize ?? 1)) * (eyeState === 'alert' ? 1.15 : 1);
-    // bounding box
-    const Rb = Math.max(hl, back) + hh * 2 + 4;
-    const bx0 = Math.max(0, Math.floor(ox0 - Rb)), bx1 = Math.min(buf.w - 1, Math.ceil(ox0 + Rb));
-    const by0 = Math.max(0, Math.floor(oy0 - Rb)), by1 = Math.min(buf.h - 1, Math.ceil(oy0 + Rb));
+    // bounding box: the head's own box in head space (the open jaw swings down from the hinge), projected
+    let uTop = -1e9, uBot = 1e9;
+    for (let i = 0; i < nL; i++) { if (LT[i] > uTop) uTop = LT[i]; if (LB[i] < uBot) uBot = LB[i]; }
+    uTop += 2; uBot -= 2 + (top ? Math.max(uTop, -uBot) : (hl - fh) * Math.sin(ja) * 1.05 + hh * 0.5 * jaw);
+    if (top) uTop = Math.max(uTop, -uBot);
+    let bx0 = 1e9, bx1 = -1e9, by0 = 1e9, by1 = -1e9;
+    for (const ff of [-back - 1, hl + 1]) for (const uu of [uTop, uBot]) {
+      const xx = ox0 + fx * ff + ux * uu, yy = oy0 + fy * ff + uy * uu;
+      if (xx < bx0) bx0 = xx; if (xx > bx1) bx1 = xx; if (yy < by0) by0 = yy; if (yy > by1) by1 = yy;
+    }
+    bx0 = Math.max(0, Math.floor(bx0)); bx1 = Math.min(buf.w - 1, Math.ceil(bx1));
+    by0 = Math.max(0, Math.floor(by0)); by1 = Math.min(buf.h - 1, Math.ceil(by1));
     const data = buf.data, W = buf.w;
     const labSp = Math.max(2, hh * 0.55);
     const toothSp = Math.max(2, hl / 15);
@@ -2165,6 +2671,11 @@ export class SerpentPainter {
     const mark = L.headMark ?? 'none';
     const tipStart = 0.78;
     const glossy = clamp(st.wet ?? L.wet ?? 0);
+    const HN = this.HN, HZ = this.HZ;
+    const jF = H.jowl[0] * hl, jU = H.jowl[1] * hh, jR = Math.max(1.5, H.jowl[2] * hh), jA = H.jowl[3];
+    const sockR = er + Math.max(1, hh * 0.22);
+    const labH = H.labials ? Math.min(3.2, Math.max(1.1, hh * 0.21)) : 0;
+    const pitsLab = !!L.pits && (L.head === 'blunt' || L.head === 'eel') && hh >= 4;
     for (let y = by0; y <= by1; y++) {
       for (let x = bx0; x <= bx1; x++) {
         const qx = x + 0.5 - ox0, qy = y + 0.5 - oy0;
@@ -2257,45 +2768,92 @@ export class SerpentPainter {
           data[idx] = c;
           continue;
         }
-        // lighting on a rounded head
+        // ---- form: the head's own cross-section (flat cheek, a crown plane meeting it at the canthus,
+        // the jaw rounding under), the snout turning forward at the tip, a dome over the jaw muscles /
+        // venom glands, the eye sitting in its socket under the brow
         const hv = (2 * pu - (ptp + pbt)) / Math.max(1, ptp - pbt);
         const v = hv < -1 ? -1 : hv > 1 ? 1 : hv;
+        const hvi = ((v + 1) * (LUTN / 2) + 0.5) | 0;
         const tk = smoothstep(tipStart, 1.02, pf / hl);
-        const nzz = Math.sqrt(Math.max(0.02, 1 - v * v * (1 - tk * 0.4)));
-        const nfx = fx * tk * 0.75, nfy = fy * tk * 0.75;
-        const lum = (ux * v + nfx) * LX + (uy * v + nfy) * LY + nzz * LZ * (1 - tk * 0.25);
+        const hN = HN[hvi] * (1 - tk * 0.35), hZ = HZ[hvi];
+        let gx = ux * hN + fx * tk * 0.8, gy = uy * hN + fy * tk * 0.8;
+        // the jowl dome
+        const jdf = pf - jF, jdu = pu - jU;
+        const jd2 = (jdf * jdf + jdu * jdu) / (jR * jR);
+        if (jd2 < 1 && jA > 0) {
+          const k2 = (1 - jd2) * jA * 0.7 / jR;
+          gx += (fx * jdf + ux * jdu) * k2; gy += (fy * jdf + uy * jdu) * k2;
+        }
+        // the eye socket: a shallow bowl round the eye
+        const edf = pf - eyeF, edu = pu - eyeU;
+        const ed2 = edf * edf + edu * edu;
+        if (ed2 < sockR * sockR && ed2 > er * er) {
+          const k3 = -0.55 / sockR;
+          gx += (fx * edf + ux * edu) * k3; gy += (fy * edf + uy * edu) * k3;
+        }
+        const lum = gx * FX + gy * FY + hZ * FZ * (1 - tk * 0.25);
         let lvl = (0.5 + 0.5 * lum) * 7 - 1;
         let mat = M_BASE;
         const tt = pf / hl;
         if (part === 2) {
           mat = M_THROAT;
-          lvl = lvl * 0.55 + 2.6;
-          if (this.patId === P_CROC || this.patId === P_COUNTER) { if (pu > pmo - hh * 0.35 && this.patId === P_CROC) { mat = M_BASE; lvl = (0.5 + 0.5 * lum) * 7 - 1.4; } }
-          if (H.labials && pu > pmo - Math.max(1.2, hh * 0.28) && mod(pf, labSp) < 0.9 && pf > fh) lvl -= 1.3;
+          lvl = lvl * 0.85 + 0.95;
+          if (this.patId === P_CROC && pu > pmo - hh * 0.55) {
+            // the iron jaw: the mandible's flank in rust-dark armour, a pale line along its lower edge
+            mat = M_PAT2; lvl = (0.5 + 0.5 * lum) * 7 - 1.2;
+            if (mod(pf * 0.5 + Math.floor((pmo - pu) / 1.6) * 0.5, 1) < 0.22 && pmo - pu > 0.9) lvl -= 1;
+          }
+          if (H.labials && pu > pmo - labH && mod(pf, labSp) < 0.9 && pf > fh) lvl -= 1.3;
+          // the gular fold under a salamander's throat
+          if (L.head === 'salamander' && Math.abs(pf - fh - hh * 0.35) < 0.6 && pu < pmo - 0.8) lvl -= 1.4;
         } else {
-          const labH = H.labials ? Math.max(1.1, hh * 0.24) : 0;
-          if (pu - pmo < labH && pf > fh) {
+          if (labH > 0 && pu - pmo < labH && pf > fh) {
+            // supralabials: a row of lip scales turned out to the light, each seam a dark notch, boas
+            // with a heat pit in every scale toward the snout
             mat = M_THROAT;
-            lvl = lvl * 0.55 + 2.8;
-            if (mod(pf + labSp * 0.5, labSp) < 0.9) lvl -= 1.3;
+            lvl = lvl * 0.6 + 2.3 + (pu - pmo > labH * 0.5 ? 0.5 : -0.2);
+            const lm = mod(pf + labSp * 0.5, labSp);
+            if (lm < 0.9) lvl -= 1.4;
+            else if (pitsLab && tt > 0.42 && tt < 0.94 && lm > labSp * 0.45 && lm < labSp * 0.45 + 1 && pu - pmo > labH * 0.35) { mat = M_PAT; lvl = 0.6; }
           } else if (this.patId === P_COUNTER && v < -0.1) {
             mat = M_BELLY; lvl = lvl * 0.6 + 2.4;
           }
-          // markings
+          // markings: a postocular stripe from the eye down to the jaw angle, edged pale above
           if (mark === 'postocular' && mat === M_BASE) {
             const lx = (pf - eyeF) / Math.max(1, eyeF - fh + hh * 0.4); // 0 at the eye .. -1 at the jaw angle
-            if (lx < 0.1 && lx > -1.15) {
-              const cu = eyeU + (lx < 0 ? lx : 0) * (eyeU - pmo - hh * 0.1);
-              if (Math.abs(pu - cu) < hh * 0.16 + 0.4) { mat = M_PAT; lvl -= 0.3; }
+            if (lx < 0.15 && lx > -1.15) {
+              const cu = eyeU - er * 0.2 + (lx < 0 ? lx : 0) * (eyeU - pmo - hh * 0.05);
+              const half = Math.min(hh * 0.08 + 0.45, 1.25);
+              const dd = pu - cu;
+              if (dd > -half && dd < half) { mat = M_PAT; lvl -= dd > half - 1 ? -0.4 : 0.3; }
+              else if (dd >= half && dd < half + 1.05 && hh >= 3.5) lvl += 1.1;
             }
           } else if (mark === 'mask' && mat === M_BASE && Math.abs(pu - eyeU) < er + 0.6 && pf > eyeF - hh * 1.2 && pf < eyeF + er * 1.6) mat = M_PAT;
           // crown plates on big heads
-          if (detail >= 1 && hh >= 5.5 && mat === M_BASE && pu > ptp - hh * 0.55) {
+          if (detail >= 1 && hh >= 5.5 && mat === M_BASE && pu > ptp - hh * 0.55 && L.head !== 'croc') {
             const a = pf / (hh * 0.55), b = (ptp - pu) / (hh * 0.3);
             if (mod(a + Math.floor(b) * 0.5, 1) < 0.12 || mod(b, 1) < 0.14) lvl -= 1.1;
           }
-          // snout sensory pits / scale texture on the croc
-          if (this.patId === P_CROC && tt > 0.35 && hash2(x, y, this.seed) > 0.86) lvl -= 0.9;
+          if (L.head === 'leviathan' && detail >= 1 && mat !== M_PAT) {
+            // the lateral-line pores: rows of sensory pits along the jaw and under the eye
+            const r1 = pmo + Math.max(2, hh * 0.12), r2 = eyeU - er - Math.max(2, hh * 0.14);
+            if ((Math.abs(pu - r1) < 0.6 || (Math.abs(pu - r2) < 0.6 && pf < eyeF + er && pf > eyeF - hh)) && mod(pf, 3.2) < 1 && tt > 0.2 && tt < 0.92) lvl -= 1.6;
+          }
+          if (L.head === 'croc' && detail >= 1) {
+            // skull table plates over the back, the snout's rough skin: rows of dark sensory pits along
+            // the jaw, ridged skin on top, a pale band along the upper jaw's edge
+            if (tt < 0.26 && pu > ptp - hh * 0.5) {
+              const a = (pf + hl * 0.08) / (hh * 0.5), b = (ptp - pu) / (hh * 0.26);
+              if (mod(a + (Math.floor(b) & 1) * 0.5, 1) < 0.16 || mod(b, 1) < 0.18) lvl -= 1.2;
+              else if (mod(b, 1) > 0.7) lvl += 0.4;
+            } else if (tt >= 0.26 && tt < 0.97) {
+              const row = Math.floor((pu - pmo) / 1.7);
+              const ph = mod(pf * 0.5 + row * 0.57, 1);
+              if (pu - pmo > 0.9 && pu < ptp - 0.9 && row < 3 && ph < 0.24 && hash2(Math.floor(pf * 0.5), row, this.seed) > 0.3) lvl -= 1.1;
+              if (pu > ptp - hh * 0.25 && mod(pf, 2.6) < 0.8) lvl -= 0.6;
+              if (pu - pmo < 1.2) { lvl += 0.6; }
+            }
+          }
         }
         // form: the canthus (the edge where the crown turns down to the side) catches the light from the
         // eye to the snout; the cheek under the eye and behind the jaw angle falls into shadow
@@ -2319,12 +2877,13 @@ export class SerpentPainter {
               let d1 = 1e9, d2 = 1e9, su = 0;
               if (L.head === 'blunt' || L.head === 'leviathan' || L.head === 'salamander' || L.head === 'croc' || L.head === 'gecko') {
                 // small scales on a jittered grid, larger over the eye (the supraocular) and at the snout
-                const cs = Math.max(2.1, hh * (L.head === 'blunt' ? 0.3 : 0.4));
+                const cs = Math.max(2.1, hh * (L.head === 'blunt' ? 0.3 : L.head === 'leviathan' ? 0.2 : 0.4));
                 const gi = Math.floor(pf / cs), gj = Math.floor(pu / (cs * 0.85));
                 for (let jj = -1; jj <= 1; jj++) for (let ii = -1; ii <= 1; ii++) {
                   const cx = (gi + ii + 0.5 + (hash2(gi + ii, gj + jj, this.seed + 3) - 0.5) * 0.6) * cs;
                   const cy = (gj + jj + 0.5 + (hash2(gj + jj, gi + ii, this.seed + 4) - 0.5) * 0.6) * cs * 0.85;
-                  const d = Math.hypot(pf - cx, pu - cy);
+                  const ddf = pf - cx, ddu = pu - cy;
+                  const d = Math.sqrt(ddf * ddf + ddu * ddu);
                   if (d < d1) { d2 = d1; d1 = d; su = cy; } else if (d < d2) d2 = d;
                 }
                 const so = Math.hypot(pf - eyeF, (pu - (eyeU + er * 1.4)) * 1.4);
@@ -2334,7 +2893,8 @@ export class SerpentPainter {
                 const seeds = HEAD_PLATES(E);
                 for (let i = 0; i < seeds.length; i += 2) {
                   const sx = seeds[i] * hl, sy = pmo + seeds[i + 1] * hgt;
-                  const d = Math.hypot(pf - sx, (pu - sy) * 1.15);
+                  const ddf = pf - sx, ddu = (pu - sy) * 1.15;
+                  const d = Math.sqrt(ddf * ddf + ddu * ddu);
                   if (d < d1) { d2 = d1; d1 = d; su = sy; } else if (d < d2) d2 = d;
                 }
               }
@@ -2399,32 +2959,72 @@ export class SerpentPainter {
         buf.set(hx, hy, R[M_BASE * NR + (t > 0.6 ? 6 : 4)]);
       }
     }
-    // nostril
+    // nostril: a dark opening in the nasal scale, its rim catching the light above and in front
     const nosU = L.nostrilTop ? LT[lut(hl * H.nos[0])] - 0.6 : H.nos[1] * hh;
     const [nx0, ny0] = at(hl * H.nos[0], nosU);
+    if (hh >= 3.5) {
+      const [rx, ry] = at(hl * H.nos[0] + 0.6, nosU + 0.9);
+      buf.paint(rx, ry, R[M_BASE * NR + 6]);
+    }
     buf.paint(nx0, ny0, R[M_BASE * NR + 0]);
     if (hh >= 6) {
       const [nx1, ny1] = at(hl * H.nos[0] - 1, nosU);
       buf.paint(nx1, ny1, R[M_BASE * NR + 0]);
     }
-    // heat pits along the upper lip
     if (L.pits) {
-      for (let i = 0; i < 4; i++) {
-        const f = hl * (0.52 + i * 0.1);
-        const [px2, py2] = at(f, LM[lut(f)] + Math.max(1.1, hh * 0.18));
+      if (L.head === 'viper' || L.head === 'raptor' || L.head === 'slim') {
+        // the loreal pit: a deep dark pocket between nostril and eye, its upper rim lit
+        const pf0 = (hl * H.nos[0] + eyeF + er) * 0.5, pu0 = (nosU + eyeU) * 0.5 - Math.max(0.6, hh * 0.18);
+        const [px2, py2] = at(pf0, pu0);
         buf.paint(px2, py2, R[M_PAT * NR + 0]);
+        if (hh >= 4.5) buf.paint(px2 - fx, py2 - fy, R[M_PAT * NR + 0]);
+        const [qx, qy] = at(pf0, pu0 + 1);
+        buf.paint(qx, qy, R[M_BASE * NR + 6]);
+      } else if (hh < 4) {
+        for (let i = 0; i < 4; i++) {
+          const f = hl * (0.52 + i * 0.1);
+          const [px2, py2] = at(f, LM[lut(f)] + Math.max(1.1, hh * 0.18));
+          buf.paint(px2, py2, R[M_PAT * NR + 0]);
+        }
       }
     }
-    // croc: nuchal scutes behind the head, ear slit
+    // croc: the ear lid behind the eye, the enlarged teeth showing along the closed jaws
     if (L.head === 'croc') {
-      const [ex, ey] = at(eyeF - er * 2.6, eyeU - er * 0.2);
-      buf.paint(ex, ey, R[M_BASE * NR + 0]);
-      buf.paint(ex - fx, ey - fy, R[M_BASE * NR + 0]);
+      for (let i = 0; i < 4; i++) {
+        const [ex, ey] = at(eyeF - er * 1.8 - i * 0.9, eyeU - er * 0.1 - i * 0.12);
+        buf.paint(ex, ey, R[M_BASE * NR + 0]);
+        const [ex2, ey2] = at(eyeF - er * 1.8 - i * 0.9, eyeU - er * 0.1 - i * 0.12 + 1);
+        buf.paint(ex2, ey2, R[M_BASE * NR + 5]);
+      }
+      if (jaw < 0.12 && hh >= 4) this.crocTeeth(buf, at, LM, lut, hl, hh, fh);
     }
     // eye (open/alert/angry/closed)
     const [ex, ey] = at(eyeF, eyeU);
     this.drawEye(buf, Math.floor(ex) + 0.5, Math.floor(ey) + 0.5, er, fx, fy, ux, uy, eyeState, L.pupil ?? H.pupil, false);
     void time;
+  }
+
+  /** the crocodile's interlocking teeth, visible with the jaws shut: uppers hang over the lower lip, the
+   *  lowers stand up into notches, the big fourth mandibular tooth at the snout's waist */
+  private crocTeeth(buf: PixelBuffer, at: (f: number, u: number) => V, LM: Float32Array, lut: (f: number) => number,
+    hl: number, hh: number, fh: number) {
+    const R = this.R;
+    const sp = Math.max(2, hl / 16);
+    const lit = R[M_TOOTH * NR + 6], mid = R[M_TOOTH * NR + 4], dk = R[M_TOOTH * NR + 2];
+    for (let f = fh + hl * 0.3, i = 0; f < hl * 0.97; f += sp, i++) {
+      const mo = LM[lut(f)];
+      const t = f / hl;
+      const big = Math.abs(t - 0.6) < 0.035 || Math.abs(t - 0.88) < 0.03;
+      const len = (big ? 2.2 : 1.2) * Math.min(1.4, hh / 7) + (i % 3 === 1 ? 0.5 : 0);
+      if (i & 1) {
+        // upper tooth hanging down past the lip
+        for (let q = 0; q < len; q += 0.5) { const [x, y] = at(f, mo - 0.4 - q); buf.paint(x, y, q < 0.6 ? mid : lit); }
+        const [x2, y2] = at(f - 0.6, mo - 0.6); buf.paint(x2, y2, dk);
+      } else {
+        // lower tooth standing up over the upper lip
+        for (let q = 0; q < len; q += 0.5) { const [x, y] = at(f, mo + 0.4 + q); buf.paint(x, y, q < 0.6 ? mid : lit); }
+      }
+    }
   }
 
   /**
@@ -2491,7 +3091,7 @@ export class SerpentPainter {
   /** forked tongue flicking from the snout */
   private drawTongue(buf: PixelBuffer, st: SerpentState, time: number) {
     const L = this.look;
-    if (L.head === 'croc' || L.head === 'leviathan' || L.head === 'salamander') return;
+    if (L.head === 'croc' || L.head === 'leviathan' || L.head === 'salamander' || L.head === 'gecko') return;
     const { ox0, oy0, fx, fy, ux, uy } = this.headFrame(st);
     const hl = this.hl, hh = this.hh;
     const col = L.tongueCol ?? hex('#c7354a');
