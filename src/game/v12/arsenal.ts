@@ -14,6 +14,12 @@
 //                                                             collapses asleep for a while ('dart', PredState.asleep; the Bearer
 //                                                             needs 5, they wear off over time)
 //   spray     w_spray                 v12:ammo:spray (6)      bear spray, a short cone of pepper: a strong blind up close ('spray')
+//   harpoon   (blueprint 'speargun')  v12:ammo:harpoon (6)    V12 the kelp dive: the rubber speargun, the ONLY weapon under water
+//             (or w_speargun, dev)                            and hidden out of it. Spearfishing (a ring QTE leads a moving fish;
+//                                                             a hit takes it, a shaft goes with each catch, a miss is reeled back
+//                                                             in and spooks the fish), and the blunt bang-head that turns a
+//                                                             charging shark (src/game/v12/arsenal-harpoon.ts). Shafts per dive:
+//                                                             the tank's startAir loads a full six.
 //
 // The API (for the story and the village boss fight):
 //   WEAPONS / WEAPON_BY_ID / WEAPON_IDS        the list (sling first)
@@ -44,8 +50,9 @@ import { ITEMS, defineItem } from '../items';
 import { add } from '../inventory';
 import { PX_ICONS } from '../../ui/pxicons';
 import '../../art/v12/weapons';
+import { isActive } from '../v11/blueprints';
 
-export type WeaponId = 'sling' | 'bolas' | 'flare' | 'bangers' | 'net' | 'tranq' | 'spray';
+export type WeaponId = 'sling' | 'bolas' | 'flare' | 'bangers' | 'net' | 'tranq' | 'spray' | 'harpoon';
 export interface WeaponDef {
   id: WeaponId;
   /** the tool item on the belt (save.tools) */
@@ -84,6 +91,8 @@ export const WEAPONS: WeaponDef[] = [
     desc: 'A bolt-action dart rifle with a little scope. Each dart makes a predator drowsier; enough of them and it lies down for a nap. Big ones need several, and they wear off.' },
   { id: 'spray', item: 'w_spray', name: 'Bear spray', short: 'Spray', ammoVar: 'v12:ammo:spray', max: 6, unit: ['burst', 'bursts'], icon: 'w_spray', ammoIcon: 'w_spray', use: 'spray', cool: 0.45,
     desc: 'Capsaicin in a can, with a safety clip. A short, fierce cone of pepper fog: blinding up close, useless at range. Mind the wind.' },
+  { id: 'harpoon', item: 'w_speargun', name: 'Rubber speargun', short: 'Spear', ammoVar: 'v12:ammo:harpoon', max: 6, unit: ['shaft', 'shafts'], icon: 'w_speargun', ammoIcon: 'a_spear', use: 'shoot', cool: 0.9,
+    desc: 'Jenna’s band-powered speargun: a teak stock, two red rubbers, a flint-tipped shaft on a line. Dinner on a string, and a blunt bang-head for anything with too many teeth.' },
 ];
 export const WEAPON_BY_ID = Object.fromEntries(WEAPONS.map(w => [w.id, w])) as Record<WeaponId, WeaponDef>;
 export const WEAPON_IDS = WEAPONS.map(w => w.id);
@@ -98,10 +107,13 @@ for (const w of WEAPONS) {
 
 // ---------------------------------------------------------------- owning, ammo
 const V = () => game.save.vars;
-export const ownsWeapon = (id: WeaponId) => game.save.tools.includes(WEAPON_BY_ID[id]?.item ?? '');
-export const ownedWeapons = (): WeaponDef[] => WEAPONS.filter(w => ownsWeapon(w.id));
+/** Mori is under water right now (the speargun is the belt there, and only there) */
+export const wetNow = () => !!(game.scene as unknown as { player?: { underwater?: boolean } } | null)?.player?.underwater;
+export const ownsWeapon = (id: WeaponId) => (id === 'harpoon' && isActive('speargun')) || game.save.tools.includes(WEAPON_BY_ID[id]?.item ?? '');
+/** the weapons on the belt here: under water only the speargun, out of it everything but */
+export const ownedWeapons = (): WeaponDef[] => { const wet = wetNow(); return WEAPONS.filter(w => (w.id === 'harpoon') === wet && ownsWeapon(w.id)); };
 /** more than the slingshot on the belt (the HUD's weapon button shows then) */
-export const ownsAnyWeapon = () => WEAPONS.some(w => w.id !== 'sling' && ownsWeapon(w.id));
+export const ownsAnyWeapon = () => ownedWeapons().some(w => w.id !== 'sling');
 export function ammoMax(id: WeaponId): number {
   const w = WEAPON_BY_ID[id];
   if (!w) return 0;
@@ -124,13 +136,15 @@ export const addAmmo = (id: WeaponId, n: number) => setAmmo(id, ammo(id) + n);
 
 /** the weapon G uses: the one picked with T (if still owned), else the first owned, else the slingshot */
 export function selectedWeapon(): WeaponId {
+  // under water the speargun is the only thing on the belt
+  if (wetNow()) return ownsWeapon('harpoon') ? 'harpoon' : 'sling';
   const k = V()['v12:arm'];
   const own = ownedWeapons();
-  if (k !== undefined && WEAPONS[k] && ownsWeapon(WEAPONS[k].id)) return WEAPONS[k].id;
+  if (k !== undefined && WEAPONS[k] && WEAPONS[k].id !== 'harpoon' && ownsWeapon(WEAPONS[k].id)) return WEAPONS[k].id;
   return own[0]?.id ?? 'sling';
 }
 export function selectWeapon(id: WeaponId): boolean {
-  if (!ownsWeapon(id)) return false;
+  if (!ownsWeapon(id) || id === 'harpoon') return id === 'harpoon' && wetNow() && ownsWeapon(id);
   const i = WEAPONS.findIndex(w => w.id === id);
   if (V()['v12:arm'] === i) return true;
   V()['v12:arm'] = i;
@@ -235,6 +249,17 @@ const icons: Record<string, { rows: string[]; pal: Record<string, string> }> = {
   ], pal: { a: '#9ab8c8', b: '#2a3a48', c: '#4a5a68', d: '#1a1e24', e: '#6a7480', f: '#2a2e34', g: '#a06a3a', h: '#6a4420' } },
   // one dart: a steel needle, a yellow tuft
   a_dart: { rows: ['ab....', '.bc...', '..cc..', '...dd.', '...ded', '....ee'], pal: { a: '#ffffff', b: '#c8d0d8', c: '#7a8490', d: '#f0d040', e: '#c89810' } },
+  // the rubber speargun: a teak stock, the red band, the steel shaft with its flint point
+  w_speargun: { rows: [
+    '..........aaab.',
+    'bbbbbbbbbbbbbbc',
+    'dddddeeedddddd.',
+    '..ff.dd........',
+    '..ff...........',
+    '.ff............',
+  ], pal: { a: '#e8eef2', b: '#9aa6ae', c: '#3a3a42', d: '#a86a38', e: '#d8302a', f: '#5e2e12' } },
+  // one shaft: steel, a notch at the tail, the flint point and its flopper
+  a_spear: { rows: ['......b.', 'aaaaaacd', '......b.'], pal: { a: '#b4c0c6', b: '#8a969e', c: '#5a5a62', d: '#2a2a30' } },
   // the bear-spray can: an orange cap, the safety clip, a black can
   w_spray: { rows: [
     '..ab..',

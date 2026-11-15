@@ -7,6 +7,10 @@
 //   body    stamina in big digits, the heart (beating at its rate), hunger in five pips
 //   sun     how long until dark; LATE when it is
 //   timer   (countdowns) the seconds left in big digits
+//   dive    (V12, on the kelp dive, whatever face is picked) a dive computer: the depth in metres in big
+//           digits, the air left over it, the time under it; the ring is the AIR left (cyan, amber, red
+//           and blinking when it's nearly gone), the stamina ring tucked just inside it; the backlight
+//           comes on in the gloom below 8 m
 // and round the edge of every face the segmented ring: stamina (the pips hunger has locked are hatched
 // out), or for a timer, the time left. It glows in the dark (the backlight), buzzes when stamina runs
 // out, and when a countdown runs out it shakes and goes red. Everything is fillRect on whole pixels.
@@ -58,7 +62,13 @@ export interface WatchOpts {
   press?: 'light' | 'mode' | 'start' | 'back' | null;
   /** 0..1 a buzz (the whole watch jitters a pixel) */
   buzz?: number;
+  /** V12 clock mode: the dive computer face (depth in metres, the air left 0..1); left out, it shows
+   *  by itself while Mori is on the kelp dive (WATCH_DIVE); false: never */
+  dive?: false | { depth: number; air: number };
 }
+/** V12 the kelp dive's air tank (src/game/v12/dive/air.ts) registers the live reading here, so any clock
+ *  watch turns into the dive computer while he's down there (the watch imports nothing of the game's) */
+export const WATCH_DIVE: { live: (() => { depth: number; air: number } | null) | null } = { live: null };
 export type WatchFace = 'time' | 'body' | 'sun';
 
 // the palette (brass, dial, blued steel, red)
@@ -308,7 +318,7 @@ const STEEL = ['#23272c', '#3c434a', '#5d666e', '#858e95', '#adb5ba', '#d6dcdf',
 const STRAPC = ['#0f1214', '#181d20', '#22292d', '#2e373c', '#3d484e'];
 const ORANGE = ['#7a2a06', '#d4560e', '#ff8a2a', '#ffc27a'];
 const SCR = { bg: '#0a1215', bgLit: '#0c2a2e', grid: '#0f1b1f', gridLit: '#12383c', dim: '#6f9c98', dimLit: '#8fd8d0', ink: '#e8f6f0', inkLit: '#f4fffb' };
-const RING = { off: '#1a2529', offLit: '#1e3a3c', lock: '#3a2416', lockHatch: '#6a3a1a', g: ['#1e8a4c', '#4ae08a'], a: ['#b87a10', '#ffcc3a'], r: ['#a01e10', '#ff5a3a'], t: ['#2a8ad0', '#7ad0ff'] };
+const RING = { off: '#1a2529', offLit: '#1e3a3c', lock: '#3a2416', lockHatch: '#6a3a1a', g: ['#1e8a4c', '#4ae08a'], a: ['#b87a10', '#ffcc3a'], r: ['#a01e10', '#ff5a3a'], t: ['#2a8ad0', '#7ad0ff'], air: ['#14a0b8', '#5cf0f0'] };
 
 /** a few letters in a tiny 3x5 face for the display's labels (what the watch needs, nothing more) */
 const TINY: Record<string, string> = {
@@ -333,7 +343,9 @@ export function drawWatch(ctx: CanvasRenderingContext2D, x: number, y: number, s
   const shake = Math.max(opts.shake ?? (clock ? 0 : left < 0.25 ? (0.25 - left) / 0.25 : 0), opts.buzz ?? 0);
   const red = opts.red ?? (!clock && left < 0.2);
   const hour = (((opts.hour ?? 12) % 24) + 24) % 24;
-  const lit = !!opts.light || (clock && (hour >= 19.5 || hour < 5.6));
+  const dv = clock && opts.dive !== false ? (opts.dive ?? WATCH_DIVE.live?.() ?? null) : null;
+  // (the backlight: after dark, or down in the gloom on a dive)
+  const lit = !!opts.light || (clock && (hour >= 19.5 || hour < 5.6)) || (!!dv && dv.depth > 8);
   // (whole pixels only: a fractional fillRect would smear)
   const px = (X: number, Y: number, c: string) => { ctx.fillStyle = c; ctx.fillRect(Math.round(X), Math.round(Y), 1, 1); };
   const rect = (X: number, Y: number, w: number, h: number, c: string) => { ctx.fillStyle = c; ctx.fillRect(Math.round(X), Math.round(Y), Math.round(w), Math.round(h)); };
@@ -438,7 +450,11 @@ export function drawWatch(ctx: CanvasRenderingContext2D, x: number, y: number, s
   const seg = S >= 40 ? 24 : S >= 28 ? 16 : 12;
   const span = Math.PI * 1.5, a0r = Math.PI * 0.75; // from bottom-left round the top to bottom-right
   let fill: number, cap = 1, ringC: string[];
-  if (!clock) { fill = left; ringC = red ? RING.r : left < 0.4 ? RING.a : RING.t; }
+  if (dv) {
+    // on the dive the big ring is the air left; it blinks red when it's nearly gone
+    fill = dv.air;
+    ringC = dv.air < 0.15 ? (Math.floor(T * 3) % 2 === 0 ? RING.r : RING.a) : dv.air < 0.3 ? RING.a : RING.air;
+  } else if (!clock) { fill = left; ringC = red ? RING.r : left < 0.4 ? RING.a : RING.t; }
   else if (opts.stamina !== undefined) {
     fill = opts.stamina; cap = opts.staminaMax ?? 1;
     ringC = fill < 0.25 ? RING.r : fill < 0.5 ? RING.a : RING.g;
@@ -463,11 +479,47 @@ export function drawWatch(ctx: CanvasRenderingContext2D, x: number, y: number, s
     const outer = d > (ri + ro) / 2;
     px(X, Y, on ? ringC[outer ? 1 : 0] : locked ? (((X + Y) & 1) ? RING.lockHatch : RING.lock) : lit ? RING.offLit : RING.off);
   }
+  // the dive: the stamina ring kept, a thin one just inside the air (hatched where hunger caps it)
+  if (dv) {
+    const so = ri - 1, si = Math.max(1.5, ri - Math.max(1.4, S / 36) - 1);
+    const sf = opts.stamina ?? 1, sc = opts.staminaMax ?? 1;
+    const sCol = opts.winded && Math.floor(T * 4) % 2 === 0 ? RING.r : sf < 0.25 ? RING.r : sf < 0.5 ? RING.a : RING.g;
+    for (let Y = Math.floor(cy - so - 1); Y <= cy + so + 1; Y++) for (let X = Math.floor(cx - so - 1); X <= cx + so + 1; X++) {
+      const dx = X + 0.5 - cx, dy = Y + 0.5 - cy, d = Math.hypot(dx, dy);
+      if (d > so || d < si) continue;
+      let a = Math.atan2(dy, dx) - a0r;
+      while (a < 0) a += Math.PI * 2;
+      if (a > span) continue;
+      const u = a / span, si2 = Math.floor(u * seg);
+      if ((u * seg - si2) > 0.72) continue;
+      const on = (si2 + 0.5) / seg <= sf, locked = (si2 + 0.5) / seg > sc;
+      px(X, Y, on ? sCol[1] : locked ? (((X + Y) & 1) ? RING.lockHatch : RING.lock) : lit ? RING.offLit : RING.off);
+    }
+  }
 
-  const face: WatchFace | 'timer' = !clock ? 'timer' : opts.face ?? 'time';
+  const face: WatchFace | 'timer' | 'dive' = !clock ? 'timer' : dv ? 'dive' : opts.face ?? 'time';
   const big = Rs * 2 >= 26;
   const lab = S >= 40;
-  if (face === 'timer') {
+  if (face === 'dive' && dv) {
+    // a dive computer: the air left in tiny digits over a little tank, the depth big, the time under it
+    const low = dv.air < 0.15, blink = low && Math.floor(T * 3) % 2 === 0;
+    const pct = `${Math.max(0, Math.round(dv.air * 100))}`;
+    const ty = Math.round(cy - Rs * (lab ? 0.5 : 0.56));
+    const tw = 4 + tinyW(pct);
+    const tx = Math.round(cx - tw / 2);
+    tank(tx, ty, blink ? RING.r[1] : low ? RING.a[1] : RING.air[1]);
+    tinyText(tx + 4, ty, pct, blink ? RING.r[1] : low ? RING.a[1] : ink, 1);
+    const m10 = Math.round(dv.depth);
+    bigDigits(`${m10}M`, cx, cy + (lab ? 1 : 0), ink);
+    if (lab) {
+      const hh = Math.floor(hour), mm = Math.floor((hour - hh) * 60), h12 = ((hh + 11) % 12) + 1;
+      const tt = `${h12}:${String(mm).padStart(2, '0')}`;
+      tinyText(Math.round(cx - tinyW(tt) / 2), Math.round(cy + Rs * 0.38), tt, dim, 1);
+      // a bubble or two rising off the depth, now and then
+      const bu = (T * 0.7) % 1;
+      if (bu < 0.6) px(Math.round(cx + Rs * 0.42 + Math.sin(T * 5) * 0.6), Math.round(cy - Rs * 0.05 - bu * Rs * 0.4), dim);
+    }
+  } else if (face === 'timer') {
     const secs = Math.max(0, Math.ceil(left * (opts.secs ?? 10)));
     const txt = secs >= 60 ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}` : String(secs).padStart(2, '0');
     if (lab) tinyText(cx - tinyW('TIMER') / 2, Math.round(cy - Rs * 0.56), 'TIMER', dim, 1);
@@ -560,6 +612,10 @@ export function drawWatch(ctx: CanvasRenderingContext2D, x: number, y: number, s
   function heart(X: number, Y: number, beat: boolean) {
     const rows = beat ? ['.##.##.', '#######', '#######', '.#####.', '..###..', '...#...'] : ['.......', '.##.##.', '.#####.', '..###..', '...#...', '.......'];
     rows.forEach((row, yy) => { for (let xx = 0; xx < 7; xx++) if (row[xx] === '#') px(X + xx - 1, Y + yy - 1, (xx + yy) < 4 ? '#ff8a8a' : '#e03a3a'); });
+  }
+  /** a tiny tank: a 3x5 cylinder with its valve */
+  function tank(X: number, Y: number, c: string) {
+    ['.#.', '###', '#.#', '###', '###'].forEach((row, yy) => { for (let xx = 0; xx < 3; xx++) if (row[xx] === '#') px(X + xx, Y + yy, c); });
   }
   function bolt(X: number, Y: number, c: string) {
     for (const [dx, dy] of [[2, 0], [1, 1], [0, 2], [1, 2], [2, 2], [1, 3], [0, 4]]) px(X + dx, Y + dy, c);

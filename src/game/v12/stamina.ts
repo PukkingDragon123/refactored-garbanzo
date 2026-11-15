@@ -22,7 +22,10 @@ const CATCH = 0.7;
 /** seconds winded once it hits empty */
 const WINDED = 3.2;
 
-const st = { s: 1, catchT: 0, winded: 0, bpm: 66, emptyAt: -1, lowWarned: false };
+const st = { s: 1, catchT: 0, winded: 0, bpm: 66, emptyAt: -1, lowWarned: false, swimK: 1 };
+/** V12 the kelp dive (src/game/v12/dive/air.ts): breathing off a full tank, finning along is easy work;
+ *  a multiplier on the swim drain (1 = holding his breath, the old way) */
+export function setSwimDrain(k: number) { st.swimK = clamp(k, 0, 2); }
 type Listener = (e: 'winded' | 'recovered' | 'low') => void;
 const fns: Listener[] = [];
 export function onStamina(fn: Listener): () => void { fns.push(fn); return () => { const i = fns.indexOf(fn); if (i >= 0) fns.splice(i, 1); }; }
@@ -46,7 +49,7 @@ export function tickStamina(dt: number, p: Player, act: StaminaAct, live: boolea
   if (live) {
     if (p.running) drain = DRAIN.sprint;
     else if (act === 'climb') drain = DRAIN.climb;
-    else if (act === 'swim') drain = DRAIN.swim;
+    else if (act === 'swim') drain = DRAIN.swim * st.swimK;
     else if (act === 'wade') drain = DRAIN.wade;
   }
   if (drain > 0) {

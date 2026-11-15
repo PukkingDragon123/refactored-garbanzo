@@ -29,6 +29,7 @@ const TAU = Math.PI * 2;
 const K = (b: Build) => b.torso / 15;
 const add2 = (p: P2, x: number, y: number): P2 => [p[0] + x, p[1] + y];
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+const frac = (v: number) => v - Math.floor(v);
 const smooth = (u: number) => { u = clamp01(u); return u * u * (3 - 2 * u); };
 const shoulder = (b: Build, hip: P2, lean: number): P2 => { const T = b.torso - b.shY; return [hip[0] + Math.sin(lean) * T, hip[1] + Math.cos(lean) * T]; };
 
@@ -140,6 +141,57 @@ function throwP(b: Build, t: number, kind: string): Pose {
   return p;
 }
 
+// ------------------------------------------------------------------ under water (V12 the kelp dive)
+// diveSwim     the diver's trim: nearly level, hands folded under the chest, a slow flutter kick from
+//              the hips (the fins do the work); the player's swim clip while he wears the dive kit
+// armSwimHarpoon / armSwimHarpoonE   the speargun out in front at arm's length, both hands on it,
+//              level in the water, a slow kick to hold station ('E': the shaft is out on its line)
+function diveBody(b: Build, t: number, kick = 1): Pose {
+  const k = K(b), i = TAU * t, lean = 1.5;
+  const hip: P2 = [-3 * k, b.hipH * 0.55 + Math.sin(i) * 0.25 * k];
+  const ax: P2 = [Math.sin(lean), Math.cos(lean)], belly: P2 = [Math.cos(lean), -Math.sin(lean)];
+  const leg = (b.thigh + b.shin) * 0.94;
+  // the flutter: each leg sweeps up and down about the line of the body, out of phase, the ankles soft
+  const foot = (ph: number): P2 => {
+    const sw = Math.sin(i + ph) * 2.2 * k * kick;
+    return [hip[0] - ax[0] * leg + belly[0] * sw, hip[1] - ax[1] * leg + belly[1] * sw + 0.6 * k];
+  };
+  const p: Pose = {
+    hip, lean,
+    fa: { a: 0, e: 0, hand: 'relax' }, ba: { a: 0, e: 0, hand: 'relax' },
+    // (the toes pointed back along the line of the legs: the fins trail and flex with the kick)
+    fl: { f: foot(0), fa: Math.PI - 0.12 + Math.cos(i) * 0.22 * kick }, bl: { f: foot(Math.PI), fa: Math.PI - 0.12 - Math.cos(i) * 0.22 * kick },
+    hd: [0.7 * k, -1.1 * k],
+    sway: 0.1,
+    // turned more side-on than on land, so the level body reads level (and the tank rides on top)
+    flags: { hair: 1, yaw: 0.42 },
+  };
+  return p;
+}
+function diveSwimP(b: Build, t: number): Pose {
+  const k = K(b), p = diveBody(b, t);
+  const s = shoulder(b, p.hip, p.lean);
+  // the arms back along the flanks, hands by the hips, drifting a little with the kick
+  const dr = Math.sin(TAU * t + 1) * 0.35 * k;
+  p.fa = { ik: add2(s, -9.6 * k + dr, -3.4 * k), hand: 'relax' };
+  p.ba = { ik: add2(s, -8.8 * k + dr, -2.6 * k), hand: 'relax' };
+  return p;
+}
+function swimAimP(b: Build, t: number, loaded: boolean): Pose {
+  const k = K(b), p = diveBody(b, t, 0.45);
+  const s = shoulder(b, p.hip, p.lean), br = Math.sin(TAU * t) * 0.15;
+  // both arms out ahead past the head: the trigger hand on the grip, the other forward on the stock
+  p.fa = { ik: add2(s, 8.4 * k, -2.0 * k + br), hand: 'grip' };
+  p.ba = { ik: add2(s, 11.6 * k, -1.5 * k + br), hand: 'grip' };
+  p.front = ['armF'];
+  p.held = { kind: loaded ? 'arm:harpoon' : 'arm:harpoonE', t };
+  p.flags = { ...(p.flags ?? {}), zN: 0.8, zF: 0.2 };
+  return p;
+}
+registerAnim7('diveSwim', { frames: 16, fps: 8, loop: true }, (b, t) => diveSwimP(b, t));
+registerAnim7('armSwimHarpoon', { frames: 16, fps: 8, loop: true }, (b, t) => swimAimP(b, t, true));
+registerAnim7('armSwimHarpoonE', { frames: 16, fps: 8, loop: true }, (b, t) => swimAimP(b, t, false));
+
 const W = (n: string) => n[0].toUpperCase() + n.slice(1);
 for (const kind of ['flare', 'spray']) registerAnim7('armAim' + W(kind), { frames: 16, fps: 8, loop: true, talk: 'armAim' + W(kind) }, (b, t) => aimP(b, t, kind));
 for (const kind of ['net', 'tranq']) registerAnim7('armShoulder' + W(kind), { frames: 16, fps: 8, loop: true, talk: 'armShoulder' + W(kind) }, (b, t) => shoulderP(b, t, kind));
@@ -155,6 +207,7 @@ export function armClips(id: string): [string, string, string | null] {
     case 'spray': return ['armAimSpray', 'armAimSpray', null];
     case 'net': return ['armShoulderNet', 'armShoulderNet', null];
     case 'tranq': return ['armShoulderTranq', 'armShoulderTranq', null];
+    case 'harpoon': return ['armSwimHarpoon', 'armSwimHarpoon', 'armSwimHarpoonE'];
     case 'bolas': return ['armReadyBolas', 'armWhirlBolas', 'armThrowBolas'];
     default: return ['armReadyBangers', 'armWhirlBangers', 'armThrowBangers'];
   }
@@ -243,6 +296,51 @@ function longGun(s: Scene3D, J: J3, hN: HandFrame | null, hF: HandFrame | null, 
 }
 HELD7['arm:net'] = (s, J, _P, _ch, hN, hF, pts) => longGun(s, J, hN, hF, pts, true);
 HELD7['arm:tranq'] = (s, J, _P, _ch, hN, hF, pts) => longGun(s, J, hN, hF, pts, false);
+
+/**
+ * The rubber speargun (bpdata 'speargun'): a teak stock with a pistol grip and trigger, two red rubber
+ * bands looped from the muzzle to the shaft's notches, the line reel under the stock, and the steel
+ * shaft along the top with its flint tip and flopper (loaded); the blunt bang-head rides in a clip on
+ * the muzzle. Points: 'muzzle' (where the shaft leaves), 'tip' (the loaded shaft's point).
+ */
+const TEAK = R6('#1e0e06', '#3e1e0c', '#643416', '#8c5228', '#b0743e', '#d8a066');
+const BAND = R6('#2a0404', '#5e0c08', '#9a1a10', '#cc3020', '#ec5a3a', '#ffa080');
+const FLINT = R6('#121216', '#24242a', '#3a3a42', '#55555e', '#7a7a84', '#c8c8d0');
+function speargun(s: Scene3D, J: J3, hN: HandFrame | null, hF: HandFrame | null, pts: Pts, loaded: boolean) {
+  const a = hN ? hN.grip : J.wrN, b = hF ? hF.grip : J.wrF;
+  const d = vnorm(vadd(vsc(vnorm(vsub(b, a)), 0.35), vsc(level(J), 0.65)));
+  const [X, Y] = frame(d);
+  void b;
+  s.layer = 1;
+  // the stock: from behind the grip to the muzzle, the butt rounded off
+  const st0 = P(a, X, Y, -3.6, 0.9), st1 = P(a, X, Y, 17, 0.9);
+  s.limb(st0, st1, 0.95, 0.8, G.gun, h => (h.t > 0.97 ? cel(STEEL, h.l, 0.1, true) : cel(TEAK, h.l, frac(h.t * 7 + h.q[1] * 0.2) < 0.12 ? -0.25 : 0.06, true)));
+  // the pistol grip and the trigger in its guard
+  s.limb(P(a, X, Y, 0.2, 0.6), P(a, X, Y, -0.8, -2.0), 0.72, 0.66, G.gun2, m(TEAK, -0.05));
+  s.limb(P(a, X, Y, 1.0, 0.0), P(a, X, Y, 1.3, -1.0), 0.22, 0.22, G.gun3, m(STEEL, 0.2, true));
+  // the line reel under the stock, the line wound on it
+  s.ellipsoid(P(a, X, Y, 3.0, -0.6), vsc(X, 0.9), vsc(Y, 0.9), vsc(vcross(X, Y), 0.55), G.gun2, h => (Math.hypot(h.q[0], h.q[1]) < 0.55 ? cel(CORD, h.l, 0.1) : cel(BLACK, h.l, 0.2)));
+  // the muzzle block, the bands looped from it
+  s.ellipsoid(P(a, X, Y, 17, 1.0), vsc(X, 0.8), vsc(Y, 1.0), vsc(vcross(X, Y), 1.0), G.gun3, m(BLACK, 0.15));
+  // (cocked: stretched back to the shaft's notches over the grip; fired: hanging slack off the muzzle)
+  for (const z of [-0.6, 0.6]) {
+    const n0 = vadd(P(a, X, Y, 17, 1.6), vsc(vcross(X, Y), z));
+    const n1 = loaded ? vadd(P(a, X, Y, 2.4, 2.0), vsc(vcross(X, Y), z * 0.3)) : vadd(P(a, X, Y, 14.6, -0.6), vsc(vcross(X, Y), z * 1.2));
+    s.limb(n0, n1, 0.36, 0.32, G.gun3, m(BAND, 0.1, true));
+  }
+  // the bang-head in its clip on the side of the muzzle: a blunt steel knob
+  s.ellipsoid(P(a, X, Y, 15.8, -0.3), vsc(X, 0.9), vsc(Y, 0.65), vsc(vcross(X, Y), 0.65), G.gun3, m(STEEL, 0.25, true));
+  pts.muzzle = P(a, X, Y, 17.8, 1.7);
+  if (loaded) {
+    // the shaft along the top: steel, the flint point and its flopper past the muzzle
+    s.limb(P(a, X, Y, -1.4, 1.75), P(a, X, Y, 19.4, 1.75), 0.26, 0.26, G.gun3, m(STEEL, 0.15, true));
+    s.limb(P(a, X, Y, 19.2, 1.75), P(a, X, Y, 21.6, 1.75), 0.48, 0.05, G.gun3, m(FLINT, 0.1, true));
+    pts.tip = P(a, X, Y, 21.6, 1.75);
+  }
+  s.layer = 0;
+}
+HELD7['arm:harpoon'] = (s, J, _P, _ch, hN, hF, pts) => speargun(s, J, hN, hF, pts, true);
+HELD7['arm:harpoonE'] = (s, J, _P, _ch, hN, hF, pts) => speargun(s, J, hN, hF, pts, false);
 
 /** three stones in leather netting on cords from a knot: hanging (ready) or swung round (up) */
 function bolas(s: Scene3D, J: J3, hN: HandFrame | null, pts: Pts, up: boolean, t: number) {

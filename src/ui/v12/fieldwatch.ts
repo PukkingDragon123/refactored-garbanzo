@@ -13,6 +13,8 @@
 //   QUEST       the objective he's working on
 //   NOTEBOOK, BACKPACK, CAMERA  shortcuts (the watch goes away and the thing opens)
 //   LIGHT       the backlight left on
+//   DIVE        (V12, only on the kelp dive, and the screen it opens on there) a dive computer: the depth
+//               in big segment digits, the air left as a segmented gauge and a tank, LOW AIR blinking
 // Picking CLOCK, BODY or SUN also sets what the small watch on the HUD shows. The world softens behind
 // it and freezes, like the notebook. No hands: the watch floats on its own.
 
@@ -29,6 +31,7 @@ import { stamina, staminaMax, isWinded, heartRate } from '../../game/v12/stamina
 import { hunger, hungerWord } from '../../game/v12/hunger';
 import { DUSK_HOUR, DARK_HOUR } from '../../game/v12/clock';
 import { trackedQuest, currentStepIndex } from '../../game/quests';
+import { WATCH_DIVE } from './watch';
 
 // ---------------------------------------------------------------- palette
 const H = (s: string) => hex(s);
@@ -47,7 +50,7 @@ const D = {
 const W = 312, HGT = 320, CX = 156, CY = 160, R = 96, RB = R * 0.86, RS = R * 0.7;
 
 // ---------------------------------------------------------------- the apps
-type AppId = 'clock' | 'body' | 'sun' | 'compass' | 'quest' | 'notebook' | 'backpack' | 'camera' | 'light';
+type AppId = 'clock' | 'body' | 'sun' | 'compass' | 'quest' | 'notebook' | 'backpack' | 'camera' | 'light' | 'dive';
 interface App { id: AppId; name: string; icon: string[]; col: C }
 // 11 x 11 icons, '#' the colour, '+' a highlight, 'o' a dark detail
 const APPS: App[] = [
@@ -61,6 +64,9 @@ const APPS: App[] = [
   { id: 'camera', name: 'CAMERA', col: H('#c8d0d8'), icon: ['...........', '...###.....', '.#########.', '#####.#####', '####.o.####', '###.ooo.###', '####.o.####', '#####.#####', '###########', '...........', '...........'] },
   { id: 'light', name: 'LIGHT', col: H('#9af0e0'), icon: ['....###....', '...#####...', '..#######..', '..#######..', '..#######..', '...#####...', '....###....', '....###....', '....###....', '.....#.....', '...........'] },
 ];
+
+// (V12 the dive computer, first while he's on the kelp dive)
+const DIVE_APP: App = { id: 'dive', name: 'DIVE', col: H('#5cf0f0'), icon: ['....#......', '...###.....', '..#####....', '..#...#....', '..#####..#.', '..#...#.#.#', '..#####..#.', '..#...#....', '..#####..#.', '...###..#.#', '.........#.'] };
 
 export interface FieldWatchOpts {
   /** the HUD watch's screen rect: the big one comes up from there and goes back to it */
@@ -90,6 +96,8 @@ class FieldWatch {
   private buf: PixelBuffer;
   private k = 2;
   private screen: 'menu' | AppId = 'menu';
+  /** the apps on the carousel (the dive computer joins them under water) */
+  private apps: App[] = WATCH_DIVE.live?.() ? [DIVE_APP, ...APPS] : APPS;
   private sel = 0;
   private pos = 0;
   private press: Record<string, number> = {};
@@ -116,7 +124,8 @@ class FieldWatch {
     paintBody(this.base);
     this.buf = new PixelBuffer(W, HGT);
     const face = game.save?.vars?.['hud:watchFace'] ?? 0;
-    this.sel = Math.max(0, APPS.findIndex(a => a.id === (['clock', 'body', 'sun'] as AppId[])[face]));
+    this.sel = this.apps[0] === DIVE_APP ? 0 : Math.max(0, this.apps.findIndex(a => a.id === (['clock', 'body', 'sun'] as AppId[])[face]));
+    if (this.apps[0] === DIVE_APP) this.screen = 'dive';
     this.pos = this.sel;
     game.ui.modalLayer.appendChild(this.root);
     game.ui.modalOpen++;
@@ -171,12 +180,12 @@ class FieldWatch {
   }
   private nav(d: number) {
     if (this.screen !== 'menu') { if (this.screen === 'quest' || this.screen === 'body') return; this.screen = 'menu'; }
-    this.sel = (this.sel + d + APPS.length) % APPS.length;
+    this.sel = (this.sel + d + this.apps.length) % this.apps.length;
     audio.play('ui', { vol: 0.06, pitch: 3.6 });
   }
   private select() {
     if (this.screen !== 'menu') { this.back(); return; }
-    const a = APPS[this.sel];
+    const a = this.apps[this.sel];
     audio.play('ui', { vol: 0.1, pitch: 2.8 });
     setTimeout(() => audio.play('ui', { vol: 0.08, pitch: 3.6 }), 80);
     if (a.id === 'notebook') { this.close(() => { void import('./notebook').then(m => m.openNotebook({})); }); return; }
@@ -250,7 +259,7 @@ class FieldWatch {
     if (!this.coveredOn && !this.closing && T > 0.45) { this.coveredOn = true; game.covered++; }
     for (const k of Object.keys(this.press)) this.press[k] = Math.max(0, this.press[k] - dt);
     this.pos += (this.sel - this.pos) * Math.min(1, dt * 14);
-    if (Math.abs(this.sel - this.pos) > APPS.length / 2) this.pos = this.sel;
+    if (Math.abs(this.sel - this.pos) > this.apps.length / 2) this.pos = this.sel;
     const b = this.buf;
     b.data.set(this.base.data);
     paintPushers(b, this.press);
@@ -280,6 +289,7 @@ class FieldWatch {
     else if (this.screen === 'sun') this.appSun(b, T, hour);
     else if (this.screen === 'compass') this.appCompass(b, T, dt);
     else if (this.screen === 'quest') this.appQuest(b);
+    else if (this.screen === 'dive') this.appDive(b, T);
     // the stamina ring round every screen (hatched where hunger locks it; red and blinking winded)
     ring(b, stamina(), staminaMax(), isWinded() && Math.floor(T * 4) % 2 === 0, lit);
     // the hint along the bottom
@@ -288,11 +298,11 @@ class FieldWatch {
 
   private menu(b: PixelBuffer, T: number) {
     // the carousel: the picked app big in a frame, its neighbours smaller and fading above and below
-    const n = APPS.length;
+    const n = this.apps.length;
     for (let off = -2; off <= 2; off++) {
       let i = Math.round(this.pos) + off;
       i = ((i % n) + n) % n;
-      const a = APPS[i];
+      const a = this.apps[i];
       const dy = (i - this.pos + n * 10) % n;
       const rel = dy > n / 2 ? dy - n : dy;
       const y = CY + rel * 30;
@@ -385,6 +395,38 @@ class FieldWatch {
     for (let i = 0; i < 5; i++) for (let y = 0; y < 4; y++) for (let x = 0; x < 5; x++) b.set(CX - 26 + i * 7 + x, CY + 22 + y, i < pips ? (hu > 0.65 ? D.amber : D.green) : D.faint);
     txt(b, hungerWord(hu).toUpperCase(), CX + 12, CY + 22, 'tiny', hu > 0.65 ? D.amber : D.ink);
     void T;
+  }
+
+  private appDive(b: PixelBuffer, T: number) {
+    const dv = WATCH_DIVE.live?.();
+    title(b, 'DIVE', D.blue);
+    if (!dv) { txt(b, 'ON THE SURFACE', CX - pxMeasure('ON THE SURFACE', 'tiny') / 2, CY, 'tiny', D.dim); return; }
+    // the depth, big
+    txt(b, 'DEPTH', CX - 44, CY - 38, 'tiny', D.dim);
+    const dStr = String(Math.round(dv.depth));
+    segText(b, dStr, CX - 6, CY - 18, 11, 22, 3, D.ink, false);
+    txt(b, 'M', CX - 6 + (dStr.length * 13) / 2 + 3, CY - 14, 'bold', D.blue);
+    // the air: a tank and a long segmented gauge, the percentage
+    const air = dv.air, low = air < 0.15, blink = low && Math.floor(T * 3) % 2 === 0;
+    const col = low ? (blink ? D.red : D.amber) : air < 0.3 ? D.amber : H('#5cf0f0');
+    const tx = CX - 44, ty = CY + 4;
+    // the tank: a valve, a domed shoulder, the body filled to its level
+    for (let y = 0; y < 18; y++) for (let x = 0; x < 9; x++) {
+      const dome = y < 3 && (x === 0 || x === 8 || (y === 0 && (x < 2 || x > 6)));
+      if (dome) continue;
+      const edge = x === 0 || x === 8 || y === 0 || y === 17 || (y < 3 && (x === 1 || x === 7));
+      const lvl = 17 - Math.round(air * 15);
+      b.set(tx + x, ty + y, edge ? D.dim : y >= lvl ? ((x + y) % 4 === 0 ? shadeOf(col) : col) : D.faint);
+    }
+    for (let x = 3; x < 6; x++) { b.set(tx + x, ty - 1, D.dim); b.set(tx + x, ty - 2, D.dim); }
+    txt(b, low ? 'LOW AIR!' : 'AIR', CX - 30, CY + 4, 'tiny', low ? (blink ? D.red : D.amber) : D.dim);
+    for (let i = 0; i < 24; i++) {
+      const x = CX - 30 + i * 3, on = (i + 0.5) / 24 <= air;
+      for (let y = CY + 14; y < CY + 20; y++) { b.set(x, y, on ? (y < CY + 17 ? col : shadeOf(col)) : D.faint); b.set(x + 1, y, on ? (y < CY + 17 ? col : shadeOf(col)) : D.faint); }
+    }
+    const pct = `${Math.max(0, Math.round(air * 100))}%`;
+    txt(b, pct, CX + 44 - pxMeasure(pct, 'bold'), CY + 22, 'bold', blink ? D.red : D.ink);
+    if (low) txt(b, 'TO THE LADDER', CX - pxMeasure('TO THE LADDER', 'tiny') / 2, CY + 34, 'tiny', blink ? D.red : D.amber);
   }
 
   private appSun(b: PixelBuffer, T: number, hour: number) {

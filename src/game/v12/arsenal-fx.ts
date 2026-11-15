@@ -222,6 +222,37 @@ export function armFrames(): FrArm {
   return FR;
 }
 
+// ================================================================== V12 the speargun under water (arsenal-harpoon.ts)
+interface FrHarp { shock: Frame[]; silt: Frame[] }
+let hOwner: unknown = null;
+let HF: FrHarp | null = null;
+/** the bang-head's shock ring in the water (five frames, opening out and breaking up), silt motes */
+export function harpoonFrames(): FrHarp {
+  if (HF && hOwner === local) return HF;
+  hOwner = local;
+  const shock: Frame[] = [];
+  for (let f = 0; f < 5; f++) {
+    const R = 4 + f * 4, W = R * 2 + 5;
+    const b = new PixelBuffer(W, W);
+    const c = W / 2;
+    // a hand-broken ring: an inner pale edge, a blue outer one, gaps opening as it spreads
+    for (let a = 0; a < 96; a++) {
+      const an = (a / 96) * Math.PI * 2;
+      const gap = Math.sin(an * 5 + f * 1.7) > 0.55 - f * 0.18;
+      if (gap && f > 0) continue;
+      const x = Math.round(c - 0.5 + Math.cos(an) * R), y = Math.round(c - 0.5 + Math.sin(an) * R * 0.86);
+      b.set(x, y, hex(f < 2 ? '#ffffff' : '#d4f4ff'));
+      if (f < 4) b.set(Math.round(c - 0.5 + Math.cos(an) * (R + 1)), Math.round(c - 0.5 + Math.sin(an) * (R + 1) * 0.86), hex('#6ac0e4'));
+    }
+    if (f === 0) { for (const [x, y] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) b.set(Math.round(c) + x, Math.round(c) + y, hex('#ffffff')); }
+    shock.push(local.add('v12harp:shock' + f, b, c, c));
+  }
+  // stirred-up silt: a sandy mote, a dark grain, a pale fleck
+  const silt = ['#c8b48a', '#8a7a5a', '#e8dcc0'].map((col, i) => local.add('v12harp:silt' + i, buf(i === 0 ? 2 : 1, 1, i === 0 ? [[0, 0, col], [1, 0, '#a8946a']] : [[0, 0, col]]), 0.5, 0.5));
+  HF = { shock, silt };
+  return HF;
+}
+
 // ================================================================== the things in the air and on the ground
 interface Throw { x: number; y: number; vx: number; vy: number; t: number; owner: string; dead: boolean; spin: number }
 interface Wrap { a: Animal; t: number; seed: number }

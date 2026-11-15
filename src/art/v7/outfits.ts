@@ -11,6 +11,8 @@
 //  ship        the everyday ship clothes aboard the Kittiwake (outfits-ship.ts); 'shipPhones' is the
 //              same with Jenna's cat-ear headphones on her head
 //  storm       foul-weather gear: oilskins with a hard sheen, a life-jacket harness, sea boots, hoods up
+//  wetsuit     (Mori, under water) the patched wetsuit alone; 'dive' the wetsuit with the tank, mask,
+//              regulator and fins (outfits-dive.ts)
 // An outfit rebuilds the character (bulkier volumes, new part materials, gear as extras) and gives
 // the head its wear. The facade (index.ts) dresses ids like 'mori@winter' and caches per outfit.
 
@@ -20,11 +22,12 @@ import type { Char7, Part, PartMat, J3 } from './body';
 import type { Pose } from '../people-rig';
 import { CAST7 } from './cast';
 import { SHIP_OUTFITS } from './outfits-ship';
+import { DIVE_OUTFITS } from './outfits-dive';
 import type { HeadWear7, Lock } from './head';
 import { R6, PAL, GG, lb, quilt, tape, gloss, furMat, knit, plain, backpack, pouch, radio, ropeCoil, carabiner, knife, collar, onStraps, onSash, tEll, tLimb, beanie, hood, goggles, headlamp, wear, hash2, ropeMat } from './gear';
 import { arohaGear } from './aroha7';
 
-export const OUTFIT_NAMES = ['casual', 'ship', 'shipPhones', 'winter', 'winterHood', 'storm'] as const;
+export const OUTFIT_NAMES = ['casual', 'ship', 'shipPhones', 'winter', 'winterHood', 'storm', 'wetsuit', 'dive'] as const;
 export interface Outfit7 { body(base: Char7): Char7; head?: HeadWear7 }
 
 const L = (p: Part) => p.hit.l;
@@ -338,6 +341,8 @@ export const OUTFITS7: Record<string, Record<string, Outfit7>> = {
 };
 
 for (const [id, o] of Object.entries(SHIP_OUTFITS)) Object.assign(OUTFITS7[id], o);
+// V12 under water (outfits-dive.ts): the patched wetsuit, and the full dive kit
+for (const [id, o] of Object.entries(DIVE_OUTFITS)) Object.assign(OUTFITS7[id], o);
 
 const dressed = new Map<string, Char7>();
 /** a character in an outfit (unknown outfits fall back to their everyday clothes) */

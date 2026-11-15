@@ -146,7 +146,7 @@ defineTalk('hank', () => {
 /** what each weapon costs (a full load comes with it), and a refill of its ammo; items are things Mori
  *  collects in the world (where: the item's own `where`), rp = research points as agency vouchers */
 interface Price { items: [string, number][]; rp?: number }
-export const PRICES: Record<Exclude<WeaponId, 'sling'>, { buy: Price; refill: Price; per: number; patter: string; refillPatter: string }> = {
+export const PRICES: Record<Exclude<WeaponId, 'sling' | 'harpoon'>, { buy: Price; refill: Price; per: number; patter: string; refillPatter: string }> = {
   bolas: { buy: { items: [['rope', 3], ['driftglass', 2]] }, refill: { items: [['rope', 2]] }, per: 2,
     patter: 'Genuine Argentine bolas. Says so on the tag. I wrote the tag. Wraps up the legs of anything.',
     refillPatter: 'Two more bolas. Stones not included. Kidding, stones included.' },
@@ -166,7 +166,7 @@ export const PRICES: Record<Exclude<WeaponId, 'sling'>, { buy: Price; refill: Pr
     patter: 'Dart rifle. Vet grade. A couple darts and they take a little nap. The big ones need a few more.',
     refillPatter: 'Five darts. Sweet dreams, whoever.' },
 };
-const ORDER: Exclude<WeaponId, 'sling'>[] = ['bolas', 'bangers', 'spray', 'flare', 'net', 'tranq'];
+const ORDER: Exclude<WeaponId, 'sling' | 'harpoon'>[] = ['bolas', 'bangers', 'spray', 'flare', 'net', 'tranq'];
 const priceOf = (p: Price): Price => (freeAmmo() ? { items: [] } : p);
 function waresNow() {
   const out: import('../../../ui/v12/wares').Ware[] = [];
@@ -197,7 +197,7 @@ async function openWares(h: TalkHost) {
     have: id => count(id),
     rp: () => game.save.rp ?? 0,
     onBuy: async ware => {
-      const [kind, wid] = ware.key.split(':') as ['buy' | 'ammo', Exclude<WeaponId, 'sling'>];
+      const [kind, wid] = ware.key.split(':') as ['buy' | 'ammo', Exclude<WeaponId, 'sling' | 'harpoon'>];
       const P = kind === 'buy' ? PRICES[wid].buy : priceOf(PRICES[wid].refill);
       if (P.items.some(([id, n]) => count(id) < n) || (P.rp ?? 0) > (game.save.rp ?? 0)) return false;
       for (const [id, n] of P.items) remove(id, n);

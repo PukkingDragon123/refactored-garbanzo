@@ -15,29 +15,42 @@
 //   spray      a burst of bear spray: a hard hiss
 //   snore      a predator asleep (deep, slow)
 //   click      empty: the dry click of nothing
+// V12 the kelp dive (the speargun, src/game/v12/arsenal-harpoon.ts; the tank, src/game/v12/dive/air.ts):
+//   harpoonShot  the bands letting go: a fat rubber thwack and the shaft hissing away through the water
+//   cock         loading: rubber stretching, the band clicking into the shaft's notch
+//   reel         the line reel's ratchet (short; the reel repeats it)
+//   spearHit     the shaft going home: a dull thock
+//   bangHead     the blunt bang-head on a shark's snout: a deep underwater boom
+//   regIn        a breath in through the regulator: the demand valve's hiss   (in his head: the UI bus)
+//   regOut       a breath out: the exhaust's bubbly burble                     (in his head)
+//   regEmpty     sucking on an empty tank: a hiss that chokes off, a rattle     (in his head)
+//   airAlarm     the field watch's dive alarm: two sharp beeps                  (in his head)
 
 import { audio } from '../../core/audio';
 import { game } from '../game';
 
-interface Graph { ctx: AudioContext; sfxBus: GainNode; wSendS: AudioNode; wSendL: AudioNode; white: AudioBuffer; pink: AudioBuffer; brown: AudioBuffer }
+interface Graph { ctx: AudioContext; sfxBus: GainNode; uiBus?: GainNode; wSendS: AudioNode; wSendL: AudioNode; white: AudioBuffer; pink: AudioBuffer; brown: AudioBuffer }
 const graph = (): Graph | null => {
   const g = (audio as unknown as { g: Graph | null }).g;
   return g && g.ctx.state === 'running' ? g : null;
 };
 
-export type SfxArm = 'whirl' | 'wrap' | 'flareShot' | 'flareBurn' | 'bangerPop' | 'netShot' | 'netSnap' | 'tranqShot' | 'dartHit' | 'bolt' | 'spray' | 'snore' | 'click';
+export type SfxArm = 'whirl' | 'wrap' | 'flareShot' | 'flareBurn' | 'bangerPop' | 'netShot' | 'netSnap' | 'tranqShot' | 'dartHit' | 'bolt' | 'spray' | 'snore' | 'click'
+  | 'harpoonShot' | 'cock' | 'reel' | 'spearHit' | 'bangHead' | 'regIn' | 'regOut' | 'regEmpty' | 'airAlarm';
 
 interface V { out: GainNode; nodes: AudioNode[]; g: Graph }
-function voice(g: Graph, vol: number, pan: number, life: number, send = 0.15, long = false): V {
+function voice(g: Graph, vol: number, pan: number, life: number, send = 0.15, long = false, head = false): V {
   const ctx = g.ctx;
   const out = ctx.createGain();
   out.gain.value = vol;
   const nodes: AudioNode[] = [out];
+  // (sounds in his own head, the regulator and the watch, skip the world's underwater muffle)
+  const bus = head && g.uiBus ? g.uiBus : g.sfxBus;
   if (pan && typeof ctx.createStereoPanner === 'function') {
     const p = ctx.createStereoPanner();
     p.pan.value = Math.max(-1, Math.min(1, pan));
-    out.connect(p); p.connect(g.sfxBus); nodes.push(p);
-  } else out.connect(g.sfxBus);
+    out.connect(p); p.connect(bus); nodes.push(p);
+  } else out.connect(bus);
   if (send > 0) {
     const s = ctx.createGain();
     s.gain.value = send;
@@ -99,7 +112,7 @@ function burst(v: V, kind: 'white' | 'pink' | 'brown', t: number, a: number, d: 
 }
 
 const last = new Map<string, number>();
-const THROTTLE: Partial<Record<SfxArm, number>> = { bangerPop: 0.03, flareBurn: 0.2, snore: 1.2, whirl: 0.12 };
+const THROTTLE: Partial<Record<SfxArm, number>> = { bangerPop: 0.03, flareBurn: 0.2, snore: 1.2, whirl: 0.12, reel: 0.2, airAlarm: 0.5, regIn: 0.5, regOut: 0.5 };
 
 /** play one; x (world) pans and fades it with distance from the camera, pitch < 1 is bigger */
 export function sfxArm(name: SfxArm, o: { x?: number; vol?: number; pitch?: number; delay?: number } = {}): void {
@@ -226,6 +239,79 @@ function play(g: Graph, name: SfxArm, vol: number, pan: number, t: number, p: nu
     case 'click': {
       const v = voice(g, 0.3 * vol, pan, 0.2, 0);
       burst(v, 'white', t, 0.0005, 0.012, 0.8, 'bandpass', 3200 * p, null, 4);
+      break;
+    }
+    case 'harpoonShot': {
+      // the bands let go: a fat rubber thwack, a low thump through the stock, the shaft hissing off
+      const v = voice(g, 0.8 * vol, pan, 1.0, 0.25, true);
+      tone(v, 'sine', 140 * p, 46, t, 0.002, 0.18, 1);
+      tone(v, 'triangle', 260 * p, 150 * p, t, 0.001, 0.09, 0.5);
+      burst(v, 'pink', t, 0.001, 0.07, 0.9, 'bandpass', 900 * p, 400, 1.4);
+      burst(v, 'white', t + 0.02, 0.03, 0.5, 0.35, 'bandpass', 2600 * p, 700 * p, 1.2);
+      break;
+    }
+    case 'cock': {
+      // rubber stretched back, creaking, then the wishbone clicking into the notch
+      const v = voice(g, 0.4 * vol, pan, 0.6, 0.05);
+      const o = osc(v, 'sawtooth', 70 * p, t, t + 0.3);
+      o.frequency.linearRampToValueAtTime(130 * p, t + 0.26);
+      const lp = filt(v, 'bandpass', 500 * p, 3);
+      const e = env(v, t, 0.05, 0.35, 0.22);
+      o.connect(lp); lp.connect(e); e.connect(v.out);
+      burst(v, 'white', t + 0.3, 0.0005, 0.02, 0.9, 'bandpass', 2400 * p, null, 3);
+      tone(v, 'triangle', 1500 * p, null, t + 0.3, 0.0005, 0.03, 0.3);
+      break;
+    }
+    case 'reel': {
+      // the reel's ratchet: a run of little clicks
+      const v = voice(g, 0.3 * vol, pan, 0.5, 0);
+      for (let i = 0; i < 5; i++) burst(v, 'white', t + i * 0.038, 0.0005, 0.012, 0.8, 'bandpass', (1900 + (i % 2) * 300) * p, null, 4);
+      break;
+    }
+    case 'spearHit': {
+      const v = voice(g, 0.55 * vol, pan, 0.5, 0.1);
+      tone(v, 'sine', 330 * p, 140 * p, t, 0.001, 0.09, 0.9);
+      burst(v, 'pink', t, 0.0008, 0.04, 0.6, 'lowpass', 1800 * p);
+      break;
+    }
+    case 'bangHead': {
+      // a blunt knob on a shark's snout: a deep boom through the water, a ringing knock in it
+      const v = voice(g, 0.95 * vol, pan, 1.6, 0.35, true);
+      tone(v, 'sine', 90 * p, 32, t, 0.002, 0.5, 1);
+      burst(v, 'brown', t, 0.002, 0.35, 0.9, 'lowpass', 700 * p, 120, 0.8);
+      tone(v, 'triangle', 720 * p, 640 * p, t, 0.001, 0.25, 0.22);
+      break;
+    }
+    case 'regIn': {
+      // the demand valve opening: a rising hiss with a faint whistle in it
+      const v = voice(g, 0.24 * vol, pan, 1.2, 0.02, false, true);
+      burst(v, 'white', t, 0.18, 0.32, 1, 'bandpass', 2400 * p, 3600 * p, 1.6, 0.25);
+      burst(v, 'pink', t, 0.15, 0.3, 0.35, 'lowpass', 900 * p, null, 0.7, 0.25);
+      tone(v, 'sine', 1750 * p, 1900 * p, t + 0.05, 0.15, 0.3, 0.05, 0.2);
+      break;
+    }
+    case 'regOut': {
+      // the exhaust: a low burble, bubbles popping off it
+      const v = voice(g, 0.3 * vol, pan, 1.6, 0.06, false, true);
+      burst(v, 'brown', t, 0.08, 0.6, 1, 'lowpass', 520 * p, 300 * p, 1.2, 0.35);
+      for (let i = 0; i < 9; i++) {
+        const tt = t + 0.06 + Math.random() * 0.8;
+        tone(v, 'sine', (380 + Math.random() * 500) * p, (220 + Math.random() * 120) * p, tt, 0.002, 0.04 + Math.random() * 0.04, 0.22);
+      }
+      break;
+    }
+    case 'regEmpty': {
+      // nothing comes: a hiss that chokes off, the valve rattling
+      const v = voice(g, 0.4 * vol, pan, 1, 0.02, false, true);
+      burst(v, 'white', t, 0.05, 0.12, 0.8, 'bandpass', 3000 * p, 1400 * p, 2);
+      for (let i = 0; i < 4; i++) burst(v, 'white', t + 0.2 + i * 0.07, 0.0005, 0.02, 0.6, 'bandpass', 1600 * p, null, 4);
+      break;
+    }
+    case 'airAlarm': {
+      // the watch: two sharp square beeps
+      const v = voice(g, 0.16 * vol, pan, 0.6, 0, false, true);
+      tone(v, 'square', 2780 * p, null, t, 0.002, 0.07, 1, 0.05);
+      tone(v, 'square', 2780 * p, null, t + 0.17, 0.002, 0.07, 1, 0.05);
       break;
     }
   }

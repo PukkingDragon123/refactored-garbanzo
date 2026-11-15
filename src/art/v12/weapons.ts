@@ -8,6 +8,8 @@
 //   w_netgun   (2x1) the net launcher: an olive canister on a pistol grip, the net folded in its mouth
 //   w_tranq    (2x1) the dart rifle: walnut stock, blued receiver, a little scope, darts in a loop
 //   w_spray    (1x1) bear spray: a black can, a hi-vis label with claw marks, the orange trigger cap
+//   w_speargun (2x1) V12 Jenna's rubber speargun: a teak stock with a pistol grip, two red bands to the
+//              shaft's notch, the steel shaft with its knapped flint point, the line reel, the bang-head
 
 import { artGroup, fp, IP, RP, H, rp, hash, noise2, bez, clamp } from '../v11/items/kit';
 import type { Pt, Mask } from '../v11/items/kit';
@@ -187,6 +189,39 @@ art('w_spray', fp(1, 1), p => {
   p.tube([[9.4, 6.2], [15.6, 5.2]], 0.55, rp('#5a5a5a', '#8a8a8a', '#b8b8b8', '#dedede', '#f4f4f4', '#ffffff'), { lift: 1 });
   p.glint(8, 11, H('#c8c8e8'), 0);
   p.glint(10, 3, H('#fff0d0'), 0.4);
+});
+
+// ------------------------------------------------------------------ rubber speargun (2x1)
+const TEAK = rp('#1c0c04', '#3e1e0a', '#643414', '#8c5226', '#b4763c', '#e8b47a');
+const BANDR = rp('#2a0404', '#5e0c08', '#9a1a10', '#cc3020', '#ee5c3c', '#ffb898');
+art('w_speargun', fp(2, 1), p => {
+  // the two rubbers first (behind the shaft): from the muzzle back to the notch, a slight sag
+  for (const dy of [-0.6, 0.6]) p.tube(bez([41, 9.6 + dy], [30, 7.2 + dy], [19, 8.4 + dy], 10), 0.75, BANDR, { lift: 0.4, spec: 0.94 });
+  // the teak stock: a long slab with a rounded butt, the grain along it
+  p.tube([[3, 11.6], [41, 11.6]], 1.9, TEAK, { lift: 0.25, spec: 0.93, cap: 'round', tex: (x, y) => (noise2(x * 0.25, y * 1.8, 7) > 0.64 ? -0.4 : 0) });
+  // the pistol grip, raked back, the trigger and its guard
+  p.tube([[13, 12.6], [10.6, 20.4]], 1.7, TEAK, { lift: 0.2, cap: 'round', tex: (x, y) => (((y + x) % 3) === 0 ? -0.35 : 0) });
+  const guard: Pt[] = [];
+  for (let i = 0; i <= 8; i++) { const a = Math.PI * (0.05 + (i / 8) * 0.95); guard.push([15.4 + Math.cos(a) * 2.4, 13.4 + Math.sin(a) * 2.6]); }
+  p.tube(guard, 0.45, RP.steel, { lift: 0.6 });
+  p.tube([[15.2, 13], [15.8, 15.6]], 0.45, RP.chrome, { lift: 0.8 });
+  // the line reel under the stock: a black spool, the line wound on it
+  p.ball(24, 15.6, 2.6, 2.4, RP.iron, { lift: 0.4 });
+  const spool = p.maskEllipse(24, 15.6, 1.6, 1.5);
+  p.fill(spool, (x, y) => ((x + y * 2) % 3 === 0 ? RP.cream[2] : RP.cream[4]));
+  // the muzzle block and the bang-head clipped under it: a blunt steel knob
+  p.tube([[40, 10.4], [43.4, 10.4]], 2.3, RP.iron, { lift: 0.3, cap: 'flat' });
+  p.ball(39.4, 15.4, 1.5, 1.5, RP.chrome, { lift: 0.7 });
+  p.tube([[39.4, 13.4], [39.4, 14.2]], 0.5, RP.iron, { lift: 0.5 });
+  // the shaft along the top: steel, the notch, and the knapped flint point with its flopper
+  p.tube([[5, 8.4], [43, 8.4]], 0.55, RP.chrome, { lift: 0.6, spec: 0.9, cap: 'flat' });
+  const pt = p.maskPoly([43, 7, 47.4, 8.4, 43, 9.8]);
+  p.relief(pt, rp('#141418', '#24242a', '#38383e', '#55555e', '#7a7a84', '#d0d0d8'), p.dome(pt, 1.2), { lift: 0.4, spec: 0.9, tex: (x, y) => (hash(x, y, 3) > 0.7 ? 0.3 : 0) });
+  p.tube([[42, 8.4], [40, 6.6]], 0.35, RP.steel, { lift: 0.6 });
+  // the line from the reel up to the shaft's tail
+  p.tube(bez([24, 13.2], [14, 11], [5.4, 8.4], 8), 0.3, RP.cream, { lift: 0.8 });
+  p.glint(30, 10, H('#ffe8c8'), 0.3);
+  p.glint(45, 8, H('#ffffff'), 0);
 });
 
 void (null as unknown as Mask);

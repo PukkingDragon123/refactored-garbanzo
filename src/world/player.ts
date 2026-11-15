@@ -17,6 +17,13 @@ import { carrySpeedK } from '../game/v11/carry';
 /** ground acceleration and braking (px/s^2): about a step to get up to his walk, a short stop */
 const ACCEL = 190;
 const DECEL = 260;
+/** V12 under water: the fins' kick (src/game/v10/campgear.ts gearFx.swimSpeed) and the dive gear (the
+ *  diver's outfit, src/game/v12/dive/air.ts diveWear), loaded lazily (they import the game) */
+type GearMod = typeof import('../game/v10/campgear');
+type DiveMod = typeof import('../game/v12/dive/air');
+let gearMod: GearMod | null = null, diveMod: DiveMod | null = null;
+void import('../game/v10/campgear').then(m => { gearMod = m; }).catch(() => {});
+void import('../game/v12/dive/air').then(m => { diveMod = m; }).catch(() => {});
 /** the jump's wind-up (s) */
 const JUMP_PREP = 0.075;
 /** the turn round on the spot (s): the turn clip's length */
@@ -434,20 +441,27 @@ export class Player implements Drawable {
     const inp = game.input;
     const ax = canControl ? inp.axisX() : 0;
     const ay = canControl ? (inp.down('down') ? 1 : 0) - (inp.down('up') || inp.down('jump') ? 1 : 0) : 0;
-    const sp = 50 * this.loadK * Math.max(0.6, this.staminaK);
-    this.vx = approach(this.vx, ax * sp, 90 * dt);
-    this.vy = approach(this.vy, ay * sp + 4, 90 * dt);
+    // V12: Shift kicks hard (fast, loud, it burns stamina and, on the dive, air); fins push him along
+    this.running = canControl && !this.noSprint && !this.winded && !this.camera && (ax !== 0 || ay !== 0) && inp.down('run');
+    const fins = gearMod?.gearFx.swimSpeed() ?? 1;
+    const sp = 50 * fins * (this.running ? 1.55 : 1) * this.loadK * Math.max(0.6, this.staminaK);
+    this.vx = approach(this.vx, ax * sp, 90 * fins * dt);
+    this.vy = approach(this.vy, ay * sp + 4, 90 * fins * dt);
     this.x = clamp(this.x + this.vx * dt, this.minX, this.maxX);
     const floor = this.terrain.groundY(this.x);
     this.y = Math.min(this.y + this.vy * dt, floor);
     if (ax !== 0 && !this.camera) this.facing = ax;
-    this.anim = 'swim';
+    // (a held pose: the speargun up under water)
+    this.anim = this.poseOverride ?? 'swim';
+    if (this.running) this.sinceRun = 0;
     this.noise = Math.hypot(this.vx, this.vy) > 50 ? 0.6 : 0.2;
     this.visibility = 0.9;
   }
 
   private syncBody(dt: number) {
     const b = this.body;
+    // V12: in the water with the dive gear, he wears it (the wetsuit, the tank, the mask, the fins)
+    diveMod?.diveWear(this, dt);
     b.x = this.x;
     b.y = this.y;
     b.facing = this.facing;

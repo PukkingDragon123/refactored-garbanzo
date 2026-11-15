@@ -14,6 +14,8 @@
 // further the longer you hold; the guns (the flare pistol, the net launcher, the dart rifle) settle
 // their aim as you hold. Readied, Mori plants his feet; push a direction for a moment to lower it.
 // The dotted arc (or the sight line, or the spray's reach) shows where it will go.
+// V12 under water the belt is the rubber speargun alone (src/game/v12/arsenal-harpoon.ts): the land
+// weapons are put away there, and the speargun is hidden out of the water.
 
 import type { Renderer } from '../../gfx/renderer';
 import { packColor } from '../../gfx/renderer';
@@ -31,12 +33,13 @@ import { isPredator, shootTargets, emitPred } from '../v11/predators-core';
 import { ballistic } from '../v11/predators-sling';
 import { armClips } from '../../art/v12/arms7';
 import { ArsenalFx } from './arsenal-fx';
+import { HarpoonGun } from './arsenal-harpoon';
 import { sfxArm } from './arsenal-sfx';
 import { WEAPON_BY_ID, selectedWeapon, cycleWeapon, ownsWeapon, ownedWeapons, ammo, setAmmo, ammoMax, onBelt } from './arsenal';
 import type { WeaponId, WeaponDef } from './arsenal';
 
 /** launch speed and gravity per weapon (thrown ones scale with the draw) */
-const BALL: Record<Exclude<WeaponId, 'sling' | 'spray'>, { v: (draw: number) => number; g: number }> = {
+const BALL: Record<Exclude<WeaponId, 'sling' | 'spray' | 'harpoon'>, { v: (draw: number) => number; g: number }> = {
   bolas: { v: d => 230 + 250 * d, g: 380 },
   bangers: { v: d => 210 + 240 * d, g: 380 },
   net: { v: () => 370, g: 300 },
@@ -49,6 +52,8 @@ export const beltOf = (s: FieldScene) => belts.get(s) ?? null;
 
 export class WeaponBelt {
   readonly fx: ArsenalFx;
+  /** V12 the speargun: the belt under water */
+  readonly harpoon: HarpoonGun;
   ready = false;
   drawing = false;
   /** 0..1: the wind-up of a throw, how settled a gun's aim is */
@@ -86,6 +91,7 @@ export class WeaponBelt {
       s.st.shake(kind === 'spray' ? 0.6 : 1.1, 0.12);
     };
     belts.set(s, this);
+    this.harpoon = new HarpoonGun(s, { hitstop: opts.hitstop });
     this.onDown = (e: PointerEvent) => {
       if (!this.ready || e.button !== 0 || e.pointerType === 'touch') return;
       game.input.consumeClick(0);
@@ -115,6 +121,9 @@ export class WeaponBelt {
     this.updateChip();
     if (this.btn) this.btn.hidden = !this.weapon || !!s.cam?.active || s.cutscene;
     if (this.pending) { this.pending.t -= dt; if (this.pending.t <= 0) { const f = this.pending.fire; this.pending = null; f(); } }
+    // V12 under water: the speargun is the only weapon (the land ones stay put away)
+    if (p?.underwater) { if (this.ready) this.lower(); this.harpoon.update(dt); return; }
+    if (this.harpoon.ready || this.harpoon.shaft) this.harpoon.dispose();
     // T: the next weapon on the belt (anywhere the belt works, readied or not)
     const free = !s.cutscene && !game.ui.blocking && !s.cam?.active && !!p;
     if (free && inp.keyHit('KeyT')) this.cycle();
@@ -348,7 +357,7 @@ export class WeaponBelt {
   // ---------------------------------------------------------------- the ammo words over Mori (no box: pixel words with an ink ring)
   private updateChip() {
     const W = this.weapon;
-    if (!this.ready || !W) { if (this.chip) this.chip.style.display = 'none'; return; }
+    if (!(this.ready || this.harpoon?.ready) || !W) { if (this.chip) this.chip.style.display = 'none'; return; }
     if (!this.chip) {
       const c = document.createElement('canvas');
       c.className = 'v12-arm-chip';
@@ -396,7 +405,10 @@ export class WeaponBelt {
   }
 
   // ---------------------------------------------------------------- touch
-  touchStart(x: number, y: number) { this.tDown = true; this.tStart = [x, y]; this.tPull = [0, 0]; }
+  touchStart(x: number, y: number) {
+    if (this.s.player?.underwater) { this.harpoon.tap(); return; }
+    this.tDown = true; this.tStart = [x, y]; this.tPull = [0, 0];
+  }
   touchMove(x: number, y: number) {
     if (!this.tDown) return;
     const r = game.r, c = this.s.st.cam;
@@ -462,6 +474,7 @@ export class WeaponBelt {
 
   // ---------------------------------------------------------------- the aim: the dotted arc, the sight line, the spray's reach
   render(r: Renderer) {
+    if (this.s.player?.underwater) { this.harpoon.render(r); return; }
     if (!this.ready || !this.drawing) return;
     const W = this.weapon;
     if (!W) return;
@@ -498,6 +511,7 @@ export class WeaponBelt {
     this.cyc?.remove();
     this.chip?.remove();
     this.fx.dispose();
+    this.harpoon.dispose();
     this.lower();
   }
 }

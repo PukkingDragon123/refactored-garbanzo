@@ -33,7 +33,7 @@ import { pxDraw, pxMeasure, pxWrap } from '../pxfont';
 import type { PxFontId } from '../pxfont';
 import { PixelBuffer } from '../../art/pixel';
 import { hudHour } from './hudclock';
-import { drawWatch, watchSize } from '../v12/watch';
+import { drawWatch, watchSize, WATCH_DIVE } from '../v12/watch';
 import type { WatchFace } from '../v12/watch';
 import { openFieldWatch, installWatchKeys, fieldWatchOpen } from '../v12/fieldwatch';
 import { stamina, staminaMax, isWinded, heartRate, onStamina } from '../../game/v12/stamina';
@@ -559,7 +559,11 @@ export class Hud2Classic {
       const [t0, todo0] = watchWords(hour);
       const late = DARK_HOUR - hour;
       const fmt = (h: number) => `${Math.floor(h)}:${String(Math.floor((h - Math.floor(h)) * 60)).padStart(2, '0')}`;
-      const [t, todo] = face === 'body'
+      // (V12 on the kelp dive the watch is a dive computer: its words are the depth and the air)
+      const dv = WATCH_DIVE.live?.();
+      const [t, todo] = dv
+        ? [`Depth ${Math.round(dv.depth)} m · Air ${Math.round(dv.air * 100)}%`, dv.air < 0.3 ? 'Low air! Back to the ladder' : 'The ladder refills the tank']
+        : face === 'body'
         ? [`Stamina ${Math.round(st * 100)}%`, winded ? 'Winded! Catch your breath' : hu >= 0.65 && cap < 0.9 ? 'Hungry: eat to fill up' : `Heart ${bpm} · Shift to sprint`]
         : face === 'sun' ? [late > 0 ? `Dark in ${fmt(late)}` : 'It’s dark!', todo0] : [t0, todo0];
       if (todo !== this.watchAdvice) {
