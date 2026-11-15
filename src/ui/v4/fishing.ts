@@ -32,6 +32,8 @@ import { FightSim, PX_M, REEL_M } from '../v6/fishfight';
 import { FishView, Shade, resetViewFrames } from '../v9/fishview';
 import { Reel, FishInput } from '../v9/reel';
 import { showBanner, catchPhoto, lousePhoto } from '../v9/catchshow';
+/** the catch banner's fish is painted at 48 / 64 px (shown at 2x) for the detailed art */
+const bannerIcon = () => (Math.min(window.innerWidth, window.innerHeight) < 500 ? 48 : 64);
 import { fishIcon, fishSide, louseIcon, louseSide, sidePoint, canvasOf, gripOf } from '../../art/v9/fish';
 import { pxIcon, pxRating } from '../pxicons';
 
@@ -580,7 +582,7 @@ export async function goFishing(host: FishingHost, o: FishOpts = {}): Promise<Fi
     };
     await sleep(0.35, show);
     const meta = `<span>${len} cm</span><span class="st">${pxRating(stars, 3)}</span>${isNew ? '<span class="bd new">NEW!</span>' : ''}${fish.rare ? '<span class="bd rare">RARE</span>' : ''}`;
-    const banner = showBanner(fishIcon(fish.id), 'I caught a', fish.name, fish.pun, meta);
+    const banner = showBanner(fishIcon(fish.id, bannerIcon()), 'I caught a', fish.name, fish.pun, meta);
     inp.clear();
     const waitBanner = (b: ReturnType<typeof showBanner>) => loop(dt => {
       show(dt);
@@ -606,7 +608,7 @@ export async function goFishing(host: FishingHost, o: FishOpts = {}): Promise<Fi
       audio.play('discover', { vol: 0.6 });
       const lp2 = held.flat.louse ? host.heldPoint?.(held.flat.louse[0], held.flat.louse[1]) : null;
       if (lp2) { fv.sparkle(lp2[0], lp2[1], 10, 8); void lousePhoto([lp2[0] - 4, lp2[1] - 4, lp2[0] + 4, lp2[1] + 4]); }
-      const b2 = showBanner(louseIcon(32), 'Wait… I found a', 'Snout Louse', 'That’s snot what I expected!', '<span>A parasite, riding in its trunk</span><span class="bd new">PARASITE</span>');
+      const b2 = showBanner(louseIcon(bannerIcon()), 'Wait… I found a', 'Snout Louse', 'That’s snot what I expected!', '<span>A parasite, riding in its trunk</span><span class="bd new">PARASITE</span>');
       inp.clear();
       await waitBanner(b2);
       await b2.close();

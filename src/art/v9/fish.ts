@@ -34,7 +34,7 @@ const pal = (...h: string[]): Ramp => h.map(x => hex(x));
 /** pick a tone (0 = darkest) */
 const tone = (r: Ramp, t: number) => r[Math.max(0, Math.min(r.length - 1, Math.round(t)))];
 /** a tone with a little ordered dither, so steps break into pixel clusters instead of bands */
-const toneD = (r: Ramp, t: number, p: Px, k = 0.22) => tone(r, t + (bay(p.px, p.py) - 0.5) * k);
+const toneD = (r: Ramp, t: number, _p?: Px, _k?: number) => tone(r, t);
 /** colour c over b (straight RGB; the alphas used are few, so the palette stays small) */
 function over(c: C, b: C): C {
   const a = (c >>> 24) / 255;
@@ -105,7 +105,7 @@ interface FishArt {
 /** what the body hands a species' pattern for one pixel */
 interface BodyCtx {
   u: number; v: number;
-  /** tone index so far (lighting, scales, lateral line) and the ramp it indexes */
+  /** tone index so far (form light, highlight band, scale hints, lateral line) and the ramp it indexes */
   t: number; ramp: Ramp;
   /** body height here in px */
   Hpx: number;
@@ -113,12 +113,10 @@ interface BodyCtx {
   head: boolean;
   /** 0 back, 1 flank, 2 belly */
   zone: number;
-  /** the scale under the pixel (null where there are none), whether on its shadowed free edge, cell size px */
-  sc: ScaleHit | null; rim: boolean; cell: number;
-  /** lambert term and the wet-highlight term */
+  /** lambert term and the highlight term */
   lam: number; spec: number;
-  /** on the lateral line */
-  lat: boolean;
+  /** on the lateral line / on a scale-hint mark */
+  lat: boolean; hint: boolean;
   /** the colour the body would paint */
   c: C;
 }
@@ -135,11 +133,11 @@ interface BodyOpt {
   gill?: number; bow?: number; pre?: number;
   /** jaw line: snout x, y, length back, droop at the corner */
   mouth?: [number, number, number, number];
-  /** scale rows across the body at full size (0 = scaleless), cell aspect and texture strength */
-  rows?: number; aspect?: number; scaleK?: number;
+  /** scale hints: rows of small marks in the mid-tone band (0 = scaleless), the band, and dark marks instead of light */
+  hints?: number; hintV?: [number, number]; hintDark?: boolean;
   /** lateral line: v at the gill, v at the peduncle, arch */
   lat?: [number, number, number];
-  /** wet mucus highlight strength */
+  /** the lit band along the upper flank */
   spec?: number;
   /** the species' pattern: a colour, or null to keep the body's */
   mark?: (p: Px, b: BodyCtx) => C | null;
@@ -152,16 +150,14 @@ function body(o: BodyOpt): Part {
   const Hf = (x: number) => Math.max(1e-3, bot(cl(x)) - top(cl(x)));
   let Hmax = 0;
   for (let i = 0; i <= 64; i++) Hmax = Math.max(Hmax, Hf(x0 + ((x1 - x0) * i) / 64));
-  // scale columns: one column per local cell width, so scales shrink where the body narrows
-  const G = cumTable(x => 1 / Hf(x), x0, x1);
+  // distance along the body measured in local body heights: hint marks crowd where the body narrows
+  const G = cumTable(x => Hmax / Hf(x), x0, x1);
   const zb0 = o.zb ?? 0.36, zl0 = o.zl ?? 0.66;
-  const rowsMax = o.rows ?? 0, aspect = o.aspect ?? 1.15, scaleK = o.scaleK ?? 1;
   const gill = o.gill ?? 0, bow = o.bow ?? 0.08, headX = gill || x1 - 0.18;
   const gx = (v: number) => gill - (v - 0.45) * (v - 0.45) * bow;
+  const nh = o.hints ?? 0, hv = o.hintV ?? [Math.max(zb0 - 0.04, 0.24), zl0 - 0.06];
   const slope = (f: (x: number) => number, x: number) => { const a = cl(x - 0.005), b = cl(x + 0.005); return (f(b) - f(a)) / (b - a || 1); };
-  const SCL: ScaleHit = { i: 0, j: 0, d: 0, dx: 0, dy: 0 };
-  const ctx: BodyCtx = { u: 0, v: 0, t: 0, ramp: o.side, Hpx: 0, head: false, zone: 1, sc: null, rim: false, cell: 0, lam: 0, spec: 0, lat: false, c: 0 };
-  let lastS = -1, R = 0;
+  const ctx: BodyCtx = { u: 0, v: 0, t: 0, ramp: o.side, Hpx: 0, head: false, zone: 1, lam: 0, spec: 0, lat: false, hint: false, c: 0 };
   return {
     z: o.z ?? 10, ink: o.ink ?? true,
     bounds: [...o.top, ...o.bot],
@@ -170,77 +166,61 @@ function body(o: BodyOpt): Part {
       return y >= top(x) && y <= bot(x);
     },
     paint(p) {
-      if (p.S !== lastS) { lastS = p.S; R = rowsMax ? Math.min(rowsMax, Math.round((Hmax * p.S) / 3.9)) : 0; }
       const x = p.x, y = p.y, T = top(x), H = bot(x) - T;
       const v = clamp01((y - T) / H), u = (x - x0) / (x1 - x0), Hpx = H * p.S;
-      // the normal of a laterally flattened solid: a flat flank rolling off to the back and belly,
+      // the normal of a laterally flattened solid: a broad flank rolling off to the back and belly,
       // tipped by the profile's slope, rounding forward over the head and back over the tail stock
       const e = 2 * v - 1, ae = Math.abs(e);
       const sx = slope(top, x) * (1 - v) - slope(bot, x) * v;
       const hx = smooth(headX - 0.04, x1, x);
       let nx = sx * Math.min(1, ae * 1.3) * 0.85 + hx * hx * 0.55 - (u < 0.06 ? (0.06 - u) * 4 : 0);
-      let ny = Math.sign(e) * Math.pow(ae, 1.7) * 0.95;
+      let ny = Math.sign(e) * Math.pow(ae, 1.5) * 0.95;
       const nm = Math.hypot(nx, ny);
       if (nm > 0.97) { nx *= 0.97 / nm; ny *= 0.97 / nm; }
       const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
       const lam = nx * p.L[0] + ny * p.L[1] + nz * p.L[2];
       const spec = nx * p.H[0] + ny * p.H[1] + nz * p.H[2];
-      // countershading zones with dithered, gently wavering borders
-      const dz = ((bay(p.px, p.py) - 0.5) * 1.8) / Math.max(2, Hpx);
+      // countershading zones with gently wavering (never dithered) borders
       const wv = Math.sin(x * 31 + 0.5) * 0.02;
-      const zone = v < zb0 + wv + dz ? 0 : v < zl0 - wv + dz ? 1 : 2;
-      let t = zone === 0 ? 1.7 + (v / zb0) * 0.6 : zone === 1 ? 2.7 : 3.4 + clamp01((v - zl0) / (1 - zl0)) * 0.6;
-      t += (lam - 0.53) * 2.2 * (o.light ?? 1);
-      if ((1 - v) * Hpx < 1.2 && Hpx > 4) t += 0.7; // light bounced up off the sea floor
+      const zone = v < zb0 + wv ? 0 : v < zl0 - wv ? 1 : 2;
+      // a solid lit volume in a few clean bands: a bright band along the upper flank, mid tones, a
+      // shadowed lower flank, then the pale belly with a darker keel line
+      let t = zone === 0 ? 1.9 + (v / zb0) * 0.5 : zone === 1 ? 2.6 : 4;
+      t += (lam - 0.53) * 2.9 * (o.light ?? 1);
+      const sw = o.spec ?? 0.8;
+      if (sw > 0) { if (spec > 0.972) t += 0.9 * sw; if (spec > 0.996) t += 0.5 * sw; }
+      if (zone === 2) t = Math.max(t, 2.8 + (1 - v) * 1.4);
+      if ((1 - v) * Hpx < 1.1 && Hpx > 5) t -= 0.4;
       let ramp = zone === 0 ? o.back : zone === 1 ? o.side : o.belly;
-      const ds = ((bay(p.px, p.py) - 0.5) * 1.1) / Math.max(2, Hpx);
-      if (o.sheen && o.sheenV && v > o.sheenV[0] + ds && v < o.sheenV[1] + ds) ramp = o.sheen;
+      if (o.sheen && o.sheenV && v > o.sheenV[0] - wv && v < o.sheenV[1] + wv) ramp = o.sheen;
       const head = gill > 0 && x > gx(v);
-      // overlapping scales: each pixel finds its scale, and a neighbour that belongs to a scale nearer
-      // the head means this pixel lies in the shadow under that scale's free edge (a crisp 1 px arc)
-      let sc: ScaleHit | null = null, rim = false, cell = 0;
-      if (!head && R >= 2 && scaleK > 0) {
-        cell = Hpx / R / aspect;
-        const k = scaleK * (zone === 1 ? 1 : zone === 0 ? 0.6 : 0.5) * smooth(0.0, 0.1, v) * smooth(1, 0.9, v) * smooth(0.0, 0.05, u);
-        if (cell >= 2.2 && k > 0.25) {
-          const at = (X: number, Y: number) => { const T2 = top(cl(X)); return scaleHit(G(X) * R * aspect, ((Y - T2) / (bot(cl(X)) - T2)) * R); };
-          const ant = (h: ScaleHit) => h.i + (h.j & 1 ? 0.5 : 0);
-          const s0 = at(x, y), i0 = s0.i, j0 = s0.j, a0 = ant(s0), d0 = s0.d, dy0 = s0.dy;
-          SCL.i = i0; SCL.j = j0; SCL.d = d0; SCL.dx = s0.dx; SCL.dy = dy0; sc = SCL;
-          let lit = false;
-          for (let n = 0; n < 4 && !rim; n++) {
-            const h = n === 0 ? at(x + p.ax, y + p.ay) : n === 1 ? at(x - p.bx, y - p.by) : n === 2 ? at(x + p.bx, y + p.by) : at(x - p.ax, y - p.ay);
-            if (h.i === i0 && h.j === j0) continue;
-            if (ant(h) > a0) rim = true; else if (n === 3) lit = true;
-          }
-          if (rim) t -= (cell < 3.2 ? 0.85 : 1.1) * k;
-          else if (cell >= 3.4) {
-            if (lit) t += 0.5 * k;
-            if (dy0 < -0.1 && d0 < 0.55) t += 0.4 * k;
-            t += (hash(i0, j0, 77) - 0.5) * 0.5 * k;
-          }
+      // scale hints: a few soft rows of small marks in the mid-tone band, staggered row to row
+      let hint = false;
+      if (nh > 0 && !head && Hpx >= 7 && u > 0.1 && x < headX - 0.03 && v > hv[0] && v < hv[1]) {
+        const rv = ((v - hv[0]) / (hv[1] - hv[0])) * nh, r = Math.floor(rv);
+        if (Math.abs(rv - r - 0.5) * ((hv[1] - hv[0]) / nh) * Hpx < 0.5) {
+          const P = Math.max(3, Math.min(5, (Hmax * p.S) / 7));
+          const q = (G(x) * p.S) / P + (r & 1) * 0.5;
+          if (frac(q) < (Hpx > 16 ? 1.6 : 1) / P) { hint = true; t += o.hintDark ? -0.9 : 0.9; }
         }
       }
-      // lateral line: a row of pored scales
+      // lateral line: a clean row along the flank
       let lat = false;
-      if (o.lat && !head && u > 0.04 && Hpx > 5) {
+      if (o.lat && !head && u > 0.04 && Hpx > 6 && !hint) {
         const [vh, vt, arch] = o.lat;
         const uu = clamp01((x - x0) / (headX - x0));
         const lv = vt + (vh - vt) * uu - arch * Math.sin(Math.PI * uu);
-        if (Math.abs(v - lv) * Hpx < 0.5) {
-          lat = true;
-          t += Hpx > 10 && p.detail >= 0.5 && frac((x * p.S) / 3) < 0.34 ? -0.8 : 0.7;
-        }
+        if (Math.abs(v - lv) * Hpx < 0.5) { lat = true; t += 0.6; }
       }
-      // wet mucus glints along the upper flank, broken by the scale edges
-      const sw = o.spec ?? 0.6;
-      if (sw > 0 && !rim && !lat) { if (spec > 0.9975) t += 1.3 * sw + 0.2; else if (spec > 0.982 && hash(p.px >> 1, p.py >> 1, 3) < 0.55) t += 0.6 * sw; }
-      // the bony head: the operculum's lit rim over the dark gill slit, the preopercle crease ahead
-      if (head && v > 0.1 && v < 0.94) {
+      // the head: a gill-cover plate with a lit rim and its shadow cast on the body behind it
+      if (gill > 0 && v > 0.12 && v < 0.94) {
         const dg = (x - gx(v)) * p.S;
-        if (dg < 0.85) t -= 1.7;
-        else if (dg < 1.85) t += 0.9;
-        else if (o.pre && Hpx > 9 && v > 0.3 && v < 0.9 && Math.abs((x - gx(v) - o.pre) * p.S) < 0.5) t -= 0.7;
+        if (dg < 0 && dg > -(Hpx > 12 ? 2 : 1.1)) t -= 1.3;
+        else if (dg >= 0 && dg < 1) t += 1;
+        else if (dg >= 1) {
+          t += 0.25;
+          if (o.pre && Hpx > 10 && v > 0.32 && v < 0.9 && Math.abs((x - gx(v) - o.pre) * p.S) < 0.5) t -= 0.8;
+        }
       }
       let c: C = 0;
       if (o.mouth) {
@@ -248,13 +228,13 @@ function body(o: BodyOpt): Part {
         if (x > mx - ml) {
           const f = (mx - x) / ml, dpx = (y - (my + droop * f * f)) * p.S;
           if (Math.abs(dpx) < 0.55) c = tone(o.back, 0);
-          else if (dpx >= 0.55 && dpx < 1.55 && Hpx > 8) t += 0.6;
+          else if (dpx >= 0.55 && dpx < 1.55 && Hpx > 7) t += 0.7;
         }
       }
-      if (!c) c = toneD(ramp, t, p);
+      if (!c) c = tone(ramp, t);
       if (!o.mark) return c;
       ctx.u = u; ctx.v = v; ctx.t = t; ctx.ramp = ramp; ctx.Hpx = Hpx; ctx.head = head; ctx.zone = zone;
-      ctx.sc = sc; ctx.rim = rim; ctx.cell = cell; ctx.lam = lam; ctx.spec = spec; ctx.lat = lat; ctx.c = c;
+      ctx.lam = lam; ctx.spec = spec; ctx.lat = lat; ctx.hint = hint; ctx.c = c;
       return o.mark(p, ctx) ?? c;
     },
   };
@@ -298,19 +278,20 @@ function fin(o: FinOpt): Part {
         if (d < bd) { bd = d; ba = a; bk = k; }
       }
       const dpx = bd * p.S, rl = len[bk] * p.S, out = ba * rl;
-      let t = (o.t ?? 2) + 0.4 + ba * (o.grad ?? -0.5) + p.L[2] * 0.2;
-      let a = o.alpha ?? 215;
-      const ray = rays.length > 0 && dpx < 0.5 && out > 0.6;
+      // each fin carries its own value gradient: dark at the fleshy base, lighter and translucent at the edge
+      let t = (o.t ?? 2) + 0.1 + ba * (o.grad ?? 1.5) + p.L[2] * 0.2;
+      let a = ba > 0.62 ? o.alpha ?? 205 : 255;
+      const ray = rays.length > 0 && dpx < 0.5 && out > 0.6 && (o.spines || ba > 0.18);
       let c: C;
       if (ray) {
-        let tr = t + 1.3;
-        if (!o.spines && rl > 8 && frac(out / 2.7) < 0.3) tr -= 0.9; // the joints of a soft ray
-        if (o.spines && ba > 0.82) tr += 0.6;
-        c = tone(o.rayRamp ?? o.ramp, tr);
-        a = 255;
-      } else c = toneD(o.ramp, t + (frac(out * 0.5 + bk * 0.37) < 0.5 && rl > 10 ? 0.25 : 0), p, 0.5);
-      if (out < 1.6) a = 255; // the fleshy fin base
-      if (o.edge !== null && p.detail > 0.4 && ba > 0.3 && !ray && polyEdgeDist(pts, p.x, p.y) * p.S < 0.9) { c = o.edge ?? tone(o.ramp, t - 1); a = Math.max(a, 235); }
+        // subtle soft rays in the membrane's own colour; spines stand out pale and stiff
+        let tr = t + (o.spines ? 1.1 : 0.8);
+        if (!o.spines && rl > 12 && frac(out / 3) < 0.3) tr -= 0.5; // the joints of a long soft ray
+        c = tone(o.spines ? o.rayRamp ?? o.ramp : o.ramp, tr);
+        a = o.spines ? 255 : Math.max(a, 230);
+      } else c = tone(o.ramp, t);
+      if (out < 1.4) a = 255;
+      if (o.edge && p.detail > 0.4 && ba > 0.3 && !ray && polyEdgeDist(pts, p.x, p.y) * p.S < 0.9) { c = o.edge; a = Math.max(a, 235); }
       if (o.mark) {
         ctx.s = rays.length > 1 ? bk / (rays.length - 1) : 0.5; ctx.a = ba; ctx.d = dpx; ctx.ray = ray; ctx.t = t; ctx.c = c;
         const m = o.mark(p, ctx);
@@ -454,7 +435,7 @@ function snoutBass(): FishArt {
   const top: Pt[] = [[0.17, -0.036], [0.25, -0.052], [0.35, -0.1], [0.46, -0.136], [0.57, -0.149], [0.66, -0.139], [0.74, -0.112], [0.8, -0.076], [0.84, -0.034]];
   const bot: Pt[] = [[0.17, 0.036], [0.25, 0.048], [0.35, 0.076], [0.46, 0.104], [0.57, 0.117], [0.66, 0.109], [0.74, 0.087], [0.8, 0.058], [0.84, 0.014]];
   const back = pal('#161e0a', '#222d12', '#32421a', '#465a24', '#5e7430', '#7a8e40');
-  const side = pal('#343a14', '#4c561e', '#66722a', '#848e36', '#a4ac48', '#c4c866');
+  const side = pal('#2e3412', '#444e1a', '#5c6826', '#788430', '#96a040', '#b6bc58');
   const belly = pal('#6e6238', '#988650', '#c0ac70', '#dccc90', '#f0e4b6', '#fdf8dc');
   const sheen = pal('#34401a', '#4c5e24', '#6c8434', '#90aa48', '#b6cc62', '#dcec88');
   const blot = pal('#0c1006', '#141a0a', '#1c240e', '#283314', '#36441c', '#465626');
@@ -465,14 +446,14 @@ function snoutBass(): FishArt {
   return {
     x0: 0, x1: 1, ink: hex('#0e1206'), eye,
     parts: [
-      fin({ ...tail(0.19, 0.034, 0.124, 0.08, 12, 0.02), ramp: finM, rayRamp: finR, z: 4, t: 2.2, grad: -0.8 }),
+      fin({ ...tail(0.19, 0.034, 0.124, 0.08, 12, 0.02), ramp: finM, rayRamp: finR, z: 4, t: 2.2 }),
       fin({ ...dorsal(top, 0.26, 0.45, softH(0.08, 0.7), -1, 0.3, 9), ramp: finM, rayRamp: finR, z: 4, t: 2.2 }),
       fin({ ...dorsal(top, 0.44, 0.67, spiny(0.09, 7), -1, 0.22, 0, 7), ramp: finM, rayRamp: finR, z: 4, spines: true, alpha: 190, minPx: 0.5 }),
       fin({ ...dorsal(bot, 0.24, 0.39, softH(0.064, 0.7), 1, 0.4, 7), ramp: finM, rayRamp: finR, z: 4 }),
       fin({ ...fan([0.6, 0.112], [0.66, 0.106], [[0.585, 0.15], [0.56, 0.168], [0.6, 0.172], [0.64, 0.15]], 5), ramp: finM, rayRamp: finR, z: 4 }),
       body({
         top, bot, back, side, belly, zb: 0.34, zl: 0.68, sheen, sheenV: [0.3, 0.4], gill: 0.705, pre: 0.045,
-        mouth: [0.84, 0.014, 0.08, 0.014], rows: 9, lat: [0.3, 0.46, 0.05], spec: 0.7,
+        mouth: [0.84, 0.014, 0.08, 0.014], hints: 3, lat: [0.3, 0.46, 0.05], spec: 0.7,
         mark: (p, b) => {
           if (b.head) {
             // dark stripes fanning back from the eye over the cheek and gill cover
@@ -496,7 +477,6 @@ function snoutBass(): FishArt {
       // the trunk: a hugely stretched upper lip, wrinkled and pitted with taste pores, curling down to a fleshy disc
       tube({
         pts: [[0.8, -0.036], [0.87, -0.036], [0.935, -0.018], [0.974, 0.022], [0.99, 0.066], [0.978, 0.1]], r: [0.036, 0.03, 0.026, 0.024, 0.023, 0.022], ramp: trunk, z: 13, ink: true, t: 2.2, rings: 11,
-        mark: (p, s, t, d) => (p.detail >= 0.5 && s > 0.12 && d < 0.75 && hash(p.px, p.py, 19) < 0.07 ? tone(trunk, t - 1.6) : null),
       }),
       disc({
         x: 0.966, y: 0.114, rx: 0.032, ry: 0.027, ramp: pal('#7a3030', '#ac5048', '#d47a68', '#eea28c', '#fcc8b4', '#ffe6da'), z: 14, ink: true, t: 2.4,
@@ -531,13 +511,13 @@ function lanternCod(): FishArt {
       fin({ ...fan([0.82, 0.104], [0.85, 0.1], [[0.79, 0.14], [0.765, 0.162], [0.8, 0.166]], 3), ramp: finM, rayRamp: finR, z: 3 }),
       body({
         top, bot, back, side, belly, zb: 0.42, zl: 0.7, sheen, sheenV: [0.4, 0.5], gill: 0.8, pre: 0.05, mouth: [0.968, 0.032, 0.08, 0.012],
-        rows: 11, aspect: 1.3, scaleK: 0.7, lat: [0.26, 0.5, 0.13], spec: 0.55,
+        hints: 3, lat: [0.26, 0.5, 0.13], spec: 0.55,
         mark: (p, b) => {
           // the cod's pale arching lateral line stands out on the dark flank
           if (b.lat) return tone(side, b.t + 0.9);
           // a mottled, finely spotted back fading over the flank
           if (b.v < 0.66 && !b.head) {
-            const s = spotP(p, p.x, p.y, 34, 0.75, 0.012, 7);
+            const s = spotP(p, p.x, p.y, 34, 0.5, 0.011, 7, 5);
             if (s > 0) return toneD(mott, b.t - 0.3 + s * 0.6, p);
             if (fbm(p.x * 14, b.v * 4, 2) > 0.6 - b.v * 0.2) return toneD(mott, b.t + 0.7, p);
           }
@@ -588,14 +568,13 @@ function gurnard(): FishArt {
       fin({ ...dorsal(bot, 0.3, 0.57, softH(0.046, 0.5), 1, 0.3, 11), ramp: finM, rayRamp: finR, z: 4 }),
       body({
         top, bot, back, side, belly, zb: 0.4, zl: 0.7, gill: 0.8, pre: 0.045, mouth: [0.958, 0.024, 0.055, 0.01],
-        rows: 10, aspect: 1.25, scaleK: 0.9, lat: [0.3, 0.5, 0.04], spec: 0.6,
+        hints: 3, lat: [0.3, 0.5, 0.04], spec: 0.6,
         mark: (p, b) => {
           // the armoured head: bony plates with dark sutures and pitted, granular surfaces
           if (p.x > 0.78 && (b.head || p.x > 0.8)) {
-            const c = cells(p.x, p.y * 1.2, 34, 5);
-            if ((c.d2 - c.d1) * (p.S / 34) < 0.6 && p.S > 30) return toneD(bone, b.t - 0.9, p);
-            const tt = b.t + (c.id - 0.5) * 0.9 - c.d1 * 0.7 + 0.9;
-            if (p.detail >= 0.5 && hash(p.px, p.py, 31) < 0.1) return tone(bone, tt - 1.2);
+            const c = cells(p.x, p.y * 1.2, 22, 5);
+            if ((c.d2 - c.d1) * (p.S / 22) < 0.55 && p.S > 30) return tone(bone, b.t - 0.8);
+            const tt = b.t + (c.id - 0.5) * 0.6 - c.d1 * 0.5 + 0.8;
             return toneD(bone, tt, p);
           }
           // the lateral line of spiny bony scales
@@ -611,7 +590,7 @@ function gurnard(): FishArt {
       // the great wings: fan pectorals, teal with blue ocelli and an electric edge
       fin({
         ...fan([0.77, 0.0], [0.765, 0.05], [[0.68, -0.036], [0.56, -0.03], [0.46, 0.0], [0.415, 0.05], [0.44, 0.11], [0.52, 0.146], [0.62, 0.136], [0.7, 0.1]], 12),
-        ramp: wing, rayRamp: wingR, z: 14, ink: true, t: 2.2, grad: 0.4, alpha: 230, edge: hex('#7cf0ff'),
+        ramp: wing, rayRamp: wingR, z: 14, ink: true, t: 2, grad: 1.2, alpha: 230, edge: hex('#7cf0ff'),
         mark: (p, f) => {
           if (f.ray) return null;
           const s = spotP(p, p.x, p.y, 30, 0.5, 0.012, 11);
@@ -700,13 +679,12 @@ function hammerSnapper(): FishArt {
       fin({ ...fan([0.62, 0.126], [0.68, 0.12], [[0.6, 0.17], [0.575, 0.186], [0.62, 0.188]], 4), ramp: finM, rayRamp: finR, z: 4 }),
       body({
         top, bot, back, side, belly, zb: 0.34, zl: 0.7, gill: 0.78, pre: 0.05, mouth: [0.95, 0.022, 0.06, 0.012],
-        rows: 7, aspect: 1.08, scaleK: 1.15, lat: [0.24, 0.42, 0.07], spec: 0.75,
+        hints: 3, lat: [0.24, 0.42, 0.07], spec: 0.75,
         mark: (p, b) => {
           // the brow's shadow on the head below it
           if (p.x > 0.74) { const d = (p.y - under(Math.min(1, p.x))) * p.S; if (d >= 0 && d < 1.6) return toneD(b.ramp, b.t - 1.5, p); }
           // electric-blue spots, one to a scale, over the upper flank
-          if (b.sc && !b.rim && b.v < 0.62 && b.u > 0.06 && hash(b.sc.i, b.sc.j, 11) < 0.15) return b.sc.d < 0.3 && b.sc.dy < 0 && b.cell >= 4 ? hex('#c8f4ff') : hex('#3cbcec');
-          if (!b.sc && !b.head && b.v < 0.6 && spotP(p, p.x, p.y, 40, 0.3, 0.008, 3) > 0) return hex('#4ac8f0');
+          if (!b.head && b.v < 0.62 && b.u > 0.06) { const sp = spotP(p, p.x, p.y, 34, 0.42, 0.009, 3); if (sp > 0) return sp > 0.55 && p.S > 40 ? hex('#c8f4ff') : hex('#3cbcec'); }
           return null;
         },
       }),
@@ -719,7 +697,6 @@ function hammerSnapper(): FishArt {
           if (face < 1.5 && b.Hpx > 4) return toneD(brow, 3.6 + (b.v < 0.5 ? 0.6 : -0.4), p);
           if (b.v > 0.82) return tone(brow, b.t - 1.4);
           if (p.S > 30 && frac(face / 3.2 + b.v * 0.6) < 0.22 && b.v > 0.2) return tone(brow, b.t - 0.9);
-          if (p.detail >= 0.5 && hash(p.px, p.py, 29) < 0.07) return tone(brow, b.t - 1.6);
           return null;
         },
       }),
@@ -754,8 +731,8 @@ function bubblePuffer(): FishArt {
           // a small gill opening in front of the pectoral
           if (Math.abs((p.x - 0.735 + (b.v - 0.5) * (b.v - 0.5) * 0.3) * p.S) < 0.6 && b.v > 0.36 && b.v < 0.6) return tone(spotR, 0);
           // prickles folded into the skin: a lit tip over a shadow, on a jittered lattice
-          if (b.Hpx > 12 && b.u > 0.25 && b.u < 0.88) {
-            const s = spotP(p, p.x, p.y, 34, 0.75, 0.0075, 17);
+          if (b.Hpx > 12 && b.u > 0.25 && b.u < 0.88 && b.zone === 2) {
+            const s = spotP(p, p.x, p.y, 30, 0.6, 0.0075, 17, 5);
             if (s > 0) return tone(b.zone === 2 ? prick : spotR, b.zone === 2 ? (s > 0.5 ? 2 : 3) : s > 0.5 ? 4 : 2);
           }
           // leopard spots, big on the back and shrinking down the flank
@@ -779,7 +756,8 @@ function bubblePuffer(): FishArt {
     iconPad: 3.5,
     iconPost: b => {
       const bub = (cx: number, cy: number, r: number) => {
-        for (let y = -r - 1; y <= r + 1; y++) for (let x = -r - 1; x <= r + 1; x++) {
+        const R = Math.ceil(r);
+        for (let y = -R - 1; y <= R + 1; y++) for (let x = -R - 1; x <= R + 1; x++) {
           const d = Math.hypot(x, y);
           if (b.opaque(cx + x, cy + y)) continue;
           if (d <= r + 0.5 && d > r - 0.6) b.set(cx + x, cy + y, hex('#3a8ab8'));
@@ -787,7 +765,8 @@ function bubblePuffer(): FishArt {
         }
         if (r >= 2) b.set(cx - 1, cy - 1, hex('#ffffff'));
       };
-      bub(28, 4, 2.4); bub(24, 1, 1.3); bub(30, 10, 1.3);
+      const k = b.w / 32, q = (n: number) => Math.round(n * k);
+      bub(q(28), q(4), 2.4 * k); bub(q(24), q(1.2), 1.3 * k); bub(q(30), q(10), 1.3 * k);
     },
   };
 }
@@ -817,7 +796,6 @@ function ribbonEel(): FishArt {
           if (b.v > 0.15 && b.v < 0.85 && Math.abs(frac(b.u * 60 + Math.sin(b.v * 7 + b.u * 40) * 0.25) - 0.5) < 0.07 && p.S > 60) return toneD(silver, b.t - 1.2, p);
           if (spotP(p, p.x, p.y, 70, 0.22, 0.006, 5, 5) > 0 && b.v > 0.2 && b.v < 0.8) return tone(silver, 1);
           // tubercles: tiny bright bumps in rows
-          if (p.detail >= 0.5 && b.Hpx > 4 && hash(p.px >> 1, p.py, 7) < 0.06) return tone(r, b.t + 1.4);
           return toneD(r, b.t, p);
         },
       }),
@@ -902,11 +880,11 @@ function kahawai(): FishArt {
     x0: 0, x1: 1, ink: hex('#04100e'),
     eye: { x: 0.9, y: -0.022, r: 0.023, iris: hex('#ecd070') },
     parts: [
-      fin({ ...tail(0.21, 0.026, 0.17, 0.7, 13), ramp: finM, rayRamp: finR, z: 4, t: 2.4, grad: -1, edge: hex('#0a1414') }),
+      fin({ ...tail(0.21, 0.026, 0.17, 0.7, 13), ramp: finM, rayRamp: finR, z: 4, t: 2 }),
       // the spinnaker: a tall sail fin, raised to steer and to herd baitfish
       fin({
         ...fan([0.35, -0.066], [0.79, -0.07], [[0.38, -0.14], [0.44, -0.24], [0.52, -0.3], [0.6, -0.31], [0.68, -0.28], [0.74, -0.2], [0.78, -0.12]], 13),
-        ramp: sail, rayRamp: sailR, z: 4, t: 2.2, grad: 0.4, alpha: 225, edge: hex('#0a1640'),
+        ramp: sail, rayRamp: sailR, z: 4, t: 1.8, grad: 1.3, alpha: 225, edge: hex('#0a1640'),
         mark: (p, f) => {
           if (f.ray) return null;
           const s = spotP(p, p.x, p.y, 30, 0.6, 0.009, 31);
@@ -917,7 +895,7 @@ function kahawai(): FishArt {
       fin({ ...fan([0.74, 0.064], [0.78, 0.058], [[0.7, 0.09], [0.69, 0.104], [0.72, 0.1]], 3), ramp: finM, rayRamp: finR, z: 4 }),
       body({
         top, bot, back, side, belly, zb: 0.4, zl: 0.66, sheen, sheenV: [0.38, 0.5], gill: 0.84, pre: 0.045, mouth: [0.975, 0.008, 0.06, 0.008],
-        rows: 9, aspect: 1.25, scaleK: 0.85, lat: [0.3, 0.48, 0.04], spec: 0.75,
+        hints: 3, lat: [0.3, 0.48, 0.04], spec: 0.75,
         mark: (p, b) => {
           // the kahawai's dark spots and dashes over the back and upper flank
           if (b.v < 0.5 && b.u > 0.05) {
@@ -956,7 +934,7 @@ function sunwheelOpah(): FishArt {
       fin({ ...fan([0.66, 0.2], [0.71, 0.196], [[0.62, 0.27], [0.6, 0.3], [0.64, 0.31]], 4), ramp: finM, rayRamp: finR, z: 4, t: 2.4 }),
       body({
         top, bot, back, side, belly, zb: 0.34, zl: 0.66, sheen, sheenV: [0.16, 0.32], gill: 0.8, pre: 0.05, mouth: [0.945, 0.004, 0.05, 0.01],
-        rows: 12, aspect: 1.3, scaleK: 0.55, lat: [0.18, 0.5, 0.16], spec: 0.7,
+        hints: 3, lat: [0.18, 0.5, 0.16], spec: 0.7,
         mark: (p, b) => {
           // crimson jaws
           if (p.x > 0.915 && Math.abs(p.y - 0.006) < 0.03) return toneD(finM, b.t + 0.4, p);
@@ -1017,7 +995,6 @@ function snoutLouse(): FishArt {
           if (b.Hpx > 10 && (Math.abs(b.v - 0.17) * b.Hpx < 0.5 || Math.abs(b.v - 0.83) * b.Hpx < 0.5) && b.u > 0.24 && b.u < 0.86) return tone(shell, b.t - 1.2);
           // the short pleon segments ahead of the tail fan
           if (b.u < 0.24 && b.u > 0.08 && frac(b.u * 34) < 0.2) return tone(shell, b.t - 1.4);
-          if (p.detail >= 0.5 && hash(p.px, p.py, 37) < 0.07) return tone(shell, b.t - 1.1);
           // a pale ridge down the middle
           if (Math.abs(b.v - 0.5) * b.Hpx < 0.5 && b.Hpx > 8) return tone(shell, b.t + 0.7);
           return null;
@@ -1083,9 +1060,9 @@ function pxFor(v: View): Px {
   return { x: 0, y: 0, px: 0, py: 0, S: v.S, L, H: [h[0] / hn, h[1] / hn, h[2] / hn], ax: cs / v.S, ay: -sn / v.S, bx: sn / v.S, by: cs / v.S, detail: v.detail };
 }
 /** shade one output pixel: the top part that paints there, with translucent parts laid over the ones below */
-function shadeAt(a: FishArt, v: View, pp: Px, px: number, py: number, mask: boolean): [C, number] {
+function shadeAt(a: FishArt, v: View, pp: Px, px: number, py: number, mask: boolean, fx = 0.5, fy = 0.5): [C, number] {
   const cs = Math.cos(v.rot), sn = Math.sin(v.rot);
-  const dx = px + 0.5 - v.ox, dy = py + 0.5 - v.oy;
+  const dx = px + fx - v.ox, dy = py + fy - v.oy;
   const x = (dx * cs + dy * sn) / v.S;
   const y = (-dx * sn + dy * cs) / v.S + bendAt(v, x, a);
   const P = a.parts;
@@ -1125,7 +1102,13 @@ function inkUp(r: Raster, a: FishArt, inner = true) {
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const i = y * w + x;
     if (!(src[i] >>> 24)) {
-      if (op(x - 1, y) || op(x + 1, y) || op(x, y - 1) || op(x, y + 1)) d[i] = a.ink;
+      // the outline takes a darker hue of the colour it wraps, and breaks lighter where the light
+      // from the top-left grazes the silhouette (the shape lies only below / right of this pixel)
+      const lo = op(x, y + 1), ri = op(x + 1, y), up = op(x, y - 1), le = op(x - 1, y);
+      if (!(lo || ri || up || le)) continue;
+      const k = lo ? i + w : ri ? i + 1 : up ? i - w : i - 1;
+      const lit = (lo || ri) && !up && !le;
+      d[i] = lmix(a.ink, withAlpha(src[k], 255), lit ? 0.42 : 0.2);
       continue;
     }
     if (!inner) continue;
@@ -1134,7 +1117,7 @@ function inkUp(r: Raster, a: FishArt, inner = true) {
     for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]) {
       if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
       const pj = part[ny * w + nx];
-      if (pj >= 0 && pj !== pi && a.parts[pj].z < q.z) { d[i] = lmix(a.ink, withAlpha(src[i], 255), 0.3); break; }
+      if (pj >= 0 && pj !== pi && a.parts[pj].z < q.z) { d[i] = lmix(a.ink, withAlpha(src[i], 255), 0.38); break; }
     }
   }
 }
@@ -1173,35 +1156,36 @@ function haloUp(r: Raster, a: FishArt) {
   }
 }
 
-/** 3x3 block majority: opaque when at least 4 of 9 samples are, coloured by the commonest colour */
-function downsample(hi: Raster, w: number, h: number): Raster {
-  const buf = new PixelBuffer(w, h), part = new Int16Array(w * h).fill(-1);
+/** 3x3 block majority of a coverage mask: opaque when at least 4 of 9 samples are, keeping the
+ *  commonest part and one of its samples (the middle sample counts double so features stay centred) */
+function downsample(hi: Raster, w: number, h: number): Raster & { sub: Uint8Array } {
+  const buf = new PixelBuffer(w, h), part = new Int16Array(w * h).fill(-1), sub = new Uint8Array(w * h);
   const W = hi.buf.w;
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const count = new Map<number, number>();
-    let n = 0, best = 0, bestN = 0, bp = -1;
+    let n = 0, bestN = 0, bp = -1, bs = 4;
     for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) {
-      const k = (y * 3 + j) * W + x * 3 + i;
-      const c = hi.buf.data[k];
-      if (!(c >>> 24)) continue;
+      const k = (y * 3 + j) * W + x * 3 + i, q = hi.part[k];
+      if (q < 0) continue;
       n++;
-      // the middle sample counts double so features stay centred
-      const wgt = (i === 1 && j === 1 ? 2 : 1) + (count.get(c) ?? 0);
-      count.set(c, wgt);
-      if (wgt > bestN) { bestN = wgt; best = c; bp = hi.part[k]; }
+      const wgt = (i === 1 && j === 1 ? 2 : 1) + (count.get(q) ?? 0);
+      count.set(q, wgt);
+      if (wgt > bestN) { bestN = wgt; bp = q; bs = j * 3 + i; }
     }
-    if (n >= 4) { buf.data[y * w + x] = best; part[y * w + x] = bp; }
+    if (n >= 4) { buf.data[y * w + x] = 0xffffffff; part[y * w + x] = bp; sub[y * w + x] = bs; }
   }
-  return { buf, part };
+  return { buf, part, sub };
 }
-/** small sprites: keep the 3x silhouette but paint each pixel at its own centre, so zones and marks stay crisp */
-function repaint(r: Raster, a: FishArt, v: View) {
-  const { buf, part } = r, pp = pxFor(v);
+/** small sprites: keep the 3x silhouette but paint each pixel at its own centre (or, on the edge, at
+ *  one of its covered samples), so zones and marks stay crisp */
+function repaint(r: Raster & { sub: Uint8Array }, a: FishArt, v: View) {
+  const { buf, part, sub } = r, pp = pxFor(v);
   for (let py = 0; py < buf.h; py++) for (let px = 0; px < buf.w; px++) {
     const i = py * buf.w + px;
     if (part[i] < 0) continue;
-    const [c, top] = shadeAt(a, v, pp, px, py, false);
-    if (top >= 0 && c) { buf.data[i] = c; part[i] = top; }
+    let [c, top] = shadeAt(a, v, pp, px, py, false);
+    if (top < 0 || !c) [c, top] = shadeAt(a, v, pp, px, py, false, ((sub[i] % 3) + 0.5) / 3, (Math.floor(sub[i] / 3) + 0.5) / 3);
+    if (top >= 0 && c) { buf.data[i] = c; part[i] = top; } else { buf.data[i] = 0; part[i] = -1; }
   }
 }
 
@@ -1217,7 +1201,8 @@ function toPx(v: View, a: FishArt, x: number, y: number): Pt {
 function drawEye(r: Raster, a: FishArt, v: View, boost = 1) {
   const b = r.buf, e = a.eye;
   const [ex, ey] = toPx(v, a, e.x, e.y);
-  const rp = e.r * v.S * boost;
+  // big round eyes, as a naturalist draws them
+  const rp = e.r * v.S * boost * 1.2;
   const put = (x: number, y: number, c: C) => { if (b.opaque(x, y)) b.set(x, y, c); };
   const pupil = hex('#07050a'), white = hex('#ffffff');
   const irisLo = lmix(e.iris, white, 0.3), irisHi = lmix(e.iris, a.ink, 0.45);
@@ -1229,10 +1214,10 @@ function drawEye(r: Raster, a: FishArt, v: View, boost = 1) {
     put(x, y, pupil); put(x - fx, y, e.iris);
     return;
   }
-  if (rp < 2.1) {
-    // 2x2: a glint, the iris and the pupil
+  if (rp < 1.85) {
+    // 2x2: a white catch-light on a dark pupil, the iris showing below
     const x = Math.floor(ex - 0.5), y = Math.floor(ey - 0.5);
-    put(x, y, white); put(x + 1, y, irisHi); put(x, y + 1, irisLo); put(x + 1, y + 1, pupil);
+    put(x, y, white); put(x + 1, y, pupil); put(x, y + 1, irisLo); put(x + 1, y + 1, pupil);
     return;
   }
   const fx = Math.cos(v.rot) >= 0 ? 1 : -1;
@@ -1242,7 +1227,7 @@ function drawEye(r: Raster, a: FishArt, v: View, boost = 1) {
     if (d > rp - 0.9) { put(x, y, Y > rp * 0.45 ? lmix(e.ring ?? e.iris, white, 0.25) : e.ring ?? lmix(a.ink, e.iris, 0.25)); continue; }
     if (Math.hypot(X - fx * rp * 0.08, Y) < rp * 0.5) { put(x, y, pupil); continue; }
     const k = Y / rp;
-    put(x, y, k < -0.25 ? irisHi : k > 0.3 ? irisLo : e.iris);
+    put(x, y, k < -0.3 ? irisHi : k > 0.25 ? irisLo : e.iris);
   }
   const gx = Math.floor(ex - rp * 0.38), gy = Math.floor(ey - rp * 0.38);
   put(gx, gy, white);
@@ -1300,8 +1285,9 @@ export function fishSide(id: string, len: number, o: { swing?: number; arch?: nu
     // survive as whole pixels instead of breaking up into specks, then paint every pixel at its centre
     let r: Raster;
     if (L < 24) {
-      r = downsample(raster(a, w * 3, h * 3, { ...v, S: S * 3, ox: v.ox * 3, oy: v.oy * 3, detail: 0.1 }, false), w, h);
-      repaint(r, a, v);
+      const lo = downsample(raster(a, w * 3, h * 3, { ...v, S: S * 3, ox: v.ox * 3, oy: v.oy * 3, detail: 0.1 }, true), w, h);
+      repaint(lo, a, v);
+      r = lo;
     } else r = raster(a, w, h, v);
     if (L >= 24 && L < 48) despeck(r, a);
     drawEye(r, a, v);
