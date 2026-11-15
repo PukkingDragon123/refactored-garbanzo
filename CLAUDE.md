@@ -152,6 +152,17 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
   `./birds.ts` (kea, ruru), `./crawlers.ts` (tuna, ngaokeoke), each with a `*_CTX` the scene fills in;
   the props: `src/art/v12/wild/encounters.ts`. New encounters should be things to do, feed each other,
   and get a first-visit hint line.
+- **Te Ara Matatū, the main arc after the raid** (user: "a whole six hours of gameplay ... super
+  exciting always"): `src/game/v12/arc/` (`arc.ts` registers it, starts it at camp once `raid:won` and
+  `raid:report`, installs it). Seven chapters `arc_ch1`..`arc_ch7` (ruins, fossils, glowforest, geovalley,
+  grotto/deep/coast, Motu Ahi, Te Korokoro), each with a set piece; four new species (`species1.ts`,
+  `species4.ts`, art in `src/art/v12/arc/`). The Old One is anatomically a tuatara (user: "absolutely
+  anatomically accurate ... super detailed", with spec-evo creature art as the reference).
+- **Feats (achievements):** `src/game/v12/feats.ts`, medals in `src/ui/v12/featsprites.ts`, the notebook
+  FEATS tab `src/ui/v12/nb/feats.ts`. 43 feats bronze to legend; new content should add feats.
+- **Bounties, field events, side quests:** `src/game/v12/bounty.ts` (a daily agency photo spec, a
+  streak), `fieldevents.ts` (stampede, fog hunt, rival photographer, flash flood, night of eyes),
+  `sidequests2.ts` (14 quests, each with its own verb; village givers via `SIDE_HOOKS` in people.ts).
 - **Rooms behind doors and windows:** never a black hole. `src/art/v11/village/interior.ts` paints the
   room (home, meeting house, store) lit by the opening; use `paintDoorway` / `paintWindowRoom` for any
   new building.
