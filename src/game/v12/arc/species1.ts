@@ -159,8 +159,12 @@ export class GeckoBody implements Body {
     const g = this.glowK * k * a.alpha;
     if (g < 0.02 || a.hidden >= 0.98) return;
     r.emissive(1);
-    r.draw(f.gfr, a.x, a.y, a.facing * a.scale, a.scale, 0, packColor(1, 1, 1, Math.min(1, g)));
+    r.draw(f.gfr, a.x, a.y, a.facing * a.scale, a.scale, 0, packColor(1, 1, 1, Math.min(1, g * 1.35)));
     r.emissive();
+    // a little pool of its own light round it, and the lantern's (held up high in the display)
+    const up = this.cur === 'glow';
+    r.light(a.x, a.y - 5, 30, 0.45, 1, 0.86, 0.5 * g, 0.1);
+    r.light(a.x - a.facing * (up ? 5 : 20) * a.scale, a.y - (up ? 17 : 3) * a.scale, up ? 34 : 18, 0.55, 1, 0.9, (up ? 0.9 : 0.45) * g, 0.25);
   }
   bounds(a: Animal): Box {
     const f = this.last ?? this.frame(a), s = a.scale;

@@ -39,7 +39,7 @@ import { rand, clamp } from '../../../core/math';
 import { floatSky, floatCaption } from '../../../ui/v12/float';
 import { give, count, remove } from '../../inventory';
 import { boneTip, rock, giantSkull } from '../../../art/v12/arc/props1';
-import { F, setF, active, say, aroha, by, sleep, lateTick, hints } from './kit1';
+import { F, setF, active, say, aroha, by, sleep, lateTick, hints, drawDust } from './kit1';
 import './items1';
 
 // ------------------------------------------------------------------ where (fossils world x; the terrace and the high ledge as the site builds them)
@@ -163,20 +163,25 @@ class Race {
   moriWon = false;
   private watch: { set(t: number): void; close(): void } | null = null;
   private dustT = 0;
+  /** where she kneels to dig, and the whole race's length (her walk and her dig) */
+  readonly stand: number;
+  readonly total: number;
   constructor(readonly f: FieldScene, readonly S: Ch2, readonly v: Actor) {
+    this.stand = LAST_X + (v.x > LAST_X ? 16 : -16);
+    this.total = Math.abs(v.x - this.stand) / VARGA_WALK + VARGA_DIG;
     void import('../../../ui/v12/watch').then(W => {
       if (this.phase === 'done') return;
-      this.watch = W.showWatch({ mode: 'countdown', manual: true, secs: 34, size: 26, anchor: () => { const [x, y] = this.f.css(this.v.x, this.v.y - 78); return [x, y]; } });
+      this.watch = W.showWatch({ mode: 'countdown', manual: true, secs: Math.round(this.total), size: 26, anchor: () => { const [x, y] = this.f.css(this.v.x, this.v.y - 78); return [x, y]; } });
       this.watch.set(1);
     });
-    void v.walkTo(LAST_X + 16, VARGA_WALK, 'walk');
+    void v.walkTo(this.stand, VARGA_WALK, 'walk');
   }
   tick(dt: number) {
     if (this.phase === 'done') return;
     const f = this.f, p = f.player, v = this.v;
     this.t += dt;
-    const left = this.phase === 'walk' ? (Math.abs(v.x - (LAST_X + 16)) / VARGA_WALK + VARGA_DIG) : VARGA_DIG * (1 - this.dig);
-    this.watch?.set(clamp(left / 34));
+    const left = this.phase === 'walk' ? (Math.abs(v.x - this.stand) / VARGA_WALK + VARGA_DIG) : VARGA_DIG * (1 - this.dig);
+    this.watch?.set(clamp(left / this.total));
     // Mori gets there first: the race is his
     if (Math.abs(p.x - LAST_X) < 22 && Math.abs(p.y - fossilGround(LAST_X)) < 22) { this.win(); return; }
     if (this.phase === 'walk' && !v.walking) {
@@ -228,7 +233,9 @@ class Race {
 async function startRace(f: FieldScene, S: Ch2) {
   if (S.race || F('arc:ch2:race') || F('arc:ch2:beatVarga') || game.scene !== (f as never)) return;
   (await import('../../../art/v11/npcs/register')).registerNpcArt();
-  const v = S.varga ?? f.addActor('celeste', VARGA_X0, fossilGround(VARGA_X0), 1);
+  // she comes in from whichever end of the gorge is the far side of the scree from Mori
+  const vx = f.player.x < LAST_X ? 1120 : VARGA_X0;
+  const v = S.varga ?? f.addActor('celeste', vx, fossilGround(vx), vx > LAST_X ? -1 : 1);
   v.z = 44; v.visible = true;
   S.varga = v;
   if (S.lastProp) S.lastProp.hidden = false;
@@ -324,14 +331,8 @@ class Chase {
       if (q.t > 0.78 && q.t < 1 && q.spr) r.draw(q.spr, q.x, y - 3 - (1 - (q.t - 0.78) / 0.22) * 150, 1, 1, q.t * 8, packColor(1, 1, 1, 1));
     }
     if (this.boulder) r.draw(this.boulder, this.bx, this.by, 1, 1, this.spin, packColor(1, 1, 1, 1));
-    // the slope coming down behind it: a sheet of dust and stones, dithered
-    const x0 = Math.round(this.bx + 10), t = this.t;
-    for (let cy = 0; cy < 22; cy++) for (let cx = 0; cx < 30; cx++) {
-      const n = ((cx * 7 + cy * 11 + Math.floor(t * 14)) & 15) / 16;
-      if (n > clamp(1 - cx / 30) * 0.85 || this.t < 1) continue;
-      const gx = x0 + cx * 3;
-      r.rect(gx, Math.round(fossilGround(gx) - 4 - cy * 3), 3, 3, packColor(0.6 + n * 0.08, 0.5 + n * 0.06, 0.4, 0.85));
-    }
+    // the slope coming down behind it: a billowing sheet of dust
+    if (this.t > 1) drawDust(r, this.bx + 8, fossilGround, -1, this.t, { h: 70, w: 90, col: [0.58, 0.49, 0.4] });
   }
   private async caught() {
     if (this.ended) return;

@@ -82,6 +82,8 @@ interface Ch3 {
 
 export function build(f: FieldScene) {
   const night = f.tod === 'night';
+  // the chapter is a night out: the crew's dusk calls and the carry-home wait until it's over
+  if (active('arc_ch3') && !F('arc:ch3:survived')) holdFetch(true);
   const S: Ch3 = { f, busy: false, lamp: f.lampOn, gecko: null, spooks: 0, dark: 1, darkTo: 1, hunt: null, wayK: F('arc:ch3:done') ? 1 : 0, moths: [], geckoLight: { x: 0, y: 0, r: 40, k: 0 } };
   // ---------------------------------------------------------------- the glowing logs (hides) and the bushes as hides
   const hides: HideSpot[] = [];
@@ -271,7 +273,7 @@ class Hunt {
     await aroha(f, 'Down. DOWN. Don\'t breathe. Something big is coming up the valley.', 'whisper', 3000);
     if (this.ended || game.scene !== (f as never)) return;
     const D = await import('../feud/director');
-    const x = f.player.x > 1500 ? 60 : 2270;
+    const px = f.player.x, x = clamp(px > 1150 ? px - 620 : px + 620, 60, 2270);
     this.a = D.spawnBearer(f, x, { facing: x > 1000 ? -1 : 1, act: 'wander', home: [0, 2300] });
     this.bs = D.bearerScript(this.a);
     audio.play('roar', { vol: 0.5, pitch: 0.6 });
@@ -312,7 +314,7 @@ class Hunt {
         if (moriHidden(f)) { await this.lose(); continue; }
         const tx = f.player.x;
         let hit = false;
-        await Promise.race([bs.walkTo(tx, { run: true }), this.until(() => Math.abs(this.f.player.x - a.x) < 26 || moriHidden(this.f))]);
+        await Promise.race([bs.walkTo(tx, { run: true, speed: 135 }), this.until(() => Math.abs(this.f.player.x - a.x) < 26 || moriHidden(this.f))]);
         if (!this.alive()) return;
         if (moriHidden(f)) { await this.lose(); continue; }
         if (Math.abs(f.player.x - a.x) < 40) {

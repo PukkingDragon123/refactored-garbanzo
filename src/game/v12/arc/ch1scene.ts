@@ -45,7 +45,7 @@ import { floatSky, floatCaption } from '../../../ui/v12/float';
 import { give } from '../../inventory';
 import { ITEMS } from '../../items';
 import { carvedStone, sunFleck, whare, whareDoor, rock, rubbleHeap, WHARE } from '../../../art/v12/arc/props1';
-import { F, setF, active, say, aroha, sleep, onShot, inShot, lateTick, hints } from './kit1';
+import { F, setF, active, say, aroha, sleep, onShot, inShot, lateTick, hints, drawDust } from './kit1';
 import './items1';
 
 // ------------------------------------------------------------------ where things are (ruins world x)
@@ -399,8 +399,8 @@ class CaveIn {
     // rocks dropping ahead of him (and onto where he's going)
     this.fallT -= dt;
     if (this.fallT <= 0 && this.t > 1.2) {
-      this.fallT = rand.range(0.55, 0.95);
-      const lead = rand.chance(0.45) ? -p.vx * 0.95 : -rand.range(50, 150);
+      this.fallT = rand.range(0.9, 1.4);
+      const lead = rand.chance(0.3) ? -p.vx * 0.95 : -rand.range(60, 160);
       const x = clamp(p.x + lead, SAFE_X + 10, this.front - 20);
       this.falls.push({ x, t: 0, size: rand.int(2, 7), spr: this.rocks[rand.int(2, this.rocks.length - 1)] ?? null, done: false });
       f.sfx('rustle', x, 0.45, 0.6);
@@ -414,7 +414,7 @@ class CaveIn {
         f.sfx('land', q.x, 0.8, 0.6);
         f.st.shake(2.5, 0.25);
         for (let i = 0; i < 10; i++) f.main.particles.spawn({ frame: A.dot2, x: q.x + rand.range(-6, 6), y: gy(q.x) - 2, vx: rand.range(-70, 70), vy: rand.range(-90, -20), ay: 300, life: 0.8, color: [0.5, 0.45, 0.38], alpha: 1, alpha1: 0.2, floorY: gy(q.x) + 1 });
-        if (Math.abs(p.x - q.x) < 11 && p.y > gy(q.x) - 30 && p.state !== 'stunned') hitMori(f, q.x + 6, { sev: 2 });
+        if (Math.abs(p.x - q.x) < 10 && p.y > gy(q.x) - 30 && p.state !== 'stunned') hitMori(f, q.x + 6, { sev: 1 });
         if (q.spr && this.lying.length < 40) { const pr = new Prop(q.spr, q.x, gy(q.x) - 2, 55, { foliage: false, rot: rand.range(-1, 1) }); this.lying.push(pr); f.main.add(pr); }
       }
     }
@@ -434,15 +434,9 @@ class CaveIn {
       // the rock itself, falling the last stretch
       if (q.t > 0.85 && q.spr) { const u = (q.t - 0.85) / 0.25; r.draw(q.spr, q.x, gy(q.x) - 4 - (1 - u) * 170, 1, 1, t * 6, packColor(1, 1, 1, 1)); }
     }
-    // the front: a curtain of falling stone in a wall of dust (dithered, never soft)
+    // the front: a curtain of falling stone in a billowing wall of dust (dithered, never soft)
     const x0 = Math.round(this.front), g0 = gy(this.front);
-    for (let cy = 0; cy < 64; cy++) for (let cx = 0; cx < 34; cx++) {
-      const wx = x0 - 6 + cx * 3, wy = Math.round(g0 - 190 + cy * 3);
-      const k = clamp(1 - cx / 34 + 0.25 - Math.abs(Math.sin(cy * 0.31 + t * 2)) * 0.15);
-      const n = ((cx * 7 + cy * 13 + Math.floor(t * 12)) & 15) / 16;
-      if (n > k * 0.95) continue;
-      r.rect(wx, wy, 3, 3, packColor(0.36 + n * 0.1, 0.31 + n * 0.08, 0.26, 0.92));
-    }
+    drawDust(r, this.front + 4, gy, -1, t, { h: 180, w: 120 });
     for (let i = 0; i < 18; i++) {
       const s = this.rocks[i % this.rocks.length];
       if (!s) continue;

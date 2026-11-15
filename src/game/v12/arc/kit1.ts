@@ -7,6 +7,7 @@ import { game } from '../../game';
 import { floatText } from '../../../ui/v12/float';
 import type { FloatStyle } from '../../../ui/v12/float';
 import { questStatus } from '../../quests';
+import { packColor } from '../../../gfx/renderer';
 
 export const F = (k: string) => !!game.save.flags[k];
 export const setF = (k: string) => { if (!game.save.flags[k]) { game.save.flags[k] = true; game.persist(); } };
@@ -104,3 +105,37 @@ export class Beats {
   }
   clear() { this.list = []; }
 }
+
+/**
+ * A billowing wall of dust (a collapse front), pixel-quantised and dithered, never a box: its leading
+ * edge boils in and out, its top heaves up in lumps, it is lit on its upper left. `dir` is the way it is
+ * moving (-1 left): the mass lies behind the front. Cells of 2 px.
+ */
+const B4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
+const hn = (x: number, y: number) => { let n = (x * 374761393 + y * 668265263) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
+const vn1 = (x: number, y: number) => { const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy); const a = hn(xi, yi), b = hn(xi + 1, yi), c = hn(xi, yi + 1), d = hn(xi + 1, yi + 1); return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v; };
+export function drawDust(r: import('../../../gfx/renderer').Renderer, front: number, ground: (x: number) => number, dir: number, t: number, o: { h?: number; w?: number; col?: [number, number, number] } = {}) {
+  const H = o.h ?? 170, Wd = o.w ?? 110, c = o.col ?? [0.42, 0.37, 0.31];
+  const tones = [0.72, 0.86, 1, 1.16].map(k => packColor0(c[0] * k, c[1] * k, c[2] * k));
+  const inside = (dx: number, h: number) => {
+    // dx: px behind the front; h: px above the ground
+    const top = Math.min(H, 34 + dx * 1.4 + (vn1(dx * 0.05 + t * 0.4, 3.1) - 0.5) * 50);
+    const edge = (vn1(h * 0.06 + t * 1.2, t * 0.3) - 0.5) * 22 + (vn1(h * 0.15 - t * 2, 7) - 0.5) * 8;
+    return dx - edge + Math.min(0, (top - h) * 1.2) + (vn1(dx * 0.08 - t * 0.5, h * 0.08 + t * 0.7) - 0.5) * 16;
+  };
+  for (let cx = -14; cx < Wd / 2; cx++) {
+    const dx = cx * 2, wx = Math.round(front - dir * dx), g = ground(wx);
+    for (let cy = 0; cy < H / 2; cy++) {
+      const h = cy * 2, v = inside(dx, h);
+      if (v <= -2) continue;
+      const th = B4[((cy & 3) << 2) | (cx & 3)];
+      if (v < 6 && th > (v + 2) / 8) continue;
+      let k = v > 26 ? 1 : v > 10 ? 2 : 1;
+      if (inside(dx, h + 4) <= 0) k = 3;
+      else if (inside(dx - 4, h) <= 0) k = Math.max(k, 2);
+      if (v > 40 && th < 0.4) k = 0;
+      r.rect(wx - (dir > 0 ? 1 : 0), Math.round(g - h - 2), 2, 2, tones[k]);
+    }
+  }
+}
+const packColor0 = (r: number, g: number, b: number) => packColor(Math.min(1, r), Math.min(1, g), Math.min(1, b), 1);
