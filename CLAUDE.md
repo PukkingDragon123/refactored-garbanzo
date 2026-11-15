@@ -175,6 +175,13 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
 - **Bounties, field events, side quests:** `src/game/v12/bounty.ts` (a daily agency photo spec, a
   streak), `fieldevents.ts` (stampede, fog hunt, rival photographer, flash flood, night of eyes),
   `sidequests2.ts` (14 quests, each with its own verb; village givers via `SIDE_HOOKS` in people.ts).
+- **Te Moana Rimurimu, the kelp-forest dive** (user: "a full underwater stage and kelp forest ... sharks,
+  bigger fish, seals ... absolute perfection"): a boat stop (`kelpforest` in `src/game/sites10/ocean.ts`,
+  gated by `gateOk('scuba')`, the `air_tank` blueprint). `src/game/v12/dive/`: `ctx.ts` (`DIVE_CTX` joins
+  the parts), `scene.ts` / `layout.ts` (four zones), `species.ts` / `lifeguide.ts` (the Glasseye Whaler,
+  the seal pod, hāpuku, kingfish, blue cod, sunfish, eagle ray), `air.ts` (the tank, the watch's dive face),
+  `quest.ts` (Joshu's Te Ara Moana). The speargun is `src/game/v12/arsenal-harpoon.ts`; kelp is a
+  `'kelp'` foliage kind on a water surge; art in `src/art/v12/dive/`. Dev jumps `dive:kelp|reef|dropoff|blue`.
 - **Rooms behind doors and windows:** never a black hole. `src/art/v11/village/interior.ts` paints the
   room (home, meeting house, store) lit by the opening; use `paintDoorway` / `paintWindowRoom` for any
   new building.
