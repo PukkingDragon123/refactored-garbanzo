@@ -66,6 +66,14 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
     (`PROF_*`). `STYLE` in `restyle.ts` gives every adult fuller arms and legs and hands that read;
     Mori is a fit young man with a full chest and real arms and legs (`realBuild`). The shoulders are
     a sloping trapezius with a deltoid cap, never a tube straight across.
+- **Creatures (user, latest: "never ever use lazy sphere shapes ... organic, a lot higher detail,
+  absolute perfection, cooler, unique designs"; reference: naturalistic speculative-evolution creature
+  art).** No creature may read as ellipses, spheres or tubes stuck together. Each pose's outline is one
+  continuous contour drawn through anatomical landmarks (splines), used as the shape mask; primitives
+  are only invisible helpers for interior shading. Interior form comes from anatomy (bone and muscle
+  landmarks, folds, cast shadows) and per-region texture (fur breaking the edge, scales and scutes,
+  wrinkles, patterns), so every few pixels carry detail. Every species gets a distinctive, believable
+  design true to its field-guide text. Judge at game scale and against the reference standard.
 - **Never show the player's first-person hands** (user: "never ever show player first person
   hand"). Close-ups show the tools and what they touch, not Mori's hands or sleeves
   (`FIRST_PERSON_HANDS = false` in `src/ui/v12/closeup/hands.ts`, `HANDS3D.enabled = false`).
