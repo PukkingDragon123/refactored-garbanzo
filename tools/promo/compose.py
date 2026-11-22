@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
-"""Compose the Project Zealandia promo reels: raw 9:16 footage + Alagard titles + chiptune audio.
+"""Compose the Project Zealandia nature films (vertical, about a minute each, documentary style).
 
     python3 tools/promo/compose.py --id shark
-    python3 tools/promo/compose.py --all
-    python3 tools/promo/compose.py --all --placeholder     # build & use placeholder footage
+    python3 tools/promo/compose.py --all --sheet
+    python3 tools/promo/compose.py --id gecko --frames 2,9.5,40      # preview frames only (PNG)
 
-Input  <scratch>/promo/raw/<id>.mp4 (1080x1920, 30 fps) and manifest.json (optional).
-Output <scratch>/promo/out/reel_<id>.mp4, reel_<id>.wav, reel_<id>_timing.txt.
+Input  <scratch>/promo/raw/<id>.mp4 (1080x1920, 30 fps) and manifest.json:
+       per id 'duration', 'beats' {name: t, 'main': t} and/or 'shots' [{start, end, type}, ...], 'main'.
+Output <scratch>/promo/out/reel_<id>.mp4, reel_<id>.wav, reel_<id>_levels.txt, reel_<id>_plan.txt
+       (and reel_<id>_sheet.png with --sheet: 12 frames).
 
-Timeline of a reel (E = end-card start = min(footage, 16.5 s); total = E + 4.5 s):
-  0 - 2.6 s   hook line typed with bleeps in the top band, dithered scrim, dissolves out
-  beat        name card in the bottom band: whoosh, the name drops in letter by letter, sparkle chime,
-              subtitle, then a one-line field-guide fact typed with bleeps
-  E - E+4.5   end card: the last frame frozen and darkened with an ordered dither and a slow pixel
-              vignette, the PROJECT ZEALANDIA logo (bass hit + sparkles), two calls to action typed.
+The film (E = footage length, capped at 70 s; total = E + 5 s):
+  0.5 - 5.5 s   title card over the establishing shot: "THE KELP FOREST", a fern rule,
+                "Project Zealandia · Field Notes"; each letter dithers in, then dissolves out
+  shot cuts     a 0.4 s ordered-dither cross-dissolve from the outgoing shot's last frame
+  captions      two or three calm observations from the field guide, placed on the shot list (top band)
+  main beat     a field-note lower-third: fern rule, common name, small-caps habitat, binomial
+  E - E+5       end card: last frame frozen and dither-darkened, the carved logo with fronds and a kiwi,
+                "Comment PLAY for the game link", a fern divider, "Playtest on Discord · link in bio"
+Sound: the CC0 track (next-to-you for the dive, town-theme elsewhere) and a synthesised ambience bed.
 """
 from __future__ import annotations
 
@@ -23,80 +28,65 @@ import math
 import os
 import subprocess
 import sys
+import zlib
 
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import audio as A                                    # noqa: E402
-from textfx import (TextBlock, STYLES, CHAT_PAD, Icon, fit_scale, text_width,   # noqa: E402
-                    bayer_tile, dither_darken)
+from textfx import TextBlock, STYLES, fit_scale, text_width, bayer_tile, dither_darken   # noqa: E402
+import ornaments as O                                # noqa: E402
 
 W, H, FPS = 1080, 1920, 30
 SCRATCH = os.environ.get('PROMO_SCRATCH',
                          '/tmp/claude-0/-home-user-refactored-garbanzo/008a599d-3fa5-508c-bfed-9f9233f31c34/scratchpad')
 PROMO = os.path.join(SCRATCH, 'promo')
-END_DUR = 4.5
-MAX_FOOTAGE = 16.5
-CELL = 6               # device px per dither cell (matches the chunky title pixels)
+END_DUR = 5.0
+MAX_FOOTAGE = 70.0
+CELL = 3                 # device px per footage art pixel (the raw is a 3x nearest upscale)
+XFADE = 0.4
+DOT = '\x03'             # a mid-dot (Alagard has none): drawn as a 2x2 pixel icon
+MARGIN = 72
 
-REELS = {
-    'shark': dict(hook='SOMETHING IS CIRCLING...', hook_kw='CIRCLING',
-                  name='GLASSEYE WHALER', sub='OF THE KELP DROP-OFF',
-                  fact='Knock its snout and it veers off.',
-                  music='next-to-you.mp3', music_offset=0.0, beat=7.0,
-                  ph_still='trailer/s10.png', ph_y=60),
-    'gecko': dict(hook='WHAT GLOWS IN THE DARK?', hook_kw='GLOWS',
-                  name='MOKOTURAMA', sub='THE LANTERN GECKO',
-                  fact='Its glowing tail lures moths in.',
-                  music='town-theme.mp3', music_offset=0.0, beat=7.0,
-                  ph_still='trailer/s06.png', ph_y=60),
-    'worm': dict(hook='LIFT THE LOG...', hook_kw='LOG',
-                 name='NGAOKEOKE', sub='THE VELVET WORM',
-                 fact='It hunts with glue.',
-                 music='town-theme.mp3', music_offset=18.0, beat=7.0,
-                 ph_still='trailer/s03.png', ph_y=70),
-    'crab': dict(hook='LOOK CLOSER AT THE TIDE', hook_kw='CLOSER',
-                 name='GLASS CRAB', sub='OF THE TIDELINE',
-                 fact='You can see its heart beat.',
-                 music='town-theme.mp3', music_offset=38.0, beat=7.0,
-                 ph_still='trailer/s01.png', ph_y=70),
+FILMS = {
+    'shark': dict(title='THE KELP FOREST', common='Glasseye Whaler', sci='Carcharhinus vitreus',
+                  place='WHALER SHARK\nTE MOANA RIMURIMU', bed='underwater',
+                  music='next-to-you.mp3', music_offset=0.0,
+                  captions=[('kelp', 'A forest of kelp is a maze to a three-metre shark.'),
+                            ('investigate', 'A whaler patrols the edge of the reef, where the blue begins.'),
+                            ('hunch', 'Back up, fins down: the warning before a charge.'),
+                            ('veer', 'A sharp knock on the snout makes it think again.')]),
+    'gecko': dict(title='THE GLOW FOREST', common='Mokoturama', sci='Hoplodactylus lucernarius',
+                  place='LANTERN GECKO\nTHE GLOW FOREST, NIGHT', bed='night',
+                  music='town-theme.mp3', music_offset=18.0,
+                  captions=[('forage', 'At night, two rows of lights wake along its flanks.'),
+                            ('feed', 'It licks the sweet dew the glowcaps weep after dark.'),
+                            ('lure', 'The lantern on its tail sways like a fungus cap. Moths come.'),
+                            ('freeze', 'One false move, and every light goes out at once.')]),
+    'worm': dict(title='THE FEATHERED GULLY', common='Ngaokeoke', sci='Peripatoides titan',
+                 place='GIANT VELVET WORM\nTHE FEATHERED GULLY', bed='forest',
+                 music='town-theme.mp3', music_offset=8.0,
+                 captions=[('hide', 'Under a rotten log, the air stays wet.'),
+                           ('curl', 'Uncovered, it curls up tight.'),
+                           ('squirt', 'Two jets of slime, and they set like glue.'),
+                           ('creep', 'Its kind has walked the earth for 500 million years.')]),
+    'crab': dict(title='THE TIDELINE', common='Glass Crab', sci='Hyalocarcinus pellucidus',
+                 place='GHOST CRAB\nTHE LANDING BEACH', bed='beach',
+                 music='town-theme.mp3', music_offset=26.0,
+                 captions=[('feed', 'On wet sand, only its organs seem to float.'),
+                           ('wave', 'Males wave one oversized claw at their rivals.'),
+                           ('dig', 'At the first footstep, it digs in.'),
+                           ('peek', 'Then it peeks out on its eyestalks.')]),
 }
-
-SMALL_STAR = Icon(rows=[
-    '..a..',
-    '.aca.',
-    'acCca',
-    '.aca.',
-    '..a..',
-], palette={'a': '#ffc85a', 'c': '#fff3b8', 'C': '#ffffff'})
+REELS = FILMS          # stills.py and older callers
 
 
-# ----------------------------------------------------------------------------------- footage
-def raw_dir(placeholder):
-    return os.path.join(PROMO, 'placeholder' if placeholder else 'raw')
+# ----------------------------------------------------------------------------------- manifest
+RAW = os.path.join(PROMO, 'raw')
 
 
-def make_placeholders():
-    """Still-pan stand-ins with the same contract as helper A's footage."""
-    d = raw_dir(True)
-    os.makedirs(d, exist_ok=True)
-    man = {}
-    for rid, cfg in REELS.items():
-        src = os.path.join(SCRATCH, cfg['ph_still'])
-        out = os.path.join(d, f'{rid}.mp4')
-        if not os.path.exists(out):
-            dur = 18
-            vf = (f"crop=360:640:x='trunc((1280-360)*t/{dur})':y={cfg['ph_y']},"
-                  f"scale=1080:1920:flags=neighbor,fps=30")
-            subprocess.run(['ffmpeg', '-v', 'error', '-y', '-loop', '1', '-i', src, '-t', str(dur), '-vf', vf,
-                            '-c:v', 'libx264', '-crf', '16', '-pix_fmt', 'yuv420p', '-an', out], check=True)
-        for k in (1, 2, 3):
-            sp = os.path.join(d, f'{rid}_still_{k}.png')
-            if not os.path.exists(sp):
-                subprocess.run(['cp', src, sp], check=True)
-        man[rid] = {'duration': 18.0, 'beats': {'main': cfg['beat']}}
-    with open(os.path.join(d, 'manifest.json'), 'w') as f:
-        json.dump(man, f, indent=2)
+def raw_dir():
+    return RAW
 
 
 def probe_duration(path):
@@ -108,36 +98,6 @@ def probe_duration(path):
         return 18.0
 
 
-def main_beat(entry, default):
-    """Find the main behaviour beat in whatever shape the manifest uses."""
-    if not isinstance(entry, dict):
-        return default
-    for k in ('main_beat', 'main', 'beat', 'hero'):
-        v = entry.get(k)
-        if isinstance(v, (int, float)):
-            return float(v)
-        if isinstance(v, dict) and isinstance(v.get('t'), (int, float)):
-            return float(v['t'])
-    beats = entry.get('beats')
-    if isinstance(beats, dict) and beats:
-        for k in ('main', 'main_beat', 'hero'):
-            if k in beats:
-                v = beats[k]
-                return float(v['t'] if isinstance(v, dict) else v)
-        v = list(beats.values())[0]
-        return float(v['t'] if isinstance(v, dict) else v)
-    if isinstance(beats, list) and beats:
-        for b in beats:
-            if isinstance(b, dict) and (b.get('main') or b.get('name') in ('main', 'hero')):
-                return float(b.get('t', default))
-        b = beats[len(beats) // 2]
-        if isinstance(b, dict):
-            return float(b.get('t', b.get('time', default)))
-        if isinstance(b, (int, float)):
-            return float(b)
-    return default
-
-
 def read_manifest(d, rid):
     p = os.path.join(d, 'manifest.json')
     if not os.path.exists(p):
@@ -146,7 +106,7 @@ def read_manifest(d, rid):
         m = json.load(open(p))
     except Exception:
         return {}
-    if isinstance(m, dict) and rid in m:
+    if isinstance(m, dict) and isinstance(m.get(rid), dict):
         return m[rid]
     if isinstance(m, dict) and isinstance(m.get('reels'), dict):
         return m['reels'].get(rid, {})
@@ -157,179 +117,226 @@ def read_manifest(d, rid):
     return {}
 
 
+def _num(v):
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, dict):
+        for k in ('t', 'time', 'start'):
+            if isinstance(v.get(k), (int, float)):
+                return float(v[k])
+    return None
+
+
+def shots_of(man):
+    out = []
+    for s in man.get('shots', []) or []:
+        if isinstance(s, dict):
+            a, b = _num(s.get('start')), _num(s.get('end'))
+            if a is not None:
+                out.append(dict(start=a, end=b, type=str(s.get('type', s.get('name', ''))),
+                                label=str(s.get('label', '')), beats=s.get('beats', {})))
+    return sorted(out, key=lambda s: s['start'])
+
+
+def anchor_time(man, name):
+    """When does `name` happen? beats{} first, then a shot whose type/label/beats mention it."""
+    beats = man.get('beats') or {}
+    if isinstance(beats, dict) and name in beats and _num(beats[name]) is not None:
+        return _num(beats[name])
+    if isinstance(beats, list):
+        for b in beats:
+            if isinstance(b, dict) and name in (b.get('name'), b.get('type')):
+                return _num(b)
+    for s in shots_of(man):
+        if name in (s['type'], s['label']) or name in s['type'].split('_') or \
+                (isinstance(s['beats'], dict) and name in s['beats']):
+            if isinstance(s['beats'], dict) and _num(s['beats'].get(name)) is not None:
+                return _num(s['beats'][name])
+            return s['start']
+    return None
+
+
+def main_time(man, default):
+    for k in ('main', 'main_beat'):
+        v = _num(man.get(k))
+        if v is not None:
+            return v
+    v = anchor_time(man, 'main')
+    if v is not None:
+        return v
+    for s in shots_of(man):
+        if s['type'] in ('main', 'hero', 'behaviour', 'behavior'):
+            return s['start']
+    return default
+
+
 # ------------------------------------------------------------------------------------- dither
-_CELL_B = None
+_CB = {}
 
 
-def cell_bayer():
-    global _CELL_B
-    if _CELL_B is None:
-        b = bayer_tile(H // CELL + 1, W // CELL + 1, 8)
-        _CELL_B = np.repeat(np.repeat(b, CELL, 0), CELL, 1)[:H, :W]
-    return _CELL_B
+def cell_bayer(cell=CELL):
+    if cell not in _CB:
+        b = bayer_tile(H // cell + 1, W // cell + 1, 8)
+        _CB[cell] = np.repeat(np.repeat(b, cell, 0), cell, 1)[:H, :W]
+    return _CB[cell]
 
 
-def band_scrim(frame, top, strength):
-    """Ordered-dither darkening of the top or bottom band (no smooth gradient), in stepped strength."""
+def band_scrim(frame, top, strength, frac=0.27):
+    """Soft, stepped ordered-dither darkening of the top or bottom band behind text."""
     if strength <= 0:
         return
-    strength = math.floor(strength * 4 + 1e-6) / 4
-    band = int(H * 0.30)
+    strength = math.floor(strength * 6 + 1e-6) / 6
+    band = int(H * frac)
     yy = np.arange(band, dtype=np.float32)
     lvl = (1 - yy / band) if top else (yy / band)
-    lvl = np.clip(lvl, 0, 1) ** 0.9 * 0.85 * strength
+    lvl = np.clip(lvl, 0, 1) ** 1.1 * 0.75 * strength
     rows = slice(0, band) if top else slice(H - band, H)
-    frame[rows] = dither_darken(frame[rows], np.broadcast_to(lvl[:, None], (band, W)), 3)
+    frame[rows] = dither_darken(frame[rows], np.broadcast_to(lvl[:, None], (band, W)), CELL, steps=3, strength=0.3)
+
+
+_R2 = None
 
 
 def endcard_bg(still, te):
-    """Three-level ordered-dither darken plus a slowly closing pixel vignette."""
-    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
-    # radius in cells, so the vignette edge steps in whole cells
-    cy, cx = (yy // CELL) * CELL, (xx // CELL) * CELL
-    r2 = ((cx - W / 2) / (W * 0.62)) ** 2 + ((cy - H * 0.46) / (H * 0.55)) ** 2
-    a = min(1.0, te / 0.5) * 1.05
-    b = 0.45 + 0.9 * min(1.0, te / END_DUR)
-    v = a + b * r2
-    lv = np.clip(np.floor(v + cell_bayer() - 0.5 + 0.5), 0, 2).astype(np.uint8)
-    lv = np.where(v < 0.02, 0, lv)
-    f = still.astype(np.uint16)
-    out = still.copy()
-    l1 = lv == 1
-    l2 = lv >= 2
-    out[l1] = (f[l1] * 7 // 16).astype(np.uint8)
-    navy = np.array([5, 9, 18], np.uint16)
-    out[l2] = ((f[l2] * 3 // 16) + navy).astype(np.uint8)
-    return out
+    """Calm darkening: ordered dither across three levels, with a slow, soft vignette."""
+    global _R2
+    if _R2 is None:
+        yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+        _R2 = ((xx - W / 2) / (W * 0.7)) ** 2 + ((yy - H * 0.45) / (H * 0.6)) ** 2
+    r2 = _R2
+    a = min(1.0, te / 1.2)
+    lvl = np.clip(a * (0.72 + 0.3 * min(1.0, te / END_DUR) * r2 + 0.2 * r2), 0, 1)
+    return dither_darken(still, lvl, CELL, colour=(6, 9, 8), steps=4, strength=0.3)
 
 
-# ------------------------------------------------------------------------------------- titles
-def _two_lines(text):
-    """Split a hook into two balanced lines at a space."""
-    words = text.split(' ')
-    if len(words) < 2:
-        return [text]
-    best = min(range(1, len(words)), key=lambda k: abs(text_width(' '.join(words[:k])) - text_width(' '.join(words[k:]))))
-    return [' '.join(words[:best]), ' '.join(words[best:])]
+# --------------------------------------------------------------------------------- the plan
+class Ornament:
+    """An RGBA ornament with a dithered fade-in/out, drawn like a TextBlock."""
+
+    def __init__(self, rgba, scale, t_in, fade=0.7, t_out=None, out_dur=0.6):
+        self.rgba, self.scale, self.t_in, self.fade, self.t_out, self.out_dur = rgba, scale, t_in, fade, t_out, out_dur
+
+    def draw(self, frame, t, cx, cy, anchor='center'):
+        if t < self.t_in:
+            return
+        op = min(1.0, (t - self.t_in) / self.fade)
+        if self.t_out is not None and t >= self.t_out:
+            op = min(op, 1 - (t - self.t_out) / self.out_dur)
+        if op <= 0:
+            return
+        O.draw_rgba(frame, self.rgba, cx, cy, self.scale, anchor, op)
 
 
-def _two_lines_text(text):
-    return '\n'.join(_two_lines(text))
+def fade_text(text, style, scale, t_in, t_out=None, stagger=0.05, fade_dur=0.7, out_dur=0.7, spacing=1,
+              max_w=None, align='center'):
+    return TextBlock(text, STYLES[style], scale=scale, mode='fade', t_in=t_in, stagger=stagger, fade_dur=fade_dur,
+                     t_out=t_out, out_dur=out_dur, wave=None, spacing=spacing, max_w=max_w, align=align,
+                     icons={DOT: O.MIDDOT})
 
 
-def build(rid, total_hint=None, beat_hint=None, footage=18.0):
-    cfg = REELS[rid]
+def build(rid, man, footage):
+    cfg = FILMS[rid]
     E = min(footage, MAX_FOOTAGE)
     total = E + END_DUR
-    beat = beat_hint if beat_hint is not None else cfg['beat']
-    beat = max(3.3, min(beat, E - 5.3))
-    items = []           # (block, cx, cy, anchor)
-    voices = []          # (block, voice)
-    sfx = []             # (time, clip name)
+    items = []            # (drawable, x, y, anchor)
+    log = []
 
-    # hook (top band): two lines at 7x if it fits, else 6x
-    hs = 7 if max(text_width(l) for l in _two_lines(cfg['hook'])) * 7 <= 1000 else 6
-    hook = TextBlock(_two_lines_text(cfg['hook']), STYLES['caption'], scale=hs, t_in=0.25, type_rate=0.055,
-                     t_out=2.65, out_dur=0.3, keywords={cfg['hook_kw']: STYLES['ember']},
-                     sparkle_words=(cfg['hook_kw'],), sparkle_rate=4.0, seed=11)
-    items.append((hook, W // 2, 300, 'center'))
-    voices.append((hook, 'narrator'))
+    # title card over the establishing shot
+    t_title_out = min(5.2, E * 0.3)
+    ts = min(7, fit_scale(cfg['title'], 960, 7, 4, spacing=2))
+    title = fade_text(cfg['title'], 'bone', ts, 0.6, t_out=t_title_out, stagger=0.07, fade_dur=0.8, spacing=2)
+    rule = Ornament(O.fern_rule(70, leaf=3, seed=4), 3, 1.5, fade=0.9, t_out=t_title_out)
+    sub = fade_text(f'Project Zealandia {DOT} Field Notes', 'sage', 3, 1.9, t_out=t_title_out, stagger=0.03, spacing=2)
+    items += [(title, W // 2, 300, 'center'), (rule, W // 2, 300 + ts * 10 + 12, 'center'),
+              (sub, W // 2, 300 + ts * 10 + 64, 'center')]
+    log.append(f'title "{cfg["title"]}" 0.60 - {t_title_out + 0.7:.2f}s')
+    top_busy = [(0.0, t_title_out + 0.8)]
 
-    # name card (bottom band): star tag, name, optional subtitle, the fact typed
-    name_s = min(8, fit_scale(cfg['name'], 1000, 8, 5))
-    t_out = min(beat + 4.9, E - 0.35)
-    tag = TextBlock('\x02 FIELD GUIDE \x02', STYLES['small'], scale=3, mode='drop', t_in=beat - 0.15, drop_h=4,
-                    drop_dur=0.25, stagger=0.012, wave=None, icons={'\x02': SMALL_STAR},
-                    t_out=t_out, out_dur=0.35)
-    name = TextBlock(cfg['name'], STYLES['name'], scale=name_s, mode='drop', t_in=beat, drop_h=22,
-                     drop_dur=0.55, stagger=0.045, t_out=t_out, out_dur=0.35,
-                     sparkle_words=tuple(w for w in cfg['name'].split()), sparkle_rate=2.2, seed=21)
-    sub = None
-    if cfg.get('sub'):
-        sub = TextBlock(cfg['sub'], STYLES['small'], scale=4, mode='drop', t_in=beat + 0.45, drop_h=5,
-                        drop_dur=0.3, stagger=0.018, wave=None, t_out=t_out, out_dur=0.35)
-    fact = TextBlock(cfg['fact'], STYLES['caption'], scale=5, max_w=1000, t_in=beat + 1.05, type_rate=0.05,
-                     t_out=t_out, out_dur=0.35, wave=(1, 0.6, 0.5))
-    bottom = 1810
-    stack = [(tag, 4), (name, 8 if sub else 16), (sub, 16), (fact, 0)]
-    stack = [(b, g) for b, g in stack if b is not None]
-    y = bottom - sum(b.h * b.scale + g for b, g in stack)
-    for b, g in stack:
-        items.append((b, W // 2, y, 'top'))
-        y += b.h * b.scale + g
-    voices.append((fact, 'guide'))
-    sfx += [(beat - 0.3, 'whoosh'), (name.t_land, 'chime')]
-    card_span = (beat - 0.3, t_out + 0.35)
+    # lower third at the main beat
+    tm = main_time(man, E * 0.4)
+    lt0 = max(t_title_out + 0.6, min(tm + 0.3, E - 7.5))
+    lt1 = min(lt0 + 6.5, E - 0.6)
+    lrule = Ornament(O.fern_rule(64, leaf=3, seed=12), 3, lt0, fade=0.6, t_out=lt1)
+    name = fade_text(cfg['common'], 'bone', min(6, fit_scale(cfg['common'], W - 2 * MARGIN, 6, 4, spacing=2)),
+                     lt0 + 0.3, t_out=lt1, stagger=0.06, spacing=2, align='left')
+    place = fade_text(cfg['place'], 'sage', 3, lt0 + 1.0, t_out=lt1, stagger=0.02, spacing=2, align='left')
+    sci = fade_text(cfg['sci'], 'muted', 3, lt0 + 1.5, t_out=lt1, stagger=0.02, spacing=1, align='left')
+    y = 1800 - (sci.h * 3 + place.h * 3 + name.h * name.scale + 14 * 3 + 30)
+    items.append((lrule, MARGIN - 6, y, 'left'))
+    y += 14 * 3 + 6
+    for blk, gap in ((name, 10), (place, 8), (sci, 0)):
+        items.append((blk, MARGIN, y, 'left'))
+        y += blk.h * blk.scale + gap
+    log.append(f'lower third "{cfg["common"]}" {lt0:.2f} - {lt1 + 0.7:.2f}s (main beat {tm:.2f}s)')
+    bottom_busy = [(lt0 - 0.2, lt1 + 0.8)]
+
+    # observation captions, placed on the shot list / beats, never on top of each other
+    caps = []
+    last_end = t_title_out + 0.9
+    for name_, text in cfg['captions']:
+        if len(caps) >= 3:
+            break
+        ta = anchor_time(man, name_)
+        if ta is None:
+            continue
+        t0 = max(ta + 0.5, last_end + 0.6)
+        if t0 - ta > 7.0:
+            log.append(f'caption skipped (stale by {t0 - ta:.1f}s): "{text}" anchor {name_}@{ta:.2f}')
+            continue
+        dur = 3.2 + 0.035 * len(text)
+        if t0 + dur > E - 0.5:
+            log.append(f'caption skipped (no room): "{text}" anchor {name_}@{ta:.2f}')
+            continue
+        caps.append((t0, t0 + dur, text, name_, ta))
+        last_end = t0 + dur + 0.7
+    for t0, t1, text, name_, ta in caps:
+        c = fade_text(text, 'bone', 4, t0, t_out=t1, stagger=0.025, fade_dur=0.6, out_dur=0.7, max_w=W - 2 * 80)
+        items.append((c, W // 2, 330, 'center'))
+        top_busy.append((t0 - 0.2, t1 + 0.8))
+        log.append(f'caption {t0:6.2f} - {t1 + 0.7:6.2f}s  [{name_}@{ta:.2f}] "{text}"')
 
     # end card
-    logo1 = TextBlock('PROJECT', STYLES['gold'], scale=8, mode='drop', t_in=E + 0.1, drop_h=20, drop_dur=0.6,
-                      stagger=0.05, seed=31, wave=(1, 0.5, 0.5))
-    zs = fit_scale('ZEALANDIA', 900, 11, 7)
-    logo2 = TextBlock('ZEALANDIA', STYLES['gold'], scale=zs, mode='drop', t_in=E + 0.28, drop_h=22, drop_dur=0.65,
-                      stagger=0.055, sparkle_words=('ZEALANDIA',), sparkle_rate=6.0, seed=32, wave=(1, 0.5, 0.45))
-    tagline = TextBlock('A WILDLIFE PHOTOGRAPHY ADVENTURE', STYLES['small'], scale=3, mode='drop',
-                        t_in=E + 0.85, drop_h=5, drop_dur=0.3, stagger=0.012, wave=None)
-    cta1 = TextBlock("COMMENT 'PLAY'\nFOR THE GAME LINK", STYLES['caption'], scale=6, t_in=E + 0.8,
-                     type_rate=0.034, keywords={'PLAY': STYLES['ember']}, sparkle_words=('PLAY',),
-                     sparkle_rate=5.0, seed=41, wave=(1, 0.6, 0.5))
-    badge = TextBlock('\x01', STYLES['caption'], scale=6, mode='drop', t_in=cta1.t_done + 0.05, drop_h=10,
-                      drop_dur=0.45, icons={'\x01': CHAT_PAD}, wave=(2, 0.9, 0.0))
-    cta2 = TextBlock('PLAYTEST ON DISCORD,\nLINK IN BIO', STYLES['caption'], scale=5,
-                     t_in=cta1.t_done + 0.15, type_rate=0.034,
-                     keywords={'DISCORD': STYLES['name']}, sparkle_words=('DISCORD',), sparkle_rate=3.0,
-                     seed=42, wave=(1, 0.6, 0.5))
-    items += [(logo1, W // 2, 540, 'center'), (logo2, W // 2, 685, 'center'), (tagline, W // 2, 815, 'center'),
-              (cta1, W // 2, 925, 'top'), (badge, W // 2, 1225, 'center'), (cta2, W // 2, 1320, 'top')]
-    voices += [(cta1, 'host'), (cta2, 'host')]
-    sfx += [(E - 0.25, 'whoosh_down'), (logo2.t_land, 'bass'), (logo2.t_done - 0.1, 'chime')]
-    return dict(E=E, total=total, beat=beat, items=items, voices=voices, sfx=sfx, hook=hook,
-                card_span=card_span, cfg=cfg)
+    lg = O.logo()
+    ls = 4 if lg.shape[1] * 4 <= W - 40 else 3
+    logo = Ornament(lg, ls, E + 0.35, fade=1.1)
+    cta1 = TextBlock('Comment PLAY\nfor the game link', STYLES['bone'], scale=5, mode='fade', t_in=E + 1.6,
+                     stagger=0.03, fade_dur=0.6, wave=None, spacing=1, max_w=W - 120,
+                     keywords={'PLAY': STYLES['moss']})
+    div = Ornament(O.fern_divider(42, leaf=3), 3, E + 2.5, fade=0.8)
+    cta2 = fade_text(f'Playtest on Discord\n{DOT} link in bio {DOT}', 'bone', 4, E + 2.8, stagger=0.03,
+                     fade_dur=0.6)
+    items += [(logo, W // 2, 690, 'center'), (cta1, W // 2, 1080, 'center'), (div, W // 2, 1215, 'center'),
+              (cta2, W // 2, 1330, 'center')]
+    log.append(f'end card {E:.2f} - {total:.2f}s')
+    return dict(E=E, total=total, items=items, top_busy=top_busy, bottom_busy=bottom_busy, cfg=cfg, log=log)
 
 
-# --------------------------------------------------------------------------------------- audio
-def render_audio(rid, plan, out_wav, log_lines):
-    total = plan['total']
-    n = int(total * A.SR)
-    voice = np.zeros(n)
-    spans = []
-    for blk, vname in plan['voices']:
-        v, blog = A.babble(blk.events, vname, total)
-        voice += v
-        spoken = [e for e in blk.events if e['ch'].isalnum()]
-        if spoken:
-            spans.append((spoken[0]['t'] - 0.05, spoken[-1]['t'] + 0.15))
-        log_lines.append('# block "' + blk.text.replace(chr(10), ' / ') + f'" voice={vname}')
-        log_lines.append('#   t(s)    frame  sample   char  semis  Hz      onset_err_ms')
-        for (t, s0, c, semi, f0) in blog:
-            frame = int(round(t * FPS))
-            # measure the onset in the rendered stem
-            # (look back only 2 ms: a blip always ends >= 2.6 ms before the next one starts)
-            seg = np.abs(voice[max(0, s0 - 90):s0 + 400])
-            hit = np.nonzero(seg > 0.02)[0]
-            onset = (max(0, s0 - 90) + hit[0]) if len(hit) else -1
-            err = (onset - s0) / A.SR * 1000 if onset >= 0 else float('nan')
-            vis_t = frame / FPS
-            log_lines.append(f'  {t:7.3f}  {frame:5d}  {s0:7d}  {c!r:5}  {semi:+4d}  {f0:7.1f}  {err:+6.1f}'
-                             f'{"" if abs(vis_t - t) < 1e-6 else "  (visual " + f"{vis_t:.3f})"}')
+def _strength(t, spans, ramp=0.5):
+    s = 0.0
+    for a, b in spans:
+        if a <= t <= b:
+            s = max(s, min(1.0, (t - a) / ramp, (b - t) / ramp))
+    return s
+
+
+# ----------------------------------------------------------------------------------- render
+def render_audio(rid, plan, wav):
     cfg = plan['cfg']
-    mus = A.music(cfg['music'], total, rms=0.19, offset=cfg.get('music_offset', 0.0))
-    # the sfx also duck the music a little
-    for t, name in plan['sfx']:
-        spans.append((t, t + 0.35))
-    mix = mus * A.duck_curve(n, spans, depth=0.5) + voice * 0.62
-    clips = {'whoosh': A.whoosh(0.7, True), 'whoosh_down': A.whoosh(0.6, False), 'chime': A.chime(),
-             'bass': A.bass_hit()}
-    gains = {'whoosh': 0.8, 'whoosh_down': 0.7, 'chime': 0.75, 'bass': 1.0}
-    for t, name in plan['sfx']:
-        A.place(mix, clips[name], t, gains[name])
-        log_lines.append(f'# sfx {name:12s} at {t:7.3f}s  frame {int(round(t * FPS))}')
-    A.write_wav(out_wav, A.master(mix))
-    A.write_wav(out_wav.replace('.wav', '_voice.wav'), np.clip(voice, -1, 1), stereo=False)
+    mix, stems, off = A.mix_film(plan['total'], cfg['bed'], cfg['music'], cfg['music_offset'], end_t=plan['E'],
+                                 seed=zlib.crc32(rid.encode()) % 1000)
+    A.write_wav(wav, mix)
+    lines = [f'reel {rid}: music {cfg["music"]} from {off:.1f}s, bed {cfg["bed"]}',
+             f'overall RMS  mix {A.db(mix):6.1f} dBFS   music {A.db(stems["music"]):6.1f}   '
+             f'ambience {A.db(stems["ambience"]):6.1f}   peak {20 * math.log10(np.max(np.abs(mix)) + 1e-9):6.1f} dBFS',
+             '  sec    mix   music  ambience   (dBFS RMS per second; stems before the master gain)']
+    for s in range(int(plan['total'])):
+        a, b = s * A.SR, (s + 1) * A.SR
+        lines.append(f'  {s:3d}  {A.db(mix[a:b]):6.1f}  {A.db(stems["music"][a:b]):6.1f}  {A.db(stems["ambience"][a:b]):6.1f}')
+    return lines
 
 
-# --------------------------------------------------------------------------------------- video
-def render(rid, placeholder=False, frames_only=None, out_dir=None):
-    d = raw_dir(placeholder)
+def render(rid, frames_only=None, out_dir=None, cuts='dither'):
+    d = raw_dir()
     src = os.path.join(d, f'{rid}.mp4')
     if not os.path.exists(src):
         raise SystemExit(f'missing footage: {src}')
@@ -337,23 +344,25 @@ def render(rid, placeholder=False, frames_only=None, out_dir=None):
     os.makedirs(out_dir, exist_ok=True)
     man = read_manifest(d, rid)
     footage = probe_duration(src)
-    if isinstance(man.get('duration'), (int, float)):
-        footage = min(footage, float(man['duration']))
-    plan = build(rid, beat_hint=main_beat(man, REELS[rid]['beat']), footage=footage)
+    if _num(man.get('duration')) is not None:
+        footage = min(footage, _num(man['duration']))
+    plan = build(rid, man, footage)
     E, total = plan['E'], plan['total']
     nfr = int(round(total * FPS))
-    log = [f'reel {rid}: footage {footage:.2f}s, end card at {E:.2f}s, total {total:.2f}s ({nfr} frames), '
-           f'name-card beat {plan["beat"]:.2f}s',
-           'bleep onsets are rendered at the exact frame time the letter first appears (reveals snap to 1/30 s);',
-           'onset_err_ms is measured from the rendered voice stem.']
+    cut_frames = sorted({int(round(s['start'] * FPS)) for s in shots_of(man) if 0.2 < s['start'] < E - 0.2})
+    plan['log'].insert(0, f'reel {rid}: footage {footage:.2f}s, end card at {E:.2f}s, total {total:.2f}s '
+                          f'({nfr} frames), {len(cut_frames)} cuts ({cuts})')
     wav = os.path.join(out_dir, f'reel_{rid}.wav')
-    render_audio(rid, plan, wav, log)
-    with open(os.path.join(out_dir, f'reel_{rid}_timing.txt'), 'w') as f:
-        f.write('\n'.join(log) + '\n')
+    if frames_only is None:
+        levels = render_audio(rid, plan, wav)
+        with open(os.path.join(out_dir, f'reel_{rid}_levels.txt'), 'w') as f:
+            f.write('\n'.join(levels) + '\n')
+        with open(os.path.join(out_dir, f'reel_{rid}_plan.txt'), 'w') as f:
+            f.write('\n'.join(plan['log']) + '\n')
 
-    dec = subprocess.Popen(['ffmpeg', '-v', 'error', '-i', src, '-vf',
-                            f'scale={W}:{H}:flags=neighbor,fps={FPS}', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'],
-                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL if frames_only is not None else None)
+    dec = subprocess.Popen(['ffmpeg', '-v', 'error', '-i', src, '-vf', f'scale={W}:{H}:flags=neighbor,fps={FPS}',
+                            '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], stdout=subprocess.PIPE,
+                           stderr=subprocess.DEVNULL if frames_only is not None else None)
     out_mp4 = os.path.join(out_dir, f'reel_{rid}.mp4')
     enc = None
     if frames_only is None:
@@ -363,34 +372,37 @@ def render(rid, placeholder=False, frames_only=None, out_dir=None):
                                 '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-shortest',
                                 '-movflags', '+faststart', out_mp4], stdin=subprocess.PIPE)
     fsz = W * H * 3
-    last = None
+    last = prev_shot_last = None
     frozen = None
     saved = {}
     eframe = int(round(E * FPS))
+    xf_n = int(round(XFADE * FPS))
+    cur_cut = None
     for i in range(nfr):
         t = i / FPS
         if i <= eframe:
-            buf = dec.stdout.read(fsz) if dec.poll() is None or True else b''
+            buf = dec.stdout.read(fsz)
             if len(buf) == fsz:
+                if i in cut_frames:
+                    prev_shot_last, cur_cut = last, i
                 last = np.frombuffer(buf, np.uint8).reshape(H, W, 3)
             if last is None:
                 last = np.zeros((H, W, 3), np.uint8)
             frame = last.copy()
             if i == eframe:
                 frozen = last.copy()
+            # ordered-dither cross-dissolve out of the previous shot's last frame
+            if cuts == 'dither' and cur_cut is not None and prev_shot_last is not None and i - cur_cut < xf_n:
+                k = (i - cur_cut + 1) / (xf_n + 1)
+                keep_old = cell_bayer() >= k
+                frame[keep_old] = prev_shot_last[keep_old]
         if t >= E:
             frame = endcard_bg(frozen if frozen is not None else last, t - E)
         else:
-            hook = plan['hook']
-            if t < hook.t_out + hook.out_dur:
-                st = min(1.0, t / 0.25) if t < hook.t_out else 1 - (t - hook.t_out) / hook.out_dur
-                band_scrim(frame, True, st)
-            a, b = plan['card_span']
-            if a <= t < b:
-                st = min(1.0, (t - a) / 0.25) if t < b - 0.35 else (b - t) / 0.35
-                band_scrim(frame, False, st)
-        for blk, cx, cy, anchor in plan['items']:
-            blk.draw(frame, t, cx, cy, anchor)
+            band_scrim(frame, True, _strength(t, plan['top_busy']))
+            band_scrim(frame, False, _strength(t, plan['bottom_busy']))
+        for blk, x, y, anchor in plan['items']:
+            blk.draw(frame, t, x, y, anchor)
         if enc:
             enc.stdin.write(frame.tobytes())
         if frames_only is not None and i in frames_only:
@@ -406,32 +418,34 @@ def render(rid, placeholder=False, frames_only=None, out_dir=None):
     return out_mp4, saved, plan
 
 
-def contact_sheet(mp4, out_png, n=8):
-    dur = probe_duration(mp4)
-    times = [dur * (k + 0.5) / n for k in range(n)]
-    tiles = []
+def contact_sheet(mp4, out_png, n=12, cols=6):
     from PIL import Image
-    for t in times:
+    dur = probe_duration(mp4)
+    tiles = []
+    for k in range(n):
+        t = dur * (k + 0.5) / n
         raw = subprocess.run(['ffmpeg', '-v', 'error', '-ss', f'{t:.3f}', '-i', mp4, '-frames:v', '1',
                               '-vf', 'scale=270:480:flags=neighbor', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'],
                              capture_output=True).stdout
         tiles.append(np.frombuffer(raw, np.uint8).reshape(480, 270, 3))
-    sheet = np.concatenate([np.concatenate(tiles[:4], 1), np.concatenate(tiles[4:], 1)], 0)
-    Image.fromarray(sheet).save(out_png)
+    rows = [np.concatenate(tiles[r * cols:(r + 1) * cols], 1) for r in range(n // cols)]
+    Image.fromarray(np.concatenate(rows, 0)).save(out_png)
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--id', choices=list(REELS))
+    ap.add_argument('--id', choices=list(FILMS))
     ap.add_argument('--all', action='store_true')
-    ap.add_argument('--placeholder', action='store_true', help='build and use still-pan placeholder footage')
     ap.add_argument('--out', default=None, help='output dir (default <scratch>/promo/out)')
-    ap.add_argument('--sheet', action='store_true', help='also write an 8-frame contact sheet')
+    ap.add_argument('--sheet', action='store_true', help='also write a 12-frame contact sheet')
+    ap.add_argument('--cuts', choices=['dither', 'plain'], default='dither')
+    ap.add_argument('--raw', default=None, help='footage dir (default <scratch>/promo/raw)')
     ap.add_argument('--frames', default=None, help='only preview these times (s, comma separated) as PNGs')
     a = ap.parse_args()
-    if a.placeholder:
-        make_placeholders()
-    ids = list(REELS) if a.all else ([a.id] if a.id else [])
+    if a.raw:
+        global RAW
+        RAW = a.raw
+    ids = list(FILMS) if a.all else ([a.id] if a.id else [])
     if not ids:
         ap.error('give --id or --all')
     if a.frames:
@@ -439,7 +453,8 @@ def main():
         times = [float(x) for x in a.frames.split(',')]
         for rid in ids:
             fr = {int(round(t * FPS)): t for t in times}
-            _, saved, plan = render(rid, a.placeholder, frames_only=set(fr), out_dir=a.out)
+            _, saved, plan = render(rid, frames_only=set(fr), out_dir=a.out, cuts=a.cuts)
+            print('\n'.join(plan['log']))
             for i, img in saved.items():
                 p = os.path.join(PROMO, 'work', f'prev_{rid}_{fr[i]:05.2f}.png')
                 os.makedirs(os.path.dirname(p), exist_ok=True)
@@ -447,8 +462,8 @@ def main():
                 print('preview', p)
         return
     for rid in ids:
-        mp4, _, plan = render(rid, a.placeholder, out_dir=a.out)
-        print(f'wrote {mp4}  ({plan["total"]:.2f}s, beat {plan["beat"]:.2f}s)')
+        mp4, _, plan = render(rid, out_dir=a.out, cuts=a.cuts)
+        print(f'wrote {mp4}  ({plan["total"]:.2f}s)')
         if a.sheet:
             sp = mp4.replace('.mp4', '_sheet.png')
             contact_sheet(mp4, sp)

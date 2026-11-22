@@ -40,11 +40,14 @@ for v in (xs, ys):
     if not ok.any(): v[:] = W / 2 if v is xs else H / 2
     else: v[~ok] = np.interp(np.flatnonzero(~ok), np.flatnonzero(ok), v[ok])
 
+SHOTS = tr.get('shots') or []
 def smooth(v, sigma):
-    """zero-phase gaussian smoothing, with hard cuts (jumps > 300 px) kept as cuts"""
+    """zero-phase gaussian smoothing within each shot (hard cuts stay cuts; without a shot list, a
+    jump of > 300 px counts as a cut)"""
     if sigma <= 0: return v.copy()
     out = np.empty_like(v)
-    cuts = [0] + [i for i in range(1, len(v)) if abs(v[i] - v[i - 1]) > 300] + [len(v)]
+    if SHOTS: cuts = sorted(set([0] + [min(len(v), s['f0']) for s in SHOTS] + [len(v)]))
+    else: cuts = [0] + [i for i in range(1, len(v)) if abs(v[i] - v[i - 1]) > 300] + [len(v)]
     r = int(sigma * 3)
     k = np.exp(-0.5 * (np.arange(-r, r + 1) / sigma) ** 2); k /= k.sum()
     for s, e in zip(cuts[:-1], cuts[1:]):
@@ -67,7 +70,7 @@ if missing:
 
 def enc(path, size):
     return subprocess.Popen(['ffmpeg', '-loglevel', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{size[0]}x{size[1]}', '-r', str(fps), '-i', '-',
-                             '-an', '-c:v', 'libx264', '-preset', 'slow', '-crf', '14', '-tune', 'animation', '-pix_fmt', 'yuv420p', '-r', str(fps), '-movflags', '+faststart', path], stdin=subprocess.PIPE)
+                             '-an', '-c:v', 'libx264', '-preset', 'medium', '-crf', '14', '-tune', 'animation', '-pix_fmt', 'yuv420p', '-r', str(fps), '-movflags', '+faststart', path], stdin=subprocess.PIPE)
 
 tall = enc(os.path.join(a.out, f'{a.id}.mp4'), (1080, 1920))
 wide = enc(os.path.join(a.out, f'{a.id}_wide.mp4'), (W, H))
@@ -86,7 +89,9 @@ for k, t in enumerate(stills, 1):
     frame(i).save(os.path.join(a.out, f'{a.id}_still_{k}.png'))
 
 # ---------------------------------------------------------------- manifest
+import fcntl
 mp = os.path.join(a.out, 'manifest.json')
+lockf = open(mp + '.lock', 'w'); fcntl.flock(lockf, fcntl.LOCK_EX)   # (encodes may run in parallel)
 man = json.load(open(mp)) if os.path.exists(mp) else {}
 beats, seen = {}, {}
 for b in tr['beats']:
@@ -98,6 +103,10 @@ man[a.id] = {
     'stills': {f'{a.id}_still_{k}.png': t for k, t in enumerate(stills, 1)},
     'crop': {'src': [W, H], 'box': [CW, CH], 'scale': scale},
 }
+if SHOTS:
+    man[a.id]['shots'] = [{'name': s['name'], 'type': s['type'], 'main': s['main'], 'start': s['start'], 'end': min(s['end'], round(n / fps, 3))} for s in SHOTS if s['f0'] < n]
+    # beats: the shot starts too, as 'shot:<name>'
+    for s in man[a.id]['shots']: beats.setdefault('shot:' + s['name'], s['start'])
 for k in ('notes',):
     if k in cfg: man[a.id][k] = cfg[k]
 json.dump(man, open(mp, 'w'), indent=1)

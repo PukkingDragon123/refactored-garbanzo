@@ -33,7 +33,12 @@ const shot = SHOTS[id];
 if (!shot) { console.error('unknown id', id, 'known:', Object.keys(SHOTS).join(', ')); process.exit(1); }
 const PROBE = flag('probe');
 const FPS = 30;
-const frames = +(opt('frames') ?? Math.round(shot.secs * FPS));
+// a documentary cut: shot.shots = [{ name, type, main, secs, start(L, S, t), tick(L, S, u, j, t, dt) }]
+const LIST = shot.shots ?? null;
+const bounds = [];
+if (LIST) { let f = 0; for (const s of LIST) { const n = Math.round(s.secs * FPS); bounds.push([f, f + n]); f += n; } }
+const total = LIST ? bounds[bounds.length - 1][1] : Math.round(shot.secs * FPS);
+const frames = Math.min(total, +(opt('frames') ?? total));
 const every = +(opt('every') ?? (PROBE ? 30 : 1));
 const OUT = opt('out') ?? path.join(process.env.PROMO_WORK ?? '/tmp/promo-work', id + (PROBE ? '-probe' : ''));
 
@@ -73,6 +78,13 @@ const LIB = `(() => {
   L.near = (sp, x) => { const s = L.sc(); const px = x ?? (L.pl() ? L.pl().x : 0); return ((s && s.animals) || []).filter(a => a.species === sp && !a.gone && !a.dead).sort((a, b) => Math.abs(a.x - px) - Math.abs(b.x - px))[0] || null; };
   L.beats = [];
   L.beat = (name) => { L.beats.push(name); };
+  L.gy = (x) => L.sc().st.terrain.groundY(x);
+  L.ss = (u) => u * u * (3 - 2 * u);
+  /** a straight, constant-speed camera move across the shot (u 0..1) */
+  L.pan = (x0, y0, x1, y1, z, u) => L.camSet(x0 + (x1 - x0) * u, y0 + (y1 - y0) * u, z);
+  L.slow = (k) => { window.game.slowmo = k; };
+  L.mori = (vis) => { const p = L.pl(); if (p) p.alpha = vis ? 1 : 0; };
+  L.put = (a, x, y) => { a.x = x; if (y !== undefined) a.y = y; a.vx = 0; if ('vy' in a) a.vy = 0; };
 })();`;
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -106,23 +118,38 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   }
   await page.evaluate(`window.__dtCap = 1/${FPS}; (${shot.setup})(window.__L)`);
   for (let i = 0; i < (shot.setupFrames ?? 0); i++) await step(1000 / FPS);
-  await page.evaluate(`window.__P = { tick: ${shot.tick} }`);
+  const ser = (f) => (f ? String(f) : 'null');
+  await page.evaluate(`window.__P = { tick: ${ser(shot.tick)}, k: -1, shots: [${(LIST ?? []).map(s => `{ name: ${JSON.stringify(s.name)}, secs: ${s.secs}, start: ${ser(s.start)}, tick: ${ser(s.tick)} }`).join(',')}] }`);
+  await page.evaluate(`window.__P.bounds = ${JSON.stringify(bounds)}`);
   const cdp = await page.context().newCDPSession(page);
-  const track = { id, fps: FPS, frames, every, w: 1280, h: 720, pos: [], beats: [] };
+  const track = { id, fps: FPS, frames, every, w: 1280, h: 720, pos: [], beats: [], gt: [],
+    shots: LIST ? LIST.map((s, k) => ({ name: s.name, type: s.type, main: s.main ?? null, start: +(bounds[k][0] / FPS).toFixed(3), end: +(bounds[k][1] / FPS).toFixed(3), f0: bounds[k][0], f1: bounds[k][1] })) : null };
   const t0 = Date.now();
   for (let i = 0; i < frames; i++) {
     const info = await page.evaluate(([i, fps]) => {
       const L = window.__L; L.beats = [];
       let r = null;
-      try { r = window.__P.tick(L, i / fps, 1 / fps, i); } catch (e) { console.error('[promo] tick', e && e.stack); }
+      const P = window.__P, S = window.__S, t = i / fps, dt = 1 / fps;
+      L.subj = null;
+      if (P.shots.length) {
+        let k = P.bounds.findIndex(b => i >= b[0] && i < b[1]);
+        if (k < 0) k = P.bounds.length - 1;
+        const sh = P.shots[k], j = i - P.bounds[k][0], n = P.bounds[k][1] - P.bounds[k][0];
+        if (k !== P.k) { P.k = k; L.beat('shot:' + sh.name); try { sh.start && sh.start(L, S, t); } catch (e) { console.error('[promo] start', sh.name, e && e.stack); } }
+        try { if (P.tick) r = P.tick(L, S, t, dt, i); } catch (e) { console.error('[promo] tick', e && e.stack); }
+        try { if (sh.tick) sh.tick(L, S, n > 1 ? j / (n - 1) : 0, j, t, dt); } catch (e) { console.error('[promo] shot tick', sh.name, e && e.stack); }
+      } else {
+        try { r = P.tick(L, t, dt, i); } catch (e) { console.error('[promo] tick', e && e.stack); }
+      }
       L.hide();
       return { r, beats: L.beats };
     }, [i, FPS]);
     await step(1000 / FPS);
     // where the subject is on screen this frame (projected after the frame's camera update)
-    const sp = await page.evaluate(() => { const L = window.__L; const s = L.subj; if (!s) return null; const [x, y] = L.proj(s.x, s.y, s.p ?? 1); return [Math.round(x * 10) / 10, Math.round(y * 10) / 10]; });
-    track.pos.push(sp);
-    for (const b of info.beats) { track.beats.push({ name: b, frame: i, t: +(i / FPS).toFixed(2) }); console.log(`  beat ${b} @ ${(i / FPS).toFixed(2)}s`); }
+    const sp = await page.evaluate(() => { const L = window.__L; const s = L.subj || { x: L.st().cam.x, y: L.st().cam.y }; const [x, y] = L.proj(s.x, s.y, s.p ?? 1); return [Math.round(x * 10) / 10, Math.round(y * 10) / 10, +window.game.time.toFixed(4)]; });
+    track.pos.push(sp && [sp[0], sp[1]]);
+    track.gt.push(sp && sp[2]);
+    for (const b of info.beats) { if (b.startsWith('shot:')) { console.log(`  ${b} @ ${(i / FPS).toFixed(2)}s`); continue; } track.beats.push({ name: b, frame: i, t: +(i / FPS).toFixed(2) }); console.log(`  beat ${b} @ ${(i / FPS).toFixed(2)}s`); }
     if (i % every === (shot.shotPhase ?? 0)) {
       const r = await cdp.send('Page.captureScreenshot', { format: 'png' });
       fs.writeFileSync(path.join(OUT, `f${String(i).padStart(5, '0')}.png`), Buffer.from(r.data, 'base64'));

@@ -76,16 +76,30 @@ def bayer_tile(h, w, n=4):
     return np.tile(b, reps)[:h, :w]
 
 
+_CELL_BAYER = {}
+
+
+def cell_bayer_tile(H, W, cell):
+    key = (H, W, cell)
+    if key not in _CELL_BAYER:
+        b = bayer_tile(H // cell + 1, W // cell + 1, 8)
+        _CELL_BAYER[key] = np.repeat(np.repeat(b, cell, 0), cell, 1)[:H, :W].astype(np.float32)
+    return _CELL_BAYER[key]
+
+
 def dither_darken(img, level, cell, colour=(6, 10, 18), steps=3, strength=0.34):
     """level: float map 0..1. Ordered dither across `steps` darkening levels, each a fixed blend toward
-    `colour`, so the pattern stays low-contrast (no smooth gradient, no screen-door)."""
+    `colour`, so the pattern stays low-contrast (no smooth gradient, no screen-door). Integer maths."""
     H, W = img.shape[:2]
-    b = bayer_tile(H // cell + 1, W // cell + 1, 8)
-    b = np.repeat(np.repeat(b, cell, 0), cell, 1)[:H, :W]
-    k = np.clip(np.floor(level * steps + b), 0, steps).astype(np.int32)
+    k = np.floor(np.asarray(level, np.float32) * steps + cell_bayer_tile(H, W, cell))
+    k = np.clip(k, 0, steps).astype(np.uint8)
     keep = (1 - strength) ** np.arange(steps + 1)
-    f = keep[k][..., None]
-    out = img.astype(np.float32) * f + np.array(colour, np.float32) * (1 - f)
+    f16 = np.round(keep * 256).astype(np.uint16)
+    c16 = np.round(np.outer(1 - keep, colour) * 256).astype(np.uint16)     # (steps+1, 3)
+    out = img.astype(np.uint16)
+    out *= f16[k][..., None]
+    out += c16[k]
+    out >>= 8
     return out.astype(np.uint8)
 
 
@@ -122,6 +136,8 @@ class Icon:
     """A hand-placed pixel sprite that sits inline in a line of text (rows of palette keys)."""
     rows: list
     palette: dict
+    oy: int | None = None            # rows from the line top; default sits it on the baseline
+
     def arrays(self):
         h, w = len(self.rows), max(len(r) for r in self.rows)
         col = np.zeros((h, w, 3), np.uint8)
@@ -194,7 +210,7 @@ def wrap(text, max_w, spacing=1):
 class Style:
     fill: list                    # gradient bands top -> bottom
     outline: str
-    outline2: str
+    outline2: str | None
     shadow: list                  # one colour per staircase step
     glow: str | None = None
     glow_rings: int = 3
@@ -205,6 +221,8 @@ class Style:
     sparkle: tuple = ('#ffffff', '#fff4c2', '#ffd56b')
     band_top: int = 1             # rows of the line the gradient spans
     band_bot: int = 12
+    shadow_density: tuple = ()    # ordered-dither density per shadow step (1 = solid), for soft shadows
+    carve: bool = False           # carved/weathered stone: hand-placed light and dark edges, chips, moss
 
 
 STYLES = {
@@ -229,6 +247,18 @@ STYLES = {
                   glow='#5cf2d8', glow_rings=4, glow_density=(0.45, 0.28, 0.14, 0.06), bevel=None,
                   under=None, shine='#ffffff',
                   sparkle=('#ffffff', '#e2fff9', '#8ff5e4')),
+    # ---- documentary look: bone text, a thin dark outline, a soft stepped shadow; nothing shiny
+    'bone': Style(fill=['#f6f0e2', '#ece3cf', '#e0d6bf'], outline='#17140f', outline2=None,
+                  shadow=['#0b0a07', '#0b0a07'], shadow_density=(1.0, 0.5), glow=None, band_top=2, band_bot=11),
+    'sage': Style(fill=['#cbd5b2', '#b9c49f'], outline='#121510', outline2=None,
+                  shadow=['#0a0c08', '#0a0c08'], shadow_density=(1.0, 0.4), glow=None),
+    'muted': Style(fill=['#b3aa94', '#a59c86'], outline='#14120e', outline2=None,
+                   shadow=['#0a0907'], shadow_density=(0.6,), glow=None),
+    'moss': Style(fill=['#e6f0c4', '#cfe09a', '#b6cc7c'], outline='#11160c', outline2=None,
+                  shadow=['#0a0c08', '#0a0c08'], shadow_density=(1.0, 0.5), glow=None),
+    # the carved, weathered logo stone
+    'carved': Style(fill=['#f1e9d4', '#e6dcc2', '#d8cbab'], outline='#120f0a', outline2=None,
+                    shadow=['#3a3022', '#251e15', '#120e09'], glow=None, carve=True, band_top=1, band_bot=30),
     # small print (subtitles)
     'small': Style(fill=['#e8fbf6', '#9fe0d6'], outline='#0b3540', outline2='#03090c',
                    shadow=['#08262e'], glow=None, bevel=None),
@@ -304,6 +334,43 @@ def bounce(u):
     return n1 * u * u + 0.984375
 
 
+def _hash(h, w, salt=0):
+    yy, xx = np.mgrid[0:h, 0:w]
+    v = (xx * 73856093) ^ (yy * 19349663) ^ (salt * 83492791)
+    return ((v * 2654435761) >> 7) % 1000 / 1000.0
+
+
+CARVE = dict(light='#fffbef', shade='#9c8d6c', deep='#776a4f', crack='#c2b392',
+             moss=('#5f7f3e', '#7b9a4a', '#46622f'))
+
+
+def carve(mask, fill, salt=3):
+    """Carved, weathered bone: lit top-left edges, shaded bottom-right edges, cracks, chips and moss
+    growing on the lower edges (placed per pixel by rule, so every letter weathers differently)."""
+    H, W = mask.shape
+    hsh = _hash(H, W, salt)
+    up, left = shift(mask, 0, 1), shift(mask, 1, 0)
+    down, right = shift(mask, 0, -1), shift(mask, -1, 0)
+    top_e = mask & ~up
+    left_e = mask & ~left
+    bot_e = mask & ~down
+    right_e = mask & ~right
+    inner = mask & up & down & left & right
+    fill[(bot_e | right_e) & mask] = hexc(CARVE['shade'])
+    fill[bot_e & right_e] = hexc(CARVE['deep'])
+    fill[(top_e | left_e) & ~bot_e] = hexc(CARVE['light'])
+    fill[inner & (hsh < 0.09)] = hexc(CARVE['crack'])
+    # a crack runs on a pixel or two
+    c2 = shift(inner & (hsh < 0.05), 1, 1) & inner
+    fill[c2] = hexc(CARVE['shade'])
+    # moss on the lower edges
+    m = bot_e & (hsh > 0.55)
+    fill[m] = hexc(CARVE['moss'][0])
+    fill[m & (hsh > 0.8)] = hexc(CARVE['moss'][1])
+    m2 = shift(m, 1, 0) & bot_e
+    fill[m2] = hexc(CARVE['moss'][2])
+
+
 POP = [-3, -2, 0, 1, 0]      # typewriter pop, one step per 30 fps frame
 
 
@@ -333,6 +400,7 @@ class TextBlock:
     seed: int = 1
     shine_period: float = 2.4
     fps: float | None = 30.0            # typed reveals snap to frame times, so blips and letters coincide
+    fade_dur: float = 0.6               # 'fade' mode: each letter dithers in over this long
 
     def __post_init__(self):
         self._layout()
@@ -365,7 +433,8 @@ class TextBlock:
                 if c in self.icons:
                     m, col = self.icons[c].arrays()
                     ih = m.shape[0]
-                    g = G(c, src_i, x, y, li, word, m, 0, 12 - ih + 2, col)
+                    oy = self.icons[c].oy
+                    g = G(c, src_i, x, y, li, word, m, 0, (12 - ih + 2) if oy is None else oy, col)
                     adv = m.shape[1]
                 else:
                     m, ox, oy, adv = glyph(c)
@@ -432,6 +501,13 @@ class TextBlock:
                 if g.ch != ' ':
                     n += 1
             self.t_done = t + max(0, n - 1) * self.stagger + self.drop_dur
+        elif self.mode == 'fade':
+            n = 0
+            for g in self.glyphs:
+                self.reveal[g.idx] = t + n * self.stagger
+                if g.ch != ' ':
+                    n += 1
+            self.t_done = t + max(0, n - 1) * self.stagger + self.fade_dur
         else:
             for g in self.glyphs:
                 self.reveal[g.idx] = t
@@ -478,6 +554,8 @@ class TextBlock:
             else:
                 dy = 0
             settled = r + self.drop_dur
+        elif self.mode == 'fade':
+            dy, settled = 0, r
         elif self.mode == 'type':
             f = int((t - r) * 30)
             dy = POP[f] if f < len(POP) else 0
@@ -542,6 +620,8 @@ class TextBlock:
                 bot_edge = sub & ~below
                 by_, bx = np.nonzero(bot_edge)
                 fill[by_ + y0, bx + x0] = hexc(gst.under)
+        if st.carve:
+            carve(mask & ~icon_px, fill)
         # shine sweep
         if st.shine and self.t_done < t:
             ph = ((t - self.t_done) % self.shine_period) / self.shine_period
@@ -554,12 +634,15 @@ class TextBlock:
         sil = mask | out1
         layers = []
         sh_union = np.zeros_like(mask)
+        b4 = bayer_tile(H, W, 4)
         for s, c in enumerate(st.shadow, 1):
             sh = shift(sil, s, s) & ~sil & ~sh_union
+            if len(st.shadow_density) >= s and st.shadow_density[s - 1] < 1:
+                sh &= b4 < st.shadow_density[s - 1]
             layers.append((sh, c))
             sh_union |= sh
         union = sil | sh_union
-        out2 = dilate(union, 8) & ~union
+        out2 = (dilate(union, 8) & ~union) if st.outline2 else np.zeros_like(union)
         col = np.zeros((H, W, 3), np.uint8)
         alpha = np.zeros((H, W), bool)
         # glow (bottom)
@@ -575,8 +658,9 @@ class TextBlock:
                 col[sel] = gc
                 alpha |= sel
                 prev = prev | ring
-        col[out2] = hexc(st.outline2)
-        alpha |= out2
+        if st.outline2:
+            col[out2] = hexc(st.outline2)
+            alpha |= out2
         for sh, c in layers:
             col[sh] = hexc(c)
             alpha |= sh
@@ -584,6 +668,17 @@ class TextBlock:
         alpha |= out1
         col[mask] = fill[mask]
         alpha |= mask
+        # per-letter dithered fade-in
+        if self.mode == 'fade':
+            op = np.zeros((H, W), np.float32)
+            for g in self.glyphs:
+                if g.ch == ' ':
+                    continue
+                o = min(1.0, max(0.0, (t - self.reveal[g.idx]) / self.fade_dur))
+                xa, xb = max(0, P + g.x - 2), min(W, P + g.x + g.mask.shape[1] + g.ox + 4)
+                ya, yb = max(0, PT + g.y - 6), min(H, PT + g.y + LINE_H + 6)
+                op[ya:yb, xa:xb] = np.maximum(op[ya:yb, xa:xb], o)
+            alpha &= bayer_tile(H, W, 8) < op
         # dissolve out
         if self.t_out is not None and t >= self.t_out:
             k = (t - self.t_out) / self.out_dur

@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""Synthesised audio for the Project Zealandia promo reels (all generated here; music is CC0).
+"""Documentary sound for the Project Zealandia promo films: CC0 music plus a synthesised ambience bed.
 
-  - babble(): Animal Crossing style "8-bit voice". One short pulse-wave blip per typed character,
-    pitched per word and per syllable on a pentatonic scale, with a per-speaker timbre (base pitch,
-    pulse duty, octave mix, glide). Spaces and punctuation are silent; a sentence's last word falls
-    in pitch ('?' rises). Hissy consonants get a little LFSR noise.
-  - whoosh(), chime(), bass_hit(): chiptune stingers.
-  - music(): a CC0 track from src/assets/trailer/, faded in and out.
-  - mix(): music ducked under the voice, plus voice and stingers, soft-limited.
+Nothing here is 8-bit. The beds are built from FFT-shaped noise, slow random swells and simple
+synthesised calls, all deterministic from a seed:
+  underwater()  low filtered rumble, slow water movement, bubble trains from a diver's exhale
+  night()       soft night air, a few crickets (filtered chirp pulses) over a distant chorus, a far ruru
+  forest()      wind in gusts, leaf rustle that follows the gusts, bellbird phrases, fantail chips,
+                a grey-warbler trill
+  beach()       surf: each wave swells, breaks and washes back (noise swells), a little wind, distant piping
+Music: a CC0 track from src/assets/trailer/ (see CREDITS.md), loudness-matched with long fades.
 
-CLI demo:  python3 tools/promo/audio.py --demo /path/demo.wav
+CLI demo:  python3 tools/promo/audio.py --demo night --out /path/demo.wav --seconds 20
 """
 from __future__ import annotations
 
@@ -17,7 +18,6 @@ import math
 import os
 import subprocess
 import wave
-import zlib
 
 import numpy as np
 
@@ -26,269 +26,324 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..', '..'))
 MUSIC_DIR = os.path.join(REPO, 'src', 'assets', 'trailer')
 
-VOWELS = set('AEIOUY')
-PENTA = [0, 2, 4, 7, 9]
+
+# ------------------------------------------------------------------------------------ building blocks
+def shaped_noise(n, lo, hi, seed, tilt=0.0, order=4):
+    """White noise band-limited in the frequency domain (soft 'order' skirts), unit RMS."""
+    rng = np.random.default_rng(seed)
+    X = np.fft.rfft(rng.standard_normal(n))
+    f = np.fft.rfftfreq(n, 1 / SR)
+    fs = np.maximum(f, 1.0)
+    g = 1 / (1 + (lo / fs) ** order) / (1 + (fs / hi) ** order)
+    if tilt:
+        g = g * (fs / 1000.0) ** tilt
+    y = np.fft.irfft(X * g, n)
+    return y / (np.std(y) + 1e-12)
 
 
-def _q(semi):
-    """Snap a semitone offset to the major pentatonic, so the babble sounds sung, not random."""
-    o, r = divmod(int(round(semi)), 12)
-    best = min(PENTA + [12], key=lambda p: abs(p - r))
-    return o * 12 + best
+def lowpass(x, hi, order=2):
+    X = np.fft.rfft(x)
+    f = np.fft.rfftfreq(len(x), 1 / SR)
+    return np.fft.irfft(X / (1 + (np.maximum(f, 1) / hi) ** order), len(x))
 
 
-def _h(s):
-    return zlib.crc32(s.encode('utf8'))
+def lfo(n, rate, seed, lo=0.0, hi=1.0):
+    """A smooth random curve (cosine-interpolated random points `rate` per second) in [lo, hi]."""
+    rng = np.random.default_rng(seed)
+    k = max(2, int(n / SR * rate) + 3)
+    pts = rng.random(k)
+    t = np.arange(n) / SR * rate
+    i = np.floor(t).astype(int)
+    u = t - i
+    u = (1 - np.cos(np.pi * u)) / 2
+    v = pts[i] * (1 - u) + pts[np.minimum(i + 1, k - 1)] * u
+    return lo + (hi - lo) * v
 
 
-VOICES = {
-    # base Hz, pulse duty, octave-up mix, blip length (s), downward glide, noise on hissy consonants
-    'narrator': dict(base=246.9, duty=0.25, oct=0.30, length=0.052, glide=0.07, hiss=0.22, gain=0.50),
-    'guide':    dict(base=329.6, duty=0.125, oct=0.22, length=0.046, glide=0.05, hiss=0.18, gain=0.46),
-    'host':     dict(base=196.0, duty=0.33, oct=0.35, length=0.050, glide=0.09, hiss=0.20, gain=0.52),
-}
-
-
-def pulse(freq, n, duty, phase0=0.0):
-    """freq may be an array (per sample). Returns (wave, end phase)."""
-    f = np.broadcast_to(np.asarray(freq, np.float64), (n,))
-    ph = phase0 + np.cumsum(f) / SR
-    w = np.where((ph % 1.0) < duty, 1.0, -1.0)
-    return w, ph[-1] if n else phase0
-
-
-def lfsr_noise(n, period=1, short=False, seed=1):
-    """NES-style noise: a 15-bit LFSR held for `period` samples (array or int)."""
-    reg = seed & 0x7FFF or 1
-    out = np.empty(n, np.float64)
-    per = np.broadcast_to(np.asarray(period, np.float64), (n,))
-    cnt = 0.0
-    val = 1.0
-    tap = 6 if short else 1
-    for i in range(n):
-        cnt -= 1
-        if cnt <= 0:
-            fb = (reg ^ (reg >> tap)) & 1
-            reg = (reg >> 1) | (fb << 14)
-            val = 1.0 if reg & 1 else -1.0
-            cnt += max(1.0, per[i])
-        out[i] = val
-    return out
-
-
-def _env(n, attack=0.003, release_frac=0.45):
-    e = np.ones(n)
+def env_ad(n, attack, decay_tau):
+    t = np.arange(n) / SR
+    e = np.exp(-t / decay_tau)
     a = max(1, int(attack * SR))
-    e[:a] = np.linspace(0, 1, a)
-    r = max(1, int(n * release_frac))
-    e[-r:] *= np.linspace(1, 0, r) ** 1.6
+    e[:a] *= np.linspace(0, 1, a)
     return e
 
 
-# ------------------------------------------------------------------------------------ the voice
-def plan_pitches(events, voice='narrator'):
-    """Semitone offset per spoken event (None for silent characters)."""
-    chars = [e['ch'] for e in events]
-    words = {}
-    for i, e in enumerate(events):
-        if e['ch'].isalnum():
-            words.setdefault(e['word'], []).append(i)
-    # sentence ends: the word right before . ! ? gets the fall (or the rise)
-    tail = {}
-    for i, c in enumerate(chars):
-        if c in '.!?':
-            j = i - 1
-            while j >= 0 and not chars[j].isalnum():
-                j -= 1
-            if j >= 0:
-                tail[events[j]['word']] = c
-    out = [None] * len(events)
-    vh = _h(voice)
-    for wi, idxs in words.items():
-        word = ''.join(chars[i] for i in idxs).upper()
-        base = [-3, 0, 2, 4, 0, 7, -1][(_h(word) ^ vh) % 7]
-        syl = 0
-        prev_v = False
-        for k, i in enumerate(idxs):
-            c = chars[i].upper()
-            v = c in VOWELS
-            if v and not prev_v and k > 0:
-                syl += 1
-            prev_v = v
-            contour = [0, 2, -2, 3, 1, -1][syl % 6]
-            jitter = ((ord(c) * 7) % 5 - 2) * 0.6 if not v else 0
-            semi = base + contour + jitter
-            end = tail.get(wi)
-            if end in ('.', '!'):
-                semi -= 2 + 5 * (k + 1) / len(idxs)
-            elif end == '?':
-                semi += 1 + 6 * (k + 1) / len(idxs)
-            out[i] = _q(semi)
+def tone(freqs, amp_env, harmonics=((1, 1.0),), phase=0.0):
+    """freqs: per-sample Hz array. harmonics: (multiple, gain)."""
+    ph = 2 * np.pi * np.cumsum(freqs) / SR + phase
+    y = np.zeros_like(freqs)
+    for m, g in harmonics:
+        y += np.sin(ph * m) * g
+    return y * amp_env
+
+
+def add(track, clip, t, gain=1.0, pan=0.0):
+    """Add a mono clip into a stereo track at time t (s) with an equal-power pan in [-1, 1]."""
+    s0 = int(round(t * SR))
+    if s0 >= len(track) or s0 + len(clip) <= 0:
+        return
+    a, b = max(0, s0), min(len(track), s0 + len(clip))
+    c = clip[a - s0:b - s0] * gain
+    th = (pan + 1) * math.pi / 4
+    track[a:b, 0] += c * math.cos(th)
+    track[a:b, 1] += c * math.sin(th)
+
+
+def stereo(x, width=0.0, seed=0):
+    """Mono bed -> stereo, optionally decorrelated a little by a slow pan drift."""
+    if width <= 0:
+        return np.stack([x, x], 1) * math.sqrt(0.5)
+    p = lfo(len(x), 0.05, seed, -width, width)
+    th = (p + 1) * math.pi / 4
+    return np.stack([x * np.cos(th), x * np.sin(th)], 1)
+
+
+# ----------------------------------------------------------------------------------------- beds
+def underwater(total, seed=1):
+    n = int(total * SR)
+    rumble = shaped_noise(n, 18, 150, seed) * lfo(n, 0.08, seed + 1, 0.55, 1.0)
+    move = shaped_noise(n, 220, 900, seed + 2, tilt=-0.5) * lfo(n, 0.15, seed + 3, 0.1, 0.45)
+    bed = stereo(rumble * 0.5 + move * 0.16, 0.25, seed)
+    rng = np.random.default_rng(seed + 10)
+    bub = np.zeros((n, 2))
+
+    def bubble(f0):
+        d = rng.uniform(0.025, 0.07)
+        m = int(d * SR)
+        fr = f0 * (1 + 0.7 * (np.arange(m) / m) ** 1.5)
+        return tone(fr, env_ad(m, 0.002, d / 3), ((1, 1.0), (2, 0.12)))
+
+    t = rng.uniform(1.0, 3.0)
+    while t < total - 1:                      # the diver's exhale: a rising train of bubbles
+        k = rng.integers(10, 26)
+        pan = rng.uniform(-0.3, 0.3)
+        for j in range(k):
+            add(bub, bubble(rng.uniform(380, 1300) * (1 + j / k * 0.4)), t + j * rng.uniform(0.02, 0.06),
+                rng.uniform(0.25, 0.6) * (1 - j / k * 0.5), pan + rng.uniform(-0.15, 0.15))
+        t += rng.uniform(3.8, 5.6)
+    t = 0.5
+    while t < total - 0.5:                    # stray bubbles from the reef
+        add(bub, bubble(rng.uniform(600, 2200)), t, rng.uniform(0.05, 0.2), rng.uniform(-0.8, 0.8))
+        t += rng.exponential(1.3)
+    bub[:, 0] = lowpass(bub[:, 0], 2600)
+    bub[:, 1] = lowpass(bub[:, 1], 2600)
+    return bed + bub * 0.55
+
+
+def night(total, seed=2):
+    n = int(total * SR)
+    air = shaped_noise(n, 60, 1400, seed, tilt=-0.6) * lfo(n, 0.1, seed + 1, 0.35, 0.8) * 0.18
+    chorus = shaped_noise(n, 5600, 7400, seed + 2) * (0.5 + 0.5 * np.sign(np.sin(
+        2 * np.pi * np.cumsum(lfo(n, 0.5, seed + 3, 34, 46)) / SR))) * lfo(n, 0.2, seed + 4, 0.3, 0.8) * 0.035
+    out = stereo(air, 0.3, seed) + stereo(chorus, 0.6, seed + 5)
+    rng = np.random.default_rng(seed + 20)
+    for c in range(4):                        # a few crickets near and far, each its own song
+        f = rng.uniform(4100, 5400)
+        pulses = rng.integers(3, 5)
+        period = rng.uniform(0.55, 0.95)
+        gain = rng.uniform(0.05, 0.13) * (1.0 if c < 2 else 0.5)
+        pan = rng.uniform(-0.8, 0.8)
+        t = rng.uniform(0, period)
+        while t < total - 0.3:
+            for p in range(pulses):
+                m = int(0.013 * SR)
+                fr = f * (1 + 0.01 * np.sin(np.arange(m) / m * np.pi))
+                add(out, tone(fr, np.sin(np.linspace(0, np.pi, m)) ** 2, ((1, 1.0), (2, 0.15))),
+                    t + p * 0.024, gain, pan)
+            t += period * rng.uniform(0.92, 1.08)
+            if rng.random() < 0.06:
+                t += rng.uniform(1.0, 3.0)    # a cricket pauses
+    # a far ruru (morepork): two soft hooting notes, twice in the film
+    for tt in (total * 0.27, total * 0.63):
+        for k, (f, d) in enumerate(((690, 0.28), (530, 0.36))):
+            m = int(d * SR)
+            fr = np.full(m, f) * (1 - 0.05 * np.arange(m) / m)
+            e = np.sin(np.linspace(0, np.pi, m)) ** 0.8
+            hoot = tone(fr, e, ((1, 1.0), (2, 0.25), (3, 0.06)))
+            add(out, lowpass(hoot, 1500), tt + k * 0.42, 0.10, -0.5)
     return out
 
 
-def babble(events, voice='narrator', total=None):
-    """Render the bleep track for typed-character events [{'t','ch','word'}, ...]."""
-    V = VOICES[voice]
-    end_t = (max(e['t'] for e in events) + 0.3) if events else 0.0
-    n_total = int(SR * (total if total is not None else end_t))
-    out = np.zeros(n_total)
-    pitches = plan_pitches(events, voice)
-    times = [e['t'] for e in events]
-    log = []
-    for i, e in enumerate(events):
-        semi = pitches[i]
-        if semi is None:
-            continue
-        c = e['ch'].upper()
-        nxt = times[i + 1] if i + 1 < len(times) else e['t'] + 1
-        dur = min(V['length'] * (1.25 if c in VOWELS else 1.0), max(0.02, (nxt - e['t']) * 0.92))
-        n = int(dur * SR)
-        s0 = int(round(e['t'] * SR))
-        if s0 >= n_total:
-            continue
-        f0 = V['base'] * 2 ** (semi / 12)
-        fr = f0 * (1.03 - V['glide'] * np.linspace(0, 1, n))
-        w, _ = pulse(fr, n, V['duty'])
-        w2, _ = pulse(fr * 2, n, 0.5)
-        sig = (w * (1 - V['oct']) + w2 * V['oct'])
-        if c in 'SZXCJ' or (c in 'TKP' and V['hiss']):
-            nz = lfsr_noise(n, period=2 if c in 'SZXCJ' else 5, seed=_h(c) & 0x7FFF)
-            ne = np.exp(-np.linspace(0, 6 if c in 'TKP' else 3, n))
-            sig = sig + nz * ne * V['hiss'] * 2.2
-        sig *= _env(n) * V['gain']
-        s1 = min(n_total, s0 + n)
-        out[s0:s1] += sig[:s1 - s0]
-        log.append((e['t'], s0, c, semi, round(f0, 1)))
-    return out, log
-
-
-# ----------------------------------------------------------------------------------- stingers
-def whoosh(dur=0.7, up=True):
-    n = int(dur * SR)
-    x = np.linspace(0, 1, n)
-    shape = np.sin(np.pi * x) ** 2
-    period = 26 - 22 * np.sin(np.pi * x) if up else 4 + 22 * x
-    nz = lfsr_noise(n, period=period, seed=0x1234)
-    f = 180 * 2 ** (3.5 * np.sin(np.pi * x * 0.5)) if up else 900 * 2 ** (-3 * x)
-    sq, _ = pulse(f, n, 0.125)
-    return (nz * 0.55 + sq * 0.18) * shape * 0.55
-
-
-def chime(notes=(1318.5, 1661.2, 1975.5, 2637.0, 3322.4), step=0.055, echo=0.11):
-    n = int((step * len(notes) + 0.5 + echo * 3) * SR)
-    out = np.zeros(n)
-    for k, f in enumerate(notes):
-        m = int(0.28 * SR)
-        w, _ = pulse(np.full(m, f), m, 0.125)
-        tri = 2 * np.abs(2 * ((np.arange(m) * f * 2 / SR) % 1) - 1) - 1
-        e = np.exp(-np.linspace(0, 7, m))
-        sig = (w * 0.6 + tri * 0.4) * e * 0.33
-        for r, g in enumerate((1.0, 0.42, 0.18, 0.07)):
-            s0 = int((k * step + r * echo) * SR)
-            out[s0:s0 + m] += sig[:max(0, min(m, n - s0))] * g
+def forest(total, seed=3):
+    n = int(total * SR)
+    gust = lfo(n, 0.07, seed, 0.2, 1.0) ** 1.5
+    wind = shaped_noise(n, 140, 900, seed + 1, tilt=-0.3) * (0.25 + 0.75 * gust) * 0.32
+    leaves = shaped_noise(n, 1800, 7000, seed + 2) * gust ** 2 * lfo(n, 2.0, seed + 3, 0.6, 1.0) * 0.07
+    out = stereo(wind, 0.3, seed) + stereo(leaves, 0.7, seed + 4)
+    rng = np.random.default_rng(seed + 30)
+    t = rng.uniform(1, 4)
+    while t < total - 2:                      # bellbird: liquid bell notes in short phrases
+        base = rng.uniform(1300, 2100)
+        notes = rng.integers(3, 6)
+        pan = rng.uniform(-0.7, 0.7)
+        g = rng.uniform(0.05, 0.11)
+        for k in range(notes):
+            f = base * rng.choice([1.0, 1.122, 1.26, 1.335, 1.5])
+            m = int(0.45 * SR)
+            fr = np.full(m, f) * (1 + 0.015 * np.exp(-np.arange(m) / (0.02 * SR)))
+            add(out, tone(fr, env_ad(m, 0.004, 0.14), ((1, 1.0), (2.76, 0.08))), t + k * rng.uniform(0.16, 0.24),
+                g, pan)
+        t += rng.uniform(5.5, 9.5)
+    t = rng.uniform(3, 6)
+    while t < total - 2:                      # fantail: quick high 'cheet' chips
+        pan = rng.uniform(-0.8, 0.8)
+        for k in range(rng.integers(4, 9)):
+            m = int(0.045 * SR)
+            fr = np.linspace(rng.uniform(6500, 7500), rng.uniform(4800, 5600), m)
+            add(out, tone(fr, np.sin(np.linspace(0, np.pi, m)) ** 1.5), t + k * rng.uniform(0.09, 0.14),
+                0.035, pan)
+        t += rng.uniform(7, 12)
+    t = rng.uniform(8, 14)
+    while t < total - 3:                      # grey warbler: a falling, wavering trill
+        pan = rng.uniform(-0.6, 0.6)
+        for k in range(12):
+            m = int(0.05 * SR)
+            f = 3900 - k * 85 + rng.uniform(-60, 60)
+            add(out, tone(np.full(m, f) * (1 + 0.04 * np.sin(np.arange(m) / SR * 2 * np.pi * 40)),
+                          np.sin(np.linspace(0, np.pi, m))), t + k * 0.065, 0.03, pan)
+        t += rng.uniform(14, 22)
     return out
 
 
-def bass_hit(dur=1.6):
-    n = int(dur * SR)
+def beach(total, seed=4, wave_times=None):
+    n = int(total * SR)
+    rng = np.random.default_rng(seed)
+    low = shaped_noise(n, 40, 500, seed + 1)
+    mid = shaped_noise(n, 300, 2200, seed + 2)
+    hiss = shaped_noise(n, 1800, 9000, seed + 3, tilt=-0.4)
+    e_low = np.full(n, 0.25)
+    e_mid = np.full(n, 0.08)
+    e_hiss = np.full(n, 0.03)
     t = np.arange(n) / SR
-    f = 45 + 125 * np.exp(-t / 0.06)
-    ph = np.cumsum(f) / SR
-    tri = 2 * np.abs(2 * (ph % 1) - 1) - 1
-    tri = np.round(tri * 7.5) / 7.5                    # 4-bit triangle, NES style
-    body = tri * np.exp(-t / 0.55)
-    snap = lfsr_noise(int(0.14 * SR), period=1, seed=77) * np.exp(-np.linspace(0, 9, int(0.14 * SR)))
-    crash_n = int(1.1 * SR)
-    crash = lfsr_noise(crash_n, period=1, short=False, seed=99) * np.exp(-np.linspace(0, 5, crash_n)) * 0.22
-    # a low chord stab: root, fifth, octave
-    stab = np.zeros(n)
-    for fr, g in ((87.3, 0.5), (130.8, 0.32), (174.6, 0.25)):
-        w, _ = pulse(np.full(n, fr), n, 0.5)
-        stab += w * g
-    stab *= np.exp(-t / 0.35) * 0.22
-    out = body * 0.95 + stab
-    out[:len(snap)] += snap * 0.55
-    out[:crash_n] += crash
-    return out * 0.8
+    if wave_times is None:
+        wave_times = []
+        w = rng.uniform(1.5, 4.0)
+        while w < total + 2:
+            wave_times.append(w)
+            w += rng.uniform(6.5, 9.5)
+    for w in wave_times:                      # each wave: swell, break, wash, draw back
+        size = rng.uniform(0.7, 1.0)
+        rise = np.exp(-((t - w + 0.2) / 1.1) ** 2)
+        brk = np.where(t >= w, np.exp(-(t - w) / 0.6), np.exp(-((t - w) / 0.12) ** 2))
+        wash = np.where(t >= w, np.exp(-(t - w - 0.4).clip(0) / 2.6) * (1 - np.exp(-(t - w) / 0.3)), 0)
+        back = np.where(t >= w + 2.2, np.exp(-(t - w - 2.2) / 1.6) * (1 - np.exp(-(t - w - 2.2) / 0.5)), 0)
+        e_low += size * (0.45 * rise + 0.8 * brk + 0.25 * back)
+        e_mid += size * (0.35 * brk + 0.25 * wash)
+        e_hiss += size * (0.12 * brk + 0.3 * wash + 0.12 * back)
+    surf = low * e_low * 0.22 + mid * e_mid * 0.3 + hiss * e_hiss * 0.35
+    wind = shaped_noise(n, 200, 1200, seed + 4) * lfo(n, 0.1, seed + 5, 0.1, 0.4) * 0.08
+    out = stereo(surf, 0.35, seed) + stereo(wind, 0.5, seed + 6)
+    tt = rng.uniform(5, 9)
+    while tt < total - 2:                     # distant piping from the wrack line
+        pan = rng.uniform(-0.8, 0.8)
+        for k in range(rng.integers(3, 7)):
+            m = int(0.09 * SR)
+            fr = np.linspace(3300, 2700, m) * rng.uniform(0.95, 1.05)
+            add(out, lowpass(tone(fr, np.sin(np.linspace(0, np.pi, m)), ((1, 1.0), (2, 0.1))), 4000),
+                tt + k * 0.17, 0.03, pan)
+        tt += rng.uniform(9, 16)
+    return out
 
 
-def music(name, total, rms=0.2, fade_in=0.6, fade_out=1.4, offset=0.0):
-    path = os.path.join(MUSIC_DIR, name)
-    raw = subprocess.run(['ffmpeg', '-v', 'error', '-ss', str(offset), '-i', path, '-t', str(total + 0.1),
-                          '-f', 'f32le', '-ac', '1', '-ar', str(SR), '-'], capture_output=True, check=True).stdout
+BEDS = {'underwater': underwater, 'night': night, 'forest': forest, 'beach': beach}
+# each bed sits this far under full scale (RMS): a few dB under the music, so it is felt more than heard
+BED_DB = {'underwater': -26.0, 'night': -29.0, 'forest': -28.0, 'beach': -27.5}
+
+
+# ------------------------------------------------------------------------------------------- music
+def music_duration(name):
+    r = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0',
+                        os.path.join(MUSIC_DIR, name)], capture_output=True, text=True)
+    return float(r.stdout.strip())
+
+
+def music(name, total, rms=0.1, fade_in=2.5, fade_out=3.5, offset=0.0):
+    """Mono CC0 track, loudness-matched (RMS), faded; the offset is pulled back if the track would run out."""
+    dur = music_duration(name)
+    offset = max(0.0, min(offset, dur - total - 0.5))
+    raw = subprocess.run(['ffmpeg', '-v', 'error', '-ss', str(offset), '-i', os.path.join(MUSIC_DIR, name),
+                          '-t', str(total + 0.1), '-f', 'f32le', '-ac', '1', '-ar', str(SR), '-'],
+                         capture_output=True, check=True).stdout
     x = np.frombuffer(raw, np.float32).astype(np.float64)
     n = int(total * SR)
     if len(x) < n:
         x = np.concatenate([x, np.zeros(n - len(x))])
     x = x[:n].copy()
-    x = x * (rms / (np.sqrt(np.mean(x ** 2)) or 1.0))      # match loudness, not peaks
+    x *= rms / (np.sqrt(np.mean(x ** 2)) or 1.0)
     fi, fo = int(fade_in * SR), int(fade_out * SR)
-    x[:fi] *= np.linspace(0, 1, fi)
+    x[:fi] *= np.linspace(0, 1, fi) ** 2
     x[-fo:] *= np.linspace(1, 0, fo) ** 1.5
-    return x
+    return x, offset
 
 
-def duck_curve(n, spans, depth=0.5, attack=0.06, release=0.3):
-    """Gain curve: 1 normally, (1-depth) inside spans [(t0, t1)], one-pole attack/release."""
-    target = np.ones(n)
-    for a, b in spans:
-        target[max(0, int(a * SR)):min(n, int(b * SR))] = 1 - depth
-    # one-pole smoothing, run at a decimated rate for speed
-    hop = 64
-    tt = target[::hop]
-    g = np.empty_like(tt)
-    cur = 1.0
-    ka = 1 - math.exp(-hop / (attack * SR))
-    kr = 1 - math.exp(-hop / (release * SR))
-    for i, v in enumerate(tt):
-        cur += (v - cur) * (ka if v < cur else kr)
-        g[i] = cur
-    return np.repeat(g, hop)[:n]
+def fade_curve(n, fade_in=1.5, fade_out=3.0, dips=()):
+    """1 with raised-cosine fades; dips = [(t0, t1, level)] eased in/out over 1 s."""
+    g = np.ones(n)
+    fi, fo = int(fade_in * SR), int(fade_out * SR)
+    g[:fi] = (1 - np.cos(np.linspace(0, np.pi, fi))) / 2
+    g[-fo:] *= (1 + np.cos(np.linspace(0, np.pi, fo))) / 2
+    t = np.arange(n) / SR
+    for a, b, lv in dips:
+        w = np.clip(np.minimum((t - a) / 1.0, (b - t) / 1.0), 0, 1)
+        g *= 1 - (1 - lv) * w
+    return g
 
 
-def place(track, clip, t, gain=1.0):
-    s0 = int(round(t * SR))
-    if s0 >= len(track):
-        return
-    m = min(len(clip), len(track) - s0)
-    track[s0:s0 + m] += clip[:m] * gain
+def master(x, target_db=-16.0, knee=0.7, ceiling=0.94):
+    """Bring the film to about -16 dBFS RMS (social-video loudness), with a soft knee above `knee`
+    so the odd wave crash or bubble burst never clips."""
+    r = np.sqrt(np.mean(x ** 2)) or 1.0
+    y = x * (10 ** (target_db / 20) / r)
+    a = np.abs(y)
+    over = a > knee
+    room = ceiling - knee
+    y[over] = np.sign(y[over]) * (knee + room * np.tanh((a[over] - knee) / room))
+    return y
 
 
-def master(x, ceiling=0.89):
-    y = np.tanh(x * 1.1) / math.tanh(1.1)
-    pk = np.max(np.abs(y)) or 1.0
-    return y * min(1.0, ceiling / pk) if pk > ceiling else y
-
-
-def write_wav(path, x, stereo=True):
+def write_wav(path, x):
+    """x: (n, 2) float stereo, or (n,) mono."""
+    if x.ndim == 1:
+        x = np.stack([x, x], 1)
     pcm = (np.clip(x, -1, 1) * 32767).astype('<i2')
-    if stereo:
-        pcm = np.repeat(pcm[:, None], 2, axis=1).ravel()
     with wave.open(path, 'wb') as w:
-        w.setnchannels(2 if stereo else 1)
+        w.setnchannels(2)
         w.setsampwidth(2)
         w.setframerate(SR)
         w.writeframes(pcm.tobytes())
 
 
+def db(x):
+    r = np.sqrt(np.mean(np.asarray(x, np.float64) ** 2))
+    return -120.0 if r <= 1e-9 else 20 * math.log10(r)
+
+
+def mix_film(total, bed, music_name, music_offset=0.0, music_rms=0.1, bed_db=None, end_t=None, seed=1,
+             wave_times=None):
+    """Return (mix stereo, stems dict, music offset used)."""
+    n = int(total * SR)
+    mus, off = music(music_name, total, rms=music_rms, offset=music_offset)
+    if bed == 'beach':
+        amb = beach(total, seed, wave_times)
+    else:
+        amb = BEDS[bed](total, seed)
+    target = 10 ** ((bed_db if bed_db is not None else BED_DB[bed]) / 20)
+    amb = amb * (target / (np.sqrt(np.mean(amb ** 2)) or 1.0))
+    dips = [(end_t, total + 1, 0.45)] if end_t else []
+    amb = amb * fade_curve(n, 1.2, 3.0, dips)[:, None]
+    m2 = np.stack([mus, mus], 1) * math.sqrt(0.5) * 1.41
+    mix = master(m2 + amb)
+    return mix, {'music': m2, 'ambience': amb}, off
+
+
 if __name__ == '__main__':
     import argparse
     ap = argparse.ArgumentParser()
-    ap.add_argument('--demo', required=True)
+    ap.add_argument('--demo', choices=list(BEDS), required=True)
+    ap.add_argument('--out', required=True)
+    ap.add_argument('--seconds', type=float, default=20.0)
+    ap.add_argument('--music', default='town-theme.mp3')
     a = ap.parse_args()
-    from textfx import TextBlock, STYLES
-    tb = TextBlock('SOMETHING IS CIRCLING...', STYLES['caption'], 6, t_in=0.3)
-    tb2 = TextBlock('Knock its snout and it veers off.', STYLES['caption'], 5, t_in=2.6, type_rate=0.05)
-    total = 6.0
-    v1, _ = babble(tb.events, 'narrator', total)
-    v2, _ = babble(tb2.events, 'guide', total)
-    voice = v1 + v2
-    mus = music('next-to-you.mp3', total)
-    spans = [(tb.events[0]['t'], tb.t_done + 0.1), (tb2.events[0]['t'], tb2.t_done + 0.1)]
-    mix = mus * duck_curve(len(mus), spans) + voice * 0.62
-    place(mix, whoosh(), 2.2)
-    place(mix, chime(), 2.5)
-    place(mix, bass_hit(), 4.6)
-    write_wav(a.demo, master(mix))
-    print('wrote', a.demo)
+    mix, stems, _ = mix_film(a.seconds, a.demo, a.music)
+    write_wav(a.out, mix)
+    print('wrote', a.out, 'music %.1f dB, ambience %.1f dB, mix %.1f dB' % (db(stems['music']), db(stems['ambience']), db(mix)))

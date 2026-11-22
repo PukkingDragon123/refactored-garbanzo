@@ -1,23 +1,22 @@
 #!/usr/bin/env python3
-"""Promo stills for Project Zealandia: itch.io banners and cover, a video thumbnail, reel covers.
+"""Promo stills for Project Zealandia, in the documentary / wild-nature look.
 
-    python3 tools/promo/stills.py                        # from <scratch>/promo/raw
-    python3 tools/promo/stills.py --placeholder          # from the placeholder stills
-    python3 tools/promo/stills.py --pick shark=2 --focus shark=640,300
+    python3 tools/promo/stills.py
+    python3 tools/promo/stills.py --pick shark=3 --focus shark=600,280
 
 Writes to <scratch>/promo/out/:
-  banner_960x300.png, banner_1920x480.png   four habitats joined with dithered seams + logo + tagline
-  cover_630x500.png                         itch.io cover thumbnail
-  thumb_1280x720.png                        YouTube-style thumbnail: the shark big, the title
-  reelcover_<id>.png                        1080x1920, one per reel
+  banner_1920x480.png, banner_960x300.png  four habitats, foreground fern silhouettes, the carved logo
+  cover_630x500.png                        itch.io cover: a 2x2 of the habitats round the carved logo
+  thumb_1280x720.png                       documentary poster: the shark looming in the blue, the logo
+  reelcover_<id>.png                       1080x1920 per film: title card, creature, field-note label
 
-Every image is scaled only by whole numbers with nearest-neighbour; every title is Alagard at its
-native grid scaled by a whole number (textfx.py).
+Images are only ever scaled by whole numbers with nearest-neighbour; titles are Alagard at its native grid
+(textfx.py), ornaments are placed pixel by pixel (ornaments.py).
 """
 from __future__ import annotations
 
 import argparse
-import json
+import math
 import os
 import sys
 
@@ -25,259 +24,222 @@ import numpy as np
 from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from textfx import TextBlock, STYLES, fit_scale, text_width, bayer_tile, dither_darken   # noqa: E402
-from compose import REELS, SMALL_STAR, PROMO, _two_lines_text, read_manifest  # noqa: E402
+from textfx import TextBlock, STYLES, fit_scale, bayer_tile, dither_darken   # noqa: E402
+import ornaments as O                                                       # noqa: E402
+from compose import FILMS, PROMO, DOT, read_manifest                         # noqa: E402
 
 IDS = ['shark', 'gecko', 'worm', 'crab']
-# where the creature sits in each placeholder still (x, y at 1280x720); A's manifest or --focus override
-FOCUS = {'shark': (230, 215), 'gecko': (900, 420), 'worm': (420, 520), 'crab': (640, 560)}
-ORDER = ['crab', 'worm', 'gecko', 'shark']      # banner: shore -> bush -> glow forest -> the deep
-# whole-number zoom per creature in the 1920 banner (small critters get bigger pixels); the 960 one uses z-1
-ZOOM = {'shark': 1, 'gecko': 2, 'worm': 2, 'crab': 2}
+ORDER = ['crab', 'worm', 'gecko', 'shark']      # shore -> bush -> glow forest -> the deep
+# hero still and the creature's centre in it (1280x720), checked by eye on helper A's stills
+HERO = {'shark': (2, (645, 268)), 'gecko': (3, (660, 415)), 'worm': (2, (670, 405)), 'crab': (1, (690, 385))}
+SIL = dict(stem='#0d170b', dark='#0a1209', mid='#111e0e', light='#182a13', tip='#20361a', outline='#070b06')
 
 
-def load_still(d, rid, pick):
+def load(d, rid, pick):
     p = os.path.join(d, f'{rid}_still_{pick}.png')
     if not os.path.exists(p):
         p = os.path.join(d, f'{rid}_still_1.png')
     return np.array(Image.open(p).convert('RGB'))
 
 
-def focus_of(man, rid, pick, override):
-    if rid in override:
-        return override[rid]
-    e = man or {}
-    cands = []
-    st = e.get('stills')
-    if isinstance(st, list) and len(st) >= pick and isinstance(st[pick - 1], dict):
-        cands.append(st[pick - 1])
-    if isinstance(st, dict):
-        cands.append(st.get(str(pick), {}) if isinstance(st.get(str(pick)), dict) else {})
-    cands.append(e)
-    for c in cands:
-        for k in ('focus', 'subject', 'center', 'centre'):
-            v = c.get(k) if isinstance(c, dict) else None
-            if isinstance(v, (list, tuple)) and len(v) >= 2:
-                return (int(v[0]), int(v[1]))
-        v = c.get('bbox') if isinstance(c, dict) else None
-        if isinstance(v, (list, tuple)) and len(v) == 4:
-            return (int(v[0] + v[2] / 2), int(v[1] + v[3] / 2))
-    return FOCUS[rid]
-
-
 def crop_scaled(img, fx, fy, w, h, s, ax=0.5, ay=0.5):
-    """Crop (w/s x h/s) source px so the focus lands at (ax, ay) of the output, then nearest-upscale by s."""
-    cw, ch = w // s + (1 if w % s else 0), h // s + (1 if h % s else 0)
-    H, W = img.shape[:2]
-    x0 = int(np.clip(fx - cw * ax, 0, W - cw))
-    y0 = int(np.clip(fy - ch * ay, 0, H - ch))
+    """Crop so the focus lands at (ax, ay) of a w x h output, nearest-upscaled by the whole number s."""
+    cw, ch = -(-w // s), -(-h // s)
+    Hs, Ws = img.shape[:2]
+    x0 = int(np.clip(fx - cw * ax, 0, Ws - cw))
+    y0 = int(np.clip(fy - ch * ay, 0, Hs - ch))
     c = img[y0:y0 + ch, x0:x0 + cw]
-    c = np.repeat(np.repeat(c, s, 0), s, 1)
-    return c[:h, :w]
+    return np.repeat(np.repeat(c, s, 0), s, 1)[:h, :w]
 
 
-def quant_contrast(img, gain=1.18, lift=-10):
-    """A punchier, still-hard-edged grade for the thumbnail: per-channel curve, no filtering."""
+def grade(img, contrast=1.08, sat=1.08, lift=-4):
+    """A gentle, natural grade (per-pixel curve, no filtering)."""
     x = img.astype(np.float32)
     m = x.mean(axis=2, keepdims=True)
-    x = m + (x - m) * 1.15                     # a little saturation
-    x = (x - 128) * gain + 128 + lift
+    x = m + (x - m) * sat
+    x = (x - 128) * contrast + 128 + lift
     return np.clip(x, 0, 255).astype(np.uint8)
 
 
-def best_t(blocks, lo=4.0, hi=9.0):
-    """A time when the sparkles are out (stills freeze the animation)."""
-    best, bt = -1, lo
-    for t in np.arange(lo, hi, 1 / 30):
-        n = 0
-        for b in blocks:
-            for (ts, gi, px, py, big) in b.sparks:
-                if 0.12 < t - ts < 0.3:
-                    n += 2 if big else 1
-        if n > best:
-            best, bt = n, float(t)
-    return bt
-
-
-def logo_blocks(scale_big, scale_small=None, one_line=False, sparkle_rate=1.6):
-    if one_line:
-        b = TextBlock('PROJECT ZEALANDIA', STYLES['gold'], scale=scale_big, mode='show', wave=None,
-                      sparkle_words=('ZEALANDIA', 'PROJECT'), sparkle_rate=sparkle_rate, seed=7)
-        return [b]
-    a = TextBlock('PROJECT', STYLES['gold'], scale=scale_small or max(2, scale_big * 2 // 3), mode='show',
-                  wave=None, sparkle_words=('PROJECT',), sparkle_rate=sparkle_rate * 0.6, seed=5)
-    b = TextBlock('ZEALANDIA', STYLES['gold'], scale=scale_big, mode='show', wave=None,
-                  sparkle_words=('ZEALANDIA',), sparkle_rate=sparkle_rate, seed=6)
-    return [a, b]
-
-
-def tagline(scale):
-    return TextBlock('A WILDLIFE PHOTOGRAPHY ADVENTURE', STYLES['small'], scale=scale, mode='show', wave=None)
-
-
-def ellipse_level(H, W, cx, cy, rx, ry, peak=0.75):
+def ellipse(H, W, cx, cy, rx, ry, peak):
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
     r = np.sqrt(((xx - cx) / rx) ** 2 + ((yy - cy) / ry) ** 2)
-    return np.clip(1.0 - r, 0, 1) ** 0.7 * peak
+    return np.clip(1 - r, 0, 1) ** 0.6 * peak
 
 
-def edge_level(H, W, amount=0.55, power=2.2):
+def edges(H, W, amount, power=3.0):
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
     r = np.maximum(np.abs(xx / W - 0.5) * 2, np.abs(yy / H - 0.5) * 2)
     return np.clip(r, 0, 1) ** power * amount
 
 
-# ------------------------------------------------------------------------------------- banner
-def banner(stills, foci, W, H, s, out, zoom=None):
+def blit(dst, rgba, x, y, s):
+    O.draw_rgba(dst, rgba, x, y, s, anchor='topleft')
+
+
+def foliage(dst, s, seed=1, top=True, bottom=True):
+    """Foreground fern silhouettes reaching in from the corners, as if seen through the bush."""
+    H, W = dst.shape[:2]
+    rnd = np.random.default_rng(seed)
+    specs = []
+    if bottom:
+        for side in (0, 1):
+            for k in range(2):
+                L = int(rnd.integers(40, 60)) * (H // s) // 160
+                a0 = -math.pi / 2 + (0.35 + 0.35 * k) * (1 if side == 0 else -1)
+                specs.append((side, 'b', max(22, L), a0, (0.9 + 0.3 * k) * (1 if side == 0 else -1)))
+    if top:
+        for side in (0, 1):
+            L = int(rnd.integers(30, 44)) * (H // s) // 160
+            specs.append((side, 't', max(18, L), math.pi / 2 + (0.6 if side else -0.6), (0.6 if side else -0.6)))
+    for i, (side, edge, L, a0, bend) in enumerate(specs):
+        f, (rx, ry) = O.fern_frond(L, ang0=a0, bend=bend, curl=0.9, leaf=max(5, L // 6), seed=seed * 10 + i,
+                                   pal=SIL, with_root=True)
+        x = (0 if side == 0 else W // s) + int(rnd.integers(-4, 10)) * (1 if side == 0 else -1)
+        y = (H // s + 2) if edge == 'b' else -2
+        blit(dst, f, (x - rx) * s, (y - ry) * s, s)
+
+
+def logo_block(dst, cx, cy, s, tagline_s=None, darken=True):
+    lg = O.logo()
+    h, w = lg.shape[:2]
+    if darken:
+        H, W = dst.shape[:2]
+        lvl = ellipse(H, W, cx, cy, w * s * 0.62, h * s * 0.95, 0.95)
+        dst[:] = dither_darken(dst, lvl, s, colour=(6, 9, 7), steps=4, strength=0.32)
+    O.draw_rgba(dst, lg, cx, cy, s)
+    if tagline_s:
+        tg = TextBlock('A WILDLIFE PHOTOGRAPHY ADVENTURE', STYLES['sage'], scale=tagline_s, mode='show', wave=None,
+                       spacing=2)
+        tg.draw(dst, 10.0, cx, cy + h * s // 2 + 4 * tagline_s, 'top')
+    return h * s
+
+
+# --------------------------------------------------------------------------------------- banner
+def banner(st, W, H, zoom, logo_s, tag_s, out):
     n = len(ORDER)
     pw = W // n
-    seam = max(16, pw // 4)
-    seam -= seam % (2 * s)
-    cell = 2 * s
-    panels = []
-    for k, rid in enumerate(ORDER):
-        fx, fy = foci[rid]
-        # creature in the lower part of its panel, clear of the logo
-        z = (zoom or {}).get(rid, s)
-        panels.append(crop_scaled(stills[rid], fx, fy, pw + seam, H, z, 0.5, 0.64))
+    seam = pw // 3
     canvas = np.zeros((H, W, 3), np.uint8)
-    bt = bayer_tile(H // cell + 1, (pw + seam) // cell + 2, 8)
-    bt = np.repeat(np.repeat(bt, cell, 0), cell, 1)
-    for k, p in enumerate(panels):
+    for k, rid in enumerate(ORDER):
+        img, (fx, fy) = st[rid]
+        p = grade(crop_scaled(img, fx, fy, pw + seam, H, zoom, 0.5, 0.74))
         x0 = k * pw - seam // 2
-        for x in range(p.shape[1]):
-            X = x0 + x
-            if X < 0 or X >= W:
-                continue
-            # dithered crossfade: inside the seam on the left edge, show this panel only where bayer < ramp
-            if k > 0 and x < seam:
-                ramp = (x + 0.5) / seam
-                m = bt[:H, x] < ramp
-                canvas[m, X] = p[m, x]
-            else:
-                canvas[:, X] = p[:, x]
-    # darken behind the logo (dithered), and a little at the edges
-    lvl = ellipse_level(H, W, W / 2, H * 0.24, W * 0.40, H * 0.34, 0.9) + edge_level(H, W, 0.25, 4)
-    canvas = dither_darken(canvas, np.clip(lvl, 0, 1), s)
-    zs = fit_scale('PROJECT ZEALANDIA', int(W * 0.66), 12, 2)
-    logo = logo_blocks(zs, one_line=True)
-    t = best_t(logo)
-    for b in logo:
-        b.draw(canvas, t, W // 2, int(H * 0.21), 'center')
-    tg = tagline(max(1, zs // 2 - (1 if s == 1 else 0)))
-    tg.draw(canvas, t, W // 2, int(H * 0.21) + logo[0].h * zs // 2 + 6 * s, 'top')
+        # an organic, wavering seam, ordered-dithered across its width
+        bt = bayer_tile(H // zoom + 1, (pw + seam) // zoom + 1, 8)
+        bt = np.repeat(np.repeat(bt, zoom, 0), zoom, 1)[:H, :pw + seam]
+        yy = np.arange(H)[:, None]
+        wob = (np.sin(yy / H * 5.0 + k * 1.7) * 0.18 + np.sin(yy / H * 13.0 + k) * 0.06)
+        xs = np.arange(pw + seam)[None, :]
+        ramp = np.clip(xs / seam + wob, 0, 1)
+        m = (bt < ramp) if k > 0 else np.ones_like(bt, bool)
+        xa, xb = max(0, x0), min(W, x0 + pw + seam)
+        sub = canvas[:, xa:xb]
+        sel = m[:, xa - x0:xb - x0]
+        sub[sel] = p[:, xa - x0:xb - x0][sel]
+    canvas = dither_darken(canvas, edges(H, W, 0.45, 3.0), zoom, colour=(6, 9, 7), steps=3, strength=0.3)
+    foliage(canvas, zoom, seed=3, top=True, bottom=True)
+    logo_block(canvas, W // 2, int(H * 0.30), logo_s, tag_s)
     Image.fromarray(canvas).save(out)
     return out
 
 
-# --------------------------------------------------------------------------------- cover 630x500
-def cover(stills, foci, out):
+# ---------------------------------------------------------------------------------------- cover
+def cover(st, out):
     W, H = 630, 500
     cw, ch = W // 2, H // 2
     canvas = np.zeros((H, W, 3), np.uint8)
-    quad = {'shark': (0, 0), 'gecko': (1, 0), 'worm': (0, 1), 'crab': (1, 1)}
-    for rid, (qx, qy) in quad.items():
-        fx, fy = foci[rid]
-        canvas[qy * ch:(qy + 1) * ch, qx * cw:(qx + 1) * cw] = crop_scaled(stills[rid], fx, fy, cw, ch, 1, 0.5,
-                                                                            0.7 if qy == 0 else 0.62)
-    lvl = ellipse_level(H, W, W / 2, H / 2, W * 0.6, H * 0.3, 0.95) + edge_level(H, W, 0.25, 4)
-    canvas = dither_darken(canvas, np.clip(lvl, 0, 1), 1)
-    # a hard pixel divider cross, like tape between prints
-    canvas[ch - 1:ch + 1, :] = (8, 14, 22)
-    canvas[:, cw - 1:cw + 1] = (8, 14, 22)
-    logo = logo_blocks(5, 3)
-    t = best_t(logo)
-    logo[0].draw(canvas, t, W // 2, 196, 'center')
-    logo[1].draw(canvas, t, W // 2, 262, 'center')
-    tagline(1).draw(canvas, t, W // 2, 318, 'center')
+    for rid, (qx, qy) in {'shark': (1, 0), 'gecko': (0, 0), 'worm': (0, 1), 'crab': (1, 1)}.items():
+        img, (fx, fy) = st[rid]
+        canvas[qy * ch:(qy + 1) * ch, qx * cw:(qx + 1) * cw] = grade(
+            crop_scaled(img, fx, fy, cw, ch, 1, 0.5 + (0.12 if qx == 0 else -0.12), 0.72 if qy == 0 else 0.4))
+    # a dark mossy cross where the four prints meet
+    canvas[ch - 1:ch + 1, :] = (10, 16, 10)
+    canvas[:, cw - 1:cw + 1] = (10, 16, 10)
+    canvas = dither_darken(canvas, edges(H, W, 0.4, 3), 1, colour=(6, 9, 7))
+    foliage(canvas, 1, seed=5, top=False, bottom=True)
+    logo_block(canvas, W // 2, H // 2 - 6, 2, 1)
     Image.fromarray(canvas).save(out)
     return out
 
 
-# ---------------------------------------------------------------------------- thumb 1280x720
-def thumb(stills, foci, out):
+# ---------------------------------------------------------------------------------------- thumb
+def thumb(st, out):
     W, H = 1280, 720
-    fx, fy = foci['shark']
-    img = crop_scaled(stills['shark'], fx, fy, W, H, 2, 0.27, 0.52)
-    img = quant_contrast(img)
-    lvl = edge_level(H, W, 0.55, 2.4)
+    img, (fx, fy) = st['shark']
+    pic = grade(crop_scaled(img, fx, fy, W, H, 3, 0.30, 0.60), contrast=1.14, sat=1.12, lift=-6)
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
-    lvl = np.maximum(lvl, np.clip((xx / W - 0.42) / 0.5, 0, 1) ** 1.1 * 0.8)   # darker right side for type
-    img = dither_darken(img, lvl, 2)
-    logo = logo_blocks(8, 7)
-    t = best_t(logo)
-    cx = 1280 - logo[1].w * 8 // 2 - 70
-    logo[0].draw(img, t, cx, 250, 'center')
-    logo[1].draw(img, t, cx, 380, 'center')
-    nm = TextBlock('GLASSEYE WHALER', STYLES['name'], scale=4, mode='show', wave=None,
-                   sparkle_words=('GLASSEYE',), sparkle_rate=2, seed=3)
-    nm.draw(img, best_t([nm]), cx, 510, 'center')
-    hk = TextBlock('SOMETHING IS CIRCLING...', STYLES['caption'], scale=3, mode='show', wave=None)
-    hk.draw(img, t, cx, 585, 'center')
-    Image.fromarray(img).save(out)
+    lvl = edges(H, W, 0.55, 2.4)
+    lvl = np.maximum(lvl, np.clip((xx / W - 0.48) / 0.52, 0, 1) ** 1.3 * 0.55 * np.clip(1.2 - yy / H, 0, 1))
+    lvl = np.maximum(lvl, np.clip((yy / H - 0.55) / 0.45, 0, 1) ** 1.5 * 0.7)          # the deep below
+    pic = dither_darken(pic, lvl, 3, colour=(4, 12, 20), steps=4, strength=0.3)
+    lg = O.logo()
+    s = 3
+    cx = W - lg.shape[1] * s // 2 - 40
+    O.draw_rgba(pic, lg, cx, 40 + lg.shape[0] * s // 2, s)
+    y = 40 + lg.shape[0] * s + 26
+    t1 = TextBlock('THE KELP FOREST', STYLES['bone'], scale=4, mode='show', wave=None, spacing=2)
+    t1.draw(pic, 10.0, cx, y, 'top')
+    y += t1.h * 4 + 12
+    O.draw_rgba(pic, O.fern_rule(60, leaf=3, seed=4), cx, y + 9, 3)
+    t2 = TextBlock(f'Glasseye Whaler {DOT} Carcharhinus vitreus', STYLES['sage'], scale=2, mode='show', wave=None,
+                   spacing=1, icons={DOT: O.MIDDOT})
+    t2.draw(pic, 10.0, cx, y + 34, 'top')
+    Image.fromarray(pic).save(out)
     return out
 
 
-# ------------------------------------------------------------------------------ reel covers
-def reel_cover(rid, still, foc, out):
+# ----------------------------------------------------------------------------------- reel cover
+def reel_cover(rid, img, foc, out):
     W, H = 1080, 1920
-    cfg = REELS[rid]
-    img = crop_scaled(still, foc[0], foc[1], W, H, 3, 0.5, 0.52)
+    cfg = FILMS[rid]
+    pic = grade(crop_scaled(img, foc[0], foc[1], W, H, 3, 0.5, 0.54))
     yy = np.arange(H, dtype=np.float32)[:, None] * np.ones((1, W), np.float32)
-    lvl = np.clip(1 - yy / (H * 0.32), 0, 1) ** 0.9 * 0.7 + np.clip((yy - H * 0.62) / (H * 0.38), 0, 1) ** 0.9 * 0.75
-    img = dither_darken(img, lvl, 3)
-    hook = TextBlock(_two_lines_text(cfg['hook']), STYLES['caption'], scale=7, mode='show', wave=None,
-                     keywords={cfg['hook_kw']: STYLES['ember']}, sparkle_words=(cfg['hook_kw'],),
-                     sparkle_rate=2.5, seed=13)
-    name = TextBlock(cfg['name'], STYLES['name'], scale=min(9, fit_scale(cfg['name'], 1000, 9, 5)), mode='show',
-                     wave=None, sparkle_words=tuple(cfg['name'].split()), sparkle_rate=2.0, seed=23)
-    tag = TextBlock('\x02 FIELD GUIDE \x02', STYLES['small'], scale=4, mode='show', wave=None,
-                    icons={'\x02': SMALL_STAR})
-    t = best_t([hook, name])
-    hook.draw(img, t, W // 2, 420, 'center')
-    y = 1440
-    tag.draw(img, t, W // 2, y, 'top')
-    y += tag.h * tag.scale + 8
-    name.draw(img, t, W // 2, y, 'top')
-    y += name.h * name.scale + 14
-    if cfg.get('sub'):
-        sub = TextBlock(cfg['sub'], STYLES['small'], scale=5, mode='show', wave=None)
-        sub.draw(img, t, W // 2, y, 'top')
-        y += sub.h * sub.scale + 14
-    logo = TextBlock('PROJECT ZEALANDIA', STYLES['gold'], scale=4, mode='show', wave=None)
-    logo.draw(img, t, W // 2, 1800, 'center')
-    Image.fromarray(img).save(out)
+    lvl = np.clip(1 - yy / (H * 0.30), 0, 1) ** 1.1 * 0.8 + np.clip((yy - H * 0.66) / (H * 0.34), 0, 1) ** 1.1 * 0.85
+    pic = dither_darken(pic, lvl, 3, colour=(6, 9, 7), steps=4, strength=0.3)
+    ts = min(7, fit_scale(cfg['title'], 960, 7, 4, spacing=2))
+    t = TextBlock(cfg['title'], STYLES['bone'], scale=ts, mode='show', wave=None, spacing=2)
+    t.draw(pic, 10.0, W // 2, 300, 'center')
+    O.draw_rgba(pic, O.fern_rule(70, leaf=3, seed=4), W // 2, 300 + ts * 10 + 12, 3)
+    sub = TextBlock(f'Project Zealandia {DOT} Field Notes', STYLES['sage'], scale=3, mode='show', wave=None,
+                    spacing=2, icons={DOT: O.MIDDOT})
+    sub.draw(pic, 10.0, W // 2, 300 + ts * 10 + 64, 'center')
+    # field-note label, bottom left
+    x, y = 72, 1380
+    O.draw_rgba(pic, O.fern_rule(64, leaf=3, seed=12), x - 6, y, 3, anchor='topleft')
+    y += 48
+    for txt, sty, sc, sp, gap in ((cfg['common'], 'bone', 6, 2, 10), (cfg['place'], 'sage', 3, 2, 8),
+                                  (cfg['sci'], 'muted', 3, 1, 0)):
+        b = TextBlock(txt, STYLES[sty], scale=sc, mode='show', wave=None, spacing=sp, align='left')
+        b.draw(pic, 10.0, x, y, 'left')
+        y += b.h * sc + gap
+    O.draw_rgba(pic, O.logo(), W // 2, 1822, 2)
+    Image.fromarray(pic).save(out)
     return out
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--placeholder', action='store_true')
     ap.add_argument('--pick', action='append', default=[], help='id=N: use <id>_still_N.png')
     ap.add_argument('--focus', action='append', default=[], help='id=x,y: creature centre in the 1280x720 still')
     ap.add_argument('--out', default=os.path.join(PROMO, 'out'))
     a = ap.parse_args()
-    d = os.path.join(PROMO, 'placeholder' if a.placeholder else 'raw')
+    d = os.path.join(PROMO, 'raw')
     os.makedirs(a.out, exist_ok=True)
     picks = {k: int(v) for k, v in (p.split('=') for p in a.pick)}
-    over = {}
-    for f in a.focus:
-        k, v = f.split('=')
-        x, y = v.split(',')
-        over[k] = (int(x), int(y))
-    stills, foci = {}, {}
+    focus = {k: tuple(int(c) for c in v.split(',')) for k, v in (f.split('=') for f in a.focus)}
+    st = {}
     for rid in IDS:
+        n, f = HERO[rid]
         man = read_manifest(d, rid)
-        pick = picks.get(rid) or int(man.get('hero_still', 1) or 1)
-        stills[rid] = load_still(d, rid, pick)
-        foci[rid] = focus_of(man, rid, pick, over)
-    outs = [banner(stills, foci, 1920, 480, 2, os.path.join(a.out, 'banner_1920x480.png'), ZOOM),
-            banner(stills, foci, 960, 300, 1, os.path.join(a.out, 'banner_960x300.png'),
-                   {k: max(1, v - 1) for k, v in ZOOM.items()}),
-            cover(stills, foci, os.path.join(a.out, 'cover_630x500.png')),
-            thumb(stills, foci, os.path.join(a.out, 'thumb_1280x720.png'))]
+        mf = man.get('focus') if isinstance(man.get('focus'), (list, tuple)) else None
+        st[rid] = (load(d, rid, picks.get(rid, n)), focus.get(rid, tuple(mf) if mf else f))
+    outs = [banner(st, 1920, 480, 1, 3, 2, os.path.join(a.out, 'banner_1920x480.png')),
+            banner(st, 960, 300, 1, 2, 1, os.path.join(a.out, 'banner_960x300.png')),
+            cover(st, os.path.join(a.out, 'cover_630x500.png')),
+            thumb(st, os.path.join(a.out, 'thumb_1280x720.png'))]
     for rid in IDS:
-        outs.append(reel_cover(rid, stills[rid], foci[rid], os.path.join(a.out, f'reelcover_{rid}.png')))
+        outs.append(reel_cover(rid, st[rid][0], st[rid][1], os.path.join(a.out, f'reelcover_{rid}.png')))
     for o in outs:
         print('wrote', o, Image.open(o).size)
 
