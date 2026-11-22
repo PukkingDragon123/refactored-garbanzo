@@ -226,21 +226,24 @@ function mixJ(A: J3, B: J3, u: number): J3 {
 }
 
 /**
- * Buffer px per world px: the cast is rasterised at twice the world's pixel density (finer faces,
- * hair strands, folds and seams) and the Actor draws the frames at 1 / PX7, so a figure stands as tall
- * in the world as before. Frames say so in `k`.
+ * Buffer px per world px. The cast is drawn at the world's own pixel size (CAST_DENS7 = 1); a frame
+ * painted denser says so in `k` and the Actor draws it at 1 / k, so a figure stands as tall in the
+ * world at any density. (Nothing reads PX7 itself any more: the Actor takes `k` from each frame.)
  */
-export const PX7 = 2;
+export const PX7 = 1;
 /**
  * A character's own density, where it isn't the cast's. (Mori used to be drawn at 1.5.)
  */
 export const DENS7: Record<string, number> = {};
 /**
- * The cast's density (user, latest: "realistic anime, not ugly and chopped"): two buffer pixels per
- * world pixel, the painted anime cast's fine grid, so faces, hands, hair and folds have room. (The
- * cartoon cast was 1, at the world's own pixel size.)
+ * The cast's density (user, latest: "make the player feel more human, stylize, lower resolution, same
+ * resolution as the game"): one buffer pixel per world pixel, the same grain as the world round them.
+ * At this size the finish works in clusters (raster.ts: lone texture pixels folded in, a coloured
+ * outline on the lit side, no hand creases), faces are a few hand-placed pixels (facepx.ts) and the
+ * fringe never leaves flecks of skin (head.ts). (The painted anime cast was 2, the fine grid, with
+ * facereal.ts; set this back to 2 to get it, every 1x rule keys off the density.)
  */
-export const CAST_DENS7 = 2;
+export const CAST_DENS7 = 1;
 export const dens7 = (id: string) => DENS7[id] ?? CAST_DENS7;
 /** the side-view prop painter's canvas (world px), and the body's buffer at a density */
 const CW0 = 128, CH0 = 118, OX0 = 64, OY0 = 100;

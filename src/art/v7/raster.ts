@@ -64,7 +64,8 @@ export function cel(r: Ramp6, l: number, bias = 0, shine = false): C {
  * outline, no rim light, brighter colour (popBuf). Off (user, latest: "make the people a lot better,
  * realistic anime, not ugly and chopped"): the painted anime finish, a deep step, a terminator and a
  * shine in the shading, fabric folds, strand hair with its angel ring, rim light and contact shading,
- * at the cast's fine density (body.ts CAST_DENS7) and its realistic proportions (head.ts).
+ * at the cast's density (body.ts CAST_DENS7, now the world's own pixel size) and its realistic
+ * proportions (head.ts).
  */
 export const TOON7 = false;
 
@@ -398,7 +399,7 @@ export class Scene3D {
    * the part itself where it faces the light (selective outlining). Returns the back layer and (if
    * used) the front layer.
    */
-  finish(o: { ink: C; line?: number; depthLine?: number; /** per group: how far its edge lines go toward the ink (small parts, e.g. hands, read cleaner darker) */ inkK?: Record<number, number>; /** rim light strength (0 = none) */ rim?: number } = { ink: 0xff201418 }): { back: PixelBuffer; front: PixelBuffer | null; ox: number; oy: number } {
+  finish(o: { ink: C; line?: number; depthLine?: number; /** per group: how far its edge lines go toward the ink (small parts, e.g. hands, read cleaner darker) */ inkK?: Record<number, number>; /** rim light strength (0 = none) */ rim?: number; /** groups that take no rim light */ noRim?: number[] } = { ink: 0xff201418 }): { back: PixelBuffer; front: PixelBuffer | null; ox: number; oy: number } {
     const W = this.w, Hh = this.h, z = this.z, g = this.grp, src = this.col.slice();
     const out = this.col, nx = this.nx, lit = this.lit;
     const lineK = o.line ?? 0.55, dl = o.depthLine ?? 2.2, ik = o.inkK, rim = o.rim ?? 0.5;
@@ -425,6 +426,39 @@ export class Scene3D {
       if (!same && n >= 3) out[i] = na >= nb ? a : b;
     }
     if (TOON7) src.set(out);
+    // at the world's own pixel size (k < 1.5: the cast since CAST_DENS7 = 1), lone pixels of soft
+    // texture (knit, leg hair, speckle, a stray terminator pixel) are folded into the cluster round them,
+    // so fabric, skin and hair read as clean clusters of a few tones. A lone pixel that stands out
+    // strongly (a button, a stitch, a buckle's glint) is a placed detail and stays.
+    const px1 = !TOON7 && this.k < 1.5;
+    if (px1) {
+      for (let y = Y0; y <= Y1; y++) for (let x = X0; x <= X1; x++) {
+        const i = y * W + x, gi = g[i];
+        if (!gi) continue;
+        let n = 0, a = 0, na = 0, b = 0, nb = 0, same = false;
+        for (let q = 0; q < 4; q++) {
+          const X = x + N4X[q], Y = y + N4Y[q];
+          if (X < 0 || Y < 0 || X >= W || Y >= Hh) continue;
+          const j = Y * W + X;
+          if (g[j] !== gi) continue;
+          n++;
+          const c = src[j];
+          if (c === src[i]) { same = true; break; }
+          if (!na || c === a) { a = c; na++; } else if (!nb || c === b) { b = c; nb++; }
+        }
+        if (same || n < 3) continue;
+        // (a pixel of a thin diagonal line, a strap or a seam, has its own colour on a corner: kept)
+        let diag = false;
+        for (let q = 0; q < 4 && !diag; q++) {
+          const X = x + D4X[q], Y = y + D4Y[q];
+          if (X >= 0 && Y >= 0 && X < W && Y < Hh && g[Y * W + X] === gi && src[Y * W + X] === src[i]) diag = true;
+        }
+        if (diag) continue;
+        const r = na >= nb ? a : b;
+        if (cdist(r, src[i]) < 64) out[i] = r;
+      }
+      src.set(out);
+    }
     for (let y = Y0; y <= Y1; y++) for (let x = X0; x <= X1; x++) {
       const i = y * W + x;
       if (!g[i]) continue;
@@ -442,9 +476,10 @@ export class Scene3D {
       if (TOON7) { if (line >= 0) out[i] = toonInk(src[line], o.ink); continue; }
       // the line takes the dark tone of the part in front (a hand-inked edge of that part)
       if (line >= 0) out[i] = mix(mix(shade(src[line], -lineK - 0.1), shade(src[i], -lineK), 0.3), o.ink, ik?.[g[line]] ?? 0.3);
-      else if (contact) out[i] = mix(src[i], shade(src[i], -0.3), 0.6);
+      // (a whole world pixel at the world's pixel size: a muted shade, never a saturated fleck)
+      else if (contact) out[i] = px1 ? mix(src[i], o.ink, 0.28) : mix(src[i], shade(src[i], -0.3), 0.6);
       // back light: a thin bright rim on the far edge of a form that turns away from the key light
-      else if (rim > 0 && edgeR && nx[i] > 0.25 && lit[i] < 0.5) out[i] = mix(src[i], shade(src[i], 0.75), rim * Math.min(1, (nx[i] - 0.1) * 2));
+      else if (rim > 0 && edgeR && nx[i] > 0.25 && lit[i] < 0.5 && !o.noRim?.includes(g[i])) out[i] = mix(src[i], shade(src[i], 0.75), rim * Math.min(1, (nx[i] - 0.1) * 2));
     }
     // silhouette outline (tinted by the neighbour, its weight picked by how the form meets the light)
     let anyFront = false;
@@ -465,7 +500,11 @@ export class Scene3D {
         if (TOON7) { const c = toonInk(src[nb], o.ink); if (this.lay[nb]) { front.data[i] = c; anyFront = true; } else back.data[i] = c; continue; }
         const away = Math.max(0, Math.min(1, 0.55 - lit[nb] * 0.9));
         const base = ik ? Math.max(0.55, ik[g[nb]] ?? 0) : 0.55;
-        const c = mix(shade(src[nb], -0.5 - 0.3 * away), o.ink, Math.min(1, base * (0.55 + 0.75 * away)));
+        // (a whole world pixel wide at the world's pixel size: where the form faces the light it is the
+        // part's own deep colour, only going to ink as it turns into shadow)
+        const c = px1
+          ? mix(shade(src[nb], -0.15 - 0.2 * away), o.ink, Math.min(0.92, 0.4 + base * 0.95 * away))
+          : mix(shade(src[nb], -0.5 - 0.3 * away), o.ink, Math.min(1, base * (0.55 + 0.75 * away)));
         if (this.lay[nb]) { front.data[i] = c; anyFront = true; } else back.data[i] = c;
       }
     }
@@ -474,6 +513,9 @@ export class Scene3D {
 }
 
 const N4X = [1, -1, 0, 0], N4Y = [0, 0, 1, -1];
+const D4X = [1, 1, -1, -1], D4Y = [1, -1, 1, -1];
+/** how far apart two colours are (summed RGB difference) */
+const cdist = (a: C, b: C) => Math.abs((a & 255) - (b & 255)) + Math.abs(((a >>> 8) & 255) - ((b >>> 8) & 255)) + Math.abs(((a >>> 16) & 255) - ((b >>> 16) & 255));
 /** the cartoon outline's colour: the part's own darkest tone, mostly ink (cached per pair) */
 const inks = new Map<string, C>();
 function toonInk(c: C, ink: C): C {

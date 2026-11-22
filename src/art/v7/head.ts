@@ -14,6 +14,7 @@ import { AROHA_HEAD } from './aroha7';
 import { paintFaceMid7 } from './facemid';
 import { paintFaceSimple7 } from './facesimple';
 import { paintFaceReal7 } from './facereal';
+import { paintFacePx7 } from './facepx';
 import { headForm } from './headsdf';
 import { paintFaceToon7 } from './facetoon';
 
@@ -424,7 +425,8 @@ function bendLock(l: Lock, F: V3, lift: number, d: HeadDef7): [V3, V3, V3] {
 
 /**
  * A head, optionally dressed in outfit head wear (`wk` names it for the cache), at `hs` of its
- * volumes' size. The buffer is at the rig's pixel density (PX7 px per world px; `k` says so).
+ * volumes' size. The buffer is at the character's pixel density (dens7: buffer px per world px, 1 for
+ * the cast; `k` says so).
  */
 export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '', hs = HEAD_SCALE7): { buf: PixelBuffer; ax: number; ay: number; k: number } {
   const key = `${id}|${wk}|${o.expr}|${o.mouth}|${o.blink ? 1 : 0}|${o.look}|${o.hair ?? 0}|${o.hairY ?? 0}|${hs}`;
@@ -635,7 +637,9 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
   const marks: [number, number, C][] = [];
   const onFace = (x: number, y: number) => x >= 0 && y >= 0 && x < BW && y < BH && s.grp[y * BW + x] === 1;
   const put = (x: number, y: number, c: C) => { x = Math.floor(x); y = Math.floor(y); if (onFace(x, y)) marks.push([x, y, c]); };
-  const visible = (p: V3) => { const [x, y, z] = px(p); const i = Math.floor(y) * BW + Math.floor(x); return x >= 0 && y >= 0 && x < BW && y < BH && s.grp[i] === 1 && s.z[i] <= z + 2.2; };
+  const seen = (x: number, y: number, z: number) => { const i = Math.floor(y) * BW + Math.floor(x); return x >= 0 && y >= 0 && x < BW && y < BH && s.grp[i] === 1 && s.z[i] <= z + 2.2; };
+  // (at the world's pixel size the fringe can cover the lid's own pixel: the eye still shows under it)
+  const visible = (p: V3) => { const [x, y, z] = px(p); return seen(x, y, z) || (D < 1.5 && seen(x, y + 1, z)); };
   const eyeA: V3 = [d.eye[0], d.eye[1], d.eye[2]], eyeB: V3 = [d.eye[0], d.eye[1], -d.eye[2]];
   const [nearE, farE] = W(eyeA)[2] >= W(eyeB)[2] ? [eyeA, eyeB] : [eyeB, eyeA];
   const eye = o.blink && ex.eye !== 'happy' ? 'closed' : ex.eye;
@@ -645,7 +649,7 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
     // the V12 face (facemid.ts): clean clusters on the buffer grid
     const dirX = W([1, 0, 0])[0];
     const nt: V3 = [d.nose[0][0] + d.nose[1][0] * 0.85, d.nose[0][1] - d.nose[1][1] * 0.1, d.nose[0][2]];
-    (TOON7 ? paintFaceToon7 : HEAD_SDF7 ? paintFaceReal7 : SIMPLE_FACE7 ? paintFaceSimple7 : paintFaceMid7)(put, {
+    (TOON7 ? paintFaceToon7 : HEAD_SDF7 ? (D < 1.5 ? paintFacePx7 : paintFaceReal7) : SIMPLE_FACE7 ? paintFaceSimple7 : paintFaceMid7)(put, {
       near: visible(nearE) ? at2(nearE) : null,
       far: visible(farE) ? at2(farE) : null,
       nose: at2(nt),
@@ -661,7 +665,7 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
   }
   if (!back && FACE_STYLE7 === 'simple') {
     // the old simple face (user: "the old simple face before"): dot eyes, two-pixel brows, a
-    // small mouth, each face pixel a PX7 x PX7 block so it reads at the body's world-pixel size.
+    // small mouth, each face pixel a D x D block so it reads at the body's world-pixel size.
     // (paintFace7, the anime face, is kept unused in face7.ts.)
     const B = Math.max(1, Math.round(D));
     const blk = (cx: number, cy: number): FaceMark => (dx, dy, c) => {
@@ -708,7 +712,7 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
   }
   // the hair's edge over the face is inked in the hair's own dark, not the skin's red-brown (no streak down the cheek)
   // (the simple face: only real overlaps get an inner line, not every fold of the face volumes)
-  const r = s.finish({ ink: mix(d.ink, d.hair[0], 0.6), depthLine: SIMPLE_FACE7 ? 2.6 : 1.6, rim: 0.55, inkK: { 1: 0.8, 3: 0.6, 6: 0.75 } });
+  const r = s.finish({ ink: mix(d.ink, d.hair[0], 0.6), depthLine: SIMPLE_FACE7 ? 2.6 : 1.6, rim: 0.55, inkK: { 1: 0.8, 3: 0.6, 6: 0.75 }, noRim: D < 1.5 ? [1] : undefined });
   // under the jaw (user: "the face and neck looks uncanny"): no inked line between the head and the
   // neck (it read as a black choker, the head a mask on a stick); the edge under the jaw and chin is
   // the jaw's shadow falling on the throat, a deep skin tone running into the neck's shade
@@ -719,6 +723,19 @@ export function renderHead7(id: string, o: HeadOpts7, wear?: HeadWear7, wk = '',
       if (s.grp[i] || !bd[i] || s.grp[i - BW] !== 1) continue;
       bd[i] = jawSh;
     }
+  }
+  // at the world's pixel size, a lone pixel of skin showing between locks of the fringe reads as a fleck:
+  // it takes the hair's colour round it
+  if (D < 1.5) {
+    const bd = r.back.data, g = s.grp, fix: [number, C][] = [];
+    for (let y = 1; y < BH - 1; y++) for (let x = 1; x < BW - 1; x++) {
+      const i = y * BW + x;
+      if (g[i] !== 1) continue;
+      let face = 0, hair = -1;
+      for (const j of [i - 1, i + 1, i - BW, i + BW]) { if (g[j] === 1) face++; else if (g[j] && hair < 0) hair = j; }
+      if (face <= 1 && hair >= 0 && (g[i - BW] !== 1 || face === 0)) fix.push([i, bd[hair]]);
+    }
+    for (const [i, c] of fix) bd[i] = c;
   }
   for (const [x, y, c] of marks) r.back.data[y * BW + x] = c;
   popBuf(r.back);

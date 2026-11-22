@@ -32,12 +32,18 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
   New foliage opts into the shared plant physics (`src/world/foliage.ts`: `Prop` option
   `foliage: 'grass' | 'fern' | 'bush' | 'reed' | 'flower' | 'vine' | 'plant' | 'tree'`, `GroundCover`,
   `st.windField`). Organic painters live in `src/art/organic.ts`.
-- Characters (user, latest: "make the people a lot better, realistic anime, not ugly and chopped"):
-  the painted anime cast at its fine density, two buffer pixels per world pixel (`CAST_DENS7 = 2` in
-  `src/art/v7/body.ts`, `TOON7 = false` in `raster.ts`). That means smooth form shading, fabric
-  folds, strand hair with its angel ring, rim light, and the realistic sprite face (`facereal.ts`, below).
-  The cartoon finish and face (`facetoon.ts`) are kept, unused. Mori is a normal, fit build, never
-  skinny. Women and girls are listed in `FEM7`.
+- Characters (user, latest: "make the player feel more human, stylize, lower resolution, same
+  resolution as the game"; before that, "realistic anime, not ugly and chopped"): the painted cast at
+  the world's own pixel size, one buffer pixel per world pixel (`CAST_DENS7 = 1` in
+  `src/art/v7/body.ts`, `TOON7 = false` in `raster.ts`; frames carry `k` and the Actor draws them at
+  1 / k, so a figure's world height never depends on the density). Form shading, fabric folds, hair
+  locks with their shine band and rim light stay, designed for 1x: at k < 1.5 `Scene3D.finish` folds
+  lone texture pixels into their cluster (a pixel that stands out, or sits on a diagonal line like a
+  strap, is kept), the outline on the lit side is the part's own deep colour and only goes to ink in
+  shadow, contact shadows are muted, hands have no creases, and the face is `facepx.ts` (below). The
+  fine two-pixel grid (`CAST_DENS7 = 2`, `facereal.ts`) and the cartoon finish and face
+  (`facetoon.ts`) are kept, unused. Mori is a normal, fit build, never skinny. Women and girls are
+  listed in `FEM7`.
   - **Proportions: stylised like Dave the Diver, anatomy in the joints** (user, latest: "the body and
     face and neck looks uncanny, study how Dave the Diver makes it look good and normal"; before that,
     "make it anatomically accurate"). Purely measured anatomy (7.4 heads, a long thin neck) was
@@ -55,10 +61,14 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
     flat face front for the eyes, the jaw running from its angle under the ear to a chin about a third
     of the face's width), with a subtle brow ridge, eye sockets, nose, nostril wings and lips, rendered
     by `Scene3D.sdf` (`HEAD_SDF7 = true` in `head.ts`). Its skin is smoothed and shaded in four clean
-    tones, no speckled terminator. The sprite face is `facereal.ts`: an upper lid line over the iris
-    with its catch-light inside, only a sliver of shaded white, tapered brows, a lip line with a
-    shadow under the lower lip. The detailed (`facemid.ts`) and bead-eyed (`facesimple.ts`) faces are
-    kept, unused. Judge faces only at the game's sprite size, never from enlarged debug renders.
+    tones, no speckled terminator. The sprite face is `facepx.ts`, a few hand-placed pixels at the
+    world's pixel size: the near eye a two-pixel lid line over the iris with a sliver of shaded white,
+    the far eye one pixel across, both on one line; two-pixel brows a row clear of the lid, tilting
+    with the mood (a fringe may cover them); a woman's lash flicked up; one shadow pixel under the
+    nose; a one or two pixel mouth in a deep skin tone (rosier on a woman). Skin showing as a lone
+    fleck between fringe locks takes the hair's colour, and the face takes no rim light. The finer
+    faces for the two-pixel grid (`facereal.ts`, `facemid.ts`, `facesimple.ts`) are kept, unused.
+    Judge faces only at the game's sprite size, never from enlarged debug renders.
   - The head meets the neck with no inked line: the edge under the jaw is the jaw's shadow in a deep
     skin tone (`renderHead7`); a black line there reads as a choker.
   - **Bodies (user: "the mc is too skinny ... less like a bunch of sticks").** Limbs are shaped, not
