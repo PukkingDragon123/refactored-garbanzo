@@ -349,9 +349,10 @@ export function buildForest(f: ForestScene) {
     const k = rng.next(), v = rng.int(0, 2);
     if (REGION_HANG_SKIP.some(([a, b]) => x > a && x < b)) continue;
     const fr = k < 0.4 ? frameOf(`fh:${v}`, () => fgFernSpray(1540 + v, 66 + v * 10, true, 1, dark, 0.6))
-      : k < 0.7 ? frameOf(`fv:${v}`, () => fgVines(1550 + v, 80, 70 + v * 20, 1, dark, 0.6))
+      : k < 0.7 ? frameOf(`fv:${v}`, () => fgVines(1550 + v, 80, 380 + v * 30, 1, dark, 0.6))
         : frameOf(`fc:${v}`, () => soften(canopyClump(1560 + v, 200, 70, { above: 260 }), 1, dark, 0.58));
-    const X = x * pf, flip = rng.chance(0.5), y = rise(x, pf) + (k < 0.7 ? fyT - 14 + rng.range(-8, 4) : fyT + 10 + rng.range(-8, 8));
+    const X = x * pf, flip = rng.chance(0.5); // (the lianas drop from well above the frame, so their tops are never seen hanging from nothing)
+    const y = rise(x, pf) + (k < 0.4 ? fyT - 14 + rng.range(-8, 4) : k < 0.7 ? fyT - 330 + rng.range(-8, 4) : fyT + 10 + rng.range(-8, 8));
     front.add(new Prop(fr, X, y, 2 + rng.next(), { sway: 0.25, flip }));
   }
   // giant trunks passing close by

@@ -103,7 +103,7 @@ const SHOTS: Shot[] = [
   // the palm beach, the surf, the morning
   { jump: 'isle:jenna', music: ['town', 0], run: async () => { hideMori(); await at(-260, -60, 1.25); await pan(260, -70, 1.3, 7.5); } },
   // into the great forest: up the giant trunks
-  { jump: 'forest:in', run: async () => { hideMori(); await at(80, -20, 1.4); await pan(160, -150, 1.15, 6.5); } },
+  { jump: 'forest:in', run: async () => { hideMori(); await at(60, -20, 1.3); await pan(260, -24, 1.32, 6.5); } },
   // the fallen kauri lookout: Mori walks along under the canopy
   { jump: 'forest:lookout', run: async () => { await at(40, -50, 1.5); void drive(['KeyD'], 3.2); await pan(140, -60, 1.45, 6); } },
   // the village on festival night
@@ -173,7 +173,7 @@ async function cutTo(shot: Shot) {
   hideAll();
   const s = sc();
   if (s) s.cutscene = false;
-  cineBars(true);
+  cineBars(false); // (no letterbox: bars hide the tops of things hanging into the frame and leave them floating)
   anchor();
   if (shot.music) music(shot.music[0], shot.music[1]);
 }

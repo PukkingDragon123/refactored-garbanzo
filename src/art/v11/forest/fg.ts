@@ -65,7 +65,7 @@ export function fgVines(seed: number, w: number, h: number, blur: number, to: C,
     tube(b, pts, () => rng.range(1, 2.2), JP.bark, 3, { rim: false });
     if (rng.chance(0.6)) leafMass(b, rng, { cx: x, cy: len, rx: rng.range(6, 12), ry: rng.range(4, 8), ramp: JP.kawakawa, base: 2, steps: 2, shape: 'heart', len: [4, 7], wid: [3, 4], density: 0.7, droop: 0.8 });
   }
-  leafMass(b, rng, { cx: w / 2, cy: 6, rx: w * 0.55, ry: 14, ramp: JP.canopy, base: 1, steps: 2, shape: 'point', len: [5, 8], wid: [3, 4], density: 0.9, droop: 0.8 });
+  // (no solid leaf band along the top: out of focus it read as a dark block hanging in mid-air)
   outlineSel(b, 0.4);
   return soften({ buf: b, ax: Math.round(w / 2), ay: 0 }, blur, to, dark);
 }
