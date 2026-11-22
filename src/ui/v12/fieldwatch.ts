@@ -1,9 +1,10 @@
 // V12 Mori's field watch, up close (user: "full detailed UI and zoom in, super detailed and cool, works
 // like a menu"). Click the HUD's watch (or press C) and it comes up off the corner to fill the middle of
-// the screen as a big pixel-art object: a vented rubber strap running out of frame, a faceted composite
-// case with a carbon weave and hex screws, a brushed steel bezel engraved with the minutes and the
-// compass, four knurled pushers with their names engraved beside them, and behind flat sapphire glass a
-// colour display that works like a real one:
+// the screen as a big pixel-art object, the HUD's hand-made watch up close (./fieldwatchbody.ts: the
+// olive nylon strap running out of frame with its steel keeper, the composite case cut from the HUD
+// sprite's profile with its crown guards, screws and scuffs, the steel coin-edge bezel round a black
+// compass insert, four knurled pushers with their names beside them, the crown) and behind the glass a
+// negative LCD (ghost segments, stamina as chunky blocks round the bottom) that works like a real one:
 //   the menu    a carousel of apps; UP / DOWN (W S, arrows, the wheel) to scroll, START (E, Enter, a
 //               click on the app) to open, BACK (Esc, Backspace, right click) to go back or put it away
 //   CLOCK       the time in big segment digits, seconds round the edge, the day, dusk and dark
@@ -32,22 +33,20 @@ import { hunger, hungerWord } from '../../game/v12/hunger';
 import { DUSK_HOUR, DARK_HOUR } from '../../game/v12/clock';
 import { trackedQuest, currentStepIndex } from '../../game/quests';
 import { WATCH_DIVE } from './watch';
+import { W, HGT, CX, CY, RB, RS, PUSHERS, paintFieldBody, paintFieldPushers, paintFieldGlass, smileBlocks } from './fieldwatchbody';
 
 // ---------------------------------------------------------------- palette
 const H = (s: string) => hex(s);
-const CASE = ['#07090b', '#0e1215', '#151a1f', '#1d242a', '#262f36', '#323d46', '#45525c', '#5f6e79'].map(H);
-const STEEL = ['#1c2025', '#30363c', '#4a525a', '#6a737b', '#8e979e', '#b3bbc0', '#d7dde0', '#f3f6f7'].map(H);
-const STRAP = ['#0a0c0d', '#121618', '#1a2023', '#232b2f', '#2e383d', '#3b474d'].map(H);
-const ORANGE = ['#6a2406', '#b8480c', '#ff7a1a', '#ffb062', '#ffe0b8'].map(H);
+/** the display: a negative LCD (the HUD watch's), unlit segments faintly there (ghosts), the backlight
+ *  flat quantised teal in three hard bands */
 const D = {
-  bg: H('#071014'), bgLit: H('#0a2427'), grid: H('#0c171b'), gridLit: H('#0f3034'),
-  ink: H('#eaf7f1'), dim: H('#6f9c98'), faint: H('#2d4a4c'),
-  green: H('#4ae08a'), greenD: H('#1e8a4c'), amber: H('#ffcc3a'), amberD: H('#b87a10'),
-  red: H('#ff5a3a'), redD: H('#a01e10'), blue: H('#7ad0ff'), blueD: H('#2a6aa8'),
-  orange: H('#ff8a2a'), lock: H('#3a2416'), lockH: H('#6a3a1a'), sun: H('#ffc838'), sunL: H('#fff4b0'),
+  bg: H('#0a110f'), bgLit: H('#0c3a37'), lit1: H('#11524b'), lit2: H('#196b62'), rim: H('#050807'),
+  ink: H('#d4ecdd'), dim: H('#6f8f80'), faint: H('#2a3d34'), ghost: H('#16231d'), ghostLit: H('#1f7067'),
+  green: H('#94e05c'), greenD: H('#3f8a2c'), amber: H('#ffc23e'), amberD: H('#a8680c'),
+  red: H('#ff5a3c'), redD: H('#a0220e'), blue: H('#7aa2ff'), blueD: H('#2a6aa8'),
+  orange: H('#f06a1a'), lock: H('#2e1c10'), lockH: H('#5e3618'), sun: H('#ffd54a'), sunL: H('#fff6c0'),
 };
-
-const W = 312, HGT = 320, CX = 156, CY = 160, R = 96, RB = R * 0.86, RS = R * 0.7;
+let GHOST = D.ghost;
 
 // ---------------------------------------------------------------- the apps
 type AppId = 'clock' | 'body' | 'sun' | 'compass' | 'quest' | 'notebook' | 'backpack' | 'camera' | 'light' | 'dive';
@@ -121,7 +120,7 @@ class FieldWatch {
     this.cv.width = W; this.cv.height = HGT;
     this.g = this.cv.getContext('2d')!;
     this.base = new PixelBuffer(W, HGT);
-    paintBody(this.base);
+    paintFieldBody(this.base);
     this.buf = new PixelBuffer(W, HGT);
     const face = game.save?.vars?.['hud:watchFace'] ?? 0;
     this.sel = this.apps[0] === DIVE_APP ? 0 : Math.max(0, this.apps.findIndex(a => a.id === (['clock', 'body', 'sun'] as AppId[])[face]));
@@ -216,14 +215,14 @@ class FieldWatch {
     const x = ((e.clientX - r.left) / r.width) * W, y = ((e.clientY - r.top) / r.height) * HGT;
     if (x < 0 || y < 0 || x > W || y > HGT) { this.close(); return; }
     for (const p of PUSHERS) {
-      if (Math.abs(x - p.x) < 12 && Math.abs(y - p.y) < 13) {
+      if (Math.abs(x - p.x) < 16 && Math.abs(y - p.y) < 15) {
         this.push(p.id);
         if (p.id === 'up') this.nav(-1); else if (p.id === 'down') this.nav(1); else if (p.id === 'start') this.select(); else this.back();
         return;
       }
     }
     const d = Math.hypot(x - CX, y - CY);
-    if (d > R + 6) { this.close(); return; }
+    if (d > RB + 30) { this.close(); return; }
     if (d < RS && this.screen === 'menu') {
       const off = Math.round((y - CY) / 30);
       if (off === 0) this.select(); else this.nav(off);
@@ -262,20 +261,22 @@ class FieldWatch {
     if (Math.abs(this.sel - this.pos) > this.apps.length / 2) this.pos = this.sel;
     const b = this.buf;
     b.data.set(this.base.data);
-    paintPushers(b, this.press);
-    const lit = !!game.save?.vars?.['watch:light'] || isNight();
+    paintFieldPushers(b, this.press);
+    const lit = !!game.save?.vars?.['watch:light'] || isNight() || (WATCH_DIVE.live?.()?.depth ?? 0) > 8;
+    GHOST = lit ? D.ghostLit : D.ghost;
     this.paintDisplay(b, T, dt, lit);
-    paintGlass(b, T);
+    paintFieldGlass(b, T);
     this.g.putImageData(new ImageData(new Uint8ClampedArray(b.bytes), W, HGT), 0, 0);
   }
 
   // ---------------------------------------------------------------- the display
   private paintDisplay(b: PixelBuffer, T: number, dt: number, lit: boolean) {
-    const bg = lit ? D.bgLit : D.bg, gr = lit ? D.gridLit : D.grid;
+    // the ground: flat; lit, three hard bands curving up from the LED at six
     for (let y = Math.floor(CY - RS); y <= CY + RS; y++) for (let x = Math.floor(CX - RS); x <= CX + RS; x++) {
       const d = Math.hypot(x + 0.5 - CX, y + 0.5 - CY);
       if (d > RS) continue;
-      b.set(x, y, d > RS - 1.2 ? CASE[0] : (x % 4 === 0 || y % 4 === 0) && d < RS - 3 ? gr : bg);
+      const e = Math.hypot(x + 0.5 - CX, y + 0.5 - CY - RS * 1.5);
+      b.set(x, y, d > RS - 2 ? D.rim : !lit ? D.bg : e < RS * 1.05 ? D.lit2 : e < RS * 1.6 ? D.lit1 : D.bgLit);
     }
     // the status bar: the time, GPS, the battery
     const hour = hudHour() ?? 12;
@@ -291,9 +292,9 @@ class FieldWatch {
     else if (this.screen === 'quest') this.appQuest(b);
     else if (this.screen === 'dive') this.appDive(b, T);
     // the stamina ring round every screen (hatched where hunger locks it; red and blinking winded)
-    ring(b, stamina(), staminaMax(), isWinded() && Math.floor(T * 4) % 2 === 0, lit);
+    smile(b, stamina(), staminaMax(), isWinded() && Math.floor(T * 4) % 2 === 0, T);
     // the hint along the bottom
-    if (this.screen === 'menu' || this.screen === 'clock') { const hint = this.screen === 'menu' ? 'START  OPEN' : 'BACK  MENU'; txt(b, hint, CX - pxMeasure(hint, 'tiny') / 2, CY + RS - 14, 'tiny', D.faint); }
+    if (this.screen === 'menu') { const hint = 'START  OPEN'; txt(b, hint, CX - pxMeasure(hint, 'tiny') / 2, CY - RS + 19, 'tiny', D.dim); }
   }
 
   private menu(b: PixelBuffer, T: number) {
@@ -330,7 +331,7 @@ class FieldWatch {
     // the page dots on the right inside the ring
     for (let i = 0; i < n; i++) {
       const a = -0.55 + (i / (n - 1)) * 1.1;
-      const x = Math.round(CX + Math.cos(a) * (RS - 11)), y = Math.round(CY + Math.sin(a) * (RS - 11));
+      const x = Math.round(CX + Math.cos(a) * (RS - 9)), y = Math.round(CY + Math.sin(a) * (RS - 9));
       b.set(x, y, i === this.sel ? D.orange : D.faint);
       if (i === this.sel) { b.set(x - 1, y, D.orange); b.set(x, y - 1, D.orange); b.set(x, y + 1, D.orange); }
     }
@@ -352,7 +353,8 @@ class FieldWatch {
     txt(b, l2, CX + 6, CY + 24, 'tiny', D.blue);
     // the seconds round the inside of the ring (in the island's own time)
     for (let i = 0; i < 60; i++) {
-      const a = (i / 60) * Math.PI * 2 - Math.PI / 2, r = RS - 13;
+      const a = (i / 60) * Math.PI * 2 - Math.PI / 2, r = RS - 18;
+      if (a > Math.PI * 0.15 && a < Math.PI * 0.85) continue;
       const x = Math.round(CX + Math.cos(a) * r), y = Math.round(CY + Math.sin(a) * r);
       b.set(x, y, i <= ss ? (i % 5 === 0 ? D.ink : D.blue) : i % 5 === 0 ? D.dim : D.faint);
     }
@@ -552,7 +554,7 @@ function heartIcon(b: PixelBuffer, x: number, y: number, big: boolean) {
   rows.forEach((row, yy) => { for (let xx = 0; xx < 7; xx++) if (row[xx] === '#') b.set(x + xx, y + yy, xx + yy < 4 ? H('#ff9a9a') : D.red); });
 }
 /** segment digits (a modern watch's numerals): w x h each, stroke t, centred on x; the colon blinks */
-function segText(b: PixelBuffer, s: string, x: number, y: number, w: number, h: number, t: number, c: C, colon: boolean) {
+function segText(b: PixelBuffer, s: string, x: number, y: number, w: number, h: number, t: number, c: C, colon: boolean, ghostOn = true) {
   const SEG: Record<string, string> = { '0': 'abcdef', '1': 'bc', '2': 'abged', '3': 'abgcd', '4': 'fgbc', '5': 'afgcd', '6': 'afgedc', '7': 'abc', '8': 'abcdefg', '9': 'abcdfg', '-': 'g' };
   const gap = Math.max(2, t);
   let width = 0;
@@ -562,7 +564,9 @@ function segText(b: PixelBuffer, s: string, x: number, y: number, w: number, h: 
   const y0 = Math.round(y - h / 2), hm = Math.floor(h / 2);
   const hbar = (X: number, Y: number) => { for (let i = 1; i < w - 1; i++) for (let j = 0; j < t; j++) if (!((i === 1 || i === w - 2) && (j === 0 || j === t - 1) && t > 2)) b.set(X + i, Y + j, c); };
   const vbar = (X: number, Y: number, len: number) => { for (let j = 1; j < len - 1; j++) for (let i = 0; i < t; i++) b.set(X + i, Y + j, c); };
+  const ghost = (X: number, Y: number) => { const c0 = c; c = GHOST; if (ghostOn) { hbar(X, Y); hbar(X, Y + hm - Math.floor(t / 2)); hbar(X, Y + h - t); vbar(X, Y, hm + 1); vbar(X + w - t, Y, hm + 1); vbar(X, Y + hm, h - hm); vbar(X + w - t, Y + hm, h - hm); } c = c0; };
   for (const ch of s) {
+    if (ch !== ':') ghost(x0, y0);
     if (ch === ':') { if (colon) for (let i = 0; i < t; i++) for (let j = 0; j < t; j++) { b.set(x0 + i, y0 + Math.round(h * 0.3) + j, c); b.set(x0 + i, y0 + Math.round(h * 0.7) - t + j, c); } x0 += t + gap; continue; }
     const on = SEG[ch] ?? '';
     if (on.includes('a')) hbar(x0, y0);
@@ -575,194 +579,24 @@ function segText(b: PixelBuffer, s: string, x: number, y: number, w: number, h: 
     x0 += w + gap;
   }
 }
-/** the stamina ring round the inside of the display: segments over 270 degrees, the hunger-locked part hatched */
-function ring(b: PixelBuffer, st: number, cap: number, blink: boolean, lit: boolean) {
-  const seg = 36, span = Math.PI * 1.5, a0 = Math.PI * 0.75, ro = RS - 2.5, ri = RS - 7;
+/** stamina round the bottom of the display: chunky blocks on the pixel grid stepping round (hunger's
+ *  locked part hatched, the last lit one flickering when low, all of them blinking red winded) */
+function smile(b: PixelBuffer, st: number, cap: number, blink: boolean, T: number) {
+  const blocks = smileBlocks(), n = blocks.length;
   const col = blink || st < 0.25 ? [D.redD, D.red] : st < 0.5 ? [D.amberD, D.amber] : [D.greenD, D.green];
-  for (let y = Math.floor(CY - ro); y <= CY + ro; y++) for (let x = Math.floor(CX - ro); x <= CX + ro; x++) {
-    const d = Math.hypot(x + 0.5 - CX, y + 0.5 - CY);
-    if (d > ro || d < ri) continue;
-    let a = Math.atan2(y + 0.5 - CY, x + 0.5 - CX) - a0;
-    while (a < 0) a += Math.PI * 2;
-    if (a > span) continue;
-    const u = a / span, si = Math.floor(u * seg);
-    if (u * seg - si > 0.74) continue;
-    const on = (si + 0.5) / seg <= st, lock = (si + 0.5) / seg > cap;
-    b.set(x, y, on ? col[d > (ri + ro) / 2 ? 1 : 0] : lock ? ((x + y) & 1 ? D.lockH : D.lock) : lit ? D.gridLit : D.faint);
-  }
-  // the bolt at the ring's foot
-  const bx = CX - 4, by = CY + RS - 9;
-  for (const [dx, dy] of [[3, 0], [2, 1], [1, 2], [2, 2], [3, 2], [2, 3], [1, 4]]) b.set(bx + dx, by + dy, col[1]);
-}
-
-// ---------------------------------------------------------------- the body of the watch (painted once)
-const PUSHERS: { id: 'up' | 'down' | 'start' | 'back'; x: number; y: number; side: -1 | 1; label: string }[] = [
-  { id: 'up', x: CX - R - 4, y: CY - 46, side: -1, label: 'UP' },
-  { id: 'down', x: CX - R - 4, y: CY + 46, side: -1, label: 'DOWN' },
-  { id: 'start', x: CX + R + 4, y: CY - 46, side: 1, label: 'START' },
-  { id: 'back', x: CX + R + 4, y: CY + 46, side: 1, label: 'BACK' },
-];
-
-function hs(x: number, y: number, s: number) { let n = (x * 374761393 + y * 668265263 + s * 1442695041) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; }
-const BAY = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
-const bay = (x: number, y: number) => (BAY[(y & 3) * 4 + (x & 3)] + 0.5) / 16;
-const pick = (r: C[], v: number, x: number, y: number) => r[Math.max(0, Math.min(r.length - 1, Math.floor(v + bay(x, y) - 0.5)))];
-
-function paintBody(b: PixelBuffer) {
-  // ---- the strap: a wide vented rubber band running out of frame top and bottom
-  const sw = 112;
-  for (let y = 0; y < HGT; y++) {
-    if (y > CY - R + 20 && y < CY + R - 20) continue;
-    const top = y < CY;
-    for (let x = CX - sw / 2; x < CX + sw / 2; x++) {
-      const u = (x - (CX - sw / 2)) / sw;
-      // the band is curved: lit along the left third, a ridge down each edge
-      let v = 2.6 + Math.sin(u * Math.PI) * 1.4 - u * 1.2;
-      if (u < 0.06 || u > 0.94) v = 1.2;
-      const yy = top ? CY - R - y : y - (CY + R);
-      // molded ribs across it and a row of vents
-      const rib = ((yy + 400) % 14) < 2;
-      const vent = ((yy + 400) % 14) >= 6 && ((yy + 400) % 14) <= 9 && u > 0.22 && u < 0.78 && Math.abs(((u - 0.22) / 0.56) * 5 % 1 - 0.5) < 0.32;
-      if (vent) { b.set(Math.round(x), y, STRAP[0]); continue; }
-      b.set(Math.round(x), y, pick(STRAP, v + (rib ? 1.1 : 0) + (hs(x, y, 3) > 0.96 ? 0.6 : 0), Math.round(x), y));
+  const lastOn = Math.ceil(st * n - 0.001) - 1;
+  blocks.forEach((q, i) => {
+    let on = i <= lastOn && st > 0.001;
+    if (st < 0.25 && i === lastOn && (Math.floor(T * 7) % 3 === 0 || Math.sin(T * 23) > 0.6)) on = false;
+    const lock = (i + 0.5) / n > cap;
+    for (let y = 0; y < q.h; y++) for (let x = 0; x < q.w; x++) {
+      const X = q.x + x, Y = q.y + y;
+      b.set(X, Y, on ? (y === q.h - 1 || x === q.w - 1 ? col[0] : col[1]) : lock ? ((X + Y) & 1 ? D.lockH : D.lock) : GHOST);
     }
-  }
-  // a steel keeper loop on the lower strap, and the brand stamped into the upper one
-  for (let y = CY + R + 26; y < CY + R + 34; y++) for (let x = CX - sw / 2 - 3; x < CX + sw / 2 + 3; x++) {
-    const v = y < CY + R + 28 ? 6 : y > CY + R + 32 ? 1.5 : 3.6 - (x - CX) / sw;
-    b.set(x, y, pick(STEEL, v, x, y));
-  }
-  pxDraw(b, 'ZEALANDIA', CX - pxMeasure('ZEALANDIA', 'tiny') / 2, CY - R - 34, { font: 'tiny', color: STRAP[4] });
-  pxDraw(b, 'FIELD', CX - pxMeasure('FIELD', 'tiny') / 2, CY - R - 26, { font: 'tiny', color: STRAP[4] });
-  // ---- the lugs: chunky horns from the case into the strap
-  for (const dir of [-1, 1]) for (const side of [-1, 1]) {
-    const lx = CX + side * (sw / 2 - 8), ly = CY + dir * (R - 8);
-    for (let j = 0; j < 30; j++) for (let i = -10; i <= 10; i++) {
-      const y = ly + dir * j, x = lx + i;
-      const w = 10 - j * 0.12;
-      if (Math.abs(i) > w) continue;
-      const l = 3.4 - i / 10 * side * 1.4 - (dir > 0 ? j * 0.03 : -j * 0.02) + (Math.abs(i) > w - 1 ? -1.5 : 0);
-      b.set(x, y, weave(x, y, l));
-    }
-    // a hex screw in each lug
-    screw(b, lx + side * 1, ly + dir * 18);
-  }
-  // ---- the case: a 12-faceted composite body, carbon weave, each facet lit by its turn to the light
-  const facets = 12, seg = (Math.PI * 2) / facets;
-  const inCase = (dx: number, dy: number, k = 1) => { const a = Math.atan2(dy, dx); const q = Math.cos((((a % seg) + seg) % seg) - seg / 2); return Math.hypot(dx, dy) * q <= R * k * Math.cos(seg / 2); };
-  for (let y = CY - R - 2; y <= CY + R + 2; y++) for (let x = CX - R - 2; x <= CX + R + 2; x++) {
-    const dx = x + 0.5 - CX, dy = y + 0.5 - CY, d = Math.hypot(dx, dy);
-    if (!inCase(dx, dy)) continue;
-    if (d < RB) continue;
-    if (!inCase(dx, dy, 0.985)) { b.set(x, y, CASE[0]); continue; }
-    const a = Math.atan2(dy, dx), fa = Math.floor((a + Math.PI) / seg) * seg - Math.PI + seg / 2;
-    const l = 0.5 + (-Math.cos(fa) * 0.55 - Math.sin(fa) * 0.75) * 0.5;
-    // the facet's crease (a lit edge on the upper ones)
-    const aa = (((a + Math.PI) % seg) + seg) % seg;
-    const crease = aa < 0.05 || aa > seg - 0.05;
-    let v = 1.4 + l * 4.4 + (crease ? 1.2 : 0) - (d > R - 3 ? 0.8 : 0) + (d < RB + 2 ? -1.4 : 0);
-    b.set(x, y, weave(x, y, v));
-    // field wear: scuffs and a scratch or two on the lit shoulders
-    if (l > 0.55 && hs(x, y, 7) > 0.985) b.set(x, y, CASE[7]);
-  }
-  // ---- the bezel: brushed steel, engraved minutes (10..60) and the compass letters
-  for (let y = CY - RB; y <= CY + RB; y++) for (let x = CX - RB; x <= CX + RB; x++) {
-    const dx = x + 0.5 - CX, dy = y + 0.5 - CY, d = Math.hypot(dx, dy);
-    if (d > RB || d < RS) continue;
-    const an = Math.atan2(dy, dx);
-    let v = 4 + (-dx - dy) / (RB * 1.6) * 2.2 + (Math.sin(an * 90 + d * 0.3) > 0.55 ? 0.6 : 0);
-    if (d > RB - 1.5) v = 6.4; else if (d > RB - 3) v -= 1.2;
-    if (d < RS + 1.5) v = 1.2;
-    b.set(x, y, pick(STEEL, v, x, y));
-  }
-  const br = (RB + RS) / 2;
-  for (let i = 0; i < 60; i++) {
-    const a = (i / 60) * Math.PI * 2 - Math.PI / 2;
-    const five = i % 5 === 0;
-    if (five && i % 15 !== 0) {
-      const n = String((i / 5) * 5 || 60);
-      const tx = Math.round(CX + Math.cos(a) * br - pxMeasure(n, 'tiny') / 2), ty = Math.round(CY + Math.sin(a) * br - 2.5);
-      pxDraw(b, n, tx + 1, ty + 1, { font: 'tiny', color: STEEL[6] });
-      pxDraw(b, n, tx, ty, { font: 'tiny', color: STEEL[0] });
-    } else if (!five) {
-      for (let k = 0; k < 2; k++) b.set(Math.round(CX + Math.cos(a) * (RB - 3 - k)), Math.round(CY + Math.sin(a) * (RB - 3 - k)), STEEL[1]);
-    }
-  }
-  const letters: [string, number, C][] = [['N', -Math.PI / 2, ORANGE[2]], ['E', 0, STEEL[0]], ['S', Math.PI / 2, STEEL[0]], ['W', Math.PI, STEEL[0]]];
-  for (const [L, a, c] of letters) {
-    const tx = Math.round(CX + Math.cos(a) * br - 1.5), ty = Math.round(CY + Math.sin(a) * br - 2.5);
-    pxDraw(b, L, tx + 1, ty + 1, { font: 'tiny', color: STEEL[6] });
-    pxDraw(b, L, tx, ty, { font: 'tiny', color: c });
-  }
-  // the lume triangle at twelve
-  for (let k = 0; k < 4; k++) for (let i = -k; i <= k; i++) b.set(CX + i, Math.round(CY - RB + 2 + k), ORANGE[k < 2 ? 3 : 2]);
-  // ---- the pushers' names float beside them in the menus' words, with their keys
-  for (const p of PUSHERS) {
-    const key = p.id === 'up' ? 'W' : p.id === 'down' ? 'S' : p.id === 'start' ? 'E' : 'ESC';
-    const w = pxMeasure(p.label, 'bold'), kw = pxMeasure(key, 'tiny') + 4;
-    const tx = p.side < 0 ? p.x - 14 - w : p.x + 14;
-    const ty = p.y - 5;
-    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [1, 1]]) pxDraw(b, p.label, tx + dx, ty + dy, { font: 'bold', color: hex('#140c06') });
-    pxDraw(b, p.label, tx, ty, { font: 'bold', color: p.id === 'start' ? ORANGE[3] : hex('#fff2d8') });
-    // the keycap under the word
-    const kx = p.side < 0 ? tx + w - kw : tx, ky = ty + 12;
-    for (let x = 0; x < kw; x++) for (let y = 0; y < 9; y++) {
-      const edge = x === 0 || y === 0 || x === kw - 1 || y === 8;
-      if (edge && (x === 0 || x === kw - 1) && (y === 0 || y === 8)) continue;
-      b.set(kx + x, ky + y, edge ? hex('#140c06') : y > 6 ? hex('#a89c88') : hex('#e8dcc4'));
-    }
-    pxDraw(b, key, kx + 2, ky + 2, { font: 'tiny', color: hex('#2a2016') });
-    // a leader line from the word to the pusher
-    for (let i = 0; i < 6; i++) if (i % 2 === 0) b.set(p.side < 0 ? p.x - 8 - i : p.x + 8 + i, p.y, hex('#fff2d8'));
-  }
-}
-
-/** carbon weave on the composite: two-tone twill, lit by v */
-function weave(x: number, y: number, v: number): C {
-  const tw = ((Math.floor((x + y) / 2) + Math.floor((x - y) / 6)) & 1) === 0;
-  return pick(CASE, v + (tw ? 0.45 : -0.3), x, y);
-}
-function screw(b: PixelBuffer, x: number, y: number) {
-  for (let j = -3; j <= 3; j++) for (let i = -3; i <= 3; i++) {
-    if (Math.abs(i) + Math.abs(j) * 0.6 > 3.6) continue;
-    const v = 4 - (i + j) * 0.5;
-    b.set(x + i, y + j, pick(STEEL, v, x + i, y + j));
-  }
-  // the hex socket
-  for (const [i, j] of [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1], [0, 0]]) b.set(x + i, y + j, i === 0 && j === 0 ? STEEL[0] : STEEL[1]);
-}
-/** the four pushers: knurled steel, START ringed orange; a pressed one sits in */
-function paintPushers(b: PixelBuffer, press: Record<string, number>) {
-  for (const p of PUSHERS) {
-    const held = (press[p.id] ?? 0) > 0;
-    const out = held ? 5 : 8, ph = 18;
-    // the stem from the case
-    const x0 = p.side < 0 ? Math.round(CX - Math.sqrt(R * R * 0.93 - (p.y - CY) ** 2)) - out : Math.round(CX + Math.sqrt(R * R * 0.93 - (p.y - CY) ** 2));
-    for (let i = 0; i < out + 1; i++) for (let j = 0; j < ph; j++) {
-      const X = x0 + i, Y = p.y - ph / 2 + j;
-      const tip = p.side < 0 ? i < 2 : i > out - 2;
-      let c = j === 0 ? STEEL[6] : j === ph - 1 ? STEEL[0] : (j % 2 === 0 ? STEEL[4] : STEEL[2]);
-      if (tip) c = j < 3 ? STEEL[7] : STEEL[3];
-      if (p.id === 'start' && (p.side < 0 ? i === out - 1 : i === 1)) c = ORANGE[held ? 1 : 2];
-      if (held && j > 0 && j < ph - 1 && !tip) c = j % 2 === 0 ? STEEL[3] : STEEL[1];
-      b.set(X, Y, c);
-    }
-  }
-}
-/** the flat sapphire glass: a soft (dithered) diagonal glare and a glint that drifts */
-function paintGlass(b: PixelBuffer, T: number) {
-  for (let y = Math.floor(CY - RS); y <= CY + RS; y++) for (let x = Math.floor(CX - RS); x <= CX + RS; x++) {
-    const dx = x + 0.5 - CX, dy = y + 0.5 - CY, d = Math.hypot(dx, dy);
-    if (d > RS - 1) continue;
-    const band = dx + dy;
-    if (band < -RS * 0.7 && band > -RS * 0.95 && bay(x, y) < 0.18) b.blend(x, y, hex('#ffffff', 46));
-    if (Math.abs(band + RS * 0.55) < 1 && d > RS * 0.55 && bay(x, y) < 0.5) b.blend(x, y, hex('#ffffff', 40));
-  }
-  const g = ((T * 0.22) % 1.8) - 0.4;
-  if (g > 0 && g < 1) {
-    const gx = Math.round(CX - RS * 0.7 + g * RS * 1.1), gy = Math.round(CY - RS * 0.6 + g * RS * 0.35);
-    for (let i = 0; i < 6; i++) b.blend(gx + i, gy - i, hex('#ffffff', 150));
-  }
+  });
+  // the bolt at the smile's start
+  const bx = blocks[0].x - 9, by = blocks[0].y - 9;
+  for (const [dx, dy] of [[3, 0], [2, 1], [1, 2], [2, 2], [3, 2], [2, 3], [1, 4], [4, 1], [0, 3]]) b.set(bx + dx, by + dy, col[1]);
 }
 
 let cssOn = false;

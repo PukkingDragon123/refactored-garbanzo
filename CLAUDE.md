@@ -16,7 +16,7 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
 - The UI should be present and look great. Make it cool, stylish and physical, in the spirit of
   Dave the Diver: a proper stamina gauge, gauges and tags. Don't strip things away until it's bare.
 - Every UI piece is a super-detailed physical object. Timers and the clock are Mori's modern field watch
-  (user, latest: "real modern watch, cool, interactive, show stamina"; `src/ui/v12/watch.ts`), never a bar
+  (user, latest: "real modern watch, cool, interactive, show stamina", then "better, cooler, not AI"; `src/ui/v12/watch.ts`, a hand-placed sprite in `watchsprites.ts` with an LCD of ghosted segments painted by `watchface.ts`), never a bar
   or a bare number: a rugged composite case, a steel compass bezel, four pushers and a colour display
   with the time, stamina (its ring) and how long until dark. Click it (or press C) and it comes up big as
   a working menu (`src/ui/v12/fieldwatch.ts`: clock, body, sun, compass, quest, shortcuts).

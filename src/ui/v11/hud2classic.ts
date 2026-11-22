@@ -252,6 +252,8 @@ export class Hud2Classic {
   private watchLight = 0;
   private watchBuzz = 0;
   private watchAuto = 0;
+  /** the bezel's turn in clicks (it turns two clicks round on hover and back) */
+  private watchBez = 0;
   private offStamina: (() => void) | null = null;
   /** seconds the 'what to do' words stay up without a hover */
   private watchSayT = 0;
@@ -491,6 +493,7 @@ export class Hud2Classic {
     this.watchPress = Math.max(0, this.watchPress - dt);
     this.watchLight = Math.max(0, this.watchLight - dt);
     this.watchBuzz = Math.max(0, this.watchBuzz - dt);
+    this.watchBez = this.watchHover ? Math.min(2, this.watchBez + dt * 14) : Math.max(0, this.watchBez - dt * 10);
     // sprinting (or winded): the watch goes to the body face by itself, and back a little after
     { const pl = (game.scene as unknown as { player?: { running?: boolean } } | null)?.player; if (pl?.running || isWinded()) this.watchAuto = Math.max(this.watchAuto, 2.5); }
     this.watchAuto = Math.max(0, this.watchAuto - dt);
@@ -541,7 +544,8 @@ export class Hud2Classic {
     const hour = hudHour();
     this.watchBox.classList.toggle('off', hour === null);
     if (hour !== null) {
-      const px = kitPx(), S = Math.round((100 * hudK()) / px), ws = watchSize(S);
+      // (the HUD's watch is the hand-made sprite at its own size, a whole number of device px a pixel, like the kit)
+      const px = kitPx(), S = 50, ws = watchSize(S);
       if (this.watchCv.width !== ws.w || this.watchCv.height !== ws.h) { this.watchCv.width = ws.w; this.watchCv.height = ws.h; }
       this.watchCv.style.width = (ws.w * px) / dprOf() + 'px';
       this.watchCv.style.height = (ws.h * px) / dprOf() + 'px';
@@ -553,7 +557,7 @@ export class Hud2Classic {
       const st = stamina(), cap = staminaMax(), winded = isWinded(), bpm = heartRate(), hu = hunger();
       drawWatch(g, 0, 0, S, 1, {
         mode: 'clock', hour, deadline: DARK_HOUR, face, stamina: st, staminaMax: cap, winded, bpm, hunger: hu,
-        day: dayFn?.() ?? undefined, light: this.watchLight > 0 || !!game.save?.vars?.['watch:light'], press: this.watchPress > 0 ? 'start' : null, buzz: this.watchBuzz > 0 ? 0.8 : 0,
+        day: dayFn?.() ?? undefined, light: this.watchLight > 0 || !!game.save?.vars?.['watch:light'], press: this.watchPress > 0 ? 'start' : null, buzz: this.watchBuzz > 0 ? 0.8 : 0, bezel: this.watchBez,
       });
       // the words: what the face says, and what to do now
       const [t0, todo0] = watchWords(hour);
