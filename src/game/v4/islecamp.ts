@@ -702,7 +702,7 @@ export class IsleCamp {
       s.jenna.play('laugh', 'sit').catch(() => {});
       s.aroha.play('laugh', 'sit').catch(() => {});
       await st.say(sealChase ? [
-        { who: 'aroha', text: 'Those seals... we call them kekeno pango. The black ones. They only come ashore here, on this island.', expr: 'serious' },
+        { who: 'aroha', text: 'Those seals... we call them kekeno ihu. The long-nosed ones. They only come ashore here, on this island.', expr: 'serious' },
         { who: 'mori', text: 'Only here? Then my photo is the first one. Ever.', expr: 'excited', emote: 'sparkle' },
         { who: 'aroha', text: 'The first photo taken by someone running away, definitely.', expr: 'teasing' },
       ] : [

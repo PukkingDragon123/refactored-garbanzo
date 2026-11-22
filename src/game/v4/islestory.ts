@@ -847,7 +847,7 @@ export class IsleStory implements IsleHooks {
         await this.say([
           { who: 'mori', text: 'Is that a rock?', expr: 'thinking' },
           { who: 'mori', text: 'Rocks don’t snore.', expr: 'surprised' },
-          { who: 'mori', text: 'Black shaggy fur... a red face... white markings. That’s no fur seal I know. That’s no seal ANYONE knows.', expr: 'excited', emote: 'sparkle' },
+          { who: 'mori', text: 'A nose like a hanging trunk... a red flush on the tip... it’s HUGE. That’s no elephant seal I know. That’s no seal ANYONE knows.', expr: 'excited', emote: 'sparkle' },
           { who: 'mori', text: 'It’s enormous, and it’s lying right across the beach. Okay. If I go past, I tiptoe. Very, very quietly.', expr: 'worried' },
         ]);
         await this.pan(null, null);
