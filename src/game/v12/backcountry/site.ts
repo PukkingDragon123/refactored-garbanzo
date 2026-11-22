@@ -541,6 +541,8 @@ export function buildBackcountry(f: FieldScene): TuaRuntime {
     else if (b === 'tussock') { if (k < 0.6) { fr = tus(rng.range(28, 46), rng.chance(0.3)); fol = 'grass'; sway = 0.55; } else if (k < 0.7) { fr = spn(); fol = 'bush'; sway = 0.3; } else if (k < 0.78) { fr = dsy(); fol = 'grass'; sway = 0.4; } else if (k < 0.9) fr = stones[rng.int(0, 3)]; else fr = smallB(x); }
     else { if (k < 0.45) fr = stones[rng.int(0, 3)]; else if (k < 0.72) fr = smallB(x); else if (k < 0.86) { fr = tuft(['fern', 'kiokio'], [20, 32]); fol = 'fern'; sway = 0.4; } else { fr = frameOf(`gcu:${rng.int(0, 1)}`, () => paintCushion(3690 + rng.int(0, 1), 18)); } }
     if (!fr) continue;
+    // (its whole footprint on dry ground: a log or a gravel bar must not reach out over a stream)
+    if (inWater(x - fr.w * 0.45, dd) || inWater(x + fr.w * 0.45, dd)) continue;
     floor.add(new Prop(fr, x, tuaBase(x) + dd, 60 + dd * 0.02, { sway, flip: rng.chance(0.5), foliage: fol }));
   }
   // hide spots in the thickest cover

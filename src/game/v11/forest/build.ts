@@ -32,7 +32,7 @@ import type { Interactable } from '../../../world/npc';
 import { layerY } from '../../v4/island';
 import { FP } from '../../../art/v11/forest/kit';
 import { paintColonnade, paintBackdrop } from '../../../art/v11/forest/far';
-import { paintForestGround } from '../../../art/v11/forest/ground';
+import { paintForestGround, mudPoolAt } from '../../../art/v11/forest/ground';
 import { paintGiant } from '../../../art/v11/forest/trees';
 import type { GiantKind } from '../../../art/v11/forest/trees';
 import { paintFallenLog, paintSpringStones } from '../../../art/v11/forest/props';
@@ -293,6 +293,9 @@ export function buildForest(f: ForestScene) {
     if (x > MUD.x0 - 20 && x < MUD.x1 + 20 && dd < 110) continue;
     const k = rng.next();
     const fr = k < 0.32 ? tuft(tall, [26, 44]) : k < 0.55 ? mounds[rng.int(0, 2)] : k < 0.66 ? logs[rng.int(0, 1)] : k < 0.72 ? stump : k < 0.8 ? roots : k < 0.88 ? fungi[rng.int(0, 2)] : tuft(low, [14, 22]);
+    // (its whole footprint on dry ground: a long log's ends must not lie out over the water or the mud)
+    const hw = fr.w / 2;
+    if ([x - hw, x - hw * 0.5, x + hw * 0.5, x + hw].some(sx => Math.abs(sx - fx0) < fhw + 6 * P || Math.abs(sx - cx0) < chw + 8 * P || mudPoolAt(sx, dd) > -0.1)) continue;
     main.add(new Prop(fr, x, baseY(x) + dd, 60 + dd * 0.02, { sway: k < 0.32 || k > 0.88 ? 0.5 : 0, flip: rng.chance(0.5), sx: rng.chance(0.5) ? -1 : 1 }));
   }
   // POIs the wildlife uses

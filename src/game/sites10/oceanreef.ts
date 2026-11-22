@@ -152,7 +152,7 @@ export class ReefDiveScene extends FieldScene {
     for (const [p, seed, y] of [[0.3, 3, 250], [0.55, 7, 280]] as const) {
       const l = st.addLayer('farreef' + seed, p, 0.35, 0.3, 0);
       const sp = layerSpan(st, p, 100);
-      const fr = bigFrame(r, R.paintFarReef(Math.min(1400, sp.w), 120, seed));
+      const fr = bigFrame(r, R.paintFarReef(Math.min(1400, sp.w), 120, seed, 220));
       for (let x = 0; x < sp.w; x += fr.w) l.add(new Prop({ ...fr, ax: 0, ay: 0 }, sp.x0 + x, y - 60));
     }
     const main = st.addLayer('main', 1, 0, 1, 0);

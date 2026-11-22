@@ -71,7 +71,8 @@ function faceDist(x: number, y: number): number {
 function sediment(x: number, y = 0): number {
   const xx = x + (noise1(y * 0.045 + x * 0.004, 5) - 0.5) * 18 + (y > 0 ? 0 : 0);
   if (xx > 1420 && xx < 2380) return 1;
-  if (xx > 2640 && xx < 3800) return xx > 3380 ? 1 : 2;
+  // (the gravel at the second wall's foot spills back over the bedrock in tongues, not a straight edge)
+  if (xx > 2640 && xx < 3800) return xx + (noise1(y * 0.06 + x * 0.012, 9) - 0.5) * 110 > 3345 ? 1 : 2;
   // reef rock platforms in the shallows, crusted pink
   if (xx > 440 && xx < 1420) return noise1(xx * 0.012, 7) > 0.62 ? 2 : 0;
   return 0;
@@ -114,19 +115,49 @@ export function paintFloor(x0: number, w: number, bot: number): Chunk {
     // well below it, and behind the drop-off walls, does it turn to the rock's dark body
     const pTop = onBoulder ? by + 2 : fy;
     // (toward a drop-off's lip the plane thins to a ledge and the cliff's face takes over)
+    // (by x alone: the floor's relief must not switch it column by column, or the rock body under the
+    //  lip comes out in vertical stripes; the ramp only reaches back over the terrace above the wall)
     let plane = PLANE;
-    for (const f of wallFaces()) if (x < f.fx[0] + 2 && fy < f.yTop + 6) plane = Math.min(plane, 9 + (PLANE - 9) * clamp((f.fx[0] - x - 16) / 150));
+    for (const f of wallFaces()) if (x < f.fx[0] + 2) plane = Math.min(plane, 9 + (PLANE - 9) * clamp((f.fx[0] - x - 16) / 150));
+    // at a wall's foot the terrace below runs on in front of the wall's base (an apron of the lower
+    // floor, widening as it comes toward the viewer), so the plane never starts at a straight edge
+    let apron: { fy: number; d: number } | null = null;
+    /** under that plane, the lower floor's body (the wall's own pattern stops there) */
+    let footBody = Infinity, footY = 0, footD = 0;
+    for (const [, e] of WALLS) {
+      // (the lower floor's own line just past the wall, under any boulder sitting at the foot: the rows
+      //  its plane takes there)
+      const d = e + 2 - x, fY = Math.round(baseY(e + 6)) + 1;
+      if (d > 0 && d < 150) {
+        footBody = fY + PLANE; footY = fY; footD = d;
+        if (fy < fY - 4) apron = { fy: fY, d };
+        break;
+      }
+    }
+    /** how far back from the wall's end the apron reaches on row y (it widens toward the viewer) */
+    const reach = (y: number) => 10 + (y - footY) * 1.7 + (noise1(y * 0.21 + x * 0.03, 151) - 0.5) * 18;
+    // (a wall's last columns, down at its foot, are the lower floor's own plane, not the face's rock)
+    const wallRock = wall && fy < Math.min(...wallFaces().map(f => (x >= f.fx[0] - 8 && x <= f.fx[f.fx.length - 1] + 8 ? f.yBot : 1e9))) - 12;
     for (let y = fy0; y < y0 + H; y++) {
       const fd = faceDist(x, y);
       let c: C;
       let fogMul = 1;
       const inBoulder = onBoulder && y < by + 3;
-      const e = y - pTop;
+      let e = y - pTop;
+      let pl = plane, wF = waterF, dFy = dF, onApron = false;
+      if (!inBoulder && e >= plane && apron) {
+        const e2 = y - apron.fy;
+        if (e2 >= 0 && e2 < PLANE && apron.d < reach(y)) {
+          e = e2 + 3; pl = PLANE + 3; onApron = true;
+          // (lit and hazed as the lower floor it belongs to)
+          dFy = depthAt(apron.fy); wF = toC(waterRGB(z, dFy));
+        }
+      }
       if (inBoulder) c = boulderPx(x, y, bo!.i, fy, by, i, BO);
-      else if (e < plane) {
-        const v = clamp(e / plane);
+      else if (e < pl) {
+        const v = clamp(e / pl);
         const sed = sediment(x, y);
-        c = sed === 2 || wall ? rockPlane(x, y, e, z) : sedPx(x, y, e, sed, z);
+        c = sed === 2 || (wallRock && !onApron) ? rockPlane(x, y, e, z) : sedPx(x, y, e, sed, z);
         // the sand in a boulder's shadow, just in front of it
         if (ao > 0 && e < 10) c = shade(c, -0.24 * ao * (1 - e / 10));
         // under the kelp the floor lies in the canopy's dappled shade (blotches with gaps of light)
@@ -139,17 +170,20 @@ export function paintFloor(x0: number, w: number, bot: number): Chunk {
         // the far edge of the plane is hazier than its near rows
         fogMul = 1 - 0.4 * v;
         // the plane's near rows shade off into the dark under it (banded)
-        const k = clamp((e - plane * 0.72) / (plane * 0.28));
+        const k = clamp((e - pl * 0.72) / (pl * 0.28));
         if (k > 0) c = mix(c, under(x, y, 0, z), Math.round((k * 0.85 + (bayer(x, y) - 0.5) * 0.25) * 4) / 4);
       } else {
         // the rock's body (and the drop-off's faces, lit from the water side)
-        const dy = Math.min(Math.max(0, e - plane), fd * 0.8);
-        c = rockPx(x, y, dy, z, wall || slope > 1.6 || fd < 120);
+        // (under the apron the lower floor's body, its lit lip fading back into the dark toward where the
+        //  apron's front row ends, so the wall's body and the floor's meet without an edge)
+        const low = y >= footBody;
+        const dy = low ? y - footBody + clamp((footD - (10 + PLANE * 1.7) + 70) / 60) * 130 : Math.min(Math.max(0, e - plane), fd * 0.8);
+        c = rockPx(x, y, dy, z, !low && (wall || slope > 1.6 || fd < 120));
         const deepK = clamp((dy - 4) / 30);
         if (deepK > 0) c = mix(c, under(x, y, dy, z), Math.round((Math.pow(deepK, 0.8) * 0.95 + (bayer(x, y) - 0.5) * 0.2) * 5) / 5);
         fogMul = 1 - 0.6 * deepK;
       }
-      set(x, y, mix(c, waterF, fogK(dF) * fogMul));
+      set(x, y, mix(c, wF, fogK(dFy) * fogMul));
     }
   }
   // details on top of the painted ground

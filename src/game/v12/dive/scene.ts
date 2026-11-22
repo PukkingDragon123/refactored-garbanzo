@@ -27,6 +27,7 @@ import { Strand } from '../../../world/foliage';
 import { layerSpan } from '../../../world/scenery';
 import { audio } from '../../../core/audio';
 import { Rng, clamp, rand } from '../../../core/math';
+import { REF_Y as REF } from '../../../gfx/renderer';
 import { hex, mix, rgba } from '../../../art/color';
 import { PixelBuffer } from '../../../art/pixel';
 import type { Sprite } from '../../../art/jungle-core';
@@ -578,50 +579,75 @@ export class KelpDiveScene extends FieldScene {
     add('koheru', 48, [2900, 3800, SURF + 220, SURF + 380], 26);
   }
 
-  /** dark kelp right in front of the lens (out of focus), now and then */
+  /**
+   * Dark kelp right in front of the lens (out of focus) now and then, and rocks rising across the bottom.
+   *
+   * This layer has no floor of its own, so nothing on it may ever show a foot: everything is grounded
+   * below the bottom of the frame for the deepest the camera can sit while it is in view (the camera
+   * keeps the floor 84 px under its centre, and the floor changes a lot across one front prop's reach:
+   * the pinnacle, the boulders, the drop-off). From any higher camera the foot only sinks further out of
+   * the frame. The giant kelp's crown is set on the surface for that same camera, so from higher up it
+   * trails a few px under the surface line instead of poking up through it.
+   */
   private buildFront() {
     const st = this.st;
     const p = 1.32, py = 1.12;
     const fg = st.addLayer('front', p, 0, 0.4, 0, py);
-    const ly = (wy: number) => 180 + (wy - 180) * py;
+    const VW = game.r.VW, VH = game.r.VH;
+    const zf = Math.pow(ZOOM, p), half = VH / 2 / ZOOM;
+    /** the lowest the camera's centre goes with Mori at x (it trails the floor by 84 px, inside the stage) */
+    const camLow = (x: number) => clamp(floorAt(clamp(x, 0, W)) - 84, st.minY + half, st.maxY - half);
+    /** the deepest camera from which a front prop at layer x (half-width hw) can be seen */
+    const deepest = (lx: number, hw: number) => {
+      const reach = VW / 2 / zf + hw + 24;
+      let m = -1e9;
+      for (let vx = (lx - reach) / p; vx <= (lx + reach) / p; vx += 8) m = Math.max(m, camLow(vx));
+      return m;
+    };
+    /** the layer y that sits `below` art px under the frame's bottom edge, with the camera at vy */
+    const underFrame = (vy: number, below = 14) => REF + (vy - REF) * py + (VH / 2 + below) / zf;
+    /** the layer y that sits on the stage's surface line, with the camera at vy */
+    const onSurface = (vy: number) => REF + (vy - REF) * py + (SURF - vy) * ZOOM / zf;
     const rng = new Rng(99);
     const span = layerSpan(st, p, 120);
-    for (let lx = span.x0 + 140; lx < span.x0 + span.w; lx += rng.range(220, 420)) {
+    const tint = packColor(0.42, 0.46, 0.4, 1);
+    // (sparse: one in front of the lens every couple of screens, never a wall of it)
+    for (let lx = span.x0 + 140; lx < span.x0 + span.w; lx += rng.range(420, 760)) {
       const wx = lx / p;
       if (wx < 500 || wx > 3050) continue;
       const giant = wx < 1450;
-      const foot = ly(floorAt(wx) + 40);
-      const top = ly(SURF);
-      const tint = packColor(0.42, 0.46, 0.4, 1);
+      const vy = deepest(lx, 30);
+      const foot = underFrame(vy);
       if (giant) {
+        const top = onSurface(vy);
         const Hk = Math.ceil((foot - top) / 8) * 8;
         const v = rng.int(0, 1);
         const s = spr(`fk:${Hk}:${v}`, () => giantKelp(700 + v * 9 + Hk, Hk, { lean: 0.5 }));
         fg.add(new Strand(s.f, lx, top - 1 + Hk - 1, rng.next(), 20, rng.chance(0.5) ? 1 : -1, tint, 1.8, false));
       } else {
+        // stalked kelp: only its blades come up into the bottom of the frame
         const v = rng.int(0, 2), h = rng.int(60, 80);
         const s = spr(`fe:${h}:${v}`, () => stalkedKelp(990 + v + h, h, { lean: 0.5 }));
-        fg.add(new Strand(s.f, lx, foot - 20, rng.next(), 7, 1, tint, 0.5, false));
+        fg.add(new Strand(s.f, lx, foot, rng.next(), 7, 1, tint, 0.5, false));
       }
     }
     // rocks right in front, rising from below the frame across the bottom of the floor, crusted and
-    // tufted, with kelp holdfasts and seagrass on them
+    // tufted, with seagrass on them
     const tintR = packColor(0.5, 0.55, 0.5, 1);
     for (let lx = span.x0 + 60; lx < span.x0 + span.w; lx += rng.range(150, 330)) {
       const wx = lx / p;
       if (wx < 40 || wx > 4700) continue;
-      // (not where the floor drops away: there they would hang in the water)
-      const f0 = floorAt(wx);
-      if (Math.abs(floorAt(wx - 160) - f0) > 34 || Math.abs(floorAt(wx + 160) - f0) > 34) continue;
       const w = rng.int(50, 110), h = rng.int(18, 34);
       const v = rng.int(0, 7);
       const c = spr(`fr:${v}:${w}:${h}`, () => PR.reefRock(300 + v * 7 + w, w, h));
-      const base = ly(floorAt(wx) + 62);
+      // (its foot a little further under the frame than the kelp's: a rock shows its top only)
+      const base = underFrame(deepest(lx, w / 2), 6 + h * 0.3 * zf);
       fg.add(new Prop(c.f, lx, base, 2 + rng.next(), { flip: rng.chance(0.5), tint: tintR }));
       if (wx < 2900 && rng.chance(0.7)) {
         const sh = rng.int(16, 30);
         const sg = spr(`fsg:${sh}`, () => seagrass(77 + sh, sh, 10, { lean: 0.3 }));
-        fg.add(new Strand(sg.f, lx + rng.range(-w * 0.3, w * 0.3), base - h * 0.75, 3, sh * 0.18, 1, tintR, 0.3, false));
+        // (its foot well inside the rock's top: the crown's lowest facet is about half the rock's height)
+        fg.add(new Strand(sg.f, lx + rng.range(-w * 0.3, w * 0.3), base - h * 0.5, 3, sh * 0.18, 1, tintR, 0.3, false));
       }
     }
   }
