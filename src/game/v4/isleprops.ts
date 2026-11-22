@@ -8,7 +8,6 @@ import type { Frame } from '../../gfx/renderer';
 import { packColor } from '../../gfx/renderer';
 import { bigFrame } from '../../gfx/atlas';
 import { game } from '../game';
-import { A } from '../assets';
 import type { Layer } from '../../world/stage';
 import { Prop, Custom } from '../../world/props';
 import { layerSpan } from '../../world/scenery';
@@ -18,9 +17,9 @@ import { tree, canopyClump } from '../../art/jungle-trees';
 import { plant, deadwood, fungus } from '../../art/jungle-plants';
 import { foreground } from '../../art/jungle-fg';
 import type { PixelBuffer } from '../../art/pixel';
-import { Rng, clamp, smoothstep } from '../../core/math';
+import { Rng, clamp, hash2, noise1, smoothstep } from '../../core/math';
 import { ISL, SPOT, groundY, zoneAt } from '../../art/island4/layout';
-import { paintSeaStack, paintReef, paintCliff, paintDuneGrass } from '../../art/island4/scenery';
+import { paintSeaStack, paintReef, paintCliff, paintDuneGrass, STACK_SKIRT } from '../../art/island4/scenery';
 import { dressWest } from '../v9/beach';
 import type { IslandScene4 } from './island';
 import { layerY } from './island';
@@ -34,22 +33,49 @@ export function dressIsland(s: IslandScene4, L: IsleLayers) {
   // ---------------------------------------------------------------- offshore (p .42)
   const pm = L.mid.p;
   const midY = layerY(pm, 176);
+  const foamHi = packColor(0.97, 1, 0.99, 1), foamLo = packColor(0.84, 0.95, 0.93, 0.9);
   for (const [x, h, seed] of [[260, 96, 3], [980, 60, 5], [2350, 120, 7], [3120, 70, 9], [4480, 110, 11], [5200, 84, 13]] as const) {
-    const b = paintSeaStack(seed, Math.round(h * 0.46), h);
-    const f = bigFrame(r, b, b.w / 2, b.h - 2);
-    L.mid.add(new Prop(f, x * pm, midY + 2, 1));
+    const w = Math.round(h * 0.46);
+    const b = paintSeaStack(seed, w, h);
+    const f = bigFrame(r, b, b.w / 2, b.h - 1 - STACK_SKIRT);
+    const fx = x * pm, fy = midY + 2;
+    L.mid.add(new Prop(f, fx, fy, 1));
+    // each swell washing up round the foot: white water climbing the rock in clots, then sliding off
+    const half = Math.round(w * 0.42);
+    L.mid.add(new Custom(1.1, (rr, st2) => {
+      const k = Math.sin(st2.time * 0.8 + x * 0.01);
+      if (k < 0.15) return;
+      const up = Math.round((k - 0.15) * 7);
+      const tk = Math.floor(st2.time * 6);
+      for (let dx = -half - 2; dx <= half + 2; dx++) {
+        const edge = Math.abs(dx) > half - 2;
+        const n = noise1(dx / 2.2 + seed * 7 + tk * 0.12, 4) * 0.7 + noise1(dx / 6 + seed, 5) * 0.3;
+        if (n < (edge ? 0.6 : 0.42)) continue;
+        const hh = Math.max(1, Math.round(up * (edge ? 0.35 : 1) * (n - 0.3) * 1.6));
+        rr.rect(fx + dx, fy - hh, 1, hh, n > 0.66 ? foamHi : foamLo);
+        if (n > 0.72 && up > 3 && hash2(dx, tk, seed) < 0.35) rr.rect(fx + dx, fy - hh - 2, 1, 1, foamHi);
+      }
+    }));
   }
   for (let x = 300; x < ISL.W; x += rng.range(380, 760)) {
     const b = paintReef(rng.int(36, 90), 9, rng.int(1, 99));
-    const f = bigFrame(r, b, 0, b.h - 1);
+    const f = bigFrame(r, b, 0, b.h - 3);
     const lx = x * pm;
     const ry = midY - 4 + rng.range(-10, 8);
     L.mid.add(new Prop(f, lx, ry, 0.5));
-    // surf bursting over the reef
+    // surf bursting over the reef: pixel spray thrown up in clots, never a soft glow
     L.mid.add(new Custom(2, (rr, t) => {
       const k = Math.max(0, Math.sin(t.time * 0.9 + x));
       if (k < 0.3) return;
-      for (let i = 0; i < 6; i++) rr.fxDraw(A.dot2, lx + 4 + i * (b.w - 8) / 6, ry - 3 - k * 5 - (i % 3), 2, 1, 0, packColor(1, 1, 1, 1), (k - 0.3) * 1.6, false);
+      const tk = Math.floor(t.time * 6);
+      const hh = (k - 0.3) * 8;
+      for (let dx = 2; dx < b.w - 2; dx++) {
+        const n = noise1(dx / 3 + x + tk * 0.21, 6) * 0.65 + noise1(dx / 11 + x, 7) * 0.35;
+        if (n < 0.55) continue;
+        const top = Math.round(hh * (0.4 + n * 0.8));
+        rr.rect(lx + dx, ry - 1 - top, 1, Math.max(1, Math.round(top * 0.6)), n > 0.66 ? foamHi : foamLo);
+        if (n > 0.7 && hash2(dx, tk, 3) < 0.3) rr.rect(lx + dx, ry - 3 - top, 1, 1, foamHi);
+      }
     }));
   }
 

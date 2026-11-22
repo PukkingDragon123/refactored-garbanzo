@@ -7,6 +7,7 @@
 import type { Renderer, Env, Frame } from '../../gfx/renderer';
 import { packColor, WHITE } from '../../gfx/renderer';
 import { bigFrame } from '../../gfx/atlas';
+import type { PixelBuffer } from '../../art/pixel';
 import { game } from '../game';
 import { A } from '../assets';
 import { FieldScene, FieldSite } from '../scenes/field';
@@ -18,9 +19,10 @@ import { clamp, damp } from '../../core/math';
 import { ISL, SPOT, WRECK, groundY, canopyAt, caveAt, zoneAt } from '../../art/island4/layout';
 import { paintGroundChunk } from '../../art/island4/ground';
 import { paintWreck, WreckArt } from '../../art/island4/wreck';
-import { paintFarIslands } from '../../art/island4/scenery';
-import { DayClock, envAt, lightKAt, IsleSky, CloudDeck, SeaStrip, Breakers, Swash, LeafShadows, GodRays, MistBank, BlowingSand, Glowworms } from './islefx';
+import { paintFarIsles } from '../../art/island4/seascape';
+import { DayClock, envAt, lightKAt, IsleSky, CloudDeck, Breakers, Swash, LeafShadows, GodRays, MistBank, BlowingSand, Glowworms } from './islefx';
 import { ChunkBuddy } from './buddy';
+import { BeachSea } from './beachsea';
 import { SandFX } from '../v9/sand';
 import { dressIsland } from './isleprops';
 
@@ -29,6 +31,28 @@ export interface IsleHooks { enter(): Promise<void>; update(dt: number): void }
 /** screen-matched layer y for a band that should sit at screen y `sy` when the camera is at y 180 */
 export function layerY(p: number, sy: number, zoom = 1.25) {
   return 180 + (sy - 180) / Math.pow(zoom, p);
+}
+
+/**
+ * The swash band's mirror fades out away from the water: the sand right at the edge is a sheet of
+ * glass, a few pixels further up the beach it's only damp, so it reads as wet sand, not more sea.
+ * (Rock pools, the stream mouth and the cave keep their full mirror.)
+ */
+function fadeSwashMirror(wet: PixelBuffer, x0: number, y0: number) {
+  for (let x = 0; x < wet.w; x++) {
+    const wx = x0 + x;
+    const z = zoneAt(wx);
+    if (wx < 460 || z === 'cave' || z === 'forest' || z === 'seal' || Math.abs(wx - SPOT.stream) < 110) continue;
+    const top = Math.round(groundY(wx));
+    for (let y = 0; y < wet.h; y++) {
+      const i = y * wet.w + x, c = wet.data[i];
+      if (!(c >>> 24)) continue;
+      const d = y0 + y - top;
+      if (d > 26) break;
+      const k = d < 2 ? 1 : Math.pow(clamp(1 - (d - 2) / 17), 1.3);
+      wet.data[i] = ((c & 0x00ffffff) | (Math.round((c >>> 24) * k) << 24)) >>> 0;
+    }
+  }
 }
 
 export class IslandScene4 extends FieldScene {
@@ -108,21 +132,20 @@ export class IslandScene4 extends FieldScene {
     cf.add(new CloudDeck(clock, cf, 31, 9, 6, 86, true, layerSpan(st, 0.015, 260)));
     const far = st.addLayer('far', 0.04, 0.3, 0, 0, 0.04);
     const fspan = layerSpan(st, 0.04, 60);
-    const fi = bigFrame(r, paintFarIslands(fspan.w, 80, 3));
+    const fi = bigFrame(r, paintFarIsles(fspan.w, 80, 3));
     far.add(new Custom(0, rr => rr.draw(fi, fspan.x0, layerY(0.04, 126) - 80)));
     const cn = st.addLayer('clouds-near', 0.05, 0.1, 0, 0.5, 0.05);
     cn.add(new CloudDeck(clock, cn, 57, 6, 70, 108, false, layerSpan(st, 0.05, 200)));
     // ---- the sea, far to near
-    const band = (name: 'horizon' | 'far' | 'mid' | 'near', p: number, sy: number, speed: number, fog: number) => {
-      const l = st.addLayer('sea-' + name, p, fog, 0.4, 0, p);
-      l.add(new SeaStrip(name, layerY(p, sy), clock, speed));
-      return l;
-    };
-    band('horizon', 0.06, 124, 1.2, 0.25);
-    band('far', 0.2, 138, 2.4, 0.12);
-    const mid = band('mid', 0.42, 158, 4, 0.05);
+    // (one continuous sea drawn row by row from the horizon layer; the band layers stay for what
+    // floats on them at their depth: sea life, stacks, the reef, the breakers)
+    const band = (name: 'horizon' | 'far' | 'mid' | 'near', p: number, fog: number) => st.addLayer('sea-' + name, p, fog, 0.4, 0, p);
+    const hz = band('horizon', 0.06, 0.25);
+    hz.add(new BeachSea(clock, hz));
+    band('far', 0.2, 0.12);
+    const mid = band('mid', 0.42, 0.05);
     mid.add(new MistBank(layerY(0.42, 140), 4, () => clamp(0.55 - clock.t * 0.6) + clock.night * 0.2, 11, 640, 40));
-    const near = band('near', 0.72, 186, 7, 0);
+    const near = band('near', 0.72, 0);
     this.breakers = new Breakers(layerY(0.72, 192), layerY(0.72, 214));
     near.add(this.breakers);
     this.swash = new Swash();
@@ -165,12 +188,14 @@ export class IslandScene4 extends FieldScene {
     for (let x0 = 0; x0 < ISL.W; x0 += CH) {
       const w = Math.min(CH, ISL.W - x0);
       const ch = paintGroundChunk(x0, w);
+      fadeSwashMirror(ch.wet, x0, ch.y0);
       const base = bigFrame(r, ch.base), wet = bigFrame(r, ch.wet);
       main.add(new Custom(-10, rr => {
         const vx0 = rr.visibleX0(4), vx1 = rr.visibleX1(4);
         if (x0 + w < vx0 || x0 > vx1) return;
         rr.draw(base, x0, ch.y0);
-        rr.water(0.34, 0.7);
+        // wet sand: a glossy sheen over brown sand, not a second sea
+        rr.water(0.3, 0.7);
         rr.draw(wet, x0, ch.y0);
         rr.water(0);
       }));

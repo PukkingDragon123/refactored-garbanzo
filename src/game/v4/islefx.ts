@@ -1,6 +1,6 @@
 // V4 island effects: a continuous time of day (morning -> midday -> golden hour -> dusk -> night)
 // that blends lighting, sky, clouds and the sea; the sky with sun, moon, stars and the morning
-// rainbow; tiled sea bands with sun glitter; rolling breakers and the swash sliding up the wet sand;
+// rainbow; (the sea itself is beachsea.ts) rolling breakers and the swash sliding up the wet sand;
 // dappled leaf shadows, forest god rays, drifting mist, blowing sand and the cave's glowworms.
 
 import type { Renderer, Frame, Env, RGB } from '../../gfx/renderer';
@@ -13,8 +13,8 @@ import { game } from '../game';
 import * as L from '../../art/landscape';
 import { hex, mix } from '../../art/color';
 import { PixelBuffer } from '../../art/pixel';
-import { SKY_KEYS, SkyKey, paintSkyKey, paintSeaBand, SEA, SeaBand, paintLeafShadow } from '../../art/island4/scenery';
-import { WRAP } from '../../art/ocean';
+import { SKY_KEYS, SkyKey, paintSkyKey, paintLeafShadow } from '../../art/island4/scenery';
+import { paintIsleSun, paintRainbowLeg, paintIsleCloud } from '../../art/island4/seascape';
 import { ISL, groundY, canopyAt, wetAt } from '../../art/island4/layout';
 import { Rng, clamp, hash2, lerp, noise1, rand, smoothstep } from '../../core/math';
 
@@ -98,33 +98,21 @@ export function skyTintAt(t: number): RGB {
 
 const SKY_W = 860, SKY_H = 250, SKY_HORIZON = 124;
 
-function paintRainbow(r: number): PixelBuffer {
-  const w = r * 2 + 4, h = r + 4;
-  const b = new PixelBuffer(w, h);
-  const bands = ['#ff5a5a', '#ffa04a', '#ffe060', '#7ae070', '#5aa8ff', '#8a6aff'];
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const d = Math.hypot(x - w / 2, h - y);
-    const k = (r - d) / 9;
-    if (k < 0 || k >= 1) continue;
-    const i = Math.floor(k * bands.length);
-    b.data[y * w + x] = hex(bands[i], Math.round(120 * Math.sin(k * Math.PI)));
-  }
-  return b;
-}
-
 export class IsleSky implements Drawable {
   z = 0;
   private skies: Frame[] = [];
   private sun: Frame;
+  private halo: Frame;
   private moon: Frame;
   private rainbow: Frame;
   private stars = L.starField(SKY_W, 170, 7, 150);
   constructor(readonly clock: DayClock) {
     const r = game.r;
     for (const k of SKY_KEYS) this.skies.push(bigFrame(r, paintSkyKey(k, SKY_W, SKY_H)));
-    this.sun = local.add('isle:sun', L.paintSun(9, hex('#fffaf0'), hex('#fff0c0')), 10, 10);
+    this.sun = local.add('isle:sun2', paintIsleSun(), 26, 26);
+    this.halo = local.add('isle:sunhalo', paintIsleSun(true), 26, 26);
     this.moon = local.add('isle:moon', L.paintMoon(8, hex('#eef2f6'), hex('#bcc6d4'), hex('#8e98aa'), 0.25), 9, 9);
-    this.rainbow = bigFrame(r, paintRainbow(150), 154, 154);
+    this.rainbow = bigFrame(r, paintRainbowLeg(150));
   }
   draw(r: Renderer, st: Stage) {
     const c = this.clock;
@@ -142,9 +130,9 @@ export class IsleSky implements Drawable {
       const tw = 0.55 + 0.45 * Math.sin(st.time * s.tw + s.x);
       r.fxDraw(s.big ? A.spark : A.dot, s.x, s.y + par - 6, s.big ? 0.6 : 1, s.big ? 0.6 : 1, 0, s.c | 0, s.b * tw * 1.4 * nk, true);
     }
-    // the morning rainbow after the storm
-    const rk = c.morning * 0.55;
-    if (rk > 0.02) r.fxDraw(this.rainbow, r.VW * 0.72, hy + 4, 1, 1, 0, packColor(1, 1, 1, 1), rk);
+    // the morning rainbow after the storm: one faint, broken leg rising out of the sea
+    const rk = c.morning * 0.8;
+    if (rk > 0.02) r.draw(this.rainbow, Math.round(r.VW * 0.86 - this.rainbow.w * 0.94), Math.round(hy - this.rainbow.h + 3), 1, 1, 0, packColor(1, 1, 1, rk));
     // sun / moon
     const s = sunAt(c.t);
     const sx = s.x * r.VW, sy = s.y * SKY_HORIZON * 1.25 + par;
@@ -153,12 +141,13 @@ export class IsleSky implements Drawable {
       r.draw(this.moon, sx, sy);
       r.fxDraw(A.glow, sx, sy, 2.4, 2.4, 0, packColor(0.7, 0.8, 1, 1), 0.45 * nk);
     } else {
+      // a crisp painted disc and its stepped, dithered halo (no smooth glow sprites)
       const low = smoothstep(0.35, 0.95, s.y);
+      const tint = packColor(1, 1 - low * 0.25, 1 - low * 0.5, 1);
+      r.draw(this.halo, Math.round(sx), Math.round(sy), 1, 1, 0, tint);
       r.emissive(1);
-      r.draw(this.sun, sx, sy, 1 + low * 0.5, 1 + low * 0.5, 0, packColor(1, 1 - low * 0.25, 1 - low * 0.5, 1));
+      r.draw(this.sun, Math.round(sx), Math.round(sy), 1, 1, 0, tint);
       r.emissive();
-      r.fxDraw(A.glow, sx, sy, 1.8, 1.8, 0, packColor(cr, cg, cb, 1), 0.9);
-      r.fxDraw(A.glow, sx, sy, 6 + low * 4, 3.5 + low * 2, 0, packColor(cr, cg * 0.9, cb * 0.8, 1), 0.14 + low * 0.2);
       // god-ray fan at golden hour
       const gk = Math.max(c.golden, c.dusk) * 0.5;
       if (gk > 0.05) for (let i = 0; i < 7; i++) {
@@ -176,9 +165,9 @@ export class CloudDeck implements Drawable {
   private fr: Frame[] = [];
   private items: { f: number; x: number; y: number; v: number; k: number }[] = [];
   constructor(readonly clock: DayClock, readonly layer: Layer, seed: number, n: number, y0: number, y1: number, big: boolean, span: { x0: number; w: number }) {
-    const ramp = ['#8a94a8', '#a8b4c8', '#ccd6e2', '#e8eef4', '#ffffff'].map(h => hex(h));
+    const ramp = ['#9aa6bc', '#c4d0de', '#e8eef4', '#ffffff'].map(h => hex(h));
     const rng = new Rng(seed);
-    for (let i = 0; i < 5; i++) this.fr.push(bigFrame(game.r, L.paintCloud(seed + i * 7, big ? rng.int(120, 200) : rng.int(60, 110), big ? rng.int(40, 60) : rng.int(22, 34), ramp, 1)));
+    for (let i = 0; i < 5; i++) this.fr.push(bigFrame(game.r, paintIsleCloud(seed + i * 7, big ? rng.int(120, 200) : rng.int(60, 110), big ? rng.int(40, 60) : rng.int(24, 36), ramp)));
     for (let i = 0; i < n; i++) this.items.push({ f: rng.int(0, 4), x: rng.range(span.x0, span.x0 + span.w), y: rng.range(y0, y1), v: rng.range(1.5, 4) * (big ? 0.6 : 1), k: rng.range(0.8, 1) });
     this.span = span;
   }
@@ -188,61 +177,64 @@ export class CloudDeck implements Drawable {
     for (const c of this.items) {
       const f = this.fr[c.f];
       const x = this.span.x0 + ((((c.x + st.time * c.v - this.span.x0) % this.span.w) + this.span.w) % this.span.w);
-      r.draw(f, x - f.w / 2, c.y, 1, 1, 0, packColor(cr * c.k, cg * c.k, cb * c.k, 0.96));
+      r.draw(f, Math.round(x - f.w / 2), Math.round(c.y), 1, 1, 0, packColor(cr * c.k, cg * c.k, cb * c.k, 1));
     }
   }
 }
 
 // ------------------------------------------------------------------ sea
 
-/** one tiled band of sea on its own parallax layer, with drifting shimmer and sun glitter */
-export class SeaStrip implements Drawable {
-  z = 0;
-  private f: Frame;
-  private texW: number;
-  constructor(readonly band: SeaBand, readonly y: number, readonly clock: DayClock, readonly speed: number) {
-    const buf = paintSeaBand(band, 7 + band.length);
-    this.f = bigFrame(game.r, buf);
-    this.texW = SEA[band].texW;
+/**
+ * Batches 1px pixel columns into runs: each column puts up to SLOTS vertical spans; a slot whose span
+ * matches the previous column's (same top, height and colour) just grows, so a crest drawn per pixel
+ * column costs a few dozen rects, not hundreds.
+ */
+class SpanBatch {
+  private x0 = new Int32Array(6);
+  private y = new Int32Array(6);
+  private h = new Int32Array(6);
+  private c = new Uint32Array(6);
+  private open = new Uint8Array(6);
+  private hit = new Uint8Array(6);
+  constructor(private r: Renderer | null = null) {}
+  begin(r: Renderer) { this.r = r; this.open.fill(0); }
+  put(slot: number, x: number, y: number, h: number, c: number) {
+    if (h <= 0) return;
+    this.hit[slot] = 1;
+    if (this.open[slot] && this.y[slot] === y && this.h[slot] === h && this.c[slot] === c) return;
+    this.emit(slot, x);
+    this.open[slot] = 1; this.x0[slot] = x; this.y[slot] = y; this.h[slot] = h; this.c[slot] = c;
   }
-  draw(r: Renderer, st: Stage) {
-    const x0 = r.visibleX0(8), x1 = r.visibleX1(8);
-    const tw = this.texW;
-    const scroll = st.time * this.speed;
-    const H = this.f.h;
-    const bob = Math.sin(st.time * 0.8 + this.y) * 0.5;
-    let x = Math.floor((x0 - scroll) / tw) * tw + scroll;
-    // the band's lowest rows stretched on downward underneath the next band: when the camera rises
-    // or zooms out the bands part (each has its own parallax), and this keeps sea in the gap
-    // (40x: deep enough for the photo camera looking up from the bush track, where the bands part most)
-    for (; x < x1; x += tw) { r.drawSub(this.f, 0, H - 3, tw, 3, x, this.y + bob + H - 3, 1, 40); r.drawSub(this.f, 0, 0, tw, H, x, this.y + bob); }
-    // counter-drifting shimmer copy
-    const s2 = -st.time * this.speed * 0.6 + 37;
-    x = Math.floor((x0 - s2) / tw) * tw + s2;
-    for (; x < x1; x += tw) r.drawSub(this.f, 0, 2, tw, H - 2, x, this.y + 2 + bob, 1, 1, packColor(1, 1, 1, 0.22));
-    // sun / moon glitter path
-    const s = sunAt(this.clock.t);
-    const nightK = this.clock.night;
-    const p = SEA[this.band].p;
-    const sxw = r.wx(s.x * r.VW);
-    const spread = 40 + p * 160;
-    const [cr, cg, cb] = s.c;
-    const k = s.moon ? 0.5 * nightK : 1 - nightK;
-    if (k > 0.03) for (let i = 0; i < 26; i++) {
-      const gx = sxw + (hash2(i, 1, this.y) - 0.5) * spread * 2, gy = this.y + 1 + hash2(i, 2, this.y) * (H - 3);
-      const tw2 = Math.max(0, Math.sin(st.time * (2 + hash2(i, 3, 5) * 3) + i * 1.7));
-      const fall = Math.exp(-(((gx - sxw) / spread) ** 2) * 2);
-      if (tw2 * fall < 0.1) continue;
-      r.fxDraw(A.dot2, gx, gy, 1.6, 0.5, 0, packColor(cr, cg, cb, 1), tw2 * fall * 1.4 * k);
-    }
+  /** end of column x: close every slot that wasn't put this column */
+  col(x: number) {
+    for (let k = 0; k < 6; k++) { if (!this.hit[k]) this.emit(k, x); this.hit[k] = 0; }
   }
+  /** emit slot k's open run, which ended just before column x */
+  private emit(k: number, x: number) {
+    if (!this.open[k]) return;
+    this.open[k] = 0;
+    this.r!.rect(this.x0[k], this.y[k], x - this.x0[k], this.h[k], this.c[k]);
+  }
+  end(x: number) { for (let k = 0; k < 6; k++) this.emit(k, x); }
 }
 
-/** rolling lines of surf in the near band: swell, curl, break, spread; each break sends a swash up the sand */
+const SURF = {
+  face: packColor(0.12, 0.45, 0.56, 1), face2: packColor(0.15, 0.53, 0.62, 1), glass: packColor(0.25, 0.68, 0.72, 1),
+  lit: packColor(0.5, 0.82, 0.8, 1), foamHi: packColor(0.97, 1, 0.99, 1), foam: packColor(0.86, 0.96, 0.94, 1),
+  foamSh: packColor(0.36, 0.72, 0.73, 0.85), spray: packColor(1, 1, 1, 0.9),
+};
+
+/**
+ * Rolling lines of surf in the near band: a swell lifts (a dark face with a broken lit crest), steepens
+ * (a glassy translucent top over the dark face, the lip whitening in clots that peel along the line,
+ * spray thrown off it), breaks, and spreads as a white-water band that tears into lace as it runs in.
+ * Every break sends a swash up the sand. Drawn per pixel column in merged runs.
+ */
 export class Breakers implements Drawable {
   z = 5;
   rows = [0, 0.34, 0.68];
   onBreak: ((i: number) => void) | null = null;
+  private sb = new SpanBatch();
   constructor(readonly yFar: number, readonly yNear: number, readonly period = 7.5) {}
   update(dt: number) {
     for (let i = 0; i < this.rows.length; i++) {
@@ -252,86 +244,161 @@ export class Breakers implements Drawable {
     }
   }
   draw(r: Renderer, st: Stage) {
-    const x0 = Math.floor(r.visibleX0(6) / 3) * 3, x1 = r.visibleX1(6);
-    const face = packColor(0.16, 0.5, 0.6, 1), faceLit = packColor(0.5, 0.86, 0.86, 1), foam = packColor(0.96, 1, 1, 1);
+    const x0 = Math.floor(r.visibleX0(4)), x1 = Math.ceil(r.visibleX1(4));
+    const tick = Math.floor(st.time * 8);
+    const sb = this.sb;
     for (let i = 0; i < this.rows.length; i++) {
       const ph = this.rows[i];
       const yBase = lerp(this.yFar, this.yNear, smoothstep(0, 1, ph));
-      for (let x = x0; x < x1; x += 3) {
-        const q = ph + (noise1(x / 70 + i * 13, 5) - 0.5) * 0.16;
-        const y = yBase + (noise1(x / 40 + i * 7, 6) - 0.5) * 2;
-        if (q < 0.05 || q > 1.05) continue;
-        if (q < 0.62) {
-          // swell rising: a darker face with a sunlit top line
-          const hh = 1 + q * 5;
-          r.rect(x, y - hh, 3, hh, face);
-          r.rect(x, y - hh - 1, 3, 1, faceLit);
-        } else if (q < 0.8) {
-          // curling lip turning white, spray
-          const hh = 4 + (0.8 - q) * 8;
-          r.rect(x, y - hh, 3, hh * 0.6, face);
-          r.rect(x, y - hh - 1, 3, 2, foam);
-          if (hash2(x, Math.floor(st.time * 8), i) < 0.12) r.rect(x + 1, y - hh - 3, 1, 1, foam);
-        } else {
-          // spreading foam band
-          const k = (q - 0.8) / 0.25;
-          const th = 1 + k * 3;
-          r.rect(x, y - th, 3, th, packColor(0.94, 1, 1, clamp(1 - k * 0.8)));
-          if (hash2(x, i, 9) < 0.5) r.rect(x, y + 1, 2, 1, packColor(0.9, 1, 1, clamp(0.6 - k * 0.5)));
+      sb.begin(r);
+      for (let x = x0; x < x1; x++) {
+        // the line breaks earlier in some places than others, so the break peels along the beach
+        const q = ph + (noise1(x / 90 + i * 13, 5) - 0.5) * 0.18 + (noise1(x / 21 + i * 3, 8) - 0.5) * 0.05;
+        const y = Math.round(yBase + (noise1(x / 47 + i * 7, 6) - 0.5) * 3 + (noise1(x / 13 + i * 5, 14) - 0.5) * 1.6);
+        if (q >= 0.04 && q <= 1.08) {
+          if (q < 0.5) {
+            const a = smoothstep(0.04, 0.5, q);
+            const hh = 1 + Math.round(a * 3);
+            sb.put(0, x, y - hh, hh, a > 0.5 ? SURF.face : SURF.face2);
+            // the crest catches the sky only in stretches
+            if (noise1(x / 7 + i * 5, 9) > 0.62 - a * 0.25) sb.put(1, x, y - hh - 1, 1, SURF.lit);
+          } else if (q < 0.78) {
+            const a = (q - 0.5) / 0.28;
+            const hh = 4 + Math.round(a * 4);
+            const glass = Math.max(1, Math.round(hh * 0.45));
+            sb.put(0, x, y - hh + glass, hh - glass, SURF.face);
+            sb.put(1, x, y - hh, glass, SURF.glass);
+            const fh = Math.round(clamp((q - 0.6) * 12 + (noise1(x / 5 + i * 11, 10) - 0.5) * 2.4, 0, 3));
+            sb.put(2, x, y - hh - 1, fh || 1, fh ? SURF.foamHi : SURF.lit);
+            // spray off the lip in little clusters, re-thrown eight times a second
+            if (q > 0.66 && hash2(Math.floor(x / 3), tick, i) < 0.2) sb.put(3, x, y - hh - 2 - (hash2(x, tick, i + 1) < 0.5 ? 1 : 2), 1, SURF.spray);
+          } else {
+            // white water spreading in, tearing into lace as it goes
+            const k = (q - 0.78) / 0.3;
+            const lace = noise1(x / 3.2 + i * 31, 12) * 0.7 + noise1(x / 9 + i * 17, 13) * 0.3;
+            // a lumpy top: clots heaped up where the lace is thickest
+            const fh = Math.max(1, Math.round(lerp(5, 1, k) * (0.45 + lace * 0.9)));
+            if (lace > lerp(0.12, 0.66, k)) {
+              sb.put(0, x, y - fh, fh, k < 0.35 && lace > 0.4 ? SURF.foamHi : SURF.foam);
+              sb.put(1, x, y, 1, SURF.foamSh);
+              if (k < 0.5 && lace > 0.7) sb.put(2, x, y - fh - 1, 1, SURF.foam);
+            }
+          }
         }
+        sb.col(x);
       }
+      sb.end(x1);
     }
   }
 }
 
-/** the swash: thin sheets of water sliding up the wet sand and back (drawn under the actors) */
+/**
+ * The swash: a thin sheet of water sliding up the wet sand behind a lace of foam, lingering, then
+ * draining back; the foam it leaves at the high-water mark thins into a broken line and the sand it
+ * wetted stays dark for a while behind it (drawn under the actors).
+ */
 export class Swash implements Drawable {
   z = -9;
   sheets: { t: number; reach: number; seed: number }[] = [];
+  private sb = new SpanBatch();
   update(dt: number) {
     for (const s of this.sheets) s.t += dt;
-    this.sheets = this.sheets.filter(s => s.t < 5);
+    this.sheets = this.sheets.filter(s => s.t < 9);
   }
   push(reach = rand.range(12, 22)) { this.sheets.push({ t: 0, reach, seed: rand.int(0, 999) }); }
+  private static runK(t: number) { return t < 1.1 ? smoothstep(0, 1.1, t) : t < 2 ? 1 : 1 - smoothstep(2, 4.6, t); }
+  private static full(s: { reach: number; seed: number }, x: number) { return s.reach + (noise1(x / 18 + s.seed, 3) - 0.5) * 8 + (noise1(x / 5 + s.seed, 7) - 0.5) * 2; }
   /** 0..1: how much a sheet of water is covering the walk line at x right now (wading, splashes) */
   coverAt(x: number): number {
     if (wetAt(x) < 0.5) return 0;
     let c = 0;
     for (const s of this.sheets) {
       const t = s.t;
-      const k = t < 1.1 ? smoothstep(0, 1.1, t) : t < 2 ? 1 : 1 - smoothstep(2, 4.6, t);
-      const edge = (s.reach + (noise1(x / 18 + s.seed, 3) - 0.5) * 8) * k;
+      if (t > 4.8) continue;
+      const edge = Swash.full(s, x) * Swash.runK(t);
       if (edge > 3) c = Math.max(c, Math.min(1, edge / 10) * (t < 2.6 ? 1 : 1 - smoothstep(2.6, 4.8, t)));
     }
     return c;
   }
   draw(r: Renderer) {
-    const x0 = Math.floor(r.visibleX0(4) / 2) * 2, x1 = r.visibleX1(4);
+    const x0 = Math.floor(r.visibleX0(4)), x1 = Math.ceil(r.visibleX1(4));
+    const sb = this.sb;
+    // the sand the water just left stays dark and glossy, drying from the top down
+    r.beginShadows();
     for (const s of this.sheets) {
-      // run up fast, linger, slide back
+      if (s.t < 1.1) continue;
+      const dk = 1 - smoothstep(2.4, 8.8, s.t);
+      if (dk < 0.03) continue;
+      const k = Swash.runK(s.t);
+      const a = packColor(1, 1, 1, 0.2 * dk), a2 = packColor(1, 1, 1, 0.12 * dk);
+      sb.begin(r);
+      for (let x = x0; x < x1; x++) {
+        if (wetAt(x) >= 0.5) {
+          const gy = Math.round(groundY(x)) - 2;
+          const full = Math.round(Swash.full(s, x)), cur = Math.round(full * k);
+          // drying: the top of the wet patch goes first
+          const dry = Math.round((full - 2) * smoothstep(4, 8.8, s.t));
+          const top = Math.max(cur, dry);
+          if (full - top > 0) sb.put(0, x, gy + top, full - top, a);
+          if (full - top > 1) sb.put(1, x, gy + full - 1, 1, a2);
+        }
+        sb.col(x);
+      }
+      sb.end(x1);
+    }
+    r.endShadows();
+    for (const s of this.sheets) {
       const t = s.t;
-      const k = t < 1.1 ? smoothstep(0, 1.1, t) : t < 2 ? 1 : 1 - smoothstep(2, 4.6, t);
+      if (t > 7.5) continue;
+      const k = Swash.runK(t);
       const alpha = t < 2.6 ? 0.55 : 0.55 * (1 - smoothstep(2.6, 4.8, t));
-      if (alpha < 0.02) continue;
-      r.water(0.55, 0.8);
-      for (let x = x0; x < x1; x += 2) {
-        const w = wetAt(x);
-        if (w < 0.5) continue;
-        const gy = groundY(x) - 2;
-        const edge = (s.reach + (noise1(x / 18 + s.seed, 3) - 0.5) * 8) * k;
-        if (edge < 1) continue;
-        r.rect(x, gy, 2, edge, packColor(0.62, 0.84, 0.86, alpha * 0.7));
+      // the water sheet (a mirror, so it reflects like the wet sand)
+      if (alpha > 0.02) {
+        r.water(0.55, 0.8);
+        const sheet = packColor(0.6, 0.83, 0.85, alpha * 0.7);
+        sb.begin(r);
+        for (let x = x0; x < x1; x++) {
+          if (wetAt(x) >= 0.5) {
+            const gy = Math.round(groundY(x)) - 2;
+            const e = Math.round(Swash.full(s, x) * k);
+            if (e >= 1) sb.put(0, x, gy, e, sheet);
+          }
+          sb.col(x);
+        }
+        sb.end(x1);
+        r.water(0);
       }
-      r.water(0);
-      for (let x = x0; x < x1; x += 2) {
-        if (wetAt(x) < 0.5) continue;
-        const gy = groundY(x) - 2;
-        const edge = (s.reach + (noise1(x / 18 + s.seed, 3) - 0.5) * 8) * k;
-        if (edge < 1) continue;
-        const lace = noise1(x / 5 + s.seed, 4) > 0.35;
-        r.rect(x, gy + edge - 1, 2, lace ? 2 : 1, packColor(0.97, 1, 1, alpha * (t < 2 ? 1 : 0.6)));
-        if (lace && hash2(x, s.seed, 2) < 0.3) r.rect(x, gy + edge - 3, 1, 1, packColor(1, 1, 1, alpha * 0.8));
+      // the foam: a lace edge riding the sheet (clots and gaps, a bubble line behind it), then a
+      // broken scum line left at the high-water mark that thins out and pops
+      const back = t > 2;
+      const fa = back ? 1 - smoothstep(2.6, 7.5, t) : 1;
+      if (fa < 0.03) continue;
+      const fHi = packColor(0.98, 1, 1, 0.95 * fa), fLo = packColor(0.85, 0.95, 0.94, 0.8 * fa), bub = packColor(1, 1, 1, 0.7 * fa);
+      const thin = back ? smoothstep(2.2, 7, t) : 0;
+      sb.begin(r);
+      for (let x = x0; x < x1; x++) {
+        if (wetAt(x) >= 0.5) {
+          const gy = Math.round(groundY(x)) - 2;
+          const full = Swash.full(s, x);
+          const e = Math.round(back ? full : full * k);
+          if (e >= 1) {
+            const clot = noise1(x / 6 + s.seed, 4);
+            const holes = noise1(x / 2.3 + s.seed * 0.7, 5);
+            if (holes > 0.18 + thin * 0.6) {
+              const th = clot > 0.62 && !back ? 2 : 1;
+              sb.put(0, x, gy + e - th, th, clot > 0.4 ? fHi : fLo);
+              if (!back && clot > 0.55 && hash2(Math.floor(x / 2), s.seed, 2) < 0.5) sb.put(1, x, gy + e - th - 2, 1, bub);
+            }
+            // the sheet draining back past it trails a thinner second line
+            if (back && t < 4.6) {
+              const cur = Math.round(full * k);
+              if (cur >= 1 && cur < e - 2 && holes > 0.45) sb.put(2, x, gy + cur, 1, fLo);
+            }
+          }
+        }
+        sb.col(x);
       }
+      sb.end(x1);
     }
   }
 }

@@ -22,7 +22,8 @@ import { layerSpan } from '../../world/scenery';
 import { audio, Music } from '../../core/audio';
 import { clamp, damp, rand } from '../../core/math';
 import type { PixelBuffer } from '../../art/pixel';
-import { DayClock, envAt, lightKAt, IsleSky, CloudDeck, SeaStrip, Breakers } from '../v4/islefx';
+import { DayClock, envAt, lightKAt, IsleSky, CloudDeck, Breakers } from '../v4/islefx';
+import { BeachSea } from '../v4/beachsea';
 import { layerY } from '../v4/island';
 import { ChunkBuddy } from '../v4/buddy';
 import * as K from '../../art/v10/boat10';
@@ -149,15 +150,13 @@ export abstract class LandingScene extends FieldScene {
     far.add(new Custom(0, rr => rr.draw(hf, fsp.x0 + 150, this.ly(0.04, 125), 0.6, 0.6, 0, packColor(1, 1, 1, 0.85))));
     const cn = st.addLayer('clouds-near', 0.05, 0.1, 0, 0.5, 0.05);
     cn.add(new CloudDeck(c, cn, 63, 6, 70, 108, false, layerSpan(st, 0.05, 200)));
-    const band = (name: 'horizon' | 'far' | 'mid' | 'near', p: number, sy: number, speed: number, fog: number) => {
-      const l = st.addLayer('sea-' + name, p, fog, 0.4, 0, p);
-      l.add(new SeaStrip(name, this.ly(p, sy), c, speed));
-      return l;
-    };
-    band('horizon', 0.06, 124, 1.2, 0.25);
-    band('far', 0.2, 138, 2.4, 0.12);
-    const mid = band('mid', 0.42, 158, 4, 0.05);
-    const near = band('near', 0.72, 186, 7, 0);
+    // one continuous sea, row by row (game/v4/beachsea.ts); the band layers hold what floats on them
+    const band = (name: 'horizon' | 'far' | 'mid' | 'near', p: number, fog: number) => st.addLayer('sea-' + name, p, fog, 0.4, 0, p);
+    const hz = band('horizon', 0.06, 0.25);
+    hz.add(new BeachSea(c, hz, this.dy));
+    band('far', 0.2, 0.12);
+    const mid = band('mid', 0.42, 0.05);
+    const near = band('near', 0.72, 0);
     this.breakers = new Breakers(this.ly(0.72, 192), this.ly(0.72, 214));
     near.add(this.breakers);
     const back = st.addLayer('back', 0.9, 0, 0.8, 0, 0.9);

@@ -28,6 +28,7 @@ import * as FA from '../../art/v9/forage-art';
 import * as SV from '../../art/v11/salvage';
 import { startQuest, questStatus } from '../quests';
 import type { ForageSprite } from '../../art/v9/forage-art';
+import { contactFor } from '../../art/island4/contact';
 
 export type Cat = 'wood' | 'plants' | 'food' | 'minerals';
 type How = 'pick' | 'kneel' | 'dig' | 'jar' | 'net';
@@ -137,6 +138,8 @@ const ARTS: Record<string, () => ForageSprite> = {
   lifering: SV.lifeRing, boatbag: SV.boatBag, scrapheap: SV.scrapHeap,
 };
 
+const NO_CONTACT = new Set(['dig', 'dug', 'clay', 'net', 'jar', 'moth0', 'moth1', 'beetle0', 'beetle1', 'hopperbug']);
+
 const TOOL_LINE: Record<string, string> = {
   trowel: 'I need my trowel for this. It’s in my field kit... which is somewhere in the wreck. In my bunk, if the sea was kind.',
   net: 'I need my bug net. Field kit. Wreck. Bunk. The usual.',
@@ -150,7 +153,7 @@ export const shellKinds = () => SHELLS.filter(id => game.save.flags['v9:found:' 
 
 export class Forage {
   spots: Spot[] = [];
-  private fr: Record<string, { f: Frame; g: Frame | null }> = {};
+  private fr: Record<string, { f: Frame; g: Frame | null; ct: { f: Frame; dx: number; dy: number } | null }> = {};
   private marked = new Set<string>();
   private markT = 0;
   private saveT = 0;
@@ -166,7 +169,12 @@ export class Forage {
     let e = this.fr[name];
     if (!e) {
       const a = ARTS[name]();
-      e = { f: local.add('fg:' + name, a.buf, a.ax, a.ay), g: a.glow ? local.add('fgg:' + name, a.glow, a.ax, a.ay) : null };
+      // a contact shadow under everything that lies on the ground (not the dig holes, the clay bank or flyers)
+      const ct = NO_CONTACT.has(name) ? null : contactFor(a.buf, a.ax, a.ay, name.length);
+      e = {
+        f: local.add('fg:' + name, a.buf, a.ax, a.ay), g: a.glow ? local.add('fgg:' + name, a.glow, a.ax, a.ay) : null,
+        ct: ct ? { f: local.add('fgc:' + name, ct.buf, 0, 0), dx: ct.dx, dy: ct.dy } : null,
+      };
       this.fr[name] = e;
     }
     return e;
@@ -323,6 +331,8 @@ export class Forage {
       const name = on ? k.art : k.spent;
       if (name && name !== 'none') {
         const e = this.frame(name);
+        // (a plain draw, not the shadow pass: it also cuts the wet sand's mirror under the find)
+        if (e.ct) r.draw(e.ct.f, sp.x + e.ct.dx, sp.y + e.ct.dy);
         r.draw(e.f, sp.x, sp.y);
         if (e.g && on) { r.emissive(1); r.draw(e.g, sp.x, sp.y, 1, 1, 0, packColor(1, 1, 1, 0.65 + 0.35 * Math.sin(t * 2 + sp.ph))); r.emissive(); if (k.art === 'glowmoss' || k.art === 'warm') r.light(sp.x, sp.y - 4, 26, k.art === 'warm' ? 1 : 0.6, k.art === 'warm' ? 0.6 : 1, 0.6, 0.5); }
       }
