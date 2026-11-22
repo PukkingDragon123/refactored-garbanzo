@@ -33,7 +33,7 @@ IDS = ['shark', 'gecko', 'worm', 'crab']
 FOCUS = {'shark': (230, 215), 'gecko': (900, 420), 'worm': (420, 520), 'crab': (640, 560)}
 ORDER = ['crab', 'worm', 'gecko', 'shark']      # banner: shore -> bush -> glow forest -> the deep
 # whole-number zoom per creature in the 1920 banner (small critters get bigger pixels); the 960 one uses z-1
-ZOOM = {'shark': 1, 'gecko': 2, 'worm': 2, 'crab': 3}
+ZOOM = {'shark': 1, 'gecko': 2, 'worm': 2, 'crab': 2}
 
 
 def load_still(d, rid, pick):
