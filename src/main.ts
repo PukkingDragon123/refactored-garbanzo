@@ -78,6 +78,8 @@ async function boot() {
   else if (scene === 'island4') await (await import('./game/v4/islandflow')).goIsland();
   // developer panel: a "clean reload" jump to a story point (Settings > Developer tools)
   else if (params.has('devjump')) await (await import('./debug/devpanel')).bootJump(params.get('devjump')!);
+  // ?trailer=1: the cinematic promo tour (no UI, no text) for screen recording
+  else if (params.has('trailer')) setTimeout(() => { void import('./debug/trailer').then(m => m.startTrailer()); }, 0);
   else {
     const { TitleScene } = await import('./game/scenes/title');
     await game.setNow(new TitleScene());

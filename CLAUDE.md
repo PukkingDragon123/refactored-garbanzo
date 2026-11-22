@@ -191,6 +191,9 @@ A 2D side-view pixel-art game (Vite + TypeScript strict, custom WebGL2 renderer,
 
 - The user reviews gameplay themselves. Verify with `npx tsc --noEmit` and
   `npm run build:artifact`, and take only the screenshots needed to judge visual work.
+- Promo footage: `dist-single/index.html?trailer=1` is a hands-off cinematic tour with no UI or text over
+  two CC0 tracks (`src/debug/trailer.ts`, music and credits in `src/assets/trailer/`); click once, then
+  screen-record. `&shot=N` previews one shot. Never use copyrighted music (Pokémon, Zelda...).
 - Load the build as `dist-single/index.html`; `zealandia.html` is the body-only artifact page.
   Debug params live in `src/main.ts`. The Developer panel is in Settings, and its story points are
   in `src/debug/devpoints.ts`.
