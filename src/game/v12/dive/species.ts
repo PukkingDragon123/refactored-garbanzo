@@ -38,6 +38,7 @@
 import type { FieldScene } from '../../scenes/field';
 import type { Renderer, Frame } from '../../../gfx/renderer';
 import { packColor } from '../../../gfx/renderer';
+import { drawTrail, type TrailOpts } from '../../../gfx/trails';
 import type { Drawable } from '../../../world/stage';
 import type { Animal } from '../../wild/animal';
 import type { SpeciesDef } from '../../../art/beasts-core';
@@ -143,6 +144,8 @@ function firstLine(f: FieldScene, flag: string, text: string, style: FloatStyle 
 }
 
 // ==================================================================== the base of every dive animal
+/** afterimages: a cruise never trails, a dart or a charge (the shark's is 205 px/s) does; blue-green wash */
+const DIVE_TRAIL: TrailOpts = { min: 120, full: 200, tint: 0xa8e0e8 };
 abstract class DiveBeast implements Drawable {
   z = 40; p = 1; py = 1;
   vx = 0; vy = 0; facing: 1 | -1 = 1;
@@ -240,7 +243,8 @@ abstract class DiveBeast implements Drawable {
     if (this.x < r.visibleX0(220) || this.x > r.visibleX1(220)) return;
     const d = this.cur();
     this.lastF = d;
-    r.draw(d.fr, Math.round(this.x), Math.round(this.y), this.facing, 1, this.rot * this.facing, this.tint);
+    // a charge, a seal's dart or a bolting fish leaves afterimages (src/gfx/trails.ts)
+    drawTrail(r, this, this.x, this.y, () => r.draw(d.fr, Math.round(this.x), Math.round(this.y), this.facing, 1, this.rot * this.facing, this.tint), DIVE_TRAIL);
     this.post?.(r);
   }
   post?(r: Renderer): void;

@@ -3,6 +3,7 @@
 // expression, emote or cartoon reaction works on the player too.
 
 import type { Renderer } from '../gfx/renderer';
+import { drawTrail } from '../gfx/trails';
 import type { Drawable, Stage } from './stage';
 import type { Surface, Climb } from './terrain';
 import { Terrain } from './terrain';
@@ -491,6 +492,8 @@ export class Player implements Drawable {
 
   draw(r: Renderer, st: Stage) {
     this.body.oy = this.underwater ? 18 : 0;
-    this.body.draw(r, st);
+    // motion blur: he is what the camera tracks (its smear leaves him sharp), and a sprint or a hard
+    // kick under water leaves a short trail of afterimages (src/gfx/trails.ts)
+    drawTrail(r, this, this.x, this.y, () => this.body.draw(r, st), { held: true, min: 72, full: 118 });
   }
 }

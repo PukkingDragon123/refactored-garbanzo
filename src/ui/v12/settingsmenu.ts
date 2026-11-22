@@ -5,7 +5,7 @@
 
 import { game } from '../../game/game';
 import { audio } from '../../core/audio';
-import { GFX_HINT, GFX_LABEL, applyGfxPrefs, loadGfxPrefs, saveGfxPrefs } from '../../gfx/quality';
+import { GFX_HINT, GFX_LABEL, applyGfxPrefs, loadGfxPrefs, prefersReducedMotion, saveGfxPrefs } from '../../gfx/quality';
 import type { GfxLevel } from '../../gfx/renderer';
 import { FloatMenu, textLines } from './floatmenu';
 import type { FloatPage, FMItem } from './floatmenu';
@@ -40,6 +40,10 @@ export function settingsPage(onBack: () => void, o: { heading?: string } = {}): 
     },
     { id: 'grain', label: 'Film grain', kind: 'toggle', get: () => gp.grain, set: v => { gp.grain = !!v; apply(); } },
     { id: 'vignette', label: 'Vignette', kind: 'toggle', get: () => gp.vignette, set: v => { gp.vignette = !!v; apply(); } },
+    {
+      id: 'mblur', label: 'Motion blur', kind: 'toggle', get: () => gp.motionBlur, set: v => { gp.motionBlur = !!v; apply(); },
+      hint: () => (prefersReducedMotion() ? 'Pixel streaks on fast camera moves and afterimages behind fast movers. Off by default: your system asks for reduced motion.' : 'Pixel streaks on fast camera moves and afterimages behind fast movers.'),
+    },
   ];
   if (document.fullscreenEnabled) {
     items.push({

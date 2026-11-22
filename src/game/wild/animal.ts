@@ -6,6 +6,10 @@
 // through their ecology entry (ecology.ts) and optional special behaviours (specials.ts).
 
 import type { Renderer } from '../../gfx/renderer';
+import { drawTrail, type TrailOpts } from '../../gfx/trails';
+
+/** afterimages only on a strike, a pounce or a bolt */
+const ANIMAL_TRAIL: TrailOpts = { min: 150, full: 260 };
 import type { Drawable, Stage } from '../../world/stage';
 import type { Surface } from '../../world/terrain';
 import { Terrain } from '../../world/terrain';
@@ -623,7 +627,8 @@ export class Animal implements Drawable {
   draw(r: Renderer) {
     if (this.gone || !this.body) return;
     if (this.host && this.host.maxX > FAR_SCENE && (this.x < r.visibleX0(360) || this.x > r.visibleX1(360))) return;
-    this.body.draw(r, this);
+    // a strike, a pounce or a bolt leaves afterimages (src/gfx/trails.ts); an everyday pace never does
+    drawTrail(r, this, this.x, this.y, () => this.body.draw(r, this), ANIMAL_TRAIL);
   }
 
   // ================================================================ camera
