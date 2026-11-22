@@ -31,7 +31,7 @@ from compose import FILMS, PROMO, DOT, read_manifest                         # n
 IDS = ['shark', 'gecko', 'worm', 'crab']
 ORDER = ['crab', 'worm', 'gecko', 'shark']      # shore -> bush -> glow forest -> the deep
 # hero still and the creature's centre in it (1280x720), checked by eye on helper A's stills
-HERO = {'shark': (2, (645, 268)), 'gecko': (3, (660, 415)), 'worm': (2, (670, 405)), 'crab': (1, (690, 385))}
+HERO = {'shark': (3, (720, 320)), 'gecko': (3, (640, 420)), 'worm': (3, (720, 435)), 'crab': (2, (630, 385))}
 SIL = dict(stem='#0d170b', dark='#0a1209', mid='#111e0e', light='#182a13', tip='#20361a', outline='#070b06')
 
 
@@ -167,7 +167,7 @@ def cover(st, out):
 def thumb(st, out):
     W, H = 1280, 720
     img, (fx, fy) = st['shark']
-    pic = grade(crop_scaled(img, fx, fy, W, H, 3, 0.30, 0.60), contrast=1.14, sat=1.12, lift=-6)
+    pic = grade(crop_scaled(img, fx, fy, W, H, 2, 0.29, 0.58), contrast=1.14, sat=1.12, lift=-6)
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
     lvl = edges(H, W, 0.55, 2.4)
     lvl = np.maximum(lvl, np.clip((xx / W - 0.48) / 0.52, 0, 1) ** 1.3 * 0.55 * np.clip(1.2 - yy / H, 0, 1))
@@ -201,9 +201,11 @@ def reel_cover(rid, img, foc, out):
     t = TextBlock(cfg['title'], STYLES['bone'], scale=ts, mode='show', wave=None, spacing=2)
     t.draw(pic, 10.0, W // 2, 300, 'center')
     O.draw_rgba(pic, O.fern_rule(70, leaf=3, seed=4), W // 2, 300 + ts * 10 + 12, 3)
-    sub = TextBlock(f'Project Zealandia {DOT} Field Notes', STYLES['sage'], scale=3, mode='show', wave=None,
-                    spacing=2, icons={DOT: O.MIDDOT})
-    sub.draw(pic, 10.0, W // 2, 300 + ts * 10 + 64, 'center')
+    meet = TextBlock(f'Meet the {cfg["common"]}', STYLES['bone'], scale=4, mode='show', wave=None, spacing=1)
+    meet.draw(pic, 10.0, W // 2, 300 + ts * 10 + 70, 'center')
+    sub = TextBlock(f'Project Zealandia {DOT} Species {cfg["n"]} of 4', STYLES['sage'], scale=3, mode='show',
+                    wave=None, spacing=2, icons={DOT: O.MIDDOT})
+    sub.draw(pic, 10.0, W // 2, 300 + ts * 10 + 128, 'center')
     # field-note label, bottom left
     x, y = 72, 1380
     O.draw_rgba(pic, O.fern_rule(64, leaf=3, seed=12), x - 6, y, 3, anchor='topleft')

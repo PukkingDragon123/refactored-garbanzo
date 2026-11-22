@@ -116,6 +116,15 @@ def shift(m, dx, dy):
     return out
 
 
+def shift_rgb(a, dx, dy):
+    out = np.zeros_like(a)
+    h, w = a.shape[:2]
+    xs0, xd0 = (0, dx) if dx >= 0 else (-dx, 0)
+    ys0, yd0 = (0, dy) if dy >= 0 else (-dy, 0)
+    out[yd0:yd0 + h - abs(dy), xd0:xd0 + w - abs(dx)] = a[ys0:ys0 + h - abs(dy), xs0:xs0 + w - abs(dx)]
+    return out
+
+
 def dilate(m, conn=8):
     o = m.copy()
     o[1:, :] |= m[:-1, :]
@@ -209,7 +218,7 @@ def wrap(text, max_w, spacing=1):
 @dataclass
 class Style:
     fill: list                    # gradient bands top -> bottom
-    outline: str
+    outline: str | None
     outline2: str | None
     shadow: list                  # one colour per staircase step
     glow: str | None = None
@@ -223,6 +232,7 @@ class Style:
     band_bot: int = 12
     shadow_density: tuple = ()    # ordered-dither density per shadow step (1 = solid), for soft shadows
     carve: bool = False           # carved/weathered stone: hand-placed light and dark edges, chips, moss
+    bold: bool = False            # thicken every stroke by one pixel to the right (a heavier pen)
 
 
 STYLES = {
@@ -259,6 +269,11 @@ STYLES = {
     # the carved, weathered logo stone
     'carved': Style(fill=['#f1e9d4', '#e6dcc2', '#d8cbab'], outline='#120f0a', outline2=None,
                     shadow=['#3a3022', '#251e15', '#120e09'], glow=None, carve=True, band_top=1, band_bot=30),
+    # ink on paper (field-guide card, handwriting on prints): no outline, no shadow
+    'ink': Style(fill=['#2f271c'], outline=None, outline2=None, shadow=[], glow=None),
+    'ink_bold': Style(fill=['#2a2218'], outline=None, outline2=None, shadow=[], glow=None, bold=True),
+    'ink_muted': Style(fill=['#7d6c50'], outline=None, outline2=None, shadow=[], glow=None),
+    'ink_pen': Style(fill=['#283a5c'], outline=None, outline2=None, shadow=[], glow=None),
     # small print (subtitles)
     'small': Style(fill=['#e8fbf6', '#9fe0d6'], outline='#0b3540', outline2='#03090c',
                    shadow=['#08262e'], glow=None, bevel=None),
@@ -620,6 +635,10 @@ class TextBlock:
                 bot_edge = sub & ~below
                 by_, bx = np.nonzero(bot_edge)
                 fill[by_ + y0, bx + x0] = hexc(gst.under)
+        if st.bold:
+            b = shift(mask & ~icon_px, 1, 0) & ~mask
+            fill[b] = shift_rgb(fill, 1, 0)[b]
+            mask |= b
         if st.carve:
             carve(mask & ~icon_px, fill)
         # shine sweep
@@ -630,7 +649,7 @@ class TextBlock:
             d = xx + (yy - PT) // 2 - pos
             sel = (d >= 0) & (d < 3)
             fill[yy[sel], xx[sel]] = hexc(st.shine)
-        out1 = dilate(mask, 8) & ~mask
+        out1 = (dilate(mask, 8) & ~mask) if st.outline else np.zeros_like(mask)
         sil = mask | out1
         layers = []
         sh_union = np.zeros_like(mask)
@@ -664,8 +683,9 @@ class TextBlock:
         for sh, c in layers:
             col[sh] = hexc(c)
             alpha |= sh
-        col[out1] = hexc(st.outline)
-        alpha |= out1
+        if st.outline:
+            col[out1] = hexc(st.outline)
+            alpha |= out1
         col[mask] = fill[mask]
         alpha |= mask
         # per-letter dithered fade-in

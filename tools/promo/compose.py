@@ -36,6 +36,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import audio as A                                    # noqa: E402
 from textfx import TextBlock, STYLES, fit_scale, text_width, bayer_tile, dither_darken   # noqa: E402
 import ornaments as O                                # noqa: E402
+import photo as PH                                   # noqa: E402
 
 W, H, FPS = 1080, 1920, 30
 SCRATCH = os.environ.get('PROMO_SCRATCH',
@@ -51,30 +52,34 @@ MARGIN = 72
 FILMS = {
     'shark': dict(title='THE KELP FOREST', common='Glasseye Whaler', sci='Carcharhinus vitreus',
                   place='WHALER SHARK\nTE MOANA RIMURIMU', bed='underwater',
-                  music='next-to-you.mp3', music_offset=0.0,
+                  music='next-to-you.mp3', music_offset=0.0, n=1, group='Fish',
+                  rows=[('SIZE', 'About 3 m long'), ('HOME', 'The drop-off and the blue'),
+                        ('DIET', 'Kingfish, snapper, rays')],
                   captions=[('kelp', 'A forest of kelp is a maze to a three-metre shark.'),
-                            ('investigate', 'A whaler patrols the edge of the reef, where the blue begins.'),
-                            ('hunch', 'Back up, fins down: the warning before a charge.'),
+                            ('patrol', 'A whaler patrols the edge of the reef, where the blue begins.'),
                             ('veer', 'A sharp knock on the snout makes it think again.')]),
     'gecko': dict(title='THE GLOW FOREST', common='Mokoturama', sci='Hoplodactylus lucernarius',
                   place='LANTERN GECKO\nTHE GLOW FOREST, NIGHT', bed='night',
-                  music='town-theme.mp3', music_offset=18.0,
+                  music='town-theme.mp3', music_offset=18.0, n=2, group='Reptile',
+                  rows=[('SIZE', 'Up to 60 cm, nose to lantern'), ('HOME', 'Only in the glowing forest'),
+                        ('DIET', 'Moths, gnats, glowcap dew')],
                   captions=[('forage', 'At night, two rows of lights wake along its flanks.'),
                             ('feed', 'It licks the sweet dew the glowcaps weep after dark.'),
-                            ('lure', 'The lantern on its tail sways like a fungus cap. Moths come.'),
                             ('freeze', 'One false move, and every light goes out at once.')]),
     'worm': dict(title='THE FEATHERED GULLY', common='Ngaokeoke', sci='Peripatoides titan',
                  place='GIANT VELVET WORM\nTHE FEATHERED GULLY', bed='forest',
-                 music='town-theme.mp3', music_offset=8.0,
+                 music='town-theme.mp3', music_offset=8.0, n=3, group='Velvet worm',
+                 rows=[('SIZE', '35 cm, as heavy as an apple'), ('HOME', 'Under rotten logs, old bush'),
+                       ('DIET', 'Beetles, moths, spiders')],
                  captions=[('hide', 'Under a rotten log, the air stays wet.'),
-                           ('curl', 'Uncovered, it curls up tight.'),
-                           ('squirt', 'Two jets of slime, and they set like glue.'),
+                           ('rolled', 'Uncovered, it curls up tight.'),
                            ('creep', 'Its kind has walked the earth for 500 million years.')]),
     'crab': dict(title='THE TIDELINE', common='Glass Crab', sci='Hyalocarcinus pellucidus',
                  place='GHOST CRAB\nTHE LANDING BEACH', bed='beach',
-                 music='town-theme.mp3', music_offset=26.0,
+                 music='town-theme.mp3', music_offset=26.0, n=4, group='Crustacean',
+                 rows=[('SIZE', '2 cm'), ('HOME', 'Firm wet sand, the swash zone'),
+                       ('DIET', 'Algae, scraps from each wave')],
                  captions=[('feed', 'On wet sand, only its organs seem to float.'),
-                           ('wave', 'Males wave one oversized claw at their rivals.'),
                            ('dig', 'At the first footstep, it digs in.'),
                            ('peek', 'Then it peeks out on its eyestalks.')]),
 }
@@ -134,12 +139,17 @@ def shots_of(man):
             a, b = _num(s.get('start')), _num(s.get('end'))
             if a is not None:
                 out.append(dict(start=a, end=b, type=str(s.get('type', s.get('name', ''))),
-                                label=str(s.get('label', '')), beats=s.get('beats', {})))
+                                label=str(s.get('label', s.get('name', ''))), beats=s.get('beats', {}),
+                                main=str(s.get('main', ''))))
     return sorted(out, key=lambda s: s['start'])
 
 
 def anchor_time(man, name):
-    """When does `name` happen? beats{} first, then a shot whose type/label/beats mention it."""
+    """When does `name` happen on screen? The first shot whose 'main' is it, then beats{}, then a shot whose
+    type/label/beats mention it."""
+    for s in shots_of(man):
+        if s['main'] == name:
+            return s['start']
     beats = man.get('beats') or {}
     if isinstance(beats, dict) and name in beats and _num(beats[name]) is not None:
         return _num(beats[name])
@@ -241,36 +251,45 @@ def build(rid, man, footage):
     items = []            # (drawable, x, y, anchor)
     log = []
 
-    # title card over the establishing shot
+    # title card over the establishing shot, introducing this film's one species
     t_title_out = min(5.2, E * 0.3)
     ts = min(7, fit_scale(cfg['title'], 960, 7, 4, spacing=2))
     title = fade_text(cfg['title'], 'bone', ts, 0.6, t_out=t_title_out, stagger=0.07, fade_dur=0.8, spacing=2)
     rule = Ornament(O.fern_rule(70, leaf=3, seed=4), 3, 1.5, fade=0.9, t_out=t_title_out)
-    sub = fade_text(f'Project Zealandia {DOT} Field Notes', 'sage', 3, 1.9, t_out=t_title_out, stagger=0.03, spacing=2)
-    items += [(title, W // 2, 300, 'center'), (rule, W // 2, 300 + ts * 10 + 12, 'center'),
-              (sub, W // 2, 300 + ts * 10 + 64, 'center')]
-    log.append(f'title "{cfg["title"]}" 0.60 - {t_title_out + 0.7:.2f}s')
+    meet = fade_text(f'Meet the {cfg["common"]}', 'bone', 4, 1.9, t_out=t_title_out, stagger=0.04, spacing=1)
+    sub = fade_text(f'Project Zealandia {DOT} Species {cfg["n"]} of 4', 'sage', 3, 2.6, t_out=t_title_out,
+                    stagger=0.03, spacing=2)
+    y0 = 300 + ts * 10
+    items += [(title, W // 2, 300, 'center'), (rule, W // 2, y0 + 12, 'center'),
+              (meet, W // 2, y0 + 70, 'center'), (sub, W // 2, y0 + 128, 'center')]
+    log.append(f'title "{cfg["title"]}" / "Meet the {cfg["common"]}" 0.60 - {t_title_out + 0.7:.2f}s')
     top_busy = [(0.0, t_title_out + 0.8)]
 
-    # lower third at the main beat
+    # the photo moment at the main beat, then the field-guide card with the print pinned to it
     tm = main_time(man, E * 0.4)
-    lt0 = max(t_title_out + 0.6, min(tm + 0.3, E - 7.5))
-    lt1 = min(lt0 + 6.5, E - 0.6)
-    lrule = Ornament(O.fern_rule(64, leaf=3, seed=12), 3, lt0, fade=0.6, t_out=lt1)
-    name = fade_text(cfg['common'], 'bone', min(6, fit_scale(cfg['common'], W - 2 * MARGIN, 6, 4, spacing=2)),
-                     lt0 + 0.3, t_out=lt1, stagger=0.06, spacing=2, align='left')
-    place = fade_text(cfg['place'], 'sage', 3, lt0 + 1.0, t_out=lt1, stagger=0.02, spacing=2, align='left')
-    sci = fade_text(cfg['sci'], 'muted', 3, lt0 + 1.5, t_out=lt1, stagger=0.02, spacing=1, align='left')
-    y = 1800 - (sci.h * 3 + place.h * 3 + name.h * name.scale + 14 * 3 + 30)
-    items.append((lrule, MARGIN - 6, y, 'left'))
-    y += 14 * 3 + 6
-    for blk, gap in ((name, 10), (place, 8), (sci, 0)):
-        items.append((blk, MARGIN, y, 'left'))
-        y += blk.h * blk.scale + gap
-    log.append(f'lower third "{cfg["common"]}" {lt0:.2f} - {lt1 + 0.7:.2f}s (main beat {tm:.2f}s)')
-    bottom_busy = [(lt0 - 0.2, lt1 + 0.8)]
+    PRINT_HOLD = 4.0
+    seq = 0.75 + PRINT_HOLD + 0.45 + 0.5 + 6.0 + 0.45 + 0.6      # shutter .. card folded, plus a margin
+    tb = max(t_title_out + 0.9, min(tm, E - seq))
+    for c in sorted(sh['start'] for sh in shots_of(man)):     # keep the shutter clear of a cut's dissolve
+        if c - 0.3 <= tb < c + 0.6:
+            tb = c + 0.6
+    tb = round(tb * FPS) / FPS
+    focus = man.get('focus') if isinstance(man.get('focus'), (list, tuple)) else (W // 2, int(H * 0.47))
+    moment = PH.PhotoMoment(tb, focus, cfg['common'], hold=PRINT_HOLD)
+    card_in = moment.end - 0.15
+    hold = max(3.0, min(6.0, E - 0.6 - card_in - 0.5 - 0.45))
+    card = PH.SpeciesCard(moment, dict(common=cfg['common'], sci=cfg['sci'], group=cfg['group'], rows=cfg['rows']),
+                          f'SPECIES {cfg["n"]} OF 4', card_in, hold)
+    items += [(moment, 0, 0, None), (card, 0, 0, None)]
+    log.append(f'photo: viewfinder {tb - 0.6:.2f}, shutter {tb:.2f}s (main beat {tm:.2f}), stamp {moment.t_stamp:.2f}, '
+               f'print out {moment.t_out:.2f}')
+    log.append(f'species card {card_in:.2f} - {card.end:.2f}s (hold {hold:.1f}s)')
+    sfx = [(tb, 'shutter', 1.0), (tb + 0.3, 'advance', 0.9), (moment.t_stamp, 'thud', 1.0),
+           (moment.t_out, 'paper', 1.0), (card_in, 'paper', 0.9), (card.t_out, 'paper', 0.8)]
+    shot = dict(tb=tb, moment=moment)
+    quiet = (tb - 0.9, moment.end + 0.2)                  # no captions while the picture is being taken
 
-    # observation captions, placed on the shot list / beats, never on top of each other
+    # observation captions (top band), placed on the shot list / beats, clear of the photo moment
     caps = []
     last_end = t_title_out + 0.9
     for name_, text in cfg['captions']:
@@ -279,11 +298,13 @@ def build(rid, man, footage):
         ta = anchor_time(man, name_)
         if ta is None:
             continue
+        dur = 3.2 + 0.035 * len(text)
         t0 = max(ta + 0.5, last_end + 0.6)
+        if t0 < quiet[1] and t0 + dur > quiet[0]:
+            t0 = quiet[1]
         if t0 - ta > 7.0:
             log.append(f'caption skipped (stale by {t0 - ta:.1f}s): "{text}" anchor {name_}@{ta:.2f}')
             continue
-        dur = 3.2 + 0.035 * len(text)
         if t0 + dur > E - 0.5:
             log.append(f'caption skipped (no room): "{text}" anchor {name_}@{ta:.2f}')
             continue
@@ -294,6 +315,7 @@ def build(rid, man, footage):
         items.append((c, W // 2, 330, 'center'))
         top_busy.append((t0 - 0.2, t1 + 0.8))
         log.append(f'caption {t0:6.2f} - {t1 + 0.7:6.2f}s  [{name_}@{ta:.2f}] "{text}"')
+    bottom_busy = []
 
     # end card
     lg = O.logo()
@@ -308,7 +330,20 @@ def build(rid, man, footage):
     items += [(logo, W // 2, 690, 'center'), (cta1, W // 2, 1080, 'center'), (div, W // 2, 1215, 'center'),
               (cta2, W // 2, 1330, 'center')]
     log.append(f'end card {E:.2f} - {total:.2f}s')
-    return dict(E=E, total=total, items=items, top_busy=top_busy, bottom_busy=bottom_busy, cfg=cfg, log=log)
+    return dict(E=E, total=total, items=items, top_busy=top_busy, bottom_busy=bottom_busy, cfg=cfg, log=log,
+                sfx=sfx, shot=shot)
+
+
+_FR = None
+
+
+def flash(frame, peak):
+    """Lighten toward warm white through an ordered dither, strongest in the middle."""
+    global _FR
+    if _FR is None:
+        yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+        _FR = np.clip(1 - 0.45 * (((xx - W / 2) / (W * 0.7)) ** 2 + ((yy - H * 0.47) / (H * 0.6)) ** 2), 0.2, 1)
+    return dither_darken(frame, _FR * peak, CELL, colour=(255, 251, 238), steps=3, strength=0.62)
 
 
 def _strength(t, spans, ramp=0.5):
@@ -323,12 +358,12 @@ def _strength(t, spans, ramp=0.5):
 def render_audio(rid, plan, wav):
     cfg = plan['cfg']
     mix, stems, off = A.mix_film(plan['total'], cfg['bed'], cfg['music'], cfg['music_offset'], end_t=plan['E'],
-                                 seed=zlib.crc32(rid.encode()) % 1000)
+                                 seed=zlib.crc32(rid.encode()) % 1000, sfx=plan['sfx'])
     A.write_wav(wav, mix)
     lines = [f'reel {rid}: music {cfg["music"]} from {off:.1f}s, bed {cfg["bed"]}',
              f'overall RMS  mix {A.db(mix):6.1f} dBFS   music {A.db(stems["music"]):6.1f}   '
-             f'ambience {A.db(stems["ambience"]):6.1f}   peak {20 * math.log10(np.max(np.abs(mix)) + 1e-9):6.1f} dBFS',
-             '  sec    mix   music  ambience   (dBFS RMS per second; stems before the master gain)']
+             f'ambience {A.db(stems["ambience"]):6.1f}   foley {A.db(stems["foley"]):6.1f}   peak {20 * math.log10(np.max(np.abs(mix)) + 1e-9):6.1f} dBFS',
+             '  sec    mix   music  ambience   (dBFS RMS per second, after the master gain)']
     for s in range(int(plan['total'])):
         a, b = s * A.SR, (s + 1) * A.SR
         lines.append(f'  {s:3d}  {A.db(mix[a:b]):6.1f}  {A.db(stems["music"][a:b]):6.1f}  {A.db(stems["ambience"][a:b]):6.1f}')
@@ -372,7 +407,7 @@ def render(rid, frames_only=None, out_dir=None, cuts='dither'):
                                 '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-shortest',
                                 '-movflags', '+faststart', out_mp4], stdin=subprocess.PIPE)
     fsz = W * H * 3
-    last = prev_shot_last = None
+    last = prev_shot_last = held = None
     frozen = None
     saved = {}
     eframe = int(round(E * FPS))
@@ -391,18 +426,28 @@ def render(rid, frames_only=None, out_dir=None, cuts='dither'):
             frame = last.copy()
             if i == eframe:
                 frozen = last.copy()
+
             # ordered-dither cross-dissolve out of the previous shot's last frame
             if cuts == 'dither' and cur_cut is not None and prev_shot_last is not None and i - cur_cut < xf_n:
                 k = (i - cur_cut + 1) / (xf_n + 1)
                 keep_old = cell_bayer() >= k
                 frame[keep_old] = prev_shot_last[keep_old]
+            fb = int(round(plan['shot']['tb'] * FPS))
+            if i == fb:                                   # the shutter: capture, then hold the frame 0.3 s
+                held = frame.copy()
+                plan['shot']['moment'].capture(held)
+            if fb <= i < fb + 9 and held is not None:
+                frame = held.copy()
+            if i in (fb, fb + 1):                         # a two-frame flash with a dithered falloff
+                frame = flash(frame, 0.95 if i == fb else 0.5)
         if t >= E:
             frame = endcard_bg(frozen if frozen is not None else last, t - E)
         else:
             band_scrim(frame, True, _strength(t, plan['top_busy']))
             band_scrim(frame, False, _strength(t, plan['bottom_busy']))
         for blk, x, y, anchor in plan['items']:
-            blk.draw(frame, t, x, y, anchor)
+            if t < plan['E'] or not isinstance(blk, (PH.PhotoMoment, PH.SpeciesCard)):
+                blk.draw(frame, t, x, y, anchor)
         if enc:
             enc.stdin.write(frame.tobytes())
         if frames_only is not None and i in frames_only:
@@ -418,12 +463,13 @@ def render(rid, frames_only=None, out_dir=None, cuts='dither'):
     return out_mp4, saved, plan
 
 
-def contact_sheet(mp4, out_png, n=12, cols=6):
+def contact_sheet(mp4, out_png, n=12, cols=6, times=None):
     from PIL import Image
     dur = probe_duration(mp4)
     tiles = []
-    for k in range(n):
-        t = dur * (k + 0.5) / n
+    times = times or [dur * (k + 0.5) / n for k in range(n)]
+    n = len(times)
+    for t in times:
         raw = subprocess.run(['ffmpeg', '-v', 'error', '-ss', f'{t:.3f}', '-i', mp4, '-frames:v', '1',
                               '-vf', 'scale=270:480:flags=neighbor', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'],
                              capture_output=True).stdout
@@ -468,6 +514,15 @@ def main():
             sp = mp4.replace('.mp4', '_sheet.png')
             contact_sheet(mp4, sp)
             print('  sheet', sp)
+            m = plan['shot']['moment']
+            tb = plan['shot']['tb']
+            card = [b for b, *_ in plan['items'] if isinstance(b, PH.SpeciesCard)][0]
+            ts = [tb - 0.3, tb + 0.01, tb + 0.4, tb + 0.6, m.t_stamp + 0.02, m.t_stamp + 1.0,
+                  card.t_in + 0.25, card.t_in + 2.0, card.t_out + 0.2, plan['E'] + 1.0, plan['E'] + 3.0,
+                  plan['E'] + 4.8]
+            pp = mp4.replace('.mp4', '_photo_sheet.png')
+            contact_sheet(mp4, pp, times=ts)
+            print('  photo sheet', pp)
 
 
 if __name__ == '__main__':

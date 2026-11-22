@@ -245,6 +245,60 @@ def beach(total, seed=4, wave_times=None):
     return out
 
 
+# ------------------------------------------------------------------------- camera and paper foley
+def _burst(dur, lo, hi, seed, tau):
+    m = int(dur * SR)
+    return shaped_noise(m, lo, hi, seed) * env_ad(m, 0.0004, tau)
+
+
+def shutter():
+    """A mechanical shutter: the mirror slaps up, the curtains run, the mirror returns (filtered transients)."""
+    out = np.zeros(int(0.16 * SR))
+    for t0, dur, lo, hi, g, tau, sd in ((0.000, 0.018, 1500, 7500, 0.9, 0.004, 91),
+                                        (0.006, 0.030, 250, 1400, 0.5, 0.008, 92),
+                                        (0.062, 0.020, 2000, 9000, 0.7, 0.003, 93),
+                                        (0.071, 0.030, 300, 1800, 0.4, 0.010, 94)):
+        b = _burst(dur, lo, hi, sd, tau) * g
+        s0 = int(t0 * SR)
+        out[s0:s0 + len(b)] += b
+    m = int(0.05 * SR)
+    out[:m] += tone(np.full(m, 160.0), env_ad(m, 0.001, 0.012)) * 0.35
+    return out * 0.55
+
+
+def film_advance():
+    """The lever winds on: a ratchet of small clicks over a soft whirr."""
+    dur = 0.32
+    out = np.zeros(int(dur * SR))
+    n = len(out)
+    whirr = shaped_noise(n, 300, 1600, 95) * np.sin(np.linspace(0, np.pi, n)) ** 2 * 0.12
+    out += whirr
+    for k in range(8):
+        b = _burst(0.005, 2500, 8000, 96 + k, 0.0012) * (0.5 + 0.1 * (k % 3))
+        s0 = int((0.03 + k * 0.032) * SR)
+        out[s0:s0 + len(b)] += b
+    return out * 0.45
+
+
+def thud():
+    """A rubber stamp landing on paper: a soft low knock and a dry tap."""
+    m = int(0.22 * SR)
+    fr = 48 + 30 * np.exp(-np.arange(m) / (0.02 * SR))
+    body = tone(fr, env_ad(m, 0.001, 0.045), ((1, 1.0), (2, 0.2)))
+    tap = np.zeros(m)
+    b = _burst(0.012, 400, 3000, 97, 0.003)
+    tap[:len(b)] = b
+    return (body * 0.8 + tap * 0.35) * 0.6
+
+
+def paper_slide(dur=0.38):
+    m = int(dur * SR)
+    return shaped_noise(m, 1200, 7000, 98, tilt=-0.3) * np.sin(np.linspace(0, np.pi, m)) ** 2 * 0.09
+
+
+FOLEY = {'shutter': shutter, 'advance': film_advance, 'thud': thud, 'paper': paper_slide}
+
+
 BEDS = {'underwater': underwater, 'night': night, 'forest': forest, 'beach': beach}
 # each bed sits this far under full scale (RMS): a few dB under the music, so it is felt more than heard
 BED_DB = {'underwater': -26.0, 'night': -29.0, 'forest': -28.0, 'beach': -27.5}
@@ -319,7 +373,7 @@ def db(x):
 
 
 def mix_film(total, bed, music_name, music_offset=0.0, music_rms=0.1, bed_db=None, end_t=None, seed=1,
-             wave_times=None):
+             wave_times=None, sfx=()):
     """Return (mix stereo, stems dict, music offset used)."""
     n = int(total * SR)
     mus, off = music(music_name, total, rms=music_rms, offset=music_offset)
@@ -332,8 +386,13 @@ def mix_film(total, bed, music_name, music_offset=0.0, music_rms=0.1, bed_db=Non
     dips = [(end_t, total + 1, 0.45)] if end_t else []
     amb = amb * fade_curve(n, 1.2, 3.0, dips)[:, None]
     m2 = np.stack([mus, mus], 1) * math.sqrt(0.5) * 1.41
-    mix = master(m2 + amb)
-    return mix, {'music': m2, 'ambience': amb}, off
+    fx = np.zeros((n, 2))
+    for t, name, g in sfx:
+        add(fx, FOLEY[name](), t, g, 0.0)
+    pre = m2 + amb + fx
+    mix = master(pre)
+    gain = np.sqrt(np.mean(mix ** 2)) / (np.sqrt(np.mean(pre ** 2)) or 1.0)
+    return mix, {'music': m2 * gain, 'ambience': amb * gain, 'foley': fx * gain}, off
 
 
 if __name__ == '__main__':
