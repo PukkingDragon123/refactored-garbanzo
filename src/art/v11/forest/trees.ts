@@ -106,19 +106,63 @@ export function paintGiant(kind: GiantKind, seed: number, w: number, H: number, 
       buf.data[y * BW + x] = c;
     }
   }
-  // ---- buttress roots sprawling over the floor
-  const roots = kind === 'kahikatea' ? 6 : kind === 'rimu' ? 3 : 4;
+  // ---- buttress roots: low fluted fins growing out of the sides of the root flare and snaking off along
+  // the floor (each one a hand-shaped top contour over a flat base sunk into the soil, in the trunk's own
+  // bark, lit along its crest, shaded down its flank, occluded where it meets the trunk and the ground)
+  const roots = kind === 'kahikatea' ? 6 : kind === 'rimu' ? 3 : kind === 'rata' ? 4 : rng.int(3, 5);
+  const tall = kind === 'kahikatea' ? 1.5 : kind === 'rata' ? 1.1 : 1;
   for (let i = 0; i < roots; i++) {
     const side = i % 2 ? 1 : -1;
-    const len = w * rng.range(0.8, 1.4) * (kind === 'kahikatea' ? 1.3 : 1);
-    const y0 = gy - w * rng.range(0.55, 0.95) * (kind === 'kahikatea' ? 1.3 : 1);
-    const x0 = cx0 + side * w * rng.range(0.2, 0.4);
-    const pts: P[] = [[x0, y0], [x0 + side * len * 0.35, gy - w * 0.22], [x0 + side * len * 0.75, gy - 3], [x0 + side * len, gy + 2]];
-    tube(buf, pts, t => w * (0.24 - t * 0.17) + 2, rp, n * 0.55, { spread: 3.2, texture: (x, y) => (noise2(x / 5, y / 3, seed + 41 + i) - 0.5) * 0.6 });
-    // moss carpets the top of each root
-    for (let t = 0.2; t < 1; t += 0.12) {
-      const q = pts[Math.min(pts.length - 1, Math.floor(t * (pts.length - 1)))];
-      if (rng.chance(0.7 * moss)) mossBlob(buf, rng, q[0] + rng.range(-4, 4), q[1] - w * 0.08, rng.range(4, 9), rng.range(2, 4), JP.moss, rng.int(4, 6));
+    const h0 = w * rng.range(0.15, 0.32) * tall;
+    const L = w * rng.range(0.55, 1.05) * (kind === 'kahikatea' ? 1.25 : 1);
+    const xa = cxAt(gy - h0 * 0.5) + side * hwAt(gy - h0 * 0.5) * rng.range(0.7, 0.9);
+    // the crest: falls fast off the trunk, then rides the ground with a knuckle or two before the tip dives
+    const kn = [rng.range(0.3, 0.5), rng.range(0.6, 0.85)], kh = [rng.range(0.1, 0.3), rng.range(0.05, 0.2)];
+    const crest = (t: number) => {
+      let h = h0 * Math.pow(1 - t, 1.7) + h0 * 0.18 * (1 - t);
+      for (let k = 0; k < 2; k++) h += h0 * kh[k] * Math.exp(-(((t - kn[k]) / 0.08) ** 2));
+      return h + (noise1(t * 9, seed + 51 + i) - 0.5) * 2;
+    };
+    const steps = Math.ceil(L);
+    for (let d = 0; d <= steps; d++) {
+      const t = d / L, x = Math.round(xa + side * d);
+      if (x < 0 || x >= BW) continue;
+      const hTop = crest(t);
+      if (hTop < 0.6) continue;
+      const yTop = Math.round(gy - hTop);
+      for (let y = Math.max(0, yTop); y <= Math.min(BH - 1, gy + 1); y++) {
+        const v = clamp((gy - y) / Math.max(1, hTop), 0, 1);
+        // light: the crest catches it, the flank turns away, the far side (toward the trunk's shadow) darker
+        let l = (v > 0.82 ? 0.38 : v > 0.55 ? 0.1 : -0.18 - (1 - v) * 0.3) + (side > 0 ? -0.12 : 0.06);
+        if (y === yTop) l += 0.25;
+        // fluting: shallow grooves running along the root
+        l += Math.sin((gy - y) * 0.9 + d * 0.08 + i) > 0.7 ? -0.22 : 0;
+        // occlusion where it grows out of the trunk and where it meets the ground
+        l -= Math.max(0, 1 - d / 10) * 0.3 + (gy - y < 3 ? 0.3 : 0);
+        let c: C;
+        if (kind === 'kauri' || kind === 'kahikatea') {
+          flakes(x * 0.9 + i * 40, y * 1.4, kind === 'kauri' ? 8 : 6, kind === 'kauri' ? 10 : 7, seed + 11);
+          l += (CEL.id - 0.5) * 0.35 + (CEL.e < 0.08 ? -0.6 : 0.05);
+          c = pick(rp, n * 0.42 + l * n * 0.22);
+        } else if (kind === 'rimu') {
+          l += (noise2(d / 18, y / 4, seed + 19 + i) - 0.5) * 0.5;
+          c = pick(rp, n * 0.48 + l * n * 0.24);
+        } else {
+          l += (noise2(d / 10, y / 3, seed + 25 + i) - 0.5) * 0.45;
+          c = pick(rp, n * 0.5 + l * n * 0.22);
+        }
+        // a dusting of moss on the crest, leaf litter caught at the foot
+        if (moss > 0 && v > 0.7 && noise2(x / 6, y / 4, seed + 61 + i) > 1.08 - moss * 0.4) c = pick(FP.moss, 3 + l * 2.6);
+        buf.data[y * BW + x] = c;
+      }
+      // a cast shadow on the floor on the side away from the light
+      if (side > 0 && hTop > 2) for (let k = 1; k <= 2; k++) { const sx = x + k; if (sx < BW && gy + 1 < BH) { const q = (gy + 1) * BW + sx; if (buf.data[q] >>> 24) buf.data[q] = shade(buf.data[q] as C, -0.25); } }
+    }
+    // moss cushions on the crest
+    for (let t = 0.15; t < 0.9; t += 0.18) {
+      if (!rng.chance(0.6 * moss)) continue;
+      const x = xa + side * t * L, hTop = crest(t);
+      if (hTop > 3) mossBlob(buf, rng, x + rng.range(-3, 3), gy - hTop + 1, rng.range(3, 7), rng.range(1.5, 3), JP.moss, rng.int(4, 6));
     }
   }
   // moss cushions and fallen bark at the foot

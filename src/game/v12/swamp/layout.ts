@@ -100,11 +100,20 @@ export function swDepth(x: number): number {
 }
 /** the terrain: the bed under the water, the banks, the islands */
 export const swGround = (x: number) => swBase(x) + swDepth(x);
+/** how much of the plane is water through each stretch of the swamp (0.18 elsewhere) */
+const WET_ZONES: [number, number, number][] = [
+  [760, 2300, 0.75], [2300, 3900, 0.62], [POOL.x0 + 60, POOL.x1 - 60, 1], [5300, 6800, 0.72], [CHANNEL.x0 + 60, CHANNEL.x1 - 60, 1], [8300, 9460, 0.55],
+];
 /** 0..1 how much of the floor in front of the walk line is open water */
 export function swWet(x: number): number {
   const d = swDepth(x);
-  const zone = x > 760 && x < 2300 ? 0.75 : x > 2300 && x < 3900 ? 0.62 : x > POOL.x0 + 60 && x < POOL.x1 - 60 ? 1 : x > 5300 && x < 6800 ? 0.72 : x > CHANNEL.x0 + 60 && x < CHANNEL.x1 - 60 ? 1 : x > 8300 && x < 9460 ? 0.55 : 0.18;
-  return clamp(Math.max(zone, d > 1 ? 0.85 : 0), 0, 1);
+  // (each stretch eased in over ~180 px, so the water never starts on a straight line down the plane)
+  let zone = 0.18;
+  for (const [a, b, k] of WET_ZONES) zone += (k - 0.18) * smoothstep(a - 90, a + 90, x) * (1 - smoothstep(b - 90, b + 90, x));
+  // (and wherever the walk line wades: eased over its neighbourhood, not switched on at the first
+  //  ankle-deep pixel, so the bank doesn't end in a straight line down the plane either)
+  const dn = (d + swDepth(x - 40) + swDepth(x + 40) + swDepth(x - 80) + swDepth(x + 80)) / 5;
+  return clamp(Math.max(zone, 0.85 * smoothstep(0.3, 6, dn)), 0, 1);
 }
 /** canopy cover overhead (the kahikatea stands close it, the raupō beds are open sky) */
 export function swCanopy(x: number): number {

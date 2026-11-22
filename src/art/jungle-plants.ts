@@ -892,12 +892,51 @@ function paintLog(buf: PixelBuffer, rng: Rng, x0: number, x1: number, cy: number
   }
 }
 
+/**
+ * Settle a lying log into the ground (gy: the ground row, the sprite's anchor), so it never reads as a
+ * cylinder hovering over the floor: any gap under its belly filled with the shadow it casts, a dark
+ * contact line along its foot thinning out past its ends, and moss cushions, leaf litter and grass
+ * blades banked against it, breaking the straight bottom edge in clumps.
+ */
+function seatLog(buf: PixelBuffer, x0: number, x1: number, gy: number, r: number, seed: number) {
+  const xs = Math.floor(x0 - 7), xe = Math.ceil(x1 + 5);
+  for (let x = xs; x <= xe; x++) {
+    let yb = -1;
+    for (let y = gy; y >= 0; y--) if (buf.get(x, y) >>> 24) { yb = y; break; }
+    const under = yb >= 0;
+    // the shadow under the belly, down to the ground
+    if (under) for (let y = yb + 1; y <= gy; y++) buf.set(x, y, rc(JP.soil, y === gy ? 1 : 2));
+    // the contact line on the ground, broken up toward and past the ends
+    const end = Math.min(x - xs, xe - x);
+    for (let y = gy; y <= gy + 1; y++) {
+      const dens = (under ? 1 : clamp(end / 7)) * (y === gy ? 1 : 0.45);
+      if (hash2(x, y, seed + 31) < dens) buf.set(x, y, rc(JP.soil, y === gy ? 1 : 3));
+    }
+    // banked against the foot: moss cushions swelling and dipping along it (lit on top), flecked with
+    // leaf litter, and here and there a grass blade standing up out of it
+    const n = noise2(x * 0.11, 0.5, seed + 35), n2 = noise2(x * 0.37, 1.5, seed + 36);
+    const hgt = under ? (n - 0.26) * (5 + r * 0.3) + (n2 - 0.5) * 2.2 : ((n - 0.4) * 5 + (n2 - 0.5)) * clamp(end / 5);
+    const th = Math.max(0, Math.round(hgt));
+    for (let j = 0; j < th; j++) {
+      const y = gy - j, top = j === th - 1;
+      let c = rc(JP.moss, 2.2 + j * 0.75 + (top ? 1.7 : 0) + (hash2(x, y, seed + 38) > 0.7 ? 0.6 : 0));
+      if (!top && hash2(x, y, seed + 37) > 0.8) c = rc(JP.litter, 1.5 + hash2(y, x, seed + 39) * 2.5);
+      buf.set(x, y, c);
+    }
+    if (th > 0 && hash2(x, 5, seed + 40) > 0.955) {
+      const L = 3 + Math.floor(hash2(x, 6, seed + 40) * 4), lean = hash2(x, 7, seed + 40) < 0.5 ? -1 : 1;
+      for (let j = 0; j < L; j++) buf.set(x + (j > L * 0.6 ? lean : 0), gy - th - j, rc(JP.moss, 4.5 + j * 0.6));
+    }
+  }
+}
+
 function log(seed: number, size: number, rotten = false): Sprite {
   const rng = new Rng(seed * 179 + 113);
   const len = size * 2.2, r = size * 0.3;
   const buf = canvas(len + 20, r * 2 + 30);
   const x0 = 10, x1 = x0 + len, cy = buf.h - r - 3;
   paintLog(buf, rng, x0, x1, cy, r, { rotten, holes: rotten ? rng.int(1, 3) : rng.int(0, 1), moss: rotten ? 0.95 : 0.7, seed });
+  seatLog(buf, x0, x1, buf.h - 2, r, seed);
   // sprouting fern & a few fungi
   if (rng.chance(0.7)) {
     const fx = x0 + len * rng.range(0.3, 0.7);

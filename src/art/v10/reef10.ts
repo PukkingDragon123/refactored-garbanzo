@@ -137,11 +137,13 @@ export function paintDeepBg(w: number, h: number): PixelBuffer {
   return b;
 }
 /** far bommies as soft silhouettes */
-export function paintFarReef(w: number, h: number, seed: number): PixelBuffer {
-  const b = new PixelBuffer(w, h);
+export function paintFarReef(w: number, h: number, seed: number, fill = 0): PixelBuffer {
+  // (`fill` rows of the reef's body carry on under the silhouette, so a band seen from high up never
+  //  shows its bottom edge)
+  const b = new PixelBuffer(w, h + fill);
   for (let x = 0; x < w; x++) {
     const t = h - 10 - Math.max(0, noise1(x / 60, seed) - 0.35) * h * 1.3 - noise1(x / 9, seed + 1) * 4;
-    for (let y = Math.max(0, Math.floor(t)); y < h; y++) b.set(x, y, mix(hex('#2a6a86'), hex('#1c4e68'), clamp((y - t) / 40)));
+    for (let y = Math.max(0, Math.floor(t)); y < h + fill; y++) b.set(x, y, mix(hex('#2a6a86'), hex('#1c4e68'), clamp((y - t) / 40)));
   }
   return b;
 }

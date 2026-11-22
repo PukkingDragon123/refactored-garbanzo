@@ -52,10 +52,18 @@ async function boot() {
   game.r.post.fade = 1;
   game.fadeTo(1);
   game.start();
+  // V12: the night of the claw (the Bearer comes to Te Kāinga)
+  try { (await import('./game/v12/raid')).bootRaid(); } catch (e) { console.warn('[raid] boot', e); }
   // V11: the people of Zealandia (relationships, NPCs, their quests); K opens the people book
   try { await (await import('./game/v11/npcs')).bootNpcs(); } catch (e) { console.warn('[npcs] boot', e); }
   // V12: the Thunderbird quest and the harder, more hostile wilds
   try { await (await import('./game/v12/thunderbird')).bootThunderbird(); } catch (e) { console.warn('[thunderbird] boot', e); }
+  try { await (await import('./game/v12/feud')).bootFeud(); } catch (e) { console.warn('[feud] boot', e); }
+  // V12: Te Ara Matatū, the path of the watchers (the main arc after the raid)
+  try { (await import('./game/v12/arc/arc')).bootArc(); } catch (e) { console.warn('[arc] boot', e); }
+  // V12: daily agency bounties, field set pieces and the new side quests
+  try { (await import('./game/v12/bounty')).initFieldContent(); } catch (e) { console.warn('[field content] boot', e); }
+  try { (await import('./game/v12/dive/quest')).registerDiveQuest(); } catch (e) { console.warn('[dive quest] boot', e); }
   const scene = params.get('scene');
   const flow = await import('./game/scenes/flow');
   if (params.has('flags')) for (const f of params.get('flags')!.split(',')) game.save.flags[f] = true;
@@ -70,6 +78,8 @@ async function boot() {
   else if (scene === 'island4') await (await import('./game/v4/islandflow')).goIsland();
   // developer panel: a "clean reload" jump to a story point (Settings > Developer tools)
   else if (params.has('devjump')) await (await import('./debug/devpanel')).bootJump(params.get('devjump')!);
+  // ?trailer=1: the cinematic promo tour (no UI, no text) for screen recording
+  else if (params.has('trailer')) setTimeout(() => { void import('./debug/trailer').then(m => m.startTrailer()); }, 0);
   else {
     const { TitleScene } = await import('./game/scenes/title');
     await game.setNow(new TitleScene());
@@ -172,6 +182,8 @@ async function boot() {
       setCarry(a as never, kind, o);
       return kind;
     },
+    /** V12 the shot ledger (what each picture is worth; the same shot again pays nothing): (await zl.shots()).judgeShot(photo) */
+    shots: () => import('./game/v12/shotvalue'),
     /** the pause menu (floating words over the softened scene), wherever the game is */
     pause: async () => (await import('./ui/pause')).openPause(),
     /** the cinematic camera and post FX (cineTo, cinePunch, cineLook...): (await zl.cine()).cinePunch() */

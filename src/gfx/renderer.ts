@@ -139,10 +139,16 @@ export const GFX: Record<GfxLevel, GfxConf> = {
 // Everyday: only the extreme layers soften (the playfield and the layers near it stay pixel-sharp).
 const LENS_BASE = { dzNear: 0.12, dzFar: 0.6, near: 8, far: 3 };
 const LENS_CINE = { dzNear: 0.03, dzFar: 0.03, near: 18, far: 5.5 };
-/** motion blur: exposure time, and the screen speed (art px/s) below which nothing smears */
-const SHUTTER = 1 / 90;
-const MOTION_V0 = 450;
+/** camera motion blur: exposure time, the screen speed (art px/s on the gameplay plane) below which
+ *  nothing smears (a walk never does; a sprint just does, a whip pan or a fall streaks), and the longest
+ *  streak (art px). The zoom's dolly blur keeps its own, shorter shutter. */
+const SHUTTER = 1 / 30;
+const MOTION_V0 = 80;
+const MOTION_MAX = 9;
+const DOLLY_SHUTTER = 1 / 90;
 const DOLLY_V0 = 0.4;
+/** Renderer.hold: the mat a held subject's pixels carry (no water, ripple 1: never drawn by water) */
+const HELD_MAT = 0x0000ff00; // packColor(0, 1, 0, 0)
 
 export const packColor = (r: number, g: number, b: number, a = 1) =>
   (((a * 255) & 255) << 24 | ((b * 255) & 255) << 16 | ((g * 255) & 255) << 8 | ((r * 255) & 255)) >>> 0;
@@ -233,13 +239,16 @@ export class Renderer {
   gfx: GfxConf = GFX.high;
   grainOn = true;
   vignetteOn = true;
+  /** the player's motion blur option (Settings > Motion blur, off by default under reduced motion):
+   *  the camera smear and the afterimages behind fast movers (src/gfx/trails.ts). Zoom-blur punches stay. */
+  motionBlurOn = true;
   /** this frame is a parallax-layered scene (Stage.render sets it): the depth of field reads its layers */
   layered = false;
   /** nearest / farthest parallax drawn this frame (sizes the depth of field's reach) */
   private pMin = Infinity;
   private pMax = -Infinity;
   /** what the last frame's post pipeline ran (debug overlay / tests) */
-  readonly stats = { dof: false, motion: false, coc: 0, blur: 0 };
+  readonly stats = { dof: false, motion: false, coc: 0, blur: 0, echoes: 0 };
 
   private vao: WebGLVertexArrayObject;
   private vbo: WebGLBuffer;
@@ -276,6 +285,14 @@ export class Renderer {
   /** camera velocity on screen (art px/s on the gameplay plane) and zoom rate (1/s), smoothed */
   private vel = { x: 0, y: 0, z: 0, px: NaN, py: NaN, pz: NaN };
   private rdt = 0;
+  /** the held subject's world velocity this frame (Renderer.hold), world px/s; null = none */
+  private heldV: { x: number; y: number } | null = null;
+  private holding = false;
+  private waterMat = 0;
+  /** afterimages (echoBegin / echoEnd): scene flushes so far, and per-quad scratch */
+  private flushGen = 0;
+  private echoTex: (Texture | null)[] = [];
+  private echoMode: number[] = [];
 
   private scene = new QuadBatch(QUAD_CAP);
   private lights = new QuadBatch(4096);
@@ -393,7 +410,8 @@ export class Renderer {
 
   private lastSize: [number, number, number] | null = null;
   /** Pick a graphics quality preset (and the grain / vignette options); resizes if the resolution changes. */
-  setGfx(level: GfxLevel, grain = this.grainOn, vignette = this.vignetteOn) {
+  setGfx(level: GfxLevel, grain = this.grainOn, vignette = this.vignetteOn, motionBlur = this.motionBlurOn) {
+    this.motionBlurOn = motionBlur;
     const resChanged = GFX[level].res !== this.gfx.res, dofChanged = GFX[level].dofScale !== this.gfx.dofScale;
     this.gfxLevel = level;
     this.gfx = GFX[level];
@@ -478,8 +496,70 @@ export class Renderer {
   }
   /** Water material for following scene draws: strength of reflection, ripple amount, glints. */
   water(strength = 0, ripple = 1, glint = 1) {
-    this.mat = strength > 0 ? packColor(strength, Math.min(ripple / 4, 1), 0, 0) : 0;
+    this.waterMat = strength > 0 ? packColor(strength, Math.min(ripple / 4, 1), 0, 0) : 0;
+    this.mat = this.waterMat || (this.holding ? HELD_MAT : 0);
     void glint;
+  }
+
+  /**
+   * The held subject: the scene draws that follow (until hold(false)) belong to the one thing the camera
+   * tracks (Mori), moving at (vx, vy) world px/s. The camera's motion blur smears its pixels only by
+   * how it moves relative to the camera, so it stays sharp while the world streams past it, and never
+   * smears it into the background. One subject a frame (the last one held wins).
+   */
+  hold(on: boolean, vx = 0, vy = 0) {
+    this.holding = on;
+    if (on) this.heldV = { x: vx, y: vy };
+    this.mat = this.waterMat || (on ? HELD_MAT : 0);
+  }
+
+  /**
+   * Afterimages (src/gfx/trails.ts). echoBegin() marks the scene batch; draw the subject; echoEnd() lays
+   * copies of what was drawn since the mark behind it, each shifted by (dx, dy) world px on the current
+   * layer (whole art px), its coverage cov 0..1 an ordered dither of hard pixels, its colours half washed
+   * toward tint (packed rgb). Skipped if the batch flushed in between or would overflow.
+   */
+  echoBegin(): number {
+    return this.flushGen * 65536 + this.scene.count;
+  }
+  echoEnd(mark: number, dx: ArrayLike<number>, dy: ArrayLike<number>, cov: ArrayLike<number>, n: number, tint: number) {
+    const b = this.scene, s = mark % 65536, e = b.count, q = e - s;
+    if (Math.floor(mark / 65536) !== this.flushGen || q <= 0 || n <= 0 || e + q * (n + 1) > b.cap) return;
+    const tex = this.echoTex, mode = this.echoMode;
+    for (const sg of b.segs) {
+      const a = Math.max(sg.start, s), z = Math.min(sg.start + sg.n, e);
+      for (let i = a; i < z; i++) { tex[i - s] = sg.tex; mode[i - s] = sg.mode; }
+    }
+    const f = b.f32, u = b.u32, M = this.M, z = this.L.z, Q = 4 * FLOATS_PER_VERT;
+    let made = 0;
+    for (let j = 0; j < n; j++) {
+      let ox = dx[j], oy = dy[j];
+      if (M) { const x0 = ox; ox = M[0] * x0 + M[2] * oy; oy = M[1] * x0 + M[3] * oy; }
+      ox = Math.round(ox * z);
+      oy = Math.round(oy * z);
+      const lvl = Math.round(Math.min(1, cov[j]) * 255);
+      if ((!ox && !oy) || lvl < 8) continue;
+      for (let i = 0; i < q; i++) {
+        const src = (s + i) * Q;
+        // shadows, glows and faint overlays (half-transparent tints) leave no afterimage
+        if (mode[i] !== 0 || (u[src + 4] >>> 24) < 128 || (u[src + 6] >>> 24) > 127) continue;
+        const o = b.alloc(tex[i], 0);
+        for (let v = 0; v < Q; v += FLOATS_PER_VERT) {
+          const a = src + v, d = o + v;
+          f[d] = f[a] + ox; f[d + 1] = f[a + 1] + oy; f[d + 2] = f[a + 2]; f[d + 3] = f[a + 3];
+          u[d + 4] = ((tint & 0xffffff) | (u[a + 4] & 0xff000000)) >>> 0; u[d + 5] = u[a + 5]; u[d + 6] = ((u[a + 6] & 0xff00ffff) | (lvl << 16)) >>> 0;
+        }
+        made++;
+      }
+    }
+    if (!made) return;
+    this.stats.echoes += made;
+    // the subject itself again, over its afterimages; the first copy collapses to nothing
+    for (let i = 0; i < q; i++) {
+      const src = (s + i) * Q, o = b.alloc(tex[i], mode[i]);
+      u.copyWithin(o, src, src + Q);
+      for (let v = 0; v < Q; v += FLOATS_PER_VERT) { f[src + v] = 0; f[src + v + 1] = 0; }
+    }
   }
 
   /** world -> screen art px on the current layer */
@@ -726,6 +806,10 @@ export class Renderer {
     this.time += dt;
     this.rdt = rdt;
     this.layered = false;
+    this.heldV = null;
+    this.holding = false;
+    this.waterMat = 0;
+    this.stats.echoes = 0;
     this.pMin = Infinity;
     this.pMax = -Infinity;
     this.scene.reset();
@@ -751,6 +835,7 @@ export class Renderer {
 
   private flushScene() {
     this.beforeFlush?.();
+    this.flushGen = (this.flushGen + 1) % 4096;
     const gl = this.gl;
     const b = this.scene;
     this.rtScene.bind();
@@ -763,7 +848,7 @@ export class Renderer {
     gl.bindVertexArray(this.vao);
     this.uploadBatch(b);
     const p = this.pScene.use();
-    p.v2('u_view', this.VW, this.VH).i('u_tex', 0);
+    p.v2('u_view', this.VW, this.VH).i('u_tex', 0).f('u_artPx', this.W / this.VW);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     let shadow = -1;
@@ -872,7 +957,8 @@ export class Renderer {
       this.rtHdr.tex[0].bind(0);
       this.rtScene.tex[2].bind(1);
       v.i('u_src', 0).i('u_mat', 1).v2('u_viewArt', this.VW, this.VH).v2('u_cam', mv.cx, mv.cy).f('u_zoom', Math.max(1e-3, this.view.zoom));
-      v.f('u_dolly', mv.dolly).v3('u_radial', [cine.zoomX * this.VW, cine.zoomY * this.VH, mv.radial]).f('u_maxLen', 30).f('u_taps', mv.taps);
+      v.v2('u_held', mv.hx, mv.hy).f('u_pix', mv.pix ? 1 : 0).f('u_heldOn', this.heldV ? 1 : 0);
+      v.f('u_dolly', mv.dolly).v3('u_radial', [cine.zoomX * this.VW, cine.zoomY * this.VH, mv.radial]).f('u_maxLen', mv.pix ? MOTION_MAX : 30).f('u_taps', mv.pix ? Math.min(6, Math.max(2, q.motionTaps / 2)) : mv.taps);
       this.fullscreen();
       src = this.rtHdr2;
     }
@@ -982,23 +1068,35 @@ export class Renderer {
   /** motion / zoom blur for this frame, or null when nothing would smear by more than a fraction of a pixel */
   private motionParams() {
     const c = this.cine, q = this.gfx, m = this.vel;
-    let cx = 0, cy = 0, dolly = 0;
+    let cx = 0, cy = 0, dolly = 0, hx = 0, hy = 0;
     const gain = Math.max(0, c.motion);
-    if (q.motionTaps > 0 && gain > 0 && this.layered) {
-      const sp = Math.hypot(m.x, m.y), v0 = MOTION_V0 / Math.max(gain, 0.25);
-      if (sp > v0) {
-        const k = ((sp - v0) / sp) * SHUTTER * gain;
-        cx = m.x * k;
-        cy = m.y * k;
-      }
+    if (q.motionTaps > 0 && gain > 0 && this.layered && this.motionBlurOn) {
+      const v0 = MOTION_V0 / Math.max(gain, 0.25), k = SHUTTER * gain;
+      // the streak: the speed over the threshold, over the shutter (so it grows in from nothing)
+      const smear = (x: number, y: number) => {
+        const sp = Math.hypot(x, y);
+        return sp > v0 ? ((sp - v0) / sp) * k : 0;
+      };
+      const km = smear(m.x, m.y);
+      cx = m.x * km;
+      cy = m.y * km;
+      // the held subject moves on screen at its own speed less the camera's
+      const h = this.heldV;
+      if (h) {
+        const z = this.view.zoom, rx = m.x - h.x * z, ry = m.y - h.y * z, kh = smear(rx, ry);
+        hx = rx * kh;
+        hy = ry * kh;
+      } else { hx = cx; hy = cy; }
       const dg = Math.max(0, c.dolly) * gain, zr = Math.abs(m.z), z0 = DOLLY_V0 / Math.max(dg, 0.25);
-      if (dg > 0 && zr > z0) dolly = Math.sign(m.z) * (zr - z0) * SHUTTER * dg;
+      if (dg > 0 && zr > z0) dolly = Math.sign(m.z) * (zr - z0) * DOLLY_SHUTTER * dg;
     }
     const radial = c.zoomBlur > 0.002 && q.zoomTaps > 0 ? Math.min(1, c.zoomBlur) * 0.12 : 0;
-    const len = Math.hypot(cx, cy) * 1.5 + Math.abs(dolly) * this.VW * 0.75 + radial * this.VW * 0.6;
-    if (len < 0.6) return null;
+    const len = Math.max(Math.hypot(cx, cy) * 1.5, Math.hypot(hx, hy)) + Math.abs(dolly) * this.VW * 0.75 + radial * this.VW * 0.6;
+    // the pixel smear for camera moves (a streak under an art pixel shows nothing); a gather for punches
+    const pix = radial === 0;
+    if (len < (pix ? 1 : 0.6)) return null;
     const most = Math.max(q.motionTaps, radial > 0 ? q.zoomTaps : 0, 4);
-    return { cx, cy, dolly, radial, len, taps: Math.max(4, Math.min(most, Math.ceil(len / 1.5))) };
+    return { cx, cy, hx, hy, dolly, radial, len, pix, taps: Math.max(4, Math.min(most, Math.ceil(len / 1.5))) };
   }
 
   /** the lens for this frame, or null when nothing is out of focus */

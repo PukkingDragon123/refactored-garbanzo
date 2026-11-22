@@ -752,8 +752,9 @@ export function toolHoldArt(kind: ToolKind): { art: Art; tx: number; ty: number 
 
 // ---------------------------------------------------------------- tabs and the ribbon
 
-export type TabIcon = 'quests' | 'guide' | 'people' | 'map' | 'sketch';
+export type TabIcon = 'quests' | 'guide' | 'people' | 'map' | 'sketch' | 'feats';
 const ICONS: Record<TabIcon, string[]> = {
+  feats: ['.#...#.', '..#.#..', '...#...', '..###..', '.#.#.#.', '.##.##.', '..###..'],
   quests: ['#######', '#.....#', '#....##', '#.#.#.#', '#..#..#', '#.....#', '#######'],
   guide: ['...##..', '..####.', '.##.##.', '.#.#.#.', '##.#.#.', '#..#...', '...#...'],
   people: ['.##.##.', '#######', '#######', '.#####.', '..###..', '...#...', '.......'],

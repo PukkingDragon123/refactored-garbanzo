@@ -6,7 +6,7 @@ import { PixelBuffer } from '../pixel';
 import { hex, mix, shade, withAlpha, C } from '../color';
 import * as L from '../landscape';
 import * as O from '../ocean';
-import { Rng, bayer, clamp, fbm1, fbm2, hash2, noise1, noise2, smoothstep } from '../../core/math';
+import { Rng, bayer, clamp, fbm1, fbm2, hash2, lerp, noise1, noise2, smoothstep } from '../../core/math';
 import type { Sprite } from '../jungle-core';
 
 // ------------------------------------------------------------------ sky
@@ -102,40 +102,206 @@ export function paintSeaBand(name: SeaBand, seed = 5): PixelBuffer {
 
 // ------------------------------------------------------------------ offshore features
 
-/** a tall rock stack with a green cap and guano streaks */
+/** rows of foam skirt painted under a sea stack's waterline (the stack's anchor is h - 1 - STACK_SKIRT) */
+export const STACK_SKIRT = 3;
+
+/**
+ * A sea stack, hand-shaped: a leaning pillar of bedded basalt whose hard beds jut out as ledges and
+ * soft beds weather back into notches, a wave-cut undercut at the foot, a ragged crown with flax and
+ * grass tufts spilling over the edge, a few joints cracking down through the beds, guano streaks under
+ * the bird ledges, the wet dark zone and its weed line at the waterline, and a foam skirt around the
+ * foot. Lit from the upper left. `w` is the pillar's width, the buffer is wider for the foam.
+ */
 export function paintSeaStack(seed: number, w: number, h: number): PixelBuffer {
-  const b = new PixelBuffer(w, h);
+  const pad = Math.ceil(w * 0.22) + 4;
+  const W = w + pad * 2, H = h + STACK_SKIRT;
+  const b = new PixelBuffer(W, H);
   const rng = new Rng(seed);
-  const cx = w / 2;
-  for (let y = 0; y < h; y++) {
+  const wl = h - 1; // waterline row
+  // the beds: [top row, offset (+ juts out, - weathers back), tone shift]
+  const beds: { y: number; off: number; t: number }[] = [];
+  for (let y = Math.round(h * 0.1); y < wl; y += rng.int(5, 12)) beds.push({ y, off: rng.chance(0.45) ? rng.range(1, 3.5) : -rng.range(0.5, 2.5), t: rng.range(-0.12, 0.12) });
+  const bedAt = (y: number) => { let k = -1; for (let i = 0; i < beds.length; i++) if (beds[i].y <= y) k = i; return k; };
+  const lean = rng.range(-0.12, 0.12) * w;
+  const cxAt = (y: number) => W / 2 + lean * (1 - y / h) + (noise1(y / 26, seed + 3) - 0.5) * w * 0.14;
+  const half = (y: number) => {
     const t = y / h;
-    const half = (w * 0.26 + t * w * 0.2) * (0.85 + (noise1(y / 9, seed) - 0.5) * 0.35);
-    const off = (noise1(y / 30, seed + 3) - 0.5) * w * 0.12;
-    for (let x = 0; x < w; x++) {
-      const dx = x - cx - off;
-      if (Math.abs(dx) > half) continue;
-      const u = dx / half;
-      const n = fbm2(x / 6, y / 4, 3, seed + 9);
-      let c = u < -0.35 ? hex('#7a7068') : u > 0.45 ? hex('#3e3834') : n > 0.55 ? hex('#625850') : hex('#544a44');
-      if (Math.sin(y * 0.5 + n * 4) > 0.85) c = shade(c, -0.1);
-      if (y < h * 0.14 + (noise1(x / 5, seed + 1) - 0.5) * 6) c = mix(hex('#4a6a34'), hex('#6a8a44'), bayer(x, y));
-      if (hash2(x, y, seed) < 0.03 && y > h * 0.12 && y < h * 0.7) c = hex('#e8e4d8');
-      b.data[y * w + x] = c;
+    const k = bedAt(y);
+    let hw = w * (0.3 + 0.17 * t);
+    hw *= 1 - 0.14 * Math.exp(-(((t - 0.62) / 0.12) ** 2)); // a weathered waist
+    if (t > 0.84) hw *= 1 - 0.12 * smoothstep(0.84, 0.95, t) + 0.1 * smoothstep(0.95, 1, t); // the wave-cut undercut
+    if (k >= 0) {
+      const bd = beds[k];
+      // a bed's lip juts a little more at its top, then eases back
+      hw += bd.off * (1 - smoothstep(0, 4, y - bd.y) * 0.4);
+    }
+    return hw;
+  };
+  // left / right edge per row, with a little per-side raggedness that runs in clusters
+  const L = new Float32Array(H), R = new Float32Array(H);
+  for (let y = 0; y < h; y++) {
+    const c = cxAt(y), hw = half(y);
+    L[y] = Math.round(c - hw - (noise1(y / 3.2, seed + 5) - 0.5) * 2.2);
+    R[y] = Math.round(c + hw + (noise1(y / 3.6, seed + 6) - 0.5) * 2.2);
+  }
+  // the crown: a ragged top edge across the pillar with a couple of spires
+  const crownTop = (x: number) => {
+    const u = (x - L[0]) / Math.max(1, R[0] - L[0]);
+    return Math.round(h * 0.03 + (1 - Math.sin(clamp(u) * Math.PI)) * h * 0.05 + (noise1(x / 3, seed + 7) - 0.5) * 4 + (noise1(x / 9, seed + 8) > 0.72 ? -3 : 0));
+  };
+  const RAMP = [hex('#2c2724'), hex('#3c3530'), hex('#4e4540'), hex('#62574e'), hex('#786b5e'), hex('#93857a')];
+  // joints: wavy cracks running down through a few beds
+  const crack = new Uint8Array(W * H);
+  for (let k = 0; k < 3 + Math.floor(h / 40); k++) {
+    let y = rng.int(Math.round(h * 0.12), Math.round(h * 0.7));
+    let x = cxAt(y) + rng.range(-0.6, 0.6) * half(y);
+    const len = rng.int(Math.round(h * 0.12), Math.round(h * 0.3));
+    for (let j = 0; j < len && y < wl - 2; j++, y++) {
+      x += (noise1(j / 3 + k * 7, seed + 9) - 0.5) * 1.4;
+      const xi = Math.round(x);
+      if (xi > L[y] + 1 && xi < R[y] - 1) crack[y * W + xi] = 1;
     }
   }
-  void rng;
+  for (let y = 0; y < h; y++) {
+    const k = bedAt(y);
+    const bd = k >= 0 ? beds[k] : null;
+    for (let x = L[y]; x <= R[y]; x++) {
+      if (x < 0 || x >= W) continue;
+      const top = crownTop(x);
+      if (y < top) continue;
+      const u = (x - L[y]) / Math.max(1, R[y] - L[y]);
+      // form: lit left face, shadowed right face, the crown and the ledge tops catch the sky
+      let v = 3.2 - u * 2.6 + (bd ? bd.t * 3 : 0);
+      if (u < 0.12) v += 0.6;
+      if (u > 0.86) v -= 0.8;
+      if (bd && y - bd.y < 1 && bd.off > 0 && u < 0.75 && noise1(x / 4 + k * 5, seed + 19) > 0.42) v += 1.1; // the lit lip of a jutting bed, broken
+      if (bd && y - bd.y >= 1 && y - bd.y < 3 && k > 0 && beds[k - 1].off > bd.off + 0.8) v -= 1.2; // shade under the ledge above
+      if (y - top < 2) v += 0.8;
+      // rough grain: clustered pits and knobs on a coarse grid (not per-pixel speckle)
+      const g = noise2(x / 2.6, y / 1.8, seed + 10);
+      if (g > 0.78) v -= 0.9; else if (g < 0.2 && u < 0.6) v += 0.6;
+      let c = RAMP[clamp(Math.round(v), 0, 5)];
+      if (crack[y * W + x]) c = RAMP[0];
+      else if (x > 0 && crack[y * W + x - 1]) c = RAMP[Math.min(5, clamp(Math.round(v), 0, 5) + 1)];
+      // lichen on the lit upper face, in patches
+      if (u < 0.55 && y < h * 0.55 && noise2(x / 4, y / 3, seed + 11) > 0.74) c = mix(c, hex('#b4ac7a'), 0.45);
+      // the wet zone: darker, a weed and barnacle band right at the waterline, a sheen on the lit side
+      const wet = wl - y;
+      const wz = 7 + (noise1(x / 5, seed + 12) - 0.5) * 4;
+      if (wet < wz) {
+        c = mix(c, hex('#1e2224'), 0.42);
+        if (wet < 3 + (noise1(x / 3, seed + 13) > 0.5 ? 1 : 0)) c = noise2(x / 2, y / 2, seed + 14) > 0.5 ? hex('#2e3a26') : hex('#3c4a2c');
+        else if (u < 0.35 && noise2(x / 3, y / 2, seed + 15) > 0.7) c = hex('#7c8c90');
+      }
+      b.data[y * W + x] = c;
+    }
+  }
+  // guano: whitish stains washed down the face under the bird ledges, thinning and greying downward
+  for (let k = 0; k < beds.length; k++) {
+    const bd = beds[k];
+    if (bd.off <= 0.8 || bd.y > h * 0.7 || !rng.chance(0.6)) continue;
+    const sw = rng.int(2, 4), x0 = Math.round(lerp(L[bd.y], R[bd.y], rng.range(0.1, 0.6)));
+    const len = rng.int(5, 14);
+    for (let q = 0; q < len; q++) {
+      const y = bd.y + 1 + q;
+      if (y >= h) break;
+      const f = 1 - q / len;
+      for (let i = 0; i < sw; i++) {
+        const x = x0 + i;
+        if (x < 0 || x >= W || !(b.data[y * W + x] >>> 24)) continue;
+        // runs of stain down from the lip, each column its own length
+        if (hash2(x, bd.y, seed + 20) * len < q) continue;
+        if (crack[y * W + x]) continue;
+        b.data[y * W + x] = mix(b.data[y * W + x], hex('#d8d2c0'), 0.12 + 0.4 * f * f);
+      }
+    }
+  }
+  // the crown's plants: flax and grass tufts, blades lit at the tips, a few spilling over the lip
+  const leaf = [hex('#2e4a26'), hex('#3e6030'), hex('#557a3a'), hex('#7a9a4a')];
+  for (let x = L[0] - 1; x <= R[0] + 1; x++) {
+    if (x < 0 || x >= W || hash2(x, 1, seed + 16) > 0.62) continue;
+    const top = crownTop(x);
+    const len = rng.int(2, 7), lean2 = rng.range(-0.6, 0.6);
+    for (let q = 0; q < len; q++) {
+      const yy = top - q, xx = Math.round(x + lean2 * q * q * 0.25);
+      if (yy < 0 || xx < 0 || xx >= W) continue;
+      b.data[yy * W + xx] = q === len - 1 ? leaf[3] : leaf[q < 2 ? 1 : 2];
+    }
+    if (b.data[(top + 1) * W + x] >>> 24) b.data[(top + 1) * W + x] = leaf[0];
+  }
+  for (let k = 0; k < 4; k++) {
+    // strands hanging over the lit lip
+    const side = k % 2 ? R : L;
+    const y0 = crownTop(Math.round(side[2])) + 1;
+    let x = side[y0] + (k % 2 ? 1 : -1) * 0;
+    const len = rng.int(3, Math.max(4, Math.round(h * 0.12)));
+    for (let q = 0; q < len; q++) {
+      const yy = y0 + q;
+      if (yy >= h) break;
+      x = (k % 2 ? R : L)[yy] + (k % 2 ? 0 : 0);
+      if (x >= 0 && x < W) b.data[yy * W + x] = leaf[q % 3 === 2 ? 2 : 1];
+    }
+  }
+  // the foam skirt round the foot: clots of white water hugging the rock, lace trailing off the sides
+  const foam = [hex('#d4eeea'), hex('#f0fcf8'), hex('#ffffff')];
+  for (let y = wl - 2; y < H; y++) {
+    const yy = y - wl;
+    const reach = 1 + Math.max(0, yy) * 1.5 + (noise1(y + seed, 19) > 0.5 ? 2 : 0);
+    for (let x = Math.max(0, L[wl] - reach - 3); x <= Math.min(W - 1, R[wl] + reach + 3); x++) {
+      const out = x < L[wl] ? L[wl] - x : x > R[wl] ? x - R[wl] : 0;
+      if (yy < 0 && out === 0) {
+        if (noise2(x / 2.5, y, seed + 17) > 0.6) b.data[y * W + x] = foam[1];
+        continue;
+      }
+      const lacy = noise2(x / 3, y / 1.5, seed + 18);
+      if (out > reach || lacy < 0.4 + out * 0.08) continue;
+      b.data[y * W + x] = lacy > 0.72 ? foam[2] : lacy > 0.5 ? foam[1] : withAlpha(foam[0], 200);
+    }
+  }
   return b;
 }
 
-/** low reef rocks awash in the mid band */
+/** low reef rocks awash: a few knuckles of wet black rock, weed at the waterline and foam lacing between */
 export function paintReef(w: number, h: number, seed: number): PixelBuffer {
-  const b = new PixelBuffer(w, h);
-  for (let x = 0; x < w; x++) {
-    const top = h - 2 - Math.max(0, fbm1(x / 26, 3, seed) - 0.35) * h * 1.6;
-    for (let y = Math.max(0, Math.round(top)); y < h; y++) {
-      const d = y - top;
-      b.data[y * w + x] = d < 1.5 ? hex('#8a8070') : d < 4 ? hex('#4e4640') : hex('#3a3430');
+  const H = h + 2;
+  const b = new PixelBuffer(w, H);
+  const rng = new Rng(seed);
+  const n = 2 + Math.floor(w / 28);
+  const knobs: [number, number, number][] = [];
+  for (let k = 0; k < n; k++) knobs.push([w * (k + 0.5 + rng.range(-0.3, 0.3)) / n, rng.range(2, h - 2), rng.range(5, 12)]);
+  const topAt = (x: number) => {
+    let t = h + 1;
+    for (const [kx, kh, kw] of knobs) {
+      const d = Math.abs(x - kx) / kw;
+      if (d >= 1) continue;
+      const v = h - kh * Math.pow(1 - d * d, 0.6) * (1 + (noise1(x / 3, seed) - 0.5) * 0.35);
+      t = Math.min(t, v);
     }
+    return Math.round(t);
+  };
+  const ROCK = [hex('#24201e'), hex('#342e2a'), hex('#4a423c'), hex('#62584e'), hex('#8a8476')];
+  for (let x = 0; x < w; x++) {
+    const top = topAt(x);
+    const sl = topAt(x + 2) - topAt(x - 2);
+    for (let y = Math.max(0, top); y < h; y++) {
+      const d = y - top;
+      let v = d < 1 ? (sl > 0 ? 4 : 3) : d < 2 ? 2 : 1;
+      if (sl < -1 && d < 3) v = Math.max(v, 3);
+      if (noise2(x / 2.4, y / 2, seed + 1) > 0.74) v = Math.max(0, v - 1);
+      let c = ROCK[v];
+      if (h - y < 2) c = noise2(x / 2, y, seed + 2) > 0.5 ? hex('#2e3a26') : hex('#3a4a2c');
+      b.data[y * w + x] = c;
+    }
+  }
+  // foam lacing round and between the knuckles at the waterline
+  for (let y = h - 3; y < H; y++) for (let x = 0; x < w; x++) {
+    const top = topAt(x);
+    if (y < top && y < h - 1) continue;
+    const lacy = noise2(x / 3, y / 1.4, seed + 3);
+    const edge = Math.min(x, w - 1 - x);
+    if (lacy < 0.5 + (edge < 5 ? (5 - edge) * 0.08 : 0)) continue;
+    if (b.data[y * w + x] >>> 24 && y < h - 1) continue;
+    b.data[y * w + x] = lacy > 0.74 ? hex('#ffffff') : lacy > 0.6 ? hex('#eef9f6') : withAlpha(hex('#cfe9e6'), 210);
   }
   return b;
 }

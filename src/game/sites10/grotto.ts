@@ -7,7 +7,8 @@
 import type { FieldScene } from '../scenes/field';
 import type { Site10, Swim10 } from './kit';
 import { swimWater, SWIM_DEPTH, dim, climbSpot, ledge, glowField, arrive10, boulder, pillar, propAt, bump, sprite, Rng, hex, mix, PAL, bayer, fbm2, game, layerSpan, bigFrame, clamp } from './kit';
-import { groundStrip, mainLayer, shafts, hideBush } from '../sites2/common';
+import { mainLayer, shafts, hideBush } from '../sites2/common';
+import { caveFloorStrip } from '../v12/cave/floors';
 import { Custom, Prop } from '../../world/props';
 import { packColor } from '../../gfx/renderer';
 import { PixelBuffer } from '../../art/pixel';
@@ -99,7 +100,10 @@ export const GROTTO: Site10 = {
       }
     }));
     const main = mainLayer(f);
-    groundStrip(f, W, G0, [ROCKW[6], ROCKW[5], ROCK[4], ROCK[3]], ROCK[1], 31, 130);
+    // the cave floor (V12: textured rock, src/art/v12/cave/floor.ts; the walk line is unchanged): rimstone
+    // under the glowworm vault, wet rock round the lake and the tidal passage, flowstone and scree
+    // through the middle, dry rubble in the twilight hall
+    caveFloorStrip(f, W, grottoGround, { seed: 31, h: 130, mat: x => (x < 120 ? 'rubble' : x < 660 ? 'rim' : x < 1060 ? 'wet' : x < 1440 ? 'flow' : x < 1820 ? 'rubble' : x < 2150 ? 'wet' : 'shingle') });
     // the water: the cold lake and the tidal passage
     swimWater(f, LAKE);
     swimWater(f, TIDE);

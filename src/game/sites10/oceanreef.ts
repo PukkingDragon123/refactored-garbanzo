@@ -56,8 +56,9 @@ function framesFor(id: string, len: number) {
   return fr;
 }
 
-/** one reef fish: cruises its patch of reef, turns at the ends, darts off if you rush it */
-class ReefFish implements Drawable {
+/** one reef fish: cruises its patch of reef, turns at the ends, darts off if you rush it (the kelp dive
+ *  swims the same fish: give it that scene's floor) */
+export class ReefFish implements Drawable {
   z = 30; p = 1; py = 1;
   x: number; y: number; vx = 0; vy = 0; facing: 1 | -1 = 1;
   dead = false; gone = false; hidden = 0; noticed = false; juvenile = false;
@@ -67,7 +68,12 @@ class ReefFish implements Drawable {
   body: { bounds: (a: ReefFish) => Box; points: (a: ReefFish) => V2[]; head: (a: ReefFish) => V2 };
   private t = rand.next() * 10;
   private fear = 0;
-  constructor(readonly species: string, readonly len: number, readonly home: [number, number], readonly band: [number, number], readonly cruise: number, readonly s: ReefDiveScene, readonly mode: 'swim' | 'bottom' | 'hover' = 'swim') {
+  /** what it is doing when calm, from its field-guide behaviours: rooting / walking on the bottom, luring while it hovers, else swimming */
+  private calm: string | null;
+  constructor(readonly species: string, readonly len: number, readonly home: [number, number], readonly band: [number, number], readonly cruise: number,
+    readonly s: { player: { x: number; y: number; vx: number; vy: number } }, readonly mode: 'swim' | 'bottom' | 'hover' = 'swim', readonly floor: (x: number) => number = R.groundReef) {
+    const B = (SPECIES_BY_ID[species]?.behaviors ?? {}) as Record<string, string>;
+    this.calm = mode === 'bottom' && B.rooting ? 'rooting' : mode === 'bottom' && B.walking ? 'walking' : mode === 'hover' && B.luring ? 'luring' : B.swimming ? 'swimming' : null;
     this.x = rand.range(home[0], home[1]);
     this.y = rand.range(band[0], band[1]);
     this.facing = rand.chance(0.5) ? 1 : -1;
@@ -94,13 +100,13 @@ class ReefFish implements Drawable {
     if (this.fear <= 0 && ((this.x < this.home[0] && this.facing < 0) || (this.x > this.home[1] && this.facing > 0))) this.facing = this.facing > 0 ? -1 : 1;
     this.vx += (want - this.vx) * Math.min(1, dt * (this.fear > 0 ? 5 : 1.4));
     if (Math.abs(this.vx) > 2) this.facing = this.vx > 0 ? 1 : -1;
-    const ty = this.mode === 'bottom' ? R.groundReef(this.x) - this.len * 0.18 - 2 : clamp(this.y + Math.sin(this.t * 0.5) * 6, this.band[0], this.band[1]);
+    const ty = this.mode === 'bottom' ? this.floor(this.x) - this.len * 0.18 - 2 : clamp(this.y + Math.sin(this.t * 0.5) * 6, this.band[0], this.band[1]);
     this.vy += ((ty - this.y) * 0.8 - this.vy) * Math.min(1, dt * 2);
     if (this.fear > 0) this.vy += Math.sign(dy || -1) * 10 * dt;
     this.x += this.vx * dt;
-    this.y = Math.min(this.y + this.vy * dt, R.groundReef(this.x) - this.len * 0.18 - 1);
+    this.y = Math.min(this.y + this.vy * dt, this.floor(this.x) - this.len * 0.18 - 1);
     this.speed = Math.hypot(this.vx, this.vy);
-    this.behavior = this.fear > 0 ? null : this.mode === 'bottom' ? null : null;
+    this.behavior = this.fear > 0 ? null : this.calm;
   }
   draw(r: Renderer) {
     const f = this.fr();
@@ -146,7 +152,7 @@ export class ReefDiveScene extends FieldScene {
     for (const [p, seed, y] of [[0.3, 3, 250], [0.55, 7, 280]] as const) {
       const l = st.addLayer('farreef' + seed, p, 0.35, 0.3, 0);
       const sp = layerSpan(st, p, 100);
-      const fr = bigFrame(r, R.paintFarReef(Math.min(1400, sp.w), 120, seed));
+      const fr = bigFrame(r, R.paintFarReef(Math.min(1400, sp.w), 120, seed, 220));
       for (let x = 0; x < sp.w; x += fr.w) l.add(new Prop({ ...fr, ax: 0, ay: 0 }, sp.x0 + x, y - 60));
     }
     const main = st.addLayer('main', 1, 0, 1, 0);

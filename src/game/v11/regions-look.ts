@@ -226,6 +226,11 @@ export const LOOKS: Record<string, Look> = {
     air: [{ kind: 'smoke', rate: 0.6 }, { kind: 'motes', rate: 0.3, times: LIGHT }],
     critters: [{ kind: 'swallows', n: 3, times: DAY }],
   },
+  backcountry: {
+    note: 'Te Tuawhenua, the backcountry: big open sky and a dry wind (the gusts, ash, seed fluff and steam are in the scene); a hawk turning over the river flats, swallows, skinks on the warm stones, a far-off screech.',
+    critters: [{ kind: 'hawk', n: 1, times: LIGHT }, { kind: 'swallows', n: 2, times: DAY }, { kind: 'skinks', n: 2, times: ['day'] }],
+    sounds: [{ sfx: 'callScreech', every: [26, 50], vol: 0.04, pitch: [0.85, 1], times: LIGHT }, { sfx: 'callHoot', every: [18, 36], vol: 0.05, times: DARK }],
+  },
   hills: {
     note: 'The Rocky Hills: big sky and wind (gusts, streaks, seed fluff, mist over the ridge are in the scene); on top, a hawk circling and its cry.',
     critters: [{ kind: 'hawk', n: 1, times: LIGHT }, { kind: 'skinks', n: 3, times: ['day'] }],

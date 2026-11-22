@@ -13,7 +13,7 @@ import type { Renderer, Frame } from '../../gfx/renderer';
 import { packColor, WHITE } from '../../gfx/renderer';
 import { bigFrame } from '../../gfx/atlas';
 import { game } from '../game';
-import { A } from '../assets';
+import { A, local } from '../assets';
 import type { Layer, Stage, Drawable } from '../../world/stage';
 import { plantFor, swayAmp, windBend } from '../../world/foliage';
 import type { Plant } from '../../world/foliage';
@@ -27,6 +27,7 @@ import * as W from '../../art/v9/beach-wrack';
 import * as F from '../../art/v9/beach-flora';
 import type { Bed } from '../../art/v9/kit';
 import { sandCol } from '../../art/v9/sand';
+import { contactFor } from '../../art/island4/contact';
 import { Rng } from '../../core/math';
 import { SPOT, WRECK, groundY } from '../../art/island4/layout';
 import type { IslandScene4 } from '../v4/island';
@@ -43,6 +44,16 @@ function prune(l: Layer) {
   const x1 = WEST_END * l.p;
   l.items = l.items.filter(d => !(d instanceof Prop) || d.x >= x1);
   l.markDirty();
+}
+
+/** pixel contact shadows for the strip props, keyed by frame (filled as the sprites are made) */
+const CONTACT = new Map<Frame, { f: Frame; dx: number; dy: number }>();
+function contactOf(c: { f: Frame; s: Sprite } | null) {
+  if (c && !CONTACT.has(c.f)) {
+    const ct = contactFor(c.s.buf, c.s.ax, c.s.ay, c.s.buf.w);
+    if (ct) CONTACT.set(c.f, { f: local.add('v9wc:' + CONTACT.size + ':' + c.s.buf.w, ct.buf, 0, 0), dx: ct.dx, dy: ct.dy });
+  }
+  return c?.f ?? null;
 }
 
 interface Item { f: Frame; x: number; y: number; s: number; flip: boolean; sway: number; ph: number; tint: number; sh: number; pl?: Plant | null; amp?: number }
@@ -63,9 +74,16 @@ class Strip implements Drawable {
   draw(r: Renderer, st: Stage) {
     const x0 = r.visibleX0(this.pad + 8), x1 = r.visibleX1(this.pad + 8);
     if (this.shadows) {
+      // a hand-pixel contact shadow hugging each prop's own footprint (mirrored with the prop); a plain
+      // draw rather than the shadow pass, so it also cuts the wet sand's mirror under the prop
+      for (const it of this.items) {
+        if (it.x < x0 || it.x > x1) continue;
+        const ct = CONTACT.get(it.f);
+        if (ct) r.draw(ct.f, it.x + (it.flip ? -(ct.dx + ct.f.w) : ct.dx) * it.s, it.y + ct.dy * it.s, it.s, it.s);
+      }
       r.beginShadows();
       for (const it of this.items) {
-        if (!it.sh || it.x < x0 || it.x > x1) continue;
+        if (!it.sh || it.x < x0 || it.x > x1 || CONTACT.has(it.f)) continue;
         r.draw(A.shadow, it.x, it.y + 0.5, it.sh * it.s / 32, 0.55 * it.s, 0, packColor(0, 0, 0, 0.32));
       }
       r.endShadows();
@@ -94,7 +112,7 @@ export function dressWest(s: IslandScene4, L: WestLayers) {
   L.back.add(new Prop(bigFrame(r, hd.buf, 0, hd.buf.h), -170, layerY(pb, 216) + 5, 0));
 
   const rng = new Rng(9091);
-  const sp = (key: string, gen: () => Sprite) => sprite('v9w:' + key, gen)?.f ?? null;
+  const sp = (key: string, gen: () => Sprite) => contactOf(sprite('v9w:' + key, gen));
   const walk = new Strip(-3.2), band = new Strip(56), front = new Strip(2, false);
   L.main.add(walk); L.main.add(band); L.front.add(front);
   const amb = L.main.add(new BeachAmbience(s));

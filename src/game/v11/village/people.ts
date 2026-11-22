@@ -225,7 +225,7 @@ function addTalk(c: VCtx, id: string, a: Actor) {
   (f.interact as Interactable[]).push({
     get x() { return a.x; }, get y() { return a.y; }, w: 14, h: 22, label: `Talk to ${villagerName(id)}`, get standX() { return a.x - 22 * a.facing; },
     enabled: () => a.visible,
-    quest: () => questMark(id) || sideMark(id),
+    quest: () => questMark(id) || sideMark(id) || SIDE_HOOKS.mark.some(h => h(id)),
     action: async () => {
       if (f.cutscene || c.hold) return;
       f.cutscene = true;
@@ -237,7 +237,7 @@ function addTalk(c: VCtx, id: string, a: Actor) {
       try {
         firstMeet(id);
         const SQ = await import('./sidequests');
-        if (!(await SQ.sideTalk(c, id, a))) await (TALK[id] ?? talkGeneric)(c, a);
+        if (!(await SQ.sideTalk(c, id, a)) && !(await sideHooks(c, id, a))) await (TALK[id] ?? talkGeneric)(c, a);
       } catch (e) { console.error(e); }
       finally {
         f.cutscene = false;
@@ -256,6 +256,9 @@ function addTalk(c: VCtx, id: string, a: Actor) {
 let sideMarkFn: ((id: string) => boolean) | null = null;
 export function setSideMark(fn: (id: string) => boolean) { sideMarkFn = fn; }
 const sideMark = (id: string) => !!sideMarkFn?.(id);
+/** V12 more side quests (src/game/v12/sidequests2.ts): extra talk handlers (true: handled) and "!" marks */
+export const SIDE_HOOKS: { talk: ((c: VCtx, id: string, a: Actor) => Promise<boolean>)[]; mark: ((id: string) => boolean)[] } = { talk: [], mark: [] };
+async function sideHooks(c: VCtx, id: string, a: Actor): Promise<boolean> { for (const h of SIDE_HOOKS.talk) if (await h(c, id, a)) return true; return false; }
 
 /** the quest marker floats over whoever the tracked village quest needs next */
 function questMark(id: string): boolean {

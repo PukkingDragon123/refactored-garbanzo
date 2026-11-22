@@ -1,9 +1,21 @@
-// Sail Possum: huge-eyed arboreal possum with a furred skin sail (patagium) from wrists to ankles,
-// a dark dorsal stripe and a bushy tail. Nectar feeder. Glides in a 3/4 top view (sail spread),
-// climbs trunks (vertical, facing up, trunk on its right) and laps nectar with a long tongue.
+// Sail Possum (Velopetaurus nectarius): a big-eyed glider with a furred sail of skin from wrist to ankle,
+// drifting from blossom to blossom at dusk.
+//
+// Painted on the Relief layer (beasts-relief.ts): on the ground the body is one contour hung on a
+// flexible spine (low forager, bound, upright feeder, vertical climber), silver-grey with a dark stripe
+// from the nose down the spine and a cream belly; the folded patagium hangs as a soft furred fold along
+// the flank between the wrist and the ankle, its pale margin showing; the head is short and round with
+// enormous dark night eyes ringed in black, tall thin rounded ears pink inside, a pointed pink nose and
+// long whiskers; little hands with pink pads; a long bushy tail darkening to a black tip.
+// Gliding, seen from above, the sail is spread taut as one scalloped sheet between the outstretched
+// wrists and ankles: furred above with the fur radiating from the flanks, a dark band inside its pale
+// margin, the limbs showing as ridges through it, the hands and feet spread at its corners, the head up
+// with both eyes showing, the tail streaming behind as a rudder.
 
-import { Sk, V2, V3, rmp, drawEye, EyeSpec, BeastEye, SpeciesDef, gait, TAU, chain, fr, cbez, along, proj, poly3 } from './beasts-core';
-import { leg, LegSpec, scaleLeg, paw, ear, whiskers, Frame2 } from './beasts-rig';
+import { Sk, V2, rmp, drawEye, EyeSpec, BeastEye, SpeciesDef, gait, TAU, cbez, ik2, hh, fr } from './beasts-core';
+import { Frame2, whiskers } from './beasts-rig';
+import { Relief, Sp, Tx, LM, spline, fringe, along, strands, FS } from './beasts-relief';
+import { Curve, ribbon, localOf, claw } from './beasts-mam-kit';
 import { hex } from './color';
 
 interface P {
@@ -122,75 +134,139 @@ function pose(anim: string, f: number, n: number): P {
   return p;
 }
 
-const EYE: EyeSpec = { r: 2.2, iris: hex('#1a1216'), lash: hex('#2a2430'), dark: true };
+const EYE: EyeSpec = { r: 2.2, iris: hex('#1a1216'), lash: hex('#2a2430'), dark: true, shine: hex('#ffffff') };
 
 function mats(sk: Sk) {
   return {
-    fur: sk.m(rmp('#8f8a9c', { n: 6, dark: 0.62 })),
-    stripe: sk.m(rmp('#3b3444', { n: 5, dark: 0.5 })),
-    belly: sk.m(rmp('#efe5d6', { n: 5, dark: 0.42, at: 3 })),
-    sail: sk.m(rmp('#77718a', { n: 6, dark: 0.6, light: 0.35 }), { edge: 1 }),
-    sailD: sk.m(rmp('#4a4456', { n: 5, dark: 0.55 }), { edge: 1, bias: -0.18 }),
-    edge: sk.m(rmp('#ece2cf', { n: 4, dark: 0.35, at: 2 })),
-    nose: sk.m(rmp('#e79aa2', { n: 4, dark: 0.45 })),
-    inner: sk.m(rmp('#d8a2a6', { n: 4, dark: 0.45 })),
-    tip: sk.m(rmp('#2c2733', { n: 4, dark: 0.45 })),
-    pad: sk.m(rmp('#d9a8a4', { n: 4, dark: 0.45 })),
-    tongue: sk.m(rmp('#ee8aa0', { n: 4, dark: 0.45 })),
+    fur: sk.m(rmp('#9c96a8', { n: 7, dark: 0.62, light: 0.4, cool: 0.3, warm: 0.3 }), { edge: 1 }),
+    furD: sk.m(rmp('#6e687c', { n: 6, dark: 0.58, light: 0.36 }), { edge: 1 }),
+    stripe: sk.m(rmp('#2e2836', { n: 6, dark: 0.5, light: 0.38 }), { edge: 1 }),
+    belly: sk.m(rmp('#efe6d8', { n: 6, dark: 0.42, light: 0.35, at: 3 }), { edge: 1 }),
+    sail: sk.m(rmp('#867f96', { n: 7, dark: 0.6, light: 0.38 }), { edge: 1 }),
+    sailD: sk.m(rmp('#4c4658', { n: 6, dark: 0.55, light: 0.32 }), { edge: 1 }),
+    edge: sk.m(rmp('#ede4d4', { n: 5, dark: 0.38, light: 0.3, at: 3 }), { edge: 1 }),
+    nose: sk.m(rmp('#ec98a2', { n: 5, dark: 0.45, light: 0.4 }), { edge: 0, spec: 1 }),
+    inner: sk.m(rmp('#e0a4a8', { n: 5, dark: 0.45, light: 0.38 }), { edge: 0 }),
+    ear: sk.m(rmp('#8a8496', { n: 6, dark: 0.55, light: 0.4 }), { edge: 1 }),
+    tip: sk.m(rmp('#24202a', { n: 5, dark: 0.45, light: 0.36 }), { edge: 1 }),
+    pad: sk.m(rmp('#dca8a4', { n: 5, dark: 0.45, light: 0.38 }), { edge: 1 }),
+    tongue: sk.m(rmp('#ee8aa0', { n: 5, dark: 0.45, light: 0.4 }), { edge: 1 }),
     mouth: sk.m(rmp('#4a1c24', { n: 3, dark: 0.4 }), { edge: 0 }),
-    claw: sk.m(rmp('#e8ddd0', { n: 3, dark: 0.4 })),
+    claw: sk.m(rmp('#e8ddd0', { n: 4, dark: 0.4, at: 2 }), { edge: 1 }),
+    ring: sk.m(rmp('#1c1820', { n: 4, dark: 0.4, light: 0.3 }), { edge: 1 }),
+    petal: sk.m(rmp('#d8283a', { n: 6, dark: 0.55, light: 0.4 }), { edge: 1 }),
+    anther: sk.m(rmp('#f2c84a', { n: 4, dark: 0.4, at: 2 }), { edge: 0 }),
   };
 }
 type M = ReturnType<typeof mats>;
 
-/** Bushy tail: a thick tube with fur tufts and a dark tip. */
-function bushyTail(sk: Sk, M: M, pts: V2[], k: number, z: number, fat = 1) {
-  sk.np();
-  sk.tube(pts, t => (1.6 + Math.sin(Math.min(1, t * 1.4) * Math.PI * 0.5) * 1.6 - t * 0.6) * k * fat, (p) => (p.t > 0.78 ? M.tip : p.v > 0.45 ? M.stripe : M.fur), { z });
-  const tp = sk.pid;
-  sk.tufts(tp, (_x, _y, nx, ny) => [nx * 0.7 - 0.5, ny * 0.9 + 0.2] as V2, { every: 2, len: 1 });
-  sk.streaks(tp, () => [-1, 0.4] as V2, { spacing: 3, len: 2, amp: 0.1 });
+const ID = { SAIL: 1, BODY: 2, HEAD: 3, LEG: 4, PAW: 5, CLAW: 6, TAIL: 7, EAR: 8, EAR2: 9, MOUTH: 10, TONGUE: 11, FOLD: 12, FLOWER: 13 };
+
+/** the bushy tail along a chain from root (heading a0, turning by turn(i)) */
+function tailInto(R: Relief, M: M, root: V2, a0: number, turn: (i: number) => number, k: number, z: number, fat = 1, segs = 10, floor = Infinity) {
+  const pts: V2[] = [root];
+  let a = a0, x = root[0], y = root[1];
+  for (let i = 0; i < segs; i++) { a += turn(i); x += Math.cos(a) * 1.9 * k; y += Math.sin(a) * 1.9 * k; pts.push([x, Math.min(y, floor)]); }
+  const crv = new Curve(pts);
+  const wd = (t: number) => (1.5 + Math.sin(Math.min(1, t * 1.5) * Math.PI * 0.5) * 1.5 - t * 0.6) * k * fat;
+  const ol = fringe(spline(ribbon(pts, wd, wd, 0.5), 0.5), 1.3 * Math.max(0.8, k), 41, (xx, yy) => { const [t] = crv.project(xx, yy); return t > 0.1 ? [1 * k + 0.3, -0.6] : null; });
+  R.region(ol, { z, R: 1.7 * k, H: 2.2 * k, id: ID.TAIL, tex: (p, o) => {
+    const [t, off] = crv.project(p.x, p.y);
+    const at = crv.at(Math.max(0, Math.min(1, t)));
+    o.z += strands(p.x, p.y, Math.atan2(at.u[1], at.u[0]) + 0.3, 2.4, 1.1, 43) * 0.7;
+    o.m = t > 0.76 + (FS.tip > 0.6 ? -0.05 : 0) ? M.tip : off > 0.8 * k ? M.furD : M.fur;
+    if (o.m === M.fur && FS.tip > 0.85 && hh(FS.row, FS.seg, 45) < 0.3) o.t += 0.08;
+  } });
+  return pts;
 }
 
-function head(sk: Sk, M: M, H: Frame2, P: P, k: number, eye: BeastEye, z = 0) {
-  const ha = H.a;
-  sk.np();
-  // far ear
-  ear(sk, H.p(0.6, -3.2), H.ang(-2.2 + P.ear * 0.3), 3.4 * k, 1.9 * k, M.fur, 0, z - 2, -0.16, 1.1);
-  sk.np();
-  const skull = H.p(2.4, -0.3);
-  sk.ell(skull[0], skull[1], 4.6 * k, 4 * k, (p) => {
-    if (p.v > 0.35 && p.u > -0.4) return M.belly;
-    // dark stripe from the crown down the nose ridge
-    if (p.v < -0.55 && p.u > -0.5 && p.u < 0.45) return M.stripe;
-    return M.fur;
-  }, { rot: ha, rz: 3.8 * k, z: z + 1.5 });
-  const hp = sk.pid;
-  sk.tufts(hp, (_x, _y, nx, ny) => (ny > 0 && nx <= 0 ? [-0.6, 1] as V2 : null), { every: 2, len: 1 });
-  const mz = H.p(5.8, 0.9);
-  sk.ell(mz[0], mz[1], 2.3 * k, 1.9 * k, (p) => (p.v > 0.1 ? M.belly : M.fur), { rot: ha + 0.1, rz: 2 * k, z: z + 3 });
-  const np = H.p(7.8, 0.6);
-  sk.ell(np[0], np[1], 0.95 * k, 0.85 * k, M.nose, { z: z + 5 });
-  if (P.jaw > 0.4) {
-    const m0 = H.p(5.4, 2.2), m1 = H.p(7.2, 2.2 + P.jaw * 0.8);
-    sk.line(m0[0], m0[1], m1[0], m1[1], M.mouth, 0.2, z + 8, true);
+interface HeadO { ear: number; jaw: number; tongue: number; eye: BeastEye; k: number; z: number; top?: boolean }
+/**
+ * The head: short and round, the huge dark eyes ringed in black under a dark stripe running down the
+ * nose, tall thin rounded ears pink inside, a pointed pink nose; `top` turns it to show both eyes (the
+ * glide, seen from above).
+ */
+function headInto(sk: Sk, R: Relief, M: M, H: Frame2, o: HeadO) {
+  const k = o.k, z = o.z;
+  const hp = (x: number, y: number, s2 = 0): LM => { const q = H.p(x, y); return [q[0], q[1], s2]; };
+  const hinv = localOf(H.o, H.a, k);
+  const ear = (near: boolean) => {
+    const eb = o.top ? H.p(-0.6, near ? 2.6 : -2.6) : H.p(near ? -0.2 : 0.6, near ? -2.8 : -3.2);
+    const ea = o.top ? H.ang((near ? 1 : -1) * (2.1 + o.ear * 0.3)) : H.ang(-1.95 + o.ear * 0.35 - (near ? 0 : 0.28));
+    const ca = Math.cos(ea), sa = Math.sin(ea), nx = -sa, ny = ca;
+    const L = 4 * k, Wd = 2 * k;
+    const q = (t: number, w: number, s2 = 0): LM => [eb[0] + ca * t * L + nx * w * Wd, eb[1] + sa * t * L + ny * w * Wd, s2];
+    const ol = fringe(spline([q(-0.1, -0.7), q(0.4, -0.95), q(0.85, -0.6), q(1.04, 0, 0.2), q(0.85, 0.65), q(0.4, 1), q(-0.1, 0.75)], 0.4), 1.1, near ? 3 : 5, (x, y) => (Math.hypot(x - eb[0], y - eb[1]) > L * 0.5 ? [0.5, 0.3] : null));
+    R.region(ol, { z: z + (near ? 3.5 : -2.5) * k, R: 0.9 * k, H: 1.2 * k, id: near ? ID.EAR : ID.EAR2, tex: (p, oo) => {
+      const dx = p.x - eb[0], dy = p.y - eb[1], t = (dx * ca + dy * sa) / L, w = (dx * nx + dy * ny) / Wd;
+      oo.m = M.ear;
+      if ((near || o.top) && t > 0.12 && t < 0.86 && Math.abs(w) < 0.6 * Math.sin(Math.PI * Math.min(1, t / 0.9))) { oo.m = M.inner; oo.z -= 0.5; if (fr(t * 3) < 0.25) oo.z += 0.3; }
+    } });
+  };
+  ear(false);
+  const ja = o.jaw * 0.35;
+  const jp = (x: number, y: number, s2 = 0): LM => {
+    const dx = x - 0.5, dy = y - 1.8, c = Math.cos(ja), s = Math.sin(ja);
+    return hp(0.5 + dx * c - dy * s, 1.8 + dx * s + dy * c, s2);
+  };
+  const head: LM[] = o.top
+    ? [hp(-2.6, -2.4), hp(0.4, -3.6), hp(3.4, -3.2), hp(5.8, -1.6), hp(7.4, 0, 0.4), hp(5.8, 1.6), hp(3.4, 3.2), hp(0.4, 3.6), hp(-2.6, 2.4), hp(-3.4, 0)]
+    : [hp(-2.6, -2.8), hp(0.6, -4), hp(3.6, -3.6), hp(5.6, -2.2), hp(7, -0.6), hp(7.8, 0.6, 0.4), hp(7.2, 1.6), hp(5.8, 2.2), jp(4.8, 2.8), jp(2.2, 3.6), jp(-0.2, 3.6), hp(-2.2, 2.8), hp(-3.2, 0.2)];
+  R.region(fringe(spline(head, 0.5), 1.1, 7, (x, y, _nx, ny) => { const [hx] = hinv(x, y); return hx < 2 && (o.top || ny > 0.3) ? [0.8 * k, -0.5] : null; }), {
+    z, R: 2.6 * k, H: 3 * k, id: ID.HEAD, blend: 1.2, tex: (p, oo) => {
+      const [hx, hy] = hinv(p.x, p.y);
+      oo.z += strands(p.x, p.y, H.ang(Math.PI), 1.5, 0.9, 47) * 0.3;
+      oo.m = M.fur;
+      if (o.top) {
+        // the dark stripe down the middle, pale spectacles round both eyes
+        if (Math.abs(hy) < 0.7 + Math.max(0, 2 - hx) * 0.2 && hx < 6.4) oo.m = M.stripe;
+        for (const sy of [-2.3, 2.3]) { const d = Math.hypot(hx - 3.2, hy - sy); if (d > 1.6 && d < 2.5 && hx > 2.4) oo.m = M.belly; }
+        if (hx > 6.6) oo.m = M.nose;
+        return;
+      }
+      if (hy > 1.2 && hx > 0) oo.m = M.belly;
+      // the dark stripe from the crown down the nose ridge; pale spectacles round the huge eye; a dark streak back to the ear
+      const ed = Math.hypot(hx - 3.4, hy + 0.6);
+      if (hy < -2.5 + Math.max(0, hx - 3.6) * 0.55 && hy > -4 && hx > -0.6 && hx < 6.6) oo.m = M.stripe;
+      else if (hx < 2.6 && Math.abs(hy + 0.9 + (2.6 - hx) * 0.35) < 0.65) oo.m = M.stripe;
+      if (ed > 2.1 && ed < 3 && !(hx < 2.6 && hy < 0)) oo.m = M.belly;
+      if (hx > 6.8) oo.m = M.nose;
+    },
+  });
+  if (!o.top && o.jaw > 0.4) {
+    const a = H.p(4.4, 2.2), b = H.p(7, 2), c = jp(6, 2.8);
+    R.region(spline([[a[0], a[1], 0], [b[0], b[1], 0.4], [c[0], c[1], 0.4]], 0.4), { z: z + 2.4 * k, R: 0.4, H: 0.3, id: ID.MOUTH, tex: M.mouth });
   }
-  if (P.tongue > 0) {
-    sk.np(true);
-    const t0 = H.p(7.4, 1.6);
-    const a = H.ang(-0.35);
-    const L = (2 + P.tongue * 5) * k;
-    const t1: V2 = [t0[0] + Math.cos(a) * L * 0.6, t0[1] + Math.sin(a) * L * 0.6 + 0.4];
-    const t2: V2 = [t0[0] + Math.cos(a) * L, t0[1] + Math.sin(a) * L];
-    sk.tube([t0, t1, t2], t2v => (0.75 - t2v * 0.25) * k, M.tongue, { z: z + 9 });
+  if (o.tongue > 0) {
+    const t0 = H.p(7.2, 1.6);
+    const a = H.ang(-0.35), L = (2 + o.tongue * 5) * k;
+    const tp: V2[] = [t0, [t0[0] + Math.cos(a) * L * 0.5, t0[1] + Math.sin(a) * L * 0.5 + 0.3], [t0[0] + Math.cos(a) * L, t0[1] + Math.sin(a) * L]];
+    R.region(spline(ribbon(tp, t => (0.75 - t * 0.2) * k, t => (0.75 - t * 0.2) * k, 0.3), 0.4), { z: z + 5 * k, R: 0.5, H: 0.6, id: ID.TONGUE, tex: (p, oo) => { oo.m = M.tongue; if (Math.hypot(p.x - tp[2][0], p.y - tp[2][1]) < 1.2 * k) oo.z += 0.4; } });
   }
-  // eye stripe through the huge eye
-  sk.np();
-  ear(sk, H.p(-0.2, -2.8), H.ang(-1.95 + P.ear * 0.35), 3.8 * k, 2.1 * k, M.fur, M.inner, z + 5, 0, 1.1);
-  const ec = H.p(3.6, -0.7);
+  { const c = H.p(1.6, 1.4); R.bump(c[0], c[1], 2 * k, 1.6 * k, 0.5 * k, 0, ID.HEAD); }
+  ear(true);
+}
+
+function drawHeadEyes(sk: Sk, H: Frame2, k: number, eye: BeastEye, top = false) {
+  if (top) {
+    const e2 = H.p(3.2, -2.3);
+    drawEye(sk, e2[0], e2[1], { ...EYE, r: k < 0.8 ? 1 : 1.6 }, eye);
+    const e1 = H.p(3.2, 2.3);
+    return drawEye(sk, e1[0], e1[1], { ...EYE, r: k < 0.8 ? 1.2 : 1.9 }, eye);
+  }
+  const ec = H.p(3.4, -0.6);
   const ep = drawEye(sk, ec[0], ec[1], { ...EYE, r: k < 0.8 ? 1.2 : 2.2 }, eye);
-  whiskers(sk, H.p(6.6, 1.4), Math.cos(ha) >= 0 ? 1 : -1, 5 * k, hex('#d8d0dc'), 3, 0.3, 0.12);
-  return { ep, hc: H.p(2.4, -2.5) };
+  whiskers(sk, H.p(6.6, 1.3), Math.cos(H.a) >= 0 ? 1 : -1, 5.5 * k, hex('#d8d0dc'), 3, 0.3, 0.12);
+  return ep;
+}
+
+/** a red rata blossom: a brush of stamens with gold anthers on a short stalk */
+function blossom(R: Relief, M: M, c: V2, k: number, z: number) {
+  for (let i = 0; i < 9; i++) {
+    const a = -Math.PI / 2 + (i - 4) * 0.32;
+    const L = (2.2 + hh(i, 3, 5) * 1) * k;
+    R.cap(c, [c[0] + Math.cos(a) * L, c[1] + Math.sin(a) * L], 0.5 * k, 0.45 * k, { z: z + i * 0.05, rz: 0.5, id: ID.FLOWER, tex: (p, o) => { o.m = p.t > 0.78 ? M.anther : M.petal; } });
+  }
 }
 
 function draw(sk: Sk, anim: string, frame: number, eye: BeastEye, juv: boolean) {
@@ -201,6 +277,7 @@ function draw(sk: Sk, anim: string, frame: number, eye: BeastEye, juv: boolean) 
   if (P.glide) return drawGlide(sk, M, P, k, eye);
   if (P.curl) return drawCurled(sk, M, P, k, eye);
   if (!P.climb) sk.clipY = 0;
+  const gk = Math.max(0.8, k);
   const S = (v: V2): V2 => [v[0] * k, v[1] * k];
   const hip = S(P.hip);
   const spL = 10.5 * k, sa = P.spine;
@@ -209,156 +286,221 @@ function draw(sk: Sk, anim: string, frame: number, eye: BeastEye, juv: boolean) 
   const c1: V2 = [hip[0] + Math.cos(sa) * spL * 0.33 + nx * P.bend * k, hip[1] + Math.sin(sa) * spL * 0.33 + ny * P.bend * k];
   const c2: V2 = [hip[0] + Math.cos(sa) * spL * 0.7 + nx * P.bend * k, hip[1] + Math.sin(sa) * spL * 0.7 + ny * P.bend * k];
   const rump: V2 = [hip[0] - Math.cos(sa) * 2.4 * k, hip[1] - Math.sin(sa) * 2.4 * k];
-  const spine = [rump, ...cbez(hip, c1, c2, sh, 6)];
-  const neck = along(spine, 1).p;
+  const SP = new Curve([rump, ...cbez(hip, c1, c2, sh, 10)]);
   const up = P.upright;
+  const br = P.br * 0.25;
 
-  const FL: LegSpec = scaleLeg({ l1: 3.2, l2: 3, r1: 1.7, r2: 1.2, bend: 1 }, k);
-  const HL: LegSpec = scaleLeg({ l1: 3.7, l2: 3.4, r1: 2.4, r2: 1.4, bend: -1 }, k);
-  const drawLeg = (which: number) => {
-    const front = which < 2, near = which % 2 === 0;
-    const z = near ? 4.5 : -4.5, bias = near ? 0 : -0.14;
-    sk.np();
-    if (front) {
-      const shp = along(spine, 0.84).p;
-      const root: V2 = [shp[0] + Math.sin(sa) * 0.5 * k - (P.climb ? 0 : 0), shp[1] + Math.cos(sa) * 1.4 * k];
-      let foot = S(P.feet[which]);
-      if (!P.climb) foot = [foot[0], foot[1] - 0.9 * k];
-      if (up > 0.5) {
-        const chest = along(spine, 0.78).p;
-        foot = [chest[0] + (2.6 + (near ? 0.4 : -0.3) + P.paws * 1.2) * k, chest[1] + (1.2 - P.paws * 3.2) * k];
-      }
-      const j = leg(sk, root, foot, FL, M.fur, z, 0, bias);
-      paw(sk, j[2], k, M.pad, M.claw, z, { n: 2, clawLen: 0.6, bias, w: 1.3, h: 1, down: P.climb ? 0.3 : 0.5 });
-    } else {
-      const root: V2 = [hip[0] + Math.sin(sa) * 0.3 * k, hip[1] + Math.cos(sa) * 1.2 * k];
-      let foot = S(P.feet[which]);
-      if (!P.climb) foot = [foot[0], foot[1] - 0.9 * k];
-      if (up > 0.5) foot = [hip[0] + (2.4 + (near ? 0.5 : -0.6)) * k, -0.9 * k];
-      const j = leg(sk, root, foot, HL, M.fur, z, 0, bias);
-      paw(sk, j[2], k, M.pad, M.claw, z, { n: 2, clawLen: 0.6, bias, w: 1.7, h: 1, down: P.climb ? 0.3 : 0.5 });
-    }
+  const coat = (p: Sp, o: Tx) => {
+    const [t, off] = SP.project(p.x, p.y);
+    const at = SP.at(Math.max(0, Math.min(1, t)));
+    o.z += strands(p.x, p.y, Math.atan2(-at.u[1], -at.u[0]) + 0.2, 2 * gk, 1 * gk, 51) * 0.55;
+    const o2 = off / k;
+    o.m = o2 < -1.6 ? M.belly : M.fur;
+    if (Math.abs(o2 - 2.4) < 0.85 + (FS.tip > 0.7 ? 0.3 : 0) && t > -0.05 && t < 1.05) o.m = M.stripe;
+    else if (o2 > 2.4 && o.m === M.fur) o.m = M.furD;
+    if (o.m === M.fur && FS.tip > 0.85 && hh(FS.row, FS.seg, 53) < 0.3) o.t += 0.08;
   };
-  drawLeg(1);
-  drawLeg(3);
 
-  // tail
-  const tailA = Math.PI + sa - 0.2 + P.tail + (up ? 1.1 * up : 0) + (P.climb ? 0.55 : 0);
-  const tpts = chain(rump, tailA, 10, 1.9 * k, i => (P.climb ? -0.05 : 0.1 + (up > 0.5 ? 0.12 : 0)) + P.tailCurl * 0.1 * (i > 5 ? 1 : 0) - (P.climb ? 0 : i * 0.008));
-  bushyTail(sk, M, tpts, k, -2);
+  // ---------------------------------------------------------------- legs
+  const legJ = (which: number) => {
+    const front = which < 2, near = which % 2 === 0;
+    const root = front ? SP.V(0.84 - (near ? 0 : 0.04), -1.4 * k) : SP.V(0.14 + (near ? 0 : 0.04), -1.2 * k);
+    let foot = S(P.feet[which]);
+    if (!P.climb && !near) foot = [foot[0] + (front ? -0.8 : 0.8) * k, foot[1]];
+    let lifted = !P.climb && foot[1] < -0.4;
+    let e: V2;
+    if (front) {
+      if (up > 0.5) {
+        const ch = SP.V(0.78, -2.8 * k);
+        e = [ch[0] + (2.4 + (near ? 0.4 : -0.3) + P.paws * 1.2) * k, ch[1] + (1.6 - P.paws * 3.2) * k];
+        lifted = true;
+      } else e = P.climb ? [foot[0] - 1 * k, foot[1] + 1 * k] : [foot[0] - 0.4 * k, foot[1] - 1.3 * k];
+    } else {
+      if (up > 0.5) foot = [hip[0] + (2.4 + (near ? 0.5 : -0.6)) * k, 0];
+      e = P.climb ? [foot[0] - 1.4 * k, foot[1] + 1.2 * k] : [foot[0] - 1.8 * k, foot[1] - 1.2 * k];
+    }
+    const l1 = (front ? 3.3 : 3.8) * k, l2 = (front ? 3.1 : 3.5) * k;
+    const [j, ee] = ik2(root, e, l1, l2, (front ? 1 : -1) * (P.climb ? -1 : 1));
+    return { root, j, e: ee, foot, front, lifted };
+  };
+  type LJ = ReturnType<typeof legJ>;
+  const legOutline = (L: LJ): LM[] => {
+    const { root, j, e } = L, s = k;
+    const upv: V2 = [root[0] - (j[0] - root[0]) * 0.6, root[1] - (j[1] - root[1]) * 0.6];
+    return [
+      along(upv, root, 1, (L.front ? 2 : 2.6) * s), along(root, j, 0.3, (L.front ? 1.8 : 2.5) * s), along(root, j, 0.95, (L.front ? 1.3 : 1.4) * s),
+      along(j, e, 0.4, 1 * s), along(j, e, 1, 0.85 * s), along(j, e, 1.14, 0, 0.3), along(j, e, 0.9, -0.85 * s), along(j, e, 0.4, -1.1 * s),
+      along(j, e, -0.1, -1.2 * s, 0.35), along(root, j, 0.5, -(L.front ? 1.8 : 2.4) * s), along(upv, root, 0.5, -(L.front ? 1.8 : 2.4) * s),
+    ];
+  };
+  /** the little hand / foot: a pink-padded grip with fine claws */
+  const paw = (R: Relief, L: LJ, z0: number) => {
+    const { e } = L, s = k;
+    const ta = P.climb ? (L.front ? -0.9 : -0.4) : L.lifted ? 0.8 : 0;
+    const c = Math.cos(ta), sn = Math.sin(ta);
+    const len = L.front ? 1.8 : 2.6;
+    const q = (x: number, y: number, s2 = 0): LM => [e[0] + (x * c - y * sn) * s, e[1] + (x * sn + y * c) * s, s2];
+    R.region(spline([q(-0.8, -0.8), q(len * 0.6, -0.8), q(len, 0.1), q(len * 0.7, 1, 0.3), q(-0.8, 0.9)], 0.4), { z: z0, R: 0.6, H: 0.8, id: ID.PAW, tex: (p, o) => { o.m = p.v > 0.55 ? M.pad : M.fur; } });
+    for (let i = 0; i < 2; i++) { const b = q(len - 0.2 - i * 0.2, 0.1 + i * 0.5); claw(R, [b[0], b[1]], 0.5 + ta, 0.9 * s, 0.6 * s, 0.6, z0 + 0.5, ID.CLAW, M.claw); }
+  };
+  const legTex = (p: Sp, o: Tx) => { coat(p, o); if (o.m === M.stripe || o.m === M.belly) o.m = M.fur; };
+  for (const w of [3, 1]) {
+    const L = legJ(w);
+    const ol = legOutline(L);
+    const R = new Relief(sk, Math.min(...ol.map(q => q[0])) - 5, Math.min(...ol.map(q => q[1])) - 5, Math.max(...ol.map(q => q[0])) + 5, Math.max(...ol.map(q => q[1])) + 5);
+    R.region(spline(ol, 0.5), { z: -12, R: 1 * k, H: 1.4 * k, id: ID.LEG, tex: legTex });
+    paw(R, L, -10);
+    sk.np();
+    R.emit({ bias: -0.18, drop: 1.3, seam: 0.5, seamDark: 0.3 });
+  }
 
-  // body with a slack sail fold along the flank
+  const BR = Relief.full(sk);
+  // ---------------------------------------------------------------- tail
+  {
+    const tailA = Math.PI + sa - 0.2 + P.tail + (up ? 1.1 * up : 0) + (P.climb ? 0.55 : 0);
+    tailInto(BR, M, rump, tailA, i => (P.climb ? -0.05 : 0.1 + (up > 0.5 ? 0.12 : 0)) + P.tailCurl * 0.1 * (i > 5 ? 1 : 0) - (P.climb ? 0 : i * 0.008), k, -2, 1, 10, P.climb ? Infinity : -0.8 * k);
+  }
+  // ---------------------------------------------------------------- body
+  {
+    const T = (t: number, off: number, s2 = 0) => SP.P(t, off * k, s2);
+    const body: LM[] = [
+      T(-0.16, -0.4), T(-0.1, 2), T(0.06, 3.3 + br), T(0.3, 3.8 + br), T(0.55, 3.8 + br), T(0.8, 3.4), T(0.98, 2.9), T(1.1, 2.4),
+      T(1.1, -2.2), T(0.96, -3), T(0.78, -3.5 - br), T(0.52, -3.8 - br), T(0.3, -3.8), T(0.12, -3.6), T(-0.02, -3.1), T(-0.12, -2.1),
+    ];
+    const ol = fringe(spline(body, 0.5), 1.4 * gk, 5, (x, y) => { const [t, off] = SP.project(x, y); return off < -2.6 * k && t > 0.1 && t < 0.95 ? [0.8 * k + 0.2, 0.5] : off > 2.6 * k && t < 0.25 ? [0.6 * k, -0.5] : null; });
+    BR.region(ol, { z: 0, R: 3.6 * k, H: 4.2 * k, id: ID.BODY, tex: coat, pow: 0.9 });
+    // the folded sail: a soft furred fold hanging along the flank from the wrist to the ankle, its pale margin showing
+    if (!P.climb || true) {
+      const sag = (up > 0.5 ? 1.6 : 2.4) + Math.sin(P.br * Math.PI) * 0.2;
+      const fold: LM[] = [T(0.86, -1.2), T(0.66, -2.6), T(0.46, -2.8), T(0.24, -2.6), T(0.1, -1.4), T(0.12, -3.2 - sag * 0.6), T(0.3, -3.8 - sag), T(0.52, -4 - sag), T(0.72, -3.7 - sag), T(0.86, -2.8 - sag * 0.5)];
+      const ff = fringe(spline(fold, 0.5), 1.3, 9, (x, y) => { const [, off] = SP.project(x, y); return off < -3.4 * k ? [0.7 * k, 0.4] : null; });
+      BR.region(ff, { z: 4.6 * k, R: 1.2 * k, H: 1.4 * k, id: ID.FOLD, tex: (p, o) => {
+        const [t, off] = SP.project(p.x, p.y);
+        o.z += strands(p.x, p.y, Math.PI / 2 + 0.3, 1.6, 1, 55) * 0.5;
+        const lo = -(3.7 + sag) * k;
+        // a dark line where the sail joins the flank, the furred fold, a pale margin
+        o.m = off < lo + 1.1 * k ? M.edge : off < lo + 2 * k ? M.sail : off > -2.1 * k ? M.sailD : M.sail;
+        // the skin hangs in soft vertical folds between the limbs
+        if (fr(t * 7) < 0.2) o.z -= 0.5;
+      } });
+    }
+    const hc = SP.V(0.14, 0.3 * k), sc = SP.V(0.8, 0.2 * k);
+    BR.bump(hc[0], hc[1], 3 * k, 3 * k, 0.9 * k, 0, ID.BODY);
+    BR.bump(sc[0], sc[1], 2.4 * k, 2.8 * k, 0.6 * k, 0, ID.BODY);
+  }
+  for (const w of [2, 0]) {
+    const L = legJ(w);
+    const ax = L.root, ay = L.e, al = Math.hypot(ay[0] - ax[0], ay[1] - ax[1]) || 1;
+    const lift = L.front && up > 0.5 ? 3 : 0;
+    BR.region(spline(legOutline(L), 0.5), {
+      R: 1.1 * k, H: 1.4 * k, id: ID.LEG, blend: 0.8, tex: legTex,
+      zAt: (x, y) => { const t = ((x - ax[0]) * (ay[0] - ax[0]) + (y - ax[1]) * (ay[1] - ax[1])) / (al * al); return 4 * k - Math.max(0, 1 - (t + 0.05) / 0.5) * 4 * k + lift; },
+    });
+    paw(BR, L, 5 * k + lift);
+  }
+  // ---------------------------------------------------------------- head
+  const H = new Frame2(SP.at(1).p, sa + P.head, k);
+  headInto(sk, BR, M, H, { ear: P.ear, jaw: P.jaw, tongue: P.tongue, eye, k, z: 3.6 * k });
+  if (anim === 'eat') {
+    const hand = legJ(0).e;
+    blossom(BR, M, [hand[0] + 1 * k, hand[1] - 0.5 * k], k, 9 * k);
+  }
+  BR.shadow(ID.HEAD, 0.8, 1.2, 0.1, ID.BODY, 1);
+  BR.shadow(ID.LEG, 0.8, 0.8, 0.1, ID.BODY, 1);
+  BR.shadow(ID.LEG, 0.8, 0.8, 0.1, ID.FOLD, 1);
+  BR.shadow(ID.BODY, 0.6, 1, 0.12, ID.FOLD, 1);
   sk.np();
-  const rad = (t: number) => (t < 0.45 ? 3.6 + t * 1.6 : 4.3 - (t - 0.45) * 2.6) * k * (1 + P.br * 0.03);
-  sk.tube(spine, rad, (p) => {
-    if (p.v > 0.5) return M.belly;
-    if (p.v < -0.78) return M.stripe;
-    // folded patagium: a paler fringe line low on the flank
-    if (!P.climb && p.v > 0.32 && p.v < 0.48 && p.t > 0.25 && p.t < 0.85) return M.edge;
-    return M.fur;
-  }, { z: 0 });
-  const bp = sk.pid;
-  sk.streaks(bp, () => [Math.cos(sa + Math.PI), Math.sin(sa + Math.PI) + 0.25] as V2, { spacing: 3, len: 2, amp: 0.08 });
-  sk.tufts(bp, (_x, _y, nx2, ny2) => (ny2 > 0 || (P.climb && nx2 > 0) ? [nx2 * 0.5 - 0.4, 0.9] as V2 : null), { every: 2, len: 1 });
-
-  const H = new Frame2(neck, sa + P.head, k);
-  const { ep, hc } = head(sk, M, H, P, k, eye);
-  drawLeg(0);
-  drawLeg(2);
+  BR.emit({ drop: 1.3 * k, seam: 0.55, seamDark: 0.3, ao: 0.06, aoR: 2 });
+  const ep = drawHeadEyes(sk, H, k, eye);
+  const hc = H.p(2.4, -2.5);
   return { head: [hc[0], hc[1] - 2 * k] as V2, eye: ep };
 }
 
-/** Sail membrane fill: fur streaks radiating from the flank, darker near the body, a dark band inside the pale margin. */
-function sailFill(M: M, p: { x: number; y: number; l: number }, edgeY: (x: number) => number, bodyY: number, k: number) {
-  const ey = edgeY(p.x);
-  const span = Math.abs(ey - bodyY) || 1;
-  const d = Math.abs(p.y - bodyY) / span; // 0 at the flank .. 1 at the margin
-  p.l += d * 0.14 - 0.08;
-  if (d > 0.9) return M.edge;
-  if (d > 0.7) return M.sailD;
-  // radiating fur lines
-  const f = p.x / k * 0.42 + (p.y - bodyY) / k * 0.18;
-  if (Math.abs(f - Math.round(f)) < 0.1 && d > 0.25) p.l -= 0.09;
-  return M.sail;
-}
-
-/** Gliding: 3/4 top view with the sail spread between wrists and ankles; anchor = body centre. */
+/** Gliding, seen from above: the sail one scalloped sheet between the outstretched limbs; anchor = body centre. */
 function drawGlide(sk: Sk, M: M, P: P, k: number, eye: BeastEye) {
   const b = P.billow;
-  const K = (x: number, y: number, z: number): V3 => [x * k, y * k, z * k];
-  const PHI = 0.95;
-  const S2 = (p: V3): V2 => { const q = proj(p, PHI); return [q[0], q[1]]; };
-  const wristN = K(10.5, -0.6 + b * 0.4, 19), ankleN = K(-10, -0.4 + b * 0.3, 18);
-  const wristF = K(10.5, -0.6 + b * 0.4, -19), ankleF = K(-10, -0.4 + b * 0.3, -18);
-  const shN = K(4.5, 0.4, 2.2), hipN = K(-6, 0.4, 2.2), shF = K(4.5, 0.4, -2.2), hipF = K(-6, 0.4, -2.2);
-  const sag = 5 + b * 1.2;
-  const edgeN: V3[] = [wristN, K(4, 0, 19 - sag), K(-2, -0.2, 18.5 - sag), K(-7, 0, 18 - sag * 0.8), ankleN];
-  const edgeF: V3[] = [wristF, K(4, 0, -19 + sag), K(-2, -0.2, -18.5 + sag), K(-7, 0, -18 + sag * 0.8), ankleF];
-  const edgeYOf = (e: V3[]) => {
-    const sp = e.map(S2);
-    return (x: number) => {
-      for (let i = 1; i < sp.length; i++) {
-        const [x0, y0] = sp[i - 1], [x1, y1] = sp[i];
-        if ((x <= x0 && x >= x1) || (x >= x0 && x <= x1)) return y0 + (y1 - y0) * ((x - x0) / (x1 - x0 || 1));
-      }
-      return sp[x > sp[0][0] ? 0 : sp.length - 1][1];
-    };
-  };
-  const eyN = edgeYOf(edgeN), eyF = edgeYOf(edgeF);
-  const byN = S2(K(0, 0.4, 2.2))[1], byF = S2(K(0, 0.4, -2.2))[1];
-  // far sail + limbs
+  const q = (x: number, y: number, s2 = 0): LM => [x * k, y * k, s2];
+  const v = (x: number, y: number): V2 => [x * k, y * k];
+  // the limbs, spread: the near side (toward the viewer) lower on screen
+  const shN = v(4.5, 2.4), shF = v(4.5, -2.4), hpN = v(-5.5, 2.4), hpF = v(-5.5, -2.4);
+  const wrN = v(11, 13 + b * 0.4), wrF = v(11, -11 - b * 0.4), anN = v(-10.5, 12.4 + b * 0.3), anF = v(-10.5, -10.4 - b * 0.3);
+  const sag = 3.2 + b * 0.9;
+  const R = Relief.full(sk);
+  // the sail: one contour from the far wrist round the far edge, the tail root, the near edge and back over the neck
+  const sail: LM[] = [
+    [wrF[0], wrF[1], 0.6], q(7, -8.4 - b * 0.3), q(3, -7.6 + sag * 0.3), q(-1.5, -7.2 + sag * 0.4), q(-6, -8 + sag * 0.3), [anF[0], anF[1], 0.6],
+    q(-11.4, -6.8), q(-9.6, -2.6), q(-9.6, 2.6), q(-11.4, 8.4), [anN[0], anN[1], 0.6],
+    q(-6, 10 - sag * 0.3), q(-1.5, 9.2 - sag * 0.4), q(3, 9.6 - sag * 0.3), q(7, 10.6 + b * 0.3), [wrN[0], wrN[1], 0.6],
+    q(10.4, 7.6), q(7.6, 3.6), q(7.6, -3.6), q(10.4, -6),
+  ];
+  const so = fringe(spline(sail, 0.6), 1.5, 61, (x, y) => (Math.abs(y) > 5.5 * k && Math.abs(x) < 9 * k ? [0.7 * k, -0.5] : null));
+  R.region(so, { z: 0, R: 1.6 * k, H: 1.6 * k, id: ID.SAIL, tex: (p, o) => {
+    const near = p.y > 0;
+    // fur radiating from the flanks out to the margin; a dark band inside the pale margin
+    const ang = Math.atan2(p.y, p.x * 0.6) + (near ? 0 : 0);
+    o.z += strands(p.x, p.y, ang, 2.2, 1, 63) * 0.5;
+    o.m = M.sail;
+    if (p.s < 1.2 * k) { o.m = M.edge; return; }
+    if (p.s < 2.4 * k) { o.m = M.sailD; return; }
+    if (!near) o.t -= 0.06;
+    if (FS.tip > 0.85 && hh(FS.row, FS.seg, 65) < 0.3) o.t += 0.06;
+  } });
+  // the limbs as ridges through the sail, the hands and feet spread at its corners
+  for (const [a, c] of [[shN, wrN], [shF, wrF], [hpN, anN], [hpF, anF]] as [V2, V2][]) {
+    R.line([a, [(a[0] + c[0]) / 2, (a[1] + c[1]) / 2], c], 1.6 * k, 1.1 * k, { only: ID.SAIL, taper: false });
+  }
+  for (const [c, dirA, front] of [[wrN, 0.5, true], [wrF, -0.5, true], [anN, 2.4, false], [anF, -2.4, false]] as [V2, number, boolean][]) {
+    const ca = Math.cos(dirA), sa = Math.sin(dirA);
+    const L = front ? 2 : 2.4;
+    const pp = (x: number, y: number, s2 = 0): LM => [c[0] + (x * ca - y * sa) * k, c[1] + (x * sa + y * ca) * k, s2];
+    R.region(spline([pp(-1, -0.9), pp(L * 0.7, -1), pp(L, 0, 0.3), pp(L * 0.7, 1), pp(-1, 0.9)], 0.4), { z: 2 * k, R: 0.6, H: 0.9, id: ID.PAW, tex: (p, o) => { o.m = p.u > 0.55 ? M.pad : M.fur; } });
+    for (let i = -1; i <= 1; i += 2) { const bb = pp(L - 0.2, i * 0.5); claw(R, [bb[0], bb[1]], dirA + i * 0.35, 0.9 * k, 0.6 * k, 0.4 * i, 2.6 * k, ID.CLAW, M.claw); }
+  }
+  // the tail streaming behind
+  tailInto(R, M, v(-8.6, 0), Math.PI + 0.04 + P.tail, i => (i < 5 ? -0.02 : 0.03) + P.tail * 0.02, k, 0.5 * k, 1.05, 11);
+  // the body seen from above, arched over the sail: the dark stripe down the spine
+  const body: LM[] = [q(-9.6, 0, 0.2), q(-8, -3), q(-3, -4), q(3, -3.8), q(7.4, -2.6), q(8.6, 0), q(7.4, 2.6), q(3, 3.8), q(-3, 4), q(-8, 3)];
+  R.region(fringe(spline(body, 0.5), 1.4, 67, () => [0.6 * k, -0.5]), { z: 2 * k, R: 3 * k, H: 3 * k, id: ID.BODY, tex: (p, o) => {
+    o.z += strands(p.x, p.y, Math.PI + p.y * 0.05, 2, 1, 69) * 0.55;
+    o.m = Math.abs(p.y) < (0.9 + (FS.tip > 0.7 ? 0.3 : 0)) * k ? M.stripe : Math.abs(p.y) < 2.2 * k ? M.furD : M.fur;
+  } });
+  const H = new Frame2(v(8, 0), -0.04 * (b ? 1 : -1), k);
+  headInto(sk, R, M, H, { ear: -0.6, jaw: 0, tongue: 0, eye, k, z: 5 * k, top: true });
+  R.shadow(ID.BODY, 0.8, 1.4, 0.14, ID.SAIL, 2);
+  R.shadow(ID.HEAD, 0.8, 1.4, 0.12, ID.SAIL, 2);
+  R.shadow(ID.TAIL, 0.6, 1.2, 0.1, ID.SAIL, 1);
   sk.np();
-  poly3(sk, 0, 0, [shF, ...edgeF, hipF], (p) => { p.l -= 0.14; return sailFill(M, p, eyF, byF, k); }, { phi: PHI });
-
-  sk.np();
-  sk.tube(edgeF.map(S2), 0.6 * k, M.edge, { z: -8, bias: -0.05 });
-  sk.np();
-  sk.tube([S2(shF), S2(wristF)], 1.3 * k, M.fur, { z: -6, bias: -0.1 });
-  sk.tube([S2(hipF), S2(ankleF)], 1.5 * k, M.fur, { z: -6, bias: -0.1 });
-  const pw = S2(wristF), pa = S2(ankleF);
-  sk.ell(pw[0] + 0.8 * k, pw[1], 1.2 * k, 1 * k, M.pad, { z: -5 });
-  sk.ell(pa[0] - 0.8 * k, pa[1], 1.3 * k, 1 * k, M.pad, { z: -5 });
-  // tail streaming behind
-  const tb = S2(K(-8.5, 0.2, 0));
-  const tpts = chain(tb, Math.PI + 0.04 + P.tail, 11, 2 * k, i => (i < 5 ? -0.02 : 0.03) + P.tail * 0.02);
-  bushyTail(sk, M, tpts, k, -1, 1.05);
-  // body seen from above-side: dorsal stripe along the top
-  sk.np();
-  const body = [S2(K(-9, 0.3, 0)), S2(K(-3, 0.5, 0)), S2(K(3, 0.5, 0)), S2(K(7, 0.2, 0))];
-  sk.tube(body, t => (3.8 + Math.sin(t * Math.PI) * 0.9) * k, (p) => (p.v < -0.66 ? M.stripe : p.v > 0.7 ? M.belly : M.fur), { z: 0 });
-  sk.streaks(sk.pid, () => [-1, 0.2] as V2, { spacing: 3, len: 2, amp: 0.08 });
-  // near sail over the body's near flank
-  sk.np();
-  poly3(sk, 0, 0, [shN, ...edgeN, hipN], (p) => sailFill(M, p, eyN, byN, k), { zb: 3, phi: PHI });
-
-  sk.np();
-  sk.tube(edgeN.map(S2), 0.6 * k, M.edge, { z: 12 });
-  sk.np();
-  sk.tube([S2(shN), S2(wristN)], 1.5 * k, M.fur, { z: 13 });
-  sk.tube([S2(hipN), S2(ankleN)], 1.7 * k, M.fur, { z: 13 });
-  const qw = S2(wristN), qa = S2(ankleN);
-  sk.ell(qw[0] + 0.8 * k, qw[1], 1.3 * k, 1.1 * k, M.pad, { z: 14 });
-  sk.ell(qa[0] - 0.8 * k, qa[1], 1.4 * k, 1.1 * k, M.pad, { z: 14 });
-  // head, slightly lifted, ears laid back
-  const H = new Frame2(S2(K(7.5, 0.6, 0.6)), -0.08, k);
-  const { ep, hc } = head(sk, M, H, { ...P, ear: -1 }, k, eye, 6);
+  R.emit({ drop: 1.2 * k, seam: 0.55, seamDark: 0.3, ao: 0.06, aoR: 2 });
+  const ep = drawHeadEyes(sk, H, k, eye, true);
+  const hc = H.p(1, -3);
   return { head: [hc[0], hc[1] - 2 * k] as V2, eye: ep };
 }
 
+/** Asleep: curled round, the big ears folded, the bushy tail wrapped over the back and round the front like a blanket. */
 function drawCurled(sk: Sk, M: M, P: P, k: number, eye: BeastEye) {
   sk.clipY = 0;
-  const ry = (5.4 + P.br * 0.35) * k;
-  // round sleeping body
+  const R = Relief.full(sk);
+  const br = P.br * 0.35;
+  const q = (x: number, y: number, s2 = 0): LM => [x * k, y * k, s2];
+  const ctr: V2 = [-0.6 * k, -2 * k];
+  const body: LM[] = [q(-7.8, -0.2, 0.3), q(-8.4, -3.6), q(-6.2, -7.4 - br), q(-1.8, -9 - br), q(2.6, -8.4 - br), q(5.6, -6), q(6.6, -3), q(6, -0.2, 0.3)];
+  R.region(fringe(spline(body, 0.5), 1.4, 5, (_x, _y, _nx, ny) => (ny < -0.3 ? [0.6 * k, -0.5] : null)), { z: 0, R: 4 * k, H: 4.4 * k, id: ID.BODY, pow: 0.85, tex: (p, o) => {
+    const a = Math.atan2(p.y - ctr[1], p.x - ctr[0]);
+    o.z += strands(p.x, p.y, a - 1.5, 2, 1, 51) * 0.5;
+    const r = Math.hypot(p.x - ctr[0], p.y - ctr[1]) / k;
+    o.m = r > 5.6 && a < -1 && a > -2.4 ? M.stripe : r > 4.6 && a < -0.6 ? M.furD : M.fur;
+  } });
+  // head tucked low at the front, nose down toward the tail
+  const H = new Frame2([3.2 * k, -5.4 * k], 0.5, k);
+  headInto(sk, R, M, H, { ear: -0.8, jaw: 0, tongue: 0, eye, k, z: 6 * k });
+  // the bushy tail over the back and round the front like a blanket
+  tailInto(R, M, [-7.6 * k, -2 * k], -0.25, i => (i < 4 ? 0.02 : i < 7 ? 0.18 : 0.1), k, 11 * k, 0.95, 9, -0.8 * k);
+  R.shadow(ID.TAIL, 0.6, 1, 0.12, ID.BODY, 1);
+  R.shadow(ID.HEAD, 0.6, 1, 0.1, ID.BODY, 1);
   sk.np();
-  sk.ell(-0.5 * k, -ry, 7.6 * k, ry, (p) => (p.v > 0.55 ? M.belly : p.v < -0.75 ? M.stripe : M.fur), { rz: 5 * k });
-  sk.streaks(sk.pid, () => [-1, 0.3] as V2, { spacing: 3, len: 2, amp: 0.08 });
-  // head tucked low at the front, nose to the tail tip
-  const H = new Frame2([2.6 * k, -6.2 * k], 0.5, k);
-  const { ep } = head(sk, M, H, { ...P, ear: -0.6 }, k, eye, 4);
-  // bushy tail wrapped over the back and round the front like a blanket
-  const tpts = chain([-7.4 * k, -1.8 * k], 0.25, 9, 1.9 * k, i => (i < 5 ? -0.05 : -0.22));
-  bushyTail(sk, M, tpts, k, 10, 0.95);
-  return { head: [0, -ry * 2 - 3] as V2, eye: ep };
+  R.emit({ drop: 1.3 * k, seam: 0.55, seamDark: 0.3, ao: 0.06, aoR: 2 });
+  const ep = drawHeadEyes(sk, H, k, eye);
+  return { head: [0, -9 * k * 2 - 3] as V2, eye: ep };
 }
 
 export const SAILGLIDER: SpeciesDef = {
@@ -369,4 +511,3 @@ export const SAILGLIDER: SpeciesDef = {
   eyeFor: (anim) => (anim === 'sleep' ? 'closed' : anim === 'alert' ? 'alert' : 'open'),
   anchor: { glide: 'centre', climb: 'grip' },
 };
-void fr;

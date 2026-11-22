@@ -102,9 +102,11 @@ export const gearFx = {
   /** multiplier on climbing energy */
   climbEnergyMult: (): number => [1, 1, 0.9, 0.8][gearLevel('boots')] ?? 1,
   /** 0 nothing, 1 snorkel (can look underwater), 2 wetsuit (cold water), 3 fins */
-  swim: (): number => gearLevel('wetsuit'),
-  /** multiplier on swimming energy */
-  swimEnergyMult: (): number => [1, 0.85, 0.7, 0.6][gearLevel('wetsuit')] ?? 1,
+  swim: (): number => Math.min(3, gearLevel('wetsuit')),
+  /** multiplier on swimming energy (the chain runs on past the fins: the air tank, the speargun) */
+  swimEnergyMult: (): number => [1, 0.85, 0.7, 0.6][Math.min(3, gearLevel('wetsuit'))] ?? 1,
+  /** V12 multiplier on swimming speed: the fins (bpdata 'fins') kick him along a third faster */
+  swimSpeed: (): number => (isActive('fins') ? 1.35 : 1),
   /** multiplier on the headlamp's beam (the storm lantern adds to it) */
   lampRange: (): number => ([1, 1.6, 1.6][gearLevel('headlamp')] ?? 1) * (isActive('storm_lantern') ? 1.3 : 1),
   /** multiplier on energy spent with the lamp on (after dark, in caves) */

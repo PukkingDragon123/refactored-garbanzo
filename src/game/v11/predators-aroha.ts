@@ -331,6 +331,22 @@ const LINES: Record<string, { notice: string[]; charge: string[] }> = {
   chunk: { notice: ['Grrr... wuff?', '...whine.'], charge: ['YIP!', 'Awooo!'] },
 };
 
+/** V12: lines for the feud's two (src/game/v12/feud), in place of the tiger's */
+const SPECIES_LINES: Record<string, Record<string, { notice: string[]; charge: string[] }>> = {
+  bearer: {
+    mori: { notice: ['That claw is longer than my LEG.', 'That is not a bear. Bears are smaller. And have more claws. Fewer. Less claw.'], charge: ['The CLAW is coming!', 'Nope! Back, back, BACK!'] },
+    jenna: { notice: ['Mori. Big furry problem. Twelve o’clock.', 'Is that a bear holding a SCYTHE?'], charge: ['RUN!', 'Why is it so fast for a sofa with a knife?'] },
+    joshu: { notice: ['Don’t look it in the eye. Don’t look at the claw either.', 'Steady. It wants the meat, not us. Probably.'], charge: ['Get behind something!', 'Down! Get DOWN!'] },
+    chunk: { notice: ['Grrr...', '...whine.'], charge: ['YIP!', 'Awooo!'] },
+  },
+  plumeboa: {
+    mori: { notice: ['A boa. With FEATHERS. Of course it has feathers.', 'How long IS it? It just keeps... going.'], charge: ['It’s striking!', 'Snake! Big snake! BIG SNAKE!'] },
+    jenna: { notice: ['That snake isn’t wearing a feather boa. That snake IS one.', 'Nobody step on the... long bit.'], charge: ['AAAH!', 'It’s faster than it looks!'] },
+    joshu: { notice: ['Keep off its coils.', 'Don’t stand anywhere it can reach. Which is everywhere.'], charge: ['Back!', 'Mind its head!'] },
+    chunk: { notice: ['Grrr... wuff?', '...whine.'], charge: ['YIP!', 'Awooo!'] },
+  },
+};
+
 /** everyone else's reactions: Chunk hides behind Mori, the others back off; lines when it shows up and charges */
 export class PartyReact {
   private said = new Set<string>();
@@ -348,7 +364,7 @@ export class PartyReact {
       const who = ['mori', 'jenna', 'joshu', 'chunk'].filter(id => id === 'mori' || this.s.actors.get(id)?.visible);
       const pick = who[Math.floor(rand.next() * who.length)];
       if (this.cool <= 0 && pick) {
-        const l = LINES[pick][kind];
+        const l = (SPECIES_LINES[info.a?.species ?? '']?.[pick] ?? LINES[pick])[kind];
         const key = pick + kind;
         if (!this.said.has(key) || rand.next() < 0.3) {
           this.said.add(key);

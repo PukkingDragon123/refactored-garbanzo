@@ -11,7 +11,7 @@ import { A } from '../../assets';
 import { Rng, rand } from '../../../core/math';
 import type { FieldScene } from '../../scenes/field';
 import type { CaveLight } from './dark';
-import { FALLS, LAKE, POOLS, floorOf, poolTop } from './layout';
+import { FALLS, LAKE, POOLS, TIER, floorOf, poolTop } from './layout';
 
 const P = packColor;
 
@@ -66,7 +66,8 @@ export class CaveWater {
   rings: Ring[] = [];
   bubbles: { x: number; y: number; vy: number; s: number; top: number }[] = [];
   private t = 0;
-  private pools = POOLS.map(p => ({ ...p, top: poolTop(p) }));
+  // (where the roof dips under the water, in the sump, the water starts under the rock)
+  private pools = POOLS.map(p => ({ ...p, top: poolTop(p), lip: (x: number) => Math.max(poolTop(p), Math.round(TIER[p.tier].roof(x)) + 3) }));
   constructor(readonly f: FieldScene) {}
   /** a ring spreading on the surface (inward: closing in on the point: the Gulper's tell) */
   ring(x: number, y: number, r: number, life = 1.4, k = 0.8, inward = false) { this.rings.push({ x, y, r, t: 0, life, k, inward }); }
@@ -86,7 +87,7 @@ export class CaveWater {
     r.water(0.7, 0.4, 0.6);
     for (const p of this.pools) {
       if (p.x1 < vx0 || p.x0 > vx1 || p.top > vy1 || p.top + 20 < vy0) continue;
-      for (let x = p.x0; x < p.x1; x++) { const b = floorOf(p.tier, x); if (b > p.top + 1) r.rect(x, p.top, 1, b - p.top + 1, P(0.04, 0.07, 0.09, 1)); }
+      for (let x = p.x0; x < p.x1; x++) { const b = floorOf(p.tier, x), t = p.lip(x); if (b > t + 1) r.rect(x, t, 1, b - t + 1, P(0.04, 0.07, 0.09, 1)); }
     }
     if (LAKE.top < vy1 && LAKE.top + 200 > vy0) {
       for (let x = Math.max(LAKE.x0, Math.floor(vx0 / 2) * 2); x < Math.min(LAKE.x1, vx1); x += 2) r.rect(x, LAKE.top, 2, LAKE.bed(x) - LAKE.top + 2, P(0.02, 0.04, 0.06, 1));
@@ -99,10 +100,18 @@ export class CaveWater {
     for (const p of this.pools) {
       if (p.x1 < vx0 || p.x0 > vx1 || p.top > vy1 || p.top + 20 < vy0) continue;
       let a = -1;
+      const lit = p.kind === 'nursery';
       for (let x = p.x0; x < p.x1; x++) {
-        const b = floorOf(p.tier, x);
-        if (b > p.top + 1) { r.rect(x, p.top + 1, 1, b - p.top, P(0.05, 0.12, 0.15, 0.42)); if (a < 0) a = x; }
-        else if (a >= 0) { r.rect(a, p.top, x - a, 1, P(0.42, 0.56, 0.62, 0.7)); a = -1; }
+        const b = floorOf(p.tier, x), t = p.lip(x);
+        if (b > t + 1) {
+          r.rect(x, t + 1, 1, b - t, lit ? P(0.12, 0.42, 0.48, 0.5) : P(0.05, 0.12, 0.15, 0.42));
+          if (t === p.top) { if (a < 0) a = x; } else if (a >= 0) { r.rect(a, p.top, x - a, 1, P(0.42, 0.56, 0.62, 0.7)); a = -1; }
+        } else if (a >= 0) { r.rect(a, p.top, x - a, 1, P(0.42, 0.56, 0.62, 0.7)); a = -1; }
+      }
+      // the nursery glows from the crystals in its bed: a shimmer over the whole pool
+      if (lit) for (let x = p.x0 + 2; x < p.x1 - 2; x += 3) {
+        const k = Math.sin(time * 0.9 + x * 0.21) * Math.sin(time * 0.5 + x * 0.07);
+        if (k > 0.3) r.fxRect(x, p.top + 1 + Math.round((floorOf(p.tier, x) - p.top) * 0.6), 1, 1, P(0.5, 1, 0.95, 1), 0.9 * k, true);
       }
       if (a >= 0) r.rect(a, p.top, p.x1 - a, 1, P(0.42, 0.56, 0.62, 0.7));
     }

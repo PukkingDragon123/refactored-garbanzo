@@ -58,19 +58,20 @@ export class CaveBugs {
         this.weta.push({ hx, hy, x: hx, y: hy, f: r.int(0, 3), face: r.chance(0.5) ? 1 : -1, run: 0, vx: 0, vy: 0 });
       }
     };
-    for (const x of [380, 640, 1180, 1420]) colony('t0', x, 10 + r.int(0, 8), 60);
+    for (const x of [240, 520, 1240, 1460]) colony('t0', x, 10 + r.int(0, 8), 60);
     for (let x = 620; x < 1900; x += r.range(110, 190)) colony('t1', x, 14 + r.int(0, 12), 70);
     for (const x of [300, 900, 1650, 1950]) colony('t2', x, 8 + r.int(0, 6), 50);
     for (const x of [1000, 1700, 2150]) colony('t3', x, 8, 50);
+    for (const x of [600, 1000, 1800, 2000, 2240]) colony('t5', x, x > 1700 ? 12 : 6, x > 1700 ? 70 : 40);
     // ---- harvestmen in clumps on the roofs of the middle halls
-    for (const [tier, x] of [['t1', 860], ['t1', 1520], ['t2', 1050], ['t2', 1780], ['t3', 1380], ['g', 1450]] as const) {
+    for (const [tier, x] of [['t1', 860], ['t1', 1520], ['t2', 1050], ['t2', 1780], ['t3', 1380], ['g', 1450], ['t5', 1000], ['t5', 2100]] as const) {
       const t = TIER[tier];
       this.clumps.push({ x, y: t.floor(x) - t.height(x) + 10, n: 5 + r.int(0, 5), ph: r.range(0, 6), bob: 0 });
     }
     // ---- little centipedes running the floors
-    for (const [tier, x] of [['t1', 900], ['t1', 1700], ['t2', 1200], ['t2', 1900], ['t3', 1100], ['t3', 1800], ['g', 1400], ['t4', 300]] as const) this.centi.push({ x, tier, vx: 0, face: 1, t: r.range(0, 3), gone: 0 });
+    for (const [tier, x] of [['t1', 900], ['t1', 1700], ['t2', 1200], ['t2', 1960], ['t3', 1100], ['t3', 1800], ['g', 1400], ['t4', 300], ['t5', 1060], ['t5', 1900]] as const) this.centi.push({ x, tier, vx: 0, face: 1, t: r.range(0, 3), gone: 0 });
     // ---- moths at the mouth
-    for (let i = 0; i < 14; i++) { const x = r.range(40, 520), y = TIER.t0.floor(x) - r.range(30, 110); this.moths.push({ x, y, vx: 0, vy: 0, ph: r.range(0, 6), hx: x, hy: y }); }
+    for (let i = 0; i < 14; i++) { const x = r.range(40, 520), y = clamp(TIER.t0.floor(x) - r.range(30, 110), TIER.t0.roof(x) + 8, TIER.t0.floor(x) - 14); this.moths.push({ x, y, vx: 0, vy: 0, ph: r.range(0, 6), hx: x, hy: y }); }
     // ---- springtails on every pool
     for (const p of POOLS) { const top = poolTop(p); for (let i = 0; i < 10; i++) { const x = r.range(p.x0 + 6, p.x1 - 6); this.springs.push({ x, y: top, vy: 0, hop: r.range(0, 2), top, x0: p.x0 + 4, x1: p.x1 - 4 }); } }
     // ---- bats roosting over the guano at the mouth

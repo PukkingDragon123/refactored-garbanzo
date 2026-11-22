@@ -44,6 +44,7 @@ import type { TBArt } from '../../art/v12/thunderbird';
 const TIER: Record<string, number> = {
   fernwood: 1, canopy: 1, falls: 1, mangrove: 1, coast: 1, grotto: 1, swamp: 1,
   hills: 2, ruins: 2, fossils: 2, glowforest: 2, geovalley: 2, unknown: 2,
+  backcountry: 2,
 };
 export const tierOf = (loc: string | null) => (loc ? TIER[loc] ?? 0 : 0);
 const hasSling = () => game.save.tools.includes('slingshot');
@@ -74,6 +75,7 @@ const OW = ['OOF!', 'Ow ow ow...', 'Nope. Nope nope nope.', 'I am NOT a threat! 
 export function hitMori(f: FieldScene, from: number, o: { sev: 1 | 2 | 3; drop?: boolean; what?: string }) {
   const p = f.player;
   if (p.state === 'stunned' || p.hurtT > 0.4) return;
+  { const v = game.save.vars; v['fs:hits'] = (v['fs:hits'] ?? 0) + 1; v['fs:hitDay'] = game.save.day || 1; } // V12 feats (./feats.ts)
   const dir = Math.sign(p.x - from) || 1;
   p.cancelWork();
   f.cam?.raise(false);

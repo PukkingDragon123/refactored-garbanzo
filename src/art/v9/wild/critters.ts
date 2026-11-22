@@ -14,6 +14,8 @@ import { PixelBuffer } from '../../pixel';
 import { Sk, rmp, hh, SpeciesDef, V2 } from '../../beasts-core';
 import { hex } from '../../color';
 import type { Sprite } from './rocks';
+import { Field, strip, spline } from './contour';
+import type { LP } from './contour';
 
 const cut = (sk: Sk, rim = 0.12, outline = true): Sprite => {
   const b = sk.resolve({ rim, bounce: 0.06, outline });
@@ -22,47 +24,230 @@ const cut = (sk: Sk, rim = 0.12, outline = true): Sprite => {
 };
 
 // ------------------------------------------------------------------ amber snail (+ puppeteer fluke)
+// Painted from real land-snail anatomy on organic contours (./contour): a coiled shell built from a
+// logarithmic spiral (each whorl a rounded tube, the sutures sunk between them, spiral chocolate bands
+// that keep to their whorl, fine growth lines and two dark growth pauses across them, a glossy amber
+// periostracum and a pale thickened lip round the aperture), the mantle collar bulging at the lip, and
+// the head-foot: a long muscular foot with a pale pedal fringe along the sole, its skin netted into
+// tubercles by fine grooves, two dark grooves running back from the eye stalks, the long upper
+// tentacles (ommatophores) with their eyes at the swollen tips, the short lower tentacles and the
+// lip. The fluke's snail has one eye stalk swollen into the parasite's broodsac: a fat, glistening
+// tube ringed green, white and dark that throbs as the rings crawl up it.
+/** the shell's spiral: centre, outer radius at the aperture, growth per turn (k units) */
+const SH_B = Math.log(2.05) / (Math.PI * 2);
+const SH_TH = 1.05; // screen angle of the aperture (down and forward)
+const SH_SQ = 0.9;  // the coil seen a little from the side
+
 /** f: crawl phase 0..3; pulse: fluke throb 0..3; withdrawn: tucked in the shell */
 export function drawSnail(sk: Sk, f: number, infected: boolean, pulse: number, withdrawn: boolean, k = 1) {
-  const shell = sk.m(rmp('#c8822a', { n: 5, dark: 0.6, light: 0.45, warm: 0.3 }), { edge: 1 });
-  const band = sk.m(rmp('#5a2a14', { n: 3, dark: 0.5, light: 0.3 }), { edge: 1 });
-  const body = sk.m(rmp('#9a8e7e', { n: 4, dark: 0.55, light: 0.4 }), { edge: 1 });
-  const g1 = sk.m(rmp('#7ac83a', { n: 4, dark: 0.5, light: 0.45 }), { edge: 1 });
-  const g2 = sk.m(rmp('#f0e84a', { n: 3, dark: 0.45, light: 0.4 }), { edge: 1 });
-  const g3 = sk.m(rmp('#2a5a1a', { n: 3, dark: 0.45, light: 0.3 }), { edge: 1 });
-  const stretch = withdrawn ? 0 : [0, 0.6, 1, 0.5][f % 4];
+  const big = k >= 2;
+  const tiny = k < 1.5;
+  const M = {
+    shell: sk.m(rmp('#bc7020', { n: 8, dark: 0.72, light: 0.42, warm: 0.5, cool: 0.35, sat: 0.4 }), { edge: 1 }),
+    shellL: sk.m(rmp('#d89848', { n: 7, dark: 0.62, light: 0.42, warm: 0.5 }), { edge: 1 }),
+    band: sk.m(rmp('#4a1e0e', { n: 6, dark: 0.6, light: 0.45, warm: 0.3 }), { edge: 1 }),
+    lip: sk.m(rmp('#f0dcb4', { n: 6, dark: 0.45, light: 0.4 }), { edge: 1 }),
+    body: sk.m(rmp('#8e8270', { n: 7, dark: 0.62, light: 0.45, cool: 0.35 }), { edge: 1 }),
+    bodyD: sk.m(rmp('#5e5448', { n: 6, dark: 0.55, light: 0.4, cool: 0.3 }), { edge: 1 }),
+    sole: sk.m(rmp('#c4b8a2', { n: 6, dark: 0.5, light: 0.4 }), { edge: 1 }),
+    mantle: sk.m(rmp('#a89a80', { n: 6, dark: 0.55, light: 0.45 }), { edge: 1 }),
+    eye: sk.m(rmp('#1a1614', { n: 3, dark: 0.4, light: 0.6 }), { edge: 0, noRim: true }),
+    g1: sk.m(rmp('#4aa83a', { n: 6, dark: 0.6, light: 0.5, warm: 0.3 }), { edge: 1 }),
+    g2: sk.m(rmp('#eef0b8', { n: 5, dark: 0.45, light: 0.4 }), { edge: 1 }),
+    g3: sk.m(rmp('#1e4a1a', { n: 5, dark: 0.5, light: 0.4 }), { edge: 1 }),
+  };
+  const st = withdrawn ? 0 : [0, 0.6, 1, 0.5][f % 4];
+  const K = (x: number, y: number): V2 => [x * k, y * k];
+
+  // ---------------------------------------------------------------- the head-foot
   if (!withdrawn) {
-    // the foot: a long low slug of a body, head forward
+    const s = st;
+    // the foot is one contour: the tail, the hidden back under the shell, the neck rising to the head,
+    // the snout and lip, the chin, then the sole with its pedal waves running back to the tail
+    const wave = (x: number) => (big ? Math.max(0, Math.sin(x * 1.3 - f * 1.6)) * 0.12 : 0);
+    const L: LP[] = [
+      [-5.7 - s * 0.15, -0.28], [-4.7, -0.95], [-3.2, -1.38], [-1.0, -1.75], [1.6, -1.85],
+      [3.2 + s * 0.5, -2.15], [4.5 + s, -2.75], [5.45 + s, -3.0], [6.3 + s, -2.55], [6.62 + s, -1.6],
+      [6.35 + s, -0.75], [5.4 + s, -0.12], [3.6, wave(3.6)], [1.2, wave(1.2)], [-1.6, wave(-1.6)], [-4.2, -0.04],
+    ];
+    const C = spline(L.map(q => [q[0] * k, q[1] * k] as LP), true, tiny ? 3 : 6);
     sk.np();
-    sk.tube([[-4.5 * k, -1 * k], [0, -1.1 * k], [(4 + stretch) * k, -1.3 * k], [(5.6 + stretch) * k, -2.4 * k]], t => (1.1 + Math.sin(t * Math.PI) * 0.3) * k, body, { z: 0 });
-    // eye stalks: the near one carries the fluke when infected
-    const hx = (5.6 + stretch) * k, hy = -2.6 * k;
-    sk.np();
-    sk.tube([[hx - 0.6 * k, hy], [hx + 0.2 * k, hy - 3.2 * k]], 0.4 * k, body, { z: 1 });
+    const F = new Field(sk, [C], { round: 1.1 * k, dome: 0.4 * k });
+    // dorsal grooves from the tentacles back along the neck
+    const gr = [spline([K(5.0 + s, -2.85), K(3.9 + s * 0.6, -2.45), K(2.6, -2.0)], false, 4), spline([K(5.5 + s, -2.6), K(4.4 + s * 0.6, -2.2), K(3.0, -1.75)], false, 4)];
+    if (!tiny) for (const g of gr) F.groove(g, Math.max(0.45, 0.1 * k), -0.3 * k);
+    // the sole's pedal groove
+    if (!tiny) F.groove(spline([K(-4.4, -0.42), K(0, -0.45), K(4.6 + s, -0.48), K(5.6 + s, -0.4)], false, 5), Math.max(0.45, 0.09 * k), -0.25 * k);
+    // tubercles: a net of fine grooves (cells elongated along the foot, leaning forward)
+    if (big) F.add((x, y) => {
+      const u = x * 0.55 + y * 0.35, v = y * 0.95 - x * 0.12;
+      const cs = 1.15;
+      const gu = Math.floor(u / cs), gv = Math.floor(v / (cs * 0.8));
+      let best = 9, sec = 9;
+      for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+        const cu = (gu + i + 0.5 + (hh(gu + i, gv + j, 81) - 0.5) * 0.7) * cs, cv = (gv + j + 0.5 + (hh(gv + j, gu + i, 82) - 0.5) * 0.7) * cs * 0.8;
+        const d = Math.hypot(u - cu, (v - cv) * 1.2);
+        if (d < best) { sec = best; best = d; } else if (d < sec) sec = d;
+      }
+      return sec - best < 0.22 ? -0.22 : (sec - best) * 0.12;
+    });
+    const solY = -0.5 * k;
+    F.emit((p) => {
+      // the pale pedal fringe along the sole, finely striated
+      if (p.y > solY) { if (big && Math.floor(p.x) % 2 === 0) p.l -= 0.08; return M.sole; }
+      // the head and the dorsal stripe darker, the flanks translucent grey-amber
+      if (p.y < -2.0 * k && p.x > 3.6 * k) return p.nz > 0.85 ? M.body : M.bodyD;
+      if (big && hh(p.x * 0.8, p.y * 0.8, 85) < 0.06) p.l += 0.15;
+      return M.body;
+    }, { z: 0, spec: big ? 0.65 : 0.3, specPow: 16 });
+
+    // tentacles: the upper pair carry the eyes at their tips, the lower pair are short feelers
+    const hx = 5.4 + s, hy = -2.95;
+    const tent = (path: V2[], w0: number, w1: number, z: number, bias: number, eye: boolean) => {
+      sk.np();
+      const P2 = spline(path.map(q => [q[0] * k, q[1] * k] as LP), false, 4);
+      if (tiny) {
+        for (let i = 1; i < P2.length; i++) sk.line(P2[i - 1][0], P2[i - 1][1], P2[i][0], P2[i][1], M.body, 0.5 + bias, z, false);
+      } else {
+        const c = strip(P2, t => (w0 + (w1 - w0) * t + (eye && t > 0.85 ? 0.12 : 0)) * k, t => (w0 + (w1 - w0) * t + (eye && t > 0.85 ? 0.12 : 0)) * k, { capA: 0.5, capB: 1 });
+        const T = new Field(sk, [c], { round: 0.3 * k, dome: 0.05 * k });
+        if (big) T.add((x, y) => (Math.sin((x * 0.5 - y * 1.6) * 2.2) > 0.85 ? -0.12 : 0));
+        T.emit((p) => (p.nz < 0.6 ? M.bodyD : M.body), { z, bias, spec: 0.6 });
+      }
+      if (eye) {
+        const e = P2[P2.length - 1];
+        const d = P2[P2.length - 3] ?? P2[0];
+        const ex = e[0] - (e[0] - d[0]) * 0.15, ey = e[1] - (e[1] - d[1]) * 0.15;
+        sk.over(Math.floor(ex), Math.floor(ey), hex('#141010'));
+        if (big) { sk.over(Math.floor(ex) + 1, Math.floor(ey), hex('#2a2420')); sk.over(Math.floor(ex), Math.floor(ey) - 1, hex('#e8e0d0', 200)); }
+      }
+    };
+    // the far upper tentacle, then the near one (or the fluke's broodsac)
+    tent([[hx - 0.3, hy + 0.1], [hx + 0.1, hy - 1.8], [hx + 0.55, hy - 3.4]], 0.24, 0.17, -2 * k, -0.2, true);
+    tent([[hx + 0.75, hy + 1.3], [hx + 1.35, hy + 1.55], [hx + 1.8, hy + 1.95]], 0.2, 0.12, 2 * k, 0, false);
     if (infected) {
+      // the broodsac: a fat glistening tube that has swallowed the eye stalk, ringed, its rings crawling
+      const ph = pulse * 0.25;
+      const sw = 1 + [0, 0.12, 0.22, 0.1][pulse % 4];
+      const path = spline([K(hx + 0.1, hy + 0.2), K(hx + 0.9, hy - 1.6), K(hx + 1.7, hy - 3.6), K(hx + 1.9, hy - 5.3)], false, 6);
+      const w = (t: number) => {
+        const body = t < 0.12 ? 0.3 + t * 3 : Math.min(1.05, 0.62 + Math.sin(Math.min(1, (t - 0.08) / 0.9) * Math.PI) * 0.5);
+        const ring = big ? 1 - 0.13 * Math.max(0, Math.cos((t * 3.4 - ph) * Math.PI * 2)) ** 6 : 1;
+        return body * ring * (t > 0.2 ? sw : 1) * k;
+      };
       sk.np();
-      const sw = 1 + [0, 0.18, 0.32, 0.15][pulse % 4];
-      sk.tube([[hx, hy], [hx + 1.4 * k, hy - 2.4 * k], [hx + 1.8 * k, hy - 4.6 * k]], t => (0.55 + Math.sin(t * Math.PI) * 0.8 * sw) * k, (p) => {
-        const q = (p.t * 4 - pulse * 0.25) % 1;
-        return q < 0.3 ? g3 : q < 0.6 ? g1 : g2;
-      }, { z: 4 });
-      sk.over(Math.floor(hx + 2 * k), Math.floor(hy - 4.8 * k), hex('#101010'));
+      const SF = new Field(sk, [strip(path, w, w, { capA: 0.6, capB: 1 })], { round: 0.7 * k, dome: 0.3 * k });
+      const pl = path.length;
+      SF.emit((p) => {
+        // where along the sac: nearest path point
+        let bi = 0, bd = Infinity;
+        for (let i = 0; i < pl; i += 2) { const d = (p.x - path[i][0]) ** 2 + (p.y - path[i][1]) ** 2; if (d < bd) { bd = d; bi = i; } }
+        const t = bi / (pl - 1);
+        if (t < 0.14) return M.body;
+        // the bands: dark green rings, bright green, then a white band, crawling up with the pulse
+        const q = ((t * 3.4 - ph + 0.5) % 1 + 1) % 1;
+        if (t > 0.88) { if (big && hh(p.x, p.y, 91) < 0.35) return M.g3; return M.g1; }
+        if (q < 0.2) return M.g3;
+        if (q < 0.45) { if (big && hh(p.x * 1.2, p.y * 1.2, 92) < 0.14) return M.g3; return M.g1; }
+        if (q < 0.8) { if (big && hh(p.x * 1.3, p.y * 1.3, 93) < 0.08) return M.g1; return M.g2; }
+        return M.g1;
+      }, { z: 3 * k, spec: 1.1, specPow: 14 });
+      // its dark tip spot, where the snail's own eye used to be
+      const e = path[path.length - 1];
+      sk.over(Math.floor(e[0] + 0.3 * k), Math.floor(e[1] - 0.2 * k), hex('#0e1a0c'));
     } else {
-      sk.np();
-      sk.tube([[hx, hy], [hx + 1.2 * k, hy - 3.6 * k]], 0.42 * k, body, { z: 3 });
-      sk.over(Math.floor(hx + 1.3 * k), Math.floor(hy - 3.9 * k), hex('#101010'));
+      tent([[hx + 0.2, hy + 0.15], [hx + 0.75, hy - 1.75], [hx + 1.25, hy - 3.55]], 0.27, 0.19, 3 * k, 0, true);
     }
+    tent([[hx + 0.8, hy + 1.45], [hx + 1.45, hy + 1.75], [hx + 1.95, hy + 2.25]], 0.22, 0.13, 3.2 * k, 0, false);
   }
-  // the shell: a glossy amber spiral with dark bands
+
+  // ---------------------------------------------------------------- the shell
+  // a logarithmic spiral seen a little from the side: the coil's apex is pulled up and back (Dv), so
+  // the whorls crowd into a low spire at the top-back and open into the broad body whorl at the front
+  const cx = -0.4 * k, cy = (withdrawn ? -3.55 : -4.5) * k, R = 4.2 * k;
+  const Dx = -0.26, Dy = -0.4;
+  const pol = (r: number, th: number): V2 => [cx + R * Dx + r * (Math.cos(th) - Dx), cy + R * Dy + r * (Math.sin(th) * SH_SQ - Dy)];
+  const outline: V2[] = [];
+  const N = tiny ? 40 : 96;
+  for (let i = 0; i <= N; i++) { const a = (i / N) * Math.PI * 2; outline.push(pol(R * Math.exp(-SH_B * a), SH_TH + a)); }
+  const rIn = R * Math.exp(-SH_B * Math.PI * 2);
+  for (let i = 1; i < 10; i++) { const t = i / 10; outline.push(pol(rIn + (R - rIn) * t, SH_TH - 0.16 * Math.sin(t * Math.PI) - 0.02)); }
+  // spiral coordinates of a point: which whorl (j), how far across it (f: 0 inner suture .. 1 outer
+  // edge), the whorl's width in px, and the spiral angle back from the aperture (a)
+  const spiral = (x: number, y: number) => {
+    const wx = x - cx - R * Dx, wy = y - cy - R * Dy;
+    const ang = Math.atan2(wy, wx);
+    let th = ang;
+    for (let it = 0; it < 7; it++) {
+      const gx = Math.cos(th) - Dx, gy = Math.sin(th) * SH_SQ - Dy;
+      let d = ang - Math.atan2(gy, gx);
+      d = ((d + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+      th += d * 0.9;
+    }
+    const gl = Math.hypot(Math.cos(th) - Dx, Math.sin(th) * SH_SQ - Dy);
+    const r = Math.max(1e-3, Math.hypot(wx, wy) / gl);
+    let a = th - SH_TH;
+    a = ((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    const turns = (Math.log(R / r) / SH_B - a) / (Math.PI * 2);
+    const j = Math.floor(turns);
+    const f = 1 - (turns - j);
+    const ew = R * Math.exp(-SH_B * (a + Math.PI * 2 * Math.max(0, j))) * (1 - Math.exp(-SH_B * Math.PI * 2)) * gl;
+    return { a, j, f, r, ew };
+  };
   sk.np();
-  const sx = -0.6 * k, sy = -4.1 * k, R = 3.6 * k;
-  sk.ell(sx, sy, R, R * 0.92, (p) => {
-    const a = Math.atan2(p.v, p.u), r = Math.hypot(p.u, p.v);
-    const sp = (r * 3 + a / (Math.PI * 2) + 10) % 1;
-    if (sp < 0.16) return band;
-    return shell;
-  }, { z: 2, rz: R * 0.8 });
-  sk.over(Math.floor(sx - R * 0.4), Math.floor(sy - R * 0.5), hex('#fff2c8'));
+  const S = new Field(sk, [outline], {
+    hf: (x, y, d) => {
+      const { j, f: fw, r, ew } = spiral(x, y);
+      if (j < 0) return Math.min(d, 1.2 * k) * 0.8 + R * 0.05; // the lip / aperture zone
+      // each whorl a rounded tube, fuller toward its outer side; the spire raised toward the apex
+      let h = ew * 0.5 * Math.pow(Math.max(0, Math.sin(Math.PI * Math.min(1, fw * 0.9 + 0.06))), 0.55);
+      h += (1 - r / R) * R * 0.3;
+      return h;
+    },
+  });
+  // growth lines across the whorls (about every 2.5 px, following the spiral angle) and one growth
+  // pause, as relief so each line catches the light on one side
+  if (!tiny) S.add((x, y) => {
+    const { a, j, r, ew } = spiral(x, y);
+    if (j < 0 || ew < 4) return 0;
+    const lines = (a * r) / (big ? 2.4 : 2.0) + Math.sin(a * 3 + j) * 0.4;
+    let o = (lines % 1) < 0.34 ? -0.1 * k : 0;
+    if (big && j === 0 && Math.abs(a - 3.2) < 0.05) o -= 0.25 * k;
+    return o;
+  });
+  S.emit((p) => {
+    const { a, j, f: fw, ew } = spiral(p.x, p.y);
+    // the thickened pale lip, flaring a little past the body whorl
+    if (j < 0) return M.lip;
+    // the suture: a dark seam where each whorl laps over the one inside it
+    const px = fw * ew; // px from the inner suture
+    if (px < (tiny ? 0.7 : 0.85)) { p.l -= 0.3; return M.band; }
+    // spiral chocolate bands that keep to their whorl: a broad one below the periphery, a fine one above
+    const wob = big ? Math.sin(a * 5 + j) * 0.03 : 0;
+    const bw = Math.max(tiny ? 0.5 : 0.75, ew * 0.11);
+    if (Math.abs((fw - 0.64 - wob) * ew) < bw && ew > 3.4) { if (big && hh(p.x * 0.6, p.y * 0.6, 95) < 0.1) p.l += 0.12; return M.band; }
+    if (big && Math.abs((fw - 0.33 - wob) * ew) < 0.5 && ew > 6) return M.band;
+    // translucent amber, paler toward the young lip and on the worn apex
+    if (j >= 2 && ew > 2.5) return M.shellL;
+    if (j === 0 && a > Math.PI * 1.6 && ew > 4) return M.shellL;
+    if (big && hh(p.x * 0.5, p.y * 0.5, 96) < 0.08) p.l += 0.08;
+    return M.shell;
+  }, { z: 4 * k, zk: 0.7, spec: big ? 1.0 : 0.6, specPow: 22 });
+  // the mantle collar: a fleshy roll where the body leaves the shell, along the shell's lower margin
+  if (!withdrawn && !tiny) {
+    const path: V2[] = [];
+    for (let i = 0; i <= 8; i++) {
+      const th = 0.75 + (i / 8) * 1.3;
+      const aa = ((th - SH_TH) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+      path.push(pol(R * Math.exp(-SH_B * aa) * 0.97, th));
+    }
+    sk.np();
+    const c = strip(path, t => (0.5 - Math.abs(t - 0.4) * 0.4) * k, t => (0.42 - Math.abs(t - 0.4) * 0.3) * k, { capA: 1, capB: 1 });
+    new Field(sk, [c], { round: 0.4 * k, dome: 0.15 * k }).emit((p) => {
+      if (big && hh(p.x, p.y, 97) < 0.18) p.l -= 0.14;
+      return M.mantle;
+    }, { z: 2 * k, spec: 0.5 });
+  }
 }
 
 // ------------------------------------------------------------------ tin-can hermit
@@ -271,8 +456,8 @@ const one = (name: string, kind: SpeciesDef['kind'], len: number, height: number
   draw(sk: Sk, _a: string, f: number) { fn(sk, f); return { head: [0, -4] as V2, eye: [0, -4] as V2 }; },
 });
 export const CRITTER_DEFS: Record<string, SpeciesDef> = {
-  ambersnail: one('Amber Snail', 'mollusc', 12, 9, 50, 40, 22, 32, sk => drawSnail(sk, 2, false, 0, false, 2.2)),
-  puppetfluke: one('Puppeteer Fluke', 'other', 12, 12, 50, 44, 22, 34, sk => drawSnail(sk, 2, true, 2, false, 2.2)),
+  ambersnail: one('Amber Snail', 'mollusc', 12, 9, 50, 40, 22, 32, sk => drawSnail(sk, 2, false, 0, false, 3.1)),
+  puppetfluke: one('Puppeteer Fluke', 'other', 12, 12, 50, 44, 22, 34, sk => drawSnail(sk, 2, true, 2, false, 3.0)),
   canhermit: one('Tin-can Hermit', 'crustacean', 14, 9, 30, 20, 13, 16, sk => drawHermit(sk, 'can', 1, false)),
   periscopeeel: one('Periscope Sand Eel', 'fish', 3, 14, 18, 22, 7, 19, sk => drawEel(sk, 1, 0.3, 1)),
   wrackhopper: one('Wrack Hopper', 'crustacean', 3, 2, 10, 8, 5, 5, sk => { const m = sk.m(rmp('#c8b490', { n: 3, dark: 0.45, light: 0.4 }), { edge: 1 }); sk.ell(0, -1, 2.2, 1.3, m, { rot: -0.3 }); sk.line(-1.5, 0, -3, -2, m, 0.4, 1, true); sk.line(1.5, -1.8, 3, -3, m, 0.4, 1, true); }),

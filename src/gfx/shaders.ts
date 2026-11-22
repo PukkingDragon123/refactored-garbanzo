@@ -23,6 +23,14 @@ vec2 pixelAA(vec2 uv, vec2 texSize) {
   return p / texSize;
 }`;
 
+/** 4x4 ordered (Bayer) dither threshold of an integer cell, in (0, 1) */
+const BAYER_FN = /* glsl */ `
+float bayer4(ivec2 q) {
+  int x = q.x & 3, y = q.y & 3, d = x ^ y;
+  int v = ((d & 1) << 3) | ((y & 1) << 2) | (d & 2) | ((y >> 1) & 1);
+  return (float(v) + 0.5) / 16.0;
+}`;
+
 export const SPRITE_VS = /* glsl */ `#version 300 es
 layout(location=0) in vec2 a_pos;
 layout(location=1) in vec2 a_uv;
@@ -48,6 +56,7 @@ precision highp float;
 uniform sampler2D u_tex;
 uniform vec2 u_texSize;
 uniform float u_shadow;
+uniform float u_artPx;   // render px per art px
 in vec2 v_uv;
 in vec4 v_color;
 in vec4 v_aux;
@@ -56,8 +65,18 @@ layout(location=0) out vec4 o_albedo;
 layout(location=1) out vec4 o_aux;
 layout(location=2) out vec4 o_mat;
 ${AA_FN}
+${BAYER_FN}
 void main() {
   vec4 t = texture(u_tex, pixelAA(v_uv, u_texSize));
+  if (v_mat.b > 0.0) {
+    // an afterimage (src/gfx/trails.ts): hard pixels only, its coverage (mat.b) an ordered dither on the
+    // art pixel grid, the sprite's own colours half washed toward the trail tint (v_color.rgb)
+    if (t.a * v_color.a < 0.5 || bayer4(ivec2(floor(gl_FragCoord.xy / u_artPx))) >= v_mat.b) discard;
+    o_albedo = vec4(mix(t.rgb, v_color.rgb, 0.45), 1.0);
+    o_aux = vec4(v_aux.rgb, 1.0);
+    o_mat = vec4(v_mat.rg, v_aux.a, 1.0);
+    return;
+  }
   vec4 c = vec4(t.rgb * v_color.rgb * v_color.a, t.a * v_color.a);
   if (c.a < 0.004) discard;
   if (v_mat.a > 0.5) {
@@ -307,33 +326,58 @@ void main() {
   o = vec4(m, 0.0, 0.0, 1.0);
 }`;
 
-/**
- * Camera motion blur and radial zoom blur in one pass. Each pixel's screen velocity comes from the
- * camera's move (scaled by its layer's parallax, so the far hills hardly smear and the foreground
- * streaks), the zoom's dolly (radial, from the view centre) and an explicit zoom-blur punch (radial,
- * from its own centre: whatever sits there stays sharp).
- */
+// Camera motion blur and radial zoom blur in one pass. Each pixel's screen velocity is the camera's move
+// over the shutter, scaled by its layer's parallax (the far hills hardly smear, the foreground streaks,
+// the sky not at all), plus the zoom's dolly (radial from the view centre) and an explicit zoom-blur punch
+// (radial from its own centre: whatever sits there stays sharp). Pixels drawn as the held subject (Renderer.hold: mat.r = 0, mat.g = 1) smear by its
+// own move relative to the camera instead, so a subject the camera tracks stays sharp while the world
+// streams past it.
+// u_pix = 1, the pixel-art smear (camera moves): 2..6 exposures of the scene at whole art pixel offsets
+// along the streak (one per two art px of it), so each copy keeps its hard pixel edges: a stepped
+// multiple exposure, never a soft smear, and stable frame to frame. A background pixel never picks up
+// the held subject (no ghost halo round a sharp subject).
+// u_pix = 0, a gather (radial zoom-blur punches, src/game/v11/cine.ts punchFx): jittered taps, averaged.
 export const VELBLUR_FS = /* glsl */ `#version 300 es
 precision highp float;
 uniform sampler2D u_src;
 uniform sampler2D u_mat;
 uniform vec2 u_viewArt;
 uniform vec2 u_cam;      // camera move over the shutter on the gameplay plane, screen art px
+uniform vec2 u_held;     // the held subject's own smear (screen art px)
 uniform float u_zoom;
 uniform float u_dolly;   // relative zoom change over the shutter
 uniform vec3 u_radial;   // zoom blur centre (screen art px) and strength (fraction of the distance)
 uniform float u_maxLen;  // art px
 uniform float u_taps;
+uniform float u_pix;
+uniform float u_heldOn;  // a held subject was drawn this frame
 in vec2 v_uv;
 in vec2 v_scr;
 out vec4 o;
-${DEPTH_FN}
+bool heldMat(vec4 m) { return m.a > 0.5 && m.r < 0.01 && m.g > 0.5 * m.a; }
 void main() {
-  float p = parallaxOf(depthAt(u_mat, v_uv));
+  vec4 m = texture(u_mat, v_uv);
+  bool held = heldMat(m);
+  float p = 1.0 / max(m.a > 0.004 ? m.b / m.a : 1.0, 0.02) - 1.0;
   vec2 s = v_scr * u_viewArt;
-  vec2 v = u_cam * (p * pow(u_zoom, p - 1.0)) + (s - u_viewArt * 0.5) * (p * u_dolly) + (s - u_radial.xy) * u_radial.z;
+  vec2 v = held ? u_held : u_cam * (p * pow(u_zoom, p - 1.0)) + (s - u_viewArt * 0.5) * (p * u_dolly);
+  v += (s - u_radial.xy) * u_radial.z;
   float len = length(v);
   if (len > u_maxLen) v *= u_maxLen / len;
+  if (u_pix > 0.5) {
+    // a few exposures of the scene at whole art pixel offsets along the streak, evenly weighted: every
+    // copy keeps its hard pixel edges (a stepped multiple exposure, not a soft smear)
+    float n = clamp(floor(len * 0.5) + 2.0, 2.0, u_taps);
+    vec3 c0 = texture(u_src, v_uv).rgb, acc = vec3(0.0);
+    for (int i = 0; i < 8; i++) {
+      if (float(i) >= n) break;
+      vec2 off = floor(v * (float(i) / (n - 1.0) - 0.5) + 0.5);
+      vec2 uv = v_uv + vec2(off.x, -off.y) / u_viewArt;
+      acc += (u_heldOn > 0.5 && !held && heldMat(texture(u_mat, uv))) ? c0 : texture(u_src, uv).rgb;
+    }
+    o = vec4(acc / n, 1.0);
+    return;
+  }
   vec2 duv = vec2(v.x, -v.y) / u_viewArt;
   // interleaved gradient noise jitters the taps so short blurs never band
   float j = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));

@@ -1,4 +1,5 @@
-// Graphics preferences (Settings > Graphics): the quality preset and the grain / vignette options.
+// Graphics preferences (Settings > Graphics): the quality preset and the grain / vignette / motion blur
+// options.
 // Kept per browser (not in the save game), so they survive a new expedition and a save reset.
 
 import type { GfxLevel, Renderer } from './renderer';
@@ -7,6 +8,8 @@ export interface GfxPrefs {
   level: GfxLevel;
   grain: boolean;
   vignette: boolean;
+  /** the camera's motion blur and the afterimages behind fast movers */
+  motionBlur: boolean;
 }
 
 const KEY = 'zl-gfx';
@@ -25,7 +28,14 @@ export function defaultGfxPrefs(): GfxPrefs {
   try {
     touch = (navigator.maxTouchPoints ?? 0) > 0 && Math.min(screen.width, screen.height) < 820;
   } catch { /* no navigator */ }
-  return { level: touch ? 'medium' : 'high', grain: true, vignette: true };
+  return { level: touch ? 'medium' : 'high', grain: true, vignette: true, motionBlur: !prefersReducedMotion() };
+}
+
+/** the system's reduced-motion setting (motion blur starts off under it) */
+export function prefersReducedMotion(): boolean {
+  try {
+    return !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  } catch { return false; }
 }
 
 export function loadGfxPrefs(): GfxPrefs {
@@ -35,6 +45,7 @@ export function loadGfxPrefs(): GfxPrefs {
     if (d && LEVELS.includes(d.level as GfxLevel)) p.level = d.level as GfxLevel;
     if (d && typeof d.grain === 'boolean') p.grain = d.grain;
     if (d && typeof d.vignette === 'boolean') p.vignette = d.vignette;
+    if (d && typeof d.motionBlur === 'boolean') p.motionBlur = d.motionBlur;
   } catch { /* storage blocked */ }
   return p;
 }
@@ -46,5 +57,5 @@ export function saveGfxPrefs(p: GfxPrefs) {
 }
 
 export function applyGfxPrefs(r: Renderer, p: GfxPrefs = loadGfxPrefs()) {
-  r.setGfx(p.level, p.grain, p.vignette);
+  r.setGfx(p.level, p.grain, p.vignette, p.motionBlur);
 }

@@ -179,8 +179,9 @@ export function drawHand7(s: Scene3D, wr: V3, el: V3, J: J3, near: boolean, arm:
   const [tb, tm, tt] = bones.thumb;
   s.limb(tb, tm, fr * 1.14, fr * 1.02, g, seg(fmat, 0, 0.56));
   s.limb(tm, tt, fr * 1.02, fr * 0.84, g, seg(fmat, 0.56, 1));
-  // (the cartoon hand at the world's pixel size is a clean silhouette: no creases, no knuckle line)
-  if (TOON7 && s.k < 1.3) return H;
+  // (a hand at the world's pixel size, the cast's since CAST_DENS7 = 1, is a clean silhouette: no
+  // creases, no knuckle line; at one pixel each they read as dirt)
+  if (s.k < 1.3) return H;
   // creases between the fingers, on the side the camera sees (lying on the nearer finger's surface)
   const cam: V3 = [0, 0, 1];
   const onTop = (p: V3, q: V3, r: number) => vadd(vsc(vadd(p, q), 0.5), vsc(cam, r));

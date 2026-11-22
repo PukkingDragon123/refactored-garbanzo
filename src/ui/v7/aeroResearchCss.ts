@@ -39,6 +39,8 @@ export const RESEARCH_CSS = `
 .ln .st { color: #e8a020; letter-spacing: 1px; }
 .ln em { font-style: normal; color: #2a8a18; font-weight: 700; }
 .ln .tag { display: inline-block; padding: 1px 6px 2px; margin-left: 4px; border-radius: 8px; font: 14px/14px 'Jersey 10', 'Pixelify Sans', monospace; color: #fff; background: linear-gradient(180deg, #ffd65a 0 45%, #f0a822 45%); box-shadow: 0 0 0 1px #8a5a08; text-shadow: 0 1px 0 #8a5a08; vertical-align: 2px; }
+.ln .tag.same { background: linear-gradient(180deg, #c9a79a 0 45%, #a3301f 45%); box-shadow: 0 0 0 1px #5e170c; text-shadow: 0 1px 0 #5e170c; }
+.ln .tag.shot { background: linear-gradient(180deg, #8fe06a 0 45%, #3f9a22 45%); box-shadow: 0 0 0 1px #1f5a10; text-shadow: 0 1px 0 #1f5a10; }
 @keyframes lnIn { from { transform: translateY(8px) scale(0.96); opacity: 0; } }
 
 /* ---- camera import */
@@ -90,6 +92,9 @@ export const RESEARCH_CSS = `
 .stamp.new { background: linear-gradient(180deg, #fff3a0 0 30%, #ffc838 30% 70%, #f09a1a 70%); color: #6a3a00; text-shadow: 0 1px 0 #fff6c8; box-shadow: 0 0 0 2px #7a4a08, 0 0 0 4px #fff, 0 0 30px rgba(255,220,90,0.9); }
 .stamp.fact { background: linear-gradient(180deg, #e8fdff 0 30%, #7ae6ff 30% 70%, #22b4e2 70%); color: #063e5e; box-shadow: 0 0 0 2px #0a5f8e, 0 0 0 4px #fff, 0 0 24px rgba(90,220,255,0.9); }
 .stamp.none { background: rgba(20,40,60,0.7); font-size: 24px; transform: translate(-50%, -50%); box-shadow: 0 0 0 1px rgba(255,255,255,0.5); }
+.stamp.same, .stamp.shot { display: block; }
+.stamp.same { background: linear-gradient(180deg, #fbefe9 0 30%, #f0d4c8 30% 70%, #e2b8a8 70%); color: #8a2416; box-shadow: 0 0 0 2px #8a2416, 0 0 0 4px #fff; }
+.stamp.shot { background: linear-gradient(180deg, #effde4 0 30%, #bdf09a 30% 70%, #86d65e 70%); color: #1f5a10; box-shadow: 0 0 0 2px #2f7d1a, 0 0 0 4px #fff; }
 @keyframes stampIn { 0% { transform: translate(-50%, -50%) scale(2.6) rotate(-14deg); opacity: 0; } 60% { opacity: 1; } }
 .imp-side { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
 .imp-bar { display: flex; flex: none; }

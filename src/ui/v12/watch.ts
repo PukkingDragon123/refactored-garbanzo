@@ -1,9 +1,20 @@
-// V12 timers are watches. Every countdown the player reads (a QTE's time limit, a minigame clock,
-// "back before dark", the time of day) is shown as a small brass pocket watch painted as pixel art:
-// an engraved brass case with a crown and bow, a domed glass with a pixel glint, a cream dial with
-// numerals and minute ticks, blued hands and a sweeping second hand that ticks. Running out, it
-// wobbles and shakes and the hands turn red; a dithered red wedge on the dial shows what is left.
-// Everything is fillRect on whole pixels (no smoothing, no gradients: light and shade are dithered).
+// V12 timers are watches (user, latest: "real modern watch, cool, interactive, show stamina"; then "the
+// watch ui better cooler not ai"). Every clock and countdown the player reads (the time of day on the
+// HUD, "back before dark", a QTE's time limit, a close-up's clock) is Mori's field watch: a hand-made
+// pixel-art sprite (./watchsprites.ts: an olive nylon strap with a steel keeper, a chunky composite case
+// with crown guards, four knurled pushers (the LIGHT one ringed orange), screws, scuffs, and a steel
+// coin-edge bezel round a black compass insert) over a negative LCD painted by ./watchface.ts:
+//   time    7-segment digits with their ghosts, the colon blinking the seconds, AM/PM and the day, the
+//           sun's path in a little dome over them (dusk and dark notched)
+//   body    stamina big, the heart beating at its rate, hunger in five pips
+//   sun     how long until dark; LATE when it is
+//   timer   (countdowns) the seconds left
+//   dive    (V12, on the kelp dive, whatever face is picked) a dive computer: the depth big, the time
+//           small, stamina in the dome, the AIR in the smile (amber, then red and blinking); the
+//           backlight comes on in the gloom below 8 m
+// and round the bottom of every face the smile: stamina in six chunky segments (those hunger has locked
+// hatched out, the last flickering when it's low), or a timer's time left. The backlight is flat
+// quantised light; it buzzes when stamina runs out, and a countdown running out shakes it and goes red.
 //
 //   drawWatch(ctx, x, y, size, t01, opts)   paint one at (x, y) top-left, `size` px across the case
 //                                           (t01: countdown fraction left, 1 -> 0; or opts.hour)
@@ -12,6 +23,8 @@
 //   watchSize(size)                         the canvas size drawWatch needs for a case of `size`
 
 import { game } from '../../game/game';
+import { paintWatch, watchDims } from './watchface';
+import type { FaceState } from './watchface';
 
 export interface WatchOpts {
   /** 'countdown' (t01 = fraction left) or 'clock' (the time of day: opts.hour) */
@@ -32,7 +45,36 @@ export interface WatchOpts {
   time?: number;
   /** a wristwatch on a strap (close-ups of Mori's arm) instead of the pocket watch's bow */
   wrist?: boolean;
+  /** V12 field watch: the face shown in clock mode (default 'time') */
+  face?: WatchFace;
+  /** stamina 0..1 (the ring); left out, a clock's ring shows the daylight left */
+  stamina?: number;
+  /** the cap hunger puts on stamina (the pips above it are hatched out) */
+  staminaMax?: number;
+  /** winded: the ring blinks red */
+  winded?: boolean;
+  /** beats a minute (the body face) */
+  bpm?: number;
+  /** hunger 0..1 (the body face's five pips) */
+  hunger?: number;
+  /** the expedition day (the time face) */
+  day?: number;
+  /** the backlight on (it also comes on by itself after dark) */
+  light?: boolean;
+  /** a pusher held in */
+  press?: 'light' | 'mode' | 'start' | 'back' | null;
+  /** 0..1 a buzz (the whole watch jitters a pixel) */
+  buzz?: number;
+  /** V12 the bezel turned this many clicks (0..3; the HUD turns it on hover) */
+  bezel?: number;
+  /** V12 clock mode: the dive computer face (depth in metres, the air left 0..1); left out, it shows
+   *  by itself while Mori is on the kelp dive (WATCH_DIVE); false: never */
+  dive?: false | { depth: number; air: number };
 }
+/** V12 the kelp dive's air tank (src/game/v12/dive/air.ts) registers the live reading here, so any clock
+ *  watch turns into the dive computer while he's down there (the watch imports nothing of the game's) */
+export const WATCH_DIVE: { live: (() => { depth: number; air: number } | null) | null } = { live: null };
+export type WatchFace = 'time' | 'body' | 'sun';
 
 // the palette (brass, dial, blued steel, red)
 const BR = ['#3a2408', '#6a4416', '#9a6a22', '#c8962e', '#e8c45a', '#fff0a8'];
@@ -61,17 +103,14 @@ const DIG7: Record<string, string[]> = {
   '8': ['.###.', '#...#', '#...#', '.###.', '#...#', '#...#', '.###.'], '9': ['.###.', '#...#', '#...#', '.####', '....#', '...#.', '.##..'],
 };
 
-/** the canvas a watch of case `size` needs (the bow / strap and the shake margin included) */
+/** the canvas a watch of case `size` needs (the strap ends, the pushers and the shake margin included) */
 export function watchSize(size: number, wrist = false): { w: number; h: number } {
-  const s = Math.max(14, Math.round(size));
-  return wrist ? { w: s + 6, h: s + Math.round(s * 0.7) + 6 } : { w: s + 6, h: s + Math.round(s * 0.28) + 6 };
+  void wrist;
+  return watchDims(Math.round(size));
 }
 
-/**
- * Paint a watch with its top-left at (x, y). `size` is the case's diameter in pixels (14..96);
- * t01 is the fraction of a countdown left (ignored in clock mode).
- */
-export function drawWatch(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, t01: number, opts: WatchOpts = {}): void {
+/** the old brass pocket watch (kept, unused: V12 timers and the clock are the field watch below) */
+export function drawPocketWatch(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, t01: number, opts: WatchOpts = {}): void {
   const S = Math.max(14, Math.round(size));
   const left = Math.max(0, Math.min(1, t01));
   const clock = opts.mode === 'clock';
@@ -274,6 +313,55 @@ export function drawWatch(ctx: CanvasRenderingContext2D, x: number, y: number, s
     px(gx, gy, GLASS);
     if (tw > 0.85) { px(gx - 1, gy, GLASS); px(gx + 1, gy, GLASS); px(gx, gy - 1, GLASS); px(gx, gy + 1, GLASS); }
   }
+}
+
+// ---------------------------------------------------------------- the field watch
+// (V12, user: "the watch ui better cooler not ai") a hand-made sprite: ./watchsprites.ts holds the body
+// (the olive nylon strap and its keeper, the composite case, the steel compass bezel and its three
+// turned frames, the pushers and the crown), ./watchface.ts lays it down and paints the LCD.
+const scratch: { cv: HTMLCanvasElement | null } = { cv: null };
+
+/**
+ * Paint Mori's field watch with its top-left at (x, y). `size` is about the case's width in pixels: the
+ * HUD's watch (a case of 50) or the small one (29) is picked and scaled by a whole number to fit it;
+ * t01 is the fraction of a countdown left (ignored in clock mode).
+ */
+export function drawWatch(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, t01: number, opts: WatchOpts = {}): void {
+  const b = paintWatch(Math.round(size), watchState(t01, opts));
+  let cv = scratch.cv;
+  if (!cv) cv = scratch.cv = document.createElement('canvas');
+  if (cv.width !== b.w || cv.height !== b.h) { cv.width = b.w; cv.height = b.h; }
+  const g = cv.getContext('2d')!;
+  const img = g.createImageData(b.w, b.h);
+  new Uint32Array(img.data.buffer).set(b.d);
+  g.putImageData(img, 0, 0);
+  const sm = ctx.imageSmoothingEnabled;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(cv, Math.round(x), Math.round(y));
+  ctx.imageSmoothingEnabled = sm;
+}
+
+/** what the watch shows, from the options (the dive face by itself while Mori's on the kelp dive) */
+export function watchState(t01: number, opts: WatchOpts = {}): FaceState {
+  const left = Math.max(0, Math.min(1, t01));
+  const clock = opts.mode === 'clock';
+  const T = opts.time ?? performance.now() / 1000;
+  const shake = Math.max(opts.shake ?? (clock ? 0 : left < 0.25 ? (0.25 - left) / 0.25 : 0), opts.buzz ?? 0);
+  const hour = (((opts.hour ?? 12) % 24) + 24) % 24;
+  const dv = clock && opts.dive !== false ? (opts.dive ?? WATCH_DIVE.live?.() ?? null) : null;
+  return {
+    face: !clock ? 'timer' : dv ? 'dive' : opts.face ?? 'time',
+    hour, dark: opts.deadline ?? 19.5, dusk: 17.25, day: opts.day,
+    stamina: opts.stamina, staminaMax: opts.staminaMax, winded: opts.winded, bpm: opts.bpm, hunger: opts.hunger,
+    left, secs: opts.secs, red: opts.red ?? (!clock && left < 0.2), dive: dv,
+    // (the backlight: pressed, after dark, or down in the gloom on a dive)
+    lit: !!opts.light || (clock && (hour >= 19.5 || hour < 5.6)) || (!!dv && dv.depth > 8),
+    press: opts.press ?? null, bezel: opts.bezel ?? 0,
+    // (a buzz or a countdown running out: the whole watch jitters a pixel)
+    jx: shake > 0 ? Math.max(-1, Math.min(1, Math.round(Math.sin(T * 47) * 1.3 * shake + Math.sin(T * 23) * 0.6 * shake))) : 0,
+    jy: shake > 0 ? Math.max(-1, Math.min(1, Math.round(Math.cos(T * 39) * 0.9 * shake))) : 0,
+    T,
+  };
 }
 
 // ---------------------------------------------------------------- the DOM helper
